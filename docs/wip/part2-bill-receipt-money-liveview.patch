@@ -1,0 +1,1440 @@
+diff --git a/actions/admin/billing-run.ts b/actions/admin/billing-run.ts
+index 7325dca3..dc5e59e2 100644
+--- a/actions/admin/billing-run.ts
++++ b/actions/admin/billing-run.ts
+@@ -47,6 +47,7 @@ import {
+   type ForwarderPriceFields,
+ } from "@/lib/forwarder/outstanding";
+ import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-total";
++import { resolveBillAmounts } from "@/lib/billing/resolve-bill-amounts";
+ import { isThShippingCostMissing, codBaseTrackings } from "@/lib/forwarder/domestic-shipping";
+ import { getContainerCompletenessBatch } from "@/lib/warehouse/container-completeness";
+ import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
+@@ -782,12 +783,22 @@ export async function getInvoiceList(
+         total_thb: number | string;
+         status: "issued" | "paid" | "cancelled";
+         paid_at: string | null;
++        // bill live-view→freeze (2026-07-13) — the header adjustments + slip signals so
++        // an AMOUNT-LIVE row's total can be recomputed live to match the paper/QR.
++        mao_fee_thb: number | string | null;
++        delivery_chn_thb: number | string;
++        delivery_th_thb: number | string;
++        other_thb: number | string;
++        discount_thb: number | string;
++        slip_status: string | null;
++        slip_uploaded_at: string | null;
+       };
+       let q = admin
+         .from("tb_forwarder_invoice")
+         .select(
+           "id, doc_no, userid, buyer_name, is_juristic, date_issued, date_due, " +
+-          "total_thb, status, paid_at",
++          "total_thb, status, paid_at, mao_fee_thb, delivery_chn_thb, delivery_th_thb, " +
++          "other_thb, discount_thb, slip_status, slip_uploaded_at",
+           { count: "exact" },
+         )
+         .order("date_issued", { ascending: false })
+@@ -839,8 +850,121 @@ export async function getInvoiceList(
+         }
+       }
+ 
++      // bill live-view→freeze (2026-07-13) — an AMOUNT-LIVE row (issued · no slip · no
++      // active receipt) shows the LIVE resolver total so the list == the paper == the
++      // /b/[token] QR after a source edit. Batched over the candidate subset (never per-
++      // row) + fail-soft (any error → the stored total). A committed/paid row keeps its
++      // frozen total_thb. Consistent with loadBillingRunDocument's per-doc reflow.
++      const liveTotalByInvoice = new Map<number, number>();
++      try {
++        const candidateIds = raw
++          .filter((r) =>
++            r.status === "issued" &&
++            !r.slip_uploaded_at &&
++            !(typeof r.slip_status === "string" && r.slip_status.trim() !== ""))
++          .map((r) => r.id);
++        if (candidateIds.length > 0) {
++          const { data: candItems, error: candErr } = await admin
++            .from("tb_forwarder_invoice_item")
++            .select("invoice_id, forwarder_id, amount_thb, amount_is_override")
++            .in("invoice_id", candidateIds);
++          if (candErr) throw new Error(candErr.message);
++          const fidsByInv = new Map<number, number[]>();
++          const storedByInv = new Map<number, Record<string, number>>();
++          // Manually-overridden lines per invoice (mig 0254) → the resolver's `overrides`
++          // so the list total honors a "แก้ยอดเรียกเก็บ" figure exactly like the paper/QR.
++          const overrideByInv = new Map<number, Record<string, number>>();
++          const allFids = new Set<number>();
++          for (const it of (candItems ?? []) as Array<{ invoice_id: number; forwarder_id: number; amount_thb: number | string; amount_is_override?: boolean | null }>) {
++            const arr = fidsByInv.get(it.invoice_id) ?? [];
++            arr.push(it.forwarder_id);
++            fidsByInv.set(it.invoice_id, arr);
++            const stored = storedByInv.get(it.invoice_id) ?? {};
++            stored[String(it.forwarder_id)] = Number(it.amount_thb);
++            storedByInv.set(it.invoice_id, stored);
++            if (it.amount_is_override) {
++              const ov = overrideByInv.get(it.invoice_id) ?? {};
++              ov[String(it.forwarder_id)] = Number(it.amount_thb);
++              overrideByInv.set(it.invoice_id, ov);
++            }
++            allFids.add(it.forwarder_id);
++          }
++          if (allFids.size > 0) {
++            const fidArr = Array.from(allFids);
++            // live forwarder rows
++            const { data: fwdRows, error: fwErr } = await admin
++              .from("tb_forwarder")
++              .select(FWD_BILLING_SELECT)
++              .in("id", fidArr);
++            if (fwErr) throw new Error(fwErr.message);
++            const fwdById = new Map<number, FwdBillingRaw>();
++            for (const f of (fwdRows ?? []) as unknown as FwdBillingRaw[]) fwdById.set(f.id, f);
++            // forwarders pinned by an ACTIVE (non-cancelled) receipt → their invoice is frozen
++            const pinnedFids = new Set<number>();
++            const { data: rItems, error: riErr } = await admin
++              .from("tb_receipt_item")
++              .select("fid, rid")
++              .in("fid", fidArr);
++            if (riErr) throw new Error(riErr.message);
++            const ridToFids = new Map<string, number[]>();
++            const allRids = new Set<string>();
++            for (const ri of (rItems ?? []) as Array<{ fid: number; rid: string | null }>) {
++              if (!ri.rid) continue;
++              allRids.add(ri.rid);
++              const arr = ridToFids.get(ri.rid) ?? [];
++              arr.push(ri.fid);
++              ridToFids.set(ri.rid, arr);
++            }
++            if (allRids.size > 0) {
++              const { data: activeRcpts, error: arErr } = await admin
++                .from("tb_receipt")
++                .select("rid")
++                .in("rid", Array.from(allRids))
++                .neq("rstatus", "2");
++              if (arErr) throw new Error(arErr.message);
++              for (const ar of (activeRcpts ?? []) as Array<{ rid: string }>) {
++                for (const fid of ridToFids.get(ar.rid) ?? []) pinnedFids.add(fid);
++              }
++            }
++            const hdrById = new Map(raw.map((r) => [r.id, r]));
++            for (const [invId, fidList] of fidsByInv) {
++              const hdr = hdrById.get(invId);
++              if (!hdr) continue;
++              if (fidList.some((fid) => pinnedFids.has(fid))) continue; // a receipt pins it → frozen
++              const liveRows = fidList
++                .map((fid) => fwdById.get(fid))
++                .filter((f): f is FwdBillingRaw => !!f);
++              if (liveRows.length !== fidList.length) continue; // incomplete → keep stored
++              const resolved = resolveBillAmounts({
++                rows: liveRows.map((f) => ({
++                  id: f.id, fshipby: f.fshipby, ftrackingchn: f.ftrackingchn,
++                  ftotalprice: f.ftotalprice, ftransportprice: f.ftransportprice,
++                  fpriceupdate: f.fpriceupdate, fshippingservice: f.fshippingservice,
++                  pricecrate: f.pricecrate, ftransportpricechnthb: f.ftransportpricechnthb,
++                  priceother: f.priceother, fdiscount: f.fdiscount,
++                  fusercompany: f.fusercompany, paymethod: f.paymethod,
++                })),
++                deliveryChnThb: Number(hdr.delivery_chn_thb),
++                deliveryThThb:  Number(hdr.delivery_th_thb),
++                otherThb:       Number(hdr.other_thb),
++                discountThb:    Number(hdr.discount_thb),
++                userId:         hdr.userid,
++                isJuristic:     hdr.is_juristic,
++                maoFeeOverride: Number(hdr.mao_fee_thb ?? 0),
++                overrides:      overrideByInv.get(invId) ?? {},
++                preserveUnpricedFromStored: storedByInv.get(invId) ?? {},
++              });
++              if (!resolved.overflow) liveTotalByInvoice.set(invId, resolved.total);
++            }
++          }
++        }
++      } catch (e) {
++        console.error("[getInvoiceList live-total recompute] failed (fail-soft → stored)", { message: String(e) });
++        liveTotalByInvoice.clear();
++      }
++
+       const rows: BillingRunInvoiceRow[] = raw.map((r) => {
+-        const total = Number(r.total_thb);
++        const total = liveTotalByInvoice.get(r.id) ?? Number(r.total_thb);
+         const wht = computeBillWht(r.is_juristic, total);
+         return {
+           id:           r.id,
+@@ -1485,63 +1609,50 @@ async function createBillingRunInvoiceImpl(
+       const outstandingByID = new Map<number, number>();
+       for (const f of fwd) outstandingByID.set(f.id, calcForwarderGross(f));
+ 
+-      // เหมาๆ (PCSF flat ฿100) — the bill was MISSING it vs the detail page's
+-      // ยอดเก็บจริง (ภูม 2026-06-23: บิล 4,083.96 แต่ detail 4,183.96). Pull JUST the
+-      // maoFee per line from the batch engine — the SAME once-per-shipment anchor
+-      // logic the detail page uses (anchored to the base tracking · เดฟ "กันเก็บเบิ้ล").
+-      // We deliberately do NOT swap the whole engine (computeForwarderDebitBatch
+-      // applies its 1% at batch≥฿1000, calcForwarderOutstanding per-row) so juristic
+-      // <฿1000 bills don't shift — the ONLY money delta is the ฿100 เหมาๆ, stored as
+-      // its OWN summary line (mao_fee_thb · NOT folded into a row) so the customer
+-      // SEES it and the ใบเสร็จ reconciles to it (ภูม flag: แยกให้เห็น + ใบเสร็จต้องตรง).
+-      const maoBatch = computeForwarderDebitBatch(fwd, {
+-        userId: v.userid,
+-        isCorporate: isJuristic,
++      // subtotal + เหมาๆ + total via the SINGLE shared formula
++      // (lib/billing/resolve-bill-amounts.ts) — the SAME resolver the loader's
++      // live-view reflow + the commit-boundary freeze use, so the create total, the
++      // list total, the /b/[token] QR net + the frozen total reconcile TO THE SATANG
++      // by construction (no drift · bill live-view→freeze 2026-07-13). Byte-identical
++      // to the prior inline math: per-line = override ?? calcForwarderGross (COD-aware)
++      // · เหมาๆ once-per-shipment (base-tracking anchor · the maoFeeThb override wins,
++      // ภูม 2026-06-23 "เซลเก็บรอบเดียว") stored as its OWN summary line (mao_fee_thb ·
++      // NOT folded into subtotal so subtotal = Σ items · mig 0138) · total = subtotal +
++      // mao + the 4 admin adjustments (clamp ≥0) · overflow guard at the NUMERIC(12,2)
++      // ceiling. The 1% juristic WHT stays a header display line (computeBillWht).
++      const billAmts = resolveBillAmounts({
++        rows: fwd.map((f) => ({
++          id: f.id, fshipby: f.fshipby, ftrackingchn: f.ftrackingchn,
++          ftotalprice: f.ftotalprice, ftransportprice: f.ftransportprice,
++          fpriceupdate: f.fpriceupdate, fshippingservice: f.fshippingservice,
++          pricecrate: f.pricecrate, ftransportpricechnthb: f.ftransportpricechnthb,
++          priceother: f.priceother, fdiscount: f.fdiscount,
++          fusercompany: f.fusercompany, paymethod: f.paymethod,
++        })),
++        deliveryChnThb: v.deliveryChnThb,
++        deliveryThThb:  v.deliveryThThb,
++        otherThb:       v.otherThb,
++        discountThb:    v.discountThb,
++        userId:         v.userid,
++        isJuristic,
++        overrides:      v.overrides,
++        maoFeeOverride: v.maoFeeThb ?? undefined,
+       });
+-      const maoFeeByID = new Map<number, number>();
+-      for (const ln of maoBatch.lines) maoFeeByID.set(Number(ln.id), ln.breakdown.maoFee);
+-
+-      // Build A D2 — per-line override: an admin-typed amount wins over the auto
+-      // calcForwarderOutstanding for THAT row. Only ids being billed are read;
+-      // stray override keys are ignored. The override is bounded by the Zod schema
+-      // (positiveMoney) + audit-logged below so a manual amount is deliberate +
+-      // traceable. Un-overridden rows keep the canonical composite outstanding.
+-      const overrideAmt = (id: number): number | null => {
++      const subtotal    = billAmts.subtotal;
++      const maoFeeTotal = billAmts.maoFee;
++      const total       = billAmts.total;
++      // The billed per-line amount (override ?? auto GROSS) — used for the item INSERT
++      // + the audit breadcrumb below. Sourced from the resolver so header + items always
++      // reconcile to the satang (the resolver quantizes each line before summing).
++      const lineAmount = (id: number): number => billAmts.perLine.get(id) ?? 0;
++      const overriddenIds = v.forwarderIds.filter((id) => {
+         const raw = v.overrides?.[String(id)];
+-        return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
+-      };
+-      // money-review fix — quantize EACH line to satang BEFORE summing, so the
+-      // header subtotal_thb == Σ item amount_thb exactly (the mig 0138 invariant).
+-      // An override can carry >2dp (z.number isn't 2dp-quantized); round-each-then-
+-      // sum keeps header + items identical to the satang. The เหมาๆ is NOT folded
+-      // into any row (it's a separate header line · maoFeeTotal below) so the rows
+-      // stay = base outstanding; an OVERRIDDEN row takes the admin's exact amount.
+-      const lineAmount = (id: number): number => {
+-        const ov = overrideAmt(id);
+-        if (ov != null) return Math.round(ov * 100) / 100;
+-        return Math.round((outstandingByID.get(id) ?? 0) * 100) / 100;
+-      };
+-      const overriddenIds = v.forwarderIds.filter((id) => overrideAmt(id) != null);
+-      const subtotal = v.forwarderIds.reduce((sum, id) => sum + lineAmount(id), 0);
+-      // เหมาๆ (PCSF ฿100) — a SEPARATE summary line, Σ the anchor fee over the
+-      // selected rows (once per shipment). Kept OFF subtotal so subtotal = Σ items
+-      // (mig 0138 invariant) holds — it rides total_thb only, stored in mao_fee_thb.
+-      const autoMaoFee = Math.round(
+-        v.forwarderIds.reduce((sum, id) => sum + (maoFeeByID.get(id) ?? 0), 0) * 100,
+-      ) / 100;
+-      // ภูม 2026-06-23 — the admin can EDIT the เหมาๆ on the create form (เซลเก็บรอบเดียว
+-      // แต่ลูกค้ามีหลายออเดอร์ → คิดเหมาๆครั้งเดียว ไม่ใช่ ฿100×N). Use the submitted value
+-      // when present (bounded by the schema's positiveMoney), else the auto Σ.
+-      const maoFeeTotal = v.maoFeeThb != null ? Math.round(v.maoFeeThb * 100) / 100 : autoMaoFee;
+-      const total = Math.max(
+-        0,
+-        subtotal + maoFeeTotal + v.deliveryChnThb + v.deliveryThThb + v.otherThb - v.discountThb,
+-      );
+-      // money-review fix — per-line override is capped (positiveMoney ≤9,999,999,999.99)
+-      // but the AGGREGATE subtotal/total over up to 500 rows can exceed the
+-      // NUMERIC(12,2) header ceiling. Reject with a Thai message instead of letting
+-      // Postgres raise a raw 22003 overflow.
+-      if (subtotal > 9_999_999_999.99 || total > 9_999_999_999.99) {
++        return typeof raw === "number" && Number.isFinite(raw);
++      });
++      // money-review fix — the AGGREGATE subtotal/total over up to 500 rows can exceed
++      // the NUMERIC(12,2) header ceiling even though each per-line override is capped.
++      // Reject with a Thai message instead of letting Postgres raise a raw 22003.
++      if (billAmts.overflow) {
+         return {
+           ok: false,
+           error: "ยอดรวมทั้งใบเกินขีดจำกัด (สูงสุด 9,999,999,999.99 บาท) — กรุณาตรวจสอบยอดที่แก้ไข หรือแยกออกเป็นหลายใบ",
+@@ -1604,6 +1715,10 @@ async function createBillingRunInvoiceImpl(
+       // (f) INSERT items (bulk · ON DELETE CASCADE protects rollback semantics).
+       // Line amount = the GROSS composite (Σ subtotal of these lines == the
+       // header subtotal, both from calcForwarderGross · WHT-fix 2026-06-25).
++      // mig 0254 (money-safe) — remember WHICH lines were manually overridden so the
++      // amount-live reflow + the commit freeze route them through the resolver's
++      // `overrides` (override wins · NEVER reflows/refreezes to auto GROSS).
++      const overriddenIdSet = new Set(overriddenIds);
+       const itemsToInsert = v.forwarderIds.map((fid) => ({
+         invoice_id:   invoiceId!,
+         forwarder_id: fid,
+@@ -1611,6 +1726,9 @@ async function createBillingRunInvoiceImpl(
+         // GROSS composite. Same value the subtotal summed, so header + items
+         // always reconcile to satang. The 1% WHT is a header-level display line.
+         amount_thb:   Math.round(lineAmount(fid) * 100) / 100,
++        // true when the admin typed a manual figure for this line (mig 0254) → its
++        // amount has no live forwarder source and must never be silently reflowed.
++        amount_is_override: overriddenIdSet.has(fid),
+       }));
+       const { error: itemErr } = await admin
+         .from("tb_forwarder_invoice_item")
+@@ -1709,6 +1827,126 @@ async function createBillingRunInvoiceImpl(
+   );
+ }
+ 
++// ────────────────────────────────────────────────────────────────────────
++// FREEZE at the COMMIT boundary (bill live-view→freeze · 2026-07-13)
++// ────────────────────────────────────────────────────────────────────────
++//
++// Recompute a bill's subtotal / เหมาๆ / total (+ per-line amounts) over the LIVE
++// forwarder rows via the shared resolver and WRITE them onto tb_forwarder_invoice,
++// so the amount the customer commits to is captured verbatim at the moment the bill
++// leaves the amount-live state (slip-submit / offline-settle). After this the bill is
++// FROZEN — loadBillingRunDocument shows the stored columns, and a later source edit
++// surfaces via the drift banner (a real correction goes through คืนเงิน/ออกใบใหม่).
++// Best-effort: returns null on any failure so the caller keeps the stored total
++// (a freeze problem NEVER fails the money-safe commit). Idempotent — freezing an
++// already-frozen bill re-writes the same numbers.
++async function freezeBillTotals(
++  admin: ReturnType<typeof createAdminClient>,
++  invoiceId: number,
++): Promise<{ subtotal: number; maoFee: number; total: number } | null> {
++  const { data: hdr, error: hdrErr } = await admin
++    .from("tb_forwarder_invoice")
++    .select("userid, is_juristic, delivery_chn_thb, delivery_th_thb, other_thb, discount_thb, mao_fee_thb")
++    .eq("id", invoiceId)
++    .maybeSingle<{
++      userid: string | null; is_juristic: boolean;
++      delivery_chn_thb: number | string; delivery_th_thb: number | string;
++      other_thb: number | string; discount_thb: number | string;
++      mao_fee_thb: number | string | null;
++    }>();
++  if (hdrErr || !hdr) {
++    if (hdrErr) console.error("[freezeBillTotals header] failed", { code: hdrErr.code, message: hdrErr.message, invoiceId });
++    return null;
++  }
++  const { data: itemRows, error: itemErr } = await admin
++    .from("tb_forwarder_invoice_item")
++    .select("forwarder_id, amount_thb, amount_is_override")
++    .eq("invoice_id", invoiceId);
++  if (itemErr) {
++    console.error("[freezeBillTotals items] failed", { code: itemErr.code, message: itemErr.message, invoiceId });
++    return null;
++  }
++  const storedItems = (itemRows ?? []) as Array<{ forwarder_id: number; amount_thb: number | string; amount_is_override?: boolean | null }>;
++  // Manually-overridden lines (mig 0254) → the resolver's `overrides` so the FROZEN
++  // amount captured at the commit boundary is the admin's "แก้ยอดเรียกเก็บ" figure, NOT
++  // the auto GROSS (the receipt is then pinned to this total · G1 · money-review blocker).
++  const overrideByFid: Record<string, number> = {};
++  for (const r of storedItems) {
++    if (r.amount_is_override) overrideByFid[String(r.forwarder_id)] = Number(r.amount_thb);
++  }
++  const fids = storedItems.map((r) => r.forwarder_id);
++  if (fids.length === 0) return null; // nothing to reconcile
++  const { data: fwdRows, error: fwdErr } = await admin
++    .from("tb_forwarder")
++    .select(FWD_BILLING_SELECT)
++    .in("id", fids);
++  if (fwdErr) {
++    console.error("[freezeBillTotals forwarders] failed", { code: fwdErr.code, message: fwdErr.message, invoiceId });
++    return null;
++  }
++  const rows = (fwdRows ?? []) as unknown as FwdBillingRaw[];
++  if (rows.length !== fids.length) {
++    // A forwarder is missing → do not reflow on incomplete data; keep stored.
++    console.error("[freezeBillTotals] fid count mismatch — keeping stored totals", { invoiceId, want: fids.length, got: rows.length });
++    return null;
++  }
++  const resolved = resolveBillAmounts({
++    rows: rows.map((f) => ({
++      id: f.id, fshipby: f.fshipby, ftrackingchn: f.ftrackingchn,
++      ftotalprice: f.ftotalprice, ftransportprice: f.ftransportprice,
++      fpriceupdate: f.fpriceupdate, fshippingservice: f.fshippingservice,
++      pricecrate: f.pricecrate, ftransportpricechnthb: f.ftransportpricechnthb,
++      priceother: f.priceother, fdiscount: f.fdiscount,
++      fusercompany: f.fusercompany, paymethod: f.paymethod,
++    })),
++    deliveryChnThb: Number(hdr.delivery_chn_thb),
++    deliveryThThb:  Number(hdr.delivery_th_thb),
++    otherThb:       Number(hdr.other_thb),
++    discountThb:    Number(hdr.discount_thb),
++    userId:         hdr.userid ?? "",
++    isJuristic:     hdr.is_juristic,
++    // เหมาๆ + the 4 adjustments are CARRIED (header decisions · no forwarder source);
++    // only the per-line freight reflows.
++    maoFeeOverride: Number(hdr.mao_fee_thb ?? 0),
++    // a manual per-line override wins + is frozen verbatim (mig 0254).
++    overrides:      overrideByFid,
++    // preserve an unpriced line's create-guard override (don't freeze it back to ฿0).
++    preserveUnpricedFromStored: Object.fromEntries(
++      storedItems.map((r) => [String(r.forwarder_id), Number(r.amount_thb)]),
++    ),
++  });
++  if (resolved.overflow) {
++    console.error("[freezeBillTotals] resolver overflow — keeping stored totals", { invoiceId });
++    return null;
++  }
++  const { error: updErr } = await admin
++    .from("tb_forwarder_invoice")
++    .update({
++      subtotal_thb: resolved.subtotal,
++      mao_fee_thb:  resolved.maoFee,
++      total_thb:    resolved.total,
++    })
++    .eq("id", invoiceId);
++  if (updErr) {
++    console.error("[freezeBillTotals header update] failed", { code: updErr.code, message: updErr.message, invoiceId });
++    return null;
++  }
++  // Freeze the per-line amounts too (only the ones that actually changed) so Σ items
++  // == the frozen subtotal (the admin detail line table + the mig 0138 invariant stay
++  // consistent). Per-line update is non-fatal (the header total is authoritative).
++  const storedByFid = new Map(storedItems.map((r) => [r.forwarder_id, Number(r.amount_thb)]));
++  for (const [fid, amt] of resolved.perLine) {
++    if (Math.abs((storedByFid.get(fid) ?? 0) - amt) <= 0.005) continue; // unchanged → skip the write
++    const { error: liErr } = await admin
++      .from("tb_forwarder_invoice_item")
++      .update({ amount_thb: amt })
++      .eq("invoice_id", invoiceId)
++      .eq("forwarder_id", fid);
++    if (liErr) console.error("[freezeBillTotals item update] failed (non-fatal)", { code: liErr.code, message: liErr.message, invoiceId, fid });
++  }
++  return { subtotal: resolved.subtotal, maoFee: resolved.maoFee, total: resolved.total };
++}
++
+ // ────────────────────────────────────────────────────────────────────────
+ // 6. MARK PAID — flip 'issued' → 'paid' with payment trail
+ // ────────────────────────────────────────────────────────────────────────
+@@ -1745,9 +1983,9 @@ async function markBillingRunPaidImpl(
+       // Guard: only flip 'issued' → 'paid'
+       const { data: cur, error: curErr } = await admin
+         .from("tb_forwarder_invoice")
+-        .select("id, doc_no, status, total_thb, is_juristic, userid, slip_status, slip_reviewed_at, mao_fee_thb, buyer_name, buyer_tax_id, buyer_address, delivery_address")
++        .select("id, doc_no, status, total_thb, is_juristic, userid, slip_status, slip_reviewed_at, slip_uploaded_at, mao_fee_thb, buyer_name, buyer_tax_id, buyer_address, delivery_address")
+         .eq("id", v.invoiceId)
+-        .maybeSingle<{ id: number; doc_no: string; status: string; total_thb: number | string; is_juristic: boolean; userid: string | null; slip_status: string | null; slip_reviewed_at: string | null; mao_fee_thb: number | string | null; buyer_name: string | null; buyer_tax_id: string | null; buyer_address: string | null; delivery_address: string | null }>();
++        .maybeSingle<{ id: number; doc_no: string; status: string; total_thb: number | string; is_juristic: boolean; userid: string | null; slip_status: string | null; slip_reviewed_at: string | null; slip_uploaded_at: string | null; mao_fee_thb: number | string | null; buyer_name: string | null; buyer_tax_id: string | null; buyer_address: string | null; delivery_address: string | null }>();
+       if (curErr) {
+         console.error("[markBillingRunPaid current] failed", {
+           code: curErr.code, message: curErr.message,
+@@ -1808,14 +2046,26 @@ async function markBillingRunPaidImpl(
+         return { ok: false, error: updErr.message };
+       }
+ 
+-      // total_thb is the GROSS invoice face (WHT-fix 2026-06-25). The actual cash
++      // FREEZE at the commit boundary (bill live-view→freeze · 2026-07-13). A bill with
++      // NO slip ever submitted (slip_uploaded_at null) is still AMOUNT-LIVE at settle —
++      // this is the amount-live→paid direct boundary, so recompute over the live rows +
++      // write the frozen totals here. A bill that HAD a slip was already frozen at slip-
++      // submit (uploadBillingRunSlip); do NOT re-freeze it (that would silently change the
++      // amount the customer already paid — a post-slip source edit surfaces via the drift
++      // banner instead · guardrail c). Best-effort: on any freeze failure keep cur.*.
++      const wasAmountLive = cur.slip_uploaded_at == null;
++      const frozen = wasAmountLive ? await freezeBillTotals(admin, v.invoiceId) : null;
++      const pinnedTotal = frozen ? frozen.total : Number(cur.total_thb);
++      const pinnedMao   = frozen ? frozen.maoFee : Number(cur.mao_fee_thb ?? 0);
++
++      // pinnedTotal is the GROSS invoice face (WHT-fix 2026-06-25). The actual cash
+       // a juristic buyer remits = net_payable (gross − หัก ณ ที่จ่าย 1%); the 1%
+       // is withheld + paid to the revenue dept on our behalf (we reclaim it via
+       // the 50-ทวิ cert). Log BOTH so the audit trail shows face vs cash collected.
+-      const paidWht = computeBillWht(cur.is_juristic, Number(cur.total_thb));
++      const paidWht = computeBillWht(cur.is_juristic, pinnedTotal);
+       await logAdminAction(adminId, "billing_run.mark_paid", "forwarder_invoice", String(v.invoiceId), {
+         doc_no: cur.doc_no, payment_method: v.paymentMethod, reference: v.paymentReference,
+-        total_thb: Number(cur.total_thb), wht_amount: paidWht.wht_amount,
++        total_thb: pinnedTotal, wht_amount: paidWht.wht_amount,
+         net_payable: paidWht.net_payable, paid_at: paidAtIso,
+         // G7 — record the no-slip "ยืนยันจบการ" (offline settle) confirm + reason.
+         offline_confirmed: isOfflineSettle && v.offlineConfirmed,
+@@ -2007,17 +2257,18 @@ async function markBillingRunPaidImpl(
+               source:   "billing_run.mark_paid",
+               // STEP-2: accounting-chosen ใบเสร็จ เลขที่ (dup-validated in the helper).
+               overrideRid: v.overrideRid,
+-              // เหมาๆ mirrors the bill's OWN stored value (tb_forwarder_invoice.mao_fee_thb ·
+-              // mig 0209) so receipt total == bill total by construction. markBillingRunPaid
+-              // settles exactly ONE invoice → the receipt covers exactly its fids (invFids) →
+-              // no SUM needed. 0 stays 0, 100 stays 100.
+-              maoFeeOverride: Number(cur.mao_fee_thb ?? 0),
+-              // G1 (2026-07-08) — PIN the ใบเสร็จ total to THIS paid bill's frozen
+-              // numbers. total_thb = the GROSS face (incl เหมาๆ + extras); paidWht.net_payable
+-              // = the cash the customer actually remitted (gross − 1% WHT); is_juristic = the
++              // เหมาๆ mirrors the bill's OWN FROZEN value (tb_forwarder_invoice.mao_fee_thb ·
++              // mig 0209 · pinnedMao = the value just frozen at commit) so receipt total ==
++              // bill total by construction. markBillingRunPaid settles exactly ONE invoice →
++              // the receipt covers exactly its fids (invFids) → no SUM needed. 0 stays 0.
++              maoFeeOverride: pinnedMao,
++              // G1 (2026-07-08) — PIN the ใบเสร็จ total to THIS paid bill's FROZEN
++              // numbers (pinnedTotal = the value frozen at the commit boundary above).
++              // pinnedTotal = the GROSS face (incl เหมาๆ + extras); paidWht.net_payable =
++              // the cash the customer actually remitted (gross − 1% WHT); is_juristic = the
+               // WHT decision as billed. The receipt reconciles to these (not a live recompute
+               // that drifts if a row was edited between issue↔pay) and logs any drift.
+-              totalOverride:      Number(cur.total_thb),
++              totalOverride:      pinnedTotal,
+               netOverride:        paidWht.net_payable,
+               isJuristicOverride: cur.is_juristic,
+               // G8 (2026-07-08) — STAMP the receipt header from THIS bill's buyer
+@@ -2133,6 +2384,48 @@ async function findActiveReceiptForFids(
+   return first ? { receiptId: first.id, rid: first.rid } : null;
+ }
+ 
++/**
++ * Reconcile an existing receipt's NON-money DISPLAY fields (ship-to + buyer identity)
++ * to a bill's snapshot — writes ONLY the columns that actually differ, and NEVER touches
++ * ramount / totalbeforewithholding / mao_fee_thb (a paid amount is immutable · G1). This
++ * keeps a bill's on-demand receipt in-sync (the PR086 บุคคล↔นิติ / single-slot ที่อยู่ fix)
++ * without re-pricing it. Best-effort — a reconcile failure never blocks the button.
++ */
++async function reconcileReceiptDisplayFields(
++  admin: ReturnType<typeof createAdminClient>,
++  receiptId: number,
++  want: { recompname?: string; recompnumber?: string; recompaddress?: string; delivery_address?: string },
++  ctx: { adminId: string; invoiceId: number; docNo: string },
++): Promise<void> {
++  try {
++    const { data: cur, error } = await admin
++      .from("tb_receipt")
++      .select("recompname, recompnumber, recompaddress, delivery_address")
++      .eq("id", receiptId)
++      .maybeSingle<{ recompname: string | null; recompnumber: string | null; recompaddress: string | null; delivery_address: string | null }>();
++    if (error || !cur) {
++      if (error) console.error("[reconcileReceiptDisplayFields read] failed", { code: error.code, message: error.message, receiptId });
++      return;
++    }
++    const patch: Record<string, string> = {};
++    if (want.recompname       !== undefined && (cur.recompname ?? "")       !== want.recompname)       patch.recompname       = want.recompname;
++    if (want.recompnumber     !== undefined && (cur.recompnumber ?? "")     !== want.recompnumber)     patch.recompnumber     = want.recompnumber;
++    if (want.recompaddress    !== undefined && (cur.recompaddress ?? "")    !== want.recompaddress)    patch.recompaddress    = want.recompaddress;
++    if (want.delivery_address !== undefined && (cur.delivery_address ?? "") !== want.delivery_address) patch.delivery_address = want.delivery_address;
++    if (Object.keys(patch).length === 0) return; // already in sync — no write
++    const { error: updErr } = await admin.from("tb_receipt").update(patch).eq("id", receiptId);
++    if (updErr) {
++      console.error("[reconcileReceiptDisplayFields update] failed", { code: updErr.code, message: updErr.message, receiptId });
++      return;
++    }
++    await logAdminAction(ctx.adminId, "billing_run.receipt_display_reconciled", "tb_receipt", String(receiptId), {
++      invoice_id: ctx.invoiceId, doc_no: ctx.docNo, fields: Object.keys(patch),
++    });
++  } catch (e) {
++    console.error("[reconcileReceiptDisplayFields] unexpected", { message: String(e), receiptId });
++  }
++}
++
+ export async function ensureBillingRunReceipt(
+   input: { invoiceId: number },
+ ): Promise<AdminActionResult<{ receiptId: number; rid: string; created: boolean }>> {
+@@ -2184,9 +2477,18 @@ export async function ensureBillingRunReceipt(
+         return { ok: false, error: "ไม่พบรายการนำเข้าที่ผูกกับใบวางบิลนี้" };
+       }
+ 
+-      // 3. Already have an active receipt → return it (open/print, don't re-create).
++      // 3. Already have an active receipt → reconcile its NON-money display fields to
++      //    THIS bill's snapshot (buyer identity + single-slot ship-to), then return it —
++      //    keeps the on-demand receipt in sync with the bill without re-pricing it (never
++      //    touches ramount/totalbeforewithholding · G1). Best-effort.
+       const existing = await findActiveReceiptForFids(admin, fids);
+       if (existing) {
++        await reconcileReceiptDisplayFields(admin, existing.receiptId, {
++          recompname:       cur.buyer_name ?? undefined,
++          recompnumber:     cur.buyer_tax_id ?? undefined,
++          recompaddress:    cur.buyer_address ?? undefined,
++          delivery_address: cur.delivery_address ?? undefined,
++        }, { adminId, invoiceId, docNo: cur.doc_no });
+         return { ok: true, data: { receiptId: existing.receiptId, rid: existing.rid, created: false } };
+       }
+ 
+@@ -2751,6 +3053,14 @@ export async function uploadBillingRunSlip(input: {
+         return { ok: false, error: updErr.message };
+       }
+ 
++      // FREEZE at the slip-submit commit boundary (bill live-view→freeze · 2026-07-13).
++      // The bill was AMOUNT-LIVE (issued · no slip) until now; submitting a slip commits
++      // the customer to the CURRENT amount, so capture it verbatim (recompute over live
++      // rows → write frozen totals). After this the bill is frozen; a later source edit
++      // surfaces via the drift banner instead of silently re-flowing the committed amount.
++      // Best-effort — a freeze failure never fails the slip upload.
++      await freezeBillTotals(admin, invoiceId);
++
+       await logAdminAction(adminId, "billing_run.slip_upload", "forwarder_invoice", String(invoiceId), {
+         doc_no: cur.doc_no, slip_path: slipPath, uploaded_by: uploader,
+       });
+diff --git a/actions/admin/customer-rate.ts b/actions/admin/customer-rate.ts
+index 240fe182..f015a144 100644
+--- a/actions/admin/customer-rate.ts
++++ b/actions/admin/customer-rate.ts
+@@ -350,11 +350,14 @@ export async function adminSaveCustomerRate(
+       //    warehouse, that are (1) OPEN — un-billed (fstatus < 5) OR waiting-payment
+       //    but NOT yet paid (fstatus = 5 · paydeposit != '1'); a paid/delivered row
+       //    (fstatus ≥ 6 or paydeposit = '1') is frozen. (2) NOT a manual custom rate.
+-      //    (3) NOT cabinet-locked. (4) NOT already on an OPEN ใบวางบิล — re-pricing a
+-      //    forwarder on an unpaid bill would desync the bill's stored total, so those
+-      //    are excluded here + corrected by the stale-svip backfill script instead.
+-      //    (owner 2026-07-08: PR130 #52117 was fstatus=5 on a bill → the old fstatus<5
+-      //    filter skipped it → stayed stale · this closes the non-billed fstatus=5 gap.)
++      //    (3) NOT cabinet-locked. (4) NOT on a FROZEN ใบวางบิล — bill live-view→freeze
++      //    (2026-07-13): a forwarder on an AMOUNT-LIVE bill (issued · no slip) is now
++      //    RE-PRICEABLE (the bill recomputes its total live → the rate change reflows in
++      //    with no drift · this is the owner's "rate change ไม่ propagate" fix); only a
++      //    COMMITTED (slip submitted) or PAID bill is skipped — its total is locked at the
++      //    commit boundary + a re-price would desync it (a real correction goes through
++      //    คืนเงิน/ออกใบใหม่). (owner 2026-07-08: PR130 #52117 was fstatus=5 on a bill →
++      //    the old fstatus<5 filter skipped it → stayed stale · this closes that gap.)
+       //    Best-effort: NEVER fails / rolls back the card save (already committed).
+       //    Reuses computeAndFillForwarderImportRate — the SAME audited engine the
+       //    MOMO import + dimension-edit save call (no hand-written frefrate). It
+@@ -388,28 +391,39 @@ export async function adminSaveCustomerRate(
+           // it would desync the bill total; the stale-svip backfill handles those (it
+           // recomputes the bill). Batch lookup so a bill-heavy customer stays cheap.
+           const eligibleIds = eligible.map((t) => Number((t as { id: number }).id));
+-          const onOpenBill = new Set<number>();
++          // Skip only forwarders on a FROZEN bill (committed = a slip was submitted · OR
++          // paid). An AMOUNT-LIVE bill (issued · no slip) reflows a rate change with no
++          // drift, so those rows ARE re-priced. A cancelled bill releases the row.
++          const onFrozenBill = new Set<number>();
+           if (eligibleIds.length > 0) {
+-            const { data: billItems } = await admin
++            const { data: billItems, error: biErr } = await admin
+               .from("tb_forwarder_invoice_item")
+               .select("forwarder_id, invoice_id")
+               .in("forwarder_id", eligibleIds);
++            if (biErr) console.error(`[customer-rate frozen-bill items] failed`, { userid, wh, code: biErr.code, message: biErr.message });
+             const invIds = Array.from(new Set((billItems ?? []).map((b) => Number((b as { invoice_id: number }).invoice_id))));
+             if (invIds.length > 0) {
+-              const { data: openInvs } = await admin
++              const { data: invs, error: invErr } = await admin
+                 .from("tb_forwarder_invoice")
+-                .select("id")
+-                .in("id", invIds)
+-                .eq("status", "issued")
+-                .is("slip_status", null);
+-              const openInvSet = new Set((openInvs ?? []).map((v) => Number((v as { id: number }).id)));
++                .select("id, status, slip_status")
++                .in("id", invIds);
++              if (invErr) console.error(`[customer-rate frozen-bill invoices] failed`, { userid, wh, code: invErr.code, message: invErr.message });
++              const frozenInvSet = new Set(
++                ((invs ?? []) as Array<{ id: number; status: string | null; slip_status: string | null }>)
++                  .filter((v) => {
++                    const status = String(v.status ?? "").trim();
++                    const slip = String(v.slip_status ?? "").trim();
++                    return status === "paid" || (status === "issued" && slip !== "");
++                  })
++                  .map((v) => Number(v.id)),
++              );
+               for (const b of billItems ?? []) {
+                 const bi = b as { forwarder_id: number; invoice_id: number };
+-                if (openInvSet.has(Number(bi.invoice_id))) onOpenBill.add(Number(bi.forwarder_id));
++                if (frozenInvSet.has(Number(bi.invoice_id))) onFrozenBill.add(Number(bi.forwarder_id));
+               }
+             }
+           }
+-          const targets = eligible.filter((t) => !onOpenBill.has(Number((t as { id: number }).id)));
++          const targets = eligible.filter((t) => !onFrozenBill.has(Number((t as { id: number }).id)));
+           for (const t of targets) {
+             const fid = Number((t as { id: number }).id);
+             try {
+diff --git a/app/[locale]/(admin)/admin/billing-run/[id]/page.tsx b/app/[locale]/(admin)/admin/billing-run/[id]/page.tsx
+index d51a19c8..97cd4c74 100644
+--- a/app/[locale]/(admin)/admin/billing-run/[id]/page.tsx
++++ b/app/[locale]/(admin)/admin/billing-run/[id]/page.tsx
+@@ -151,6 +151,22 @@ export default async function BillingRunDetailPage({
+         </div>
+       </header>
+ 
++      {/* Drift banner (bill live-view→freeze · 2026-07-13) — a COMMITTED/paid bill whose
++          source (dims/rate/MOMO-revalue/item) moved AFTER it was frozen. Surface, never
++          silently change a locked amount; a real correction goes via คืนเงิน/ออกใบใหม่. */}
++      {header.frozen_vs_live && (
++        <section className="rounded-2xl border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-4 text-amber-800 dark:text-amber-300 text-sm">
++          <div className="font-bold mb-1">⚠️ ยอดถูกล็อก ณ วันชำระ/วางบิล</div>
++          <p className="leading-relaxed">
++            ยอดในเอกสารนี้ถูกล็อกไว้ที่ <b>฿{thbFmt(header.total_thb)}</b> ·
++            คำนวณจากข้อมูลปัจจุบันได้ <b>฿{thbFmt(header.live_total_thb)}</b>
++            {" "}(ต่างกัน ฿{thbFmt(Math.abs(header.live_total_thb - header.total_thb))}) —
++            มีการแก้ไขต้นทาง (ขนาด/เรท/ราคา) หลังจากออก/ชำระบิลแล้ว.
++            การแก้ยอดที่ชำระ/วางบิลแล้วต้องทำผ่านการคืนเงิน หรือออกใบใหม่ · ระบบจะไม่แก้ยอดที่ล็อกให้อัตโนมัติ.
++          </p>
++        </section>
++      )}
++
+       {/* Money summary card */}
+       <section className="rounded-2xl border border-border bg-gradient-to-br from-white to-amber-50/20 dark:from-surface dark:to-surface p-5 shadow-sm">
+         <div className="flex flex-wrap items-baseline gap-3">
+diff --git a/app/[locale]/(admin)/admin/billing-run/[id]/print/page.tsx b/app/[locale]/(admin)/admin/billing-run/[id]/print/page.tsx
+index 59a19af6..a499b85b 100644
+--- a/app/[locale]/(admin)/admin/billing-run/[id]/print/page.tsx
++++ b/app/[locale]/(admin)/admin/billing-run/[id]/print/page.tsx
+@@ -125,6 +125,7 @@ export default async function BillingRunPrintPage({
+         issuedBy={header.issued_by}
+         pages={pages}
+         qrDataUrl={qrDataUrl}
++        driftNotice={header.frozen_vs_live ? { frozen: header.total_thb, live: header.live_total_thb } : undefined}
+       />
+     </>
+   );
+diff --git a/app/[locale]/(public)/b/[token]/page.tsx b/app/[locale]/(public)/b/[token]/page.tsx
+index 84a8825d..0ac78523 100644
+--- a/app/[locale]/(public)/b/[token]/page.tsx
++++ b/app/[locale]/(public)/b/[token]/page.tsx
+@@ -143,6 +143,7 @@ export default async function PublicBillPage({
+           issuedBy={header.issued_by}
+           pages={pages}
+           qrDataUrl={qrDataUrl}
++          driftNotice={header.frozen_vs_live ? { frozen: header.total_thb, live: header.live_total_thb } : undefined}
+         />
+       </div>
+ 
+diff --git a/components/billing-run/billing-run-paper.tsx b/components/billing-run/billing-run-paper.tsx
+index 410b01d2..6de7743e 100644
+--- a/components/billing-run/billing-run-paper.tsx
++++ b/components/billing-run/billing-run-paper.tsx
+@@ -105,6 +105,11 @@ export type BillingRunCommonProps = {
+ /** Props for the full `<BillingRunPaper>` wrapper — items pre-chunked into pages. */
+ export type BillingRunPaperProps = BillingRunCommonProps & {
+   pages: Array<{ pageNumber: number; rows: BillingRunPaperRow[] }>;
++  /** bill live-view→freeze (2026-07-13) — a SCREEN-ONLY drift warning rendered ABOVE the
++   *  paper when a committed/paid bill's live recompute differs from its frozen total. NEVER
++   *  printed (the `.no-print` class hides it), so the tax document stays clean while the
++   *  on-screen viewer sees the lock. Omit when the totals are current (no drift). */
++  driftNotice?: { frozen: number; live: number };
+ };
+ 
+ function BillingRunPage({
+@@ -467,8 +472,9 @@ function SumLine({ k, v, red }: { k: string; v: string; red?: boolean }) {
+  * Reuses the receipt's `.receipt-page`/`.subpage` CSS verbatim (one-page-fit
+  * math, @page 5mm, screen drop-shadow paper, .receipt-fit mobile mode).
+  */
+-export function BillingRunPaper({ pages, ...common }: BillingRunPaperProps) {
++export function BillingRunPaper({ pages, driftNotice, ...common }: BillingRunPaperProps) {
+   const pageCount = Math.max(1, pages.length);
++  const fmtBaht = (n: number) => n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+   return (
+     <>
+       <style>{`
+@@ -492,6 +498,20 @@ export function BillingRunPaper({ pages, ...common }: BillingRunPaperProps) {
+         .subpage { display: flex; flex-direction: column; }
+       `}</style>
+ 
++      {driftNotice && (
++        <div
++          className="no-print"
++          style={{
++            maxWidth: "210mm", margin: "12px auto 0", padding: "10px 14px",
++            border: "1px solid #fcd34d", background: "#fffbeb", borderRadius: "6px",
++            color: "#92400e", fontSize: "13px", lineHeight: 1.5,
++          }}
++        >
++          <b>⚠️ ยอดถูกล็อก ณ วันชำระ/วางบิล</b> — เอกสารนี้ถูกล็อกไว้ที่ ฿{fmtBaht(driftNotice.frozen)} ·
++          คำนวณจากข้อมูลปัจจุบันได้ ฿{fmtBaht(driftNotice.live)}. การแก้ยอดที่ล็อกแล้วต้องทำผ่านการคืนเงิน/ออกใบใหม่.
++        </div>
++      )}
++
+       {pages.map((pg) => (
+         <BillingRunPage
+           key={`orig-${pg.pageNumber}`}
+diff --git a/lib/billing/load-billing-run-document.ts b/lib/billing/load-billing-run-document.ts
+index 3de7c10f..8e0fbbb6 100644
+--- a/lib/billing/load-billing-run-document.ts
++++ b/lib/billing/load-billing-run-document.ts
+@@ -21,6 +21,7 @@ import "server-only";
+ import { createAdminClient } from "@/lib/supabase/admin";
+ import { computeBillWht } from "@/lib/billing/wht";
+ import { sumNamedFees, type ForwarderFeeFields } from "@/lib/forwarder/fee-breakdown";
++import { resolveBillAmounts } from "@/lib/billing/resolve-bill-amounts";
+ 
+ // ── Public document shape (moved here from actions/admin/billing-run.ts so the
+ //    public loader + the admin action share ONE definition) ─────────────────
+@@ -88,6 +89,18 @@ export type BillingRunInvoiceDetail = {
+     /** ภูม 2026-06-30 — สลิปหลายรูป (array path) + ตรวจรอบ 1 (2-round เหมือน wallet). */
+     slip_paths: string[];
+     slip_reviewed_at: string | null;
++    /**
++     * bill live-view→freeze (2026-07-13). While a bill is AMOUNT-LIVE (issued · no
++     * slip · no active receipt) the totals below are RECOMPUTED live from the
++     * forwarder rows (a dim/rate/MOMO-revalue edit reflows into the bill + QR with
++     * zero drift). Once committed/paid they show the FROZEN columns. `frozen_vs_live`
++     * = true when a FROZEN doc's live recompute differs from its stored total_thb
++     * (>฿0.01) → a source edit after freeze; the drift banner surfaces it (a real
++     * amount correction goes through คืนเงิน/ออกใบใหม่, never a silent change).
++     */
++    frozen_vs_live: boolean;
++    /** The live-recomputed total (drift banner's "ปัจจุบันคำนวณได้ Y"). == total_thb when not drifted. */
++    live_total_thb: number;
+   };
+   items: Array<{
+     id: number;
+@@ -171,7 +184,13 @@ type HeaderRaw = {
+   slip_reviewed_by: string | null;
+ };
+ 
+-type ItemRaw = { id: number; forwarder_id: number; amount_thb: number | string };
++type ItemRaw = {
++  id: number;
++  forwarder_id: number;
++  amount_thb: number | string;
++  /** mig 0254 — true = amount_thb is a manual override (no live source) → never reflow. */
++  amount_is_override?: boolean | null;
++};
+ 
+ type FwdHydRow = {
+   id: number;
+@@ -185,6 +204,11 @@ type FwdHydRow = {
+   ftransporttype: string | null;
+   frefprice: string | null;
+   frefrate: number | string | null;
++  // เหมาๆ + COD signals for the live-view resolver (2026-07-13): fshipby anchors the
++  // PCSF/PRF flat fee, paymethod='2' (COD) excludes the domestic leg from the face.
++  fshipby: string | null;
++  paymethod: string | null;
++  fusercompany: number | string | null;
+   // Price columns — for the named-fee split (owner 2026-07-07). calcForwarderGross
+   // reads exactly these; the paper re-presents the SAME gross with correct labels.
+   ftotalprice: number | string | null;
+@@ -226,7 +250,7 @@ export async function loadBillingRunDocument(
+ 
+   const { data: itemRaw, error: itemErr } = await admin
+     .from("tb_forwarder_invoice_item")
+-    .select("id, forwarder_id, amount_thb")
++    .select("id, forwarder_id, amount_thb, amount_is_override")
+     .eq("invoice_id", invoiceId)
+     .order("id", { ascending: true });
+   if (itemErr) {
+@@ -246,6 +270,8 @@ export async function loadBillingRunDocument(
+       .select(
+         "id, ftrackingchn, famount, fweight, fvolume, fdate, fstatus, fcabinetnumber, " +
+           "ftransporttype, frefprice, frefrate, " +
++          // เหมาๆ + COD signals for the live-view resolver (2026-07-13)
++          "fshipby, paymethod, fusercompany, " +
+           // price columns for the named-fee split (owner 2026-07-07)
+           "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+           "pricecrate, ftransportpricechnthb, priceother, fdiscount",
+@@ -271,6 +297,108 @@ export async function loadBillingRunDocument(
+     .filter((f): f is FwdHydRow => !!f);
+   const named = sumNamedFees(lineFwdFees);
+ 
++  // ── bill live-view→freeze (2026-07-13) ──────────────────────────────────────
++  // A ใบวางบิล is AMOUNT-LIVE only while it is issued + no slip submitted + no active
++  // receipt exists — the ONE window where a source edit (dims / rate / MOMO-revalue)
++  // reflows into the bill + QR with ZERO drift (no receipt to disagree with). Once a
++  // slip is submitted / it is settled, the totals FREEZE and this loader shows the
++  // stored columns; a later source edit → the drift banner via frozen_vs_live. This
++  // confines live-view to the pre-receipt window so the receipt-pin invariant (G1) is
++  // never violated.
++  const storedSubtotal = Number(hdrRaw.subtotal_thb);
++  const storedMao      = Number(hdrRaw.mao_fee_thb ?? 0);
++  const storedTotal    = Number(hdrRaw.total_thb);
++
++  const hasSlip =
++    !!hdrRaw.slip_uploaded_at ||
++    (typeof hdrRaw.slip_status === "string" && hdrRaw.slip_status.trim() !== "");
++
++  // Recompute the live totals from the hydrated forwarder rows — ONLY when every line's
++  // forwarder is present (a missing/deleted forwarder → keep the frozen doc, never
++  // reflow on incomplete data). Header adjustments + เหมาๆ are CARRIED from the stored
++  // header (admin decisions with no forwarder source) so only the per-line freight (the
++  // dim/rate source) reflows.
++  const liveFwdRows = items
++    .map((i) => fwdByID.get(i.forwarder_id))
++    .filter((f): f is FwdHydRow => !!f);
++  const allHydrated = items.length > 0 && liveFwdRows.length === items.length;
++  // Stored per-line amounts (forwarder_id → ฿) — so an unpriced line keeps its create-guard
++  // override on reflow (never silently under-charge back to ฿0).
++  const storedByFid: Record<string, number> = {};
++  // Manually-overridden lines (mig 0254) — route their STORED amount through the
++  // resolver's `overrides` (override wins · never reflows/refreezes to auto GROSS) so a
++  // deliberate "แก้ยอดเรียกเก็บ" figure is not silently reverted (money-review blocker).
++  // Legacy rows (flag absent/false) fall back to the gross≤0 preservation floor.
++  const overrideByFid: Record<string, number> = {};
++  for (const i of items) {
++    storedByFid[String(i.forwarder_id)] = Number(i.amount_thb);
++    if (i.amount_is_override) overrideByFid[String(i.forwarder_id)] = Number(i.amount_thb);
++  }
++  const resolved = allHydrated
++    ? resolveBillAmounts({
++        rows: liveFwdRows.map((f) => ({
++          id: f.id, fshipby: f.fshipby, ftrackingchn: f.ftrackingchn,
++          ftotalprice: f.ftotalprice, ftransportprice: f.ftransportprice,
++          fpriceupdate: f.fpriceupdate, fshippingservice: f.fshippingservice,
++          pricecrate: f.pricecrate, ftransportpricechnthb: f.ftransportpricechnthb,
++          priceother: f.priceother, fdiscount: f.fdiscount,
++          fusercompany: f.fusercompany, paymethod: f.paymethod,
++        })),
++        deliveryChnThb: Number(hdrRaw.delivery_chn_thb),
++        deliveryThThb:  Number(hdrRaw.delivery_th_thb),
++        otherThb:       Number(hdrRaw.other_thb),
++        discountThb:    Number(hdrRaw.discount_thb),
++        userId:         hdrRaw.userid,
++        isJuristic:     hdrRaw.is_juristic,
++        maoFeeOverride: storedMao,
++        overrides:      overrideByFid,
++        preserveUnpricedFromStored: storedByFid,
++      })
++    : null;
++
++  // Amount-live = issued + no slip + no ACTIVE receipt (a receipt pins the amount).
++  // The receipt probe runs ONLY in that pre-slip window (a paid/committed bill skips it).
++  let amountLive = hdrRaw.status === "issued" && !hasSlip && !resolved?.overflow;
++  if (amountLive) {
++    const fidList = items.map((i) => i.forwarder_id);
++    if (fidList.length > 0) {
++      const { data: rcptItems, error: rcptErr } = await admin
++        .from("tb_receipt_item")
++        .select("rid")
++        .in("fid", fidList);
++      if (rcptErr) {
++        console.error("[loadBillingRunDocument receipt-probe items] failed", { code: rcptErr.code, message: rcptErr.message });
++        amountLive = false; // fail CLOSED — never reflow a possibly-pinned bill on a probe error
++      } else {
++        const rids = Array.from(new Set(
++          ((rcptItems ?? []) as Array<{ rid: string | null }>).map((r) => r.rid).filter((x): x is string => !!x),
++        ));
++        if (rids.length > 0) {
++          const { data: activeRcpts, error: arErr } = await admin
++            .from("tb_receipt")
++            .select("rid")
++            .in("rid", rids)
++            .neq("rstatus", "2"); // '2' = ยกเลิก — a cancelled receipt does not pin
++          if (arErr) {
++            console.error("[loadBillingRunDocument receipt-probe active] failed", { code: arErr.code, message: arErr.message });
++            amountLive = false; // fail CLOSED
++          } else if ((activeRcpts ?? []).length > 0) {
++            amountLive = false; // a receipt already pins the amount → frozen
++          }
++        }
++      }
++    }
++  }
++
++  const reflow = amountLive && resolved != null;
++  const effSubtotal = reflow ? resolved!.subtotal : storedSubtotal;
++  const effMao      = reflow ? resolved!.maoFee   : storedMao;
++  const effTotal    = reflow ? resolved!.total    : storedTotal;
++  // Drift = a FROZEN (committed/paid) doc whose live recompute differs from the frozen
++  // total (an amount-live bill reflows → no drift). live_total_thb powers the banner.
++  const frozenVsLive = !reflow && resolved != null && Math.abs(resolved.total - storedTotal) > 0.01;
++  const liveTotal = resolved != null ? resolved.total : storedTotal;
++
+   return {
+     header: {
+       id:                 hdrRaw.id,
+@@ -284,13 +412,15 @@ export async function loadBillingRunDocument(
+       is_juristic:        hdrRaw.is_juristic,
+       date_issued:        hdrRaw.date_issued,
+       date_due:           hdrRaw.date_due,
+-      subtotal_thb:       Number(hdrRaw.subtotal_thb),
++      // subtotal / เหมาๆ / total = LIVE resolver figures while amount-live, else the
++      // frozen stored columns (bill live-view→freeze 2026-07-13).
++      subtotal_thb:       effSubtotal,
+       delivery_chn_thb:   Number(hdrRaw.delivery_chn_thb),
+       delivery_th_thb:    Number(hdrRaw.delivery_th_thb),
+       other_thb:          Number(hdrRaw.other_thb),
+       discount_thb:       Number(hdrRaw.discount_thb),
+-      mao_fee_thb:        Number(hdrRaw.mao_fee_thb ?? 0),
+-      total_thb:          Number(hdrRaw.total_thb),
++      mao_fee_thb:        effMao,
++      total_thb:          effTotal,
+       status:             hdrRaw.status,
+       note_for_customer:  hdrRaw.note_for_customer,
+       paid_at:            hdrRaw.paid_at,
+@@ -319,14 +449,20 @@ export async function loadBillingRunDocument(
+       sum_update:         named.update,
+       sum_other_rows:     named.other,
+       sum_discount_rows:  named.discount,
+-      ...computeBillWht(hdrRaw.is_juristic, Number(hdrRaw.total_thb)),
++      frozen_vs_live:     frozenVsLive,
++      live_total_thb:     liveTotal,
++      // WHT (หัก ณ ที่จ่าย 1%) + net_payable follow the EFFECTIVE total so the QR/net
++      // reflow for an amount-live bill + stay frozen once committed.
++      ...computeBillWht(hdrRaw.is_juristic, effTotal),
+     },
+     items: items.map((i) => {
+       const f = fwdByID.get(i.forwarder_id) ?? null;
+       return {
+         id:           i.id,
+         forwarder_id: i.forwarder_id,
+-        amount_thb:   Number(i.amount_thb),
++        // amount_thb reflows to the live per-line GROSS while amount-live (so Σ items ==
++        // the live subtotal); frozen to the stored value once committed.
++        amount_thb:   reflow ? (resolved!.perLine.get(i.forwarder_id) ?? Number(i.amount_thb)) : Number(i.amount_thb),
+         forwarder:    f
+           ? {
+               ftrackingchn: f.ftrackingchn ?? "",
+diff --git a/package.json b/package.json
+index ab690c9c..0fcc2274 100644
+--- a/package.json
++++ b/package.json
+@@ -12,8 +12,8 @@
+     "build": "NODE_OPTIONS=--max-old-space-size=4096 next build",
+     "start": "next start",
+     "lint": "eslint",
+-    "test": "tsx lib/forwarder/calc-price.test.ts && tsx lib/forwarder/resolve-rate.test.ts && tsx lib/forwarder/forwarder-debit-total.test.ts && tsx lib/forwarder/fee-breakdown.test.ts && tsx lib/forwarder/forwarder-collect-total.test.ts && tsx lib/forwarder/credit-advance-guard.test.ts && tsx lib/forwarder/resolve-maomao.test.ts && tsx lib/forwarder/domestic-shipping.test.ts && tsx lib/utils/thai-datetime.test.ts && tsx lib/forwarder/calc-company-total.test.ts && tsx lib/forwarder/import-duty-vat.test.ts && tsx lib/forwarder/cargo-cost-autofill.test.ts && tsx lib/forwarder/coid.test.ts && tsx lib/forwarder/pay-method.test.ts && tsx lib/forwarder/currency-convert.test.ts && tsx lib/forwarder/cart-price-display.test.ts && tsx lib/forwarder/usd-order-pricing.test.ts && tsx lib/forwarder/cabinet-transport.test.ts && tsx lib/forwarder/price-breakdown-display.test.ts && tsx lib/forwarder/comparison-guard.test.ts && tsx lib/pricing/min-sell.test.ts && tsx lib/quote/cargo-quote-calc.test.ts && tsx lib/utils/thai-number.test.ts && tsx lib/utils/phone.test.ts && tsx lib/utils/relative-time.test.ts && tsx lib/bkk-zip.test.ts && tsx lib/pdf/render.test.tsx && tsx lib/validators/auth.test.ts && tsx lib/validators/wallet.test.ts && tsx lib/validators/cart.test.ts && tsx lib/validators/profile.test.ts && tsx lib/validators/forwarder.test.ts && tsx lib/validators/booking.test.ts && tsx lib/validators/payment.test.ts && tsx lib/validators/sales.test.ts && tsx lib/validators/misc.test.ts && tsx lib/validators/search.test.ts && tsx lib/validators/tax-invoice.test.ts && tsx lib/validators/thai-tax-id.test.ts && tsx lib/validators/freight-payment.test.ts && tsx lib/validators/safe-numeric.test.ts && tsx lib/validators/cargo-cost-fields.test.ts && tsx lib/validators/withholding-tax.test.ts && tsx lib/tax/wht.test.ts && tsx lib/billing/wht.test.ts && tsx lib/tax/tax-doc-mode.test.ts && tsx lib/promptpay-payload.test.ts && tsx lib/validators/qa-inspection.test.ts && tsx lib/validators/freight-quote.test.ts && tsx lib/validators/freight-shipment.test.ts && tsx lib/validators/refund.test.ts && tsx lib/validators/commission.test.ts && tsx lib/validators/customs-declaration.test.ts && tsx lib/validators/imported-lead-source.test.ts && tsx lib/customs/customs-kit.test.ts && tsx lib/validators/work-item.test.ts && tsx lib/validators/work-item-chat.test.ts && tsx lib/validators/accounting-period.test.ts && tsx lib/validators/broadcast.test.ts && tsx lib/validators/admin-config.test.ts && tsx lib/wallet/balance.test.ts && tsx lib/wallet/classify-approve-row.test.ts && tsx lib/wallet/wallet-hs.test.ts && tsx lib/observability/is-transient-abort.test.ts && tsx lib/wallet/reconcile-anomaly.test.ts && tsx lib/payment/shop-order-total.test.ts && tsx lib/auth/admins-rls.test.ts && tsx lib/admin/default-queue-filter.test.ts && tsx lib/admin/mint-receipt-doc-no.test.ts && tsx lib/admin/phase-access.test.ts && tsx lib/admin/momo-raw-helpers.test.ts && tsx lib/admin/momo-bill-header.test.ts && tsx lib/admin/momo-invoice-parser.test.ts && tsx lib/admin/taem-reconcile-parser.test.ts && tsx lib/admin/momo-packing-xlsx-parser.test.ts && tsx lib/admin/momo-container-resolve.test.ts && tsx lib/admin/taem-etd-eta.test.ts && tsx lib/admin/duplicate-slip-check.test.ts && tsx lib/admin/refund-rebill-guard.test.ts && tsx lib/admin/usable-image-src.test.ts && tsx lib/forwarder/shipment-scan-flip.test.ts && tsx lib/admin/auto-commit-momo-safety.test.ts && tsx lib/admin/customer-identity.test.ts && tsx lib/admin/report-cnt-add-check-gate.test.ts && tsx lib/admin/report-cnt-bucket.test.ts && tsx lib/admin/service-order-search.test.ts && tsx lib/china-search/extract-product-id.test.ts && tsx lib/china-search/short-url-cache.test.ts && tsx lib/china-search/short-url-helpers.test.ts && tsx lib/china-search/akucargo-helpers.test.ts && tsx lib/china-search/laonet-helpers.test.ts && tsx actions/product-search.test.ts && tsx lib/experiments.test.ts && tsx lib/analytics.test.ts && tsx lib/warehouse/cargo-type.test.ts && tsx lib/warehouse/rate-dimensions.test.ts && tsx lib/warehouse/sack.test.ts && tsx lib/warehouse/container-box-breakdown.test.ts && tsx lib/booking-calculator.test.ts && tsx lib/notifications/templates.test.ts && tsx lib/freight/shipping-methods.test.ts && tsx lib/freight/rate-engine.test.ts && tsx lib/freight/incurs-china-freight.test.ts && tsx lib/freight/lead-status.test.ts && tsx lib/payment/cargo-cost-line.test.ts && tsx lib/freight/commission-tier-select.test.ts && tsx lib/freight/rate-lookup-math.test.ts && tsx lib/freight/public-estimate.test.ts && tsx lib/service-order/auto-expire.test.ts && tsx lib/service-order/heartbeat-lock.test.ts && tsx lib/service-order/bulk-eligibility.test.ts && tsx lib/payment/wallet-math.test.ts && tsx lib/sales-commission/calc.test.ts && tsx lib/freight-commission/calc-v2.test.ts && tsx lib/freight-commission/bucket-bases.test.ts && tsx lib/forwarder/outstanding.test.ts && tsx lib/credit/reconcile-drift.test.ts && tsx lib/forwarder/billing-eligibility.test.ts && tsx lib/cashback/note-tag.test.ts && tsx lib/forwarder/reconfirm-gate.test.ts && tsx lib/promo/catalog.test.ts && tsx lib/cart/ship-by-eligibility.test.ts && tsx lib/etax/build-xml.test.ts && tsx lib/legacy-status-map.test.ts && tsx lib/legacy-image.test.ts && tsx lib/shop-image-url.test.ts && tsx lib/csv/escape.test.ts && tsx lib/carrier/registry.test.ts && tsx lib/integrations/google-sheets/ctt-adapter.test.ts && tsx lib/thai-provinces.test.ts && tsx lib/booking/service-config.test.ts && tsx --tsconfig tsconfig.test.json lib/forwarder/billing-gate.test.ts && tsx --tsconfig tsconfig.test.json lib/receipt/receipt-token.test.ts && tsx --env-file=.env.local lib/service-order/placement.test.ts && tsx --env-file=.env.local lib/auth/otp.test.ts && tsx --env-file=.env.local lib/wallet/ledger.test.ts && tsx --env-file=.env.local lib/wallet/overdraw-guard.test.ts && tsx --env-file=.env.local lib/auth/signup.test.ts && tsx --env-file=.env.local lib/service-order/cart-cap.test.ts && tsx lib/auth/pcs-legacy-password.test.ts && tsx lib/admin/reassign-member-code.test.ts && tsx lib/admin/paginate.test.ts && tsx lib/auth/check-fstatus-transition.test.ts && tsx actions/admin/wallet-hs.test.ts && tsx actions/payment-tb.test.ts && tsx actions/wallet-tb.test.ts && tsx actions/service-order.test.ts && tsx actions/admin/tb-bulk-yuan-uuid.test.ts && tsx app/api/cron/refresh-active-customers/route.test.ts && tsx actions/admin/forwarders-bulk-tb.test.ts && tsx actions/admin/reports-tb.test.ts && tsx actions/admin/reports-profit-types.test.ts && tsx actions/admin/service-orders-line-edits.test.ts && tsx actions/admin/service-orders-refund-history.test.ts && tsx actions/admin/service-orders-refund.test.ts && tsx lib/admin/container-journey.test.ts && tsx lib/admin/departed-container-plan.test.ts && tsx lib/admin/vehicle-recommendation.test.ts && tsx lib/forwarder/advance-to-payment-gate.test.ts && tsx lib/receipt/receipt-frozen-totals.test.ts && tsx lib/integrations/momo-web/live-status-plan.test.ts && tsx lib/integrations/momo-web/live-parcel-metrics.test.ts && tsx lib/integrations/momo-web/box-detail-recompute.ts && tsx lib/integrations/momo-web/live-cabinet-plan.test.ts && tsx lib/integrations/momo-web/split-box-rows-plan.test.ts && tsx lib/payment/bank-accounts.test.ts && tsx lib/admin/ap-disbursement.test.ts && tsx lib/services/service-catalog.test.ts && tsx lib/freight/journey-status.test.ts && tsx lib/freight/journey-catalog.test.ts && tsx lib/admin/workspace.test.ts && tsx lib/admin/purchaser-scope.test.ts && tsx lib/marketing-planner/keyword-csv.test.ts && tsx lib/admin/momo-live-discovery-plan.test.ts && tsx lib/admin/topup-slip-dedup.test.ts && tsx lib/admin/receipt-mao-fee.test.ts && tsx lib/forwarder/rate-mode-guard.test.ts && tsx lib/admin/shop-order-access.test.ts && tsx lib/forwarder/customer-tracker-steps.test.ts && tsx lib/translate/zh-to-th.test.ts && tsx --tsconfig tsconfig.test.json lib/admin/resolve-active-rep.test.ts",
+-    "test:unit": "tsx lib/forwarder/calc-price.test.ts && tsx lib/forwarder/resolve-rate.test.ts && tsx lib/forwarder/forwarder-debit-total.test.ts && tsx lib/forwarder/fee-breakdown.test.ts && tsx lib/forwarder/forwarder-collect-total.test.ts && tsx lib/forwarder/credit-advance-guard.test.ts && tsx lib/forwarder/resolve-maomao.test.ts && tsx lib/forwarder/domestic-shipping.test.ts && tsx lib/utils/thai-datetime.test.ts && tsx lib/forwarder/calc-company-total.test.ts && tsx lib/forwarder/import-duty-vat.test.ts && tsx lib/forwarder/cargo-cost-autofill.test.ts && tsx lib/forwarder/coid.test.ts && tsx lib/forwarder/pay-method.test.ts && tsx lib/forwarder/currency-convert.test.ts && tsx lib/forwarder/cart-price-display.test.ts && tsx lib/forwarder/usd-order-pricing.test.ts && tsx lib/forwarder/cabinet-transport.test.ts && tsx lib/forwarder/price-breakdown-display.test.ts && tsx lib/forwarder/comparison-guard.test.ts && tsx lib/pricing/min-sell.test.ts && tsx lib/quote/cargo-quote-calc.test.ts && tsx lib/utils/thai-number.test.ts && tsx lib/utils/phone.test.ts && tsx lib/utils/relative-time.test.ts && tsx lib/bkk-zip.test.ts && tsx lib/pdf/render.test.tsx && tsx lib/validators/auth.test.ts && tsx lib/validators/wallet.test.ts && tsx lib/validators/cart.test.ts && tsx lib/validators/profile.test.ts && tsx lib/validators/forwarder.test.ts && tsx lib/validators/booking.test.ts && tsx lib/validators/payment.test.ts && tsx lib/validators/sales.test.ts && tsx lib/validators/misc.test.ts && tsx lib/validators/search.test.ts && tsx lib/validators/tax-invoice.test.ts && tsx lib/validators/thai-tax-id.test.ts && tsx lib/validators/freight-payment.test.ts && tsx lib/validators/safe-numeric.test.ts && tsx lib/validators/cargo-cost-fields.test.ts && tsx lib/validators/withholding-tax.test.ts && tsx lib/tax/wht.test.ts && tsx lib/billing/wht.test.ts && tsx lib/tax/tax-doc-mode.test.ts && tsx lib/promptpay-payload.test.ts && tsx lib/validators/qa-inspection.test.ts && tsx lib/validators/freight-quote.test.ts && tsx lib/validators/freight-shipment.test.ts && tsx lib/validators/refund.test.ts && tsx lib/validators/commission.test.ts && tsx lib/validators/customs-declaration.test.ts && tsx lib/validators/imported-lead-source.test.ts && tsx lib/customs/customs-kit.test.ts && tsx lib/validators/work-item.test.ts && tsx lib/validators/work-item-chat.test.ts && tsx lib/validators/accounting-period.test.ts && tsx lib/validators/broadcast.test.ts && tsx lib/validators/admin-config.test.ts && tsx lib/wallet/balance.test.ts && tsx lib/wallet/classify-approve-row.test.ts && tsx lib/wallet/wallet-hs.test.ts && tsx lib/observability/is-transient-abort.test.ts && tsx lib/wallet/reconcile-anomaly.test.ts && tsx lib/payment/shop-order-total.test.ts && tsx lib/auth/admins-rls.test.ts && tsx lib/admin/default-queue-filter.test.ts && tsx lib/admin/mint-receipt-doc-no.test.ts && tsx lib/admin/phase-access.test.ts && tsx lib/admin/momo-raw-helpers.test.ts && tsx lib/admin/momo-bill-header.test.ts && tsx lib/admin/momo-invoice-parser.test.ts && tsx lib/admin/taem-reconcile-parser.test.ts && tsx lib/admin/momo-packing-xlsx-parser.test.ts && tsx lib/admin/momo-container-resolve.test.ts && tsx lib/admin/taem-etd-eta.test.ts && tsx lib/admin/duplicate-slip-check.test.ts && tsx lib/admin/refund-rebill-guard.test.ts && tsx lib/admin/usable-image-src.test.ts && tsx lib/forwarder/shipment-scan-flip.test.ts && tsx lib/admin/auto-commit-momo-safety.test.ts && tsx lib/admin/customer-identity.test.ts && tsx lib/admin/report-cnt-add-check-gate.test.ts && tsx lib/admin/report-cnt-bucket.test.ts && tsx lib/admin/service-order-search.test.ts && tsx lib/china-search/extract-product-id.test.ts && tsx lib/china-search/short-url-cache.test.ts && tsx lib/china-search/short-url-helpers.test.ts && tsx lib/china-search/akucargo-helpers.test.ts && tsx lib/china-search/laonet-helpers.test.ts && tsx actions/product-search.test.ts && tsx lib/experiments.test.ts && tsx lib/analytics.test.ts && tsx lib/warehouse/cargo-type.test.ts && tsx lib/warehouse/rate-dimensions.test.ts && tsx lib/warehouse/sack.test.ts && tsx lib/warehouse/container-box-breakdown.test.ts && tsx lib/booking-calculator.test.ts && tsx lib/notifications/templates.test.ts && tsx lib/freight/shipping-methods.test.ts && tsx lib/freight/rate-engine.test.ts && tsx lib/freight/incurs-china-freight.test.ts && tsx lib/freight/lead-status.test.ts && tsx lib/payment/cargo-cost-line.test.ts && tsx lib/freight/commission-tier-select.test.ts && tsx lib/freight/rate-lookup-math.test.ts && tsx lib/freight/public-estimate.test.ts && tsx lib/service-order/auto-expire.test.ts && tsx lib/service-order/heartbeat-lock.test.ts && tsx lib/service-order/bulk-eligibility.test.ts && tsx lib/payment/wallet-math.test.ts && tsx lib/sales-commission/calc.test.ts && tsx lib/freight-commission/calc-v2.test.ts && tsx lib/freight-commission/bucket-bases.test.ts && tsx lib/forwarder/outstanding.test.ts && tsx lib/credit/reconcile-drift.test.ts && tsx lib/forwarder/billing-eligibility.test.ts && tsx lib/cashback/note-tag.test.ts && tsx lib/forwarder/reconfirm-gate.test.ts && tsx lib/promo/catalog.test.ts && tsx lib/cart/ship-by-eligibility.test.ts && tsx lib/etax/build-xml.test.ts && tsx lib/legacy-status-map.test.ts && tsx lib/legacy-image.test.ts && tsx lib/shop-image-url.test.ts && tsx lib/csv/escape.test.ts && tsx lib/carrier/registry.test.ts && tsx lib/integrations/google-sheets/ctt-adapter.test.ts && tsx lib/thai-provinces.test.ts && tsx lib/booking/service-config.test.ts && tsx --tsconfig tsconfig.test.json lib/forwarder/billing-gate.test.ts && tsx --tsconfig tsconfig.test.json lib/receipt/receipt-token.test.ts && tsx lib/auth/pcs-legacy-password.test.ts && tsx lib/admin/reassign-member-code.test.ts && tsx lib/admin/paginate.test.ts && tsx lib/auth/check-fstatus-transition.test.ts && tsx actions/admin/wallet-hs.test.ts && tsx actions/payment-tb.test.ts && tsx actions/wallet-tb.test.ts && tsx actions/service-order.test.ts && tsx actions/admin/tb-bulk-yuan-uuid.test.ts && tsx app/api/cron/refresh-active-customers/route.test.ts && tsx actions/admin/forwarders-bulk-tb.test.ts && tsx actions/admin/reports-tb.test.ts && tsx actions/admin/reports-profit-types.test.ts && tsx actions/admin/service-orders-line-edits.test.ts && tsx actions/admin/service-orders-refund-history.test.ts && tsx actions/admin/service-orders-refund.test.ts && tsx lib/admin/container-journey.test.ts && tsx lib/admin/departed-container-plan.test.ts && tsx lib/admin/vehicle-recommendation.test.ts && tsx lib/forwarder/advance-to-payment-gate.test.ts && tsx lib/receipt/receipt-frozen-totals.test.ts && tsx lib/integrations/momo-web/live-status-plan.test.ts && tsx lib/integrations/momo-web/live-parcel-metrics.test.ts && tsx lib/integrations/momo-web/box-detail-recompute.ts && tsx lib/integrations/momo-web/live-cabinet-plan.test.ts && tsx lib/integrations/momo-web/split-box-rows-plan.test.ts && tsx lib/payment/bank-accounts.test.ts && tsx lib/admin/ap-disbursement.test.ts && tsx lib/services/service-catalog.test.ts && tsx lib/freight/journey-status.test.ts && tsx lib/freight/journey-catalog.test.ts && tsx lib/admin/workspace.test.ts && tsx lib/admin/purchaser-scope.test.ts && tsx lib/marketing-planner/keyword-csv.test.ts && tsx lib/admin/momo-live-discovery-plan.test.ts && tsx lib/admin/topup-slip-dedup.test.ts && tsx lib/admin/receipt-mao-fee.test.ts && tsx lib/forwarder/rate-mode-guard.test.ts && tsx lib/admin/shop-order-access.test.ts && tsx lib/forwarder/customer-tracker-steps.test.ts && tsx lib/translate/zh-to-th.test.ts && tsx --tsconfig tsconfig.test.json lib/admin/resolve-active-rep.test.ts",
++    "test": "tsx lib/forwarder/calc-price.test.ts && tsx lib/forwarder/resolve-rate.test.ts && tsx lib/forwarder/forwarder-debit-total.test.ts && tsx lib/forwarder/fee-breakdown.test.ts && tsx lib/forwarder/forwarder-collect-total.test.ts && tsx lib/forwarder/credit-advance-guard.test.ts && tsx lib/forwarder/resolve-maomao.test.ts && tsx lib/forwarder/domestic-shipping.test.ts && tsx lib/utils/thai-datetime.test.ts && tsx lib/forwarder/calc-company-total.test.ts && tsx lib/forwarder/import-duty-vat.test.ts && tsx lib/forwarder/cargo-cost-autofill.test.ts && tsx lib/forwarder/coid.test.ts && tsx lib/forwarder/pay-method.test.ts && tsx lib/forwarder/currency-convert.test.ts && tsx lib/forwarder/cart-price-display.test.ts && tsx lib/forwarder/usd-order-pricing.test.ts && tsx lib/forwarder/cabinet-transport.test.ts && tsx lib/forwarder/price-breakdown-display.test.ts && tsx lib/forwarder/comparison-guard.test.ts && tsx lib/pricing/min-sell.test.ts && tsx lib/quote/cargo-quote-calc.test.ts && tsx lib/utils/thai-number.test.ts && tsx lib/utils/phone.test.ts && tsx lib/utils/relative-time.test.ts && tsx lib/bkk-zip.test.ts && tsx lib/pdf/render.test.tsx && tsx lib/validators/auth.test.ts && tsx lib/validators/wallet.test.ts && tsx lib/validators/cart.test.ts && tsx lib/validators/profile.test.ts && tsx lib/validators/forwarder.test.ts && tsx lib/validators/booking.test.ts && tsx lib/validators/payment.test.ts && tsx lib/validators/sales.test.ts && tsx lib/validators/misc.test.ts && tsx lib/validators/search.test.ts && tsx lib/validators/tax-invoice.test.ts && tsx lib/validators/thai-tax-id.test.ts && tsx lib/validators/freight-payment.test.ts && tsx lib/validators/safe-numeric.test.ts && tsx lib/validators/cargo-cost-fields.test.ts && tsx lib/validators/withholding-tax.test.ts && tsx lib/tax/wht.test.ts && tsx lib/billing/wht.test.ts && tsx lib/billing/resolve-bill-amounts.test.ts && tsx lib/tax/tax-doc-mode.test.ts && tsx lib/promptpay-payload.test.ts && tsx lib/validators/qa-inspection.test.ts && tsx lib/validators/freight-quote.test.ts && tsx lib/validators/freight-shipment.test.ts && tsx lib/validators/refund.test.ts && tsx lib/validators/commission.test.ts && tsx lib/validators/customs-declaration.test.ts && tsx lib/validators/imported-lead-source.test.ts && tsx lib/customs/customs-kit.test.ts && tsx lib/validators/work-item.test.ts && tsx lib/validators/work-item-chat.test.ts && tsx lib/validators/accounting-period.test.ts && tsx lib/validators/broadcast.test.ts && tsx lib/validators/admin-config.test.ts && tsx lib/wallet/balance.test.ts && tsx lib/wallet/classify-approve-row.test.ts && tsx lib/wallet/wallet-hs.test.ts && tsx lib/observability/is-transient-abort.test.ts && tsx lib/wallet/reconcile-anomaly.test.ts && tsx lib/payment/shop-order-total.test.ts && tsx lib/auth/admins-rls.test.ts && tsx lib/admin/default-queue-filter.test.ts && tsx lib/admin/mint-receipt-doc-no.test.ts && tsx lib/admin/phase-access.test.ts && tsx lib/admin/momo-raw-helpers.test.ts && tsx lib/admin/momo-bill-header.test.ts && tsx lib/admin/momo-invoice-parser.test.ts && tsx lib/admin/taem-reconcile-parser.test.ts && tsx lib/admin/momo-packing-xlsx-parser.test.ts && tsx lib/admin/momo-container-resolve.test.ts && tsx lib/admin/taem-etd-eta.test.ts && tsx lib/admin/duplicate-slip-check.test.ts && tsx lib/admin/refund-rebill-guard.test.ts && tsx lib/admin/usable-image-src.test.ts && tsx lib/forwarder/shipment-scan-flip.test.ts && tsx lib/admin/auto-commit-momo-safety.test.ts && tsx lib/admin/customer-identity.test.ts && tsx lib/admin/report-cnt-add-check-gate.test.ts && tsx lib/admin/report-cnt-bucket.test.ts && tsx lib/admin/service-order-search.test.ts && tsx lib/china-search/extract-product-id.test.ts && tsx lib/china-search/short-url-cache.test.ts && tsx lib/china-search/short-url-helpers.test.ts && tsx lib/china-search/akucargo-helpers.test.ts && tsx lib/china-search/laonet-helpers.test.ts && tsx actions/product-search.test.ts && tsx lib/experiments.test.ts && tsx lib/analytics.test.ts && tsx lib/warehouse/cargo-type.test.ts && tsx lib/warehouse/rate-dimensions.test.ts && tsx lib/warehouse/sack.test.ts && tsx lib/warehouse/container-box-breakdown.test.ts && tsx lib/booking-calculator.test.ts && tsx lib/notifications/templates.test.ts && tsx lib/freight/shipping-methods.test.ts && tsx lib/freight/rate-engine.test.ts && tsx lib/freight/incurs-china-freight.test.ts && tsx lib/freight/lead-status.test.ts && tsx lib/payment/cargo-cost-line.test.ts && tsx lib/freight/commission-tier-select.test.ts && tsx lib/freight/rate-lookup-math.test.ts && tsx lib/freight/public-estimate.test.ts && tsx lib/service-order/auto-expire.test.ts && tsx lib/service-order/heartbeat-lock.test.ts && tsx lib/service-order/bulk-eligibility.test.ts && tsx lib/payment/wallet-math.test.ts && tsx lib/sales-commission/calc.test.ts && tsx lib/freight-commission/calc-v2.test.ts && tsx lib/freight-commission/bucket-bases.test.ts && tsx lib/forwarder/outstanding.test.ts && tsx lib/credit/reconcile-drift.test.ts && tsx lib/forwarder/billing-eligibility.test.ts && tsx lib/cashback/note-tag.test.ts && tsx lib/forwarder/reconfirm-gate.test.ts && tsx lib/promo/catalog.test.ts && tsx lib/cart/ship-by-eligibility.test.ts && tsx lib/etax/build-xml.test.ts && tsx lib/legacy-status-map.test.ts && tsx lib/legacy-image.test.ts && tsx lib/shop-image-url.test.ts && tsx lib/csv/escape.test.ts && tsx lib/carrier/registry.test.ts && tsx lib/integrations/google-sheets/ctt-adapter.test.ts && tsx lib/thai-provinces.test.ts && tsx lib/booking/service-config.test.ts && tsx --tsconfig tsconfig.test.json lib/forwarder/billing-gate.test.ts && tsx --tsconfig tsconfig.test.json lib/receipt/receipt-token.test.ts && tsx --env-file=.env.local lib/service-order/placement.test.ts && tsx --env-file=.env.local lib/auth/otp.test.ts && tsx --env-file=.env.local lib/wallet/ledger.test.ts && tsx --env-file=.env.local lib/wallet/overdraw-guard.test.ts && tsx --env-file=.env.local lib/auth/signup.test.ts && tsx --env-file=.env.local lib/service-order/cart-cap.test.ts && tsx lib/auth/pcs-legacy-password.test.ts && tsx lib/admin/reassign-member-code.test.ts && tsx lib/admin/paginate.test.ts && tsx lib/auth/check-fstatus-transition.test.ts && tsx actions/admin/wallet-hs.test.ts && tsx actions/payment-tb.test.ts && tsx actions/wallet-tb.test.ts && tsx actions/service-order.test.ts && tsx actions/admin/tb-bulk-yuan-uuid.test.ts && tsx app/api/cron/refresh-active-customers/route.test.ts && tsx actions/admin/forwarders-bulk-tb.test.ts && tsx actions/admin/reports-tb.test.ts && tsx actions/admin/reports-profit-types.test.ts && tsx actions/admin/service-orders-line-edits.test.ts && tsx actions/admin/service-orders-refund-history.test.ts && tsx actions/admin/service-orders-refund.test.ts && tsx lib/admin/container-journey.test.ts && tsx lib/admin/departed-container-plan.test.ts && tsx lib/admin/vehicle-recommendation.test.ts && tsx lib/forwarder/advance-to-payment-gate.test.ts && tsx lib/receipt/receipt-frozen-totals.test.ts && tsx lib/integrations/momo-web/live-status-plan.test.ts && tsx lib/integrations/momo-web/live-parcel-metrics.test.ts && tsx lib/integrations/momo-web/box-detail-recompute.ts && tsx lib/integrations/momo-web/live-cabinet-plan.test.ts && tsx lib/integrations/momo-web/split-box-rows-plan.test.ts && tsx lib/payment/bank-accounts.test.ts && tsx lib/admin/ap-disbursement.test.ts && tsx lib/services/service-catalog.test.ts && tsx lib/freight/journey-status.test.ts && tsx lib/freight/journey-catalog.test.ts && tsx lib/admin/workspace.test.ts && tsx lib/admin/purchaser-scope.test.ts && tsx lib/marketing-planner/keyword-csv.test.ts && tsx lib/admin/momo-live-discovery-plan.test.ts && tsx lib/admin/topup-slip-dedup.test.ts && tsx lib/admin/receipt-mao-fee.test.ts && tsx lib/forwarder/rate-mode-guard.test.ts && tsx lib/admin/shop-order-access.test.ts && tsx lib/forwarder/customer-tracker-steps.test.ts && tsx lib/translate/zh-to-th.test.ts && tsx --tsconfig tsconfig.test.json lib/admin/resolve-active-rep.test.ts",
++    "test:unit": "tsx lib/forwarder/calc-price.test.ts && tsx lib/forwarder/resolve-rate.test.ts && tsx lib/forwarder/forwarder-debit-total.test.ts && tsx lib/forwarder/fee-breakdown.test.ts && tsx lib/forwarder/forwarder-collect-total.test.ts && tsx lib/forwarder/credit-advance-guard.test.ts && tsx lib/forwarder/resolve-maomao.test.ts && tsx lib/forwarder/domestic-shipping.test.ts && tsx lib/utils/thai-datetime.test.ts && tsx lib/forwarder/calc-company-total.test.ts && tsx lib/forwarder/import-duty-vat.test.ts && tsx lib/forwarder/cargo-cost-autofill.test.ts && tsx lib/forwarder/coid.test.ts && tsx lib/forwarder/pay-method.test.ts && tsx lib/forwarder/currency-convert.test.ts && tsx lib/forwarder/cart-price-display.test.ts && tsx lib/forwarder/usd-order-pricing.test.ts && tsx lib/forwarder/cabinet-transport.test.ts && tsx lib/forwarder/price-breakdown-display.test.ts && tsx lib/forwarder/comparison-guard.test.ts && tsx lib/pricing/min-sell.test.ts && tsx lib/quote/cargo-quote-calc.test.ts && tsx lib/utils/thai-number.test.ts && tsx lib/utils/phone.test.ts && tsx lib/utils/relative-time.test.ts && tsx lib/bkk-zip.test.ts && tsx lib/pdf/render.test.tsx && tsx lib/validators/auth.test.ts && tsx lib/validators/wallet.test.ts && tsx lib/validators/cart.test.ts && tsx lib/validators/profile.test.ts && tsx lib/validators/forwarder.test.ts && tsx lib/validators/booking.test.ts && tsx lib/validators/payment.test.ts && tsx lib/validators/sales.test.ts && tsx lib/validators/misc.test.ts && tsx lib/validators/search.test.ts && tsx lib/validators/tax-invoice.test.ts && tsx lib/validators/thai-tax-id.test.ts && tsx lib/validators/freight-payment.test.ts && tsx lib/validators/safe-numeric.test.ts && tsx lib/validators/cargo-cost-fields.test.ts && tsx lib/validators/withholding-tax.test.ts && tsx lib/tax/wht.test.ts && tsx lib/billing/wht.test.ts && tsx lib/billing/resolve-bill-amounts.test.ts && tsx lib/tax/tax-doc-mode.test.ts && tsx lib/promptpay-payload.test.ts && tsx lib/validators/qa-inspection.test.ts && tsx lib/validators/freight-quote.test.ts && tsx lib/validators/freight-shipment.test.ts && tsx lib/validators/refund.test.ts && tsx lib/validators/commission.test.ts && tsx lib/validators/customs-declaration.test.ts && tsx lib/validators/imported-lead-source.test.ts && tsx lib/customs/customs-kit.test.ts && tsx lib/validators/work-item.test.ts && tsx lib/validators/work-item-chat.test.ts && tsx lib/validators/accounting-period.test.ts && tsx lib/validators/broadcast.test.ts && tsx lib/validators/admin-config.test.ts && tsx lib/wallet/balance.test.ts && tsx lib/wallet/classify-approve-row.test.ts && tsx lib/wallet/wallet-hs.test.ts && tsx lib/observability/is-transient-abort.test.ts && tsx lib/wallet/reconcile-anomaly.test.ts && tsx lib/payment/shop-order-total.test.ts && tsx lib/auth/admins-rls.test.ts && tsx lib/admin/default-queue-filter.test.ts && tsx lib/admin/mint-receipt-doc-no.test.ts && tsx lib/admin/phase-access.test.ts && tsx lib/admin/momo-raw-helpers.test.ts && tsx lib/admin/momo-bill-header.test.ts && tsx lib/admin/momo-invoice-parser.test.ts && tsx lib/admin/taem-reconcile-parser.test.ts && tsx lib/admin/momo-packing-xlsx-parser.test.ts && tsx lib/admin/momo-container-resolve.test.ts && tsx lib/admin/taem-etd-eta.test.ts && tsx lib/admin/duplicate-slip-check.test.ts && tsx lib/admin/refund-rebill-guard.test.ts && tsx lib/admin/usable-image-src.test.ts && tsx lib/forwarder/shipment-scan-flip.test.ts && tsx lib/admin/auto-commit-momo-safety.test.ts && tsx lib/admin/customer-identity.test.ts && tsx lib/admin/report-cnt-add-check-gate.test.ts && tsx lib/admin/report-cnt-bucket.test.ts && tsx lib/admin/service-order-search.test.ts && tsx lib/china-search/extract-product-id.test.ts && tsx lib/china-search/short-url-cache.test.ts && tsx lib/china-search/short-url-helpers.test.ts && tsx lib/china-search/akucargo-helpers.test.ts && tsx lib/china-search/laonet-helpers.test.ts && tsx actions/product-search.test.ts && tsx lib/experiments.test.ts && tsx lib/analytics.test.ts && tsx lib/warehouse/cargo-type.test.ts && tsx lib/warehouse/rate-dimensions.test.ts && tsx lib/warehouse/sack.test.ts && tsx lib/warehouse/container-box-breakdown.test.ts && tsx lib/booking-calculator.test.ts && tsx lib/notifications/templates.test.ts && tsx lib/freight/shipping-methods.test.ts && tsx lib/freight/rate-engine.test.ts && tsx lib/freight/incurs-china-freight.test.ts && tsx lib/freight/lead-status.test.ts && tsx lib/payment/cargo-cost-line.test.ts && tsx lib/freight/commission-tier-select.test.ts && tsx lib/freight/rate-lookup-math.test.ts && tsx lib/freight/public-estimate.test.ts && tsx lib/service-order/auto-expire.test.ts && tsx lib/service-order/heartbeat-lock.test.ts && tsx lib/service-order/bulk-eligibility.test.ts && tsx lib/payment/wallet-math.test.ts && tsx lib/sales-commission/calc.test.ts && tsx lib/freight-commission/calc-v2.test.ts && tsx lib/freight-commission/bucket-bases.test.ts && tsx lib/forwarder/outstanding.test.ts && tsx lib/credit/reconcile-drift.test.ts && tsx lib/forwarder/billing-eligibility.test.ts && tsx lib/cashback/note-tag.test.ts && tsx lib/forwarder/reconfirm-gate.test.ts && tsx lib/promo/catalog.test.ts && tsx lib/cart/ship-by-eligibility.test.ts && tsx lib/etax/build-xml.test.ts && tsx lib/legacy-status-map.test.ts && tsx lib/legacy-image.test.ts && tsx lib/shop-image-url.test.ts && tsx lib/csv/escape.test.ts && tsx lib/carrier/registry.test.ts && tsx lib/integrations/google-sheets/ctt-adapter.test.ts && tsx lib/thai-provinces.test.ts && tsx lib/booking/service-config.test.ts && tsx --tsconfig tsconfig.test.json lib/forwarder/billing-gate.test.ts && tsx --tsconfig tsconfig.test.json lib/receipt/receipt-token.test.ts && tsx lib/auth/pcs-legacy-password.test.ts && tsx lib/admin/reassign-member-code.test.ts && tsx lib/admin/paginate.test.ts && tsx lib/auth/check-fstatus-transition.test.ts && tsx actions/admin/wallet-hs.test.ts && tsx actions/payment-tb.test.ts && tsx actions/wallet-tb.test.ts && tsx actions/service-order.test.ts && tsx actions/admin/tb-bulk-yuan-uuid.test.ts && tsx app/api/cron/refresh-active-customers/route.test.ts && tsx actions/admin/forwarders-bulk-tb.test.ts && tsx actions/admin/reports-tb.test.ts && tsx actions/admin/reports-profit-types.test.ts && tsx actions/admin/service-orders-line-edits.test.ts && tsx actions/admin/service-orders-refund-history.test.ts && tsx actions/admin/service-orders-refund.test.ts && tsx lib/admin/container-journey.test.ts && tsx lib/admin/departed-container-plan.test.ts && tsx lib/admin/vehicle-recommendation.test.ts && tsx lib/forwarder/advance-to-payment-gate.test.ts && tsx lib/receipt/receipt-frozen-totals.test.ts && tsx lib/integrations/momo-web/live-status-plan.test.ts && tsx lib/integrations/momo-web/live-parcel-metrics.test.ts && tsx lib/integrations/momo-web/box-detail-recompute.ts && tsx lib/integrations/momo-web/live-cabinet-plan.test.ts && tsx lib/integrations/momo-web/split-box-rows-plan.test.ts && tsx lib/payment/bank-accounts.test.ts && tsx lib/admin/ap-disbursement.test.ts && tsx lib/services/service-catalog.test.ts && tsx lib/freight/journey-status.test.ts && tsx lib/freight/journey-catalog.test.ts && tsx lib/admin/workspace.test.ts && tsx lib/admin/purchaser-scope.test.ts && tsx lib/marketing-planner/keyword-csv.test.ts && tsx lib/admin/momo-live-discovery-plan.test.ts && tsx lib/admin/topup-slip-dedup.test.ts && tsx lib/admin/receipt-mao-fee.test.ts && tsx lib/forwarder/rate-mode-guard.test.ts && tsx lib/admin/shop-order-access.test.ts && tsx lib/forwarder/customer-tracker-steps.test.ts && tsx lib/translate/zh-to-th.test.ts && tsx --tsconfig tsconfig.test.json lib/admin/resolve-active-rep.test.ts",
+     "audit:md": "node scripts/md-link-audit.mjs",
+     "audit:env": "node scripts/env-audit.mjs",
+     "audit:i18n": "node scripts/i18n-audit.mjs",
+=== NEW FILE: lib/billing/resolve-bill-amounts.test.ts ===
+/**
+ * Unit tests for lib/billing/resolve-bill-amounts.ts — the SINGLE ใบวางบิล money
+ * formula shared by create + live-view + freeze. Pure, no IO.
+ *
+ * Proves: Σ per-line == subtotal · COD (ปลายทาง) domestic-leg exclusion · เหมาๆ
+ * once-per-shipment (base-tracking anchor) · per-line override wins · header
+ * adjustments · overflow guard · and that the result reconciles with computeBillWht.
+ *
+ * Run:  pnpm tsx lib/billing/resolve-bill-amounts.test.ts   (wired into pnpm test:unit)
+ */
+
+import { resolveBillAmounts, type ResolveBillRow, BILL_TOTAL_MAX } from "./resolve-bill-amounts";
+import { calcForwarderGross } from "@/lib/forwarder/outstanding";
+import { computeBillWht } from "./wht";
+
+let pass = 0;
+let fail = 0;
+function assertEq<T>(label: string, actual: T, expected: T) {
+  if (JSON.stringify(actual) === JSON.stringify(expected)) { pass++; console.log(`  ✓ ${label}`); }
+  else { fail++; console.error(`  ✗ ${label}\n    expected: ${JSON.stringify(expected)}\n    actual:   ${JSON.stringify(actual)}`); }
+}
+function section(name: string) { console.log(`\n${name}`); }
+
+/** Build a full ResolveBillRow (all fields 0/null) with overrides. */
+function row(o: Partial<ResolveBillRow> & { id: number }): ResolveBillRow {
+  return {
+    fshipby: null, ftrackingchn: null,
+    ftotalprice: 0, ftransportprice: 0, fpriceupdate: 0, fshippingservice: 0,
+    pricecrate: 0, ftransportpricechnthb: 0, priceother: 0, fdiscount: 0,
+    fusercompany: null, paymethod: null, ...o,
+  };
+}
+
+const base = {
+  deliveryChnThb: 0, deliveryThThb: 0, otherThb: 0, discountThb: 0,
+  userId: "PR001", isJuristic: false,
+};
+
+// ────────────────────────────────────────────────────────────────────────
+section("subtotal = Σ per-line gross");
+
+{
+  const r = resolveBillAmounts({
+    ...base,
+    rows: [
+      row({ id: 1, ftotalprice: 1000, ftransportprice: 100 }),
+      row({ id: 2, ftotalprice: 500, fpriceupdate: 25, fdiscount: 15 }),
+    ],
+  });
+  assertEq("line 1 = 1100", r.perLine.get(1), 1100);
+  assertEq("line 2 = 510", r.perLine.get(2), 510);
+  assertEq("subtotal = Σ lines (1610)", r.subtotal, 1610);
+  assertEq("total = subtotal (no mao, no adj)", r.total, 1610);
+  assertEq("Σ perLine === subtotal", r.perLine.get(1)! + r.perLine.get(2)!, r.subtotal);
+}
+
+// ────────────────────────────────────────────────────────────────────────
+section("COD (ปลายทาง · paymethod='2') excludes the domestic leg");
+
+{
+  const prepaid = resolveBillAmounts({ ...base, rows: [row({ id: 1, ftotalprice: 1000, ftransportprice: 100, paymethod: "1" })] });
+  const cod     = resolveBillAmounts({ ...base, rows: [row({ id: 1, ftotalprice: 1000, ftransportprice: 100, paymethod: "2" })] });
+  assertEq("prepaid → domestic leg INCLUDED (1100)", prepaid.total, 1100);
+  assertEq("COD → domestic leg EXCLUDED (1000)", cod.total, 1000);
+  // resolver line agrees with calcForwarderGross directly (single SOT).
+  assertEq("resolver line == calcForwarderGross (COD)",
+    cod.perLine.get(1), calcForwarderGross(row({ id: 1, ftotalprice: 1000, ftransportprice: 100, paymethod: "2" })));
+}
+
+// ────────────────────────────────────────────────────────────────────────
+section("เหมาๆ once-per-shipment (base-tracking anchor · PCSF/PRF flat ฿100)");
+
+{
+  // Two box-split siblings of ONE shipment (base tracking SF001, box SF001-1/-2),
+  // both เหมาๆ (PRF · ftransportprice 0). The ฿100 fee is charged ONCE (on the base).
+  const r = resolveBillAmounts({
+    ...base,
+    rows: [
+      row({ id: 1, fshipby: "PRF", ftrackingchn: "SF001",   ftotalprice: 300 }),
+      row({ id: 2, fshipby: "PRF", ftrackingchn: "SF001-1", ftotalprice: 200 }),
+      row({ id: 3, fshipby: "PRF", ftrackingchn: "SF001-2", ftotalprice: 100 }),
+    ],
+  });
+  assertEq("subtotal = Σ freight (600 · mao is a SEPARATE line)", r.subtotal, 600);
+  assertEq("เหมาๆ = ฿100 ONCE (not ฿300)", r.maoFee, 100);
+  assertEq("total = subtotal + mao (700)", r.total, 700);
+}
+
+{
+  // maoFeeOverride wins even at 0 (admin waived เหมาๆ · live-view carries the header value).
+  const r = resolveBillAmounts({
+    ...base,
+    rows: [row({ id: 1, fshipby: "PRF", ftrackingchn: "SF001", ftotalprice: 300 })],
+    maoFeeOverride: 0,
+  });
+  assertEq("maoFeeOverride 0 wins over the ฿100 auto", r.maoFee, 0);
+  assertEq("total = subtotal only when mao waived", r.total, 300);
+}
+
+{
+  // A non-เหมาๆ carrier gets no flat fee.
+  const r = resolveBillAmounts({ ...base, rows: [row({ id: 1, fshipby: "PCS", ftotalprice: 300 })] });
+  assertEq("non-PCSF carrier → เหมาๆ 0", r.maoFee, 0);
+}
+
+// ────────────────────────────────────────────────────────────────────────
+section("per-line override wins over the auto gross");
+
+{
+  const r = resolveBillAmounts({
+    ...base,
+    rows: [
+      row({ id: 1, ftotalprice: 1000 }),
+      row({ id: 2, ftotalprice: 500 }),
+    ],
+    overrides: { "1": 850 },
+  });
+  assertEq("line 1 = override (850)", r.perLine.get(1), 850);
+  assertEq("line 2 = auto gross (500)", r.perLine.get(2), 500);
+  assertEq("subtotal reflects the override (1350)", r.subtotal, 1350);
+}
+
+{
+  // Non-finite / out-of-map override keys ignored (no NaN leak).
+  const r = resolveBillAmounts({
+    ...base,
+    rows: [row({ id: 1, ftotalprice: 1000 })],
+    overrides: { "1": Number.NaN, "999": 5 },
+  });
+  assertEq("NaN override ignored → auto gross", r.perLine.get(1), 1000);
+  assertEq("subtotal = 1000 (stray key 999 ignored)", r.subtotal, 1000);
+}
+
+// ────────────────────────────────────────────────────────────────────────
+section("reflow preservation floor (unpriced line keeps its stored override)");
+
+{
+  // A ฿0-transport row the create-guard REQUIRED a positive override for (stored 850).
+  // On a live-view reflow (no override passed) its GROSS is still 0 → KEEP the stored 850
+  // (never silently under-charge back to ฿0). A priced line reflows normally.
+  const r = resolveBillAmounts({
+    ...base,
+    rows: [
+      row({ id: 1, ftotalprice: 0 }),    // unpriced → gross 0
+      row({ id: 2, ftotalprice: 1200 }), // priced → gross 1200 (reflows in both directions)
+    ],
+    preserveUnpricedFromStored: { "1": 850, "2": 1000 },
+  });
+  assertEq("unpriced line 1 keeps stored 850 (not ฿0)", r.perLine.get(1), 850);
+  assertEq("priced line 2 reflows to live gross 1200 (stored 1000 ignored)", r.perLine.get(2), 1200);
+  assertEq("subtotal = 850 + 1200", r.subtotal, 2050);
+}
+
+{
+  // An explicit override ALWAYS wins over the preservation floor.
+  const r = resolveBillAmounts({
+    ...base,
+    rows: [row({ id: 1, ftotalprice: 0 })],
+    overrides: { "1": 300 },
+    preserveUnpricedFromStored: { "1": 850 },
+  });
+  assertEq("override wins over the stored-preserve floor", r.perLine.get(1), 300);
+}
+
+{
+  // MONEY-REVIEW BLOCKER (mig 0254) — a PRICED line the admin manually overrode BELOW
+  // its auto gross must NOT reflow to gross on an amount-live reload / freeze. The
+  // caller (loader/list/freeze) reconstructs `overrides` from the persisted
+  // amount_is_override flag AND still passes preserveUnpricedFromStored (both maps
+  // present, as in the real caller). The override must win → the customer is billed the
+  // ฿500 the admin typed, never the ฿800 gross.
+  const r = resolveBillAmounts({
+    ...base,
+    rows: [row({ id: 1, ftotalprice: 800 })], // live gross 800
+    overrides: { "1": 500 },                  // admin typed 500 (persisted override)
+    preserveUnpricedFromStored: { "1": 500 }, // stored amount also seen by the caller
+  });
+  assertEq("priced override 500 held (not reflowed to gross 800)", r.perLine.get(1), 500);
+  assertEq("subtotal honors the override (500)", r.subtotal, 500);
+  // Direction-symmetric: an override ABOVE gross must not silently under-collect either.
+  const r2 = resolveBillAmounts({
+    ...base,
+    rows: [row({ id: 1, ftotalprice: 800 })],
+    overrides: { "1": 1200 },
+    preserveUnpricedFromStored: { "1": 1200 },
+  });
+  assertEq("priced override 1200 held (above gross 800)", r2.perLine.get(1), 1200);
+}
+
+{
+  // Absent preservation map (create path) → an unpriced line is ฿0 (unchanged behavior).
+  const r = resolveBillAmounts({ ...base, rows: [row({ id: 1, ftotalprice: 0 })] });
+  assertEq("no preserve map → unpriced line = 0", r.perLine.get(1), 0);
+}
+
+// ────────────────────────────────────────────────────────────────────────
+section("header adjustments (chn/th/other − discount) + never-negative total");
+
+{
+  const r = resolveBillAmounts({
+    ...base,
+    rows: [row({ id: 1, ftotalprice: 1000 })],
+    deliveryChnThb: 50, deliveryThThb: 30, otherThb: 20, discountThb: 10,
+  });
+  assertEq("total = 1000 + 50 + 30 + 20 − 10 = 1090", r.total, 1090);
+}
+
+{
+  // discount larger than everything → total clamps to 0 (never negative).
+  const r = resolveBillAmounts({ ...base, rows: [row({ id: 1, ftotalprice: 100 })], discountThb: 500 });
+  assertEq("over-discount clamps total to 0", r.total, 0);
+}
+
+// ────────────────────────────────────────────────────────────────────────
+section("satang quantization — subtotal == Σ quantized lines to the satang");
+
+{
+  // Legacy varchar decimals; each line rounds to 2dp BEFORE summing (mig 0138 invariant).
+  const r = resolveBillAmounts({
+    ...base,
+    rows: [
+      row({ id: 1, ftotalprice: "1000.005" }), // → 1000.01 (round-half-up on .005 → JS Math.round)
+      row({ id: 2, ftotalprice: "0.334" }),    // → 0.33
+    ],
+  });
+  const l1 = r.perLine.get(1)!;
+  const l2 = r.perLine.get(2)!;
+  assertEq("subtotal == l1 + l2 to the satang", r.subtotal, Math.round((l1 + l2) * 100) / 100);
+}
+
+// ────────────────────────────────────────────────────────────────────────
+section("overflow guard (NUMERIC(12,2) ceiling)");
+
+{
+  const under = resolveBillAmounts({ ...base, rows: [row({ id: 1, ftotalprice: BILL_TOTAL_MAX })] });
+  assertEq("at the ceiling → not overflow", under.overflow, false);
+  const over = resolveBillAmounts({ ...base, rows: [row({ id: 1, ftotalprice: BILL_TOTAL_MAX }), row({ id: 2, ftotalprice: 1 })] });
+  assertEq("over the ceiling → overflow", over.overflow, true);
+}
+
+// ────────────────────────────────────────────────────────────────────────
+section("reconciles with computeBillWht (bill face → 1% once → net)");
+
+{
+  // Juristic ฿5,000 gross → the WHT is a DISPLAY line on top of the resolver total.
+  const r = resolveBillAmounts({ ...base, isJuristic: true, rows: [row({ id: 1, ftotalprice: 5000 })] });
+  const w = computeBillWht(true, r.total);
+  assertEq("total = gross 5000 (WHT is a header line, not in subtotal)", r.total, 5000);
+  assertEq("WHT 1% = 50 · net 4950", [w.wht_amount, w.net_payable], [50, 4950]);
+  assertEq("wht + net === total (satang)", Math.round((w.wht_amount + w.net_payable) * 100) / 100, r.total);
+}
+
+console.log(`\n${fail === 0 ? "✅" : "❌"} billing/resolve-bill-amounts: ${pass} pass / ${fail} fail`);
+if (fail > 0) process.exit(1);
+=== NEW FILE: lib/billing/resolve-bill-amounts.ts ===
+/**
+ * resolve-bill-amounts.ts — the SINGLE, pure formula for a ใบวางบิล's money.
+ *
+ * ── WHY THIS EXISTS (bill live-view→freeze · 2026-07-13) ────────────────────
+ * The ใบวางบิล's subtotal / เหมาๆ / total were computed inline in THREE places:
+ *   1. createBillingRunInvoiceImpl        (at issue · billing-run.ts ~1485-1549)
+ *   2. the loader's live-view reflow      (an amount-live bill · load-billing-run-document.ts)
+ *   3. the commit-boundary freeze          (slip-submit / offline-settle · billing-run.ts)
+ * Three copies drift. This module is the ONE formula they all call so the create
+ * total, the live-view total, the frozen total, the list total and the /b/[token]
+ * QR net all reconcile TO THE SATANG by construction (guardrail b).
+ *
+ * It is EXTRACTED verbatim from the create math (billing-run.ts:1485-1544):
+ *   perLine(id)  = round2( overrides[id] ?? calcForwarderGross(liveRow) )   (1519-1523)
+ *   subtotal     = Σ perLine                                                 (1525)
+ *   mao          = maoFeeOverride ?? Σ computeForwarderDebitBatch(rows).maoFee (1497-1535)
+ *   total        = max(0, subtotal + mao + chn + th + other − discount)      (1536-1539)
+ *   overflow     = subtotal > 9,999,999,999.99 || total > …                  (1544)
+ *
+ * PURE — no IO, no Supabase. calcForwarderGross already excludes a COD (ปลายทาง ·
+ * paymethod='2') domestic leg (outstanding.ts) and computeForwarderDebitBatch
+ * charges เหมาๆ ONCE per shipment (base-tracking anchor · forwarder-debit-total.ts),
+ * so both money rules flow through this resolver for free (guardrails d + e).
+ *
+ * Callers:
+ *   - create   → pass the create-form overrides + maoFeeOverride (byte-identical to the old inline math).
+ *   - live-view → pass overrides:undefined (recompute every line from live gross) + maoFeeOverride = the
+ *                 bill's stored mao_fee_thb (a header promo fee the admin set at issue — no forwarder source,
+ *                 so it is CARRIED, not re-derived; the per-line freight is what reflows on a dim/rate edit).
+ *   - freeze   → same inputs as live-view (freeze writes exactly what live-view showed).
+ */
+
+import { calcForwarderGross } from "@/lib/forwarder/outstanding";
+import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-total";
+
+/** A live tb_forwarder row the resolver reads (all 8 price cols + the mao + COD signals). */
+export interface ResolveBillRow {
+  id: number;
+  /** เหมาๆ (PCSF/PRF) carrier — computeForwarderDebitBatch anchors the flat fee. */
+  fshipby: string | null;
+  /** Base-tracking anchor for the once-per-shipment เหมาๆ fee (optional · falls back to first-in-batch). */
+  ftrackingchn?: string | null;
+  ftotalprice: number | string | null;
+  ftransportprice: number | string | null;
+  fpriceupdate: number | string | null;
+  fshippingservice: number | string | null;
+  pricecrate: number | string | null;
+  ftransportpricechnthb: number | string | null;
+  priceother: number | string | null;
+  fdiscount: number | string | null;
+  /** '1'=juristic — unused by the GROSS math (kept so a row is a full ForwarderPriceFields). */
+  fusercompany: number | string | null;
+  /** '1'=ต้นทาง (prepaid) · '2'=ปลายทาง (COD) — a COD domestic leg is excluded from the bill face. */
+  paymethod?: number | string | null;
+}
+
+export interface ResolveBillInput {
+  /** The live forwarder rows the bill covers (already the exact billable set · deduped). */
+  rows: ResolveBillRow[];
+  /** Header adjustments — admin-typed, NO forwarder source (carried verbatim). */
+  deliveryChnThb: number;
+  deliveryThThb: number;
+  otherThb: number;
+  discountThb: number;
+  /** For the เหมาๆ once-per-shipment gate (PCS999 exempt) + the corporate ≥฿1000 branch. */
+  userId: string;
+  isJuristic: boolean;
+  /** Per-line override (forwarder_id → ฿amount, keyed as a string). A finite number wins over the auto
+   *  GROSS for that line. Absent (live-view / freeze) → every line = calcForwarderGross(row). */
+  overrides?: Record<string, number | null | undefined>;
+  /** Header เหมาๆ override. A finite number wins; undefined → derive once-per-shipment via the batch engine. */
+  maoFeeOverride?: number;
+  /**
+   * live-view / freeze REFLOW protection (bill live-view→freeze · 2026-07-13). The bill's
+   * STORED per-line amounts (forwarder_id → ฿). When a line's live GROSS is ≤ 0 (unpriced /
+   * unmeasured) but its stored amount is > 0, the STORED amount is KEPT — this preserves the
+   * positive override the create-time `zeroTransport` guard REQUIRES for a ฿0-transport row
+   * (a source still at ฿0 must not silently under-charge back to ฿0 on a reflow). A PRICED
+   * line (gross > 0) reflows in BOTH directions. Only consulted when there is NO per-line
+   * override for that row (an override always wins). Absent (create) → no preservation.
+   */
+  preserveUnpricedFromStored?: Record<string, number | null | undefined>;
+}
+
+export interface ResolvedBillAmounts {
+  /** Σ per-line (override ?? gross), satang-quantized. */
+  subtotal: number;
+  /** ค่าส่งเหมาๆ (override wins · else the once-per-shipment auto Σ). */
+  maoFee: number;
+  /** max(0, subtotal + mao + chn + th + other − discount), satang-quantized. */
+  total: number;
+  /** forwarder_id → the satang-quantized line amount (create builds items · loader sets item amounts). */
+  perLine: Map<number, number>;
+  /** subtotal or total exceeds the NUMERIC(12,2) header ceiling → the caller must refuse. */
+  overflow: boolean;
+}
+
+/** The NUMERIC(12,2) header ceiling the create form enforces (billing-run.ts:1544). */
+export const BILL_TOTAL_MAX = 9_999_999_999.99;
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Compute a ใบวางบิล's subtotal / เหมาๆ / total + per-line amounts from LIVE forwarder
+ * rows + the header adjustments. The one formula shared by create + live-view + freeze.
+ */
+export function resolveBillAmounts(input: ResolveBillInput): ResolvedBillAmounts {
+  // ── per-line: override wins, else the GROSS composite (Σ 7 cols − discount, COD-aware) ──
+  const overrideAmt = (id: number): number | null => {
+    const raw = input.overrides?.[String(id)];
+    return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
+  };
+  const storedAmt = (id: number): number | null => {
+    const raw = input.preserveUnpricedFromStored?.[String(id)];
+    return typeof raw === "number" && Number.isFinite(raw) ? raw : null;
+  };
+  const perLine = new Map<number, number>();
+  let subtotalRaw = 0;
+  for (const r of input.rows) {
+    const ov = overrideAmt(r.id);
+    let amt: number;
+    if (ov != null) {
+      amt = round2(ov); // an explicit override always wins
+    } else {
+      const gross = round2(calcForwarderGross(r));
+      // Reflow protection: an unpriced (gross ≤ 0) line keeps its positive stored amount
+      // (the create-guard override) — never silently under-charge back to ฿0.
+      const stored = storedAmt(r.id);
+      amt = gross <= 0 && stored != null && stored > 0 ? round2(stored) : gross;
+    }
+    perLine.set(r.id, amt);
+    subtotalRaw += amt;
+  }
+  const subtotal = round2(subtotalRaw);
+
+  // ── เหมาๆ (PCSF/PRF flat) — once-per-shipment (base-tracking anchor). Override wins. ──
+  const maoBatch = computeForwarderDebitBatch(
+    input.rows.map((r) => ({
+      id: r.id, fshipby: r.fshipby, ftrackingchn: r.ftrackingchn,
+      ftotalprice: r.ftotalprice, ftransportprice: r.ftransportprice,
+      fpriceupdate: r.fpriceupdate, fshippingservice: r.fshippingservice,
+      pricecrate: r.pricecrate, ftransportpricechnthb: r.ftransportpricechnthb,
+      priceother: r.priceother, fdiscount: r.fdiscount,
+    })),
+    { userId: input.userId, isCorporate: input.isJuristic },
+  );
+  const autoMaoFee = round2(
+    maoBatch.lines.reduce((s, l) => s + l.breakdown.maoFee, 0),
+  );
+  const maoFee =
+    input.maoFeeOverride != null && Number.isFinite(input.maoFeeOverride)
+      ? round2(input.maoFeeOverride)
+      : autoMaoFee;
+
+  // ── total: subtotal + mao + the 4 header adjustments (never negative) ──
+  const total = round2(
+    Math.max(
+      0,
+      subtotal + maoFee + input.deliveryChnThb + input.deliveryThThb + input.otherThb - input.discountThb,
+    ),
+  );
+
+  return {
+    subtotal,
+    maoFee,
+    total,
+    perLine,
+    overflow: subtotal > BILL_TOTAL_MAX || total > BILL_TOTAL_MAX,
+  };
+}
+=== NEW FILE: supabase/migrations/0254_billing_invoice_item_amount_override.sql ===
+-- 0254 — per-line "แก้ยอดเรียกเก็บ" OVERRIDE flag on ใบวางบิล line items.
+--
+-- WHY (MONEY · bill live-view→freeze 2026-07-13 · money-review blocker):
+--   The shared resolver (lib/billing/resolve-bill-amounts.ts) reflows every PRICED
+--   line from the LIVE forwarder GROSS while a bill is amount-live (issued · no slip ·
+--   no active receipt), and the commit freeze then writes that reflowed value. A line
+--   the admin MANUALLY OVERRODE (typed a figure ≠ the auto gross in the /add form's
+--   "แก้ยอดเรียกเก็บ" field) has NO live forwarder source, so the reflow/refreeze
+--   silently reverts it to gross → the customer is billed/paid the wrong amount
+--   (e.g. admin typed ฿500 on a ฿800-gross row → paper/QR/receipt show ฿800). The
+--   resolver cannot tell a stored override from a stored auto-gross without a
+--   persisted signal — this boolean IS that signal. loader/list/freeze read it and
+--   route flagged lines through the resolver's `overrides` map (override wins · never
+--   reflows), so bill == receipt == list == /b/[token] QR by construction (guardrail b),
+--   and a paid amount never silently changes (guardrail c).
+--
+-- BACKFILL-SAFE: DEFAULT false. Existing lines are treated as auto — legacy
+--   zeroTransport (gross≤0) overrides stay protected by the resolver's gross<=0
+--   preservation floor; legacy PRICED-override rows on a still-issued bill remain the
+--   pre-existing ambiguity (unflaggable without the create-time gross) until re-issued.
+--   Committed/paid legacy bills are already safe (frozen · reflow off).
+--
+-- ⚠️ APPLY TO prod + dev BEFORE the reading code merges (mig-ledger convention · the
+--    create INSERT + the 3 read SELECTs reference this column). Idempotent.
+ALTER TABLE public.tb_forwarder_invoice_item
+  ADD COLUMN IF NOT EXISTS amount_is_override boolean NOT NULL DEFAULT false;
+
+COMMENT ON COLUMN public.tb_forwarder_invoice_item.amount_is_override IS
+  'true = amount_thb is a manual admin override (แก้ยอดเรียกเก็บ · no live forwarder source) → the amount-live reflow + the commit freeze must NEVER revert it to auto GROSS (mig 0254 · money-safe · bill live-view→freeze).';
