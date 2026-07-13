@@ -2220,12 +2220,42 @@ export async function cancelBillingRunInvoice(
         return { ok: false, error: updErr.message };
       }
 
+      // 🔗 STATUS-SYNC (owner 2026-07-13 · PR9468 FRI2607-00026): ยกเลิกใบวางบิล
+      // แล้ว forwarder ที่ผูกไว้ต้อง "ถอยสถานะ" กลับมาเป็น รอชำระเงิน (5) เอง เพื่อ
+      // เปิดบิลใหม่ได้ (เช่น เปลี่ยนที่อยู่). ไม่งั้นแถวค้างที่ เตรียมส่ง (6) → cash
+      // ไม่เข้า eligible list (ต้อง fstatus='5') → re-bill ไม่ได้. This invoice is
+      // UNPAID (paid guard above refuses paid), so reverting 6→5 is money-safe (no
+      // payment/receipt to unwind). Guard: only linked rows still at 5/6, NOT
+      // settled (paydeposit≠'1') and NOT shipped (fstatus<'7'). Best-effort — never
+      // fails the cancel.
+      const { data: linkItems } = await admin
+        .from("tb_forwarder_invoice_item")
+        .select("forwarder_id")
+        .eq("invoice_id", v.invoiceId);
+      const linkedFids = (linkItems ?? [])
+        .map((r) => (r as { forwarder_id: number }).forwarder_id)
+        .filter((n): n is number => typeof n === "number");
+      if (linkedFids.length > 0) {
+        const { error: revErr } = await admin
+          .from("tb_forwarder")
+          .update({ fstatus: "5", fdatestatus6: null })
+          .in("id", linkedFids)
+          .eq("fstatus", "6")
+          .neq("paydeposit", "1");
+        if (revErr) {
+          console.error("[cancelBillingRunInvoice forwarder revert 6→5] failed (best-effort)", {
+            code: revErr.code, message: revErr.message, invoiceId: v.invoiceId,
+          });
+        }
+      }
+
       await logAdminAction(adminId, "billing_run.cancel_invoice", "forwarder_invoice", String(v.invoiceId), {
-        doc_no: cur.doc_no, reason: v.cancelReason,
+        doc_no: cur.doc_no, reason: v.cancelReason, reverted_forwarders: linkedFids.length,
       });
 
       revalidatePath("/[locale]/(admin)/admin/billing-run", "page");
       revalidatePath("/[locale]/(admin)/admin/billing-run/[id]", "page");
+      revalidatePath("/[locale]/(admin)/admin/forwarders", "page");
 
       return { ok: true, data: { invoiceId: v.invoiceId } };
     },
@@ -2288,24 +2318,53 @@ export async function voidBillingRunInvoices(input: {
         })
         .in("id", invoiceIds)
         .neq("status", "cancelled")
-        .select("id, doc_no");
+        .select("id, doc_no, paid_at");
       if (updErr) {
         console.error("[voidBillingRunInvoices] failed", { code: updErr.code, message: updErr.message });
         return { ok: false, error: updErr.message };
       }
 
-      const voidedRows = (flipped ?? []) as Array<{ id: number; doc_no: string }>;
+      const voidedRows = (flipped ?? []) as Array<{ id: number; doc_no: string; paid_at: string | null }>;
       const voided = voidedRows.length;
       const skipped = invoiceIds.length - voided;
 
+      // 🔗 STATUS-SYNC (owner 2026-07-13 · same as cancelBillingRunInvoice): void
+      // an UNPAID bill → its forwarders "ถอยสถานะ" 6→5 so re-billing works. Only
+      // UNPAID invoices (paid_at null) — a PAID void keeps the money-safety invariant
+      // (its rows do NOT re-open · payment/receipt would otherwise need unwinding).
+      const unpaidVoidedIds = voidedRows.filter((r) => !r.paid_at).map((r) => r.id);
+      if (unpaidVoidedIds.length > 0) {
+        const { data: linkItems } = await admin
+          .from("tb_forwarder_invoice_item")
+          .select("forwarder_id")
+          .in("invoice_id", unpaidVoidedIds);
+        const linkedFids = (linkItems ?? [])
+          .map((r) => (r as { forwarder_id: number }).forwarder_id)
+          .filter((n): n is number => typeof n === "number");
+        if (linkedFids.length > 0) {
+          const { error: revErr } = await admin
+            .from("tb_forwarder")
+            .update({ fstatus: "5", fdatestatus6: null })
+            .in("id", linkedFids)
+            .eq("fstatus", "6")
+            .neq("paydeposit", "1");
+          if (revErr) {
+            console.error("[voidBillingRunInvoices forwarder revert 6→5] failed (best-effort)", {
+              code: revErr.code, message: revErr.message,
+            });
+          }
+        }
+      }
+
       for (const r of voidedRows) {
         await logAdminAction(adminId, "billing_run.void_invoice", "forwarder_invoice", String(r.id), {
-          doc_no: r.doc_no, reason,
+          doc_no: r.doc_no, reason, unpaid: !r.paid_at,
         });
       }
 
       revalidatePath("/[locale]/(admin)/admin/billing-run", "page");
       revalidatePath("/[locale]/(admin)/admin/billing-run/[id]", "page");
+      revalidatePath("/[locale]/(admin)/admin/forwarders", "page");
 
       return { ok: true, data: { voided, skipped } };
     },
