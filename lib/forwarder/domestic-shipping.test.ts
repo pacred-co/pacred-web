@@ -4,6 +4,7 @@ import {
   domesticShippingOptions,
   isThShippingCostRequired,
   isThShippingCostMissing,
+  codBaseTrackings,
   resolveAutoThShippingFill,
   resolveThShippingAutoPrice,
 } from "./domestic-shipping";
@@ -125,6 +126,41 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
   assert.equal(isThShippingCostMissing({ fshipby: "PCS", ftransportprice: null }), false, "self-pickup null → not missing (exempt)");
   // unset carrier + ฿0 → missing (must resolve)
   assert.equal(isThShippingCostMissing({ fshipby: "", ftransportprice: 0 }), true, "unset carrier ฿0 → missing");
+
+  // shipment-level COD (ภูม 2026-07-13) — a box-split sibling that kept paymethod='1'
+  // must NOT be flagged when its shipment (base tracking) is COD.
+  assert.equal(
+    isThShippingCostMissing({ fshipby: "2", ftransportprice: 0, payMethod: "1", shipmentIsCod: true }),
+    false,
+    "ต้นทาง sibling ฿0 but shipment is COD → not missing (exempt)",
+  );
+  assert.equal(
+    isThShippingCostMissing({ fshipby: "2", ftransportprice: 0, payMethod: "1", shipmentIsCod: false }),
+    true,
+    "ต้นทาง ฿0 · shipment NOT COD → still missing (genuine origin-paid gate stays)",
+  );
+
+  // codBaseTrackings — the real prod case: base '2' (COD) + sibling '1' → base is in the set.
+  {
+    const cod = codBaseTrackings([
+      { ftrackingchn: "KY984284755", paymethod: "2" },       // base = COD
+      { ftrackingchn: "KY984284755-2/2", paymethod: "1" },   // sibling kept ต้นทาง
+      { ftrackingchn: "ZZ999", paymethod: "1" },              // unrelated ต้นทาง shipment
+    ]);
+    assert.ok(cod.has("KY984284755"), "COD base tracking is captured");
+    assert.equal(cod.has("ZZ999"), false, "a non-COD shipment is NOT in the set");
+    // sibling resolves to the same base → exempt; the unrelated ต้นทาง ฿0 stays missing.
+    assert.equal(
+      isThShippingCostMissing({ fshipby: "2", ftransportprice: 0, payMethod: "1", shipmentIsCod: cod.has("KY984284755") }),
+      false,
+      "COD sibling exempt via codBaseTrackings",
+    );
+    assert.equal(
+      isThShippingCostMissing({ fshipby: "2", ftransportprice: 0, payMethod: "1", shipmentIsCod: cod.has("ZZ999") }),
+      true,
+      "unrelated ต้นทาง ฿0 still gated",
+    );
+  }
 }
 
 // ── #7 resolveAutoThShippingFill — auto-fill ค่าส่งไทย (owner 2026-07-08) ──

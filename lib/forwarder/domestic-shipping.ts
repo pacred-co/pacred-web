@@ -221,10 +221,40 @@ export function isThShippingCostMissing(args: {
   ftransportprice: number | string | null | undefined;
   /** '2' = ปลายทาง/COD → ฿0 ถูกต้อง (เอกชนเก็บปลายทาง) → ไม่ถือว่าขาด (owner 2026-07-13). */
   payMethod?: string | null | undefined;
+  /**
+   * SHIPMENT-level COD flag (ภูม 2026-07-13 · บั๊ก COD กดออกบิลไม่ได้). COD =
+   * "เอกชนเก็บปลายทาง" is a property of the ONE physical delivery/courier — so if
+   * ANY row of the shipment (same base tracking) is COD, every sibling's ฿0 ค่าส่งไทย
+   * is legit, even a box-split sibling that kept paymethod='1'. WHY needed: MOMO
+   * box-split clones the base's paymethod onto siblings, but the COD '2' gets set on
+   * the base row AFTER the split → siblings stay '1' → the per-row gate wrongly flagged
+   * them (real prod: KY984284755 base 52309='2' COD but sibling 52315='2/2'='1' → บล็อก).
+   * The caller computes this once per shipment via `codBaseTrackings`.
+   */
+  shipmentIsCod?: boolean;
 }): boolean {
+  if (args.shipmentIsCod === true) return false; // shipment is COD → ฿0 ค่าส่งไทย legit for every sibling
   if (!isThShippingCostRequired(args.fshipby, args.payMethod)) return false; // self-pickup / COD — ฿0 ok
   const cost = Number(args.ftransportprice);
   return !Number.isFinite(cost) || cost <= 0;
+}
+
+/**
+ * Base-tracking set for the shipments that are COD (any row paymethod='2'). Used by
+ * the billing gate to treat the WHOLE base-tracking group as COD-exempt — see the
+ * `shipmentIsCod` note above. Strips the MOMO "-i/n" split suffix (same convention as
+ * momo-bill-header `baseTracking`). Pure + testable.
+ */
+export function codBaseTrackings(
+  rows: readonly { ftrackingchn: string | null | undefined; paymethod: string | null | undefined }[],
+): Set<string> {
+  const out = new Set<string>();
+  for (const r of rows) {
+    if ((r.paymethod ?? "").toString().trim() !== "2") continue;
+    const base = (r.ftrackingchn ?? "").trim().replace(/-\d+(?:\/\d+)?$/, "");
+    if (base) out.add(base);
+  }
+  return out;
 }
 
 // ────────────────────────────────────────────────────────────────────────

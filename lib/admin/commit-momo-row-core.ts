@@ -48,6 +48,7 @@ import {
   extractCoverFromMomoRaw,
 } from "@/lib/admin/momo-raw-helpers";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
+import { splitAggregatedMomoBoxRows } from "@/lib/integrations/momo-web/split-box-rows";
 import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 import { ADDRESSES } from "@/components/seo/site";
 
@@ -228,7 +229,11 @@ export async function commitMomoRowCore(
   const { data: srcRow, error: srcErr } = await admin
     .from("momo_import_tracks")
     .select(
-      "id, momo_tracking_no, momo_container_no, container_batch_no, momo_sack_no, shipment_status, raw, momo_updated_at, committed_at, committed_forwarder_id",
+      // weight_kg/cbm/quantity = the container_closed AGGREGATE (Σ track_details ·
+      // sync.ts aggregateTrackDetailMetrics) — ภูม 2026-07-13: value the row from THESE,
+      // not the first-box `raw` (raw carried only box-1 when MOMO's feed dropped the
+      // -2..-N siblings → ~5× under-bill · e.g. 800206224068 raw.kg=46.5 vs true 249).
+      "id, momo_tracking_no, momo_container_no, container_batch_no, momo_sack_no, shipment_status, raw, weight_kg, cbm, quantity, momo_updated_at, committed_at, committed_forwarder_id",
     )
     .eq("id", d.rowId)
     .maybeSingle<{
@@ -239,6 +244,9 @@ export async function commitMomoRowCore(
       momo_sack_no:           string | null;
       shipment_status:        string | null;
       raw:                    unknown;
+      weight_kg:              number | string | null;
+      cbm:                    number | string | null;
+      quantity:               number | null;
       momo_updated_at:        string | null;
       committed_at:           string | null;
       committed_forwarder_id: number | null;
@@ -382,7 +390,23 @@ export async function commitMomoRowCore(
   // and may lag one cycle behind import_track upsert).
   const cabinetForDisplay = srcRow.container_batch_no ?? srcRow.momo_container_no ?? "";
   const containerNo = srcRow.momo_container_no ?? "";
-  const metrics     = extractMetricsFromMomoRaw(srcRow.raw);
+  // ภูม 2026-07-13 (MONEY · ~5× under-bill fix) — value the row from the momo_import_tracks
+  // AGGREGATE columns (weight_kg/cbm/quantity = Σ of all the shipment's boxes, set by the
+  // container_closed propagate) and fall back to the first-box `raw` only when a column is
+  // empty (pre-close single-box rows where column==raw anyway). Was: extractMetricsFromMomoRaw
+  // alone → when MOMO's feed delivered only the bare base parcel (raw.kg = box 1) it billed
+  // box 1's weight (46.5) instead of the whole shipment (249). Dims stay from raw (the
+  // aggregate carries none; real per-box dims arrive with the box-split below).
+  const rawMetrics  = extractMetricsFromMomoRaw(srcRow.raw);
+  const colW = Number(srcRow.weight_kg);
+  const colV = Number(srcRow.cbm);
+  const colQ = Number(srcRow.quantity);
+  const metrics = {
+    ...rawMetrics,
+    weight: colW > 0 ? colW : rawMetrics.weight,
+    cbm:    colV > 0 ? colV : rawMetrics.cbm,
+    qty:    colQ > 0 ? Math.round(colQ) : rawMetrics.qty,
+  };
   // ── Crate (ตีลังไม้) — owner PR999: derive from MOMO real data ──────
   // MOMO sends an explicit crate signal (raw.wooden_create boolean +
   // raw.extra_cost fee); the old code IGNORED it and hardcoded "no crate".
@@ -716,6 +740,22 @@ export async function commitMomoRowCore(
     }
   } catch (e) {
     console.error(`[momo commit: auto-rate] threw AFTER tb_forwarder INSERT (id=${row.id})`, e);
+  }
+
+  // ── 5b. Split the shipment into its N scannable box sub-rows (ภูม 2026-07-13) ──
+  // MOMO sends one shipment as N boxes (e.g. 800206224068, -2..-8) — each must be its
+  // OWN scannable tb_forwarder row (โกดัง ยิงรับเข้าตามเลขกล่อง 800206224068-3). This
+  // replaces the on-demand "แตกกล่อง" button (removed) with split-at-import. Now that
+  // FIX 1 values the aggregate correctly (Σ == Σ momo_box_detail), the split passes its
+  // weight-Σ guard → produces the sub-rows. MONEY-NEUTRAL: allowPriced preserves the
+  // priced ftotalprice across the siblings (anchor absorbs the satang · Σ-drift-guarded);
+  // shipment-level money (ค่าส่งไทย/เหมาๆ/ตีลัง) stays on the anchor only = ONE customer
+  // bill. Best-effort — a miss (e.g. momo_box_detail not synced yet) never fails the
+  // commit; the cron liveBoxSplit pass (allowPriced) retries. No-op for single-box.
+  try {
+    await splitAggregatedMomoBoxRows(admin, [trackingNo], undefined, { allowPriced: true });
+  } catch (e) {
+    console.error(`[momo commit: box-split] threw (tracking=${trackingNo})`, e);
   }
 
   // ── 6. Back-fill the forwarder id on the already-claimed source row ──

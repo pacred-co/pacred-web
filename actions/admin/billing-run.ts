@@ -47,7 +47,7 @@ import {
   type ForwarderPriceFields,
 } from "@/lib/forwarder/outstanding";
 import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-total";
-import { isThShippingCostMissing } from "@/lib/forwarder/domestic-shipping";
+import { isThShippingCostMissing, codBaseTrackings } from "@/lib/forwarder/domestic-shipping";
 import { getContainerCompletenessBatch } from "@/lib/warehouse/container-completeness";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
@@ -638,6 +638,10 @@ export async function listEligibleForwarders(
         for (const r of (recRows ?? []) as Array<{ container_no: string }>) reconciledCabs.add(r.container_no);
       }
 
+      // ค่าส่งไทย gate — SHIPMENT-level COD set (ภูม 2026-07-13): a row is COD-exempt if
+      // ITS OWN paymethod is '2' OR any sibling of its base-tracking is COD (a box-split
+      // sibling may have kept paymethod='1'). Keeps this list flag == the create gate.
+      const codBases = codBaseTrackings(fwd);
       const rows: EligibleForwarderRow[] = fwd.map((f) => ({
         id:              f.id,
         ftrackingchn:    f.ftrackingchn ?? "",
@@ -659,7 +663,7 @@ export async function listEligibleForwarders(
         already_billed:  alreadyBilledIds.has(f.id),
         // ค่าส่งไทย "ห้ามลืม" gate (pop-spec #3) — a domestic leg applies but the
         // TH cost is still ฿0. Self-pickup rows (fshipby='PCS') are exempt.
-        th_ship_missing: isThShippingCostMissing({ fshipby: f.fshipby, ftransportprice: f.ftransportprice, payMethod: f.paymethod }),
+        th_ship_missing: isThShippingCostMissing({ fshipby: f.fshipby, ftransportprice: f.ftransportprice, payMethod: f.paymethod, shipmentIsCod: codBases.has(baseTracking(f.ftrackingchn ?? "") ?? "") }),
         fshipby:         f.fshipby,
         ftransportprice: Number(f.ftransportprice ?? 0),
         check_queued:    checkQueuedIds.has(f.id),
@@ -1222,8 +1226,11 @@ async function createBillingRunInvoiceImpl(
       // Server-side backstop — a client can't skip the TH leg (recomputed here from
       // the DB rows). NOTE: pure validation — this changes NO pricing math; the bill
       // amount is computed exactly as before. Self-pickup rows are exempt.
+      // SHIPMENT-level COD set (ภูม 2026-07-13) — exempt a row when any sibling of its
+      // base tracking is COD (box-split siblings may keep paymethod='1'). Pure validation.
+      const codBasesGate = codBaseTrackings(fwd);
       const missingThShip = fwd.filter((f) =>
-        isThShippingCostMissing({ fshipby: f.fshipby, ftransportprice: f.ftransportprice, payMethod: f.paymethod }),
+        isThShippingCostMissing({ fshipby: f.fshipby, ftransportprice: f.ftransportprice, payMethod: f.paymethod, shipmentIsCod: codBasesGate.has(baseTracking(f.ftrackingchn ?? "") ?? "") }),
       );
       if (missingThShip.length > 0 && !v.allowMissingThShip) {
         return {
