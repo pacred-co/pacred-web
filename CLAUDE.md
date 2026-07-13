@@ -3,6 +3,16 @@
 
 ---
 
+# 🧾 2026-07-13 บ่าย (เดฟ · resume ต่อจาก limit) — integrate ภูม MOMO box-split + COD gate เข้า dave-pacred (merge สะอาด · gate เขียว) → push dave-pacred · read FIRST
+
+> **🏁 CLOSE (owner: "ต่องานค้าง · เมลหลักติด limit · จบแล้ว push dave-pacred").** งานค้าง = **integrate `Poom-pacred` (ภูม MOMO box-split + COD) เข้า dave-pacred** (เดฟ main-session merge ค้างตอนติด limit). merge สะอาด 0 conflict → `46021ac1`. gate: tsc 0 · domestic-shipping COD test ผ่าน · momo-raw 180/0 · **build EXIT 0** (⚠️ รอบแรก redirect log พัง exit-1 หลอก · re-run clean = 0). push **dave-pacred** (+ ตามที่ owner สั่ง). **main ยังไม่ promote** (box-split เป็น money-going-forward · owner เคาะก่อนขึ้น prod ถ้าต้องการ).
+>
+> **✅ ภูม `9f329765` ที่ integrate (money-safe · verify DEV โดย ภูม):** (1) **box-split** — commit valuate จาก aggregate columns (แก้ under-bill ~5×) + split-at-commit (แตก N แถวตั้งแต่ดึงเข้า) + เอาปุ่ม "แตกกล่อง" ออก (`commit-momo-row-core.ts`). (2) **COD ค่าส่งไทย gate** — ระดับชิปเมนต์ (sibling COD → ยกเว้นทั้งกลุ่ม · PURE validation ไม่แตะ pricing · `domestic-shipping.ts`). billing-run +13 (ปลด COD bill). 6 ไฟล์ ไม่ทับ 3 commit ใหม่ dave-pacred.
+>
+> **🔴 CARRYOVER — owner เคาะ (money · ผมไม่รันเอง · [`docs/handoff-dave-2026-07-13-momo-boxsplit-cod-backfill.md`](docs/handoff-dave-2026-07-13-momo-boxsplit-cod-backfill.md)):** (1) **backfill BUG-1** — ตู้เก่า under-bill ยัง priced บนกล่องแรก (เช่น 52305 `800206224068` PR079 · 46.5→249kg = ขาด ~5×) → re-value(aggregate)+re-price(`computeAndFillForwarderImportRate`)+split(`allowPriced:true`) · fstatus 1-4 · **dry-run + owner เคาะ Σ delta ก่อน --apply** (ขึ้นบิล). (2) **BUG-2** paymethod normalize พี่น้อง COD (optional · ไม่ขึ้นบิล). (3) cron `liveBoxSplit allowPriced` mass-auto (owner option · ไม่ flip).
+
+---
+
 # 🧾 2026-07-13 (เดฟ · owner-driven · ส่งงาน cargo เช้า) — MOMO flow อุดรูรั่ว (งานหาย/สถานะเด้ง/เงินขาด/เครดิตซิงค์) + USD editor + ค่าส่งไทย Flash/COD + DOC BOT+ไฟล์ HS 5,335 · กู้จาก session-limit ครบ → ALL 5 BRANCHES · read FIRST
 
 > **🏁 SESSION CLOSE (owner: "ต่อ closeout · ปิด session · เดี๋ยวไปทำต่อคอมที่ทำงาน").** **main = dave-pacred = Poom-pacred = InwPond007 = web-pacred = `20a3d1b9`** (all synced · main→Vercel prod). gate: **BUILD_EXIT=0** (read from log · `NODE_OPTIONS=8192 node node_modules/next/dist/bin/next build` · ⚠️ ห้าม build ซ้อน). **NEWEST mig 0251 (doc_bot_hs_source) · NEXT FREE = 0252** (0250 booking_pricing_catalog ปอน · 0251 doc_bot source col). 🔑 prod pw chat-only `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ` (`lozntlidlqqzzcaathnm`). resume คอมที่ทำงาน: `git fetch && git pull origin dave-pacred`.
