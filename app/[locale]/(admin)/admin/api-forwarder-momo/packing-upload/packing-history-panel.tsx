@@ -74,7 +74,7 @@ export function PackingHistoryPanel({ nonce }: { nonce: number }) {
 
       {rows.length > 0 && (
         <div className="overflow-x-auto scrollbar-x-visible">
-          <table className="w-full text-xs">
+          <table className="w-full text-xs border-collapse [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border">
             <thead className="bg-surface-alt/50 text-[11px] uppercase tracking-wide text-muted">
               <tr>
                 <th className="px-2 py-2 text-left">วันที่อัพ</th>
@@ -138,7 +138,7 @@ export function PackingHistoryPanel({ nonce }: { nonce: number }) {
                                 </div>
                               )}
                               <div className="max-h-72 overflow-y-auto overflow-x-auto scrollbar-x-visible rounded-lg border border-border">
-                                <table className="w-full text-[11px]">
+                                <table className="w-full text-[11px] border-collapse [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border">
                                   <thead className="sticky top-0 bg-surface-alt text-muted">
                                     <tr>
                                       <th className="px-2 py-1 text-left">แทรคกิ้ง</th>
