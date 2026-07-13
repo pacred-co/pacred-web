@@ -1,7 +1,15 @@
 import { listMomoContainers } from "@/actions/admin/momo-containers";
+import { Link } from "@/i18n/navigation";
 import { MomoContainersClient } from "./momo-containers-client";
 
 export const dynamic = "force-dynamic";
+
+const HUB_LINKS: { href: string; label: string }[] = [
+  { href: "/admin/api-forwarder-momo/sync", label: "📥 Sync จาก MOMO API" },
+  { href: "/admin/api-forwarder-momo/packing-upload", label: "📦 อัพ packing list" },
+  { href: "/admin/api-forwarder-momo/drift", label: "🔴 คิว drift (แทร็กหาย)" },
+  { href: "/admin/api-forwarder-momo/review", label: "✅ review / commit" },
+];
 
 export default async function MomoContainersPage() {
   const res = await listMomoContainers();
@@ -16,6 +24,14 @@ export default async function MomoContainersPage() {
           <strong>packing list ที่อัพ</strong> ให้เห็นเลยว่า กล่อง/น้ำหนักตรงไหม + แทร็กที่ MOMO(API) ไม่มีแต่มีใน packing.
           {" "}ลากหัวคอลัมน์เพื่อจัดเรียงได้เหมือน Excel.
         </p>
+        <div className="flex flex-wrap gap-2 pt-1">
+          {HUB_LINKS.map((l) => (
+            <Link key={l.href} href={l.href}
+              className="rounded-full border border-border bg-white dark:bg-surface px-3 py-1.5 text-xs font-medium shadow-sm hover:bg-surface-alt">
+              {l.label}
+            </Link>
+          ))}
+        </div>
         {!res.ok && (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">โหลดข้อมูลไม่สำเร็จ: {res.error}</div>
         )}
