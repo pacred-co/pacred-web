@@ -37,12 +37,15 @@ export async function rejectPendingSlipsForCancelledOrder(
   if (!ord) return { rejectedPays: 0, rejectedTopups: 0 };
 
   try {
-    // 1. The pending PAY rows for this order (type 2=shop · 4=forwarder).
+    // 1. The pending PAY rows for this order (type 2=shop · 4=forwarder ·
+    //    8=direct ฝากสั่งซื้อ slip [ADR-0028]). owner 2026-07-13 status-sync:
+    //    a cancelled order's DIRECT type-8 slip must also drop out of the
+    //    "ชำระเงิน" review queue (status 1→3) — else it lingers un-reviewable.
     const { data: payRows, error: payErr } = await admin
       .from("tb_wallet_hs")
       .select("id, reforder2")
       .eq("reforder", ord)
-      .in("type", ["2", "4"])
+      .in("type", ["2", "4", "8"])
       .eq("status", "1");
     if (payErr) {
       console.error(`[reject-cancelled-order-slips pay lookup] failed`, { ord, code: payErr.code, message: payErr.message });
