@@ -3364,6 +3364,7 @@
     "apiForwarderUpdate": {
       "title": "อัปเดตฝากนำเข้า",
       "momo": "MOMO",
+      "momoContainers": "MOMO ตรวจตู้ (เทียบ packing)",
       "momoLive": "MOMO (Live) — ค้นสด",
       "momoDiscovery": "คิวค้นเจอจาก MOMO Live",
       "cn": "CargoCenter",

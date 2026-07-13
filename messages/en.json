@@ -3364,6 +3364,7 @@
     "apiForwarderUpdate": {
       "title": "Update import entries",
       "momo": "MOMO",
+      "momoContainers": "MOMO Container Verify",
       "momoLive": "MOMO (Live)",
       "momoDiscovery": "Found on MOMO Live (queue)",
       "cn": "CargoCenter",

@@ -521,6 +521,9 @@ const blockApiForwarderUpdate: MenuItem = {
     // owner turned MOMO_CRON_AUTOCOMMIT ON, this shows the depth of what's still pending
     // /review so staff can see when the auto-commit is caught up (or has a backlog).
     { labelKey: "apiForwarderUpdate.momo", href: "/admin/api-forwarder-momo", icon: "Truck", badge: "momoPending" },
+    // ภูม 2026-07-14 — "MOMO ตรวจตู้": หน้ายึดตู้ เทียบระบบ vs packing list ต่อตู้
+    // (กล่อง/น้ำหนักตรงไหม + แทร็กที่ API ขาด) ก่อน/หลัง commit.
+    { labelKey: "apiForwarderUpdate.momoContainers", href: "/admin/momo-containers", icon: "PackageCheck" },
     // ภูม 2026-06-30 — ทางลัด "MOMO (Live)" ใต้ MOMO เพื่อกดเข้าหน้าค้นข้อมูลสด
     // ได้เลย ไม่ต้องเข้า MOMO → กดการ์ดอีกที. (การ์ดในหน้า dashboard ยังอยู่.)
     { labelKey: "apiForwarderUpdate.momoLive", href: "/admin/api-forwarder-momo/live", icon: "Search" },

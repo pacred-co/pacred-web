@@ -181,6 +181,7 @@ export async function recordMomoPackingUpload(input: unknown): Promise<AdminActi
         transport_hint: parsed.transportHint,
         row_count: parsed.aggregated.length,
         tracking_count: parsed.totals.trackingCount,
+        total_boxes: parsed.totals.qty,
         total_weight: parsed.totals.totalWeight,
         total_cbm: parsed.totals.totalCbm,
         parsed_snapshot: snapshot,
