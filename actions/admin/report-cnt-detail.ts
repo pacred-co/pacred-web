@@ -686,6 +686,26 @@ export async function adminReportCntBillToCustomer(
         };
       }
 
+      // ── ZERO-IMPORT-COST GATE (owner 2026-07-13 · "เงินไม่ซิงค์ · เก็บเงินขาด") ──
+      // Mirror the createBillingRunInvoice guard (billing-run.ts a2): a row whose
+      // import subtotal SELL (ค่านำเข้า · ftotalprice) is still ฿0 was never
+      // measured/priced — the customer has no rate card for its warehouse × transport
+      // × product tuple, so computeAndFillForwarderImportRate wrote nothing and left
+      // it 0. Flipping it 4→5 would notify the customer "ยอดค้างชำระ 0.00 บาท" + let
+      // them pay ฿0 = เก็บเงินขาด. Refuse the new bill (this per-row path has NO
+      // positive-override channel, so any ftotalprice<=0 is a genuine under-charge).
+      // Only reached for fstatus==4 (the real new-bill flip) — a ฿0 row already billed
+      // (fstatus≥5) stays an idempotent no-op above, never re-refused. The group action
+      // loops this writer, so a batch can't sneak a ฿0 row either (each ฿0 member is
+      // refused here → lands in the group's errors[] so the operator sees which row).
+      if (Number(row.ftotalprice ?? 0) <= 0) {
+        return {
+          ok: false,
+          error:
+            "ค่านำเข้า ฿0 — ยังไม่ได้วัด/ตั้งราคา · อาจเก็บเงินขาด (กรุณาตั้งเรท/วัดขนาดที่โกดังก่อนแจ้งหนี้ลูกค้า)",
+        };
+      }
+
       // ── (a2) #7 auto-fill ค่าส่งไทย (owner 2026-07-08 "ต้อง auto") ──
       // If a delivery leg applies but ftransportprice is still ฿0, auto-fill the
       // zone default (เหมาๆ ฿100 / Flash) so ตรวจตู้→เก็บเงิน stays continuous.
@@ -804,7 +824,10 @@ export async function adminReportCntBillToCustomer(
 // Validation + auth + reachability mirror the per-row action. The fIDs are
 // pre-resolved client-side from the group's billable members (fstatus 4); the
 // server re-runs the per-row gate on each, so an ineligible/stale row is a safe
-// no-op or refusal, never a wrong bill.
+// no-op or refusal, never a wrong bill — INCLUDING the ZERO-IMPORT-COST gate
+// (a ฿0 ค่านำเข้า member is refused by the per-row writer → counted in `failed`
+// + surfaced in `errors[]`, so a batch can't sneak a เก็บเงินขาด row and the
+// operator sees exactly which fID was blocked).
 // ═════════════════════════════════════════════════════════════════════
 
 const billGroupSchema = z.object({

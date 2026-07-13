@@ -294,3 +294,24 @@ curl -s "https://opendata.dbd.go.th/api/3/action/datastore_search?resource_id=f0
 **Why this matters next time:** when a partner sends **aggregate-then-split** records (a closed container with per-parcel `track_details`), the join key on the parcel side is often the **base** tracking — match on the stripped base, and **SUM** the split parcels back to it. And when you harvest a field for one purpose (cabinet), check whether the SAME loop should also carry the adjacent money fields (weight/cbm) — a partial harvest is a silent zero downstream. The early-warning sign: a tb_forwarder row with a cabinet but `fweight=0`, or a split-tracking row with `container_batch_no=null`.
 
 **Cross-links:** the [2026-05-30] cabinet-propagation entry above (same harvest, the cabinet half) · `lib/integrations/momo-isolated/{sync,propagate}.ts` · AGENTS.md §0e (verify the consumer's table — a synced row ≠ a complete row)
+
+## [2026-07-13] MOMO sync: 1 แถวเสีย = ทั้ง rolling window หาย (all-or-nothing upsert) + cron demotes fstatus that advanced mid-cycle
+
+**Context:** owner-driven delivery audit — "งานหาย · สถานะเด้งกลับ/ไม่เดิน". 2 confirmed holes in the MOMO cron path (fix session hit the usage limit mid-flight; recovered from stranded worktree diffs + integrated 2026-07-13).
+
+**Root cause A — all-or-nothing staging upsert (`sync.ts`):** the whole rolling-window `upRows` went into ONE `.upsert(...)`. A single bad row — two rows sharing the conflict key (Postgres `21000` "ON CONFLICT DO UPDATE cannot affect row a second time") or one overflowing value — failed the ENTIRE batch → `upsertedCount=0`, nothing staged, and the cron re-failed the same window every run for ~7 days. Whole days of parcels silently never became reviewable/billable rows.
+
+**Fix A — `resilientMomoUpsert`:** (1) dedup by conflict key keeping the LAST occurrence (kills the 21000 — MOMO does send in-window duplicates), (2) chunk ~500 rows/call, (3) a failing chunk retries PER-ROW so exactly the offender lands in `errors[]` with its key while the ~499 good rows beside it are saved. Plus a LOUD `MOMO_ALL_ROWS_LOST_TRACKING` error when MOMO returns rows but ZERO carry a tracking number (field-shape change — previously an invisible no-op).
+
+**Root cause B — stale-read status demotion (`propagate.ts:405`):** the forward-only decision compared MOMO's target against `f.fstatus` READ BY THE BATCH SELECT minutes earlier. A warehouse scan (→'4') or bill (→'5') landing mid-cycle meant the unguarded `.update()` DEMOTED the row back to MOMO's older status — and since the next cycle reads the demoted value, it never self-heals ("สถานะถอยหลัง/ไม่เดิน").
+
+**Fix B — fold the forward-only guard into the WRITE:** when the update carries `fstatus`, add `.lt("fstatus", target)` to the WHERE (text compare exact for '1'..'7'; '99' > any target → cancelled rows never demoted; NULL excluded — consistent with the sibling advancers' `.in('fstatus',[...])` style). Pure fills (cabinet/weight/date) stay unguarded so they still land on rows that raced ahead.
+
+**Also (Fix F): dedup at the commit chokepoint.** `commitMomoRowCore` had the 2026-06-14 atomic claim (guards THIS staging row) but couldn't see a `tb_forwarder` row for the SAME tracking created by ANOTHER path (manual /review on an older staging row · quick-add · แต้ม reconcile). The autocommit batch pre-check was read-at-load AND failed OPEN on a lookup error. New guard 4a½ in the core: exact `ftrackingchn` match → live row (fstatus not ''/'0') → refuse with the existing row id; lookup error → fail CLOSED. Box-split siblings are safe (suffixed `-i/n` tracking + insert via `split-box-rows.ts`, never through the core). This makes flipping `MOMO_CRON_AUTOCOMMIT` dup-safe — the env flip itself stays the owner's call.
+
+**Why this matters next time:**
+- A partner-feed staging upsert MUST assume dirty batches: dedup by conflict key → chunk → per-row isolate. "One .upsert for the whole window" turns 1 bad row into N lost rows × M retry days, and the failure is invisible (error logged once per cron run, no queue).
+- ANY cron that read-then-writes a status column must re-assert its forward-only decision INSIDE the UPDATE's WHERE — the read is always stale. This is the third instance of the same class in this repo (advance-departed-containers · propagate-live-status · now propagate) — grep for `.update({...fstatus` without a status clause in the WHERE when auditing.
+- A "does this row already exist" pre-check that lives only in the CALLER (batch, fail-open) protects nothing under concurrency — the guard belongs at the single write chokepoint, fail-closed.
+
+**Cross-links:** the [2026-06-29] harvest entry above (same files) · `lib/admin/commit-momo-row-core.ts` 4a½ · `lib/admin/pending-dispatch.ts` · AGENTS.md §0e/§0f.

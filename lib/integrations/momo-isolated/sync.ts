@@ -128,6 +128,83 @@ export type RunMomoSyncResult = {
   liveBoxSplit: BoxSplitResult | null;
 };
 
+/** Max rows per staging upsert call. Chunking bounds the blast radius of a
+ *  single failing row (a value overflow) to its chunk instead of the whole
+ *  rolling window, and keeps the payload under PostgREST's practical ceiling. */
+const MOMO_UPSERT_CHUNK = 500;
+
+/**
+ * Resilient upsert for the MOMO staging tables (2026-07-13 · owner-delivery fix).
+ *
+ * The old code wrote the ENTIRE rolling-window `upRows` in ONE `.upsert(...)`.
+ * A single bad row — two rows sharing the conflict key (Postgres 21000
+ * "ON CONFLICT DO UPDATE cannot affect row a second time") or one value that
+ * overflows a column — failed the WHOLE batch → `upsertedCount=0`, nothing
+ * landed, and the cron re-failed it every run for ~7 days ("whole days of
+ * parcels vanish"). This isolates the damage:
+ *   1. dedup by the conflict key (keep the LAST occurrence) — kills the 21000.
+ *   2. chunk (~500 rows/call) — bounds a payload / single-row failure.
+ *   3. on a chunk error, retry that chunk PER-ROW so ONE offender is isolated
+ *      (counted into `failed` + reported with its key) instead of sinking the
+ *      ~500 good rows beside it.
+ * Returns the same {upserted, failed, errors} the caller folds into the
+ * existing upsertedCount / failedCount / errors[] — return shape unchanged.
+ */
+async function resilientMomoUpsert(
+  admin: SupabaseClient,
+  table: string,
+  rows: Record<string, unknown>[],
+  conflictKey: string,
+  scope: string,
+): Promise<{ upserted: number; failed: number; errors: RunMomoSyncError[] }> {
+  // 1. dedup by conflict key — keep the LAST occurrence (freshest row wins).
+  const byKey = new Map<unknown, Record<string, unknown>>();
+  for (const row of rows) byKey.set(row[conflictKey], row);
+  const deduped = Array.from(byKey.values());
+  if (deduped.length < rows.length) {
+    console.warn(
+      `[runMomoSync] ${scope}: collapsed ${rows.length}→${deduped.length} rows by ${conflictKey} (in-window duplicates)`,
+    );
+  }
+
+  const errors: RunMomoSyncError[] = [];
+  let upserted = 0;
+  let failed   = 0;
+
+  for (let i = 0; i < deduped.length; i += MOMO_UPSERT_CHUNK) {
+    const chunk = deduped.slice(i, i + MOMO_UPSERT_CHUNK);
+    const { error: chunkErr } = await admin
+      .from(table)
+      .upsert(chunk, { onConflict: conflictKey });
+    if (!chunkErr) {
+      upserted += chunk.length;
+      continue;
+    }
+    // 3. chunk failed → isolate the offender(s) by retrying each row alone,
+    //    so one bad row can't sink the good rows beside it.
+    console.error(
+      `[runMomoSync] ${scope}: chunk upsert failed → per-row fallback`,
+      { code: chunkErr.code, message: chunkErr.message, chunkSize: chunk.length },
+    );
+    for (const row of chunk) {
+      const { error: rowErr } = await admin
+        .from(table)
+        .upsert(row, { onConflict: conflictKey });
+      if (rowErr) {
+        failed += 1;
+        errors.push({
+          scope,
+          error:   "MOMO_DB_UPSERT_FAILED",
+          message: `${conflictKey}=${String(row[conflictKey])}: ${rowErr.message}`,
+        });
+      } else {
+        upserted += 1;
+      }
+    }
+  }
+  return { upserted, failed, errors };
+}
+
 /**
  * Execute one MOMO sync cycle. Pure function from `opts → DB writes`.
  * Caller (admin route OR cron) is responsible for auth + input validation.
@@ -185,19 +262,25 @@ export async function runMomoSync(
           updated_at:        new Date().toISOString(),
         }));
       if (upRows.length > 0) {
-        const { error: upErr } = await admin
-          .from("momo_import_tracks")
-          .upsert(upRows, { onConflict: "momo_tracking_no" });
-        if (upErr) {
-          failedCount += upRows.length;
-          errors.push({
-            scope:   "import_track_upsert",
-            error:   "MOMO_DB_UPSERT_FAILED",
-            message: upErr.message,
-          });
-        } else {
-          upsertedCount += upRows.length;
-        }
+        const upResult = await resilientMomoUpsert(
+          admin, "momo_import_tracks", upRows, "momo_tracking_no", "import_track_upsert",
+        );
+        upsertedCount += upResult.upserted;
+        failedCount   += upResult.failed;
+        if (upResult.errors.length > 0) errors.push(...upResult.errors);
+      } else if (importTrackCount > 0) {
+        // Finding 3 (visibility) — MOMO returned rows but NONE carried a
+        // momo_tracking_no, so nothing could be staged. Almost always a MOMO
+        // field-shape change (the tracking key moved/renamed) that would
+        // otherwise vanish silently. Make it LOUD.
+        console.error(
+          `[runMomoSync] import_track: ${importTrackCount} rows returned but 0 had a tracking number — MOMO field shape may have changed; NOTHING staged.`,
+        );
+        errors.push({
+          scope:   "import_track_upsert",
+          error:   "MOMO_ALL_ROWS_LOST_TRACKING",
+          message: `importTrackCount=${importTrackCount} but 0 rows had a momo_tracking_no — MOMO field shape may have changed; nothing was staged.`,
+        });
       }
     } else {
       errors.push({ scope: "import_track", error: res.error, message: res.message });
@@ -229,19 +312,12 @@ export async function runMomoSync(
           updated_at:        new Date().toISOString(),
         }));
       if (upRows.length > 0) {
-        const { error: upErr } = await admin
-          .from("momo_container_closed")
-          .upsert(upRows, { onConflict: "momo_container_no" });
-        if (upErr) {
-          failedCount += upRows.length;
-          errors.push({
-            scope:   "container_closed_upsert",
-            error:   "MOMO_DB_UPSERT_FAILED",
-            message: upErr.message,
-          });
-        } else {
-          upsertedCount += upRows.length;
-        }
+        const upResult = await resilientMomoUpsert(
+          admin, "momo_container_closed", upRows, "momo_container_no", "container_closed_upsert",
+        );
+        upsertedCount += upResult.upserted;
+        failedCount   += upResult.failed;
+        if (upResult.errors.length > 0) errors.push(...upResult.errors);
       }
 
       // ── 2.5. PROPAGATE cabinet (cid) → momo_import_tracks ─────────
