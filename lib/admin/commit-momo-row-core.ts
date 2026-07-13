@@ -524,44 +524,6 @@ export async function commitMomoRowCore(
     return { ok: false, error: "row นี้ถูก commit แล้ว (มีผู้ทำรายการพร้อมกันหรือกดซ้ำ)" };
   }
 
-  // ── 4c. DEDUP by EXACT ftrackingchn (2026-07-13 — dup-tracking bug fix) ──────
-  // The step-4b claim only prevents double-committing the SAME momo_import_tracks
-  // row. But MOMO RE-IMPORTS a parcel as a NEW momo row across syncs (import_track
-  // → container_closed = a different rowId, committed_at NULL), and committing that
-  // re-imported row PASSES the claim → a SECOND tb_forwarder row for a tracking
-  // already in the system. This produced 43 prod dup groups on 2026-07-10 (e.g.
-  // 1783147517-2 committed 07-06 AND 07-10, re-priced → different ยอดค้าง). It also
-  // catches a parcel first added via add-missing then re-committed here. tb_forwarder
-  // has NO UNIQUE on ftrackingchn, so guard: if a row with this EXACT ftrackingchn
-  // already exists, RESOLVE this momo row to it (committed_forwarder_id) and abort
-  // WITHOUT a duplicate INSERT. EXACT (not base-`%`) match — split "-N" children are
-  // legitimately separate rows, so a base match would wrongly block a real sibling.
-  const { data: dupFwd, error: dupErr } = await admin
-    .from("tb_forwarder")
-    .select("id")
-    .eq("ftrackingchn", trackingNo)
-    .limit(1)
-    .maybeSingle<{ id: number }>();
-  if (dupErr) {
-    console.error("[momo commit dedup] failed", { code: dupErr.code, message: dupErr.message });
-    // Release the step-4b claim so the row can be re-committed after a transient error.
-    await admin
-      .from("momo_import_tracks")
-      .update({ committed_at: null, committed_by: null, commit_userid: null, updated_at: nowIso })
-      .eq("id", srcRow.id);
-    return { ok: false, error: `db_error:${dupErr.code ?? "unknown"}` };
-  }
-  if (dupFwd) {
-    // Already in tb_forwarder → resolve THIS momo row to the existing forwarder
-    // (keep committed_at from the claim so it drops out of the uncommitted queue,
-    // never re-offered) and abort — never create the duplicate.
-    await admin
-      .from("momo_import_tracks")
-      .update({ committed_forwarder_id: dupFwd.id, updated_at: nowIso })
-      .eq("id", srcRow.id);
-    return { ok: false, error: `พัสดุนี้มีในระบบแล้ว (tb_forwarder #${dupFwd.id}) — ข้ามการสร้างซ้ำ` };
-  }
-
   // ── 5. ATOMIC INSERT into tb_forwarder ────────────────────
   // Mirrors api-forwarder-manual.ts:429 — the canonical 51-column
   // INSERT. All status + cabinet + date fields written in ONE call.
