@@ -411,20 +411,25 @@ export async function propagateMomoLiveStatusAndData(
     cabinetResult.errors.push({ scope: "cabinet-fill", message: e instanceof Error ? e.message : "unknown" });
   }
 
-  // ── pass 5: BOX-SPLIT → sibling rows (owner/ภูม 2026-07-02). Runs AFTER pass 3 so
-  //    the per-box dims are already in momo_box_detail. For a base tracking MOMO split
-  //    into N boxes, turn the ONE aggregate tb_forwarder row into N sibling rows (one
-  //    per box · matches MOMO's "-i/n"). Money-neutral: splits ONLY when the row is
-  //    UNBILLED + UNPRICED + the box Σ preserves famount/fweight/fvolume (else left
-  //    intact + counted skipped); IDEMPOTENT (a base already split is skipped). Uses the
-  //    multi-box bases SEEN on this scrape (baseTrackingOf(parcel)). best-effort — a
-  //    failure NEVER undoes the status/data/box/cabinet writes above. ──
+  // ── pass 5: BOX-SPLIT → sibling rows (owner/ภูม 2026-07-02 · allowPriced owner 2026-07-13).
+  //    Runs AFTER pass 3 so the per-box dims are already refreshed in momo_box_detail (a
+  //    stale box detail Σ that no longer matches the aggregate is skipped by the guard, so
+  //    the refresh must land first). For a base tracking MOMO split into N boxes, turn the
+  //    ONE aggregate tb_forwarder row into N sibling rows (one per box · matches MOMO's
+  //    "-i/n") so the warehouse can scan EACH box + money is itemised per box.
+  //    allowPriced=true: also split a PRICED-but-UNBILLED aggregate (an auto-priced MOMO
+  //    row · a re-valued backfill row) — money-NEUTRAL by construction (planBoxRowSplit
+  //    preserves Σ ftotalprice to the satang · drift>0.005 skips). Still NEVER touches a
+  //    BILLED row (fstatus 5/6/7 · the .in() WHERE + plan guard). IDEMPOTENT (already-split
+  //    base skipped). Billing groups by base tracking → N siblings = ONE customer bill.
+  //    Uses the multi-box bases SEEN on this scrape. best-effort — a failure NEVER undoes
+  //    the status/data/box/cabinet writes above. ──
   const boxSplitResult = emptyBoxSplitResult();
   try {
     const scrapedBases = Array.from(
       new Set(parcels.map((p) => baseTrackingOf((p.tracking ?? "").trim())).filter(Boolean)),
     );
-    await splitAggregatedMomoBoxRows(admin, scrapedBases, boxSplitResult);
+    await splitAggregatedMomoBoxRows(admin, scrapedBases, boxSplitResult, { allowPriced: true });
   } catch (e) {
     console.error("[propagateMomoLiveStatusAndData] box-split threw", e);
     boxSplitResult.errors.push({ scope: "box-split", message: e instanceof Error ? e.message : "unknown" });
