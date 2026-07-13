@@ -27,7 +27,7 @@ const COLS: Col[] = [
   {
     key: "cabinet", label: "เลขตู้", align: "left",
     render: (r) => (
-      <Link href={`/admin/report-cnt/${encodeURIComponent(r.cabinet)}`} className="font-mono font-semibold text-sky-700 hover:underline">
+      <Link href={`/admin/momo-containers/${encodeURIComponent(r.cabinet)}`} className="font-mono font-semibold text-sky-700 hover:underline">
         {r.cabinet}
       </Link>
     ),
