@@ -3,7 +3,8 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import { ArrowRight, ChevronRight, Star, BadgeCheck } from "lucide-react";
+import { ArrowRight, ChevronRight, Star, BadgeCheck, Navigation, Truck, MapPin, Clock, Package, Users, FileText, Hash, Boxes, Route, Plane, Ship, Zap, FileCheck, Sparkles, Warehouse } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
@@ -95,7 +96,53 @@ function buildLogisticsProse(facts: { key: string; value: string }[], locale: "t
 
 // One section-heading scale for the whole page (audit 2026-06-25 · §0h hierarchy).
 const H2 = "text-[18px] md:text-[22px] font-black tracking-[-0.03em] text-[#111827] dark:text-white";
+const H3 = "text-[16px] md:text-[18px] font-black tracking-[-0.02em] text-[#111827] dark:text-white";
 const EYEBROW = "flex items-center gap-1.5 mb-1 text-primary-600 text-[12px] font-black tracking-[0.06em] uppercase";
+
+// Trip-style icon per shipment-detail label / highlight tag (keyword match · safe fallback).
+function factIcon(label: string): LucideIcon {
+  const l = label.toLowerCase();
+  if (l.includes("สาย") || l.includes("การบิน") || l.includes("airline") || l.includes("flight")) return Plane;
+  if (l.includes("บริการ") || l.includes("ช่องทาง") || l.includes("service") || l.includes("mode")) return Route;
+  if (l.includes("term")) return FileText;
+  if (l.includes("port") || l.includes("เส้นทาง") || l.includes("route")) return Navigation;
+  if (l.includes("เขต") || l.includes("จัดส่ง") || l.includes("zone") || l.includes("delivery")) return MapPin;
+  if (l.includes("รถ") || l.includes("ขนส่ง") || l.includes("truck") || l.includes("carrier")) return Truck;
+  if (l.includes("แรงงาน") || l.includes("labor") || l.includes("labour")) return Users;
+  if (l.includes("คลัง") || l.includes("โกดัง") || l.includes("warehouse")) return Warehouse;
+  if (l.includes("สินค้า") || l.includes("product") || l.includes("goods")) return Package;
+  if (l.includes("เวลา") || l.includes("ระยะ") || l.includes("duration") || l.includes("lead") || l.includes("time")) return Clock;
+  if (l.includes("hs")) return Hash;
+  return Boxes;
+}
+function tagIcon(tag: string): LucideIcon {
+  const l = tag.toLowerCase();
+  if (l.includes("แอร์") || l.includes("air") || l.includes("อากาศ")) return Plane;
+  if (l.includes("เรือ") || l.includes("sea") || l.includes("lcl") || l.includes("fcl")) return Ship;
+  if (l.includes("รถ") || l.includes("road") || l.includes("truck")) return Truck;
+  if (l.includes("ด่วน") || l.includes("express") || l.includes("fast")) return Zap;
+  if (l.includes("ddp") || l.includes("cif") || l.includes("fob") || l.includes("dap")) return FileCheck;
+  return Sparkles;
+}
+
+// Split the flat shipment-detail facts into Trip-style labelled groups (แยกเป็นกลุ่ม)
+// by matching each fact's label. Unmatched facts fall into a "more details" group.
+const FACT_GROUPS: { key: string; th: string; en: string; test: RegExp }[] = [
+  { key: "route", th: "เส้นทาง & การขนส่ง", en: "Route & transport", test: /บริการ|ช่องทาง|service|mode|port|เส้นทาง|route|รถ|ขนส่ง|truck|carrier|เวลา|ระยะ|duration|lead|time|สาย|การบิน|airline|เรือ|vessel|liner|แอร์|คลัง|โกดัง|warehouse/ },
+  { key: "goods", th: "สินค้า & การจัดส่ง", en: "Goods & delivery", test: /สินค้า|product|goods|ประเภท|term|เทอม|hs|พิกัด|อากร|duty|vat|ภาษี|tariff|เขต|จัดส่ง|zone|delivery|แรงงาน|labou?r|ปลายทาง/ },
+];
+function groupCaseFacts<T extends { label: string }>(facts: T[]): { key: string; th: string; en: string; items: T[] }[] {
+  const buckets = FACT_GROUPS.map((g) => ({ key: g.key, th: g.th, en: g.en, items: [] as T[] }));
+  const other: T[] = [];
+  for (const f of facts) {
+    const idx = FACT_GROUPS.findIndex((g) => g.test.test(f.label.toLowerCase()));
+    if (idx >= 0) buckets[idx].items.push(f);
+    else other.push(f);
+  }
+  const out = buckets.filter((b) => b.items.length > 0);
+  if (other.length) out.push({ key: "other", th: "รายละเอียดเพิ่มเติม", en: "More details", items: other });
+  return out;
+}
 
 // Booking-card price pulled from the linked service page's OWN published rate
 // (ปอน 2026-06-25 "ดึงราคาจากในหน้าเว็บมาเลย"). Only services that publish a price
@@ -104,11 +151,6 @@ const EYEBROW = "flex items-center gap-1.5 mb-1 text-primary-600 text-[12px] fon
 const SERVICE_PUBLISHED_PRICE: Record<string, { ns: string; key: string }> = {
   "/services/import-china-fcl": { ns: "svcImportChinaFcl", key: "pricing0Price" },
 };
-
-function extractYouTubeId(url: string): string | null {
-  const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-  return m ? m[1] : null;
-}
 
 export function generateStaticParams() {
   // SEO-pattern slug is the canonical URL; legacy short ids still resolve
@@ -251,7 +293,6 @@ export default async function ReviewLandingPage({
       ...(cmsArticle.coverUrl ? [cmsArticle.coverUrl] : []),
       ...(cmsArticle.galleryImages ?? []),
     ];
-    const ytId = extractYouTubeId(cmsArticle.videoUrl ?? "");
     const relatedCases = REVIEWS.slice(0, 4);
 
     // Rating: average of rated comments → else the editor's caseRating → else 5.0.
@@ -288,77 +329,101 @@ export default async function ReviewLandingPage({
                 <span className="line-clamp-1 font-bold text-[#111827] dark:text-white">{cmsArticle.title}</span>
               </nav>
 
-              {/* Hero card */}
-              <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-[0_18px_44px_-16px_rgba(15,23,42,0.3)] dark:bg-surface md:rounded-3xl">
-                {galleryImages.length > 0 ? (
-                  <CaseGallery images={galleryImages} alt={cmsArticle.title} />
-                ) : null}
+              {/* ── HEADER (Trip-style · title + rating above the gallery) ── */}
+              <header className="mb-3 md:mb-4 md:flex md:items-start md:justify-between md:gap-4">
+                <h1 className="text-[22px] font-black leading-[1.2] tracking-[-0.03em] text-[#111827] dark:text-white md:text-[30px]">
+                  {cmsArticle.title}
+                </h1>
+                {/* วิว + ถูกใจ · Desktop = ข้างๆชื่อ (ขวา) · Mobile = ใต้ชื่อ · (คะแนน 5/5 อยู่ที่ score block แล้ว ไม่ซ้ำ) */}
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px] font-bold text-muted md:mt-2 md:shrink-0">
+                  <ArticleStats statKey={`our_work:${cmsArticle.slug}`} countView />
+                </div>
+              </header>
 
-                {/* Video embed */}
-                {cmsArticle.videoUrl ? (
-                  ytId ? (
-                    <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
-                      <iframe
-                        src={`https://www.youtube-nocookie.com/embed/${ytId}`}
-                        className="absolute inset-0 h-full w-full"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        title="วิดีโอผลงาน"
-                      />
-                    </div>
-                  ) : (
-                    <div className="p-4">
-                      <video src={cmsArticle.videoUrl} controls preload="metadata" className="w-full rounded-xl" />
-                    </div>
-                  )
-                ) : null}
+              {/* ── GALLERY (Trip.com collage · frameless) ── */}
+              {galleryImages.length > 0 || cmsArticle.videoUrl ? (
+                <CaseGallery images={galleryImages} alt={cmsArticle.title} videoUrl={cmsArticle.videoUrl} />
+              ) : null}
 
-                {/* Info + booking sidebar */}
-                <div className="grid gap-6 p-5 md:grid-cols-[1fr_minmax(0,340px)] md:gap-8 md:p-6">
-                  <header>
-                    <span className="inline-flex items-center gap-1 text-[12.5px] font-bold text-emerald-600 dark:text-emerald-400">
-                      <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.6} />
-                      {cmsUi.verified}
-                    </span>
-                    <h1 className="mt-2.5 text-[24px] font-black leading-[1.2] tracking-[-0.03em] text-[#111827] dark:text-white md:text-[30px]">
-                      {cmsArticle.title}
-                    </h1>
-                    <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                      <div className="inline-flex items-center gap-1.5">
-                        <span className="text-[14px] font-black text-primary-700 dark:text-primary-300">{cmsRatingWord}</span>
-                        <div className="flex items-center gap-0.5">
+              {/* ── 2-COLUMN · content left (chips + score + facts) · sticky booking right ── */}
+              {/* chips ขึ้นเป็นหัวคอลัมน์ซ้าย → booking (ขวา) เริ่มแถวเดียวกับ chips */}
+              <div className="mt-4 grid gap-6 md:grid-cols-[1fr_minmax(0,340px)] md:gap-8">
+                <div className="min-w-0">
+                  {/* HIGHLIGHT chips (tags · Trip feature-chip · มือถือแถวเดียวเลื่อน) */}
+                  {cmsArticle.tags.length > 0 ? (
+                    <div className="mb-4 flex gap-2 overflow-x-auto flex-nowrap [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible">
+                      {cmsArticle.tags.map((tg) => {
+                        const Ic = tagIcon(tg);
+                        return (
+                          <Link key={tg} href={`/our-work?tag=${encodeURIComponent(tg)}`} className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-white px-3 py-1.5 text-[12.5px] font-bold text-foreground transition hover:border-primary-300 hover:text-primary-700 dark:bg-surface">
+                            <Ic className="h-4 w-4 text-primary-600" strokeWidth={2.2} /> {tg}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+
+                  {/* Score block (Trip's 9.3 · highlight snippet beside · ไม่โล่ง) */}
+                  <section className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex shrink-0 flex-col items-center rounded-xl bg-primary-700 px-4 py-2.5 text-white">
+                        <span className="text-[28px] font-black leading-none tabular-nums">{cmsRating.toFixed(1)}</span>
+                        <span className="mt-0.5 text-[11px] font-bold text-white/75">/ 5</span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[16px] font-black text-primary-700 dark:text-primary-300">{cmsRatingWord}</p>
+                        <div className="mt-1 flex items-center gap-0.5">
                           {Array.from({ length: 5 }).map((_, i) => (
-                            <Star key={i} className={["h-3.5 w-3.5", i < Math.round(cmsRating) ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-300 dark:fill-surface dark:text-surface-alt"].join(" ")} strokeWidth={1.8} />
+                            <Star key={i} className={["h-4 w-4", i < Math.round(cmsRating) ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-300 dark:fill-surface dark:text-surface-alt"].join(" ")} strokeWidth={1.8} />
                           ))}
                         </div>
-                        {cmsRated.length > 0 ? (
-                          <span className="text-[12.5px] font-bold text-muted tabular-nums">({cmsRated.length} {typedLocale === "en" ? "reviews" : "รีวิว"})</span>
-                        ) : null}
+                        <p className="mt-1 inline-flex items-center gap-1 text-[12px] font-bold text-emerald-600 dark:text-emerald-400">
+                          <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.6} />
+                          {cmsRated.length > 0 ? `${cmsRated.length} ${typedLocale === "en" ? "reviews" : "รีวิว"}` : cmsUi.verified}
+                        </p>
                       </div>
-                      {cmsArticle.caseRoute ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-alt/60 px-2.5 py-0.5 text-[12.5px] font-bold text-foreground">
-                          {cmsArticle.caseRoute}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="mt-2.5 flex flex-wrap items-center gap-2.5 text-[12.5px] font-bold text-muted">
-                      <ArticleStats statKey={`our_work:${cmsArticle.slug}`} countView />
                     </div>
                     {cmsArticle.excerpt ? (
-                      <p className="mt-3 text-[14px] leading-relaxed text-muted">{cmsArticle.excerpt}</p>
+                      <p className="text-[13.5px] font-medium leading-relaxed text-foreground/80 sm:flex-1 sm:border-l sm:border-border sm:pl-4 sm:line-clamp-3">
+                        {cmsArticle.excerpt}
+                      </p>
                     ) : null}
-                    {cmsArticle.tags.length > 0 ? (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {cmsArticle.tags.map((tg) => (
-                          <Link key={tg} href={`/our-work?tag=${encodeURIComponent(tg)}`} className="rounded-full border border-primary-100 bg-primary-50 px-2.5 py-0.5 text-[12px] font-semibold text-primary-700 transition hover:bg-primary-100 dark:border-primary-900/40 dark:bg-primary-900/20 dark:text-primary-300">
-                            #{tg}
-                          </Link>
-                        ))}
-                      </div>
-                    ) : null}
-                  </header>
+                  </section>
 
-                  <aside className="self-start rounded-2xl border border-border bg-white p-5 shadow-[0_12px_32px_-14px_rgba(15,23,42,0.22)] dark:bg-surface">
+                  {/* ข้อมูลขนส่ง — Trip-style · split into labelled groups (แยกเป็นกลุ่ม เหมือน Trip) */}
+                  {groupCaseFacts(cmsArticle.caseFacts).map((g) => (
+                    <section key={g.key} className="border-t border-border py-4">
+                      <h2 className={H3}>{typedLocale === "en" ? g.en : g.th}</h2>
+                      <div className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-3 md:grid-cols-3">
+                        {g.items.map((f, i) => {
+                          const Ic = factIcon(f.label);
+                          return (
+                            <div key={i} className="flex items-start gap-2">
+                              <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-900/25 dark:text-primary-300">
+                                <Ic className="h-4 w-4" strokeWidth={2.2} />
+                              </span>
+                              <div className="min-w-0">
+                                <p className="text-[11.5px] font-bold uppercase tracking-wide text-muted">{f.label}</p>
+                                <p className="text-[14px] font-black text-foreground">{f.value}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
+
+                  {/* Body content */}
+                  {cmsArticle.body.trim() ? (
+                    <section className="border-t border-border py-5">
+                      <ArticleContent text={cmsArticle.body} title={cmsArticle.title} />
+                    </section>
+                  ) : null}
+                </div>
+
+                {/* Sticky booking card */}
+                <aside className="self-start md:sticky md:top-24">
+                  <div className="rounded-2xl border border-border bg-white p-5 shadow-[0_12px_32px_-14px_rgba(15,23,42,0.22)] dark:bg-surface">
                     <p className="text-[11.5px] font-bold uppercase tracking-wide text-muted">{cmsArticle.casePrice ? (typedLocale === "en" ? "Starting price" : "ราคาเริ่มต้น") : cmsUi.priceLead}</p>
                     <p className="mt-0.5 text-[26px] font-black leading-tight tracking-[-0.02em] text-primary-600">{cmsArticle.casePrice || cmsUi.quoteFree}</p>
                     <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
@@ -371,40 +436,12 @@ export default async function ReviewLandingPage({
                       <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.8} />
                       {cmsUi.fastReply}
                     </p>
-                  </aside>
-                </div>
+                  </div>
+                </aside>
               </div>
 
+              {/* ── Comments + Related (full width) ── */}
               <div className="mt-8 space-y-8 md:mt-10 md:space-y-10">
-                {/* ข้อมูลขนส่ง — case facts grid */}
-                {cmsArticle.caseFacts.length > 0 ? (
-                  <section>
-                    <div className={EYEBROW}>
-                      <Star className="h-3.5 w-3.5 fill-primary-600" strokeWidth={2.6} />
-                      {typedLocale === "en" ? "Shipment details" : "ข้อมูลขนส่ง"}
-                    </div>
-                    <h2 className={H2}>{typedLocale === "en" ? "Shipment details" : "ข้อมูลขนส่ง"}</h2>
-                    <div className="mt-3 grid grid-cols-2 gap-2.5 md:grid-cols-3">
-                      {cmsArticle.caseFacts.map((f, i) => (
-                        <div key={i} className="rounded-xl border border-border bg-white p-3 dark:bg-surface">
-                          <p className="text-[11.5px] font-bold uppercase tracking-wide text-muted">{f.label}</p>
-                          <p className="mt-0.5 text-[14px] font-black text-foreground">{f.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-
-                {/* Body content */}
-                {cmsArticle.body.trim() ? (
-                  <section>
-                    <div className="mx-auto w-full max-w-[760px]">
-                      <ArticleContent text={cmsArticle.body} title={cmsArticle.title} />
-                    </div>
-                  </section>
-                ) : null}
-
-                {/* Comments — ABOVE ผลงานอื่นๆ · full-width left-aligned with ข้อมูลขนส่ง per ปอน 2026-06-25 */}
                 <div className="w-full">
                   <CaseComments
                     caseSlug={cmsSlug}
@@ -417,7 +454,6 @@ export default async function ReviewLandingPage({
                   />
                 </div>
 
-                {/* Related catalog cases */}
                 {relatedCases.length > 0 ? (
                   <section>
                     <div className="mb-4 flex items-end justify-between gap-4">
@@ -449,7 +485,6 @@ export default async function ReviewLandingPage({
                     </div>
                   </section>
                 ) : null}
-
               </div>
             </div>
           </article>
