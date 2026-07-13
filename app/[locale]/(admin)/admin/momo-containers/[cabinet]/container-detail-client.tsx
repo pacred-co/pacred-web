@@ -46,7 +46,7 @@ export function ContainerDetailClient({ d }: { d: MomoContainerDetail }) {
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
         <h2 className="mb-2 text-sm font-semibold">ข้อมูลสรุปในตู้ (ต่อลูกค้า PR)</h2>
         <div className="overflow-x-auto scrollbar-x-visible">
-          <table className="w-full text-xs">
+          <table className="w-full text-xs border-collapse [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border">
             <thead className="bg-surface-alt/50 text-[11px] uppercase text-muted">
               <tr>
                 <th className="px-2 py-1.5 text-left">ลูกค้า (PR)</th>
@@ -91,7 +91,7 @@ export function ContainerDetailClient({ d }: { d: MomoContainerDetail }) {
       {/* ── TAB: รายการในตู้ (ระบบ) — item table (ไอแต้ม image 4) ────────── */}
       {tab === "items" && (
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm overflow-x-auto scrollbar-x-visible">
-          <table className="w-full text-xs">
+          <table className="w-full text-xs border-collapse [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border">
             <thead className="bg-surface-alt/50 text-[11px] uppercase text-muted">
               <tr>
                 <th className="px-2 py-1.5 text-right">#</th>

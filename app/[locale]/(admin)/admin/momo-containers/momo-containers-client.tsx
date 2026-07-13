@@ -128,7 +128,7 @@ export function MomoContainersClient({ rows }: { rows: MomoContainerRow[] }) {
       </div>
 
       <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
-        <table className="w-full text-xs">
+        <table className="w-full text-xs border-collapse [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border">
           <thead className="bg-surface-alt/60 text-[11px] uppercase tracking-wide text-muted">
             <tr>
               {cols.map((c) => (

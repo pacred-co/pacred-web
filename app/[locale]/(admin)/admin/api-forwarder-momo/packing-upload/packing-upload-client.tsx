@@ -248,7 +248,7 @@ export function MomoPackingUploadClient() {
           )}
 
           <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-xs">
+            <table className="w-full text-xs border-collapse [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border">
               <thead className="bg-surface-alt/50 text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-2 text-left">แทรคกิ้ง (ฐาน)</th>
