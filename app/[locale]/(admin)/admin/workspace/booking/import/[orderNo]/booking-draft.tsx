@@ -14,6 +14,8 @@ import {
   Boxes, ClipboardCheck, Warehouse, Info, CircleCheckBig, FileText, Users, Building2, Anchor,
 } from "lucide-react";
 import { directionOf, usesContainer, usesLoadType, CARRIER_LABEL, type QuoteConditions } from "../quotation-data";
+import { DraftBarcode } from "@/components/ui/draft-barcode";
+import { BookingJourney } from "@/components/workspace/booking-journey";
 
 const cx = (...c: (string | false | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -124,7 +126,6 @@ export function BookingDraftPreview({
   const Svc = svc.Icon;
   const dir = directionOf(cond);
   const serviceType = usesLoadType(cond.service) ? `${cond.service} ${cond.loadType}` : cond.service;
-  const containerLabel = usesContainer(cond.loadType) ? cond.container : (usesLoadType(cond.service) ? "รวมตู้ (LCL)" : "ตามขนาดสินค้า");
   const routeFrom = `${cond.pol.country} · ${cond.pol.port}`;
   const routeTo = `${cond.pod.country} · ${cond.pod.port}`;
   const consignee = doc.consignee || doc.billName || "—";
@@ -170,6 +171,7 @@ export function BookingDraftPreview({
           <Row label="เอกสาร">{cond.docMode}</Row>
           <Row label="สินค้า"><span className="text-foreground">{commodity}</span>{cond.productType ? <span className={cx("ml-1 rounded px-1 text-[11px]", licensed ? "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300" : "bg-muted text-muted")}>{cond.productType}{licensed ? " 🔖" : ""}</span> : null}</Row>
           <Row label="น้ำหนัก">{cond.weight ? `${cond.weight} กก.` : "—"}</Row>
+          <Row label="ปริมาตร">{cond.cbm ? `${cond.cbm} CBM` : "—"}</Row>
           <Row label={carrierLabel}>{cond.carrier || "—"}</Row>
           <Row label="ลูกค้า">{consignee}</Row>
         </dl>
@@ -186,16 +188,23 @@ export function BookingDraftPreview({
     );
   }
 
-  // ═══════════════ FULL (เต็มความกว้าง · หน้าตาใบ Booking) ═══════════════
+  // ═══════════════ FULL — booking-confirmation document (แบบ mockup 100% · owner ปอน 2026-07-13) ═══════════════
   return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm">
-      <div className="flex flex-col gap-3 border-b border-border bg-gradient-to-r from-primary-600/10 to-transparent px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <section className="relative overflow-hidden rounded-2xl border border-border bg-white shadow-sm dark:bg-surface">
+      {/* DRAFT watermark */}
+      <span aria-hidden className="pointer-events-none absolute inset-0 z-0 flex select-none items-center justify-center overflow-hidden">
+        <span className="rotate-[-20deg] text-[110px] font-black leading-none tracking-[0.15em] text-foreground/[0.04]">DRAFT</span>
+      </span>
+
+      {/* ── header ── */}
+      <div className="relative z-10 flex flex-col gap-3 border-b border-border px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-lg font-bold text-foreground">ดราฟต์ใบ Booking</h2>
-          <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted">BOOKING DRAFT · {docNo}</div>
+          <h2 className="text-xl font-black text-foreground">ดราฟต์ใบ Booking</h2>
+          <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted">BOOKING CONFIRMATION • SHIPMENT {docNo}</div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">DRAFT · ยังไม่ประมวลผล</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] text-muted">สถานะ: ดราฟต์ใบจอง / รอตรวจสอบ</span>
+          <span className="rounded-full bg-primary-600 px-3 py-1 text-xs font-bold text-white">DRAFT</span>
           <button type="button" onClick={() => onToggleFull(false)}
             className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted/50">
             <Minimize2 className="h-4 w-4" /> ย่อ
@@ -203,114 +212,116 @@ export function BookingDraftPreview({
         </div>
       </div>
 
-      <div className="space-y-5 p-5">
-        {/* chips */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2.5 py-1 text-[11px] font-semibold text-foreground"><ScanBarcode className="h-3.5 w-3.5" />{docNo}</span>
-          <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"><Users className="h-3.5 w-3.5" />ผู้ดูแล: {salesName || "WEB"}</span>
-          <span className="rounded-md bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">TERM: {cond.term} · {dir.code}</span>
-          <span className="rounded-md bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted">ไม่โชว์ราคาในดราฟต์</span>
-          <span className="rounded-md bg-primary-50 px-2.5 py-1 text-[11px] font-semibold text-primary-700 dark:bg-primary-500/15 dark:text-primary-300">{serviceType}{usesContainer(cond.loadType) ? ` · ${cond.container}` : ""}</span>
-          {attachedSummary && <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"><FileText className="h-3.5 w-3.5" />เอกสารแนบ: {attachedSummary}</span>}
-        </div>
-
-        {/* journey */}
-        <div className="rounded-xl border border-border bg-background p-4">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
-            <p className="text-xs font-bold text-foreground">สถานะการเดินทาง (ตามที่วางแผน)</p>
-            <span className="text-[11px] text-muted">สถานะ: ดราฟต์ใบจอง / รอตรวจสอบ</span>
-          </div>
-          <JourneyStrip service={cond.service} size="full" />
-        </div>
-
-        {/* route visual */}
-        <div className="rounded-xl border border-border bg-background p-4">
-          <p className="mb-3 text-xs font-bold text-foreground">เส้นทางและการขนส่ง</p>
-          <div className="flex items-center gap-3">
-            <div className="shrink-0 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary-600 text-sm font-bold text-white">{countryCode(cond.pol.country)}</div>
-              <div className="mt-1 text-[11px] font-semibold text-foreground">{cond.pol.port}</div>
-              <div className="text-[10px] text-muted">{cond.pol.country}</div>
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col items-center">
-              <div className="flex flex-wrap items-center justify-center gap-1 text-center text-[11px] font-semibold text-primary-600"><Svc className="h-4 w-4 shrink-0" /> {cond.carrier || svc.label}{usesLoadType(cond.service) ? ` · ${cond.loadType}` : ""}{usesContainer(cond.loadType) ? ` · ${cond.container}` : ""}</div>
-              <div className="my-1 h-0.5 w-full bg-primary-500" />
-              <div className="text-[10px] text-muted">Direct / Indirect: {cond.enter === "Normal" ? "ยังไม่ระบุ" : cond.enter}</div>
-            </div>
-            <div className="shrink-0 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary-600 text-sm font-bold text-white">{countryCode(cond.pod.country)}</div>
-              <div className="mt-1 text-[11px] font-semibold text-foreground">{cond.pod.port}</div>
-              <div className="text-[10px] text-muted">{cond.pod.country}</div>
-            </div>
+      <div className="relative z-10 space-y-5 p-5">
+        {/* barcode + chips */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <DraftBarcode text={docNo} />
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"><Users className="h-3.5 w-3.5" />ผู้ดูแล: {salesName || "WEB"}</span>
+            <span className="rounded-md bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">TERM: {cond.term} · {dir.code}</span>
+            <span className="rounded-md bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted">ไม่โชว์ราคาในดราฟต์</span>
+            <span className="rounded-md bg-primary-50 px-2.5 py-1 text-[11px] font-semibold text-primary-700 dark:bg-primary-500/15 dark:text-primary-300">{serviceType}{usesContainer(cond.loadType) ? ` · ${cond.container}` : ""}</span>
+            {attachedSummary && <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"><FileText className="h-3.5 w-3.5" />เอกสารแนบ: {attachedSummary}</span>}
           </div>
         </div>
 
-        {/* main data grid */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <Field label="Booking Ref" value={docNo} />
-          <Field label="ทิศทาง" value={`${dir.label} (${dir.code})`} />
-          <Field label="ขนส่ง (TR)" value={svc.label} />
-          <Field label="เทอม (Term)" value={cond.term} />
-          <Field label="เอกสาร" value={cond.docMode} />
-          <Field label="ประเภท / ตู้" value={containerLabel} />
-          <Field label={carrierLabel} value={cond.carrier || "—"} />
-          <Field label="น้ำหนัก" value={cond.weight ? `${cond.weight} กก.` : "—"} />
-          <Field label="เอเจนต์" value={cond.agent || "—"} />
-          <Field label="ผู้ดูแล / Sale" value={salesName || "—"} />
+        {/* journey — รูปสถานะจริง · ชุด stage ขึ้นกับ TERM × ขนส่ง (Incoterms · ดราฟต์ = เพิ่งเริ่ม) */}
+        <BookingJourney term={cond.term} mode={cond.service} progress={0} />
+
+        {/* ข้อมูลหลัก + เส้นทาง (2-col) */}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-xl border border-border bg-background p-4">
+            <p className="mb-3 text-sm font-black text-primary-600">ข้อมูลหลักของ Booking</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <Field label="DATE" value="—" />
+              <Field label="INV NO." value={docNo} />
+              <Field label="SHIPMENT" value={docNo} />
+              <Field label="TEL NUMBER" value={doc.phone || "—"} />
+              <Field label="PRICING / DOC / SALE" value={`WEB / ${salesName || "—"}`} />
+              <Field label="TR" value={svc.label} />
+            </div>
+          </div>
+          <div className="rounded-xl border border-border bg-background p-4">
+            <p className="mb-3 text-sm font-black text-primary-600">เส้นทางและการขนส่ง</p>
+            <div className="flex items-center gap-3">
+              <div className="shrink-0 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary-600 text-sm font-bold text-white">{countryCode(cond.pol.country)}</div>
+                <div className="mt-1 text-[11px] font-semibold text-foreground">{cond.pol.port}</div>
+                <div className="text-[10px] text-muted">{cond.pol.country}</div>
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col items-center">
+                <div className="flex flex-wrap items-center justify-center gap-1 text-center text-[11px] font-semibold text-primary-600"><Svc className="h-4 w-4 shrink-0" /> {cond.carrier || svc.label}{usesLoadType(cond.service) ? ` · ${cond.loadType}` : ""}{usesContainer(cond.loadType) ? ` · ${cond.container}` : ""}</div>
+                <div className="my-1 h-0.5 w-full bg-primary-500" />
+                <div className="text-[10px] text-muted">Direct / Indirect: {cond.enter === "Normal" ? "ยังไม่ระบุ" : cond.enter}</div>
+              </div>
+              <div className="shrink-0 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary-600 text-sm font-bold text-white">{countryCode(cond.pod.country)}</div>
+                <div className="mt-1 text-[11px] font-semibold text-foreground">{cond.pod.port}</div>
+                <div className="text-[10px] text-muted">{cond.pod.country}</div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* customer + freight */}
+        {/* ข้อมูลลูกค้า/ต้นทาง + Freight/Port */}
         <div className="grid gap-3 md:grid-cols-2">
           <div className="rounded-xl border border-border bg-background p-4">
-            <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-foreground"><Building2 className="h-4 w-4 text-primary-500" /> ลูกค้า / ต้นทาง</p>
-            <FieldLine label="Consignee / ลูกค้า" value={consignee} strong />
-            <FieldLine label="Shipper / ผู้ส่ง" value={doc.shipper || "—"} />
-            <FieldLine label="ที่อยู่ต้นทาง" value={doc.pickupAddress || doc.address || "—"} />
+            <p className="mb-2 flex items-center gap-1.5 text-sm font-black text-primary-600"><Building2 className="h-4 w-4 text-primary-500" /> ข้อมูลลูกค้า / ต้นทาง</p>
+            <FieldLine label="Consignee / Customer" value={consignee} strong />
+            <FieldLine label="ที่อยู่ต้นทาง (FROM)" value={doc.pickupAddress || doc.address || "—"} />
+            <FieldLine label="Destination Address" value={doc.address || "—"} />
             <FieldLine label="เบอร์โทร" value={doc.phone || "—"} />
           </div>
           <div className="rounded-xl border border-border bg-background p-4">
-            <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-foreground"><Anchor className="h-4 w-4 text-primary-500" /> Freight / Port</p>
+            <p className="mb-2 flex items-center gap-1.5 text-sm font-black text-primary-600"><Anchor className="h-4 w-4 text-primary-500" /> ข้อมูล Freight / Port</p>
+            <FieldLine label="Shipper Load / Freight" value={doc.shipper || cond.agent || "—"} strong />
             <FieldLine label="Port of Loading" value={routeFrom} />
             <FieldLine label="Destination" value={routeTo} />
-            <FieldLine label={carrierLabel} value={cond.carrier || "—"} />
+            <FieldLine label="Shipping Line" value={cond.carrier || "—"} />
             <FieldLine label="Loading Type" value={usesLoadType(cond.service) ? cond.loadType : "—"} />
           </div>
         </div>
 
-        {/* commodity table */}
-        <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full min-w-[560px] text-left text-xs">
-            <thead className="bg-muted/40 text-[11px] uppercase text-muted">
-              <tr>
-                <th className="px-3 py-2 font-semibold">สินค้า / Commodity</th>
-                <th className="px-3 py-2 font-semibold">ประเภท</th>
-                <th className="px-3 py-2 font-semibold">Load</th>
-                <th className="px-3 py-2 font-semibold">Qty / Cont.</th>
-                <th className="px-3 py-2 font-semibold">Weight</th>
-                <th className="px-3 py-2 font-semibold">POL → POD</th>
-                <th className="px-3 py-2 font-semibold">{carrierLabel}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-t border-border">
-                <td className="px-3 py-2 font-semibold text-primary-600">{commodity}</td>
-                <td className="px-3 py-2 text-foreground">{cond.productType}</td>
-                <td className="px-3 py-2 text-foreground">{usesLoadType(cond.service) ? cond.loadType : "—"}</td>
-                <td className="px-3 py-2 text-foreground">{usesContainer(cond.loadType) ? cond.container : "ตามขนาด"}</td>
-                <td className="px-3 py-2 text-foreground">{cond.weight ? `${cond.weight} กก.` : "—"}</td>
-                <td className="px-3 py-2 text-foreground">{cond.pol.port} → {cond.pod.port}</td>
-                <td className="px-3 py-2 text-foreground">{cond.carrier || "—"}</td>
-              </tr>
-            </tbody>
-          </table>
-          <p className="border-t border-border bg-muted/20 px-3 py-2 text-[11px] text-muted">* ดราฟต์นี้ไม่แสดงราคา — ราคาอยู่ในใบเสนอราคา (โหมด &ldquo;สร้างใบเสนอราคา&rdquo;)</p>
+        {/* รายการสินค้า / Container */}
+        <div>
+          <p className="mb-2 text-sm font-black text-primary-600">รายการสินค้า / Container</p>
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="w-full min-w-[720px] text-left text-xs">
+              <thead className="bg-muted/40 text-[11px] uppercase text-muted">
+                <tr>
+                  <th className="px-3 py-2 font-semibold">INV / Shipment</th>
+                  <th className="px-3 py-2 font-semibold">Commodity</th>
+                  <th className="px-3 py-2 font-semibold">Load</th>
+                  <th className="px-3 py-2 font-semibold">Qty / Cont.</th>
+                  <th className="px-3 py-2 font-semibold">Weight</th>
+                  <th className="px-3 py-2 font-semibold">POL</th>
+                  <th className="px-3 py-2 font-semibold">POD</th>
+                  <th className="px-3 py-2 font-semibold">Line</th>
+                  <th className="px-3 py-2 font-semibold">Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-t border-border align-top">
+                  <td className="px-3 py-2 font-semibold text-primary-600">{docNo}</td>
+                  <td className="px-3 py-2 font-semibold text-primary-600">{commodity}</td>
+                  <td className="px-3 py-2 text-foreground">{usesLoadType(cond.service) ? cond.loadType : "—"}</td>
+                  <td className="px-3 py-2 text-foreground">{usesContainer(cond.loadType) ? cond.container : "ตามขนาด"}</td>
+                  <td className="px-3 py-2 text-foreground">{cond.weight ? `${cond.weight} กก.` : "0.00 กก."}{cond.cbm ? ` · ${cond.cbm} CBM` : ""}</td>
+                  <td className="px-3 py-2 text-foreground">{cond.pol.port}</td>
+                  <td className="px-3 py-2 text-foreground">{cond.pod.port}</td>
+                  <td className="px-3 py-2 text-foreground">{cond.carrier || "—"}</td>
+                  <td className="px-3 py-2 text-muted">ไม่มีการแสดงราคาในดราฟต์นี้</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        {/* operational — not yet specified */}
+        {/* ข้อมูลปฏิบัติการที่ยังไม่ระบุ */}
         <div>
-          <p className="mb-2 text-xs font-bold text-muted">ข้อมูลปฏิบัติการ (จะระบุตอนดำเนินงานจริง)</p>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-            {["CY Date", "ETD", "ETA", "Empty Return", "Local Logistics", "Manpower", "Register", "Duty / VAT", "Customs", "D/O"].map((o) => (
+          <p className="mb-2 text-sm font-black text-primary-600">ข้อมูลปฏิบัติการที่ยังไม่ระบุ</p>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-9">
+            {["CY Date", "ETD", "ETA", "Empty Return", "Local Logistics", "Manpower", "Register", "Duty / VAT", "Customs Clearance"].map((o) => (
               <div key={o} className="rounded-lg border border-dashed border-border bg-muted/20 px-2 py-1.5 text-center">
                 <div className="text-[10px] font-medium text-muted">{o}</div>
                 <div className="text-xs text-muted">—</div>
@@ -335,8 +346,20 @@ export function BookingDraftPreview({
           </div>
         </div>
 
+        {/* footer — actions (แบบ mockup) */}
+        <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-bold text-white"><ScanBarcode className="h-4 w-4" /> บันทึกดราฟต์</span>
+            <button type="button" onClick={() => { if (typeof window !== "undefined") window.print(); }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold text-primary-600 transition-colors hover:bg-muted/50">
+              <FileText className="h-4 w-4" /> ดาวน์โหลด Booking
+            </button>
+          </div>
+          <span className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-bold text-white">ส่งต่อทีมเอกสาร <ArrowRight className="h-4 w-4" /></span>
+        </div>
+
         <p className="text-[11px] leading-relaxed text-muted">
-          📋 นี่คือ <b className="text-foreground">ตัวอย่างใบ Booking (Draft)</b> — สร้างจากเงื่อนไขที่เลือกด้านบน · <b>ยังไม่ประมวลผล / ยังไม่จองจริง</b> · ให้ลูกค้าดูว่าตรงตามที่ต้องการก่อนยืนยัน · prototype (client-state)
+          📋 นี่คือ <b className="text-foreground">ตัวอย่างใบ Booking (Draft)</b> — สร้างจากเงื่อนไขที่เลือกด้านบน · <b>ยังไม่ประมวลผล / ยังไม่จองจริง</b> · ปุ่ม &ldquo;บันทึก/ส่งต่อ&rdquo; จริงใช้ปุ่มในฟอร์มด้านบน · prototype (client-state)
         </p>
       </div>
     </section>

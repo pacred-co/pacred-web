@@ -15,7 +15,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { Link } from "@/i18n/navigation";
 import { ArrowLeft } from "lucide-react";
 import { loadBookingCatalog } from "@/actions/admin/booking-catalog";
-import { BookingCatalogSettings } from "./booking-catalog-settings";
+import { SettingsHub } from "./settings-hub";
 
 export const dynamic = "force-dynamic";
 
@@ -30,14 +30,14 @@ export default async function BookingCatalogSettingsPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <PageHeader
           eyebrow="WORKSPACE · BOOKING · นำเข้า"
-          title="ตั้งค่าเรท (Pricing) — ใบเสนอราคานำเข้า"
-          subtitle="ตั้ง/แก้เรทตั้งต้นต่อเงื่อนไข (Term × ขนส่ง × LCL/FCL) — ราคาขาย + ต้นทุน + กำไร · ใบเสนอราคาจะดึงชุดนี้ไปใช้อัตโนมัติ"
+          title="ตั้งค่าระบบ — ข้อมูลพื้นฐาน & เรท"
+          subtitle="ข้อมูลกลาง (สายเรือ · ประเทศ · เอเจนต์ · ท่า · เอกสาร · รถ · ตู้) + Term & Pricing สำหรับใบเสนอราคานำเข้า-ส่งออก"
         />
         <Link href="/admin/workspace/booking/import" className="inline-flex items-center gap-1 text-sm text-muted transition-colors hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> กลับหน้า Booking
         </Link>
       </div>
-      <BookingCatalogSettings templates={templates} persisted={persisted} />
+      <SettingsHub templates={templates} persisted={persisted} />
     </div>
   );
 }
