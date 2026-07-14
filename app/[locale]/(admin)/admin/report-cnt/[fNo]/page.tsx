@@ -688,17 +688,20 @@ export default async function AdminReportCntDetailPage({
   return (
     <>
       {/* Legacy order: breadcrumb at the VERY TOP → exception tabs → header card
-          (ปอน 2026-07-14 "บนสุดต้องเป็น หน้าแรก › รายงานตู้สินค้า › ตู้"). */}
+          (ปอน 2026-07-14 "บนสุดต้องเป็น หน้าแรก › รายงานตู้สินค้า › ตู้").
+          2026-07-14 (ปอน) — the exception-tabs strip moved INSIDE the header
+          .pcs-card (embedded) so the chip menu + รายงานตู้ share ONE framed box. */}
       <div className="px-4 pt-3 lg:px-6">
         <Breadcrumb fCabinetNumber={fCabinetNumber} />
       </div>
-      <TopMenuReport activeHref="/admin/report-cnt" />
       {/* .pcs-rc scopes the faithful legacy PCS Cargo look (legacy-report-cnt.css)
           to this content only — the rest of the admin shell keeps its own theme.
           Faithful port of report-cnt.php?id=<cnt> (ADR-0017 · ปอน 2026-07-14). */}
       <main className="pcs-rc p-4 lg:p-6 pb-32">
         {/* ── SECTION 1 · header card (report-cnt.php L1504-1576) ── */}
         <section className="pcs-card mt-3">
+          {/* exception-tabs strip — embedded as the card's top header row */}
+          <TopMenuReport activeHref="/admin/report-cnt" embedded />
           {/* title + top-right tools (legacy .float-md-right ตั้งค่าต้นทุนตู้ gear) */}
           <div className="flex flex-wrap items-start justify-between gap-3">
             <h3>
@@ -706,10 +709,25 @@ export default async function AdminReportCntDetailPage({
               รายงานตู้สินค้า {fCabinetNumber}{" "}
               <span className={`badge ${transportBadgeClass} badge-pill`}>{transportLabel}</span>
             </h3>
-            {/* legacy top-right = ตั้งค่าต้นทุนตู้ (gear) ONLY (report-cnt.php L1265-1275).
-                The other Pacred tools move to the footer toolbar below so the head
-                stays clean like legacy (ปอน 2026-07-14). */}
-            <div className="flex items-center justify-end">
+            {/* top-right toolbar — ALL tools inline as GHOST buttons (icon + text,
+                no frame · ปอน 2026-07-15 "เอาไปแถวเดียวกับตั้งค่าต้นทุน · เอากรอบปุ่ม
+                ออก มีแต่ไอคอนกับ text"): print + accounting-handoff + pay-slip + the
+                cost-rate gear. `.pcs-header-tools` lets legacy-report-cnt.css stop
+                `.pcs-rc a` from repainting the print <Link> blue/underlined. */}
+            <div className="pcs-header-tools flex flex-wrap items-center justify-end gap-x-1 gap-y-0.5">
+              <Link
+                href={`/admin/printAll?cabinet=${encodeURIComponent(fCabinetNumber)}`}
+                target="_blank"
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors hover:bg-amber-50"
+              >
+                🖨 พิมพ์ป้ายกล่องทั้งตู้
+              </Link>
+              {completeness.forwardersTotal > 0 && (
+                <WarehouseHandoffButton fCabinetNumber={fCabinetNumber} isComplete={completeness.isComplete} />
+              )}
+              {showMoney && !cabinetIsPaid && (
+                <CntPaySlipPanel fCabinetNumber={fCabinetNumber} suggestedAmount={totalCost} />
+              )}
               {canEditCost && (
                 <CostRateModal
                   fCabinetNumber={fCabinetNumber}
@@ -815,23 +833,8 @@ export default async function AdminReportCntDetailPage({
             </div>
           </div>
 
-          {/* Pacred quick tools — kept for reachability (§0d), tucked below the
-              legacy header body so the top stays clean like legacy (title + gear). */}
-          <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3" style={{ borderColor: "#eef0f2" }}>
-            <Link
-              href={`/admin/printAll?cabinet=${encodeURIComponent(fCabinetNumber)}`}
-              target="_blank"
-              className="btn btn-sm btn-warning"
-            >
-              🖨 พิมพ์ป้ายกล่องทั้งตู้
-            </Link>
-            {completeness.forwardersTotal > 0 && (
-              <WarehouseHandoffButton fCabinetNumber={fCabinetNumber} isComplete={completeness.isComplete} />
-            )}
-            {showMoney && !cabinetIsPaid && (
-              <CntPaySlipPanel fCabinetNumber={fCabinetNumber} suggestedAmount={totalCost} />
-            )}
-          </div>
+          {/* (Pacred quick tools moved up into the header's top-right ghost toolbar
+              · ปอน 2026-07-15) */}
         </section>
 
         {/* ปอน 2026-07-14 — legacy report-cnt.php has NO journey-timeline / China

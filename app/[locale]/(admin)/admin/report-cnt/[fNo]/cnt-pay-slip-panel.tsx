@@ -17,6 +17,7 @@
  */
 
 import { useState, useTransition, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Receipt } from "lucide-react";
 import { adminCreateCntPaymentSingle } from "@/actions/admin/cnt-payment";
@@ -73,7 +74,7 @@ export function CntPaySlipPanel({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-full bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700"
+        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-green-600 transition-colors hover:bg-green-50"
       >
         <Receipt className="h-3.5 w-3.5" />
         จ่ายเงินค่าตู้ + แนบสลิป
@@ -81,10 +82,21 @@ export function CntPaySlipPanel({
     );
   }
 
-  return (
+  // Portal renders client-side only — createPortal needs a real document.body,
+  // which doesn't exist during SSR (open is false on the server anyway).
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    // Modal overlay — the trigger now lives in the header's top-right ghost toolbar
+    // (ปอน 2026-07-15), so opening the form inline would shove the other tools
+    // around. Render it centered over a backdrop instead. Portalled to <body>
+    // because the admin `.animate-fade-in` wrapper keeps an identity transform,
+    // which traps position:fixed → the modal otherwise dropped off-screen.
+    // Backdrop click does NOT close (money form · avoid accidental loss).
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
     <form
       onSubmit={onSubmit}
-      className="w-full max-w-md rounded-2xl border border-green-200 bg-green-50/60 dark:bg-green-900/10 p-4 space-y-3"
+      className="w-full max-w-md rounded-2xl border border-green-200 bg-white dark:bg-surface p-4 space-y-3 shadow-xl"
     >
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold flex items-center gap-1.5">
@@ -135,5 +147,7 @@ export function CntPaySlipPanel({
         {pending ? "กำลังบันทึก..." : "บันทึกการจ่ายเงิน"}
       </button>
     </form>
+    </div>,
+    document.body,
   );
 }

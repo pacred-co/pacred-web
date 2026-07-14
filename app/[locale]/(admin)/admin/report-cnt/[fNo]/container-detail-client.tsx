@@ -22,7 +22,8 @@
  * alert today.
  */
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from "lucide-react";
 import { adminReportCntAddCheck, adminReportCntBillToCustomer, adminReportCntBillGroupToCustomer } from "@/actions/admin/report-cnt-detail";
@@ -207,6 +208,12 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
   // default; the summary row carries a dropdown chevron to reveal the boxes).
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const router = useRouter();
+  // Portal the fixed action bar to <body> so it escapes the .animate-fade-in
+  // identity transform (which traps position:fixed → the bar scrolled off with
+  // the content instead of sticking to the viewport · ปอน 2026-07-15). Mount-gate
+  // so createPortal only runs client-side (SSR has no document.body).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const filtered = useMemo(() => {
     const f = filterRows(rows, filter);
@@ -1026,8 +1033,10 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
           accounting/god). On a PAID cabinet it's read-only: the add button is
           replaced by a note, but the "ดูรายการที่ตรวจสอบแล้ว" CTA (→ /admin/
           forwarder-check where 4→5 billing happens) stays visible. */}
-      {checkColumn && (
-        <>
+      {checkColumn && mounted && createPortal(
+        // wrapped in .pcs-rc so the portalled bar keeps the legacy pcs-card styling
+        // (.pcs-rc .btn / .pcs-fixed-actions) even though it now lives under <body>.
+        <div className="pcs-rc">
           {checkInteractive && bulkMsg && (
             <div className="fixed bottom-16 left-1/2 z-40 -translate-x-1/2 rounded bg-black/80 px-3 py-1.5 text-xs text-white shadow-lg">
               {bulkMsg}
@@ -1089,7 +1098,8 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
               <span className="text-white">ดูรายการที่ตรวจสอบแล้ว</span>
             </Link>
           </div>
-        </>
+        </div>,
+        document.body,
       )}
 
       {/* Itemized confirm-before-mutate popup (§0f) — lists the ticked rows about

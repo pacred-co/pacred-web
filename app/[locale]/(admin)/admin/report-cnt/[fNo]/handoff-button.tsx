@@ -57,10 +57,10 @@ export function WarehouseHandoffButton({
         type="button"
         onClick={onClick}
         disabled={pending}
-        className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+        className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
           done
-            ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-            : "border-sky-500 bg-sky-50 text-sky-700 hover:bg-sky-100 disabled:opacity-60"
+            ? "text-emerald-600 hover:bg-emerald-50"
+            : "text-sky-600 hover:bg-sky-50 disabled:opacity-60"
         }`}
         title="แจ้งบัญชีว่าคลังยิงรับครบแล้ว — บัญชีตรวจตู้ + วางบิล (ไม่เปลี่ยนสถานะ · ไม่กระทบเงิน)"
       >

@@ -176,45 +176,86 @@ const ITEMS: { key: CountKey | "history" | "sacks"; label: string; href: string 
   { key: "fCreditError",           label: "เครดิตเกินกำหนด",    href: "/admin/forwarder-action?action=fCreditError" },
 ];
 
-export async function TopMenuReport({ activeHref }: { activeHref?: string } = {}) {
+export async function TopMenuReport({
+  activeHref,
+  embedded = false,
+}: { activeHref?: string; embedded?: boolean } = {}) {
   const counts = await loadCounts();
 
+  const isActive = (href: string) =>
+    !!activeHref &&
+    (href === activeHref || href.startsWith(activeHref + "?") || activeHref.startsWith(href.split("?")[0]));
+
+  // One dashed pill — shared by the chip row + the full-width เครดิต break row so
+  // the font / dashed frame / badge stay identical in both (ปอน 2026-07-14
+  // "ฟอนต์แบบนี้ เส้นประแบบนี้").
+  const renderChip = (it: (typeof ITEMS)[number], fullWidth = false) => {
+    const count = it.key === "sacks" ? 0 : counts[it.key];
+    const active = isActive(it.href);
+    return (
+      <Link
+        href={it.href}
+        className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border-2 border-dashed px-2.5 py-2 text-[1rem] leading-none transition-colors ${
+          fullWidth ? "w-full" : ""
+        } ${
+          active
+            ? "border-[#cc3333] bg-red-50 text-[#cc3333] dark:bg-red-950/30"
+            : "border-[#f4a0ab] text-slate-700 hover:border-[#ff4961] hover:bg-red-50 dark:border-red-900/60 dark:text-slate-300 dark:hover:bg-red-950/20"
+        }`}
+      >
+        <span>{it.label}</span>
+        {count > 0 && (
+          <span className="inline-flex min-w-[1.4rem] items-center justify-center rounded-full bg-[#ff4961] px-2 py-1 text-[0.8rem] font-bold leading-none text-white">
+            {count}
+          </span>
+        )}
+      </Link>
+    );
+  };
+
+  // ปอน 2026-07-15 — EXACTLY 2 lines. line 1 = ALL the audit chips on ONE line
+  // (scrolls horizontally if the card is narrower than the row); line 2 = ONLY the
+  // two Pacred-EXTRA tabs กระสอบรวม (sacks) + เครดิตเกินกำหนด (fCreditError). Every
+  // other chip stays on line 1 ("ที่เหลืออยู่บรรทัดแรกหมด"). Font stays 1rem.
+  const tailKeys = new Set(["sacks", "fCreditError"]);
+  const mainChips = ITEMS.filter((it) => !tailKeys.has(it.key));
+  const sacksItem = ITEMS.find((it) => it.key === "sacks");
+  const creditItem = ITEMS.find((it) => it.key === "fCreditError");
+
   return (
-    // Faithful legacy report-cnt.php exception-tabs — rounded pills with DASHED
-    // red frames (every pill) + red count badges, as one left-aligned block.
-    <nav className="pcs-legacy-top-menu border-b border-border bg-white dark:bg-surface px-3 py-2.5">
-      <ul className="flex flex-wrap items-center gap-2">
-        {ITEMS.map((it) => {
-          const count = it.key === "sacks" ? 0 : counts[it.key];
-          const active =
-            activeHref &&
-            (it.href === activeHref || it.href.startsWith(activeHref + "?") || activeHref.startsWith(it.href.split("?")[0]));
-          // Legacy report-cnt.php renders "เครดิตเกินกำหนด" as a full-width DASHED
-          // box on its own row (a visually-separated exception category).
-          const isBreak = it.key === "fCreditError";
-          return (
-            <li key={it.label} className={isBreak ? "flex basis-full justify-center" : undefined}>
-              <Link
-                href={it.href}
-                className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border-2 border-dashed px-3.5 py-2 text-[1rem] leading-none transition-colors ${
-                  isBreak ? "w-full" : ""
-                } ${
-                  active
-                    ? "border-[#cc3333] bg-red-50 text-[#cc3333] dark:bg-red-950/30"
-                    : "border-[#f4a0ab] text-slate-700 hover:border-[#ff4961] hover:bg-red-50 dark:border-red-900/60 dark:text-slate-300 dark:hover:bg-red-950/20"
-                }`}
-              >
-                <span>{it.label}</span>
-                {count > 0 && (
-                  <span className="inline-flex min-w-[1.4rem] items-center justify-center rounded-full bg-[#ff4961] px-2 py-1 text-[0.8rem] font-bold leading-none text-white">
-                    {count}
-                  </span>
-                )}
-              </Link>
-            </li>
-          );
-        })}
+    // Faithful legacy report-cnt.php exception-tabs — dashed rounded pills, BLACK
+    // labels, red count badges, never underlined (ปอน 2026-07 "font ดำ · เส้นประ"):
+    //   line 1 = every audit chip, kept on ONE line (scrolls if it overflows);
+    //   line 2 = ONLY กระสอบรวม + เครดิตเกินกำหนด (ปอน 2026-07-15 "แค่ 2 chip ·
+    //            ที่เหลืออยู่บรรทัดแรกหมด").
+    // `embedded` = rendered INSIDE the report-cnt header .pcs-card (ปอน 2026-07-14):
+    // drop the standalone strip chrome (own bg / dark surface / side padding) and
+    // bleed edge-to-edge to the card's 1.5rem padding with a divider beneath.
+    // Default (no prop) keeps the full-width standalone bar (list / forwarder-
+    // action / cnt-hs pages).
+    <nav
+      className={
+        embedded
+          ? "pcs-legacy-top-menu -mx-6 -mt-6 mb-5 border-b border-[#eef0f2] px-6 pb-3.5 pt-4"
+          : "pcs-legacy-top-menu border-b border-border bg-white dark:bg-surface px-3 py-2.5"
+      }
+    >
+      {/* line 1 — all audit chips on one line; scrolls if it overflows the card,
+          scrollbar hidden per ปอน 2026-06-10 ("nav ไม่มี scroll bar แต่เลื่อนได้") */}
+      <ul className="flex flex-nowrap items-center gap-1.5 overflow-x-auto scrollbar-hidden">
+        {mainChips.map((it) => (
+          <li key={it.label} className="shrink-0">
+            {renderChip(it)}
+          </li>
+        ))}
       </ul>
+      {/* line 2 — ONLY กระสอบรวม + เครดิตเกินกำหนด, stretched to fill the row
+          ([&>a]:flex-1 → each grows to half the width · ปอน 2026-07-15 "ลากให้
+          เต็มบรรทัด") */}
+      <div className="mt-2 flex items-stretch gap-1.5 [&>a]:flex-1">
+        {sacksItem && renderChip(sacksItem)}
+        {creditItem && renderChip(creditItem)}
+      </div>
     </nav>
   );
 }

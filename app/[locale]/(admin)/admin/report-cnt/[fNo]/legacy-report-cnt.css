@@ -44,6 +44,28 @@
 .pcs-rc a { color: #1e9ff2; text-decoration: none; }
 .pcs-rc a:hover { text-decoration: underline; }
 
+/* Exception-tab chips (<TopMenuReport embedded>) render INSIDE .pcs-rc, so the
+   two generic link rules above would paint them blue + underline them on hover.
+   Re-assert the pill styling: BLACK label, never underlined (ปอน 2026-07-15
+   "font สีดำ · ไม่มีขีดเส้นใต้"). Selector specificity (.pcs-rc + class + a)
+   beats `.pcs-rc a`. The active pill still stands out via its Tailwind bg-red-50
+   + red dashed frame — untouched by these text rules. */
+.pcs-rc .pcs-legacy-top-menu a,
+.pcs-rc .pcs-legacy-top-menu a:hover {
+  color: #1a1a1a;
+  text-decoration: none;
+}
+
+/* Header top-right ghost toolbar — the "พิมพ์ป้าย" print LINK is an <a> inside
+   .pcs-rc, so the generic `.pcs-rc a` (blue + hover underline) would repaint it.
+   Keep it amber + never underlined; the sibling buttons are <button> and aren't
+   affected (ปอน 2026-07-15). */
+.pcs-rc .pcs-header-tools a,
+.pcs-rc .pcs-header-tools a:hover {
+  color: #d97706;
+  text-decoration: none;
+}
+
 /* ── legacy "card" chrome (white panel + soft shadow) ── */
 .pcs-rc .pcs-card {
   background: #fff;
@@ -63,17 +85,23 @@
 }
 .pcs-rc .pcs-gear:hover { transform: translateY(-2px); }
 
-/* ── tabs: "มุมมอง PCS Cargo | ปรับต้นทุนตู้ใหม่" (nav-underline) ── */
+/* ── tabs: "มุมมอง PCS Cargo | ปรับต้นทุนตู้ใหม่" — DASHED pills, full-width split
+   (ปอน 2026-07-15 "เส้นประแบบในรูป · เต็มเหมือนในรูป") · matches the chip menu:
+   inactive = pink dashed + black label · active = red dashed + red label on
+   red-50 · each <li> flex:1 so the two tabs fill the row evenly. ── */
 .pcs-rc .pcs-tabs {
-  display: flex; list-style: none; padding: 0; margin: 0 0 0.5rem;
-  border-bottom: 1px solid #dfe3e7;
+  display: flex; list-style: none; padding: 0; margin: 0 0 0.75rem;
+  gap: 0.375rem;
 }
+.pcs-rc .pcs-tabs li { flex: 1 1 0; }
 .pcs-rc .pcs-tabs .pcs-tab {
-  padding: 0.5rem 1rem; color: #6b6f82; text-decoration: none;
-  border-bottom: 2px solid transparent; white-space: nowrap;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0.5rem 1rem; white-space: nowrap; text-decoration: none;
+  border: 2px dashed #f4a0ab; border-radius: 0.5rem; color: #1a1a1a;
+  transition: border-color .15s, background-color .15s, color .15s;
 }
-.pcs-rc .pcs-tabs .pcs-tab:hover { color: #4e5154; text-decoration: none; }
-.pcs-rc .pcs-tabs .pcs-tab.active { color: #cc3333; border-bottom-color: #cc3333; }
+.pcs-rc .pcs-tabs .pcs-tab:hover { border-color: #ff4961; background: #fef2f2; text-decoration: none; }
+.pcs-rc .pcs-tabs .pcs-tab.active { border-color: #cc3333; background: #fef2f2; color: #cc3333; }
 
 /* ── exception top-menu strip (report tabs · h4 + red pill) ── */
 .pcs-report-menu {
@@ -120,33 +148,43 @@
 /* ── DataTable (#myTable → .pcs-table) ── */
 .pcs-rc .pcs-table-wrap { overflow-x: auto; }
 .pcs-rc .pcs-table {
-  width: 100%; border-collapse: collapse; font-size: 0.9rem; background: #fff;
+  /* 27 dense columns → compact font + tight padding so the whole table fits the
+     screen without a big horizontal scroll (ปอน 2026-07-15 "จัด font · text พอดีจอ
+     เหมือน legacy"). */
+  width: 100%; border-collapse: collapse; font-size: 0.7rem; background: #fff;
   color: #4e5154;
 }
 .pcs-rc .pcs-table thead th {
-  padding: 0.5rem 0.25rem; border: 1px solid #ddd; text-align: center;
+  padding: 0.3rem 0.03rem; border: 1px solid #ddd; text-align: center;
   background: #fff; vertical-align: middle; font-weight: 600; white-space: nowrap;
+  font-size: 0.68rem;
 }
 .pcs-rc .pcs-table tbody td {
-  padding: 0.4rem 0.25rem; border: 1px solid #ddd; vertical-align: top;
+  padding: 0.26rem 0.03rem; border: 1px solid #ddd; vertical-align: top;
 }
 
 /* summary row — orange→red gradient (.bg-color) · lives in <thead> so it needs
    its own padding/border (the tbody td rule doesn't reach it) */
-.pcs-rc .pcs-table tr.pcs-sum td {
-  padding: 0.4rem 0.25rem; border: 1px solid rgba(255, 255, 255, 0.35);
+.pcs-rc .pcs-table tr.pcs-sum {
+  /* ONE gradient across the WHOLE row (ปอน 2026-07-15 "ไล่เฉดทั้งแถวต่อเนื่อง ·
+     ไม่ใช่ไล่ซ้ำทีละช่อง"): the gradient lives on the ROW and the cells are
+     transparent, so orange→red flows continuously across all <td> instead of
+     restarting inside each one. */
   background: linear-gradient(to right, #ee7411 0%, #c24e4e 100%);
+}
+.pcs-rc .pcs-table tr.pcs-sum td {
+  padding: 0.35rem 0.14rem; border: 1px solid rgba(255, 255, 255, 0.28);
+  background: transparent;
   color: #fff !important; font-weight: 600; vertical-align: middle;
 }
 
-/* base data row — legacy alert-danger (pink) + white text */
-.pcs-rc .pcs-table tr.pcs-row td { background: #ff4961; color: #fff; }
-.pcs-rc .pcs-table tr.pcs-row a,
-.pcs-rc .pcs-table tr.pcs-row .text-success,
-.pcs-rc .pcs-table tr.pcs-row .text-danger,
-.pcs-rc .pcs-table tr.pcs-row .text-info,
-.pcs-rc .pcs-table tr.pcs-row .text-muted { color: #fff !important; }
-.pcs-rc .pcs-table tr.pcs-row .short-text { color: #fff; }
+/* base data row — legacy Bootstrap alert-danger: SOFT pink bg + dark text (ปอน
+   2026-07-15 "ของเราเข้มไป · อ่านยาก · เอาสีอ่อนตามภาพ legacy"). No white-text
+   override → links stay blue, badges keep their own colors, numbers read dark. */
+.pcs-rc .pcs-table tr.pcs-row td { background: #fbe0e2; color: #4e5154; }
+.pcs-rc .pcs-table tr.pcs-row a { color: #1e7fc2; }
+.pcs-rc .pcs-table tr.pcs-row .text-success { color: #1f9d57 !important; }
+.pcs-rc .pcs-table tr.pcs-row .text-danger { color: #d63354 !important; }
 
 /* selected → green-blue gradient (bg-color-select) */
 .pcs-rc .pcs-table tr.pcs-row-selected td {
@@ -158,7 +196,7 @@
 }
 
 .pcs-rc .prod-img {
-  width: 40px; height: 40px; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.6);
+  width: 40px; height: 40px; object-fit: cover; border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 2px; background: #fff;
 }
 
@@ -178,13 +216,19 @@
 .pcs-rc .badge-brown { background: #9f6213; } /* legacy fstatus-4 golden-brown */
 .pcs-rc .badge-vip { background: linear-gradient(45deg, #f23e33, #fbb73c); } /* legacy SVIP/นิติ red→gold */
 .pcs-rc .bg-danger { background: #ff4961; color: #fff; padding: 0 0.25rem; border-radius: 2px; }
-.pcs-rc .pcs-table tr.pcs-row .badge { border: 1px solid rgba(255, 255, 255, 0.5); }
+.pcs-rc .pcs-table tr.pcs-row .badge { border: 1px solid rgba(0, 0, 0, 0.08); }
 
 /* ── fixed bottom action bar ── */
 .pcs-rc .pcs-fixed-actions {
-  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 40;
+  position: fixed; bottom: 20px; left: 20px; z-index: 40;   /* มุมซ้ายล่าง · ปอน 2026-07-15 (was bottom-center) */
   display: inline-flex; align-items: center; gap: 0; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
   border-radius: 10rem;
+}
+/* Desktop (lg+) shows the 64px admin sidebar rail on the left — clear it so the
+   avatar / nav icons don't cover the bar's first button (ปอน 2026-07-15 "โดนบัง").
+   Mobile has no rail, so it stays at 20px. */
+@media (min-width: 1024px) {
+  .pcs-rc .pcs-fixed-actions { left: 80px; }
 }
 .pcs-rc .pcs-fixed-actions .btn { border-radius: 0; }
 .pcs-rc .pcs-fixed-actions .btn:first-child { border-top-left-radius: 10rem; border-bottom-left-radius: 10rem; }
