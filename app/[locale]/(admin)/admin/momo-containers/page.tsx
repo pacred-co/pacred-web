@@ -14,8 +14,9 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { momoTypeToProductType } from "@/lib/admin/momo-live-discovery-plan";
-import { deriveMomoMemberCode } from "@/lib/admin/momo-raw-helpers";
+import { deriveMomoMemberCode, baseTrackingOf } from "@/lib/admin/momo-raw-helpers";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
+import type { PackingUploadSnapshot } from "@/actions/admin/momo-packing-history";
 import { MomoIngestClient, type IngestTrack } from "./momo-containers-client";
 
 export const dynamic = "force-dynamic";
@@ -125,10 +126,45 @@ export default async function MomoContainersPage() {
       );
   }
 
-  const tracks: IngestTrack[] = intermediate.map((r) => ({
-    ...r,
-    userIdValid: r.guessedUserId == null ? null : knownUserIds.has(r.guessedUserId.toUpperCase()),
-  }));
+  // Packing-list match (Slice 2) — เทียบ API vs Packing ต่อแทรค. Load the latest
+  // packing upload for each container present, aggregate the snapshot rows by base
+  // tracking → a map. weight_kg above is the SHIPMENT aggregate (same basis the
+  // packing baseTracking uses), so the compare in the client is apples-to-apples.
+  const containers = [...new Set(intermediate.map((r) => r.container).filter((c): c is string => !!c))];
+  const packingByBase = new Map<string, { weight: number | null; cbm: number | null; boxes: number | null }>();
+  if (containers.length > 0) {
+    const { data: pkUploads, error: pkErr } = await admin
+      .from("momo_packing_upload")
+      .select("container_no, parsed_snapshot, uploaded_at")
+      .in("container_no", containers)
+      .order("uploaded_at", { ascending: false })
+      .limit(500);
+    if (pkErr) console.error("[momo-containers packing load] failed", { code: pkErr.code, message: pkErr.message });
+    const seenContainer = new Set<string>();
+    for (const up of (pkUploads ?? []) as Array<{ container_no: string | null; parsed_snapshot: unknown }>) {
+      const cab = (up.container_no ?? "").trim();
+      if (cab && seenContainer.has(cab)) continue; // ordered desc → first per container = latest
+      if (cab) seenContainer.add(cab);
+      const snap = (up.parsed_snapshot as PackingUploadSnapshot | null) ?? null;
+      for (const row of snap?.rows ?? []) {
+        const b = baseTrackingOf(row.baseTracking ?? "");
+        if (!b || packingByBase.has(b)) continue; // latest upload wins
+        packingByBase.set(b, { weight: row.weight, cbm: row.cbm, boxes: row.boxes });
+      }
+    }
+  }
+
+  const tracks: IngestTrack[] = intermediate.map((r) => {
+    const pk = r.tracking ? packingByBase.get(baseTrackingOf(r.tracking)) : undefined;
+    return {
+      ...r,
+      userIdValid: r.guessedUserId == null ? null : knownUserIds.has(r.guessedUserId.toUpperCase()),
+      hasPacking: !!pk,
+      packingWeight: pk?.weight ?? null,
+      packingCbm: pk?.cbm ?? null,
+      packingBoxes: pk?.boxes ?? null,
+    };
+  });
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-6 space-y-5">
