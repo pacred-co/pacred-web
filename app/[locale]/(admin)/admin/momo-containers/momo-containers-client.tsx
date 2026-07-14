@@ -13,10 +13,11 @@ import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { CheckCircle2, AlertCircle, RefreshCw, X, PackageCheck, Truck } from "lucide-react";
+import { CheckCircle2, AlertCircle, RefreshCw, X, PackageCheck, Truck, Check } from "lucide-react";
 import { commitMomoRowToForwarder } from "@/actions/admin/momo-commit";
 import { propagateMomoLiveStatusNow } from "@/actions/admin/momo-web-live";
 import { addMissingMomoParcelsBulk } from "@/actions/admin/momo-add-missing";
+import { updateMomoImportTrackFields } from "@/actions/admin/momo-ingest-edit";
 import { confirm } from "@/components/ui/confirm";
 import { useColumnOrder } from "@/lib/hooks/use-column-order";
 // Import the input TYPE from the auth-agnostic core, NOT the "use server" file
@@ -189,6 +190,10 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" } | null>(null);
   const [dragKey, setDragKey] = useState<string | null>(null);
   const { order: colOrder, move: moveCol, reset: resetCols } = useColumnOrder(DATA_KEYS);
+  // ✎ inline-edit น้ำหนัก/คิว/จำนวน (pending only · updateMomoImportTrackFields · แก้ก่อนนำเข้า)
+  const [editing, setEditing] = useState<{ id: string; field: "weightKg" | "cbm" | "qty"; value: string } | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editErr, setEditErr] = useState<string | null>(null);
   // per-row result after commit (so a just-imported row flips without waiting for refresh)
   const [rowResult, setRowResult] = useState<Record<string, { ok: boolean; message: string; fid?: number }>>({});
   // the import preview/confirm modal
@@ -463,6 +468,58 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
 
   const modalUserValid = modal ? /^PR\d+$/i.test(modal.userID.trim()) : false;
 
+  // ✎ บันทึกการแก้ไข น้ำหนัก/คิว/จำนวน — wrap updateMomoImportTrackFields (pending-only · money-safe)
+  async function saveEdit() {
+    if (!editing) return;
+    const numVal = Number(editing.value);
+    if (!Number.isFinite(numVal) || numVal < 0) { setEditErr("ค่าไม่ถูกต้อง"); return; }
+    const payload: Record<string, unknown> = { rowId: editing.id };
+    if (editing.field === "weightKg") payload.weightKg = numVal;
+    else if (editing.field === "cbm") payload.cbm = numVal;
+    else payload.quantity = Math.round(numVal);
+    setSavingEdit(true);
+    setEditErr(null);
+    try {
+      const res = await updateMomoImportTrackFields(payload);
+      if (res.ok) { setEditing(null); startTransition(() => router.refresh()); }
+      else setEditErr(res.error);
+    } catch (err) {
+      setEditErr(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  // inline-editable measurement cell — click value → input → ✓ save / ✕ cancel.
+  // Only PENDING rows are editable (not committed / not just-imported); committed = read-only.
+  function editableCell(t: IngestTrack, field: "weightKg" | "cbm" | "qty", display: ReactNode) {
+    const canEdit = !t.committed && !rowResult[t.id]?.ok;
+    const isEditing = editing?.id === t.id && editing.field === field;
+    if (isEditing) {
+      return (
+        <span className="inline-flex flex-col items-end gap-0.5">
+          <span className="inline-flex items-center gap-0.5">
+            <input autoFocus type="number" step="any" value={editing.value} disabled={savingEdit}
+              onChange={(e) => setEditing((ed) => (ed ? { ...ed, value: e.target.value } : ed))}
+              onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); else if (e.key === "Escape") { setEditing(null); setEditErr(null); } }}
+              className="w-16 rounded border border-primary-400 px-1 py-0.5 text-right text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary-300" />
+            <button type="button" onClick={saveEdit} disabled={savingEdit} className="text-emerald-600 hover:text-emerald-700" title="บันทึก"><Check className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={() => { setEditing(null); setEditErr(null); }} className="text-gray-400 hover:text-gray-600" title="ยกเลิก"><X className="h-3 w-3" /></button>
+          </span>
+          {editErr && <span className="text-[10px] text-red-600">{editErr}</span>}
+        </span>
+      );
+    }
+    if (!canEdit) return display;
+    return (
+      <span className="group inline-flex cursor-pointer items-center gap-0.5 rounded px-0.5 hover:bg-amber-50"
+        onClick={() => { setEditErr(null); setEditing({ id: t.id, field, value: String(t[field] ?? "") }); }}
+        title="คลิกเพื่อแก้ไข (ก่อนนำเข้า)">
+        {display}<span className="text-[10px] text-gray-300 group-hover:text-amber-500">✎</span>
+      </span>
+    );
+  }
+
   // คอลัมน์ตาราง (config-driven · ลากย้าย/เรียงได้ · เนื้อหา = ตารางปอนเป๊ะ) — checkbox #
   // เป็นคอลัมน์แรกตายตัว (render แยกในตาราง) · 27 ตัวนี้อยู่ใน DATA_KEYS/colOrder.
   const colDefs: Record<string, {
@@ -516,14 +573,14 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     w: { label: "W.", sortKey: "w", thTitle: "กว้าง (ซม.) ต่อกล่อง", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => t.width > 0 ? t.width : DASH },
     l: { label: "L.", sortKey: "l", thTitle: "ยาว (ซม.) ต่อกล่อง", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => t.length > 0 ? t.length : DASH },
     h: { label: "H.", sortKey: "h", thTitle: "สูง (ซม.) ต่อกล่อง", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => t.height > 0 ? t.height : DASH },
-    totalParcel: { label: "Total Parcel", sortKey: "qty", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => t.qty ?? DASH },
+    totalParcel: { label: "Total Parcel", sortKey: "qty", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => editableCell(t, "qty", t.qty ?? DASH) },
     wt: { label: "Wt.", thTitle: "น้ำหนักต่อกล่อง = Total Wt. ÷ Total Parcel", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono text-muted", td: (t) => t.weightKg > 0 ? fx(perBox(t.weightKg, t.qty), 2) : DASH },
     vol: { label: "Vol.", thTitle: "คิวต่อกล่อง = W×L×H", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono text-muted", td: (t) => t.cbm > 0 ? fx(perBox(t.cbm, t.qty), 6) : DASH },
     totalWt: {
       label: "Total Wt.", sortKey: "weight", thTitle: "น้ำหนักรวมทั้งแทรค — ค่าที่ใช้คิดเงิน", tdClass: "px-2 py-1.5 text-right tabular-nums",
       td: (t) => (
         <>
-          {t.weightKg > 0 ? <span className="font-mono font-semibold">{fx(t.weightKg, 2)}</span> : <span className="rounded bg-amber-50 px-1 text-[11px] text-amber-700" title="MOMO ยังไม่ได้ชั่ง">⏳ รอชั่ง</span>}
+          {editableCell(t, "weightKg", t.weightKg > 0 ? <span className="font-mono font-semibold">{fx(t.weightKg, 2)}</span> : <span className="rounded bg-amber-50 px-1 text-[11px] text-amber-700" title="MOMO ยังไม่ได้ชั่ง">⏳ รอชั่ง</span>)}
           {t.hasPacking && t.packingWeight != null && (<div className={`text-[11px] font-normal ${pkWtDiff(t) ? "text-rose-600 font-semibold" : "text-emerald-600"}`} title="น้ำหนักจาก packing list">📦{n2(t.packingWeight)}{pkWtDiff(t) ? " ⚠" : " ✓"}</div>)}
           {t.hasLive && t.liveWeight != null && (<div className={`text-[11px] font-normal ${liveWtDiff(t) ? "text-rose-600 font-semibold" : "text-sky-600"}`} title="น้ำหนักจาก MOMO Live (ตู้ปิด)">🟢{n2(t.liveWeight)}{liveWtDiff(t) ? " ⚠" : " ✓"}</div>)}
         </>
@@ -533,7 +590,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
       label: "Total Vol.", sortKey: "cbm", thTitle: "คิวรวมทั้งแทรค — ค่าที่ใช้คิดเงิน", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono font-semibold",
       td: (t) => (
         <>
-          {t.cbm > 0 ? fx(t.cbm, 6) : DASH}
+          {editableCell(t, "cbm", t.cbm > 0 ? <span>{fx(t.cbm, 6)}</span> : DASH)}
           {t.hasPacking && t.packingCbm != null && (<div className={`text-[11px] font-normal ${pkVolDiff(t) ? "text-rose-600 font-semibold" : "text-emerald-600"}`} title="คิวจาก packing list">📦{n6(t.packingCbm)}{pkVolDiff(t) ? " ⚠" : " ✓"}</div>)}
           {t.hasLive && t.liveCbm != null && (<div className={`text-[11px] font-normal ${liveVolDiff(t) ? "text-rose-600 font-semibold" : "text-sky-600"}`} title="คิวจาก MOMO Live (ตู้ปิด)">🟢{n6(t.liveCbm)}{liveVolDiff(t) ? " ⚠" : " ✓"}</div>)}
         </>
@@ -749,7 +806,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           เลือก 1 รายการจะไม่มาที่นี่ (ไป modal ตรวจ/แก้ PR ทีละใบแทน). */}
       {bulkOpen && createPortal(
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => !bulkRunning && setBulkOpen(false)} role="button" tabIndex={-1}>
-          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-surface p-5 shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-3xl rounded-2xl bg-white dark:bg-surface p-5 shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold flex items-center gap-2"><PackageCheck className="h-5 w-5 text-primary-600" /> ยืนยันนำเข้าระบบ {selectedTracks.length} รายการ</h3>
               <button type="button" onClick={() => !bulkRunning && setBulkOpen(false)} className="rounded-lg border border-border px-2 py-0.5 text-xs hover:bg-surface-alt"><X className="h-3.5 w-3.5" /></button>
@@ -767,23 +824,8 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                   <span>{invalidSelected} รายการ PR ไม่ตรง tb_users → ระบบจะปฏิเสธเอง (ไม่เดา PR ให้) — ติ๊กทีละรายการเพื่อแก้ PR ก่อน</span>
                 </p>
               )}
-              <div className="max-h-40 overflow-y-auto rounded border border-border bg-white dark:bg-surface">
-                <table className="w-full text-[11px]">
-                  <tbody>
-                    {selectedTracks.slice(0, 50).map((t) => (
-                      <tr key={t.id} className="border-b border-border last:border-0">
-                        <td className="px-2 py-1 font-mono">{t.tracking ?? "—"}</td>
-                        <td className="px-2 py-1">
-                          {t.guessedUserId ? <span className={`font-mono font-semibold ${t.userIdValid === true ? "" : "text-red-600"}`}>{t.guessedUserId}</span> : <span className="text-red-600">ไม่มี PR</span>}
-                        </td>
-                        <td className="px-2 py-1 text-right tabular-nums font-mono text-muted">{fx(t.weightKg, 2) ?? "—"} กก.</td>
-                        <td className="px-2 py-1 text-right tabular-nums font-mono text-muted">{fx(t.cbm, 6) ?? "—"} คิว</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {selectedTracks.length > 50 && <div className="px-2 py-1 text-[11px] text-muted">…และอีก {selectedTracks.length - 50} รายการ</div>}
-              </div>
+              {/* full-data preview — โชว์ครบเหมือนตาราง (ภูม: "แสดงข้อมูลให้ครบทั้งหมด เพื่อตรวจอีกที") */}
+              {previewTable(selectedTracks)}
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-1">
