@@ -103,10 +103,16 @@ export const ENTER_HINT = (
   <div>
     <p className="mb-1 font-bold text-[#1f2937]">ENTER — ประเภทการยื่นใบขน</p>
     <Line k="Normal" v="นำเข้าปกติ" />
-    <Line k="Change Status" v="เปลี่ยนสถานะใบขน" />
     <Line k="Document Amend" v="แก้ไขเอกสารใบขน" />
-    <Line k="Direct" v="นำเข้าตรง (ชื่อลูกค้าเอง)" />
-    <Line k="Indirect" v="นำเข้าผ่านตัวแทน/ชื่อบริษัท" />
+  </div>
+);
+
+// ── TRANSIT (การเดินทาง) ──────────────────────────────────────────────
+export const TRANSIT_HINT = (
+  <div>
+    <p className="mb-1 font-bold text-[#1f2937]">TRANSIT — เส้นทางเดินทาง</p>
+    <Line k="Direct" v="ตรงจากท่าต้นทาง → ท่าปลายทาง ไม่แวะถ่ายลำ (เร็วกว่า)" />
+    <Line k="Indirect" v="แวะถ่ายลำที่ท่ากลาง (Transshipment) — ใช้เวลานานกว่า" />
   </div>
 );
 

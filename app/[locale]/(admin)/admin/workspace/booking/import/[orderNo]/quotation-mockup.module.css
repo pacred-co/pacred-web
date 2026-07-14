@@ -207,6 +207,50 @@
 .delBtn { border: none; background: transparent; color: #c0c4cd; cursor: pointer; font-size: 15px; padding: 4px 5px; border-radius: 6px; line-height: 1; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
 .delBtn:hover { color: var(--red); background: #ffe7ea; }
 
+/* ── Quotation Breakdown — 4 หมวด (owner ปอน 2026-07-14) ──
+   1 ค่าระวาง · 2 local ต้นทาง · 3 local ปลายทาง · 4 เก็บตามใบเสร็จจริง.
+   คอลัมน์ "ราคาขาย" ผูกกับ picker ด้านบน (LCL = รถ 4/6 ล้อ · FCL = ขนาดตู้ที่เลือก). */
+.qtSections { display: grid; gap: 14px; }
+.qtSection { border: 1px solid var(--line); border-radius: 16px; background: #fff; overflow: hidden; }
+.qtSectionHead { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #fbfbfc; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.qtSectionNo { flex-shrink: 0; width: 23px; height: 23px; border-radius: 999px; background: var(--red); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; }
+.qtSectionTitle { margin: 0; flex: 1; min-width: 0; font-size: 13.5px; font-weight: 800; color: #1f2937; }
+/* ตารางในการ์ดหมวด — ตัดขอบ/มุมโค้งของ .qt ออก (การ์ดมีกรอบให้แล้ว) + กว้างขึ้นตามคอลัมน์ที่เพิ่ม */
+.qtg { min-width: 950px; }
+.qtSection .qt th { border-top: none; border-radius: 0; }
+.qtSection .qt th:first-child { border-left: none; }
+.qtSection .qt th:last-child { border-right: none; }
+.qtEmpty { text-align: center; color: #9aa0a8; font-size: 12px; padding: 15px 8px; }
+
+/* เซลล์ "Rate × Qty" — เรทสีแดง · จำนวนแก้ได้ */
+.rateCell { white-space: nowrap; }
+.rateWrap { display: inline-flex; align-items: center; gap: 4px; }
+.rateVal { color: var(--red); font-weight: 800; font-size: 12.8px; }
+.rateX { color: #b6b9c1; font-weight: 700; }
+.dash { color: #9aa0a8; }
+.basisTxt { color: #5b6472; font-size: 12px; white-space: nowrap; }
+.noteCell { min-width: 118px; max-width: 210px; }
+
+/* VAT ต่อบรรทัด (owner ปอน 2026-07-14) — 7% = คิด VAT · — = ไม่คิด · "ไม่มี" = เก็บตามใบเสร็จจริง (ล็อก)
+   กดสลับได้ → มีผลกับ "มูลค่าที่คำนวณ VAT" + "VAT 7%" ท้ายใบทันที (computeCatalogTotals อ่าน l.vat) */
+.vatPill { border: 1px solid #e2e4ea; background: #fff; color: #9aa0a8; font: inherit; font-size: 11.5px; font-weight: 800; line-height: 1.4; padding: 3px 9px; border-radius: 999px; cursor: pointer; white-space: nowrap; transition: color .12s, border-color .12s, background .12s; }
+.vatPill:hover { border-color: var(--red); color: var(--red); }
+.vatOn { background: var(--pink); border-color: #efd1d1; color: var(--red); }
+.vatLocked { background: #f4f5f7; cursor: default; }
+.vatLocked:hover { border-color: #e2e4ea; color: #9aa0a8; }
+
+/* แถวรวมท้ายหมวด — พื้นเทาอ่อน · 1 ยอดต่อคอลัมน์ราคา */
+.qtSub td { background: #f4f5f7; border-top: 1px solid #e2e4ea; border-bottom: none; font-size: 12.5px; font-weight: 800; color: #1f2937; }
+.qtSub td:first-child { color: #4b5563; }
+
+/* ท้ายตาราง — หมายเหตุ (ซ้าย) + รวมราคาคร่าวๆ (ขวา) */
+.qtFooter { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 16px; flex-wrap: wrap; }
+.qtFooterNote { margin: 0; flex: 1 1 240px; min-width: 0; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+.qtGrandBox { flex-shrink: 0; display: inline-flex; align-items: baseline; gap: 9px; background: var(--pink); border: 1px solid #efd1d1; border-radius: 14px; padding: 10px 16px; }
+.qtGrandLabel { font-size: 12.5px; font-weight: 800; color: #b11117; }
+.qtGrandVal { font-size: 20px; font-weight: 900; color: var(--red); }
+.qtGrandCcy { font-size: 12px; font-weight: 800; color: #b11117; }
+
 /* ── summary ── */
 .summary { display: flex; justify-content: flex-end; padding: 0 28px 26px; }
 .totalBox { background: #f9fafb; border: 1px solid #e4e6ee; border-radius: 16px; padding: 16px; width: 340px; max-width: 100%; }
