@@ -180,30 +180,33 @@ export async function TopMenuReport({ activeHref }: { activeHref?: string } = {}
   const counts = await loadCounts();
 
   return (
-    <nav className="pcs-legacy-top-menu border-b border-border bg-white dark:bg-surface px-2 py-2">
-      <ul className="flex flex-wrap gap-1 items-center text-xs">
+    // Faithful legacy report-cnt.php exception-tabs — rounded pills with DASHED
+    // red frames (every pill) + red count badges, as one left-aligned block.
+    <nav className="pcs-legacy-top-menu border-b border-border bg-white dark:bg-surface px-3 py-2.5">
+      <ul className="flex flex-wrap items-center gap-2">
         {ITEMS.map((it) => {
           const count = it.key === "sacks" ? 0 : counts[it.key];
           const active =
             activeHref &&
             (it.href === activeHref || it.href.startsWith(activeHref + "?") || activeHref.startsWith(it.href.split("?")[0]));
+          // Legacy report-cnt.php renders "เครดิตเกินกำหนด" as a full-width DASHED
+          // box on its own row (a visually-separated exception category).
+          const isBreak = it.key === "fCreditError";
           return (
-            <li key={it.label}>
+            <li key={it.label} className={isBreak ? "flex basis-full justify-center" : undefined}>
               <Link
                 href={it.href}
-                className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 whitespace-nowrap border ${
+                className={`inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg border-2 border-dashed px-3.5 py-2 text-[1rem] leading-none transition-colors ${
+                  isBreak ? "w-full" : ""
+                } ${
                   active
-                    ? "bg-primary-500 text-white border-primary-500"
-                    : "bg-white border-border hover:bg-surface-alt"
+                    ? "border-[#cc3333] bg-red-50 text-[#cc3333] dark:bg-red-950/30"
+                    : "border-[#f4a0ab] text-slate-700 hover:border-[#ff4961] hover:bg-red-50 dark:border-red-900/60 dark:text-slate-300 dark:hover:bg-red-950/20"
                 }`}
               >
                 <span>{it.label}</span>
                 {count > 0 && (
-                  <span
-                    className={`inline-flex items-center justify-center rounded-full text-[11px] font-bold leading-none px-1.5 py-0.5 ${
-                      active ? "bg-white text-primary-600" : "bg-red-500 text-white"
-                    }`}
-                  >
+                  <span className="inline-flex min-w-[1.4rem] items-center justify-center rounded-full bg-[#ff4961] px-2 py-1 text-[0.8rem] font-bold leading-none text-white">
                     {count}
                   </span>
                 )}
