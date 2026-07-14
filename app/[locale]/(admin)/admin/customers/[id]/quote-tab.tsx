@@ -260,7 +260,11 @@ export function QuoteTab({
   const [rateSaveMsg, setRateSaveMsg] = useState<string | null>(null);
   const whShortName = (w: WarehouseId) => (w === "1" ? "กวางโจว" : "อี้อู");
 
-  async function saveCompareToRates() {
+  /**
+   * บันทึกเรทเทียบราคา → "เรทตั้งค่าลูกค้า" (เขียน tb_rate_custom_* · re-price ออเดอร์ที่ยังไม่ปิด).
+   * คืน true เมื่อบันทึกครบ — ตัวเรียก (saveRateAndIssue) ใช้ตัดสินว่าจะออกเอกสารต่อไหม.
+   */
+  async function saveCompareToRates(): Promise<boolean> {
     setRateSaveMsg(null);
     const byWh = new Map<WarehouseId, CompareRow[]>();
     for (const r of model.compareRows) {
@@ -268,13 +272,14 @@ export function QuoteTab({
       const wid = r.warehouseId as WarehouseId;
       byWh.set(wid, [...(byWh.get(wid) ?? []), r]);
     }
-    if (byWh.size === 0) { setRateSaveMsg("ไม่มีแถวที่ผูกกับการตั้งค่า (แถวที่เพิ่มเองบันทึกกลับไม่ได้)"); return; }
+    if (byWh.size === 0) { setRateSaveMsg("ไม่มีแถวที่ผูกกับการตั้งค่า (แถวที่เพิ่มเองบันทึกกลับไม่ได้)"); return false; }
     const whNames = [...byWh.keys()].map(whShortName).join(" + ");
+    // §0f confirm-before-mutate — ปุ่มเดียวทำ 2 อย่าง (owner ปอน 2026-07-14) → บอกให้ครบทั้งคู่
     const ok = await confirmRate(
-      `บันทึกเรทเทียบราคานี้เข้า "เรทตั้งค่าลูกค้า" ${userid} (โกดัง ${whNames})? · ` +
+      `บันทึกเรทเทียบราคานี้เข้า "เรทตั้งค่าลูกค้า" ${userid} (โกดัง ${whNames}) แล้วออก${docTitle}ต่อ? · ` +
       `ทั่วไป·มอก. และ อย.·พิเศษ จะถูกตั้งเป็นราคาเดียวกันในแต่ละกลุ่ม · ลูกค้ามีเรทเฉพาะตัว · ใช้กับออเดอร์ใหม่`,
     );
-    if (!ok) return;
+    if (!ok) return false;
     setSavingRates(true);
     try {
       const done: string[] = [];
@@ -286,18 +291,23 @@ export function QuoteTab({
             cells.push({ t: "2", p, rkg: r.ship.kg, rcbm: r.ship.cbm });
           }
         }
-        if (cells.length !== 8) { setRateSaveMsg(`โกดัง${whShortName(wid)}: ตารางไม่ครบ 2 กลุ่มสินค้า — เพิ่มให้ครบก่อนบันทึก`); setSavingRates(false); return; }
+        if (cells.length !== 8) { setRateSaveMsg(`โกดัง${whShortName(wid)}: ตารางไม่ครบ 2 กลุ่มสินค้า — เพิ่มให้ครบก่อนบันทึก`); return false; }
         const res = await adminSaveCustomerRate({ userid, sourceWarehouse: wid, cells });
-        if (!res.ok) { setRateSaveMsg(`โกดัง${whShortName(wid)}: ${res.error}`); setSavingRates(false); return; }
+        if (!res.ok) { setRateSaveMsg(`โกดัง${whShortName(wid)}: ${res.error}`); return false; }
         done.push(`${whShortName(wid)} ${res.data?.changed ?? 0} ช่อง${res.data?.created ? " (สร้างเรทเฉพาะตัว)" : ""}${res.data?.repriced ? ` · คิดราคาใหม่ ${res.data.repriced}` : ""}`);
       }
       setRateSaveMsg(`✓ บันทึกเข้าเรทลูกค้าแล้ว — ${done.join(" · ")}`);
+      return true;
     } finally {
       setSavingRates(false);
     }
   }
   const docEmpty = model.view === "calc" ? model.lines.length === 0 : model.compareRows.length === 0;
   const docTitle = model.view === "calc" ? "ใบประเมินราคา" : "ใบเสนอราคา";
+  /** โหมดเทียบราคาเท่านั้นที่บันทึกกลับเข้าเรทลูกค้าได้ (แถวผูกกับโกดัง/กลุ่มสินค้า) */
+  const canSaveRates = view === "compare";
+  /** ป้ายปุ่ม — ใช้ตัวเดียวกันทั้งปุ่มบน (ในตารางเทียบ) และปุ่มล่าง เพราะเป็นปุ่มเดียวกัน */
+  const actionLabel = canSaveRates ? `บันทึกเรท + ออก${docTitle}` : `ออก${docTitle}`;
 
   async function copyText() {
     try { await navigator.clipboard.writeText(buildQuoteText(model)); setActionMsg(null); setCopied(true); setTimeout(() => setCopied(false), 2000); }
@@ -337,6 +347,23 @@ export function QuoteTab({
     } finally {
       setIssuing(false);
     }
+  }
+
+  /**
+   * ปุ่มเดียว 2 ตำแหน่ง (owner ปอน 2026-07-14: "ให้ปุ่มบันทึกเรท กับ ออกใบเสนอ เป็นปุ่มเดียวกัน ·
+   * แยกเป็น 2 ปุ่มตำแหน่งเดิม แต่เป็นปุ่มเดียวกัน") — ปุ่มบนในตารางเทียบราคา กับ ปุ่มล่าง
+   * เรียกตัวนี้ตัวเดียวกัน:
+   *   โหมดเทียบราคา → บันทึกเข้าเรทลูกค้าก่อน (confirm) แล้วออกเอกสารต่อ
+   *   โหมดคำนวณ (ไม่มีเรทให้บันทึก) → ออกเอกสารอย่างเดียวเหมือนเดิม
+   * เรทบันทึกไม่ผ่าน/กดยกเลิก → ไม่ออกเอกสาร (กันเอกสารหลุดออกไปทั้งที่เรทยังไม่เข้า).
+   */
+  async function saveRateAndIssue() {
+    if (docEmpty || issuing || savingRates) return;
+    if (canSaveRates) {
+      const saved = await saveCompareToRates();
+      if (!saved) return;
+    }
+    await issueQuote();
   }
 
   // Copy the link of the ALREADY-issued snapshot (no re-save → not counted again).
@@ -455,10 +482,10 @@ export function QuoteTab({
         </div>
       </details>
 
-      {/* Actions */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
-          <span>กดที่ข้อความบนใบเพื่อแก้ไข · กด “เพิ่มรายการ” เพื่อเพิ่มบรรทัด · แล้วกด “ออก{docTitle}” เพื่อบันทึก+ส่งลูกค้า</span>
+      {/* Actions — ปุ่มหลักชิดขวาเสมอ (ml-auto · justify-between เอาไม่อยู่ตอนบรรทัดตัด) */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-[11px] text-muted">
+          <span>กดที่ข้อความบนใบเพื่อแก้ไข · กด “เพิ่มรายการ” เพื่อเพิ่มบรรทัด · แล้วกด “{actionLabel}” เพื่อ{canSaveRates ? "อัปเดตเรทลูกค้า + " : ""}บันทึก+ส่งลูกค้า</span>
           {hasEdits && (
             <button type="button" onClick={() => setOverrides({})} className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700 hover:bg-amber-100">
               <RotateCcw className="w-3 h-3" /> รีเซ็ตการแก้ไข
@@ -466,11 +493,13 @@ export function QuoteTab({
           )}
         </div>
         {!issued ? (
-          <button type="button" onClick={issueQuote} disabled={docEmpty || issuing} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 text-white px-4 py-2 text-[13px] font-bold shadow-sm hover:bg-primary-700 disabled:opacity-50">
-            <FileCheck2 className="w-4 h-4" /> {issuing ? "กำลังออกเอกสาร…" : `ออก${docTitle}`}
+          <button type="button" onClick={saveRateAndIssue} disabled={docEmpty || issuing || savingRates}
+            title={canSaveRates ? "บันทึกเรทที่แก้เข้าเรทลูกค้า แล้วออกเอกสารต่อ (ปุ่มเดียวกับในตารางเทียบราคา)" : undefined}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-primary-600 text-white px-4 py-2 text-[13px] font-bold shadow-sm hover:bg-primary-700 disabled:opacity-50">
+            <FileCheck2 className="w-4 h-4" /> {savingRates ? "กำลังบันทึกเรท…" : issuing ? "กำลังออกเอกสาร…" : actionLabel}
           </button>
         ) : (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1 rounded-md border border-green-200 bg-green-50 px-2 py-1 text-[11px] font-semibold text-green-700">
               <Check className="w-3 h-3" /> ออก{docTitle}แล้ว · บันทึกในประวัติ
             </span>
@@ -500,11 +529,13 @@ export function QuoteTab({
         </div>
       )}
 
+      {/* ปุ่มในตารางเทียบราคา = ปุ่มเดียวกับปุ่มล่าง (action เดียว · ป้ายเดียว) */}
       <EditableQuoteCard
         model={model}
         onChange={patchModel}
-        onSaveToRates={view === "compare" ? saveCompareToRates : undefined}
-        savingToRates={savingRates}
+        onSaveToRates={canSaveRates ? saveRateAndIssue : undefined}
+        saveToRatesLabel={actionLabel}
+        savingToRates={savingRates || issuing}
       />
       {rateDialogs}
     </div>

@@ -141,13 +141,17 @@ export function EditableQuoteCard({
   model,
   onChange,
   onSaveToRates,
+  saveToRatesLabel,
   savingToRates,
 }: {
   model: QuoteModel;
   onChange: (patch: Partial<QuoteModel>) => void;
-  /** Compare mode only — when provided, the เทียบราคา table shows a "บันทึกเข้าเรทลูกค้า"
-   *  button that writes the edited rates back to the customer's configured rate. */
+  /** Compare mode only — when provided, the เทียบราคา table shows the primary action
+   *  button (writes the edited rates back to the customer's configured rate, then
+   *  issues the document · owner ปอน 2026-07-14: ปุ่มนี้ = ปุ่มเดียวกับปุ่มล่างของหน้า). */
   onSaveToRates?: () => void;
+  /** ป้ายปุ่ม — ส่งมาจากหน้าที่ใช้ เพื่อให้ตรงกับปุ่มล่างเป๊ะ (ปุ่มเดียวกัน). */
+  saveToRatesLabel?: string;
   savingToRates?: boolean;
 }) {
   const t = model.totals;
@@ -198,7 +202,7 @@ export function EditableQuoteCard({
           <TextInput value={model.packageLabel} onChange={(v) => onChange({ packageLabel: v })} placeholder="ชื่อแพ็คเกจ" className="text-[11px] font-bold" />
         </div>
 
-        {isCalc ? <LineItemsEditor model={model} onChange={onChange} /> : <CompareEditor model={model} onChange={onChange} onSaveToRates={onSaveToRates} savingToRates={savingToRates} />}
+        {isCalc ? <LineItemsEditor model={model} onChange={onChange} /> : <CompareEditor model={model} onChange={onChange} onSaveToRates={onSaveToRates} saveToRatesLabel={saveToRatesLabel} savingToRates={savingToRates} />}
 
         {/* Customs add-on info (compare mode · read-only reference) */}
         {!isCalc && model.showCustomsInfo && (
@@ -393,7 +397,7 @@ function LineItemsEditor({ model, onChange }: { model: QuoteModel; onChange: (p:
 }
 
 // ── ใบประเมิน (compare) — editable เทียบราคา table ──────────────────────────
-function CompareEditor({ model, onChange, onSaveToRates, savingToRates }: { model: QuoteModel; onChange: (p: Partial<QuoteModel>) => void; onSaveToRates?: () => void; savingToRates?: boolean }) {
+function CompareEditor({ model, onChange, onSaveToRates, saveToRatesLabel, savingToRates }: { model: QuoteModel; onChange: (p: Partial<QuoteModel>) => void; onSaveToRates?: () => void; saveToRatesLabel?: string; savingToRates?: boolean }) {
   const rows = model.compareRows;
   const setRows = (next: CompareRow[]) => onChange({ compareRows: next });
   const patchRow = (i: number, changes: Partial<CompareRow>) => setRows(rows.map((r, idx) => (idx === i ? { ...r, ...changes } : r)));
@@ -442,15 +446,18 @@ function CompareEditor({ model, onChange, onSaveToRates, savingToRates }: { mode
         <button type="button" onClick={addRow} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-primary-300 px-3 py-1.5 text-[12px] font-semibold text-primary-700 hover:bg-primary-50">
           <Plus className="h-3.5 w-3.5" /> เพิ่มแถว
         </button>
+        {/* ปุ่มหลัก — ชิดขวา (owner ปอน 2026-07-14) · "เพิ่มแถว" อยู่ซ้ายสุดของแถว */}
         {onSaveToRates && (
-          <button type="button" onClick={onSaveToRates} disabled={savingToRates} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-primary-700 disabled:opacity-60">
-            <Save className="h-3.5 w-3.5" /> {savingToRates ? "กำลังบันทึก..." : "บันทึกเข้าเรทลูกค้า"}
+          <button type="button" onClick={onSaveToRates} disabled={savingToRates}
+            title="ปุ่มเดียวกับปุ่มหลักด้านบนของหน้า — บันทึกเรทที่แก้เข้าเรทลูกค้า แล้วออกเอกสารต่อ"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-primary-700 disabled:opacity-60">
+            <Save className="h-3.5 w-3.5" /> {savingToRates ? "กำลังบันทึก..." : (saveToRatesLabel ?? "บันทึกเข้าเรทลูกค้า")}
           </button>
         )}
       </div>
       {onSaveToRates && (
         <p className="text-[11px] text-slate-400">
-          แก้เรทในตารางนี้ แล้วกด “บันทึกเข้าเรทลูกค้า” เพื่ออัปเดตเรทตั้งค่าของลูกค้า (ทั่วไป·มอก. และ อย.·พิเศษ ตั้งเป็นราคาเดียวกันในกลุ่ม)
+          แก้เรทในตารางนี้ แล้วกด “{saveToRatesLabel ?? "บันทึกเข้าเรทลูกค้า"}” เพื่ออัปเดตเรทตั้งค่าของลูกค้า (ทั่วไป·มอก. และ อย.·พิเศษ ตั้งเป็นราคาเดียวกันในกลุ่ม) แล้วออกเอกสารต่อ — ปุ่มนี้กับปุ่มหลักด้านบนของหน้าเป็นปุ่มเดียวกัน
         </p>
       )}
     </div>
