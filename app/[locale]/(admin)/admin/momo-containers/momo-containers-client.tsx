@@ -118,6 +118,11 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
   // the import preview/confirm modal
   const [modal, setModal] = useState<null | { track: IngestTrack; userID: string; fShipBy: string; fProductsType: "1" | "2" | "3" | "4" }>(null);
   const [committing, setCommitting] = useState(false);
+  // ── เลือกรายการ → นำเข้าระบบ (owner ปอน 2026-07-14: เอาปุ่มรายแถวออก · ติ๊กเลือกแล้วกดปุ่มเดียว) ──
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkResult, setBulkResult] = useState<null | { ok: number; errors: { tracking: string; message: string }[] }>(null);
 
   const counts = useMemo(() => ({
     all: tracks.length,
@@ -141,8 +146,90 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
     return list;
   }, [tracks, tab, q]);
 
+  // ── ติ๊กเลือก — เลือกได้เฉพาะแถวที่ "ยังไม่เข้าระบบ" และอยู่ในผลกรองปัจจุบัน ──
+  const allPendingIds = useMemo(
+    () => filtered.filter((t) => !t.committed && !rowResult[t.id]?.ok).map((t) => t.id),
+    [filtered, rowResult],
+  );
+  const selectedTracks = useMemo(() => tracks.filter((t) => sel.has(t.id) && !t.committed), [tracks, sel]);
+  const invalidSelected = useMemo(() => selectedTracks.filter((t) => t.userIdValid !== true).length, [selectedTracks]);
+  const allSelected = allPendingIds.length > 0 && allPendingIds.every((id) => sel.has(id));
+  const someSelected = !allSelected && allPendingIds.some((id) => sel.has(id));
+  function toggleAll() {
+    setSel((prev) => {
+      const next = new Set(prev);
+      if (allSelected) for (const id of allPendingIds) next.delete(id);
+      else for (const id of allPendingIds) next.add(id);
+      return next;
+    });
+  }
+  function toggleOne(id: string) {
+    setSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   function openImport(t: IngestTrack) {
     setModal({ track: t, userID: t.guessedUserId ?? "", fShipBy: "", fProductsType: t.guessedProductType });
+  }
+
+  /**
+   * กดปุ่ม "นำเข้าระบบ":
+   *   เลือก 1 รายการ → modal เดิม (ตรวจ/แก้ PR · ขนส่ง · ประเภทสินค้า ก่อนยืนยัน — ทางเดียว
+   *     ที่แก้ PR ผิดได้ เลยต้องคงไว้หลังเอาปุ่มรายแถวออก)
+   *   เลือกหลายรายการ → ยืนยันรวม แล้วยิงทีละแถวผ่าน commitMomoRowToForwarder ตัวเดิม
+   */
+  function onImportClick() {
+    if (selectedTracks.length === 0) return;
+    if (selectedTracks.length === 1) {
+      openImport(selectedTracks[0]);
+      return;
+    }
+    setBulkOpen(true);
+  }
+
+  /** ยิงทีละแถว (ไม่ยิงพร้อมกัน) ผ่าน chokepoint เดิม — ค่าที่ commit เท่ากับกดปุ่มรายแถวเป๊ะ
+      (PR ที่ระบบเดาได้ · ขนส่ง = ยังไม่ระบุ · ประเภทสินค้า = ที่ map จาก MOMO).
+      แถวไหน PR ไม่ตรง tb_users → action ปฏิเสธเอง (ไม่มีการเดา) แล้วรายงานเป็น "ไม่สำเร็จ". */
+  async function runBulkImport() {
+    setBulkRunning(true);
+    const errors: { tracking: string; message: string }[] = [];
+    let ok = 0;
+    for (const t of selectedTracks) {
+      const label = t.tracking ?? t.id;
+      try {
+        const res = await commitMomoRowToForwarder({
+          rowId: t.id,
+          userID: (t.guessedUserId ?? "").trim().toUpperCase(),
+          fShipBy: "",
+          fProductsType: t.guessedProductType,
+        } satisfies CommitMomoRowInput);
+        if (res.ok) {
+          ok++;
+          setRowResult((m) => ({ ...m, [t.id]: { ok: true, message: `เข้าระบบแล้ว #${res.data?.forwarderId}`, fid: res.data?.forwarderId } }));
+          setSel((prev) => {
+            const next = new Set(prev);
+            next.delete(t.id);
+            return next;
+          });
+        } else {
+          errors.push({ tracking: label, message: res.error });
+          setRowResult((m) => ({ ...m, [t.id]: { ok: false, message: res.error } }));
+        }
+      } catch (err) {
+        console.error("[momo bulk import] threw", err);
+        const message = err instanceof Error ? err.message : "เกิดข้อผิดพลาด (ดู console)";
+        errors.push({ tracking: label, message });
+        setRowResult((m) => ({ ...m, [t.id]: { ok: false, message } }));
+      }
+    }
+    setBulkRunning(false);
+    setBulkOpen(false);
+    setBulkResult({ ok, errors });
+    startTransition(() => router.refresh());
   }
 
   async function confirmImport() {
@@ -202,6 +289,44 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">โหลดข้อมูลไม่สำเร็จ: {loadError}</div>
       )}
 
+      {/* ผลนำเข้ารอบล่าสุด (เลือกหลายรายการ) */}
+      {bulkResult && (
+        <div className={`rounded-xl border px-3 py-2 text-xs ${bulkResult.errors.length > 0 ? "border-amber-300 bg-amber-50" : "border-emerald-300 bg-emerald-50"}`}>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-foreground">
+              นำเข้าระบบสำเร็จ {bulkResult.ok} รายการ{bulkResult.errors.length > 0 ? ` · ไม่สำเร็จ ${bulkResult.errors.length}` : ""}
+            </span>
+            <button type="button" onClick={() => setBulkResult(null)} className="ml-auto rounded-full border border-border bg-white px-2 py-0.5 text-[11px] hover:bg-surface-alt">ปิด</button>
+          </div>
+          {bulkResult.errors.length > 0 && (
+            <ul className="mt-1 space-y-0.5 text-[11px] text-red-700">
+              {bulkResult.errors.slice(0, 8).map((e) => (
+                <li key={e.tracking}><span className="font-mono font-semibold">{e.tracking}</span> — {e.message}</li>
+              ))}
+              {bulkResult.errors.length > 8 && <li className="text-muted">…และอีก {bulkResult.errors.length - 8} รายการ</li>}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* แถบเลือก — โผล่เมื่อติ๊กแล้ว · ปุ่มเดียวนำเข้าระบบ (owner ปอน 2026-07-14) */}
+      {sel.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2 dark:border-primary-500/30 dark:bg-primary-500/10">
+          <span className="text-xs font-semibold text-primary-700 dark:text-primary-300">เลือก {sel.size} รายการ</span>
+          {invalidSelected > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
+              <AlertCircle className="h-3 w-3" /> PR ไม่ถูกต้อง {invalidSelected} — ต้องแก้ทีละรายการ
+            </span>
+          )}
+          <button type="button" onClick={onImportClick} disabled={bulkRunning}
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-primary-700 disabled:opacity-50">
+            <PackageCheck className="h-3.5 w-3.5" /> นำเข้าระบบ ({sel.size})
+          </button>
+          <button type="button" onClick={() => setSel(new Set())} disabled={bulkRunning}
+            className="rounded-full border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-alt disabled:opacity-50 dark:bg-surface">ล้างที่เลือก</button>
+        </div>
+      )}
+
       {/* กล่องสูง ~12 แถว (owner ปอน 2026-07-14: "เห็นแค่ 12 รายการ จะได้กดเลื่อนซ้ายขวาง่าย แต่เลื่อนลงได้") —
           แถบเลื่อนซ้าย-ขวาอยู่ติดขอบล่างกล่อง ไม่ต้องเลื่อนหน้าผ่าน 394 แถวลงไปหาก่อน · เลื่อนลงในกล่อง
           เห็นครบทุกแถวเหมือนเดิม · หัวตารางล็อกไว้ (sticky) ไม่งั้นเลื่อนลงแล้วไม่รู้ว่าคอลัมน์ไหนเป็นอะไร. */}
@@ -215,7 +340,17 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
               box-shadow เพราะ border ของ th หายเวลา sticky + border-collapse (พฤติกรรม Chrome) */}
           <thead className="sticky top-0 z-20 bg-surface-alt text-[11px] font-semibold text-foreground/70 [&_th]:whitespace-nowrap [&_th]:shadow-[inset_0_-1px_0_var(--color-border),inset_0_1px_0_var(--color-border)]">
             <tr>
-              <th className="px-2 py-2 text-center w-8">#</th>
+              {/* ติ๊กเลือก — หัว = เลือกทุกรายการที่ยังไม่เข้าระบบ (ตามที่กรองอยู่) · owner ปอน 2026-07-14 */}
+              <th className="px-2 py-2 text-center w-16">
+                <label className="inline-flex cursor-pointer items-center gap-1" title={allPendingIds.length ? "เลือกทุกรายการที่ยังไม่เข้าระบบ (ตามตัวกรองนี้)" : "ไม่มีรายการที่ยังไม่เข้าระบบ"}>
+                  <input type="checkbox" className="h-3.5 w-3.5 cursor-pointer accent-primary-600"
+                    disabled={allPendingIds.length === 0}
+                    checked={allSelected}
+                    ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                    onChange={toggleAll} />
+                  <span className="text-[11px] font-normal">#</span>
+                </label>
+              </th>
               <th className="px-2 py-2 text-center w-14">รูป</th>
               <th className="px-2 py-2 text-center">Container Name</th>
               <th className="px-2 py-2 text-center">Trans</th>
@@ -243,12 +378,11 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
               <th className={thNoFeed} title={NO_FEED}>Return</th>
               <th className="px-2 py-2 text-center" title="วันออกจากจีน — จากไฟล์ packing list (ระดับตู้)">ETD</th>
               <th className="px-2 py-2 text-center" title="วันถึงไทย — จากไฟล์ packing list (ระดับตู้)">ETA</th>
-              <th className="px-2 py-2 text-center w-40">นำเข้าระบบ</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={29} className="px-3 py-6 text-center text-xs text-muted">ไม่มีรายการตามเงื่อนไข</td></tr>
+              <tr><td colSpan={28} className="px-3 py-6 text-center text-xs text-muted">ไม่มีรายการตามเงื่อนไข</td></tr>
             )}
             {filtered.map((t, i) => {
               const rr = rowResult[t.id];
@@ -257,8 +391,30 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
               const wDiff = pkWtDiff(t);
               const vDiff = pkVolDiff(t);
               return (
-                <tr key={t.id} className={`align-top ${done ? "bg-emerald-50/40" : t.userIdValid === false ? "bg-red-50/30" : ""}`}>
-                  <td className="px-2 py-1.5 text-center text-muted tabular-nums">{i + 1}</td>
+                <tr key={t.id} className={`align-top ${done ? "bg-emerald-50/40" : sel.has(t.id) ? "bg-primary-50/60" : t.userIdValid === false ? "bg-red-50/30" : ""}`}>
+                  {/* ติ๊กเลือก + เลขแถว · แถวที่เข้าระบบแล้ว = ลิงก์ไปใบนำเข้า (ย้ายมาจากคอลัมน์
+                      "นำเข้าระบบ" ที่ owner ให้เอาออก — ข้อมูลไม่หาย) */}
+                  <td className="px-2 py-1.5 text-center">
+                    {done ? (
+                      fid ? (
+                        <Link href={`/admin/forwarders/${fid}`} title={`เข้าระบบแล้ว #${fid}`}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:underline">
+                          <CheckCircle2 className="h-3.5 w-3.5" />#{fid}
+                        </Link>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700" title="เข้าระบบแล้ว"><CheckCircle2 className="h-3.5 w-3.5" /></span>
+                      )
+                    ) : (
+                      <label className="inline-flex cursor-pointer items-center gap-1" title="เลือกเพื่อนำเข้าระบบ">
+                        <input type="checkbox" className="h-3.5 w-3.5 cursor-pointer accent-primary-600"
+                          checked={sel.has(t.id)} onChange={() => toggleOne(t.id)} />
+                        <span className="text-[11px] text-muted tabular-nums">{i + 1}</span>
+                      </label>
+                    )}
+                    {rr && !rr.ok && (
+                      <div className="mt-0.5 text-[11px] font-semibold text-red-700" title={rr.message}>ไม่สำเร็จ</div>
+                    )}
+                  </td>
                   <td className="px-2 py-1.5 text-center">
                     {t.images.length > 0 ? (
                       <button type="button" onClick={() => setZoom({ urls: t.images, tracking: t.tracking ?? "—" })} className="relative inline-block" title="คลิกดูรูปป้าย (ตรวจ PR)">
@@ -353,27 +509,6 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
                   {/* Y/Z ETD / ETA — จาก packing list ระดับตู้ */}
                   <td className="px-2 py-1.5 text-center tabular-nums text-[11px] whitespace-nowrap">{t.etd ?? DASH}</td>
                   <td className="px-2 py-1.5 text-center tabular-nums text-[11px] whitespace-nowrap">{t.eta ?? DASH}</td>
-                  <td className="px-2 py-1.5 text-center">
-                    {done ? (
-                      fid ? (
-                        <Link href={`/admin/forwarders/${fid}`} className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-100 px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-200">
-                          <CheckCircle2 className="h-3 w-3" /> เข้าระบบแล้ว #{fid}
-                        </Link>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-100 px-2 py-1 text-[11px] font-bold text-emerald-700"><CheckCircle2 className="h-3 w-3" /> เข้าระบบแล้ว</span>
-                      )
-                    ) : (
-                      <>
-                        <button type="button" onClick={() => openImport(t)}
-                          className="inline-flex w-full items-center justify-center gap-1 rounded-lg border border-primary-300 bg-primary-50 px-2 py-1.5 text-[11px] font-bold text-primary-700 hover:bg-primary-100">
-                          <PackageCheck className="h-3.5 w-3.5" /> นำเข้าระบบ
-                        </button>
-                        {rr && !rr.ok && (
-                          <div className="mt-1 flex items-start gap-1 rounded bg-red-50 px-1 py-0.5 text-[11px] text-red-700 text-left"><AlertCircle className="h-3 w-3 flex-shrink-0 mt-0.5" /><span>{rr.message}</span></div>
-                        )}
-                      </>
-                    )}
-                  </td>
                 </tr>
               );
             })}
@@ -397,6 +532,59 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
           มีอยู่ในไฟล์ packing list ของแต้ม แต่ตอนนี้ระบบยังไม่ได้เก็บ (ถ้าอยากให้ขึ้น ต้องเก็บเพิ่มตอน ingest ไฟล์).
         </p>
       </div>
+
+      {/* ยืนยันนำเข้าหลายรายการ (§0f confirm-before-mutate) — portal เหมือน modal เดิม.
+          เลือก 1 รายการจะไม่มาที่นี่ (ไป modal ตรวจ/แก้ PR ทีละใบแทน). */}
+      {bulkOpen && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => !bulkRunning && setBulkOpen(false)} role="button" tabIndex={-1}>
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-surface p-5 shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold flex items-center gap-2"><PackageCheck className="h-5 w-5 text-primary-600" /> ยืนยันนำเข้าระบบ {selectedTracks.length} รายการ</h3>
+              <button type="button" onClick={() => !bulkRunning && setBulkOpen(false)} className="rounded-lg border border-border px-2 py-0.5 text-xs hover:bg-surface-alt"><X className="h-3.5 w-3.5" /></button>
+            </div>
+
+            <div className="rounded-lg bg-surface-alt/50 p-3 text-xs space-y-1.5">
+              <p className="text-muted leading-relaxed">
+                จะสร้างรายการนำเข้า (tb_forwarder) ให้ทุกแถวที่เลือก โดยใช้ค่าที่เห็นในตาราง —
+                <strong> PR ที่ระบบเทียบกับ tb_users แล้ว</strong> · ขนส่งไทย = <strong>ยังไม่ระบุ</strong> (เซล/ลูกค้ากรอกทีหลัง) ·
+                ประเภทสินค้า = ที่ map มาจาก MOMO. น้ำหนัก/คิว = ค่าเดียวกับที่โชว์ในคอลัมน์ Total.
+              </p>
+              {invalidSelected > 0 && (
+                <p className="flex items-start gap-1.5 rounded bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
+                  <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                  <span>{invalidSelected} รายการ PR ไม่ตรง tb_users → ระบบจะปฏิเสธเอง (ไม่เดา PR ให้) — ติ๊กทีละรายการเพื่อแก้ PR ก่อน</span>
+                </p>
+              )}
+              <div className="max-h-40 overflow-y-auto rounded border border-border bg-white dark:bg-surface">
+                <table className="w-full text-[11px]">
+                  <tbody>
+                    {selectedTracks.slice(0, 50).map((t) => (
+                      <tr key={t.id} className="border-b border-border last:border-0">
+                        <td className="px-2 py-1 font-mono">{t.tracking ?? "—"}</td>
+                        <td className="px-2 py-1">
+                          {t.guessedUserId ? <span className={`font-mono font-semibold ${t.userIdValid === true ? "" : "text-red-600"}`}>{t.guessedUserId}</span> : <span className="text-red-600">ไม่มี PR</span>}
+                        </td>
+                        <td className="px-2 py-1 text-right tabular-nums font-mono text-muted">{fx(t.weightKg, 2) ?? "—"} กก.</td>
+                        <td className="px-2 py-1 text-right tabular-nums font-mono text-muted">{fx(t.cbm, 6) ?? "—"} คิว</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {selectedTracks.length > 50 && <div className="px-2 py-1 text-[11px] text-muted">…และอีก {selectedTracks.length - 50} รายการ</div>}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button type="button" onClick={() => setBulkOpen(false)} disabled={bulkRunning} className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt disabled:opacity-50">ยกเลิก</button>
+              <button type="button" onClick={runBulkImport} disabled={bulkRunning}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-primary-700 bg-primary-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-primary-700 disabled:opacity-50">
+                {bulkRunning ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> กำลังนำเข้า…</> : <><Truck className="h-3.5 w-3.5" /> ยืนยันนำเข้า {selectedTracks.length} รายการ</>}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {/* import preview + confirm modal — portal to body so `fixed` is relative
           to the viewport, not a transformed layout ancestor (else it opens
