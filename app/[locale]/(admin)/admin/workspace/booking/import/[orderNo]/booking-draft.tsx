@@ -11,7 +11,7 @@
 import type { ReactNode } from "react";
 import {
   Ship, Plane, Truck, Maximize2, Minimize2, ScanBarcode, MapPin, ArrowRight,
-  Boxes, ClipboardCheck, Warehouse, Info, CircleCheckBig, FileText, Users, Building2, Anchor,
+  Info, CircleCheckBig, FileText, Users, Building2, Anchor,
 } from "lucide-react";
 import { directionOf, usesContainer, usesLoadType, CARRIER_LABEL, type QuoteConditions } from "../quotation-data";
 import { DraftBarcode } from "@/components/ui/draft-barcode";
@@ -75,46 +75,6 @@ function countryCode(country: string): string {
   return (country || "?").slice(0, 2).toUpperCase();
 }
 
-// ── Journey stepper (5 ขั้น · draft = ขั้น "เปิด Booking" คือปัจจุบัน) ──────────────
-function journeyStages(service: string) {
-  const m = serviceMeta(service);
-  return [
-    { code: "BK", label: "เปิด Booking", desc: "สร้าง/ยืนยันใบจอง", Icon: FileText },
-    { code: "CT", label: "จัดตู้/บรรจุ", desc: "แพ็คลงตู้ต้นทาง", Icon: Boxes },
-    { code: m.legCode, label: m.legOut, desc: `${m.label}ออกจากต้นทาง`, Icon: m.Icon },
-    { code: "CU", label: "เคลียร์ศุลกากร", desc: "พิธีการ + ชำระอากร", Icon: ClipboardCheck },
-    { code: "DL", label: "ส่งปลายทาง", desc: "กระจายส่งถึงลูกค้า", Icon: Warehouse },
-  ];
-}
-
-function JourneyStrip({ service, size = "full" }: { service: string; size?: "full" | "compact" }) {
-  const stages = journeyStages(service);
-  const currentIdx = 0; // draft = ยังอยู่ขั้นเปิด Booking
-  const dot = size === "compact" ? "h-8 w-8" : "h-11 w-11";
-  const iconSz = size === "compact" ? "h-4 w-4" : "h-5 w-5";
-  return (
-    <ol className="flex items-start gap-1 overflow-x-auto scrollbar-x-visible py-1">
-      {stages.map((s, i) => {
-        const state = i < currentIdx ? "done" : i === currentIdx ? "current" : "todo";
-        const StageIcon = s.Icon;
-        return (
-          <li key={`${s.code}-${i}`} className={cx("flex flex-1 flex-col items-center text-center", size === "compact" ? "min-w-[62px]" : "min-w-[92px]")}>
-            <div className="flex w-full items-center">
-              <span className={cx("h-0.5 flex-1", i === 0 ? "opacity-0" : state === "todo" ? "bg-border" : "bg-primary-500")} />
-              <span className={cx("flex shrink-0 items-center justify-center rounded-xl transition-all", dot,
-                state === "todo" ? "border border-dashed border-border bg-muted/40 text-muted" : "bg-primary-600 text-white shadow-sm")}>
-                <StageIcon className={iconSz} strokeWidth={2} />
-              </span>
-              <span className={cx("h-0.5 flex-1", i === stages.length - 1 ? "opacity-0" : state === "done" ? "bg-primary-500" : "bg-border")} />
-            </div>
-            <span className={cx("mt-1.5 font-semibold leading-tight", size === "compact" ? "text-[10px]" : "text-[11px]", state === "current" ? "text-foreground" : "text-muted")}>{s.label}</span>
-            {size === "full" && <span className="mt-0.5 hidden text-[10px] leading-tight text-muted sm:block">{s.desc}</span>}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
 
 export function BookingDraftPreview({
   cond, doc, docNo, salesName, attachedSummary, full, onToggleFull,
@@ -163,7 +123,7 @@ export function BookingDraftPreview({
             </button>
           </div>
         </div>
-        <div className="border-b border-border px-3 py-3"><JourneyStrip service={cond.service} size="compact" /></div>
+        <div className="border-b border-border px-3 py-3"><BookingJourney term={cond.term} mode={cond.service} progress={0} compact /></div>
         <dl className="divide-y divide-border text-[13px]">
           <Row label="เส้นทาง"><span className="inline-flex items-center gap-1 font-medium text-foreground"><MapPin className="h-3.5 w-3.5 text-primary-500" />{cond.pol.port} <ArrowRight className="h-3 w-3 text-muted" /> {cond.pod.port}</span></Row>
           <Row label="ขนส่ง"><span className="inline-flex items-center gap-1 font-medium text-foreground"><Svc className="h-3.5 w-3.5 text-primary-500" />{svc.label}{usesLoadType(cond.service) ? ` · ${cond.loadType}` : ""}</span></Row>

@@ -6,7 +6,6 @@
  *   Data = SEED_IMPORT_BOOKINGS lookup (prototype · ยังไม่ต่อ DB — booking ที่เพิ่งเพิ่มบนบอร์ด
  *   [client-state] จะยังหาไม่เจอ). See memory: pacred-booking-flow.
  */
-import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { canViewCost, canViewProfit } from "@/lib/admin/money-visibility";
@@ -26,7 +25,7 @@ export default async function BookingImportQuotationPage({
   const key = decodeURIComponent(orderNo);
   const isNew = key === "new";
   const booking = isNew ? null : SEED_IMPORT_BOOKINGS.find((x) => x.orderNo === key) ?? null;
-  if (!isNew && !booking) notFound();
+  // ไม่ notFound ถ้าไม่เจอใน seed — draft ที่บันทึกอยู่ใน localStorage (client) · ฟอร์มโหลด draft เองฝั่ง client (กัน 404)
 
   const withProfile = await getCurrentUserWithProfile();
   const p = withProfile?.profile ?? null;

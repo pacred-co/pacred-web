@@ -58,6 +58,7 @@ import {
 } from "./live-cabinet";
 import {
   splitAggregatedMomoBoxRows,
+  findMultiBoxBases,
   emptyBoxSplitResult,
   type BoxSplitResult,
 } from "./split-box-rows";
@@ -426,10 +427,17 @@ export async function propagateMomoLiveStatusAndData(
   //    the status/data/box/cabinet writes above. ──
   const boxSplitResult = emptyBoxSplitResult();
   try {
-    const scrapedBases = Array.from(
-      new Set(parcels.map((p) => baseTrackingOf((p.tracking ?? "").trim())).filter(Boolean)),
-    );
-    await splitAggregatedMomoBoxRows(admin, scrapedBases, boxSplitResult, { allowPriced: true });
+    const scrapedBases = parcels
+      .map((p) => baseTrackingOf((p.tracking ?? "").trim()))
+      .filter(Boolean);
+    // 🔴 ROOT-FIX (2026-07-14): union the CURRENT-scrape bases with the DURABLE
+    // multi-box bases in momo_box_detail — a shipment that advanced off MOMO's boards
+    // (no longer in scrapedBases) but was never split (stranded aggregate) still gets
+    // picked up here. The split re-guards each base (billed/already-split/Σ drift), so
+    // the wider set is safe; it only closes the "ยังเกิดอีก" gap.
+    const durableBases = await findMultiBoxBases(admin);
+    const allBases = Array.from(new Set([...scrapedBases, ...durableBases]));
+    await splitAggregatedMomoBoxRows(admin, allBases, boxSplitResult, { allowPriced: true });
   } catch (e) {
     console.error("[propagateMomoLiveStatusAndData] box-split threw", e);
     boxSplitResult.errors.push({ scope: "box-split", message: e instanceof Error ? e.message : "unknown" });

@@ -552,10 +552,9 @@ export async function renderLegacyCustomerView(
   const isSuperAdmin = isGodRole(adminRoles);
 
   // "รันเลข PR ลูกค้าใหม่" is ULTRA-ONLY (re-keys the whole identity across 52+
-  // tables + auth). NOT isGodRole (that would admit super/normies) — strictly
-  // `ultra`. The server action re-asserts this; the UI flag just hides the
-  // button for non-ultra. (owner 2026-07-06)
-  const isUltraAdmin = adminRoles.includes("ultra");
+  // tables + auth). owner 2026-07-14: allow SUPER too (not only ultra). The server
+  // action re-asserts ultra||super; this UI flag just shows/hides the button.
+  const isUltraAdmin = adminRoles.includes("ultra") || adminRoles.includes("super");
 
   // Sell-rate floors — resolve the LIVE floors (business_config override ||
   // constant default) on the server and pass BOTH into the (client) rate editor
