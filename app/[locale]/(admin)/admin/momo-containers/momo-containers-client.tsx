@@ -16,6 +16,8 @@ import { Link } from "@/i18n/navigation";
 import { CheckCircle2, AlertCircle, RefreshCw, X, PackageCheck, Truck, Check } from "lucide-react";
 import { commitMomoRowToForwarder, commitMomoRowsBatch } from "@/actions/admin/momo-commit";
 import { updateMomoImportTrackFields } from "@/actions/admin/momo-ingest-edit";
+import { propagateMomoLiveStatusNow } from "@/actions/admin/momo-web-live";
+import { confirm } from "@/components/ui/confirm";
 import { useColumnOrder } from "@/lib/hooks/use-column-order";
 
 // reorderable DATA columns (drag · เฟส A-3b) — fixed cols (checkbox/#/รูป/นำเข้า) stay put.
@@ -164,6 +166,9 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
   // reorderable columns (drag · เฟส A-3b)
   const { order: colOrder, move: moveCol, reset: resetCols } = useColumnOrder(DATA_KEYS);
   const [dragKey, setDragKey] = useState<string | null>(null);
+  // on-demand MOMO Live pull (เฟส B2)
+  const [liveBusy, setLiveBusy] = useState(false);
+  const [liveMsg, setLiveMsg] = useState<string | null>(null);
 
   const counts = useMemo(() => ({
     all: tracks.length,
@@ -314,6 +319,26 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
     }
   }
 
+  async function onPullLive() {
+    if (!(await confirm("ดึงข้อมูลสดจากเว็บ MOMO เดี๋ยวนี้?\n\nจะอัปเดตสถานะ + เติม น้ำหนัก/คิว/ขนาด/จำนวน ที่ยังว่างลงระบบ (ข้ามรายการที่ออกบิลแล้ว · ไม่ทับค่าที่มีอยู่). ใช้เวลาสักครู่ (login เว็บ MOMO)."))) return;
+    setLiveBusy(true);
+    setLiveMsg(null);
+    try {
+      const res = await propagateMomoLiveStatusNow();
+      if (res.ok && res.data) {
+        const s = res.data;
+        setLiveMsg(`✅ ดึง Live สำเร็จ · อัปเดตสถานะ ${s.summary.advanced} · เติมข้อมูล ${s.data.filled} · เลขตู้ ${s.cabinet.filled} · แตกกล่อง ${s.boxSplit.split}`);
+        startTransition(() => router.refresh());
+      } else {
+        setLiveMsg(res.ok ? "ดึง Live เสร็จ" : `⚠️ ดึง Live ไม่สำเร็จ: ${res.error}`);
+      }
+    } catch (err) {
+      setLiveMsg(err instanceof Error ? `⚠️ ดึง Live ไม่สำเร็จ: ${err.message}` : "⚠️ ดึง Live ไม่สำเร็จ");
+    } finally {
+      setLiveBusy(false);
+    }
+  }
+
   async function saveEdit() {
     if (!editing) return;
     const numVal = Number(editing.value);
@@ -456,6 +481,10 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
           className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt disabled:opacity-50">
           <RefreshCw className={`h-3 w-3 ${pending ? "animate-spin" : ""}`} /> รีเฟรช
         </button>
+        <button type="button" onClick={onPullLive} disabled={liveBusy} title="ดึงข้อมูลสดจากเว็บ MOMO เดี๋ยวนี้ (อัปเดตสถานะ + เติมข้อมูลที่ยังว่าง)"
+          className="inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50">
+          <RefreshCw className={`h-3 w-3 ${liveBusy ? "animate-spin" : ""}`} /> {liveBusy ? "กำลังดึง Live…" : "🔄 ดึง Live เดี๋ยวนี้"}
+        </button>
         <button type="button" onClick={() => exportRows("copy")} title="คัดลอกเป็นตาราง (วางใน Excel/Sheet ได้)"
           className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt">{copied ? "✓ คัดลอกแล้ว" : "📋 Copy"}</button>
         <button type="button" onClick={() => exportRows("excel")} title="ดาวน์โหลด .csv เปิดใน Excel"
@@ -473,6 +502,9 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
 
       {loadError && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">โหลดข้อมูลไม่สำเร็จ: {loadError}</div>
+      )}
+      {liveMsg && (
+        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">{liveMsg}</div>
       )}
 
       <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
