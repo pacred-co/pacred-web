@@ -437,6 +437,45 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     );
   }
 
+  // full-data preview table — reused by the bulk-import + Live modals so the confirm
+  // step shows ทุกช่องเหมือนตาราง (ภูม: "ควรแสดงข้อมูลให้ครบทั้งหมดเหมือนหน้าตาราง").
+  function previewTable(rows: IngestTrack[], skipRows?: IngestTrack[]) {
+    return (
+      <div className="max-h-72 overflow-auto rounded-lg border border-border">
+        <table className="w-full whitespace-nowrap border-collapse text-[11px] [&_td]:border [&_td]:border-border [&_th]:border [&_th]:border-border">
+          <thead className="sticky top-0 bg-surface-alt/60 text-muted"><tr>
+            <th className="px-2 py-1 text-left">แทรคกิ้ง</th><th className="px-2 py-1 text-left">ตู้</th><th className="px-2 py-1 text-left">PR</th>
+            <th className="px-2 py-1 text-right">น้ำหนัก</th><th className="px-2 py-1 text-right">คิว</th><th className="px-2 py-1 text-right">จำนวน</th>
+            <th className="px-2 py-1 text-left">ขนาด</th><th className="px-2 py-1 text-left">ประเภท</th><th className="px-2 py-1 text-left">สถานะ MOMO</th>
+          </tr></thead>
+          <tbody>
+            {rows.map((t) => (
+              <tr key={t.id}>
+                <td className="px-2 py-1 font-mono font-semibold">{t.tracking}</td>
+                <td className="px-2 py-1 font-mono">{t.container ?? <span className="text-amber-600">ยังไม่เข้าตู้</span>}</td>
+                <td className="px-2 py-1 font-mono">{t.guessedUserId}</td>
+                <td className="px-2 py-1 text-right font-mono">{t.weightKg > 0 ? n2(t.weightKg) : <span className="text-amber-600">รอชั่ง</span>}{t.hasPacking && t.packingWeight != null && pkWtDiff(t) ? " ⚠" : ""}</td>
+                <td className="px-2 py-1 text-right font-mono">{n6(t.cbm)}{t.hasPacking && t.packingCbm != null && pkVolDiff(t) ? " ⚠" : ""}</td>
+                <td className="px-2 py-1 text-right">{t.qty ?? "—"}</td>
+                <td className="px-2 py-1 font-mono">{t.width > 0 || t.length > 0 || t.height > 0 ? `${t.width}×${t.length}×${t.height}` : "—"}</td>
+                <td className="px-2 py-1">{PRODUCT_TYPE_TH[t.guessedProductType] ?? "—"}</td>
+                <td className="max-w-[9rem] truncate px-2 py-1" title={t.adminStatusText ?? ""}>{t.adminStatusText ?? t.phase ?? "—"}</td>
+              </tr>
+            ))}
+            {(skipRows ?? []).map((t) => (
+              <tr key={t.id} className="bg-red-50/50 text-red-600">
+                <td className="px-2 py-1 font-mono">{t.tracking}</td>
+                <td className="px-2 py-1 font-mono">{t.container ?? "—"}</td>
+                <td className="px-2 py-1 font-mono">{t.guessedUserId ?? "—"}</td>
+                <td colSpan={6} className="px-2 py-1">⚠ ข้าม (PR ไม่ถูกต้อง / ไม่มี)</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
   // reorderable DATA columns — each cell is a render fn (closes over editableCell etc.).
   const dataColumns: { key: string; label: string; align: "left" | "right"; cell: (t: IngestTrack) => ReactNode }[] = [
     { key: "tracking", label: "แทรคกิ้ง", align: "left",
@@ -761,9 +800,10 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           const noWeight = tracks.filter((t) => !t.committed && t.weightKg <= 0).length;
           const noCbm = tracks.filter((t) => !t.committed && t.cbm <= 0).length;
           const noCabinet = tracks.filter((t) => !t.container).length;
+          const incompleteRows = tracks.filter((t) => !t.committed && (t.weightKg <= 0 || t.cbm <= 0));
           return (
             <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => setLiveConfirm(false)} role="button" tabIndex={-1}>
-              <div className="w-full max-w-md rounded-2xl bg-white dark:bg-surface p-5 shadow-2xl space-y-3.5" onClick={(e) => e.stopPropagation()}>
+              <div className="w-full max-w-3xl rounded-2xl bg-white dark:bg-surface p-5 shadow-2xl space-y-3.5" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-bold flex items-center gap-2"><RefreshCw className="h-5 w-5 text-sky-600" /> ดึงข้อมูลสดจาก MOMO</h3>
                   <button type="button" onClick={() => setLiveConfirm(false)} className="rounded-lg border border-border px-2 py-0.5 text-xs hover:bg-surface-alt"><X className="h-3.5 w-3.5" /></button>
@@ -775,6 +815,12 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                   <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2"><div className="text-lg font-extrabold text-slate-700">{noCabinet}</div><div className="text-[11px] text-slate-600">ยังไม่เข้าตู้ปิด</div></div>
                   <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2"><div className="text-lg font-extrabold text-red-700">{missing.length}</div><div className="text-[11px] text-red-600">พัสดุขาด (packing มี · API ไม่มี)</div></div>
                 </div>
+                {incompleteRows.length > 0 && (
+                  <div>
+                    <div className="mb-1 text-[11px] font-semibold text-amber-700">📋 รายการที่ข้อมูลยังไม่ครบ (Live จะเติมให้) — {incompleteRows.length} รายการ:</div>
+                    {previewTable(incompleteRows)}
+                  </div>
+                )}
                 <div className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-800">กดยืนยัน → login เว็บ MOMO สด → อัปเดตสถานะ + เติม น้ำหนัก/คิว/ขนาด/เลขตู้ ที่ยังว่าง (ข้ามบิลแล้ว · ไม่ทับค่าที่มี). ใช้เวลาสักครู่.</div>
                 <div className="flex items-center justify-end gap-2">
                   <button type="button" onClick={() => setLiveConfirm(false)} className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt">ยกเลิก</button>
@@ -793,7 +839,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
       {/* bulk import preview + confirm modal (portal to body · ภูม 2026-07-14) */}
       {bulkOpen && createPortal(
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => !bulkBusy && setBulkOpen(false)} role="button" tabIndex={-1}>
-          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-surface p-5 shadow-2xl space-y-3.5" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-3xl rounded-2xl bg-white dark:bg-surface p-5 shadow-2xl space-y-3.5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold flex items-center gap-2"><PackageCheck className="h-5 w-5 text-primary-600" /> ยืนยันนำเข้าหลายรายการ</h3>
               <button type="button" onClick={() => !bulkBusy && setBulkOpen(false)} className="rounded-lg border border-border px-2 py-0.5 text-xs hover:bg-surface-alt"><X className="h-3.5 w-3.5" /></button>
@@ -802,21 +848,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
               เลือกไว้ {selectedTracks.length} รายการ · <span className="font-semibold text-emerald-700">พร้อมนำเข้า {bulkReady.length}</span>
               {bulkSkip.length > 0 && <> · <span className="font-semibold text-red-600">ข้าม {bulkSkip.length}</span> (PR ไม่ถูกต้อง/ไม่มี)</>}
             </div>
-            <div className="max-h-60 overflow-y-auto rounded-lg border border-border">
-              <table className="w-full text-[11px] border-collapse [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border">
-                <thead className="bg-surface-alt/60 text-muted sticky top-0"><tr>
-                  <th className="px-2 py-1 text-left">แทรคกิ้ง</th><th className="px-2 py-1 text-left">PR</th><th className="px-2 py-1 text-right">นน. / คิว</th>
-                </tr></thead>
-                <tbody>
-                  {bulkReady.map((t) => (
-                    <tr key={t.id}><td className="px-2 py-1 font-mono">{t.tracking}</td><td className="px-2 py-1 font-mono">{t.guessedUserId}</td><td className="px-2 py-1 text-right font-mono">{n2(t.weightKg)} / {n6(t.cbm)}</td></tr>
-                  ))}
-                  {bulkSkip.map((t) => (
-                    <tr key={t.id} className="bg-red-50/50 text-red-600"><td className="px-2 py-1 font-mono">{t.tracking}</td><td className="px-2 py-1 font-mono">{t.guessedUserId ?? "—"}</td><td className="px-2 py-1 text-right">ข้าม</td></tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {previewTable(bulkReady, bulkSkip)}
             <div className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">⚠️ ตรวจ PR + น้ำหนัก/คิว ให้ถูกก่อนนำเข้า · การนำเข้าจะ INSERT ลง tb_forwarder ทันที</div>
             <div className="flex items-center justify-end gap-2">
               <button type="button" onClick={() => setBulkOpen(false)} disabled={bulkBusy} className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt disabled:opacity-50">ยกเลิก</button>
