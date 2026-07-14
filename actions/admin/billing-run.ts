@@ -51,6 +51,7 @@ import { isThShippingCostMissing, codBaseTrackings } from "@/lib/forwarder/domes
 import { getContainerCompletenessBatch } from "@/lib/warehouse/container-completeness";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
+import { resolvePackingConfirmedCabs } from "@/lib/admin/packing-confirmed-cabs";
 import {
   isBillableForwarder,
   isBillingRunEligible,
@@ -623,20 +624,10 @@ export async function listEligibleForwarders(
       const cabs = Array.from(
         new Set(fwd.map((f) => (f.fcabinetnumber ?? "").trim()).filter((c) => c !== "" && c !== "0")),
       );
-      const reconciledCabs = new Set<string>();
-      if (cabs.length > 0) {
-        const { data: recRows, error: recErr } = await admin
-          .from("container_packing_reconcile")
-          .select("container_no")
-          .in("container_no", cabs);
-        if (recErr) {
-          console.error("[listEligibleForwarders packing-reconcile] failed", {
-            code: recErr.code, message: recErr.message,
-          });
-          // Non-fatal — no badge / no pre-ack, but the rows still list (the server gate holds).
-        }
-        for (const r of (recRows ?? []) as Array<{ container_no: string }>) reconciledCabs.add(r.container_no);
-      }
+      // packing-confirmed = reconcile stamp (mig 0245) OR packing-list upload (mig 0254 ·
+      // what the banner tells staff to use). Accept either → no false "ยังไม่อัพ" on an
+      // uploaded container (owner 2026-07-14). See lib/admin/packing-confirmed-cabs.ts.
+      const reconciledCabs = await resolvePackingConfirmedCabs(admin, cabs);
 
       // ค่าส่งไทย gate — SHIPMENT-level COD set (ภูม 2026-07-13): a row is COD-exempt if
       // ITS OWN paymethod is '2' OR any sibling of its base-tracking is COD (a box-split
@@ -1314,19 +1305,11 @@ async function createBillingRunInvoiceImpl(
         ),
       );
       if (cabsToCheck.length > 0 && !v.allowUnreconciledPacking) {
-        const { data: reconciledRows, error: recErr } = await admin
-          .from("container_packing_reconcile")
-          .select("container_no")
-          .in("container_no", cabsToCheck);
-        if (recErr) {
-          console.error("[createBillingRunInvoice packing-reconcile check] failed", {
-            code: recErr.code, message: recErr.message,
-          });
-          // Non-fatal — don't block billing on a lookup error (fall through).
-        } else {
-          const reconciled = new Set(
-            (reconciledRows ?? []).map((r) => (r as { container_no: string }).container_no),
-          );
+        // packing-confirmed = reconcile stamp (mig 0245) OR packing-list upload (mig 0254).
+        // Accept either so a container the staff DID upload never false-blocks (owner
+        // 2026-07-14 "อัพแล้วยังบอกไม่อัพ"). See lib/admin/packing-confirmed-cabs.ts.
+        const reconciled = await resolvePackingConfirmedCabs(admin, cabsToCheck);
+        {
           const unreconciled = fwd.filter((f) => {
             const c = (f.fcabinetnumber ?? "").trim();
             return c !== "" && c !== "0" && !reconciled.has(c);
