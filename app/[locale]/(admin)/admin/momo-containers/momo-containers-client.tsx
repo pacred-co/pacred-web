@@ -191,7 +191,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
   const [dragKey, setDragKey] = useState<string | null>(null);
   const { order: colOrder, move: moveCol, reset: resetCols } = useColumnOrder(DATA_KEYS);
   // ✎ inline-edit น้ำหนัก/คิว/จำนวน (pending only · updateMomoImportTrackFields · แก้ก่อนนำเข้า)
-  const [editing, setEditing] = useState<{ id: string; field: "weightKg" | "cbm" | "qty"; value: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; field: "weightKg" | "cbm" | "qty" | "width" | "length" | "height" | "pr"; value: string } | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editErr, setEditErr] = useState<string | null>(null);
   // per-row result after commit (so a just-imported row flips without waiting for refresh)
@@ -471,12 +471,19 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
   // ✎ บันทึกการแก้ไข น้ำหนัก/คิว/จำนวน — wrap updateMomoImportTrackFields (pending-only · money-safe)
   async function saveEdit() {
     if (!editing) return;
-    const numVal = Number(editing.value);
-    if (!Number.isFinite(numVal) || numVal < 0) { setEditErr("ค่าไม่ถูกต้อง"); return; }
     const payload: Record<string, unknown> = { rowId: editing.id };
-    if (editing.field === "weightKg") payload.weightKg = numVal;
-    else if (editing.field === "cbm") payload.cbm = numVal;
-    else payload.quantity = Math.round(numVal);
+    if (editing.field === "pr") {
+      payload.memberCode = editing.value.trim().toUpperCase(); // "" = เคลียร์ PR
+    } else {
+      const numVal = Number(editing.value);
+      if (!Number.isFinite(numVal) || numVal < 0) { setEditErr("ค่าไม่ถูกต้อง"); return; }
+      if (editing.field === "weightKg") payload.weightKg = numVal;
+      else if (editing.field === "cbm") payload.cbm = numVal;
+      else if (editing.field === "qty") payload.quantity = Math.round(numVal);
+      else if (editing.field === "width") payload.width = numVal;
+      else if (editing.field === "length") payload.length = numVal;
+      else payload.height = numVal; // "height"
+    }
     setSavingEdit(true);
     setEditErr(null);
     try {
@@ -490,19 +497,34 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     }
   }
 
-  // inline-editable measurement cell — click value → input → ✓ save / ✕ cancel.
-  // Only PENDING rows are editable (not committed / not just-imported); committed = read-only.
-  function editableCell(t: IngestTrack, field: "weightKg" | "cbm" | "qty", display: ReactNode) {
+  // ค่าเริ่มต้นของช่องแก้ไขต่อ field (PR = guessedUserId · dims/measure = คอลัมน์)
+  function fieldInitValue(t: IngestTrack, field: NonNullable<typeof editing>["field"]): string {
+    switch (field) {
+      case "pr": return t.guessedUserId ?? "";
+      case "weightKg": return t.weightKg > 0 ? String(t.weightKg) : "";
+      case "cbm": return t.cbm > 0 ? String(t.cbm) : "";
+      case "qty": return t.qty != null ? String(t.qty) : "";
+      case "width": return t.width > 0 ? String(t.width) : "";
+      case "length": return t.length > 0 ? String(t.length) : "";
+      case "height": return t.height > 0 ? String(t.height) : "";
+    }
+  }
+
+  // inline-editable cell — click value → input → ✓ save / ✕ cancel. Only PENDING rows editable
+  // (not committed / not just-imported). PR = text (parse → member_code) · อื่น = number.
+  function editableCell(t: IngestTrack, field: NonNullable<typeof editing>["field"], display: ReactNode) {
     const canEdit = !t.committed && !rowResult[t.id]?.ok;
     const isEditing = editing?.id === t.id && editing.field === field;
+    const isPr = field === "pr";
     if (isEditing) {
       return (
         <span className="inline-flex flex-col items-end gap-0.5">
           <span className="inline-flex items-center gap-0.5">
-            <input autoFocus type="number" step="any" value={editing.value} disabled={savingEdit}
-              onChange={(e) => setEditing((ed) => (ed ? { ...ed, value: e.target.value } : ed))}
+            <input autoFocus type={isPr ? "text" : "number"} step={isPr ? undefined : "any"} value={editing.value} disabled={savingEdit}
+              placeholder={isPr ? "PR545" : undefined}
+              onChange={(e) => setEditing((ed) => (ed ? { ...ed, value: isPr ? e.target.value.toUpperCase() : e.target.value } : ed))}
               onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); else if (e.key === "Escape") { setEditing(null); setEditErr(null); } }}
-              className="w-16 rounded border border-primary-400 px-1 py-0.5 text-right text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary-300" />
+              className={`${isPr ? "w-20 text-left uppercase" : "w-16 text-right"} rounded border border-primary-400 px-1 py-0.5 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary-300`} />
             <button type="button" onClick={saveEdit} disabled={savingEdit} className="text-emerald-600 hover:text-emerald-700" title="บันทึก"><Check className="h-3.5 w-3.5" /></button>
             <button type="button" onClick={() => { setEditing(null); setEditErr(null); }} className="text-gray-400 hover:text-gray-600" title="ยกเลิก"><X className="h-3 w-3" /></button>
           </span>
@@ -513,7 +535,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     if (!canEdit) return display;
     return (
       <span className="group inline-flex cursor-pointer items-center gap-0.5 rounded px-0.5 hover:bg-amber-50"
-        onClick={() => { setEditErr(null); setEditing({ id: t.id, field, value: String(t[field] ?? "") }); }}
+        onClick={() => { setEditErr(null); setEditing({ id: t.id, field, value: fieldInitValue(t, field) }); }}
         title="คลิกเพื่อแก้ไข (ก่อนนำเข้า)">
         {display}<span className="text-[10px] text-gray-300 group-hover:text-amber-500">✎</span>
       </span>
@@ -561,7 +583,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
       label: "Code", sortKey: "pr", tdClass: "px-2 py-1.5 whitespace-nowrap",
       td: (t) => (
         <>
-          {t.guessedUserId ? <span className="font-mono font-semibold">{t.guessedUserId}</span> : <span className="text-[11px] text-amber-600">MOMO ไม่ส่ง PR</span>}
+          {editableCell(t, "pr", t.guessedUserId ? <span className="font-mono font-semibold">{t.guessedUserId}</span> : <span className="text-[11px] text-amber-600">MOMO ไม่ส่ง PR</span>)}
           {t.userCode && <span className="ml-1 text-[11px] text-muted" title="รหัสลูกค้าดิบจาก MOMO (user_code)">({t.userCode})</span>}
           {!t.committed && t.userIdValid === false && t.guessedUserId && (<div className="mt-0.5 inline-flex items-center gap-1 rounded bg-red-100 px-1 py-0.5 text-[11px] font-bold text-red-700"><AlertCircle className="h-2.5 w-2.5" /> ไม่มีในระบบ</div>)}
           {!t.committed && t.userIdValid === true && (<div className="mt-0.5 inline-flex items-center gap-1 rounded bg-emerald-100 px-1 py-0.5 text-[11px] font-bold text-emerald-700"><CheckCircle2 className="h-2.5 w-2.5" /> พบในระบบ</div>)}
@@ -570,9 +592,9 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
       ),
     },
     tracking: { label: "Tracking", sortKey: "tracking", tdClass: "px-2 py-1.5 font-mono font-semibold text-foreground whitespace-nowrap", td: (t) => t.tracking ?? "—" },
-    w: { label: "W.", sortKey: "w", thTitle: "กว้าง (ซม.) ต่อกล่อง", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => t.width > 0 ? t.width : DASH },
-    l: { label: "L.", sortKey: "l", thTitle: "ยาว (ซม.) ต่อกล่อง", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => t.length > 0 ? t.length : DASH },
-    h: { label: "H.", sortKey: "h", thTitle: "สูง (ซม.) ต่อกล่อง", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => t.height > 0 ? t.height : DASH },
+    w: { label: "W.", sortKey: "w", thTitle: "กว้าง (ซม.) ต่อกล่อง · แก้ไขได้", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => editableCell(t, "width", t.width > 0 ? t.width : DASH) },
+    l: { label: "L.", sortKey: "l", thTitle: "ยาว (ซม.) ต่อกล่อง · แก้ไขได้", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => editableCell(t, "length", t.length > 0 ? t.length : DASH) },
+    h: { label: "H.", sortKey: "h", thTitle: "สูง (ซม.) ต่อกล่อง · แก้ไขได้", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => editableCell(t, "height", t.height > 0 ? t.height : DASH) },
     totalParcel: { label: "Total Parcel", sortKey: "qty", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => editableCell(t, "qty", t.qty ?? DASH) },
     wt: { label: "Wt.", thTitle: "น้ำหนักต่อกล่อง = Total Wt. ÷ Total Parcel", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono text-muted", td: (t) => t.weightKg > 0 ? fx(perBox(t.weightKg, t.qty), 2) : DASH },
     vol: { label: "Vol.", thTitle: "คิวต่อกล่อง = W×L×H", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono text-muted", td: (t) => t.cbm > 0 ? fx(perBox(t.cbm, t.qty), 6) : DASH },
