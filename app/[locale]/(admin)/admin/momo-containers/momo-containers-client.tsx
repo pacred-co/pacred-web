@@ -10,6 +10,7 @@
  */
 
 import { useMemo, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { CheckCircle2, AlertCircle, RefreshCw, X, PackageCheck, Truck } from "lucide-react";
@@ -51,7 +52,22 @@ export type IngestTrack = {
   commitUserId: string | null;
   committedAt: string | null;
   lastSyncedAt: string | null;
+  // Slice 2 — packing-list match (aggregated by base tracking · null = ไม่มีใน packing)
+  hasPacking: boolean;
+  packingWeight: number | null;
+  packingCbm: number | null;
+  packingBoxes: number | null;
 };
+
+const WT_EPS = 0.01;
+const VOL_EPS = 0.000001;
+/** API weight/cbm (shipment aggregate) disagrees with the packing list. */
+function pkWtDiff(t: IngestTrack): boolean {
+  return t.hasPacking && t.packingWeight != null && t.weightKg > 0 && Math.abs(t.weightKg - t.packingWeight) > WT_EPS;
+}
+function pkVolDiff(t: IngestTrack): boolean {
+  return t.hasPacking && t.packingCbm != null && t.cbm > 0 && Math.abs(t.cbm - t.packingCbm) > VOL_EPS;
+}
 
 const SHIP_BY_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "— ยังไม่ระบุ (เซล/ลูกค้ากรอกภายหลัง) —" },
@@ -89,7 +105,7 @@ const thNoFeed = "px-2 py-2 text-center font-normal italic text-muted/50";
 const tdNoFeed = "px-2 py-1.5 text-center text-gray-300";
 const DASH = <span className="text-gray-300">—</span>;
 
-type Tab = "pending" | "committed" | "all";
+type Tab = "pending" | "committed" | "all" | "mismatch";
 
 export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[]; loadError: string | null }) {
   const router = useRouter();
@@ -107,6 +123,7 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
     all: tracks.length,
     pending: tracks.filter((t) => !t.committed).length,
     committed: tracks.filter((t) => t.committed).length,
+    mismatch: tracks.filter((t) => pkWtDiff(t) || pkVolDiff(t)).length,
   }), [tracks]);
   const invalidPr = useMemo(() => tracks.filter((t) => !t.committed && t.userIdValid === false).length, [tracks]);
 
@@ -114,6 +131,7 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
     let list = tracks;
     if (tab === "pending") list = list.filter((t) => !t.committed);
     else if (tab === "committed") list = list.filter((t) => t.committed);
+    else if (tab === "mismatch") list = list.filter((t) => pkWtDiff(t) || pkVolDiff(t));
     const term = q.trim().toLowerCase();
     if (term)
       list = list.filter((t) =>
@@ -161,7 +179,7 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
     <div className="space-y-3">
       {/* tabs + search */}
       <div className="flex flex-wrap items-center gap-2">
-        {([["pending", "🟡 ยังไม่เข้าระบบ"], ["committed", "✅ เข้าระบบแล้ว"], ["all", "ทั้งหมด"]] as [Tab, string][]).map(([k, label]) => (
+        {([["pending", "🟡 ยังไม่เข้าระบบ"], ["committed", "✅ เข้าระบบแล้ว"], ["mismatch", "❗ ไม่ตรง packing"], ["all", "ทั้งหมด"]] as [Tab, string][]).map(([k, label]) => (
           <button key={k} type="button" onClick={() => setTab(k)}
             className={`rounded-full px-3 py-1 text-xs font-medium ${tab === k ? "bg-primary-600 text-white" : "bg-surface-alt text-muted hover:bg-surface-alt/70"}`}>
             {label} <span className="opacity-70">{counts[k]}</span>
@@ -236,6 +254,8 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
               const rr = rowResult[t.id];
               const done = t.committed || rr?.ok;
               const fid = t.committedForwarderId ?? rr?.fid ?? null;
+              const wDiff = pkWtDiff(t);
+              const vDiff = pkVolDiff(t);
               return (
                 <tr key={t.id} className={`align-top ${done ? "bg-emerald-50/40" : t.userIdValid === false ? "bg-red-50/30" : ""}`}>
                   <td className="px-2 py-1.5 text-center text-muted tabular-nums">{i + 1}</td>
@@ -303,8 +323,21 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
                   {/* Q/R Total Wt. Total Vol. — ยอดรวมทั้งแทรค = ค่าที่ใช้คิดเงิน (เข้ม) */}
                   <td className="px-2 py-1.5 text-right tabular-nums">
                     {t.weightKg > 0 ? <span className="font-mono font-semibold">{fx(t.weightKg, 2)}</span> : <span className="rounded bg-amber-50 px-1 text-[11px] text-amber-700" title="MOMO ยังไม่ได้ชั่ง">⏳ รอชั่ง</span>}
+                    {/* Slice 2 (ภูม) — เทียบกับ packing list · อยู่ใต้ Total Wt. เพราะเทียบยอดรวมกับยอดรวม */}
+                    {t.hasPacking && t.packingWeight != null && (
+                      <div className={`text-[11px] font-normal ${wDiff ? "text-rose-600 font-semibold" : "text-emerald-600"}`} title="น้ำหนักจาก packing list">
+                        📦{n2(t.packingWeight)}{wDiff ? " ⚠" : " ✓"}
+                      </div>
+                    )}
                   </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums font-mono font-semibold">{t.cbm > 0 ? fx(t.cbm, 6) : DASH}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums font-mono font-semibold">
+                    {t.cbm > 0 ? fx(t.cbm, 6) : DASH}
+                    {t.hasPacking && t.packingCbm != null && (
+                      <div className={`text-[11px] font-normal ${vDiff ? "text-rose-600 font-semibold" : "text-emerald-600"}`} title="คิวจาก packing list">
+                        📦{n6(t.packingCbm)}{vDiff ? " ⚠" : " ✓"}
+                      </div>
+                    )}
+                  </td>
                   {/* S Rem (Remark Number) — MOMO ไม่ส่ง */}
                   <td className={tdNoFeed} title={NO_FEED}>—</td>
                   {/* T CG. */}
@@ -355,6 +388,8 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
         <p>
           <strong>Wt. / Vol.</strong> = ต่อกล่อง (คำนวณจาก Total ÷ Total Parcel · Vol. = W×L×H) ·{" "}
           <strong>Total Wt. / Total Vol.</strong> = รวมทั้งแทรคจาก MOMO = <strong>ค่าที่ใช้คิดเงิน</strong> ·{" "}
+          <strong className="text-emerald-700">📦 = ค่าจาก packing list</strong> เทียบกับ MOMO API (<span className="text-emerald-600">✓ ตรง</span> ·{" "}
+          <span className="text-rose-600">⚠ ไม่ตรง</span> — ดูรวมที่แท็บ &quot;❗ ไม่ตรง packing&quot;) ·{" "}
           <strong>Service Fee</strong> = extra_cost ของ MOMO (ค่าตีลังไม้/ค่าใช้จ่ายเพิ่ม) · <strong>ETD/ETA</strong> มาจากไฟล์ packing list ระดับตู้ (ว่างจนกว่าจะอัพไฟล์).
         </p>
         <p className="italic text-muted/70">
@@ -363,9 +398,11 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
         </p>
       </div>
 
-      {/* import preview + confirm modal */}
-      {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !committing && setModal(null)} role="button" tabIndex={-1}>
+      {/* import preview + confirm modal — portal to body so `fixed` is relative
+          to the viewport, not a transformed layout ancestor (else it opens
+          mid-page and you must scroll to it · ภูม 2026-07-14). */}
+      {modal && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => !committing && setModal(null)} role="button" tabIndex={-1}>
           <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-surface p-5 shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold flex items-center gap-2"><PackageCheck className="h-5 w-5 text-primary-600" /> ยืนยันนำเข้าระบบ</h3>
@@ -426,12 +463,13 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {/* image lightbox */}
-      {zoom && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4 cursor-zoom-out" onClick={() => setZoom(null)} role="button" tabIndex={-1}>
+      {/* image lightbox — portal to body too (same fixed-positioning reason) */}
+      {zoom && createPortal(
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-4 cursor-zoom-out" onClick={() => setZoom(null)} role="button" tabIndex={-1}>
           <div className="relative max-w-3xl w-full space-y-2" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between text-white">
               <span className="font-mono text-sm font-bold">{zoom.tracking} · ป้าย MOMO ({zoom.urls.length})</span>
@@ -445,7 +483,8 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
             </div>
             <p className="text-[11px] text-white/60 text-center">⚠️ ตรวจเลข PR บนป้ายให้ตรงก่อนนำเข้าระบบ</p>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

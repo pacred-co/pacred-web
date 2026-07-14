@@ -77,6 +77,11 @@ const CLONE_OMIT = new Set<string>([
   "id",
   "ftrackingchn", "fweight", "fvolume", "fwidth", "flength", "fheight", "famount",
   "ftotalprice", "frefrate", "frefprice",
+  // adminidupdate is set EXPLICITLY ('sys-split') in the INSERT column list below, so
+  // it must NOT also be cloned from the template — else the raw SQL insert lists it
+  // twice → Postgres "column adminidupdate specified more than once" (the live path
+  // uses object-spread so a dup key just overwrites — this is a raw-SQL-only hazard).
+  "adminidupdate",
   ...SHIPMENT_LEVEL_MONEY,
 ]);
 

@@ -139,13 +139,55 @@ function n(v: number | string | null | undefined): number {
 }
 
 /**
+ * The DURABLE candidate set for the split pass: EVERY base in momo_box_detail that
+ * has >1 box.
+ *
+ * 🔴 ROOT-FIX (2026-07-14 · owner "ทำไมยังเกิดอีก"): pass 5 used to derive its
+ * candidates ONLY from `scrapedBases` (the bases MOMO's boards return on the CURRENT
+ * scrape). But MOMO's web boards only return a parcel while it sits in its FIRST
+ * status — once it advances (→ ถึงไทย / billing), it drops off the boards, so its base
+ * falls OUT of `scrapedBases` and the split pass never looks at it again. Its per-box
+ * detail is already durably in momo_box_detail (pass 3 landed it earlier), but the
+ * aggregate tb_forwarder row was stranded UNSPLIT — and could then get BILLED as one
+ * row (e.g. 800206224068 · 13 boxes · 1 line). box_detail PERSISTS, so this is the
+ * durable source. The split function re-guards every base (already-split / billed / Σ
+ * drift), so returning a base that shouldn't split is harmless — the candidate set is
+ * just made complete. Cost: one paged scan of momo_box_detail per cron (tiny).
+ */
+export async function findMultiBoxBases(admin: SupabaseClient): Promise<string[]> {
+  const counts = new Map<string, number>();
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await admin
+      .from("momo_box_detail")
+      .select("base_tracking")
+      .range(from, from + PAGE - 1);
+    if (error) {
+      console.error("[findMultiBoxBases] momo_box_detail scan failed", {
+        code: error.code, message: error.message,
+      });
+      break;
+    }
+    const rows = (data ?? []) as { base_tracking: string | null }[];
+    for (const r of rows) {
+      const b = (r.base_tracking ?? "").trim();
+      if (b) counts.set(b, (counts.get(b) ?? 0) + 1);
+    }
+    if (rows.length < PAGE) break;
+  }
+  return [...counts.entries()].filter(([, n]) => n > 1).map(([b]) => b);
+}
+
+/**
  * Split the aggregate tb_forwarder rows for the given base trackings into N sibling
  * box rows (one per momo_box_detail box), money-neutral + idempotent.
  *
  * @param admin        service-role client (bypasses RLS · server-only)
  * @param baseTrackings the base trackings to consider (dedup'd internally). When
  *                     omitted/empty, nothing runs — the caller (Live pass) derives
- *                     these from the multi-box bases seen on the current scrape.
+ *                     these from the multi-box bases seen on the current scrape UNION
+ *                     the durable multi-box bases (findMultiBoxBases) so a stranded
+ *                     aggregate that advanced off MOMO's boards still gets split.
  */
 export async function splitAggregatedMomoBoxRows(
   admin: SupabaseClient,

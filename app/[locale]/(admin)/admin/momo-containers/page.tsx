@@ -14,8 +14,9 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { momoTypeToProductType } from "@/lib/admin/momo-live-discovery-plan";
-import { deriveMomoMemberCode } from "@/lib/admin/momo-raw-helpers";
+import { deriveMomoMemberCode, baseTrackingOf } from "@/lib/admin/momo-raw-helpers";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
+import type { PackingUploadSnapshot } from "@/actions/admin/momo-packing-history";
 import { MomoIngestClient, type IngestTrack } from "./momo-containers-client";
 
 export const dynamic = "force-dynamic";
@@ -132,30 +133,64 @@ export default async function MomoContainersPage() {
       );
   }
 
-  // ETD/ETA (cols Y/Z ของ packing list) — MOMO API ไม่ส่งมาต่อแทรค · เก็บอยู่ระดับ "ตู้"
+  // ตู้ทั้งหมดที่โผล่ในลิสต์ — ใช้ร่วมกัน 2 อย่างข้างล่าง (packing match + ETD/ETA)
+  const containers = [...new Set(intermediate.map((r) => r.container).filter((c): c is string => !!c))];
+
+  // Packing-list match (Slice 2 · ภูม) — เทียบ API vs Packing ต่อแทรค. Load the latest
+  // packing upload for each container present, aggregate the snapshot rows by base
+  // tracking → a map. weight_kg above is the SHIPMENT aggregate (same basis the
+  // packing baseTracking uses), so the compare in the client is apples-to-apples.
+  const packingByBase = new Map<string, { weight: number | null; cbm: number | null; boxes: number | null }>();
+  if (containers.length > 0) {
+    const { data: pkUploads, error: pkErr } = await admin
+      .from("momo_packing_upload")
+      .select("container_no, parsed_snapshot, uploaded_at")
+      .in("container_no", containers)
+      .order("uploaded_at", { ascending: false })
+      .limit(500);
+    if (pkErr) console.error("[momo-containers packing load] failed", { code: pkErr.code, message: pkErr.message });
+    const seenContainer = new Set<string>();
+    for (const up of (pkUploads ?? []) as Array<{ container_no: string | null; parsed_snapshot: unknown }>) {
+      const cab = (up.container_no ?? "").trim();
+      if (cab && seenContainer.has(cab)) continue; // ordered desc → first per container = latest
+      if (cab) seenContainer.add(cab);
+      const snap = (up.parsed_snapshot as PackingUploadSnapshot | null) ?? null;
+      for (const row of snap?.rows ?? []) {
+        const b = baseTrackingOf(row.baseTracking ?? "");
+        if (!b || packingByBase.has(b)) continue; // latest upload wins
+        packingByBase.set(b, { weight: row.weight, cbm: row.cbm, boxes: row.boxes });
+      }
+    }
+  }
+
+  // ETD/ETA (cols Y/Z ของ packing list · ปอน) — MOMO API ไม่ส่งมาต่อแทรค · เก็บอยู่ระดับ "ตู้"
   // จากไฟล์ packing list ของแต้ม (taem_container_etd_eta · mig 0195 · แต้ม-primary).
   // ว่างจนกว่าจะอัพ packing list ของตู้นั้น → fail-soft (ตารางไม่พังถ้า query มีปัญหา).
-  const cabinetNos = Array.from(
-    new Set(intermediate.map((r) => r.container).filter((v): v is string => !!v)),
-  );
   const etaByCabinet = new Map<string, { etd: string | null; eta: string | null }>();
-  if (cabinetNos.length > 0) {
+  if (containers.length > 0) {
     const { data: etaRows, error: etaErr } = await admin
       .from("taem_container_etd_eta")
       .select("container_no, etd, eta")
-      .in("container_no", cabinetNos);
+      .in("container_no", containers);
     if (etaErr) console.error("[momo-containers etd/eta] failed", { code: etaErr.code, message: etaErr.message });
     else
       for (const row of (etaRows ?? []) as Array<{ container_no: string; etd: string | null; eta: string | null }>)
         etaByCabinet.set(row.container_no, { etd: row.etd, eta: row.eta });
   }
 
-  const tracks: IngestTrack[] = intermediate.map((r) => ({
-    ...r,
-    userIdValid: r.guessedUserId == null ? null : knownUserIds.has(r.guessedUserId.toUpperCase()),
-    etd: (r.container && etaByCabinet.get(r.container)?.etd) || null,
-    eta: (r.container && etaByCabinet.get(r.container)?.eta) || null,
-  }));
+  const tracks: IngestTrack[] = intermediate.map((r) => {
+    const pk = r.tracking ? packingByBase.get(baseTrackingOf(r.tracking)) : undefined;
+    return {
+      ...r,
+      userIdValid: r.guessedUserId == null ? null : knownUserIds.has(r.guessedUserId.toUpperCase()),
+      hasPacking: !!pk,
+      packingWeight: pk?.weight ?? null,
+      packingCbm: pk?.cbm ?? null,
+      packingBoxes: pk?.boxes ?? null,
+      etd: (r.container && etaByCabinet.get(r.container)?.etd) || null,
+      eta: (r.container && etaByCabinet.get(r.container)?.eta) || null,
+    };
+  });
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-6 space-y-5">
