@@ -17,6 +17,7 @@ import { CheckCircle2, AlertCircle, RefreshCw, X, PackageCheck, Truck, Check } f
 import { commitMomoRowToForwarder, commitMomoRowsBatch } from "@/actions/admin/momo-commit";
 import { updateMomoImportTrackFields } from "@/actions/admin/momo-ingest-edit";
 import { propagateMomoLiveStatusNow } from "@/actions/admin/momo-web-live";
+import { addMissingMomoParcelsBulk } from "@/actions/admin/momo-add-missing";
 import { confirm } from "@/components/ui/confirm";
 import { useColumnOrder } from "@/lib/hooks/use-column-order";
 
@@ -61,6 +62,17 @@ export type IngestTrack = {
   hasLive: boolean;
   liveWeight: number | null;
   liveCbm: number | null;
+};
+
+// เฟส C — a parcel in the packing list that MOMO API never sent (พัสดุขาด).
+export type MissingParcel = {
+  tracking: string;
+  cabinet: string;
+  code: string | null; // PR from packing (may be non-PR → ต้องกรอกเอง)
+  weight: number | null;
+  cbm: number | null;
+  boxes: number | null;
+  inLive: boolean;
 };
 
 const WT_EPS = 0.01;
@@ -139,7 +151,7 @@ const EXPORT_COLS: { key: string; label: string; val: (t: IngestTrack) => string
 
 type Tab = "pending" | "committed" | "all" | "mismatch";
 
-export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[]; loadError: string | null }) {
+export function MomoIngestClient({ tracks, missing, loadError }: { tracks: IngestTrack[]; missing: MissingParcel[]; loadError: string | null }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [tab, setTab] = useState<Tab>("pending");
@@ -169,6 +181,9 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
   // on-demand MOMO Live pull (เฟส B2)
   const [liveBusy, setLiveBusy] = useState(false);
   const [liveMsg, setLiveMsg] = useState<string | null>(null);
+  // missing-parcel recovery (เฟส C · พัสดุขาด → ดึงเข้าระบบ)
+  const [missingBusy, setMissingBusy] = useState(false);
+  const [missingMsg, setMissingMsg] = useState<string | null>(null);
 
   const counts = useMemo(() => ({
     all: tracks.length,
@@ -285,6 +300,36 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
   const isValidPr = (pr: string | null) => /^PR\d+$/i.test((pr ?? "").trim());
   const bulkReady = selectedTracks.filter((t) => isValidPr(t.guessedUserId));
   const bulkSkip = selectedTracks.filter((t) => !isValidPr(t.guessedUserId));
+  const missingReady = missing.filter((m) => isValidPr(m.code));
+  const missingNoPr = missing.filter((m) => !isValidPr(m.code));
+
+  async function onCreateMissing() {
+    if (missingReady.length === 0) return;
+    if (!(await confirm(`ดึงพัสดุที่ขาด ${missingReady.length} รายการ เข้าระบบ?\n\nสร้างรายการ tb_forwarder ให้พัสดุที่มีใน packing list แต่ MOMO API ไม่ส่ง (ใช้ PR/น้ำหนัก/คิว จาก packing · ข้ามรายการที่มีในระบบแล้วอัตโนมัติ · มี guard กันซ้ำ + เช็ค PR)`))) return;
+    setMissingBusy(true);
+    setMissingMsg(null);
+    try {
+      const rows = missingReady.map((m) => ({
+        tracking: m.tracking,
+        cabinet: m.cabinet,
+        memberCode: (m.code ?? "").toUpperCase(),
+        weightKg: m.weight ?? 0,
+        cbm: m.cbm ?? 0,
+        boxCount: m.boxes && m.boxes > 0 ? m.boxes : undefined,
+      }));
+      const res = await addMissingMomoParcelsBulk(rows);
+      if (res.ok && res.data) {
+        setMissingMsg(`✅ ดึงเข้าระบบ ${res.data.added} · ข้าม (มีแล้ว) ${res.data.skipped} · ล้มเหลว ${res.data.failed}`);
+        startTransition(() => router.refresh());
+      } else {
+        setMissingMsg(res.ok ? "เสร็จ" : `⚠️ ${res.error}`);
+      }
+    } catch (err) {
+      setMissingMsg(err instanceof Error ? `⚠️ ${err.message}` : "⚠️ ดึงไม่สำเร็จ");
+    } finally {
+      setMissingBusy(false);
+    }
+  }
 
   async function confirmBulk() {
     if (bulkReady.length === 0) return;
@@ -607,6 +652,47 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
         เทียบ 3 ทาง: ค่าบรรทัดแรก = <strong>API</strong> · <strong className="text-emerald-700">📦 = packing list</strong> · <strong className="text-sky-700">🟢 = MOMO Live (ตู้ปิด)</strong> (<span className="text-emerald-600">✓ ตรง</span> · <span className="text-rose-600">⚠ ไม่ตรง</span>) ·
         กดเลขตู้เพื่อดูรายละเอียดทั้งตู้.
       </p>
+
+      {/* เฟส C — missing-parcel recovery panel (พัสดุที่ MOMO API ไม่ส่ง แต่มีใน packing) */}
+      {missing.length > 0 && (
+        <section className="space-y-2 rounded-2xl border-2 border-red-200 bg-red-50/40 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-red-800">🔴 พัสดุที่ MOMO API ไม่ส่ง (มีใน packing list) — {missing.length} รายการ</h3>
+            {missingReady.length > 0 && (
+              <button type="button" onClick={onCreateMissing} disabled={missingBusy}
+                className="inline-flex items-center gap-1 rounded-lg border border-red-600 bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50">
+                <PackageCheck className="h-3.5 w-3.5" /> {missingBusy ? "กำลังดึง…" : `ดึงเข้าระบบทั้งหมด (${missingReady.length})`}
+              </button>
+            )}
+          </div>
+          {missingMsg && <div className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] text-red-800">{missingMsg}</div>}
+          {missingNoPr.length > 0 && (
+            <div className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">⚠️ {missingNoPr.length} รายการไม่มี PR (packing ไม่ระบุรหัสลูกค้า) — ต้องตามเก็บ PR ที่หน้าเว็บ MOMO ก่อน · ดึงอัตโนมัติไม่ได้</div>
+          )}
+          <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-red-200 bg-white">
+            <table className="w-full text-[11px] border-collapse [&_th]:border [&_th]:border-red-100 [&_td]:border [&_td]:border-red-100">
+              <thead className="bg-red-100/50 text-red-700"><tr>
+                <th className="px-2 py-1 text-left">แทรคกิ้ง</th><th className="px-2 py-1 text-left">ตู้</th><th className="px-2 py-1 text-left">PR</th>
+                <th className="px-2 py-1 text-right">นน.</th><th className="px-2 py-1 text-right">คิว</th><th className="px-2 py-1 text-right">กล่อง</th><th className="px-2 py-1 text-center">Live</th>
+              </tr></thead>
+              <tbody>
+                {missing.map((m) => (
+                  <tr key={m.tracking} className={isValidPr(m.code) ? "" : "bg-amber-50/40"}>
+                    <td className="px-2 py-1 font-mono">{m.tracking}</td>
+                    <td className="px-2 py-1 font-mono">{m.cabinet}</td>
+                    <td className="px-2 py-1 font-mono">{isValidPr(m.code) ? m.code : <span className="text-amber-600">{m.code || "ไม่มี PR"}</span>}</td>
+                    <td className="px-2 py-1 text-right font-mono">{n2(m.weight ?? 0)}</td>
+                    <td className="px-2 py-1 text-right font-mono">{n6(m.cbm ?? 0)}</td>
+                    <td className="px-2 py-1 text-right">{m.boxes ?? "—"}</td>
+                    <td className="px-2 py-1 text-center">{m.inLive ? "🟢" : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] text-red-700/80">พัสดุพวกนี้ MOMO API ไม่ส่งมา (เพราะสถานะขยับเกิน status แรก) แต่ packing list มี → กด &quot;ดึงเข้าระบบ&quot; จะสร้าง billable row ให้ (ปลอดภัย · กันซ้ำ + คิดราคาอัตโนมัติ). = ตัวเดียวกับหน้า drift.</p>
+        </section>
+      )}
 
       {/* bulk import preview + confirm modal (portal to body · ภูม 2026-07-14) */}
       {bulkOpen && createPortal(

@@ -17,7 +17,7 @@ import { momoTypeToProductType } from "@/lib/admin/momo-live-discovery-plan";
 import { deriveMomoMemberCode, baseTrackingOf, aggregateTrackDetailMetrics } from "@/lib/admin/momo-raw-helpers";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import type { PackingUploadSnapshot } from "@/actions/admin/momo-packing-history";
-import { MomoIngestClient, type IngestTrack } from "./momo-containers-client";
+import { MomoIngestClient, type IngestTrack, type MissingParcel } from "./momo-containers-client";
 
 export const dynamic = "force-dynamic";
 
@@ -131,7 +131,7 @@ export default async function MomoContainersPage() {
   // tracking → a map. weight_kg above is the SHIPMENT aggregate (same basis the
   // packing baseTracking uses), so the compare in the client is apples-to-apples.
   const containers = [...new Set(intermediate.map((r) => r.container).filter((c): c is string => !!c))];
-  const packingByBase = new Map<string, { weight: number | null; cbm: number | null; boxes: number | null }>();
+  const packingByBase = new Map<string, { weight: number | null; cbm: number | null; boxes: number | null; code: string | null; container: string }>();
   if (containers.length > 0) {
     const { data: pkUploads, error: pkErr } = await admin
       .from("momo_packing_upload")
@@ -149,7 +149,7 @@ export default async function MomoContainersPage() {
       for (const row of snap?.rows ?? []) {
         const b = baseTrackingOf(row.baseTracking ?? "");
         if (!b || packingByBase.has(b)) continue; // latest upload wins
-        packingByBase.set(b, { weight: row.weight, cbm: row.cbm, boxes: row.boxes });
+        packingByBase.set(b, { weight: row.weight, cbm: row.cbm, boxes: row.boxes, code: row.code, container: cab });
       }
     }
   }
@@ -195,6 +195,27 @@ export default async function MomoContainersPage() {
     };
   });
 
+  // เฟส C — พัสดุขาด: bases in the packing list but NOT in the MOMO API feed
+  // (MOMO API drops advanced parcels · the ฿294k recovery). Packing carries the PR
+  // (member code) + cabinet + weight/cbm → enough to CREATE via the proven, guarded
+  // addMissingMomoParcel. Live-only-missing (no PR) is out of scope here — those need
+  // a manual PR chase on the MOMO web (the /drift page covers them).
+  const apiBases = new Set(intermediate.map((r) => (r.tracking ? baseTrackingOf(r.tracking) : "")).filter(Boolean));
+  const missing: MissingParcel[] = [];
+  for (const [base, pk] of packingByBase) {
+    if (apiBases.has(base) || !pk.container) continue;
+    missing.push({
+      tracking: base,
+      cabinet: pk.container,
+      code: pk.code,
+      weight: pk.weight,
+      cbm: pk.cbm,
+      boxes: pk.boxes,
+      inLive: liveByBase.has(base),
+    });
+  }
+  missing.sort((a, b) => a.cabinet.localeCompare(b.cabinet));
+
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-6 space-y-5">
       <header className="space-y-1">
@@ -215,7 +236,7 @@ export default async function MomoContainersPage() {
           ))}
         </div>
       </header>
-      <MomoIngestClient tracks={tracks} loadError={error?.message ?? null} />
+      <MomoIngestClient tracks={tracks} missing={missing} loadError={error?.message ?? null} />
     </div>
   );
 }
