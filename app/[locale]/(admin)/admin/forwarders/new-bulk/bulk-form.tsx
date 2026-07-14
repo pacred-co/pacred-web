@@ -34,53 +34,17 @@ import {
   type AddressOption,
 } from "@/actions/admin/forwarders-new";
 import { resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
+import { ALL_WORKBOOK_CARRIER_OPTIONS } from "@/lib/cart/ship-by-eligibility";
 
-// Mirror single form — copied verbatim from legacy optionHShipByCart().
-const SHIP_BY_OPTIONS: { value: string; label: string }[] = [
-  { value: "PCS",  label: "🏬 รับเองโกดัง Pacred (สมุทรสาคร)" },
-  { value: "2",    label: "Flash Express" },
-  { value: "3",    label: "J.K. เอ็กซ์เพรส" },
-  { value: "21",   label: "นิ่มซี่เส็งขนส่ง 1988" },
-  { value: "5",    label: "Nim Express" },
-  { value: "6",    label: "S & J ขนส่งด่วนสุพรรณบุรี" },
-  { value: "7",    label: "SB สมใจขนส่ง" },
-  { value: "9",    label: "เคพีเอ็น (2017)" },
-  { value: "10",   label: "เฟิร์ส เอ็กเพรส ขนส่ง" },
-  { value: "11",   label: "ไปรษณีย์ไทย" },
-  { value: "12",   label: "จันทร์สว่างขนส่ง" },
-  { value: "13",   label: "ธนามัย ขนส่งด่วน" },
-  { value: "14",   label: "บุญอนันต์ขนส่ง" },
-  { value: "15",   label: "พี.เจ. ด่วนอีสาน ขนส่ง" },
-  { value: "16",   label: "มะม่วงขนส่ง" },
-  { value: "17",   label: "วันชนะ แอนด์ วันณิสา ขนส่ง" },
-  { value: "18",   label: "สมพงษ์อุบลรัตน์ ขนส่ง" },
-  { value: "19",   label: "อาร์.ซี.อาร์ เพลส (r.c.r. place)" },
-  { value: "20",   label: "ตองสอง ขนส่ง" },
-  { value: "22",   label: "ธนาไพศาล ขนส่ง" },
-  { value: "23",   label: "PL ขนส่งด่วน" },
-  { value: "24",   label: "J&T Express" },
-  { value: "25",   label: "มังกรทองขนส่ง 2019" },
-  { value: "26",   label: "PM ชลบุรี ขนส่งด่วน" },
-  { value: "27",   label: "ทรัพย์ปรีชา" },
-  { value: "28",   label: "พัฒนาเอ็กซ์เพลส" },
-  { value: "29",   label: "หาดใหญ่ทัวร์" },
-  { value: "30",   label: "หาดใหญ่ โอ.พี. 2012" },
-  { value: "31",   label: "อาร์.ซี.เอ็กซเพรส" },
-  { value: "32",   label: "สี่สหาย" },
-  { value: "33",   label: "แพปลา​สมบัติ​วัฒนา" },
-  { value: "34",   label: "ทวีทรัพย์ระยอง" },
-  { value: "35",   label: "ศิริสมบูรณ์" },
-  { value: "36",   label: "นิวสอง อัศวินขนส่ง" },
-  { value: "37",   label: "โชคสถาพรขนส่ง" },
-  { value: "38",   label: "ทรัพย์สมบูรณ์ถาวร" },
-  { value: "39",   label: "MNB Transport" },
-  { value: "40",   label: "หจก.โชคพูลทรัพย์ขนส่ง 2014" },
-  { value: "41",   label: "สิรินครขนส่ง" },
-  { value: "42",   label: "พาณิชย์การขนส่ง KSD" },
-  { value: "43",   label: "นวรรณขนส่ง" },
-  { value: "44",   label: "กุญชรมณี ขนส่ง" },
-  { value: "45",   label: "เอ็มพอร์ท โลจิสติกส์" },
-  { value: "46",   label: "ซี.เอ็น.ทรานสปอร์ต" },
+// 🔴 CLOSED CARRIER LIST (owner 2026-07-14) — "ไม่ให้เลือกหรือให้ใส่ นอกเหนือจาก data ตรงนี้".
+// This is the BULK form: ONE carrier is applied to MANY customers, each with their OWN main
+// address → there is no single delivery province to filter by here. So the picker offers the
+// whole CLOSED workbook (28 couriers — never the retired legacy ones), and the per-province
+// coverage half of the rule is enforced ROW BY ROW by the server
+// (adminCreateForwarder → checkCarrierForProvince): a row whose province the carrier does not
+// serve is refused with a clear message instead of being silently created.
+const OWN_FLEET_OPTIONS: { value: string; label: string }[] = [
+  { value: "PCS", label: "🏬 รับเองโกดัง Pacred (สมุทรสาคร)" },
 ];
 
 const TRANSPORT_OPTIONS = [
@@ -372,16 +336,30 @@ export function AdminForwarderNewBulkForm({
                 className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50"
               >
                 <option value="">— กรุณาเลือก —</option>
-                {freeShipping && <option value="PCSF">📦 PCSF · เหมาๆ 100 บาท</option>}
-                {SHIP_BY_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
+                <optgroup label="Pacred (ส่งเอง)">
+                  {freeShipping && <option value="PCSF">📦 PCSF · เหมาๆ 100 บาท</option>}
+                  {OWN_FLEET_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </optgroup>
+                <optgroup label={`ขนส่งเอกชน (${ALL_WORKBOOK_CARRIER_OPTIONS.length} เจ้า · ตามไฟล์พื้นที่ขนส่ง)`}>
+                  {ALL_WORKBOOK_CARRIER_OPTIONS.map((o) => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
+                </optgroup>
               </select>
               {shipBy === "PCS" && (
                 <p className="mt-1 text-[11px] text-emerald-700">ลูกค้ามารับเองที่โกดัง Pacred (สมุทรสาคร) · ไม่ต้องเลือกที่อยู่</p>
               )}
               {shipBy && shipBy !== "PCS" && (
-                <p className="mt-1 text-[11px] text-muted">ที่อยู่จัดส่งใช้ <strong>ที่อยู่หลัก</strong>ของลูกค้าแต่ละราย · ถ้าต้องการเปลี่ยน แก้ที่ /edit หลังสร้าง</p>
+                <>
+                  <p className="mt-1 text-[11px] text-muted">ที่อยู่จัดส่งใช้ <strong>ที่อยู่หลัก</strong>ของลูกค้าแต่ละราย · ถ้าต้องการเปลี่ยน แก้ที่ /edit หลังสร้าง</p>
+                  {shipBy !== "PCSF" && shipBy !== "PCSE" && (
+                    <p className="mt-1 text-[11px] text-amber-700">
+                      ⚠ ขนส่งเอกชนวิ่งไม่ครบทุกจังหวัด — แถวที่จังหวัดปลายทางไม่มีขนส่งเจ้านี้ ระบบจะไม่สร้างให้ (แจ้งเตือนรายแถว)
+                    </p>
+                  )}
+                </>
               )}
             </div>
             <div>
@@ -485,7 +463,7 @@ export function AdminForwarderNewBulkForm({
         <div className="mx-auto max-w-5xl px-4 py-3 flex items-center gap-3 flex-wrap">
           <div className="flex flex-col text-xs leading-tight">
             <span className="text-muted">
-              ขนส่ง: <strong className="text-foreground">{shipBy ? (SHIP_BY_OPTIONS.find((s) => s.value === shipBy)?.label.slice(0, 24) ?? shipBy) : "—"}</strong>
+              ขนส่ง: <strong className="text-foreground">{shipBy ? ((ALL_WORKBOOK_CARRIER_OPTIONS.find((c) => c.id === shipBy)?.name ?? OWN_FLEET_OPTIONS.find((o) => o.value === shipBy)?.label ?? shipBy).slice(0, 24)) : "—"}</strong>
               {shipBy && <> · {TRANSPORT_OPTIONS.find((t) => t.value === transportType)?.label}</>}
             </span>
             <span className="text-base font-bold mt-0.5">

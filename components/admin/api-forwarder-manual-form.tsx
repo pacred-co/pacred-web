@@ -38,19 +38,14 @@ import {
   type ManualCustomerOption,
 } from "@/actions/admin/api-forwarder-manual";
 import { fetchAddressesByUserid, type AddressOption } from "@/actions/admin/forwarders-new";
+import { getPrivateCarrierOptionsForProvince } from "@/lib/cart/ship-by-eligibility";
 
-// Same ship-by list as Wave 12-C v2 (legacy optionHShipBy/optionHShipByCart).
-// "PCS" + numerical IDs from tb_ship_by. Mirrors components/admin pattern.
-const SHIP_BY_OPTIONS: { value: string; label: string }[] = [
-  { value: "PCS",  label: "🏬 รับเองโกดัง Pacred (สมุทรสาคร)"        },
-  { value: "2",    label: "Flash Express"                  },
-  { value: "3",    label: "J.K. เอ็กซ์เพรส"                 },
-  { value: "21",   label: "นิ่มซี่เส็งขนส่ง 1988"             },
-  { value: "5",    label: "Nim Express"                    },
-  { value: "11",   label: "ไปรษณีย์ไทย"                     },
-  { value: "24",   label: "J&T Express"                     },
-  { value: "1",    label: "DHL Express"                    },
-  { value: "4",    label: "Kerry Express"                   },
+// 🔴 CLOSED CARRIER LIST (owner 2026-07-14) — the ขนส่งเอกชน options are the owner's workbook,
+// FILTERED BY THE SELECTED ADDRESS'S PROVINCE. The old hardcoded list offered DHL (1) · Kerry (4) ·
+// Nim Express (5) · ไปรษณีย์ไทย (11) — none of which are in the workbook → all removed.
+// Own-fleet "รับเองโกดัง Pacred" is not a private courier and stays.
+const OWN_FLEET_OPTIONS: { value: string; label: string }[] = [
+  { value: "PCS", label: "🏬 รับเองโกดัง Pacred (สมุทรสาคร)" },
 ];
 
 const TRANSPORT_OPTIONS = [
@@ -139,8 +134,14 @@ export function ApiForwarderManualForm({
   const [containerCode, setContainerCode] = useState("");
 
   // ── shipping ─────────────────────────────────────────────
-  const [shipBy, setShipBy]                       = useState<string>("PCS");
+  // 2026-07-14 (owner · CLOSED list): default EMPTY, not "PCS" — the address picker (which
+  // feeds the province-filtered ขนส่งเอกชน list) is hidden while shipBy==="PCS", so defaulting
+  // to PCS would make a private courier unreachable.
+  const [shipBy, setShipBy]                       = useState<string>("");
   const [addresses, setAddresses]                 = useState<AddressOption[]>([]);
+  // ขนส่งเอกชน ที่วิ่งจริงในจังหวัดปลายทาง (owner's workbook · CLOSED · empty until an address is picked).
+  const selectedAddress = addresses.find((a) => a.addressid === addressID) ?? null;
+  const privateCarriers = getPrivateCarrierOptionsForProvince(selectedAddress?.addressprovince ?? "");
   const [addressesLoading, setAddressesLoading]   = useState(false);
   const [addressID, setAddressID]                 = useState<number | null>(null);
 
@@ -211,7 +212,7 @@ export function ApiForwarderManualForm({
     setProductCostCHN(""); setProductCostCHNType("");
     setDate1(todayDdMmYyyy()); setManifestDate("");
     setTransportCode("EK"); setContainerCode("");
-    setShipBy("PCS"); setAddresses([]); setAddressID(null);
+    setShipBy(""); setAddresses([]); setAddressID(null);
     setError(null);
     setFieldErrors(new Set());
   }
@@ -684,23 +685,6 @@ export function ApiForwarderManualForm({
           📬 บริษัทขนส่งปลายทาง · ที่อยู่
         </h2>
 
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">
-            บริษัทขนส่งปลายทาง (fShipBy) <span className="text-red-500">*</span>
-          </label>
-          <select
-            value={shipBy}
-            onChange={(e) => { setShipBy(e.target.value); setFieldErrors((p) => { const n = new Set(p); n.delete("shipBy"); return n; }); }}
-            className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ${errCls("shipBy")}`}
-            disabled={pending}
-            required
-          >
-            {SHIP_BY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </div>
-
         {shipBy === "PCS" ? (
           <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
             <p className="font-medium">📍 ที่อยู่: รับเองที่โกดัง Pacred (สมุทรสาคร)</p>
@@ -747,6 +731,40 @@ export function ApiForwarderManualForm({
             )}
           </div>
         )}
+        <div className="mt-4">
+          <label className="block text-xs font-medium text-muted mb-1">
+            บริษัทขนส่งปลายทาง (fShipBy) <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={shipBy}
+            onChange={(e) => { setShipBy(e.target.value); setFieldErrors((p) => { const n = new Set(p); n.delete("shipBy"); return n; }); }}
+            className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ${errCls("shipBy")}`}
+            disabled={pending}
+            required
+          >
+            <option value="">— กรุณาเลือกบริษัทขนส่ง —</option>
+            <optgroup label="Pacred (ส่งเอง)">
+              {OWN_FLEET_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </optgroup>
+            {privateCarriers.length > 0 && (
+              <optgroup label={`ขนส่งเอกชน ที่วิ่ง จ.${selectedAddress?.addressprovince ?? ""} (${privateCarriers.length})`}>
+                {privateCarriers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}{c.note ? ` — ${c.note}` : ""}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+          {privateCarriers.length === 0 && shipBy !== "PCS" && (
+            <p className="mt-1 text-[11px] text-amber-700">
+              เลือกที่อยู่จัดส่งก่อน ระบบจะขึ้นรายชื่อ “ขนส่งเอกชน” ที่วิ่งในจังหวัดนั้นให้เลือก
+              (เลือกได้เฉพาะที่มีในไฟล์พื้นที่ขนส่งของบริษัท · พิมพ์ชื่อขนส่งเองไม่ได้)
+            </p>
+          )}
+        </div>
       </section>
 
       {/* ── Sticky actions ─────────────────────────────────── */}

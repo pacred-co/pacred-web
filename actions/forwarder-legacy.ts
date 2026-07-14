@@ -9,6 +9,7 @@ import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { derivePayMethodForDelivery, isPayAtOriginCarrier } from "@/lib/forwarder/pay-method";
 import { resolveMaomaoCarrier } from "@/lib/forwarder/resolve-maomao";
 import { MAO_CARRIER_CODE } from "@/lib/forwarder/mao-fee";
+import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
 import { ADDRESSES } from "@/components/seo/site";
 import { modeFromPref, prefFromMode, modeRequiresBillingSnapshot } from "@/lib/tax/tax-doc-mode";
 
@@ -236,6 +237,15 @@ export async function createLegacyForwarder(
     }
     fShipBy = mao.carrier;
   }
+  // 🔴 CLOSED LIST (owner 2026-07-14) — the customer may only submit a courier that is in
+  // the owner's workbook AND runs in the resolved delivery province. The <select> is
+  // already filtered (getShipByOptionsForAddress) — this refuses a raw action post.
+  // Own-fleet (PCS/PCSF/PCSE) + an empty carrier are exempt.
+  {
+    const coverage = checkCarrierForProvince(fShipBy, addressProvince);
+    if (!coverage.ok) return { ok: false, error: coverage.error };
+  }
+
   // forwarder.php L49-53 — paymethod from the FINAL carrier (setPayMethodShip),
   // zone-aware: an external courier delivered upcountry → COD (ปลายทาง). Own-fleet
   // (PCS/PCSF/PRF/PCSE) + self-pickup (addressID='PCS') stay carrier-derived.
@@ -385,13 +395,34 @@ export async function updateLegacyForwarderShipBy(
   const userID = session.profile.member_code ?? "";
   if (!userID) return { ok: false, error: "no_member_code" };
 
+  const admin = createAdminClient();
+
+  // 🔴 CLOSED LIST (owner 2026-07-14) — read the row's delivery province (ownership-scoped)
+  // and refuse a courier that is not in the owner's workbook, or that does not run there.
+  // Own-fleet (PCS/PCSF/PCSE) exempt; re-saving the SAME stored value is a carry, not a
+  // choice, so a legacy free-text carrier on an old row never becomes unsavable.
+  const { data: fwdRow, error: fwdRowErr } = await admin
+    .from("tb_forwarder")
+    .select("fshipby, faddressprovince")
+    .eq("id", ID)
+    .eq("userid", userID)
+    .maybeSingle<{ fshipby: string | null; faddressprovince: string | null }>();
+  if (fwdRowErr) {
+    console.error(`[updateLegacyForwarderShipBy read] failed`, { code: fwdRowErr.code, message: fwdRowErr.message, ID });
+    return { ok: false, error: fwdRowErr.message };
+  }
+  if (!fwdRow) return { ok: false, error: "not_found" };
+
+  const coverage = checkCarrierForProvince(fShipBy, fwdRow.faddressprovince, {
+    previous: fwdRow.fshipby,
+  });
+  if (!coverage.ok) return { ok: false, error: coverage.error };
+
   // forwarder.php L1590-1592 — only stamp payMethod when the carrier is
   // pay-at-origin; a destination carrier leaves the stored value alone
   // (preserve the legacy update-only-on-origin asymmetry). Origin set
   // shared with the shop-cart path via lib/forwarder/pay-method.ts.
   const paymethod = isPayAtOriginCarrier(fShipBy) ? "1" : undefined;
-
-  const admin = createAdminClient();
 
   // forwarder.php L1593 — base UPDATE with ownership.
   const baseUpdate: Record<string, string> = { fshipby: fShipBy };

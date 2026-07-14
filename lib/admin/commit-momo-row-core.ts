@@ -50,6 +50,7 @@ import {
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { splitAggregatedMomoBoxRows } from "@/lib/integrations/momo-web/split-box-rows";
 import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
+import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
 import { ADDRESSES } from "@/components/seo/site";
 
 // ────────────────────────────────────────────────────────────
@@ -377,6 +378,16 @@ export async function commitMomoRowCore(
       // ภูม 2026-06-25 ("ตัดออก") — ไม่มีที่อยู่ลูกค้า → เว้นว่าง (ไม่ default โกดัง).
       addr = { ...EMPTY_ADDRESS };
     }
+  }
+
+  // 🔴 CLOSED LIST (owner 2026-07-14) — a ขนส่งเอกชน chosen at commit time must be in the
+  // owner's workbook, and must run in the resolved delivery province. Exempt: an EMPTY
+  // carrier (the ภูม 2026-06-25 default — เซล/ลูกค้ากรอกภายหลัง) and own-fleet PCS/PCSF/PCSE.
+  // With EMPTY_ADDRESS the province is "" → only the closed-list half applies, so a MOMO row
+  // with no address still commits.
+  {
+    const coverage = checkCarrierForProvince(d.fShipBy, addr.addressprovince);
+    if (!coverage.ok) return { ok: false, error: coverage.error };
   }
 
   // ── 4. Derive cargo fields from MOMO source row ────────────

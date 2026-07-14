@@ -13,6 +13,7 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 // the customer's saved ที่อยู่หลัก (profile) instead of showing "รับที่โกดัง".
 import { loadCustomerPrimaryAddress, loadJuristicCorporateAddress, loadCustomerAddressRows } from "@/lib/legacy/customer-address-options";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
+import { getPrivateCarrierOptionsForProvince } from "@/lib/cart/ship-by-eligibility";
 // 2026-06-10 (ปอน) — Code128 tracking barcode, same local SVG generator the
 // customer page /service-import/[fNo] uses (copy the header 1:1).
 import { code128SvgDataUrl } from "@/lib/barcode";
@@ -1009,7 +1010,15 @@ async function tryRenderTbForwarder(
             <EditPalletField fId={r.id} fpallet={r.fpallet} />
             <EditCrateField fId={r.id} crate={r.crate} pricecrate={r.pricecrate} />
             <EditPayMethodField fId={r.id} paymethod={r.paymethod} zip={r.faddresszipcode} fshipby={r.fshipby} />
-            <EditShipByField fId={r.id} fshipby={r.fshipby} />
+            {/* ขนส่งเอกชน = ตามจังหวัดปลายทาง (owner 2026-07-14) — the option list is
+                computed SERVER-side from the delivery province, incl. each courier's
+                delivery restriction ("ไม่เข้าวังน้ำเขียว" ฯลฯ). */}
+            <EditShipByField
+              fId={r.id}
+              fshipby={r.fshipby}
+              province={r.faddressprovince}
+              carriers={getPrivateCarrierOptionsForProvince(r.faddressprovince)}
+            />
             <div className="text-foreground">
               <b className="font-semibold">ที่อยู่จัดส่งสินค้า : </b>
               {deliveryAddrFromProfile && (
