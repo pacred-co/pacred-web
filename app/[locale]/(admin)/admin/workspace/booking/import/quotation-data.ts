@@ -13,6 +13,8 @@ import {
   usesLoadType as usesLoadTypeBase, usesContainer as usesContainerBase,
   type CatalogTemplate,
 } from "@/lib/booking/catalog";
+// ตัวเลือกในฟอร์ม (ท่า/สายเรือ/เอเจนต์/คลัง) = ดึงจาก "ตั้งค่าเรท" (settings) เป็น source เดียว (owner ปอน 2026-07-14)
+import { BOOKING_COUNTRIES, BOOKING_PORTS, BOOKING_WAREHOUSES, BOOKING_CARRIERS, BOOKING_AGENTS } from "./settings/settings-hub-data";
 
 /** ต้นทาง/ปลายทาง = ประเทศ + พอร์ท (จิ้มเลือก · ไม่พิมพ์ · owner 2026-07-10). */
 export type PortSel = { country: string; port: string };
@@ -79,28 +81,14 @@ export const TRANSPORT_TABS: { id: string; label: string; icon: string }[] = [
 ];
 
 /** ประเทศที่เลือก POL/POD ได้ (จิ้มเลือก · เพิ่มภายหลัง). */
-export const PORT_COUNTRIES = ["จีน", "ไทย"];
+export const PORT_COUNTRIES = BOOKING_COUNTRIES;
 
-/** พอร์ทต่อประเทศ × ขนส่ง (starter dataset · owner ปรับเพิ่มภายหลัง). */
-export const PORT_CATALOG: Record<string, Record<string, string[]>> = {
-  จีน: {
-    SEA: ["กวางโจว", "อี้อู", "หนิงโบ", "หนานซา", "เซินเจิ้น", "เซี่ยงไฮ้", "ชิงเต่า"],
-    TRUCK: ["กวางโจว", "คุนหมิง", "หนานหนิง"],
-    AIR: ["กวางโจว (CAN)", "เซินเจิ้น (SZX)", "เซี่ยงไฮ้ (PVG)", "ปักกิ่ง (PEK)"],
-  },
-  ไทย: {
-    SEA: ["แหลมฉบัง", "กรุงเทพ (คลองเตย)"],
-    TRUCK: ["กรุงเทพฯ", "เชียงของ", "นครพนม", "มุกดาหาร"],
-    AIR: ["สุวรรณภูมิ (BKK)", "ดอนเมือง (DMK)"],
-  },
-};
+/** พอร์ทต่อประเทศ × ขนส่ง — มาจาก "ตั้งค่าเรท" (settings-hub-data). */
+export const PORT_CATALOG = BOOKING_PORTS;
 
 /** โกดัง (cargo) ต่อประเทศ — เลือกโกดัง = งาน cargo (รับ/พักของที่โกดัง ไม่ใช่ท่าเรือ/สนามบิน).
  *  starter dataset · owner ปรับเพิ่มภายหลัง (ซับโกดัง). ไม่ขึ้นกับขนส่ง (โกดัง = สถานที่). */
-export const WAREHOUSE_CATALOG: Record<string, string[]> = {
-  จีน: ["กวางโจว", "อี้อู"],
-  ไทย: ["โกดังเพชรเกษม 118"],
-};
+export const WAREHOUSE_CATALOG = BOOKING_WAREHOUSES;
 
 /** พอร์ทตัวแรกของ ประเทศ × ขนส่ง (ใช้ default + revalidate ตอนสลับขนส่ง). */
 export function firstPort(country: string, service: string): string {
@@ -110,15 +98,11 @@ export function firstPort(country: string, service: string): string {
 /** ป้ายชื่อ carrier ต่อขนส่ง (เปลี่ยนตาม รถ/เรือ/แอร์). */
 export const CARRIER_LABEL: Record<string, string> = { SEA: "สายเรือ", AIR: "สายการบิน", TRUCK: "สายรถ" };
 
-/** ตัวเลือก carrier ต่อขนส่ง (starter · owner เพิ่มเองภายหลัง). */
-export const CARRIER_CATALOG: Record<string, string[]> = {
-  SEA: ["Maersk", "MSC", "ONE", "Evergreen", "Wan Hai", "COSCO", "Yang Ming", "OOCL", "Hapag-Lloyd", "SITC", "อื่นๆ"],
-  AIR: ["Thai Airways (TG)", "Cathay Pacific (CX)", "China Airlines (CI)", "EVA Air (BR)", "Emirates (EK)", "Singapore (SQ)", "อื่นๆ"],
-  TRUCK: ["รถบริษัท (Pacred)", "รถร่วม", "Kerry", "อื่นๆ"],
-};
+/** ตัวเลือก carrier ต่อขนส่ง — มาจาก "ตั้งค่าเรท" (settings-hub-data). */
+export const CARRIER_CATALOG = BOOKING_CARRIERS;
 
-/** เอเจนต์ (starter · owner เพิ่มเองภายหลัง). */
-export const AGENT_OPTIONS = ["Pacred", "TTP", "AXELRA", "HUAHAI", "FEISHENG", "อื่นๆ"];
+/** เอเจนต์ — มาจาก "ตั้งค่าเรท" (settings-hub-data). */
+export const AGENT_OPTIONS = BOOKING_AGENTS;
 
 /** carrier ในลิสต์ของขนส่งนั้นหรือไม่ (ใช้ revalidate ตอนสลับขนส่ง). */
 export function carrierValidFor(carrier: string, service: string): boolean {
