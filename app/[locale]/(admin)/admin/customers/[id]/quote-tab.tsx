@@ -482,16 +482,14 @@ export function QuoteTab({
         </div>
       </details>
 
-      {/* Actions — ปุ่มหลักชิดขวาเสมอ (ml-auto · justify-between เอาไม่อยู่ตอนบรรทัดตัด) */}
+      {/* Actions — ปุ่มหลักชิดขวาเสมอ (ml-auto · justify-between เอาไม่อยู่ตอนบรรทัดตัด).
+          ข้อความอธิบายวิธีใช้เอาออกแล้ว (owner ปอน 2026-07-14: "เกะกะ") — ปุ่มบอกตัวเองอยู่แล้ว. */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-[11px] text-muted">
-          <span>กดที่ข้อความบนใบเพื่อแก้ไข · กด “เพิ่มรายการ” เพื่อเพิ่มบรรทัด · แล้วกด “{actionLabel}” เพื่อ{canSaveRates ? "อัปเดตเรทลูกค้า + " : ""}บันทึก+ส่งลูกค้า</span>
-          {hasEdits && (
-            <button type="button" onClick={() => setOverrides({})} className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 font-semibold text-amber-700 hover:bg-amber-100">
-              <RotateCcw className="w-3 h-3" /> รีเซ็ตการแก้ไข
-            </button>
-          )}
-        </div>
+        {hasEdits && (
+          <button type="button" onClick={() => setOverrides({})} className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 hover:bg-amber-100">
+            <RotateCcw className="w-3 h-3" /> รีเซ็ตการแก้ไข
+          </button>
+        )}
         {!issued ? (
           <button type="button" onClick={saveRateAndIssue} disabled={docEmpty || issuing || savingRates}
             title={canSaveRates ? "บันทึกเรทที่แก้เข้าเรทลูกค้า แล้วออกเอกสารต่อ (ปุ่มเดียวกับในตารางเทียบราคา)" : undefined}
