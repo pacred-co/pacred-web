@@ -19,7 +19,7 @@ import { updateMomoImportTrackFields } from "@/actions/admin/momo-ingest-edit";
 import { useColumnOrder } from "@/lib/hooks/use-column-order";
 
 // reorderable DATA columns (drag · เฟส A-3b) — fixed cols (checkbox/#/รูป/นำเข้า) stay put.
-const DATA_KEYS = ["tracking", "container", "pr", "weight", "cbm", "qty", "type", "status"];
+const DATA_KEYS = ["tracking", "container", "pr", "weight", "cbm", "qty", "dims", "type", "status"];
 // Import the input TYPE from the auth-agnostic core, NOT the "use server" file
 // (a type re-export from a "use server" module hits a Turbopack analyzer bug).
 import type { CommitMomoRowInput } from "@/lib/admin/commit-momo-row-core";
@@ -99,6 +99,7 @@ const SORT_VAL: Record<string, (t: IngestTrack) => string | number> = {
   weight: (t) => t.weightKg,
   cbm: (t) => t.cbm,
   qty: (t) => t.qty ?? -1,
+  dims: (t) => (t.width || 0) + (t.length || 0) + (t.height || 0),
   type: (t) => t.guessedProductType,
   status: (t) => t.adminStatusText ?? "",
 };
@@ -112,6 +113,7 @@ const EXPORT_COLS: { key: string; label: string; val: (t: IngestTrack) => string
   { key: "packingW", label: "น้ำหนัก(packing)", val: (t) => t.packingWeight ?? "" },
   { key: "packingC", label: "คิว(packing)", val: (t) => t.packingCbm ?? "" },
   { key: "qty", label: "จำนวน", val: (t) => t.qty ?? "" },
+  { key: "dims", label: "ขนาด(กxยxส)", val: (t) => (t.width || t.length || t.height) ? `${t.width}x${t.length}x${t.height}` : "" },
   { key: "type", label: "ประเภท", val: (t) => PRODUCT_TYPE_TH[t.guessedProductType] ?? "" },
   { key: "status", label: "สถานะ MOMO", val: (t) => t.adminStatusText ?? "" },
   { key: "entered", label: "เข้าระบบ", val: (t) => (t.committed ? `#${t.committedForwarderId ?? ""}` : "ยังไม่เข้า") },
@@ -394,6 +396,10 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
         </>
       ) },
     { key: "qty", label: "จำนวน", align: "right", cell: (t) => editableCell(t, "qty", <span>{t.qty ?? "—"}</span>) },
+    { key: "dims", label: "ขนาด (ก×ย×ส)", align: "left",
+      cell: (t) => (t.width > 0 || t.length > 0 || t.height > 0)
+        ? <span className="whitespace-nowrap font-mono text-[11px]">{t.width}×{t.length}×{t.height}</span>
+        : <span className="text-gray-300">—</span> },
     { key: "type", label: "ประเภท", align: "left",
       cell: (t) => <span className="whitespace-nowrap">{PRODUCT_TYPE_TH[t.guessedProductType] ?? "—"}{t.guessedProductType === "3" && <span className="ml-1 rounded bg-amber-100 px-1 text-[11px] font-semibold text-amber-700">อย.</span>}</span> },
     { key: "status", label: "สถานะ MOMO", align: "left",
@@ -475,7 +481,7 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
           </thead>
           <tbody>
             {sorted.length === 0 && (
-              <tr><td colSpan={12} className="px-3 py-6 text-center text-xs text-muted">ไม่มีรายการตามเงื่อนไข</td></tr>
+              <tr><td colSpan={13} className="px-3 py-6 text-center text-xs text-muted">ไม่มีรายการตามเงื่อนไข</td></tr>
             )}
             {paged.map((t, i) => {
               const rr = rowResult[t.id];
