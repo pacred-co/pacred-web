@@ -55,6 +55,10 @@ export type IngestTrack = {
   packingWeight: number | null;
   packingCbm: number | null;
   packingBoxes: number | null;
+  // เฟส B — MOMO Live match (momo_container_closed track_details · null = ไม่มีใน Live)
+  hasLive: boolean;
+  liveWeight: number | null;
+  liveCbm: number | null;
 };
 
 const WT_EPS = 0.01;
@@ -65,6 +69,16 @@ function pkWtDiff(t: IngestTrack): boolean {
 }
 function pkVolDiff(t: IngestTrack): boolean {
   return t.hasPacking && t.packingCbm != null && t.cbm > 0 && Math.abs(t.cbm - t.packingCbm) > VOL_EPS;
+}
+/** API weight/cbm disagrees with MOMO Live (closed-container manifest). */
+function liveWtDiff(t: IngestTrack): boolean {
+  return t.hasLive && t.liveWeight != null && t.weightKg > 0 && Math.abs(t.weightKg - t.liveWeight) > WT_EPS;
+}
+function liveVolDiff(t: IngestTrack): boolean {
+  return t.hasLive && t.liveCbm != null && t.cbm > 0 && Math.abs(t.cbm - t.liveCbm) > VOL_EPS;
+}
+function anyDiff(t: IngestTrack): boolean {
+  return pkWtDiff(t) || pkVolDiff(t) || liveWtDiff(t) || liveVolDiff(t);
 }
 
 const SHIP_BY_OPTIONS: { value: string; label: string }[] = [
@@ -112,6 +126,8 @@ const EXPORT_COLS: { key: string; label: string; val: (t: IngestTrack) => string
   { key: "cbm", label: "คิว", val: (t) => t.cbm || "" },
   { key: "packingW", label: "น้ำหนัก(packing)", val: (t) => t.packingWeight ?? "" },
   { key: "packingC", label: "คิว(packing)", val: (t) => t.packingCbm ?? "" },
+  { key: "liveW", label: "น้ำหนัก(Live)", val: (t) => t.liveWeight ?? "" },
+  { key: "liveC", label: "คิว(Live)", val: (t) => t.liveCbm ?? "" },
   { key: "qty", label: "จำนวน", val: (t) => t.qty ?? "" },
   { key: "dims", label: "ขนาด(กxยxส)", val: (t) => (t.width || t.length || t.height) ? `${t.width}x${t.length}x${t.height}` : "" },
   { key: "type", label: "ประเภท", val: (t) => PRODUCT_TYPE_TH[t.guessedProductType] ?? "" },
@@ -153,7 +169,7 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
     all: tracks.length,
     pending: tracks.filter((t) => !t.committed).length,
     committed: tracks.filter((t) => t.committed).length,
-    mismatch: tracks.filter((t) => pkWtDiff(t) || pkVolDiff(t)).length,
+    mismatch: tracks.filter(anyDiff).length,
   }), [tracks]);
   const invalidPr = useMemo(() => tracks.filter((t) => !t.committed && t.userIdValid === false).length, [tracks]);
 
@@ -161,7 +177,7 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
     let list = tracks;
     if (tab === "pending") list = list.filter((t) => !t.committed);
     else if (tab === "committed") list = list.filter((t) => t.committed);
-    else if (tab === "mismatch") list = list.filter((t) => pkWtDiff(t) || pkVolDiff(t));
+    else if (tab === "mismatch") list = list.filter(anyDiff);
     const term = q.trim().toLowerCase();
     if (term)
       list = list.filter((t) =>
@@ -384,6 +400,9 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
           {t.hasPacking && t.packingWeight != null && (
             <div className={`text-[11px] ${pkWtDiff(t) ? "text-rose-600 font-semibold" : "text-emerald-600"}`} title="น้ำหนักจาก packing list">📦{n2(t.packingWeight)}{pkWtDiff(t) ? " ⚠" : " ✓"}</div>
           )}
+          {t.hasLive && t.liveWeight != null && (
+            <div className={`text-[11px] ${liveWtDiff(t) ? "text-rose-600 font-semibold" : "text-sky-600"}`} title="น้ำหนักจาก MOMO Live (ตู้ปิด)">🟢{n2(t.liveWeight)}{liveWtDiff(t) ? " ⚠" : " ✓"}</div>
+          )}
         </>
       ) },
     { key: "cbm", label: "คิว", align: "right",
@@ -392,6 +411,9 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
           {editableCell(t, "cbm", <span className="font-mono">{n6(t.cbm)}</span>)}
           {t.hasPacking && t.packingCbm != null && (
             <div className={`text-[11px] ${pkVolDiff(t) ? "text-rose-600 font-semibold" : "text-emerald-600"}`} title="คิวจาก packing list">📦{n6(t.packingCbm)}{pkVolDiff(t) ? " ⚠" : " ✓"}</div>
+          )}
+          {t.hasLive && t.liveCbm != null && (
+            <div className={`text-[11px] ${liveVolDiff(t) ? "text-rose-600 font-semibold" : "text-sky-600"}`} title="คิวจาก MOMO Live (ตู้ปิด)">🟢{n6(t.liveCbm)}{liveVolDiff(t) ? " ⚠" : " ✓"}</div>
           )}
         </>
       ) },
@@ -411,7 +433,7 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
     <div className="space-y-3">
       {/* tabs + search */}
       <div className="flex flex-wrap items-center gap-2">
-        {([["pending", "🟡 ยังไม่เข้าระบบ"], ["committed", "✅ เข้าระบบแล้ว"], ["mismatch", "❗ ไม่ตรง packing"], ["all", "ทั้งหมด"]] as [Tab, string][]).map(([k, label]) => (
+        {([["pending", "🟡 ยังไม่เข้าระบบ"], ["committed", "✅ เข้าระบบแล้ว"], ["mismatch", "❗ ไม่ตรง (Packing/Live)"], ["all", "ทั้งหมด"]] as [Tab, string][]).map(([k, label]) => (
           <button key={k} type="button" onClick={() => setTab(k)}
             className={`rounded-full px-3 py-1 text-xs font-medium ${tab === k ? "bg-primary-600 text-white" : "bg-surface-alt text-muted hover:bg-surface-alt/70"}`}>
             {label} <span className="opacity-70">{counts[k]}</span>
@@ -550,7 +572,7 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
       <p className="text-[11px] text-muted leading-relaxed">
         1 แถว = 1 แทรคกิ้งลูกค้า (จาก MOMO API) · ตรวจ PR/น้ำหนัก/คิว/ประเภท ให้ถูก แล้วกด <strong>&quot;นำเข้าระบบ&quot;</strong> →
         พรีวิว+ยืนยัน → INSERT ลง tb_forwarder · น้ำหนัก/คิว = ค่ารวมทั้งชิปเมนต์จาก MOMO (ตรงกับที่จะคิดเงิน) ·
-        <strong className="text-emerald-700"> 📦 = ค่าจาก packing list</strong> เทียบกับ MOMO API (<span className="text-emerald-600">✓ ตรง</span> · <span className="text-rose-600">⚠ ไม่ตรง</span>) ·
+        เทียบ 3 ทาง: ค่าบรรทัดแรก = <strong>API</strong> · <strong className="text-emerald-700">📦 = packing list</strong> · <strong className="text-sky-700">🟢 = MOMO Live (ตู้ปิด)</strong> (<span className="text-emerald-600">✓ ตรง</span> · <span className="text-rose-600">⚠ ไม่ตรง</span>) ·
         กดเลขตู้เพื่อดูรายละเอียดทั้งตู้.
       </p>
 
