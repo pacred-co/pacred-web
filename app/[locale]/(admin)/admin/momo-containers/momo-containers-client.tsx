@@ -16,6 +16,10 @@ import { Link } from "@/i18n/navigation";
 import { CheckCircle2, AlertCircle, RefreshCw, X, PackageCheck, Truck, Check } from "lucide-react";
 import { commitMomoRowToForwarder, commitMomoRowsBatch } from "@/actions/admin/momo-commit";
 import { updateMomoImportTrackFields } from "@/actions/admin/momo-ingest-edit";
+import { useColumnOrder } from "@/lib/hooks/use-column-order";
+
+// reorderable DATA columns (drag · เฟส A-3b) — fixed cols (checkbox/#/รูป/นำเข้า) stay put.
+const DATA_KEYS = ["tracking", "container", "pr", "weight", "cbm", "qty", "type", "status"];
 // Import the input TYPE from the auth-agnostic core, NOT the "use server" file
 // (a type re-export from a "use server" module hits a Turbopack analyzer bug).
 import type { CommitMomoRowInput } from "@/lib/admin/commit-momo-row-core";
@@ -139,6 +143,9 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
   const [perPage, setPerPage] = useState(50);
   const [page, setPage] = useState(1);
   const [copied, setCopied] = useState(false);
+  // reorderable columns (drag · เฟส A-3b)
+  const { order: colOrder, move: moveCol, reset: resetCols } = useColumnOrder(DATA_KEYS);
+  const [dragKey, setDragKey] = useState<string | null>(null);
 
   const counts = useMemo(() => ({
     all: tracks.length,
@@ -340,6 +347,60 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
     );
   }
 
+  // reorderable DATA columns — each cell is a render fn (closes over editableCell etc.).
+  const dataColumns: { key: string; label: string; align: "left" | "right"; cell: (t: IngestTrack) => ReactNode }[] = [
+    { key: "tracking", label: "แทรคกิ้ง", align: "left",
+      cell: (t) => <span className="font-mono font-semibold text-foreground whitespace-nowrap">{t.tracking ?? "—"}</span> },
+    { key: "container", label: "ตู้", align: "left",
+      cell: (t) => (
+        <div className="whitespace-nowrap">
+          {t.container ? (
+            <Link href={`/admin/momo-containers/${encodeURIComponent(t.container)}`} className="font-mono font-semibold text-sky-700 hover:underline">
+              {t.container}<span className="ml-1 text-[11px] text-muted">{t.transport ? TRANSPORT_TH[t.transport] ?? "" : ""}</span>
+            </Link>
+          ) : (<span className="text-[11px] text-amber-600" title={t.routingBatch ?? ""}>⏳ ยังไม่เข้าตู้ปิด</span>)}
+          {t.sack && <div className="text-[11px] text-muted">กระสอบ: {t.sack}</div>}
+        </div>
+      ) },
+    { key: "pr", label: "ลูกค้า (PR)", align: "left",
+      cell: (t) => (
+        <div className="whitespace-nowrap">
+          {t.guessedUserId ? <span className="font-mono font-semibold">{t.guessedUserId}</span> : <span className="text-[11px] text-amber-600">MOMO ไม่ส่ง PR</span>}
+          {!t.committed && t.userIdValid === false && t.guessedUserId && (
+            <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-red-100 px-1 py-0.5 text-[11px] font-bold text-red-700"><AlertCircle className="h-2.5 w-2.5" /> ไม่มีในระบบ</div>
+          )}
+          {!t.committed && t.userIdValid === true && (
+            <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-emerald-100 px-1 py-0.5 text-[11px] font-bold text-emerald-700"><CheckCircle2 className="h-2.5 w-2.5" /> พบในระบบ</div>
+          )}
+          {t.committed && t.commitUserId && t.commitUserId !== t.guessedUserId && (<div className="text-[11px] text-muted">→ {t.commitUserId}</div>)}
+        </div>
+      ) },
+    { key: "weight", label: "น้ำหนัก", align: "right",
+      cell: (t) => (
+        <>
+          {editableCell(t, "weightKg", t.weightKg > 0 ? <span className="font-mono">{n2(t.weightKg)}</span> : <span className="text-[11px] text-amber-700" title="MOMO ยังไม่ได้ชั่ง">⏳ รอชั่ง</span>)}
+          {t.hasPacking && t.packingWeight != null && (
+            <div className={`text-[11px] ${pkWtDiff(t) ? "text-rose-600 font-semibold" : "text-emerald-600"}`} title="น้ำหนักจาก packing list">📦{n2(t.packingWeight)}{pkWtDiff(t) ? " ⚠" : " ✓"}</div>
+          )}
+        </>
+      ) },
+    { key: "cbm", label: "คิว", align: "right",
+      cell: (t) => (
+        <>
+          {editableCell(t, "cbm", <span className="font-mono">{n6(t.cbm)}</span>)}
+          {t.hasPacking && t.packingCbm != null && (
+            <div className={`text-[11px] ${pkVolDiff(t) ? "text-rose-600 font-semibold" : "text-emerald-600"}`} title="คิวจาก packing list">📦{n6(t.packingCbm)}{pkVolDiff(t) ? " ⚠" : " ✓"}</div>
+          )}
+        </>
+      ) },
+    { key: "qty", label: "จำนวน", align: "right", cell: (t) => editableCell(t, "qty", <span>{t.qty ?? "—"}</span>) },
+    { key: "type", label: "ประเภท", align: "left",
+      cell: (t) => <span className="whitespace-nowrap">{PRODUCT_TYPE_TH[t.guessedProductType] ?? "—"}{t.guessedProductType === "3" && <span className="ml-1 rounded bg-amber-100 px-1 text-[11px] font-semibold text-amber-700">อย.</span>}</span> },
+    { key: "status", label: "สถานะ MOMO", align: "left",
+      cell: (t) => <span className="block max-w-[10rem] truncate text-[11px] text-muted" title={t.adminStatusText ?? ""}>{t.adminStatusText ?? t.phase ?? "—"}</span> },
+  ];
+  const orderedCols = colOrder.map((k) => dataColumns.find((c) => c.key === k)).filter((c): c is (typeof dataColumns)[number] => !!c);
+
   return (
     <div className="space-y-3">
       {/* tabs + search */}
@@ -378,6 +439,8 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
           <option value={200}>200 / หน้า</option>
           <option value={99999}>ทั้งหมด</option>
         </select>
+        <button type="button" onClick={resetCols} title="รีเซ็ตลำดับคอลัมน์"
+          className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt">↺ คอลัมน์</button>
       </div>
 
       {loadError && (
@@ -393,10 +456,17 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
               </th>
               <th className="px-2 py-2 text-center w-8">#</th>
               <th className="px-2 py-2 text-center w-14">รูป</th>
-              {([["tracking", "แทรคกิ้ง", "left"], ["container", "ตู้", "left"], ["pr", "ลูกค้า (PR)", "left"], ["weight", "น้ำหนัก", "right"], ["cbm", "คิว", "right"], ["qty", "จำนวน", "right"], ["type", "ประเภท", "left"], ["status", "สถานะ MOMO", "left"]] as [string, string, string][]).map(([key, label, al]) => (
-                <th key={key} className={`px-2 py-2 ${al === "right" ? "text-right" : "text-left"}`}>
-                  <button type="button" onClick={() => toggleSort(key)} className={`inline-flex items-center gap-1 hover:text-primary-600 ${sort?.key === key ? "text-primary-700" : ""}`} title="กดเพื่อเรียงลำดับ">
-                    {label} <span className="text-gray-400">{sortIcon(key)}</span>
+              {orderedCols.map((c) => (
+                <th key={c.key} draggable
+                  onDragStart={() => setDragKey(c.key)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => { if (dragKey) moveCol(dragKey, c.key); setDragKey(null); }}
+                  onDragEnd={() => setDragKey(null)}
+                  className={`cursor-move select-none px-2 py-2 ${c.align === "right" ? "text-right" : "text-left"} ${dragKey === c.key ? "bg-primary-100" : "hover:bg-surface-alt"}`}
+                  title="ลากเพื่อย้ายคอลัมน์ · กดชื่อเพื่อเรียงลำดับ">
+                  <span className="mr-1 text-gray-400">⋮⋮</span>
+                  <button type="button" onClick={() => toggleSort(c.key)} className={`inline-flex items-center gap-1 hover:text-primary-600 ${sort?.key === c.key ? "text-primary-700" : ""}`}>
+                    {c.label} <span className="text-gray-400">{sortIcon(c.key)}</span>
                   </button>
                 </th>
               ))}
@@ -411,8 +481,6 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
               const rr = rowResult[t.id];
               const done = t.committed || rr?.ok;
               const fid = t.committedForwarderId ?? rr?.fid ?? null;
-              const wDiff = pkWtDiff(t);
-              const vDiff = pkVolDiff(t);
               return (
                 <tr key={t.id} className={`align-top ${done ? "bg-emerald-50/40" : selected.has(t.id) ? "bg-primary-50/40" : t.userIdValid === false ? "bg-red-50/30" : ""}`}>
                   <td className="px-2 py-1.5 text-center">
@@ -430,51 +498,9 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
                       </button>
                     ) : <span className="text-gray-300">—</span>}
                   </td>
-                  <td className="px-2 py-1.5 font-mono font-semibold text-foreground whitespace-nowrap">{t.tracking ?? "—"}</td>
-                  <td className="px-2 py-1.5 whitespace-nowrap">
-                    {t.container ? (
-                      <Link href={`/admin/momo-containers/${encodeURIComponent(t.container)}`} className="font-mono font-semibold text-sky-700 hover:underline">
-                        {t.container}
-                        <span className="ml-1 text-[11px] text-muted">{t.transport ? TRANSPORT_TH[t.transport] ?? "" : ""}</span>
-                      </Link>
-                    ) : (
-                      <span className="text-[11px] text-amber-600" title={t.routingBatch ?? ""}>⏳ ยังไม่เข้าตู้ปิด</span>
-                    )}
-                    {t.sack && <div className="text-[11px] text-muted">กระสอบ: {t.sack}</div>}
-                  </td>
-                  <td className="px-2 py-1.5 whitespace-nowrap">
-                    {t.guessedUserId ? (
-                      <span className="font-mono font-semibold">{t.guessedUserId}</span>
-                    ) : <span className="text-[11px] text-amber-600">MOMO ไม่ส่ง PR</span>}
-                    {!t.committed && t.userIdValid === false && t.guessedUserId && (
-                      <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-red-100 px-1 py-0.5 text-[11px] font-bold text-red-700"><AlertCircle className="h-2.5 w-2.5" /> ไม่มีในระบบ</div>
-                    )}
-                    {!t.committed && t.userIdValid === true && (
-                      <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-emerald-100 px-1 py-0.5 text-[11px] font-bold text-emerald-700"><CheckCircle2 className="h-2.5 w-2.5" /> พบในระบบ</div>
-                    )}
-                    {t.committed && t.commitUserId && t.commitUserId !== t.guessedUserId && (
-                      <div className="text-[11px] text-muted">→ {t.commitUserId}</div>
-                    )}
-                  </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">
-                    {editableCell(t, "weightKg", t.weightKg > 0 ? <span className="font-mono">{n2(t.weightKg)}</span> : <span className="text-[11px] text-amber-700" title="MOMO ยังไม่ได้ชั่ง">⏳ รอชั่ง</span>)}
-                    {t.hasPacking && t.packingWeight != null && (
-                      <div className={`text-[11px] ${wDiff ? "text-rose-600 font-semibold" : "text-emerald-600"}`} title="น้ำหนักจาก packing list">
-                        📦{n2(t.packingWeight)}{wDiff ? " ⚠" : " ✓"}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">
-                    {editableCell(t, "cbm", <span className="font-mono">{n6(t.cbm)}</span>)}
-                    {t.hasPacking && t.packingCbm != null && (
-                      <div className={`text-[11px] ${vDiff ? "text-rose-600 font-semibold" : "text-emerald-600"}`} title="คิวจาก packing list">
-                        📦{n6(t.packingCbm)}{vDiff ? " ⚠" : " ✓"}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{editableCell(t, "qty", <span>{t.qty ?? "—"}</span>)}</td>
-                  <td className="px-2 py-1.5 whitespace-nowrap">{PRODUCT_TYPE_TH[t.guessedProductType] ?? "—"}{t.guessedProductType === "3" && <span className="ml-1 rounded bg-amber-100 px-1 text-[11px] font-semibold text-amber-700">อย.</span>}</td>
-                  <td className="px-2 py-1.5 text-[11px] text-muted whitespace-nowrap max-w-[10rem] truncate" title={t.adminStatusText ?? ""}>{t.adminStatusText ?? t.phase ?? "—"}</td>
+                  {orderedCols.map((c) => (
+                    <td key={c.key} className={`px-2 py-1.5 ${c.align === "right" ? "text-right tabular-nums" : ""}`}>{c.cell(t)}</td>
+                  ))}
                   <td className="px-2 py-1.5 text-center">
                     {done ? (
                       fid ? (
