@@ -14,7 +14,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { CheckCircle2, AlertCircle, RefreshCw, X, PackageCheck, Truck } from "lucide-react";
-import { commitMomoRowToForwarder } from "@/actions/admin/momo-commit";
+import { commitMomoRowToForwarder, commitMomoRowsBatch } from "@/actions/admin/momo-commit";
 // Import the input TYPE from the auth-agnostic core, NOT the "use server" file
 // (a type re-export from a "use server" module hits a Turbopack analyzer bug).
 import type { CommitMomoRowInput } from "@/lib/admin/commit-momo-row-core";
@@ -99,6 +99,10 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
   // the import preview/confirm modal
   const [modal, setModal] = useState<null | { track: IngestTrack; userID: string; fShipBy: string; fProductsType: "1" | "2" | "3" | "4" }>(null);
   const [committing, setCommitting] = useState(false);
+  // bulk-select + bulk import (ภูม 2026-07-14) — ติ๊กหลายแถว → นำเข้าทีเดียว (พรีวิว+ยืนยัน)
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const counts = useMemo(() => ({
     all: tracks.length,
@@ -156,6 +160,56 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
 
   const modalUserValid = modal ? /^PR\d+$/i.test(modal.userID.trim()) : false;
 
+  // bulk-select helpers — only rows still pending (not committed / not just-imported) are selectable.
+  const isSelectable = (t: IngestTrack) => !t.committed && !rowResult[t.id]?.ok;
+  const pendingVisible = filtered.filter(isSelectable);
+  const allVisibleSelected = pendingVisible.length > 0 && pendingVisible.every((t) => selected.has(t.id));
+  const toggleRow = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleAll = () => setSelected((s) => {
+    const n = new Set(s);
+    if (allVisibleSelected) pendingVisible.forEach((t) => n.delete(t.id));
+    else pendingVisible.forEach((t) => n.add(t.id));
+    return n;
+  });
+  // selected tracks (still pending) split into ready (valid PR) vs skip (invalid/no PR — bulk auto-skips them)
+  const selectedTracks = tracks.filter((t) => selected.has(t.id) && isSelectable(t));
+  const isValidPr = (pr: string | null) => /^PR\d+$/i.test((pr ?? "").trim());
+  const bulkReady = selectedTracks.filter((t) => isValidPr(t.guessedUserId));
+  const bulkSkip = selectedTracks.filter((t) => !isValidPr(t.guessedUserId));
+
+  async function confirmBulk() {
+    if (bulkReady.length === 0) return;
+    const rows: CommitMomoRowInput[] = bulkReady.map((t) => ({
+      rowId: t.id,
+      userID: (t.guessedUserId ?? "").trim().toUpperCase(),
+      fShipBy: "",
+      fProductsType: t.guessedProductType,
+    }));
+    setBulkBusy(true);
+    try {
+      const res = await commitMomoRowsBatch({ rows });
+      if (res.ok && res.data) {
+        const data = res.data;
+        setRowResult((m) => {
+          const out = { ...m };
+          for (const r of data.results) {
+            out[r.rowId] = r.ok
+              ? { ok: true, message: `เข้าระบบแล้ว #${r.forwarderId}`, fid: r.forwarderId }
+              : { ok: false, message: r.error ?? "ล้มเหลว" };
+          }
+          return out;
+        });
+        setSelected(new Set());
+        setBulkOpen(false);
+        startTransition(() => router.refresh());
+      }
+    } catch (err) {
+      console.error("[momo ingest bulk] threw", err);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-3">
       {/* tabs + search */}
@@ -171,8 +225,14 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
             <AlertCircle className="h-3 w-3" /> PR ไม่มีในระบบ {invalidPr}
           </span>
         )}
+        {selected.size > 0 && (
+          <button type="button" onClick={() => setBulkOpen(true)}
+            className="ml-auto inline-flex items-center gap-1 rounded-full border border-primary-700 bg-primary-600 px-3.5 py-1 text-xs font-bold text-white hover:bg-primary-700">
+            <PackageCheck className="h-3.5 w-3.5" /> นำเข้าที่เลือก ({selected.size})
+          </button>
+        )}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหา แทรคกิ้ง / PR / เลขตู้…"
-          className="ml-auto rounded-full border border-border bg-white dark:bg-surface px-3 py-1 text-xs w-56" />
+          className={`${selected.size > 0 ? "" : "ml-auto"} rounded-full border border-border bg-white dark:bg-surface px-3 py-1 text-xs w-56`} />
         <button type="button" onClick={() => router.refresh()} disabled={pending}
           className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt disabled:opacity-50">
           <RefreshCw className={`h-3 w-3 ${pending ? "animate-spin" : ""}`} /> รีเฟรช
@@ -187,6 +247,9 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
         <table className="w-full text-xs border-collapse [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border min-w-[1080px]">
           <thead className="bg-surface-alt/60 text-[11px] uppercase tracking-wide text-muted">
             <tr>
+              <th className="px-2 py-2 text-center w-8">
+                <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} title="เลือกทั้งหมดที่ยังไม่เข้าระบบ (ในหน้านี้)" className="cursor-pointer" />
+              </th>
               <th className="px-2 py-2 text-center w-8">#</th>
               <th className="px-2 py-2 text-center w-14">รูป</th>
               <th className="px-2 py-2 text-left">แทรคกิ้ง</th>
@@ -202,7 +265,7 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={11} className="px-3 py-6 text-center text-xs text-muted">ไม่มีรายการตามเงื่อนไข</td></tr>
+              <tr><td colSpan={12} className="px-3 py-6 text-center text-xs text-muted">ไม่มีรายการตามเงื่อนไข</td></tr>
             )}
             {filtered.map((t, i) => {
               const rr = rowResult[t.id];
@@ -211,7 +274,12 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
               const wDiff = pkWtDiff(t);
               const vDiff = pkVolDiff(t);
               return (
-                <tr key={t.id} className={`align-top ${done ? "bg-emerald-50/40" : t.userIdValid === false ? "bg-red-50/30" : ""}`}>
+                <tr key={t.id} className={`align-top ${done ? "bg-emerald-50/40" : selected.has(t.id) ? "bg-primary-50/40" : t.userIdValid === false ? "bg-red-50/30" : ""}`}>
+                  <td className="px-2 py-1.5 text-center">
+                    {isSelectable(t) && (
+                      <input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleRow(t.id)} className="cursor-pointer" />
+                    )}
+                  </td>
                   <td className="px-2 py-1.5 text-center text-muted tabular-nums">{i + 1}</td>
                   <td className="px-2 py-1.5 text-center">
                     {t.images.length > 0 ? (
@@ -300,6 +368,46 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
         <strong className="text-emerald-700"> 📦 = ค่าจาก packing list</strong> เทียบกับ MOMO API (<span className="text-emerald-600">✓ ตรง</span> · <span className="text-rose-600">⚠ ไม่ตรง</span>) ·
         กดเลขตู้เพื่อดูรายละเอียดทั้งตู้.
       </p>
+
+      {/* bulk import preview + confirm modal (portal to body · ภูม 2026-07-14) */}
+      {bulkOpen && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => !bulkBusy && setBulkOpen(false)} role="button" tabIndex={-1}>
+          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-surface p-5 shadow-2xl space-y-3.5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold flex items-center gap-2"><PackageCheck className="h-5 w-5 text-primary-600" /> ยืนยันนำเข้าหลายรายการ</h3>
+              <button type="button" onClick={() => !bulkBusy && setBulkOpen(false)} className="rounded-lg border border-border px-2 py-0.5 text-xs hover:bg-surface-alt"><X className="h-3.5 w-3.5" /></button>
+            </div>
+            <div className="text-xs text-muted">
+              เลือกไว้ {selectedTracks.length} รายการ · <span className="font-semibold text-emerald-700">พร้อมนำเข้า {bulkReady.length}</span>
+              {bulkSkip.length > 0 && <> · <span className="font-semibold text-red-600">ข้าม {bulkSkip.length}</span> (PR ไม่ถูกต้อง/ไม่มี)</>}
+            </div>
+            <div className="max-h-60 overflow-y-auto rounded-lg border border-border">
+              <table className="w-full text-[11px] border-collapse [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border">
+                <thead className="bg-surface-alt/60 text-muted sticky top-0"><tr>
+                  <th className="px-2 py-1 text-left">แทรคกิ้ง</th><th className="px-2 py-1 text-left">PR</th><th className="px-2 py-1 text-right">นน. / คิว</th>
+                </tr></thead>
+                <tbody>
+                  {bulkReady.map((t) => (
+                    <tr key={t.id}><td className="px-2 py-1 font-mono">{t.tracking}</td><td className="px-2 py-1 font-mono">{t.guessedUserId}</td><td className="px-2 py-1 text-right font-mono">{n2(t.weightKg)} / {n6(t.cbm)}</td></tr>
+                  ))}
+                  {bulkSkip.map((t) => (
+                    <tr key={t.id} className="bg-red-50/50 text-red-600"><td className="px-2 py-1 font-mono">{t.tracking}</td><td className="px-2 py-1 font-mono">{t.guessedUserId ?? "—"}</td><td className="px-2 py-1 text-right">ข้าม</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">⚠️ ตรวจ PR + น้ำหนัก/คิว ให้ถูกก่อนนำเข้า · การนำเข้าจะ INSERT ลง tb_forwarder ทันที</div>
+            <div className="flex items-center justify-end gap-2">
+              <button type="button" onClick={() => setBulkOpen(false)} disabled={bulkBusy} className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt disabled:opacity-50">ยกเลิก</button>
+              <button type="button" onClick={confirmBulk} disabled={bulkBusy || bulkReady.length === 0}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-primary-700 bg-primary-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-primary-700 disabled:opacity-50">
+                {bulkBusy ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> กำลังนำเข้า {bulkReady.length}…</> : <><Truck className="h-3.5 w-3.5" /> ยืนยันนำเข้า {bulkReady.length} รายการ</>}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {/* import preview + confirm modal — portal to body so `fixed` is relative
           to the viewport, not a transformed layout ancestor (else it opens
