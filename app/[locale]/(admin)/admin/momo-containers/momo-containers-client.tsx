@@ -87,6 +87,32 @@ const TRANSPORT_TH: Record<string, string> = { "1": "🚚 รถ", "2": "🚢 �
 const n2 = (v: number) => (v > 0 ? v.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—");
 const n6 = (v: number) => (v > 0 ? v.toLocaleString("en-US", { maximumFractionDigits: 6 }) : "—");
 
+// sortable data columns → value getter (⇅ · เฟส A-3)
+const SORT_VAL: Record<string, (t: IngestTrack) => string | number> = {
+  tracking: (t) => t.tracking ?? "",
+  container: (t) => t.container ?? "",
+  pr: (t) => t.guessedUserId ?? "",
+  weight: (t) => t.weightKg,
+  cbm: (t) => t.cbm,
+  qty: (t) => t.qty ?? -1,
+  type: (t) => t.guessedProductType,
+  status: (t) => t.adminStatusText ?? "",
+};
+// export column set (Copy/Excel · เฟส A-4)
+const EXPORT_COLS: { key: string; label: string; val: (t: IngestTrack) => string | number }[] = [
+  { key: "tracking", label: "แทรคกิ้ง", val: (t) => t.tracking ?? "" },
+  { key: "container", label: "ตู้", val: (t) => t.container ?? "" },
+  { key: "pr", label: "ลูกค้า (PR)", val: (t) => t.guessedUserId ?? "" },
+  { key: "weight", label: "น้ำหนัก", val: (t) => t.weightKg || "" },
+  { key: "cbm", label: "คิว", val: (t) => t.cbm || "" },
+  { key: "packingW", label: "น้ำหนัก(packing)", val: (t) => t.packingWeight ?? "" },
+  { key: "packingC", label: "คิว(packing)", val: (t) => t.packingCbm ?? "" },
+  { key: "qty", label: "จำนวน", val: (t) => t.qty ?? "" },
+  { key: "type", label: "ประเภท", val: (t) => PRODUCT_TYPE_TH[t.guessedProductType] ?? "" },
+  { key: "status", label: "สถานะ MOMO", val: (t) => t.adminStatusText ?? "" },
+  { key: "entered", label: "เข้าระบบ", val: (t) => (t.committed ? `#${t.committedForwarderId ?? ""}` : "ยังไม่เข้า") },
+];
+
 type Tab = "pending" | "committed" | "all" | "mismatch";
 
 export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[]; loadError: string | null }) {
@@ -108,6 +134,11 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
   const [editing, setEditing] = useState<null | { id: string; field: "weightKg" | "cbm" | "qty"; value: string }>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editErr, setEditErr] = useState<string | null>(null);
+  // sort + pagination (เฟส A-3/A-4)
+  const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" } | null>(null);
+  const [perPage, setPerPage] = useState(50);
+  const [page, setPage] = useState(1);
+  const [copied, setCopied] = useState(false);
 
   const counts = useMemo(() => ({
     all: tracks.length,
@@ -130,6 +161,49 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
         (t.container ?? "").toLowerCase().includes(term));
     return list;
   }, [tracks, tab, q]);
+
+  const sorted = useMemo(() => {
+    if (!sort || !SORT_VAL[sort.key]) return filtered;
+    const val = SORT_VAL[sort.key];
+    return [...filtered].sort((a, b) => {
+      const va = val(a), vb = val(b);
+      if (va < vb) return sort.dir === "asc" ? -1 : 1;
+      if (va > vb) return sort.dir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filtered, sort]);
+
+  const ALL = 99999;
+  const totalPages = perPage >= ALL ? 1 : Math.max(1, Math.ceil(sorted.length / perPage));
+  const curPage = Math.min(page, totalPages);
+  const paged = perPage >= ALL ? sorted : sorted.slice((curPage - 1) * perPage, curPage * perPage);
+
+  const toggleSort = (key: string) =>
+    setSort((s) => (s?.key === key ? (s.dir === "asc" ? { key, dir: "desc" } : null) : { key, dir: "asc" }));
+  const sortIcon = (key: string) => (sort?.key === key ? (sort.dir === "asc" ? "↑" : "↓") : "⇅");
+
+  function exportRows(kind: "copy" | "excel") {
+    const header = EXPORT_COLS.map((c) => c.label);
+    const rows = sorted.map((t) => EXPORT_COLS.map((c) => String(c.val(t) ?? "")));
+    if (kind === "copy") {
+      const tsv = [header, ...rows].map((r) => r.join("\t")).join("\n");
+      navigator.clipboard?.writeText(tsv).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {});
+      return;
+    }
+    // Excel = CSV (formula-injection-safe · UTF-8 BOM → เปิดใน Excel ตรงๆ)
+    const esc = (v: string) => {
+      const s = /^[=+\-@]/.test(v) ? `'${v}` : v;
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv = [header, ...rows].map((r) => r.map((c) => esc(c)).join(",")).join("\r\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `momo-tracks-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   function openImport(t: IngestTrack) {
     setModal({ track: t, userID: t.guessedUserId ?? "", fShipBy: "", fProductsType: t.guessedProductType });
@@ -167,7 +241,7 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
 
   // bulk-select helpers — only rows still pending (not committed / not just-imported) are selectable.
   const isSelectable = (t: IngestTrack) => !t.committed && !rowResult[t.id]?.ok;
-  const pendingVisible = filtered.filter(isSelectable);
+  const pendingVisible = paged.filter(isSelectable); // select-all = the visible page
   const allVisibleSelected = pendingVisible.length > 0 && pendingVisible.every((t) => selected.has(t.id));
   const toggleRow = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const toggleAll = () => setSelected((s) => {
@@ -293,6 +367,17 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
           className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt disabled:opacity-50">
           <RefreshCw className={`h-3 w-3 ${pending ? "animate-spin" : ""}`} /> รีเฟรช
         </button>
+        <button type="button" onClick={() => exportRows("copy")} title="คัดลอกเป็นตาราง (วางใน Excel/Sheet ได้)"
+          className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt">{copied ? "✓ คัดลอกแล้ว" : "📋 Copy"}</button>
+        <button type="button" onClick={() => exportRows("excel")} title="ดาวน์โหลด .csv เปิดใน Excel"
+          className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100">⬇ Excel</button>
+        <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}
+          className="rounded-full border border-border bg-white dark:bg-surface px-2 py-1 text-xs" title="จำนวนแถวต่อหน้า">
+          <option value={50}>50 / หน้า</option>
+          <option value={100}>100 / หน้า</option>
+          <option value={200}>200 / หน้า</option>
+          <option value={99999}>ทั้งหมด</option>
+        </select>
       </div>
 
       {loadError && (
@@ -308,22 +393,21 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
               </th>
               <th className="px-2 py-2 text-center w-8">#</th>
               <th className="px-2 py-2 text-center w-14">รูป</th>
-              <th className="px-2 py-2 text-left">แทรคกิ้ง</th>
-              <th className="px-2 py-2 text-left">ตู้</th>
-              <th className="px-2 py-2 text-left">ลูกค้า (PR)</th>
-              <th className="px-2 py-2 text-right">น้ำหนัก</th>
-              <th className="px-2 py-2 text-right">คิว</th>
-              <th className="px-2 py-2 text-right">จำนวน</th>
-              <th className="px-2 py-2 text-left">ประเภท</th>
-              <th className="px-2 py-2 text-left">สถานะ MOMO</th>
+              {([["tracking", "แทรคกิ้ง", "left"], ["container", "ตู้", "left"], ["pr", "ลูกค้า (PR)", "left"], ["weight", "น้ำหนัก", "right"], ["cbm", "คิว", "right"], ["qty", "จำนวน", "right"], ["type", "ประเภท", "left"], ["status", "สถานะ MOMO", "left"]] as [string, string, string][]).map(([key, label, al]) => (
+                <th key={key} className={`px-2 py-2 ${al === "right" ? "text-right" : "text-left"}`}>
+                  <button type="button" onClick={() => toggleSort(key)} className={`inline-flex items-center gap-1 hover:text-primary-600 ${sort?.key === key ? "text-primary-700" : ""}`} title="กดเพื่อเรียงลำดับ">
+                    {label} <span className="text-gray-400">{sortIcon(key)}</span>
+                  </button>
+                </th>
+              ))}
               <th className="px-2 py-2 text-center w-40">นำเข้าระบบ</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && (
+            {sorted.length === 0 && (
               <tr><td colSpan={12} className="px-3 py-6 text-center text-xs text-muted">ไม่มีรายการตามเงื่อนไข</td></tr>
             )}
-            {filtered.map((t, i) => {
+            {paged.map((t, i) => {
               const rr = rowResult[t.id];
               const done = t.committed || rr?.ok;
               const fid = t.committedForwarderId ?? rr?.fid ?? null;
@@ -336,7 +420,7 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
                       <input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleRow(t.id)} className="cursor-pointer" />
                     )}
                   </td>
-                  <td className="px-2 py-1.5 text-center text-muted tabular-nums">{i + 1}</td>
+                  <td className="px-2 py-1.5 text-center text-muted tabular-nums">{(curPage - 1) * perPage + i + 1}</td>
                   <td className="px-2 py-1.5 text-center">
                     {t.images.length > 0 ? (
                       <button type="button" onClick={() => setZoom({ urls: t.images, tracking: t.tracking ?? "—" })} className="relative inline-block" title="คลิกดูรูปป้าย (ตรวจ PR)">
@@ -418,6 +502,19 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
           </tbody>
         </table>
       </div>
+      {perPage < ALL && totalPages > 1 && (
+        <div className="flex items-center justify-between gap-2 text-xs text-muted">
+          <span>แสดง {(curPage - 1) * perPage + 1}–{Math.min(curPage * perPage, sorted.length)} จาก {sorted.length}</span>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={curPage <= 1}
+              className="rounded border border-border px-2 py-0.5 hover:bg-surface-alt disabled:opacity-40">‹ ก่อนหน้า</button>
+            <span className="px-1">หน้า {curPage}/{totalPages}</span>
+            <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={curPage >= totalPages}
+              className="rounded border border-border px-2 py-0.5 hover:bg-surface-alt disabled:opacity-40">ถัดไป ›</button>
+          </div>
+        </div>
+      )}
+
       <p className="text-[11px] text-muted leading-relaxed">
         1 แถว = 1 แทรคกิ้งลูกค้า (จาก MOMO API) · ตรวจ PR/น้ำหนัก/คิว/ประเภท ให้ถูก แล้วกด <strong>&quot;นำเข้าระบบ&quot;</strong> →
         พรีวิว+ยืนยัน → INSERT ลง tb_forwarder · น้ำหนัก/คิว = ค่ารวมทั้งชิปเมนต์จาก MOMO (ตรงกับที่จะคิดเงิน) ·
