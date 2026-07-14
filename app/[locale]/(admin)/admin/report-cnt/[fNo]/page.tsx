@@ -691,13 +691,13 @@ export default async function AdminReportCntDetailPage({
           (ปอน 2026-07-14 "บนสุดต้องเป็น หน้าแรก › รายงานตู้สินค้า › ตู้").
           2026-07-14 (ปอน) — the exception-tabs strip moved INSIDE the header
           .pcs-card (embedded) so the chip menu + รายงานตู้ share ONE framed box. */}
-      <div className="px-4 pt-3 lg:px-6">
+      <div className="px-4 pt-3 lg:px-6 bg-[#f4f5f7]">
         <Breadcrumb fCabinetNumber={fCabinetNumber} />
       </div>
       {/* .pcs-rc scopes the faithful legacy PCS Cargo look (legacy-report-cnt.css)
           to this content only — the rest of the admin shell keeps its own theme.
           Faithful port of report-cnt.php?id=<cnt> (ADR-0017 · ปอน 2026-07-14). */}
-      <main className="pcs-rc p-4 lg:p-6 pb-32">
+      <main className="pcs-rc px-1 py-4 lg:px-1 lg:py-6 pb-32">
         {/* ── SECTION 1 · header card (report-cnt.php L1504-1576) ── */}
         <section className="pcs-card mt-3">
           {/* exception-tabs strip — embedded as the card's top header row */}
@@ -837,42 +837,8 @@ export default async function AdminReportCntDetailPage({
               · ปอน 2026-07-15) */}
         </section>
 
-        {/* ปอน 2026-07-14 — legacy report-cnt.php has NO journey-timeline / China
-            chat feed (Pacred additions). Kept behind a "v" toggle (collapsed by
-            default), so the legacy look stays clean; a stuck container still
-            surfaces its warning on the summary bar. */}
-        <details className="group rounded-2xl border border-border bg-white shadow-sm mb-4">
-          <summary className="flex cursor-pointer select-none list-none items-center justify-between gap-2 px-4 lg:px-6 py-3 [&::-webkit-details-marker]:hidden">
-            <span className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-              🗺️ เส้นทางตู้ + แชทจีน
-              <span className="hidden text-[11px] font-normal text-muted sm:inline">
-                ตู้นี้ถึงไหนแล้ว · จีนว่าไงเรื่องตู้นี้
-              </span>
-              {journey.isStuck && (
-                <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[11px] font-medium">
-                  ⚠️ ตู้ค้าง
-                </span>
-              )}
-            </span>
-            <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted">
-              <span className="group-open:hidden">แสดง</span>
-              <span className="hidden group-open:inline">ซ่อน</span>
-              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
-            </span>
-          </summary>
-          <div className="border-t border-border p-3 lg:p-4">
-            <ContainerJourneyPanel
-              journey={journey}
-              totals={journeyTotals}
-              etd={journeyEtd}
-              eta={journeyEta}
-              wechat={wechatContext}
-            />
-          </div>
-        </details>
-
         {/* ── SECTION 2 · table card (report-cnt.php L1582-1651) ── */}
-        <section className="pcs-card">
+        <section className="pcs-card pcs-card--flush">
           <h3>
             <Truck size={28} strokeWidth={1.5} className="inline-block align-[-5px]" aria-hidden />{" "}
             รายงานตู้สินค้า {fCabinetNumber}
@@ -880,7 +846,7 @@ export default async function AdminReportCntDetailPage({
           {/* view tabs: มุมมอง PCS Cargo | ปรับต้นทุนตู้ใหม่ (nav-underline) */}
           <ul className="pcs-tabs">
             <li>
-              <TabLink href={cabHref} active={!isCostUpdate}>มุมมอง PCS Cargo</TabLink>
+              <TabLink href={cabHref} active={!isCostUpdate}>มุมมอง Pacred Cargo</TabLink>
             </li>
             <li>
               <TabLink href={`${cabHref}?action=cost-update`} active={isCostUpdate}>ปรับต้นทุนตู้ใหม่</TabLink>
@@ -935,6 +901,39 @@ export default async function AdminReportCntDetailPage({
             />
           )}
         </section>
+
+        {/* ปอน 2026-07-15 — "เส้นทางตู้ + แชทจีน" (Pacred journey/China-chat panel,
+            not in legacy report-cnt.php) moved to the BOTTOM, below the table.
+            Collapsed by default; a stuck container still warns on the summary bar. */}
+        <details className="group rounded-2xl border border-border bg-white shadow-sm mt-4">
+          <summary className="flex cursor-pointer select-none list-none items-center justify-between gap-2 px-4 lg:px-6 py-3 [&::-webkit-details-marker]:hidden">
+            <span className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+              🗺️ เส้นทางตู้ + แชทจีน
+              <span className="hidden text-[11px] font-normal text-muted sm:inline">
+                ตู้นี้ถึงไหนแล้ว · จีนว่าไงเรื่องตู้นี้
+              </span>
+              {journey.isStuck && (
+                <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[11px] font-medium">
+                  ⚠️ ตู้ค้าง
+                </span>
+              )}
+            </span>
+            <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted">
+              <span className="group-open:hidden">แสดง</span>
+              <span className="hidden group-open:inline">ซ่อน</span>
+              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+            </span>
+          </summary>
+          <div className="border-t border-border p-3 lg:p-4">
+            <ContainerJourneyPanel
+              journey={journey}
+              totals={journeyTotals}
+              etd={journeyEtd}
+              eta={journeyEta}
+              wechat={wechatContext}
+            />
+          </div>
+        </details>
       </main>
     </>
   );

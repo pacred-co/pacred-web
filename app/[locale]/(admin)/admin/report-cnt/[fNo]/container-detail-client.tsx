@@ -188,9 +188,25 @@ type SortKey =
   | "fcosttotalprice"
   | "profitItem"
   | "fstatus"
+  | "fdetail"
+  | "fshipby"
+  | "cntPaid"
+  | "fnote"
+  | "onePer"
   | null;
 
 type SortDir = "asc" | "desc";
+
+/** Resolve a row's value for a sort column. Most keys are direct DetailRow
+ *  fields; "onePer" is the DISPLAYED 1% WHT (juristic only → else 0), which is
+ *  computed, not stored, so it needs this indirection. */
+function sortValueOf(
+  r: DetailRow,
+  key: Exclude<NonNullable<SortKey>, "onePer"> | "onePer",
+): string | number | boolean | null {
+  if (key === "onePer") return r.usercompany === "1" ? (r.fusercompany1per ?? 0) : 0;
+  return r[key];
+}
 
 export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIsPaid, billByFid = {}, transportLabel, transportBadgeClass }: ContainerDetailClientProps) {
   // The checkbox COLUMN shows for any check-flow viewer; interactivity (ticking
@@ -207,21 +223,27 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
   // ภูม 2026-06-18 — which multi-tracking orders are expanded (collapsed by
   // default; the summary row carries a dropdown chevron to reveal the boxes).
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // click a product thumbnail → full-image lightbox (ปอน 2026-07-15 "กดจิ้มดูภาพเต็ม").
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const router = useRouter();
   // Portal the fixed action bar to <body> so it escapes the .animate-fade-in
   // identity transform (which traps position:fixed → the bar scrolled off with
   // the content instead of sticking to the viewport · ปอน 2026-07-15). Mount-gate
   // so createPortal only runs client-side (SSR has no document.body).
   const [mounted, setMounted] = useState(false);
+  // mount-gate: flip once after hydration so the client-only portals
+  // (action bar + image lightbox) render — SSR has no document.body.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
 
   const filtered = useMemo(() => {
     const f = filterRows(rows, filter);
     if (!sortKey) return f;
     const dir = sortDir === "asc" ? 1 : -1;
+    const key = sortKey;
     return [...f].sort((a, b) => {
-      const av = a[sortKey];
-      const bv = b[sortKey];
+      const av = sortValueOf(a, key);
+      const bv = sortValueOf(b, key);
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
@@ -631,22 +653,22 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
               <Th k="fidorco"       onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">ID/CO</Th>
               <Th k="ftrackingchn"  onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">เลขแทรคกิ้ง</Th>
               <Th k="userid"        onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">รหัส</Th>
-              <th className="px-2 py-2 text-left">รายละเอียดสินค้า</th>
+              <Th k="fdetail" onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">รายละเอียดสินค้า</Th>
               <Th k="famount"       onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ลัง</Th>
-              <Th k="fvolume"       onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ปริมาตร (CBM)</Th>
-              <Th k="fweight"       onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">หนัก (Kg)</Th>
+              <Th k="fvolume"       onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ปริมาตร<br />(CBM)</Th>
+              <Th k="fweight"       onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">หนัก<br />(Kg)</Th>
               <Th k="fproductstype" onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">ประเภท</Th>
               {showMoney && <Th k="rate" onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">เรทต้นทุน</Th>}
-              <Th k="ftotalprice"            onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่านำเข้า</Th>
-              <Th k="fpriceupdate"           onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่าอัปเดต</Th>
-              <Th k="pricecrate"             onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่าตีลัง</Th>
-              <Th k="ftransportpricechnthb"  onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่าขนส่งจีน+</Th>
+              <Th k="ftotalprice"            onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่า<br />นำเข้า</Th>
+              <Th k="fpriceupdate"           onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่า<br />อัปเดต</Th>
+              <Th k="pricecrate"             onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่า<br />ตีลัง</Th>
+              <Th k="ftransportpricechnthb"  onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่าขน<br />ส่งจีน+</Th>
               <Th k="priceother"             onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่าอื่นๆ</Th>
-              <th className="px-2 py-2 text-left">การขนส่ง</th>
-              <Th k="ftransportprice"        onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่าขนส่งไทย</Th>
-              <Th k="fdiscount"              onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ส่วนลด</Th>
-              <Th k="priceGetUser"           onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">รวมขาย</Th>
-              <th className="px-2 py-2 text-right">1%</th>
+              <Th k="fshipby" onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">การขนส่ง</Th>
+              <Th k="ftransportprice"        onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ค่าขน<br />ส่งไทย</Th>
+              <Th k="fdiscount"              onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ส่วน<br />ลด</Th>
+              <Th k="priceGetUser"           onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">รวม<br />ขาย</Th>
+              <Th k="onePer" onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">1%</Th>
               {showMoney && <Th k="fcosttotalprice" onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">ต้นทุน</Th>}
               {showMoney && <Th k="profitItem"      onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="right">กำไร</Th>}
               <Th k="fstatus" onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="center">สถานะสินค้า</Th>
@@ -654,9 +676,9 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                   state — renamed "สถานะตู้" → "สถานะจ่ายค่าตู้" to match the LIST page
                   (where "สถานะตู้" means the GOODS journey, not payment). Now the
                   two pages use the same word for the same axis. */}
-              <th className="px-2 py-2 text-center">สถานะจ่ายค่าตู้</th>
-              <th className="text-right">ตัวเลือก</th>
-              <th className="px-2 py-2 text-left">หมายเหตุ</th>
+              <Th k="cntPaid" onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="center">สถานะจ่ายค่าตู้</Th>
+              <th className="text-right">ตัว<br />เลือก</th>
+              <Th k="fnote" onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">หมายเหตุ</Th>
             </tr>
             {/* Summary band — orange→red gradient totals row (legacy L1621-1651 `.bg-color`).
                 One <td> per header column, in order. */}
@@ -754,29 +776,20 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                           FSTATUS_LABEL[r.fstatus] ??
                           (r.fstatus ? r.fstatus : "(ว่าง)");
                         return (
-                          <>
-                            <input
-                              type="checkbox"
-                              checked={selected.has(r.id)}
-                              onChange={() => toggleRow(r.id)}
-                              disabled={!eligible || !checkInteractive}
-                              title={
-                                !checkInteractive
-                                  ? "ตู้นี้จ่ายค่าตู้แล้ว · แก้ผ่านบิลจ่ายเงินตู้"
-                                  : eligible
-                                    ? `เลือก ${r.fidorco ?? `#${r.id}`}`
-                                    : `รอของถึงโกดังก่อน · สถานะปัจจุบัน: ${currentLabel}`
-                              }
-                              aria-label={`เลือก ${r.id}`}
-                            />
-                            {/* FIX 2b — VISIBLE disabled reason so a not-yet-arrived
-                                row (fstatus<4) doesn't read as "broken" (the dead-end). */}
-                            {!eligible && checkInteractive && (
-                              <span className="mt-0.5 block text-[11px] leading-tight text-amber-600">
-                                รอสินค้าถึงไทย
-                              </span>
-                            )}
-                          </>
+                          <input
+                            type="checkbox"
+                            checked={selected.has(r.id)}
+                            onChange={() => toggleRow(r.id)}
+                            disabled={!eligible || !checkInteractive}
+                            title={
+                              !checkInteractive
+                                ? "ตู้นี้จ่ายค่าตู้แล้ว · แก้ผ่านบิลจ่ายเงินตู้"
+                                : eligible
+                                  ? `เลือก ${r.fidorco ?? `#${r.id}`}`
+                                  : `รอของถึงโกดังก่อน · สถานะปัจจุบัน: ${currentLabel}`
+                            }
+                            aria-label={`เลือก ${r.id}`}
+                          />
                         );
                       })()}
                     </td>
@@ -821,9 +834,15 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                     {/* legacy: image float-right + short-text detail (fdetail →
                         item productname → tracking·ประเภท), never a bare "-". */}
                     {r.coverUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <span className="float-right ml-2">
-                        <img src={r.coverUrl} alt={`#${r.id}`} loading="lazy" className="prod-img" />
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={r.coverUrl}
+                          alt={`#${r.id}`}
+                          loading="lazy"
+                          className="prod-img cursor-zoom-in"
+                          onClick={() => setLightboxSrc(r.coverUrl ?? null)}
+                        />
                       </span>
                     ) : null}
                     <div className="short-text max-w" title={r.detailDisplay ?? r.ftrackingchn ?? ""}>
@@ -1028,6 +1047,27 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
           </tbody>
         </table>
       </div>
+
+      {/* Product-image lightbox — click a thumbnail to view it full-size (ปอน
+          2026-07-15 "กดจิ้มดูภาพเต็ม"). Portalled to <body> so the fixed overlay
+          escapes the .animate-fade-in transform (same trap as the action bar);
+          click anywhere / Esc dismisses. */}
+      {mounted && lightboxSrc && createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[100] flex cursor-zoom-out items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxSrc(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxSrc}
+            alt="รูปสินค้าเต็ม"
+            className="max-h-[92vh] max-w-[92vw] rounded-md object-contain shadow-2xl"
+          />
+        </div>,
+        document.body,
+      )}
 
       {/* Fixed-bottom add-to-check bar — for any check-flow viewer (super/ops/
           accounting/god). On a PAID cabinet it's read-only: the add button is
@@ -1362,8 +1402,8 @@ function Th({
         onClick={() => onSort(k)}
         className={`group inline-flex w-full items-center gap-1 ${justifyCls} hover:text-foreground ${active ? "text-foreground" : ""}`}
       >
-        <span>{children}</span>
-        <Icon className={`h-3 w-3 ${active ? "opacity-100" : "opacity-40 group-hover:opacity-70"}`} />
+        <span className="text-center leading-tight">{children}</span>
+        <Icon className={`h-3 w-3 shrink-0 ${active ? "opacity-100" : "opacity-40 group-hover:opacity-70"}`} />
       </button>
     </th>
   );
