@@ -181,6 +181,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
   // on-demand MOMO Live pull (เฟส B2)
   const [liveBusy, setLiveBusy] = useState(false);
   const [liveMsg, setLiveMsg] = useState<string | null>(null);
+  const [liveConfirm, setLiveConfirm] = useState(false); // preview-before-pull modal (ภูม)
   // missing-parcel recovery (เฟส C · พัสดุขาด → ดึงเข้าระบบ)
   const [missingBusy, setMissingBusy] = useState(false);
   const [missingMsg, setMissingMsg] = useState<string | null>(null);
@@ -365,7 +366,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
   }
 
   async function onPullLive() {
-    if (!(await confirm("ดึงข้อมูลสดจากเว็บ MOMO เดี๋ยวนี้?\n\nจะอัปเดตสถานะ + เติม น้ำหนัก/คิว/ขนาด/จำนวน ที่ยังว่างลงระบบ (ข้ามรายการที่ออกบิลแล้ว · ไม่ทับค่าที่มีอยู่). ใช้เวลาสักครู่ (login เว็บ MOMO)."))) return;
+    setLiveConfirm(false);
     setLiveBusy(true);
     setLiveMsg(null);
     try {
@@ -526,7 +527,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt disabled:opacity-50">
           <RefreshCw className={`h-3 w-3 ${pending ? "animate-spin" : ""}`} /> รีเฟรช
         </button>
-        <button type="button" onClick={onPullLive} disabled={liveBusy} title="ดึงข้อมูลสดจากเว็บ MOMO เดี๋ยวนี้ (อัปเดตสถานะ + เติมข้อมูลที่ยังว่าง)"
+        <button type="button" onClick={() => setLiveConfirm(true)} disabled={liveBusy} title="ดึงข้อมูลสดจากเว็บ MOMO เดี๋ยวนี้ (อัปเดตสถานะ + เติมข้อมูลที่ยังว่าง)"
           className="inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50">
           <RefreshCw className={`h-3 w-3 ${liveBusy ? "animate-spin" : ""}`} /> {liveBusy ? "กำลังดึง Live…" : "🔄 ดึง Live เดี๋ยวนี้"}
         </button>
@@ -692,6 +693,41 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           </div>
           <p className="text-[11px] text-red-700/80">พัสดุพวกนี้ MOMO API ไม่ส่งมา (เพราะสถานะขยับเกิน status แรก) แต่ packing list มี → กด &quot;ดึงเข้าระบบ&quot; จะสร้าง billable row ให้ (ปลอดภัย · กันซ้ำ + คิดราคาอัตโนมัติ). = ตัวเดียวกับหน้า drift.</p>
         </section>
+      )}
+
+      {/* ดึง Live — พรีวิวช่องว่างปัจจุบันก่อนดึง → ยืนยัน (ภูม 2026-07-14) */}
+      {liveConfirm && createPortal(
+        (() => {
+          const noWeight = tracks.filter((t) => !t.committed && t.weightKg <= 0).length;
+          const noCbm = tracks.filter((t) => !t.committed && t.cbm <= 0).length;
+          const noCabinet = tracks.filter((t) => !t.container).length;
+          return (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => setLiveConfirm(false)} role="button" tabIndex={-1}>
+              <div className="w-full max-w-md rounded-2xl bg-white dark:bg-surface p-5 shadow-2xl space-y-3.5" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold flex items-center gap-2"><RefreshCw className="h-5 w-5 text-sky-600" /> ดึงข้อมูลสดจาก MOMO</h3>
+                  <button type="button" onClick={() => setLiveConfirm(false)} className="rounded-lg border border-border px-2 py-0.5 text-xs hover:bg-surface-alt"><X className="h-3.5 w-3.5" /></button>
+                </div>
+                <p className="text-xs text-muted">ตอนนี้ในระบบยังขาด/ไม่ครบ — กดดึง Live เพื่อให้ MOMO เว็บเติมให้:</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2"><div className="text-lg font-extrabold text-amber-700">{noWeight}</div><div className="text-[11px] text-amber-700/80">ยังไม่มีน้ำหนัก</div></div>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2"><div className="text-lg font-extrabold text-amber-700">{noCbm}</div><div className="text-[11px] text-amber-700/80">ยังไม่มีคิว</div></div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2"><div className="text-lg font-extrabold text-slate-700">{noCabinet}</div><div className="text-[11px] text-slate-600">ยังไม่เข้าตู้ปิด</div></div>
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2"><div className="text-lg font-extrabold text-red-700">{missing.length}</div><div className="text-[11px] text-red-600">พัสดุขาด (packing มี · API ไม่มี)</div></div>
+                </div>
+                <div className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-800">กดยืนยัน → login เว็บ MOMO สด → อัปเดตสถานะ + เติม น้ำหนัก/คิว/ขนาด/เลขตู้ ที่ยังว่าง (ข้ามบิลแล้ว · ไม่ทับค่าที่มี). ใช้เวลาสักครู่.</div>
+                <div className="flex items-center justify-end gap-2">
+                  <button type="button" onClick={() => setLiveConfirm(false)} className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt">ยกเลิก</button>
+                  <button type="button" onClick={onPullLive}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-sky-700 bg-sky-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-sky-700">
+                    <RefreshCw className="h-3.5 w-3.5" /> ยืนยันดึง Live เดี๋ยวนี้
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })(),
+        document.body,
       )}
 
       {/* bulk import preview + confirm modal (portal to body · ภูม 2026-07-14) */}
