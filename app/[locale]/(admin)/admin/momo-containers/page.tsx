@@ -18,6 +18,7 @@ import { deriveMomoMemberCode, baseTrackingOf, aggregateTrackDetailMetrics } fro
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import type { PackingUploadSnapshot } from "@/actions/admin/momo-packing-history";
 import { MomoIngestClient, type IngestTrack, type MissingParcel } from "./momo-containers-client";
+import { MomoGuideButton } from "./momo-guide-button";
 
 export const dynamic = "force-dynamic";
 
@@ -259,64 +260,9 @@ export default async function MomoContainersPage() {
               {l.label}
             </Link>
           ))}
+          <MomoGuideButton />
         </div>
       </header>
-
-      {/* คู่มือใช้งาน — พับเก็บได้ (owner ภูม: "อนาคตอาจไม่ใช่ภูมิที่ดึงข้อมูล คนอื่นมาทำต่อจะได้เข้าใจ") */}
-      <details className="rounded-2xl border border-sky-200 bg-sky-50/50 px-4 py-3 dark:border-sky-500/20 dark:bg-sky-500/5">
-        <summary className="cursor-pointer select-none text-sm font-bold text-sky-800 dark:text-sky-300">
-          📖 วิธีใช้งานหน้านี้ (สำหรับผู้ที่เพิ่งเริ่มทำ) — คลิกเพื่อดูขั้นตอน
-        </summary>
-        <ol className="mt-3 list-decimal space-y-2 pl-5 text-xs leading-relaxed text-foreground/90 marker:font-bold marker:text-sky-600">
-          <li>
-            <strong>หน้านี้ทำอะไร:</strong> รวมข้อมูลจาก <strong>MOMO API</strong> + <strong>packing list (แต้ม)</strong> +
-            <strong> MOMO Live</strong> มาเป็น &quot;รายแทรคกิ้งลูกค้า&quot; (1 แถว = 1 แทรค) → ตรวจ/แก้ให้ถูก →
-            กด &quot;นำเข้าระบบ&quot; เพื่อสร้างรายการบิล (tb_forwarder).
-          </li>
-          <li>
-            <strong>แท็บด้านบน:</strong> 🟡 ยังไม่เข้าระบบ = รอนำเข้า · ✅ เข้าระบบแล้ว · ❗ ไม่ตรง (Packing/Live) =
-            ข้อมูล API ไม่ตรงกับ packing/Live (ต้องตรวจ) · ทั้งหมด. ตัวเลข = จำนวนรายการ.
-          </li>
-          <li>
-            <strong>คอลัมน์สำคัญ:</strong> <strong>Code</strong> = PR ลูกค้า · <strong>Tracking</strong> = เลขแทรค ·
-            <strong> Total Wt / Total Vol</strong> = น้ำหนัก/คิวรวม (<strong className="text-rose-600">ค่าที่ใช้คิดเงิน</strong>) ·
-            <strong> W/L/H</strong> = ขนาดกล่อง · <strong>Status</strong> = สถานะ MOMO.
-          </li>
-          <li>
-            <strong>เทียบ 3 ทาง</strong> (ใต้ Total Wt/Vol): บรรทัดบน = MOMO API ·{" "}
-            <strong className="text-emerald-700">📦</strong> = packing list ·{" "}
-            <strong className="text-sky-700">🟢</strong> = MOMO Live · <strong className="text-emerald-600">✓</strong> ตรง ·{" "}
-            <strong className="text-rose-600">⚠</strong> ไม่ตรง (รวมดูที่แท็บ ❗ ไม่ตรง).
-          </li>
-          <li>
-            <strong>ตรวจ PR ให้ถูก:</strong> คลิกรูปป้ายเพื่อดู PR บนกล่อง · ป้าย <span className="text-emerald-700 font-semibold">พบในระบบ</span> = PR ใช้ได้ ·{" "}
-            <span className="text-red-700 font-semibold">ไม่มีในระบบ</span> = ต้องแก้ PR ก่อน (ข้อ 6).
-          </li>
-          <li>
-            <strong>แก้ข้อมูลที่ MOMO ส่งผิด:</strong> คลิกค่าที่มีดินสอ <span className="text-amber-600">✎</span> เพื่อแก้ได้ทันที —
-            <strong> น้ำหนัก · คิว · จำนวน · ขนาด W/L/H · PR</strong> (พิมพ์เช่น <code>PR545</code>) → กด Enter หรือ ✓ บันทึก.
-            ⚠️ แก้ได้เฉพาะแถว <strong>&quot;ยังไม่เข้าระบบ&quot;</strong> เท่านั้น (เข้าระบบแล้ว = แก้ไม่ได้ เพื่อกันบิลเพี้ยน).
-          </li>
-          <li>
-            <strong>ข้อมูลขาด? กด 🔄 ดึง Live เดี๋ยวนี้:</strong> จะพรีวิวรายการที่ยังไม่ครบ → ยืนยัน → MOMO เว็บเติม
-            น้ำหนัก/คิว/เลขตู้ ที่ยังว่างให้อัตโนมัติ (ไม่ทับค่าที่มีอยู่ · ข้ามรายการที่วางบิลแล้ว).
-          </li>
-          <li>
-            <strong>นำเข้าระบบ:</strong> ติ๊ก ☑ หน้ารายการที่ตรวจแล้ว (ติ๊กหัวตาราง = เลือกทั้งหน้า) → กดปุ่ม
-            <strong> &quot;นำเข้าระบบ&quot;</strong> → พรีวิวข้อมูลครบ ตรวจอีกที → ยืนยัน. รายการจะกลายเป็น
-            <strong> เข้าระบบแล้ว</strong> + มีลิงก์ไปใบนำเข้า (#เลข).
-          </li>
-          <li>
-            <strong>พัสดุขาด</strong> (ถ้ามี · แถบแดงใต้ตาราง): พัสดุที่ packing มีแต่ MOMO API ไม่ส่ง → กด
-            <strong> &quot;ดึงเข้าระบบ&quot;</strong> ระบบสร้างบิลให้ (กันซ้ำ + คิดราคาอัตโนมัติ).
-          </li>
-          <li>
-            <strong>เครื่องมือ:</strong> ช่องค้นหา (แทรค/PR/เลขตู้) · <strong>⇅</strong> คลิกหัวคอลัมน์ = เรียง ·
-            <strong> ⋮⋮</strong> ลากหัวคอลัมน์ = ย้ายตำแหน่ง · <strong>↺ คอลัมน์</strong> = รีเซ็ต ·
-            <strong> Copy / Excel</strong> = ส่งออก · คลิก <strong>Container Name</strong> = ดูรายละเอียดทั้งตู้.
-          </li>
-        </ol>
-      </details>
 
       <MomoIngestClient tracks={tracks} missing={missing} loadError={error?.message ?? null} />
     </div>
