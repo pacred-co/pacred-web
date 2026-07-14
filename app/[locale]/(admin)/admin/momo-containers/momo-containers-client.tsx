@@ -327,10 +327,11 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
         </div>
       )}
 
-      {/* กล่องสูง ~12 แถว (owner ปอน 2026-07-14: "เห็นแค่ 12 รายการ จะได้กดเลื่อนซ้ายขวาง่าย แต่เลื่อนลงได้") —
-          แถบเลื่อนซ้าย-ขวาอยู่ติดขอบล่างกล่อง ไม่ต้องเลื่อนหน้าผ่าน 394 แถวลงไปหาก่อน · เลื่อนลงในกล่อง
-          เห็นครบทุกแถวเหมือนเดิม · หัวตารางล็อกไว้ (sticky) ไม่งั้นเลื่อนลงแล้วไม่รู้ว่าคอลัมน์ไหนเป็นอะไร. */}
-      <div className="max-h-[42rem] overflow-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
+      {/* กล่องตาราง — สูงพอดีจอ ไม่ให้หน้าเลื่อน (owner ปอน 2026-07-14: "อยากได้เต็มหน้าแบบไม่เลื่อน") :
+          100dvh ลบส่วนหัวหน้า+แท็บ (~17.5rem) + คำอธิบายที่พับไว้ + ขอบล่าง ≈ 21rem → เลื่อนแค่ในกล่อง
+          (แถบเลื่อนซ้าย-ขวาติดขอบล่างกล่องเสมอ ไม่ต้องไล่หาท้าย 394 แถว · หัวตาราง sticky).
+          min-h กันจอเตี้ยมากแล้วกล่องแบนจนใช้ไม่ได้. */}
+      <div className="max-h-[calc(100dvh-21rem)] min-h-[16rem] overflow-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
         {/* หัวตาราง = ไฟล์ packing list "Shipment Report" (ของแต้ม) เรียง A→Z ตรงตัว
             (owner ปอน 2026-07-14 · "ลอกมาเลย ตามภาพ") + คอลัมน์ "รูป" ของเราที่เก็บไว้
             + ปุ่ม "นำเข้าระบบ" (ฟังก์ชันของหน้านี้). ลำดับคอลัมน์ = CANON ตัวจริงใน
@@ -515,23 +516,28 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
           </tbody>
         </table>
       </div>
-      <div className="space-y-1 text-[11px] text-muted leading-relaxed">
-        <p>
-          หัวตาราง = ไฟล์ <strong>packing list (Shipment Report)</strong> เรียงคอลัมน์ A→Z ตรงตัว · 1 แถว = 1 แทรคกิ้งลูกค้า (จาก MOMO API) ·
-          ตรวจ PR / น้ำหนัก / คิว / ประเภท ให้ถูก แล้วกด <strong>&quot;นำเข้าระบบ&quot;</strong> → พรีวิว+ยืนยัน → INSERT ลง tb_forwarder · กด Container Name เพื่อดูรายละเอียดทั้งตู้.
-        </p>
-        <p>
-          <strong>Wt. / Vol.</strong> = ต่อกล่อง (คำนวณจาก Total ÷ Total Parcel · Vol. = W×L×H) ·{" "}
-          <strong>Total Wt. / Total Vol.</strong> = รวมทั้งแทรคจาก MOMO = <strong>ค่าที่ใช้คิดเงิน</strong> ·{" "}
-          <strong className="text-emerald-700">📦 = ค่าจาก packing list</strong> เทียบกับ MOMO API (<span className="text-emerald-600">✓ ตรง</span> ·{" "}
-          <span className="text-rose-600">⚠ ไม่ตรง</span> — ดูรวมที่แท็บ &quot;❗ ไม่ตรง packing&quot;) ·{" "}
-          <strong>Service Fee</strong> = extra_cost ของ MOMO (ค่าตีลังไม้/ค่าใช้จ่ายเพิ่ม) · <strong>ETD/ETA</strong> มาจากไฟล์ packing list ระดับตู้ (ว่างจนกว่าจะอัพไฟล์).
-        </p>
-        <p className="italic text-muted/70">
-          คอลัมน์ที่จางไว้ (SM Number · Branch · Product · Dum · Rem · Note. · Return) = <strong>MOMO API ไม่ส่งมา</strong> —
-          มีอยู่ในไฟล์ packing list ของแต้ม แต่ตอนนี้ระบบยังไม่ได้เก็บ (ถ้าอยากให้ขึ้น ต้องเก็บเพิ่มตอน ingest ไฟล์).
-        </p>
-      </div>
+      {/* คำอธิบายคอลัมน์ — พับเก็บ (owner ปอน 2026-07-14: อยากได้เต็มหน้าไม่ต้องเลื่อน · เดิมกิน 115px
+          ท้ายหน้า) เปิดอ่านได้เมื่อต้องการ · เนื้อหาเดิมครบ ไม่ได้ตัดทิ้ง */}
+      <details className="text-[11px] text-muted leading-relaxed">
+        <summary className="cursor-pointer select-none font-medium hover:text-foreground">ℹ️ คำอธิบายคอลัมน์ (หัวตาราง = ไฟล์ packing list · A→Z)</summary>
+        <div className="mt-1.5 space-y-1">
+          <p>
+            หัวตาราง = ไฟล์ <strong>packing list (Shipment Report)</strong> เรียงคอลัมน์ A→Z ตรงตัว · 1 แถว = 1 แทรคกิ้งลูกค้า (จาก MOMO API) ·
+            ตรวจ PR / น้ำหนัก / คิว / ประเภท ให้ถูก แล้วติ๊กเลือก → กด <strong>&quot;นำเข้าระบบ&quot;</strong> → ยืนยัน → INSERT ลง tb_forwarder · กด Container Name เพื่อดูรายละเอียดทั้งตู้.
+          </p>
+          <p>
+            <strong>Wt. / Vol.</strong> = ต่อกล่อง (คำนวณจาก Total ÷ Total Parcel · Vol. = W×L×H) ·{" "}
+            <strong>Total Wt. / Total Vol.</strong> = รวมทั้งแทรคจาก MOMO = <strong>ค่าที่ใช้คิดเงิน</strong> ·{" "}
+            <strong className="text-emerald-700">📦 = ค่าจาก packing list</strong> เทียบกับ MOMO API (<span className="text-emerald-600">✓ ตรง</span> ·{" "}
+            <span className="text-rose-600">⚠ ไม่ตรง</span> — ดูรวมที่แท็บ &quot;❗ ไม่ตรง packing&quot;) ·{" "}
+            <strong>Service Fee</strong> = extra_cost ของ MOMO (ค่าตีลังไม้/ค่าใช้จ่ายเพิ่ม) · <strong>ETD/ETA</strong> มาจากไฟล์ packing list ระดับตู้ (ว่างจนกว่าจะอัพไฟล์).
+          </p>
+          <p className="italic text-muted/70">
+            คอลัมน์ที่จางไว้ (SM Number · Branch · Product · Dum · Rem · Note. · Return) = <strong>MOMO API ไม่ส่งมา</strong> —
+            มีอยู่ในไฟล์ packing list ของแต้ม แต่ตอนนี้ระบบยังไม่ได้เก็บ (ถ้าอยากให้ขึ้น ต้องเก็บเพิ่มตอน ingest ไฟล์).
+          </p>
+        </div>
+      </details>
 
       {/* ยืนยันนำเข้าหลายรายการ (§0f confirm-before-mutate) — portal เหมือน modal เดิม.
           เลือก 1 รายการจะไม่มาที่นี่ (ไป modal ตรวจ/แก้ PR ทีละใบแทน). */}
