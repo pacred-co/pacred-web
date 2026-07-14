@@ -160,6 +160,7 @@ body {
 }
 .scrollbar-x-visible::-webkit-scrollbar {
   height: 10px;                            /* WebKit/Blink — Chrome on Win/Mac */
+  width: 10px;                             /* กล่องที่เลื่อนลงได้ด้วย (max-h + overflow-auto) ให้เห็นแถบตั้งเหมือนกัน */
 }
 .scrollbar-x-visible::-webkit-scrollbar-track {
   background: transparent;

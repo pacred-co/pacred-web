@@ -41,6 +41,18 @@ export type MomoPackingRow = {
   totalWeight: number | null; // aggregate (Total Weight) — the SELL basis
   totalCbm: number | null;    // aggregate (Total CBM) — the SELL basis
   cg: string | null;          // CG column (CG…)
+  // ── REFERENCE columns (owner ปอน 2026-07-14) ────────────────────────────
+  // The real file carries 18 cols (A Trans. · B SM. Date · C Branch · D Product ·
+  // E Dum · F Type · G Code · H Tracking · I-K W/L/H · L Parcel Count · M Weight(KG) ·
+  // N CBM · O Total Weight · P Total CBM · Q Remark Number · R CG) — the parser used
+  // to drop these 6, so the preview grid showed blanks for data the file HAD.
+  // Display/reference ONLY: none of them feed the SELL basis (totalWeight/totalCbm).
+  trans: string | null;       // A "Trans." — SEA / EK …
+  smDate: string | null;      // B "SM. Date" — วันรับเข้าโกดังจีน (as-written, e.g. 2026/06/13)
+  branch: string | null;      // C "Branch" — โกดังต้นทาง (PACRED …)
+  product: string | null;     // D "Product" — ชื่อสินค้า (จีน · 铝箔盒 …)
+  dum: number | null;         // E "Dum"
+  remark: string | null;      // Q "Remark Number" — เลขมาร์คกล่อง ("6" · "1-5")
 };
 
 /**
@@ -62,6 +74,15 @@ export type MomoPackingAggRow = {
   totalWeight: number | null;   // Σ sub.totalWeight — the SELL weight basis
   totalCbm: number | null;      // Σ sub.totalCbm — the SELL CBM basis
   subTrackings: string[];       // every raw sub tracking under this base
+  // reference (first sub · display only · never the SELL basis)
+  weightKg: number | null;      // M "Weight(KG)" — น้ำหนักต่อกล่อง ที่ไฟล์เขียนมาเอง
+  cbm: number | null;           // N "CBM" — คิวต่อกล่อง ที่ไฟล์เขียนมาเอง
+  trans: string | null;         // A
+  smDate: string | null;        // B
+  branch: string | null;        // C
+  product: string | null;       // D
+  dum: number | null;           // E
+  remark: string | null;        // Q
 };
 
 /**
@@ -91,6 +112,15 @@ export function aggregatePackingRowsByBase(rows: MomoPackingRow[]): MomoPackingA
         totalWeight: null,
         totalCbm: null,
         subTrackings: [],
+        // reference — first sub (same discipline as dims/cg/code)
+        weightKg: r.weightKg,
+        cbm: r.cbm,
+        trans: r.trans,
+        smDate: r.smDate,
+        branch: r.branch,
+        product: r.product,
+        dum: r.dum,
+        remark: r.remark,
       };
       byBase.set(base, agg);
       seen.set(base, { parcel: false, wt: false, cbm: false });
@@ -349,6 +379,13 @@ export function parseMomoPackingXlsx(buf: Uint8Array | Buffer): MomoPackingParse
   const cTotalWt = col("totalweight", "total weight");
   const cTotalCbm = col("totalcbm", "total cbm");
   const cCg = col("cg");
+  // reference cols (owner ปอน 2026-07-14) — by NAME like the rest (norm() ตัด . ( ) _ - ช่องว่าง)
+  const cTrans = col("trans", "trans.");
+  const cSmDate = col("smdate", "sm. date", "sm date");
+  const cBranch = col("branch");
+  const cProduct = col("product");
+  const cDum = col("dum");
+  const cRemark = col("remarknumber", "remark number", "remark");
 
   // ── Data rows: below the header, until the sheet ends. Skip GRAND TOTAL + blanks. ──
   const rows: MomoPackingRow[] = [];
@@ -374,6 +411,12 @@ export function parseMomoPackingXlsx(buf: Uint8Array | Buffer): MomoPackingParse
       totalWeight: cTotalWt >= 0 ? toNum(row[cTotalWt]) : null,
       totalCbm: cTotalCbm >= 0 ? toNum(row[cTotalCbm]) : null,
       cg: cCg >= 0 ? cellStr(row[cCg]) || null : null,
+      trans: cTrans >= 0 ? cellStr(row[cTrans]) || null : null,
+      smDate: cSmDate >= 0 ? cellStr(row[cSmDate]) || null : null,
+      branch: cBranch >= 0 ? cellStr(row[cBranch]) || null : null,
+      product: cProduct >= 0 ? cellStr(row[cProduct]) || null : null,
+      dum: cDum >= 0 ? toNum(row[cDum]) : null,
+      remark: cRemark >= 0 ? cellStr(row[cRemark]) || null : null,
     });
     rawRows.push(Array.from({ length: width }, (_, c) => (row[c] ?? null)));
   }

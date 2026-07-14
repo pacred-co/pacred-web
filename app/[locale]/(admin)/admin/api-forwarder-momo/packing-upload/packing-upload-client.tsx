@@ -12,6 +12,15 @@ import { PackingHistoryPanel } from "./packing-history-panel";
 
 const n3 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 6 }));
 const n2 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 2 }));
+// ── ตารางแบบชีท "ข้อมูลรายละเอียดสินค้าในตู้" (owner ปอน 2026-07-14) ──────────
+const DASH = <span className="text-gray-300">—</span>;
+/** ป้ายเล็กใต้หัวคอลัมน์ที่โชว์เป็น diff (ค่าปัจจุบันในระบบ → ค่าจาก packing list) */
+const DiffHint = () => <div className="text-[11px] font-normal text-muted/70">ระบบ→packing</div>;
+/** คอลัมน์ที่ชีทมี แต่ไฟล์ packing list ของ MOMO ไม่มี — โชว์ไว้ให้ครบฟอร์ม (ไม่เดาค่า) */
+const NO_FEED = "ไฟล์ packing list ของ MOMO ไม่มีคอลัมน์นี้ (ไฟล์มี 18 คอลัมน์) — ไม่เดาค่าใส่";
+const NO_FEED_ETD = "ไฟล์ packing list ของ MOMO ไม่มี ETD/ETA — มาจากไฟล์ของแต้ม (ดูที่หน้า MOMO · ตู้)";
+const thNoFeed = "px-2 py-2 text-center font-normal italic text-muted/50";
+const tdNoFeed = "px-2 py-1.5 text-center text-gray-300";
 
 const VERDICT: Record<string, { label: string; cls: string }> = {
   ok:        { label: "✅ ตรงแล้ว",              cls: "bg-emerald-100 text-emerald-800 border border-emerald-300" },
@@ -248,16 +257,38 @@ export function MomoPackingUploadClient() {
           )}
 
           <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-xs border-collapse [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border">
-              <thead className="bg-surface-alt/50 text-[11px] uppercase tracking-wide text-muted">
+            <table className="w-full text-xs border-collapse [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border min-w-[2200px]">
+              {/* หัวตาราง = ชีท "ข้อมูลรายละเอียดสินค้าในตู้" ตรงตัว (owner ปอน 2026-07-14 · "เอาตามนี้เป๊ะๆ
+                  ไม่มั่ว"): SM Date … ETA. ไฟล์ packing list ของ MOMO (18 คอลัมน์) ให้ครบทุกช่องยกเว้น
+                  SM Number / Note. / Service Fee / Return / ETD / ETA (ทำจาง + ขีด · ไม่เดาค่าใส่).
+                  Status = สถานะในระบบเรา (fstatus). 3 คอลัมน์ Total = diff ระบบ→packing (จุดประสงค์ของหน้า). */}
+              <thead className="bg-surface-alt/70 text-[11px] font-semibold text-foreground/70 [&_th]:whitespace-nowrap">
                 <tr>
-                  <th className="px-2 py-2 text-left">แทรคกิ้ง (ฐาน)</th>
-                  <th className="px-2 py-2 text-left">ลูกค้า</th>
-                  <th className="px-2 py-2 text-right">กล่อง ระบบ→packing</th>
-                  <th className="px-2 py-2 text-right">นน. ระบบ→packing</th>
-                  <th className="px-2 py-2 text-right">คิว ระบบ→packing</th>
-                  <th className="px-2 py-2 text-left">ประเภท / HS</th>
-                  <th className="px-2 py-2 text-center">สถานะ</th>
+                  <th className="px-2 py-2 text-center w-8">#</th>
+                  <th className="px-2 py-2 text-center" title="B — วันรับเข้าโกดังจีน (ตามที่ไฟล์เขียน)">SM Date</th>
+                  <th className={thNoFeed} title={NO_FEED}>SM Number</th>
+                  <th className="px-2 py-2 text-center" title="C — โกดังต้นทาง">Branch</th>
+                  <th className="px-2 py-2 text-center" title="D — ชื่อสินค้า (จีน)">Product</th>
+                  <th className="px-2 py-2 text-center" title="E">Dum</th>
+                  <th className="px-2 py-2 text-center">Type</th>
+                  <th className="px-2 py-2 text-center">Code</th>
+                  <th className="px-2 py-2 text-center">Tracking</th>
+                  <th className="px-2 py-2 text-center" title="กว้าง (ซม.) ต่อกล่อง">W.</th>
+                  <th className="px-2 py-2 text-center" title="ยาว (ซม.) ต่อกล่อง">L.</th>
+                  <th className="px-2 py-2 text-center" title="สูง (ซม.) ต่อกล่อง">H.</th>
+                  <th className="px-2 py-2 text-center">Total Parcel<DiffHint /></th>
+                  <th className="px-2 py-2 text-center" title="M — น้ำหนักต่อกล่อง (ค่าที่ไฟล์เขียนมาเอง)">Wt.</th>
+                  <th className="px-2 py-2 text-center" title="N — คิวต่อกล่อง (ค่าที่ไฟล์เขียนมาเอง)">Vol.</th>
+                  <th className="px-2 py-2 text-center" title="น้ำหนักรวมทั้งแทรค — ค่าที่ใช้คิดเงิน">Total Wt.<DiffHint /></th>
+                  <th className="px-2 py-2 text-center" title="คิวรวมทั้งแทรค — ค่าที่ใช้คิดเงิน">Total Vol.<DiffHint /></th>
+                  <th className="px-2 py-2 text-center" title="Q — Remark Number (เลขมาร์คกล่อง)">Rem</th>
+                  <th className="px-2 py-2 text-center" title="R — CG (พิกัด/HS ที่ MOMO ระบุ)">CG.</th>
+                  <th className={thNoFeed} title={NO_FEED}>Note.</th>
+                  <th className={thNoFeed} title={NO_FEED}>Service Fee</th>
+                  <th className="px-2 py-2 text-center" title="สถานะรายการในระบบเรา (fstatus)">Status</th>
+                  <th className={thNoFeed} title={NO_FEED}>Return</th>
+                  <th className={thNoFeed} title={NO_FEED_ETD}>ETD</th>
+                  <th className={thNoFeed} title={NO_FEED_ETD}>ETA</th>
                   <th className="px-2 py-2 text-center">ผล</th>
                 </tr>
               </thead>
@@ -267,26 +298,54 @@ export function MomoPackingUploadClient() {
                   const isMissing = r.verdict === "missing";
                   return (
                     <tr key={`${r.baseTracking}-${i}`} className={`border-t border-border align-top ${r.statusStale ? "bg-rose-50/60" : isMissing ? "bg-red-50/40" : ""}`}>
-                      <td className="px-2 py-1.5 font-mono">
+                      <td className="px-2 py-1.5 text-center text-muted tabular-nums">{i + 1}</td>
+                      {/* SM Date (B) */}
+                      <td className="px-2 py-1.5 text-center text-[11px] tabular-nums whitespace-nowrap">{r.packingSmDate ?? DASH}</td>
+                      {/* SM Number — ไฟล์ MOMO ไม่มี */}
+                      <td className={tdNoFeed} title={NO_FEED}>—</td>
+                      {/* Branch (C) · Product (D) · Dum (E) */}
+                      <td className="px-2 py-1.5 text-center text-[11px] whitespace-nowrap">{r.packingBranch ?? DASH}</td>
+                      <td className="px-2 py-1.5 text-center text-[11px] whitespace-nowrap" title={r.packingProduct ?? ""}>{r.packingProduct ?? DASH}</td>
+                      <td className="px-2 py-1.5 text-right text-[11px] tabular-nums">{r.packingDum ?? DASH}</td>
+                      {/* Type (F) */}
+                      <td className="px-2 py-1.5 text-center text-[11px] leading-snug">{r.productType ?? DASH}</td>
+                      {/* Code — PR ที่แมตช์ได้ / รหัสดิบจาก MOMO ถ้ายังไม่พบ */}
+                      <td className="px-2 py-1.5 text-center text-[11px]">
+                        {r.matched ? `${r.userid ?? "-"} / ${r.curCab ?? "-"}` : <span className="text-red-500">{r.code ?? "—"} (MOMO)</span>}
+                      </td>
+                      {/* Tracking (ฐาน — รวมกล่องย่อยแล้ว) */}
+                      <td className="px-2 py-1.5 font-mono whitespace-nowrap">
                         {r.baseTracking}
                         {r.subCount > 1 && <span className="ml-1 rounded bg-gray-100 px-1 text-[11px] text-gray-600">{r.subCount} กล่องย่อย</span>}
                       </td>
-                      <td className="px-2 py-1.5 text-[11px]">
-                        {r.matched ? `${r.userid ?? "-"} / ${r.curCab ?? "-"}` : <span className="text-red-500">{r.code ?? "—"} (MOMO)</span>}
-                      </td>
-                      <td className={`px-2 py-1.5 text-right ${r.amtDiff ? "text-orange-700 font-semibold" : "text-muted"}`}>
+                      {/* W. L. H. — ขนาดต่อกล่อง (ซม.) จาก packing list */}
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">{r.packingWidth ?? DASH}</td>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">{r.packingLength ?? DASH}</td>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">{r.packingHeight ?? DASH}</td>
+                      {/* Total Parcel — diff */}
+                      <td className={`px-2 py-1.5 text-right tabular-nums ${r.amtDiff ? "text-orange-700 font-semibold" : "text-muted"}`}>
                         {r.curAmt ?? "—"}→{r.packingBoxes ?? "—"}
                       </td>
-                      <td className={`px-2 py-1.5 text-right ${r.wtDiff ? "text-amber-700 font-semibold" : "text-muted"}`}>
+                      {/* Wt. (M) / Vol. (N) — ค่าต่อกล่องที่ไฟล์เขียนมาเอง (ไม่คำนวณเอง) */}
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums text-muted">{n2(r.packingWtPerBox)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums text-muted">{n3(r.packingCbmPerBox)}</td>
+                      {/* Total Wt. / Total Vol. — diff · ค่าที่ใช้คิดเงิน */}
+                      <td className={`px-2 py-1.5 text-right tabular-nums ${r.wtDiff ? "text-amber-700 font-semibold" : "text-muted"}`}>
                         {n2(r.curWt)}→{n2(r.packingWeight)}
                       </td>
-                      <td className={`px-2 py-1.5 text-right ${r.volDiff ? "text-amber-700 font-semibold" : "text-muted"}`}>
+                      <td className={`px-2 py-1.5 text-right tabular-nums ${r.volDiff ? "text-amber-700 font-semibold" : "text-muted"}`}>
                         {n3(r.curVol)}→{n3(r.packingCbm)}
                       </td>
-                      <td className="px-2 py-1.5 text-left text-[11px] leading-snug">
-                        <div>{r.productType ?? "—"}</div>
-                        {r.cg && <div className="text-sky-700">HS {r.cg}</div>}
+                      {/* Rem (Q) */}
+                      <td className="px-2 py-1.5 text-center font-mono text-[11px] whitespace-nowrap">{r.packingRemark ?? DASH}</td>
+                      {/* CG. (R) */}
+                      <td className="px-2 py-1.5 text-center font-mono text-[11px] whitespace-nowrap">
+                        {r.cg ? <span className="text-sky-700">{r.cg}</span> : DASH}
                       </td>
+                      {/* Note. · Service Fee — ไฟล์ MOMO ไม่มี */}
+                      <td className={tdNoFeed} title={NO_FEED}>—</td>
+                      <td className={tdNoFeed} title={NO_FEED}>—</td>
+                      {/* Status = สถานะในระบบเรา */}
                       <td className="px-2 py-1.5 text-center text-[11px]">
                         {r.fstatus ? <span className="text-muted">[{r.fstatus}]</span> : "—"}
                         {r.willAdvanceTo && (
@@ -295,6 +354,11 @@ export function MomoPackingUploadClient() {
                           </div>
                         )}
                       </td>
+                      {/* Return · ETD · ETA — ไฟล์ MOMO ไม่มี */}
+                      <td className={tdNoFeed} title={NO_FEED}>—</td>
+                      <td className={tdNoFeed} title={NO_FEED_ETD}>—</td>
+                      <td className={tdNoFeed} title={NO_FEED_ETD}>—</td>
+                      {/* ผล — ของเรา (ไม่ใช่คอลัมน์ในชีท) */}
                       <td className="px-2 py-1.5 text-center">
                         <span className={`inline-block rounded-full px-1.5 py-0.5 text-[11px] font-medium ${v.cls}`}>{v.label}</span>
                         {isMissing && r.code && /^PR\d+$/i.test(r.code) && (
@@ -315,6 +379,8 @@ export function MomoPackingUploadClient() {
             </table>
           </div>
           <p className="text-[11px] text-muted leading-relaxed">
+            หัวตาราง = ชีท &quot;ข้อมูลรายละเอียดสินค้าในตู้&quot; · <strong>Wt./Vol.</strong> = ค่าต่อกล่องที่ไฟล์เขียนมาเอง (คอลัมน์ M/N) ·{" "}
+            <strong>Total Wt./Total Vol.</strong> = รวมทั้งแทรค = ค่าที่ใช้คิดเงิน · คอลัมน์ที่จางไว้ (SM Number · Note. · Service Fee · Return · ETD · ETA) = ไฟล์ packing list ของ MOMO ไม่มี (18 คอลัมน์) ·{" "}
             [เลขในวงเล็บ] = สถานะ fstatus ปัจจุบัน · &quot;ระบบ→packing&quot; = ค่าปัจจุบันในระบบ → ค่าจาก packing list (รวมกล่องย่อยแล้ว) ·
             🟠 กล่องขาด = ระบบนับกล่อง/น้ำหนักน้อยกว่า packing → จะแก้ให้ตรง · 🔴 ไม่พบ = MOMO มีแต่ระบบไม่รู้จัก → ติ๊ก &quot;สร้าง&quot; เพื่อสร้างรายการให้ ·
             🟣 หลายแถว = ระบบมีหลายรายการยังไม่วางบิลของแทรคเดียว → ไม่แก้อัตโนมัติ (ตรวจเอง กันคิดเงินซ้ำ) · 🔒 วางบิลแล้ว = ข้าม (แก้บิลเอง) ·

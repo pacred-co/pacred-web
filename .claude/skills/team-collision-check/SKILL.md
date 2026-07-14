@@ -38,6 +38,14 @@ WHEN done: move your row to DONE.
 - **Same feature built twice** → stop the duplicate immediately; one keeps it, the other repoints. This is the pure time-waste the owner wants gone.
 - **Money/status SOT conflict** → extra care: two divergent edits to a money path = a money bug. Money-review both sides before keeping.
 
+### 🔴 Case study — the SAME SCREEN built twice (2026-07-14 · ภูม ↔ ปอน · the worst kind)
+Both teammates independently rebuilt the **same admin screen** (`app/[locale]/(admin)/admin/momo-containers/momo-containers-client.tsx` — the MOMO ตรวจตู้ / นำเข้าระบบ grid): ภูม shipped ติ๊กหลายแถว→นำเข้า + inline-edit น้ำหนัก/คิว + sort/export + grid↔card + ดึง-Live modal + พัสดุขาด (+373/−73); ปอน shipped ติ๊กเลือก + ปุ่มเดียวนำเข้า + หัวตาราง packing-list 2-หน้า + fit-to-screen (+343/−52). They **both implemented tick-select + an import button** — the same feature, twice, differently. Result at integration: **8 conflict regions in one component**, un-auto-mergeable, and un-testable by the integrator (no UI test harness) → it BLOCKED the branch push until the owner had to pick a side ("ยึดตามปอน") — and the loser's newer work was superseded.
+
+**What would have caught it:** claim the **SCREEN (route + component path)**, not a feature nickname — "ตรวจตู้" and "นำเข้าระบบ" are the SAME screen.
+- Worklog rows must name `route + component path` (`/admin/momo-containers · momo-containers-client.tsx`).
+- Before ANY admin-screen work: `git log --oneline origin/main..origin/<teammate> -- <component path>` → any commits there = REAL collision, coordinate NOW.
+- **One screen = one owner per round.** The second dev contributes through the first, or takes a disjoint slice (parser/columns vs interactions) — agreed IN WRITING before either starts.
+
 ## At integration time (เดฟ / the integrator)
 Run [`branch-integrate-loop`](../branch-integrate-loop/SKILL.md) — this skill is its proactive front. In the SURVEY step, the collision table above tells you which overlaps are real (resolve, keep BOTH sides' intent) vs cosmetic (auto-merge). The recurring real ones: the `package.json` test-list, migration-number clashes, and a shared SOT both branches edited.
 

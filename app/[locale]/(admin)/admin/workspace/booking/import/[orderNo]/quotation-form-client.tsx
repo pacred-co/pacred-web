@@ -15,7 +15,7 @@ import { Link, useRouter } from "@/i18n/navigation";
 import { ArrowLeft, Paperclip, Trash2, Settings, ChevronDown, FilePlus2, Calculator, UserRoundCheck, CalendarClock, CalendarCheck2, CircleCheckBig, Search, Ship, Truck, Plane, Clock3, Check, Sparkles, ArrowRight, PackageCheck, ShieldCheck, FileText, Maximize2 } from "lucide-react";
 import { BOOKING_STATUS_META, type Booking, type BookingStatus } from "../booking-data";
 import {
-  TERM_OPTIONS, ENTER_OPTIONS, SPECIAL_OPTIONS, PRODUCT_TYPE_OPTIONS, docModeOptions, LOAD_TYPE_OPTIONS, TRANSPORT_TABS, PORT_COUNTRIES, PORT_CATALOG, WAREHOUSE_CATALOG, firstPort, directionOf,
+  TERM_OPTIONS, ENTER_OPTIONS, TRANSIT_OPTIONS, SPECIAL_OPTIONS, PRODUCT_TYPE_OPTIONS, docModeOptions, LOAD_TYPE_OPTIONS, TRANSPORT_TABS, PORT_COUNTRIES, PORT_CATALOG, WAREHOUSE_CATALOG, firstPort, directionOf,
   CARRIER_LABEL, CARRIER_CATALOG, AGENT_OPTIONS, carrierValidFor,
   linesForConditions, computeQuoteTotals, bahtFmt, templateKeyOf, usesLoadType, usesContainer, noteForConditions, PACRED_ISSUER,
   type QuoteConditions, type PortSel, type QuoteLine,
@@ -25,7 +25,7 @@ import { lookupMemberByCode } from "@/actions/admin/booking-member-lookup";
 import { CARGO_PROMO_PACKAGES, rateFor, MIN_CHARGE, DEFAULT_COMPARISON, type QuoteMode, type WarehouseKey, type CargoPromoPackage } from "@/lib/quote/cargo-promo-packages";
 import { BookingDraftPreview } from "./booking-draft";
 import { SubProcessTimeline } from "@/components/workspace/booking-journey";
-import { FieldHint, TRANSPORT_HINT, LOADTYPE_HINT, TERM_HINT, ENTER_HINT, PRODUCT_HINT, SPECIAL_HINT, DOCMODE_HINT, POL_HINT, POD_HINT, COMMODITY_HINT, CARRIER_HINT, WEIGHT_HINT, CBM_HINT, AGENT_HINT } from "./booking-hints";
+import { FieldHint, TRANSPORT_HINT, LOADTYPE_HINT, TERM_HINT, ENTER_HINT, TRANSIT_HINT, PRODUCT_HINT, SPECIAL_HINT, DOCMODE_HINT, POL_HINT, POD_HINT, COMMODITY_HINT, CARRIER_HINT, WEIGHT_HINT, CBM_HINT, AGENT_HINT } from "./booking-hints";
 import styles from "./quotation-mockup.module.css";
 
 // ลำดับ stepper (ตัด "ยกเลิก" ออก — โชว์เป็น banner แยก)
@@ -61,7 +61,7 @@ function deriveConditions(b: Booking | null): QuoteConditions {
     pol: { country: "จีน", port: firstPort("จีน", service) },
     pod: { country: "ไทย", port: firstPort("ไทย", service) },
     loadType, container: "20' GP × 1", carrier: "", weight: "", cbm: "", agent: "", productType: "ทั่วไป", docMode: "ไม่รับเอกสาร",
-    term, enter: "Normal", special: [],
+    term, enter: "Normal", transit: "Direct", special: [],
   };
 }
 
@@ -88,7 +88,7 @@ function docTypesFor(service: string): DocType[] {
 }
 
 // สี pill พิเศษ (mockup): ENTER แต่ละตัวมีสีประจำ (Normal=active/แดง)
-const ENTER_COLOR: Record<string, string> = { "Change Status": "amber", "Document Amend": "purple", "Direct": "blue", "Indirect": "green" };
+const ENTER_COLOR: Record<string, string> = { "Document Amend": "purple" };
 
 export function QuotationFormClient({
   booking, isNew, docNo, salesName, catalog, showCost, showProfit,
@@ -317,12 +317,46 @@ export function QuotationFormClient({
   function editLine(id: string, patch: Partial<QuoteLine>) {
     setLines((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   }
-  function addLine() {
+  /** เพิ่มบรรทัดเข้า "หมวด" ที่กด (group เป็นตัวกำหนดว่าไปลงหมวดไหน · sectionOf). */
+  function addLine(group: string, receipt = false) {
     setLines((prev) => [...prev, {
-      id: `new-${prev.length}-${Math.round(totals.grand)}`, group: "Special", desc: "", qty: 1, unitPrice: 0, vat: true, wht: 0,
+      id: `new-${group}-${prev.length}-${Date.now()}`, group, desc: "", qty: 1, unitPrice: 0,
+      vat: !receipt, wht: 0, ...(receipt ? { receipt: true } : {}),
       ...(showCost ? { cost: 0 } : {}), ...(showProfit ? { profit: 0 } : {}),
     }]);
   }
+
+  // ── Quotation Breakdown (owner ปอน 2026-07-14) — 4 หมวด + คอลัมน์ราคาขายตาม LCL/FCL ──
+  const saleCols = useMemo(
+    () => saleColumnsFor(cond.service, cond.loadType, cond.container),
+    [cond.service, cond.loadType, cond.container],
+  );
+  const firstColKey = saleCols[0]?.key ?? "sale";
+  const isFclCols = usesLoadType(cond.service) && usesContainer(cond.loadType);
+  const saleColsNote = isFclCols
+    ? (cond.container ? `คอลัมน์ราคา = ขนาดตู้ที่เลือก (${cond.container})` : "FCL · ยังไม่ได้เลือกขนาดตู้")
+    : "คอลัมน์ราคา = รถ 4 ล้อ / 6 ล้อ (LCL)";
+  /** ราคาขายของบรรทัดในคอลัมน์นั้น — ยังไม่กรอก → ใช้ unitPrice (ราคาตั้งต้นจาก catalog). */
+  const priceAt = (l: QuoteLine, colKey: string) => Number(l.prices?.[colKey] ?? l.unitPrice) || 0;
+  const setPriceAt = (l: QuoteLine, colKey: string, v: number) =>
+    editLine(l.id, { prices: { ...(l.prices ?? {}), [colKey]: v } });
+  const colSubtotal = (ls: QuoteLine[], colKey: string) =>
+    ls.reduce((n, l) => n + (Number(l.qty) || 0) * priceAt(l, colKey), 0);
+  const sections = useMemo(() => {
+    const b: Record<1 | 2 | 3 | 4, QuoteLine[]> = { 1: [], 2: [], 3: [], 4: [] };
+    for (const l of lines) b[sectionOf(l)].push(l);
+    return [
+      { no: 1, title: freightSectionTitle(cond.service), lines: b[1], addGroup: "Freight", addReceipt: false },
+      { no: 2, title: `Local charge at ${cond.pol.port || "ต้นทาง"}`, lines: b[2], addGroup: "Origin", addReceipt: false },
+      { no: 3, title: `Local charge at ${cond.pod.port || "ปลายทาง"}`, lines: b[3], addGroup: "Special", addReceipt: false },
+      { no: 4, title: "Receipt for Customs", lines: b[4], addGroup: "Receipt", addReceipt: true },
+    ];
+  }, [lines, cond.service, cond.pol.port, cond.pod.port]);
+  // colSpan: หัวแถว (Item + Currency/Basis + Rate×Qty) | คอลัมน์ราคาขาย | ท้ายแถว (Unit + Cost? + Profit? + VAT + Note + ลบ)
+  const leadCols = 3;
+  const tailCols = 4 + (showCostNow ? 1 : 0) + (showProfitNow ? 1 : 0);
+  const totalCols = leadCols + saleCols.length + tailCols;
+  const grandFirstCol = colSubtotal(lines, firstColKey);
   const setF = (k: keyof typeof doc) => (v: string) => setDoc((d) => ({ ...d, [k]: v }));
 
   const webShort = PACRED_ISSUER.web.replace(/^https?:\/\//, "").replace(/\/$/, "");
@@ -404,6 +438,8 @@ export function QuotationFormClient({
               <SelRow stack label="ประเภทสินค้า" options={PRODUCT_TYPE_OPTIONS} value={cond.productType} onPick={(v) => setC("productType", v)} hint={<FieldHint content={PRODUCT_HINT} />} />
               <SelRow stack label="TERM" options={TERM_OPTIONS} value={cond.term} onPick={(v) => setC("term", v)} hint={<FieldHint content={TERM_HINT} align="center" />} />
               <SelRow stack label="ENTER" options={ENTER_OPTIONS} value={cond.enter} colorMap={ENTER_COLOR} onPick={(v) => setC("enter", v)} hint={<FieldHint content={ENTER_HINT} align="center" />} />
+              {/* TRANSIT (owner ปอน 2026-07-14) — เดินทางตรง vs ถ่ายลำ (ย้ายออกจาก ENTER) */}
+              <SelRow stack label="TRANSIT" options={TRANSIT_OPTIONS} value={cond.transit} onPick={(v) => setC("transit", v)} hint={<FieldHint content={TRANSIT_HINT} align="center" />} />
               {/* เอกสารที่ออก (owner พี่ป๊อป 2026-07-10) — ตัวเลือกขึ้นกับ TERM: DDP เหมาภาษี ไม่มีใบกำกับเต็ม */}
               <SelRow stack label="เอกสาร" options={docModeOptions(cond.term)} value={cond.docMode} onPick={(v) => setC("docMode", v)} hint={<FieldHint content={DOCMODE_HINT} align="center" />} />
               {usesLoadType(cond.service) && (
@@ -577,15 +613,12 @@ export function QuotationFormClient({
               </div>
             </div>
 
-            {/* quoteTable */}
+            {/* quoteTable — Quotation Breakdown (owner ปอน 2026-07-14): แยก 4 หมวดตาม group · คอลัมน์ราคาขายผูกกับ LCL/FCL */}
             <div className={styles.quoteTable}>
               <div className={styles.qtHead}>
                 <div>
-                  <span className={styles.sectionTag}>Dynamic quotation lines</span>
-                  <div className={styles.sub}>รายการขึ้นตามเงื่อนไขที่เลือก · เรทตั้งต้นจาก “ตั้งค่า” (Pricing)</div>
-                </div>
-                <div className={styles.sourceWrap}>
-                  <button type="button" className={styles.addBtn} onClick={addLine}>+ เพิ่มบรรทัด</button>
+                  <span className={styles.sectionTag}>Quotation breakdown</span>
+                  <div className={styles.sub}>รายการขึ้นตามเงื่อนไขที่เลือก · เรทตั้งต้นจาก “ตั้งค่า” (Pricing) · {saleColsNote}</div>
                 </div>
               </div>
 
@@ -603,64 +636,119 @@ export function QuotationFormClient({
                 </div>
               )}
 
-              {!hasTemplate && lines.length === 0 ? (
-                <div style={{ border: "1px dashed #d9dce3", borderRadius: 16, padding: "28px 16px", textAlign: "center", color: "#6f7278", fontSize: 13 }}>
-                  ยังไม่มีเรทตั้งต้นสำหรับ <b>{templateKeyOf(cond)}</b> — กด “เพิ่มบรรทัด” เพื่อกรอกเอง
+              {!hasTemplate && lines.length === 0 && (
+                <div style={{ border: "1px dashed #d9dce3", borderRadius: 16, padding: "16px", textAlign: "center", color: "#6f7278", fontSize: 13, marginBottom: 12 }}>
+                  ยังไม่มีเรทตั้งต้นสำหรับ <b>{templateKeyOf(cond)}</b> — กด “เพิ่มบรรทัด” ในหมวดที่ต้องการ เพื่อกรอกเอง
                   {canSeeMoney && <><br />หรือไปตั้งเรทชุดนี้ที่หน้า <b>ตั้งค่า</b> (Pricing) เพื่อให้ดึงมาอัตโนมัติครั้งต่อไป</>}
                 </div>
-              ) : (
-                <div className={styles.qtScroll}>
-                  <table className={styles.qt}>
-                    <thead>
-                      <tr>
-                        <th>#</th><th>คำอธิบาย</th>
-                        <th className={styles.center}>Qty</th><th className={styles.money}>ราคาขาย</th>
-                        {showCostNow && <th className={styles.money}>ต้นทุน</th>}
-                        {showProfitNow && <th className={styles.money}>กำไร</th>}
-                        <th className={styles.center}>VAT</th><th className={styles.center}>WHT</th><th className={styles.center} />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lines.map((l, idx) => {
-                        return (
-                          <tr key={l.id}>
-                            <td className={styles.no}>{idx + 1}</td>
-                            <td>
-                              <input className={styles.descIn} value={l.desc} onChange={(e) => editLine(l.id, { desc: e.target.value })} placeholder="คำอธิบายรายการ" />
-                              {l.note && <span className={styles.descNote}>⚠ {l.note}</span>}
-                            </td>
-                            <td className={styles.center}>
-                              <input type="number" className={cx(styles.cellIn, styles.qtyIn)} value={l.qty} onChange={(e) => editLine(l.id, { qty: Number(e.target.value) })} />
-                            </td>
-                            <td className={styles.money}>
-                              <input type="number" className={cx(styles.cellIn, styles.priceIn)} value={l.unitPrice} onChange={(e) => editLine(l.id, { unitPrice: Number(e.target.value) })} />
-                            </td>
-                            {showCostNow && (
-                              <td className={styles.money}>
-                                {l.receipt ? <span style={{ color: "#9aa0a8" }}>—</span> : (
-                                  <input type="number" className={cx(styles.cellIn, styles.priceIn)} value={l.cost ?? 0} onChange={(e) => editLine(l.id, { cost: Number(e.target.value) })} />
-                                )}
-                              </td>
-                            )}
-                            {showProfitNow && (
-                              <td className={styles.money}>
-                                {l.receipt ? <span style={{ color: "#9aa0a8" }}>—</span> : (
-                                  <span style={{ fontWeight: 700, color: lineMargin(l) < 0 ? "#dc2626" : "#159447" }}>{bahtFmt(lineMargin(l))}</span>
-                                )}
-                              </td>
-                            )}
-                            <td className={styles.center}>{l.receipt ? "ไม่มี" : l.vat ? "7%" : "—"}</td>
-                            <td className={styles.center}>{l.wht ? `${l.wht}%` : "-"}</td>
-                            <td className={styles.center}>
-                              <button type="button" className={styles.delBtn} onClick={() => setLines((prev) => prev.filter((x) => x.id !== l.id))} aria-label="ลบบรรทัด"><Trash2 className="h-3.5 w-3.5" /></button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
               )}
+
+              {/* 4 หมวด (เรียง 1→4 เสมอ · หมวดที่ไม่มีรายการ = โชว์แถวว่าง) */}
+              <div className={styles.qtSections}>
+                {sections.map((sec) => (
+                  <section key={sec.no} className={styles.qtSection}>
+                    <div className={styles.qtSectionHead}>
+                      <span className={styles.qtSectionNo}>{sec.no}</span>
+                      <h4 className={styles.qtSectionTitle}>{sec.title}</h4>
+                      <button type="button" className={styles.addBtn} onClick={() => addLine(sec.addGroup, sec.addReceipt)}>+ เพิ่มบรรทัด</button>
+                    </div>
+                    <div className={styles.qtScroll}>
+                      <table className={cx(styles.qt, styles.qtg)}>
+                        <thead>
+                          <tr>
+                            <th>Item</th>
+                            <th>Currency / Basis</th>
+                            <th>Rate × Qty</th>
+                            {saleCols.map((c) => <th key={c.key} className={styles.money}>{c.label}</th>)}
+                            <th>Unit</th>
+                            {showCostNow && <th className={styles.money}>Cost (THB)</th>}
+                            {showProfitNow && <th className={styles.money}>Profit (THB)</th>}
+                            <th className={styles.center}>VAT</th>
+                            <th>Note</th>
+                            <th className={styles.center} />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sec.lines.length === 0 ? (
+                            <tr><td className={styles.qtEmpty} colSpan={totalCols}>— ไม่มีรายการ —</td></tr>
+                          ) : sec.lines.map((l) => (
+                            <tr key={l.id}>
+                              <td>
+                                <input className={styles.descIn} value={l.desc} onChange={(e) => editLine(l.id, { desc: e.target.value })} placeholder="คำอธิบายรายการ" />
+                              </td>
+                              <td className={styles.center}><span className={styles.basisTxt}>{currencyBasis(l.unit)}</span></td>
+                              <td className={styles.rateCell}>
+                                <span className={styles.rateWrap}>
+                                  {l.unitPrice ? <b className={styles.rateVal}>{bahtFmt(l.unitPrice)}</b> : <span className={styles.dash}>-</span>}
+                                  <span className={styles.rateX}>×</span>
+                                  <input type="number" aria-label="จำนวน" className={cx(styles.cellIn, styles.qtyIn)} value={l.qty} onChange={(e) => editLine(l.id, { qty: Number(e.target.value) })} />
+                                </span>
+                              </td>
+                              {saleCols.map((c) => (
+                                <td key={c.key} className={styles.money}>
+                                  <input type="number" aria-label={c.label} className={cx(styles.cellIn, styles.priceIn)} value={priceAt(l, c.key)} onChange={(e) => setPriceAt(l, c.key, Number(e.target.value))} />
+                                </td>
+                              ))}
+                              <td className={styles.center}>{l.unit ? <span className={styles.basisTxt}>{l.unit}</span> : <span className={styles.dash}>-</span>}</td>
+                              {showCostNow && (
+                                <td className={styles.money}>
+                                  {l.receipt ? <span className={styles.dash}>—</span> : (
+                                    <input type="number" aria-label="ต้นทุน" className={cx(styles.cellIn, styles.priceIn)} value={l.cost ?? 0} onChange={(e) => editLine(l.id, { cost: Number(e.target.value) })} />
+                                  )}
+                                </td>
+                              )}
+                              {showProfitNow && (
+                                <td className={styles.money}>
+                                  {l.receipt ? <span className={styles.dash}>—</span> : (
+                                    <span style={{ fontWeight: 700, color: lineMargin(l) < 0 ? "#dc2626" : "#159447" }}>{bahtFmt(lineMargin(l))}</span>
+                                  )}
+                                </td>
+                              )}
+                              {/* VAT 7% ต่อบรรทัด (owner ปอน 2026-07-14) — กดสลับได้ · เก็บตามใบเสร็จจริง = ไม่มี VAT (ล็อก) */}
+                              <td className={styles.center}>
+                                {l.receipt ? (
+                                  <span className={cx(styles.vatPill, styles.vatLocked)} title="เก็บตามใบเสร็จจริง — ไม่คิด VAT">ไม่มี</span>
+                                ) : (
+                                  <button type="button" className={cx(styles.vatPill, l.vat && styles.vatOn)}
+                                    onClick={() => editLine(l.id, { vat: !l.vat })}
+                                    title={l.vat ? "คิด VAT 7% — กดเพื่อไม่คิด" : "ไม่คิด VAT — กดเพื่อคิด 7%"}>
+                                    {l.vat ? "7%" : "—"}
+                                  </button>
+                                )}
+                              </td>
+                              <td className={styles.noteCell}>
+                                {l.note ? <span className={styles.descNote}>⚠ {l.note}</span> : <span className={styles.dash}>-</span>}
+                              </td>
+                              <td className={styles.center}>
+                                <button type="button" className={styles.delBtn} onClick={() => setLines((prev) => prev.filter((x) => x.id !== l.id))} aria-label="ลบบรรทัด"><Trash2 className="h-3.5 w-3.5" /></button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        {sec.lines.length > 0 && (
+                          <tfoot>
+                            <tr className={styles.qtSub}>
+                              <td colSpan={leadCols}>รวม {sec.title}</td>
+                              {saleCols.map((c) => <td key={c.key} className={styles.money}>{bahtFmt(colSubtotal(sec.lines, c.key))}</td>)}
+                              <td colSpan={tailCols} />
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  </section>
+                ))}
+              </div>
+
+              {/* ท้ายตาราง — หมายเหตุ (ซ้าย) + รวมราคาคร่าวๆ ของคอลัมน์ราคาแรก (ขวา) */}
+              <div className={styles.qtFooter}>
+                <p className={styles.qtFooterNote}>หมายเหตุ : เมื่อมีการเปลี่ยนแปลงที่อยู่รับหรือส่งสินค้า จะมีค่าใช้จ่ายเพิ่มเติม</p>
+                <div className={styles.qtGrandBox}>
+                  <span className={styles.qtGrandLabel}>รวมราคา (คร่าวๆ)</span>
+                  <span className={styles.qtGrandVal}>{bahtFmt(grandFirstCol)}</span>
+                  <span className={styles.qtGrandCcy}>THB</span>
+                </div>
+              </div>
             </div>
 
             {/* summary */}
@@ -941,6 +1029,46 @@ function parseContainer(s: string): Record<string, number> {
     if (m) q[sz.code] = Number(m[1]);
   }
   return q;
+}
+
+// ── Quotation Breakdown — คอลัมน์ราคาขาย + การจัดหมวด (owner ปอน 2026-07-14) ────────
+/** 1 คอลัมน์ราคาขาย = 1 ตัวเลือกที่ผูกกับ picker ด้านบน (รถ 4/6 ล้อ หรือ ขนาดตู้). */
+type SaleCol = { key: string; label: string };
+
+/**
+ * คอลัมน์ "ราคาขาย" ของใบ — ผูกกับตัวเลือก “ประเภท / ขนาดตู้” ด้านบน:
+ *   LCL → 2 คอลัมน์ รถ 4 ล้อ / 6 ล้อ (รถที่ใช้ส่ง)
+ *   FCL → 1 คอลัมน์ต่อ “ขนาดตู้ที่เลือก” (20' GP / 40' HC …) · ยังไม่เลือก → คอลัมน์เดียว
+ * เปลี่ยน picker → คอลัมน์เปลี่ยนตามเอง (derive จาก cond · ไม่มี state ซ้ำ).
+ */
+function saleColumnsFor(service: string, loadType: string, container: string): SaleCol[] {
+  if (!usesLoadType(service) || !usesContainer(loadType)) {
+    return [{ key: "4W", label: "Sale 4W (THB)" }, { key: "6W", label: "Sale 6W (THB)" }];
+  }
+  const qty = parseContainer(container);
+  const cols = FCL_SIZES.filter((s) => (qty[s.code] ?? 0) > 0).map((s) => ({ key: s.code, label: `Sale ${s.code} (THB)` }));
+  return cols.length > 0 ? cols : [{ key: "sale", label: "Sale (THB)" }];
+}
+
+/** หมวดของบรรทัด: 1 = ค่าระวาง · 2 = local ต้นทาง · 3 = local ปลายทาง · 4 = เก็บตามใบเสร็จจริง. */
+function sectionOf(l: QuoteLine): 1 | 2 | 3 | 4 {
+  if (l.group === "Receipt" || l.receipt) return 4; // เช็ค receipt ก่อน — บรรทัดที่เก็บตามใบเสร็จลงหมวด 4 เสมอ
+  if (l.group === "Freight") return 1;
+  if (l.group === "Origin") return 2;
+  return 3; // Customs / Document / D/O / Transport / Port / Special
+}
+
+/** หัวหมวดค่าระวาง — เปลี่ยนตามโหมดขนส่ง (เรือ/แอร์/รถ). */
+function freightSectionTitle(service: string): string {
+  if (service === "AIR") return "Air Freight Charge (ค่าบริการขนส่งสินค้าทางอากาศ)";
+  if (service === "TRUCK") return "Truck Freight Charge (ค่าบริการขนส่งสินค้าทางรถ)";
+  return "Ocean Freight Charge (ค่าบริการขนส่งสินค้าทางทะเล)";
+}
+
+/** หน่วยจาก catalog → “สกุลเงิน / ฐานคิด” เช่น "THB/CBM" → "THB / CBM" · ไม่มีหน่วย → "-". */
+function currencyBasis(unit?: string): string {
+  const parts = (unit ?? "").split("/").map((s) => s.trim()).filter(Boolean);
+  return parts.length > 0 ? parts.join(" / ") : "-";
 }
 
 function LoadTypePicker({

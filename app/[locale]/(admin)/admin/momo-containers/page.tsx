@@ -14,10 +14,10 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { momoTypeToProductType } from "@/lib/admin/momo-live-discovery-plan";
-import { deriveMomoMemberCode, baseTrackingOf, aggregateTrackDetailMetrics } from "@/lib/admin/momo-raw-helpers";
+import { deriveMomoMemberCode, baseTrackingOf } from "@/lib/admin/momo-raw-helpers";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import type { PackingUploadSnapshot } from "@/actions/admin/momo-packing-history";
-import { MomoIngestClient, type IngestTrack, type MissingParcel } from "./momo-containers-client";
+import { MomoIngestClient, type IngestTrack } from "./momo-containers-client";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +84,13 @@ export default async function MomoContainersPage() {
       phase: row.phase ?? null,
       adminStatusText: (row.admin_status_text as string | null) ?? null,
       guessedUserId,
+      // packing-list (Shipment Report) columns MOMO DOES feed — the grid mirrors
+      // แต้ม's sheet layout (owner ปอน 2026-07-14 · CANON in lib/admin/taem-reconcile-parser).
+      smDate: str("created_date"),        // C "SM Date" — วันที่ MOMO รับเข้าโกดัง
+      userCode: userCodeRaw,              // I "Code" — รหัสลูกค้าฝั่ง MOMO (ที่ derive เป็น PR)
+      cgNo: str("CG_NO"),                 // T "CG." — เลข CG ของ MOMO
+      // V "Service fee." — MOMO ส่งมาเป็น extra_cost (ค่าตีลังไม้/ค่าใช้จ่ายเพิ่ม · extractCrateFromMomoRaw)
+      serviceFee: raw && typeof raw === "object" && raw.extra_cost != null ? num(raw.extra_cost) : null,
       guessedShipBy: str("ship_by"),
       guessedProductType: momoTypeToProductType(str("type")),
       qty: colQ > 0 ? colQ : (numFromRaw("quantity") || null),
@@ -126,12 +133,14 @@ export default async function MomoContainersPage() {
       );
   }
 
-  // Packing-list match (Slice 2) — เทียบ API vs Packing ต่อแทรค. Load the latest
+  // ตู้ทั้งหมดที่โผล่ในลิสต์ — ใช้ร่วมกัน 2 อย่างข้างล่าง (packing match + ETD/ETA)
+  const containers = [...new Set(intermediate.map((r) => r.container).filter((c): c is string => !!c))];
+
+  // Packing-list match (Slice 2 · ภูม) — เทียบ API vs Packing ต่อแทรค. Load the latest
   // packing upload for each container present, aggregate the snapshot rows by base
   // tracking → a map. weight_kg above is the SHIPMENT aggregate (same basis the
   // packing baseTracking uses), so the compare in the client is apples-to-apples.
-  const containers = [...new Set(intermediate.map((r) => r.container).filter((c): c is string => !!c))];
-  const packingByBase = new Map<string, { weight: number | null; cbm: number | null; boxes: number | null; code: string | null; container: string }>();
+  const packingByBase = new Map<string, { weight: number | null; cbm: number | null; boxes: number | null }>();
   if (containers.length > 0) {
     const { data: pkUploads, error: pkErr } = await admin
       .from("momo_packing_upload")
@@ -149,39 +158,28 @@ export default async function MomoContainersPage() {
       for (const row of snap?.rows ?? []) {
         const b = baseTrackingOf(row.baseTracking ?? "");
         if (!b || packingByBase.has(b)) continue; // latest upload wins
-        packingByBase.set(b, { weight: row.weight, cbm: row.cbm, boxes: row.boxes, code: row.code, container: cab });
+        packingByBase.set(b, { weight: row.weight, cbm: row.cbm, boxes: row.boxes });
       }
     }
   }
 
-  // MOMO Live match (เฟส B) — the closed-container manifest (track_details) is the
-  // MOST complete source: it lists every parcel MOMO knows even ones the API feed
-  // dropped. Read the CACHED momo_container_closed (cron pulls Live ~ทุก 5 นาที) →
-  // aggregate track_details by base tracking (Σ across split parcels · reuse the
-  // proven helper) → a base→{kg,cbm} map. Fast (DB read, no scrape) + apples-to-apples.
-  const liveByBase = new Map<string, { weight: number | null; cbm: number | null }>();
-  {
-    const { data: ccRows, error: ccErr } = await admin
-      .from("momo_container_closed")
-      .select("raw")
-      .order("last_synced_at", { ascending: false })
-      .limit(400);
-    if (ccErr) console.error("[momo-containers live load] failed", { code: ccErr.code, message: ccErr.message });
-    for (const cc of (ccRows ?? []) as Array<{ raw: unknown }>) {
-      const td = cc.raw && typeof cc.raw === "object" ? (cc.raw as Record<string, unknown>).track_details : null;
-      const agg = aggregateTrackDetailMetrics(Array.isArray(td) ? td : []);
-      for (const [key, m] of Object.entries(agg)) {
-        if (key !== baseTrackingOf(key)) continue; // keep only the base/aggregate entries (Σ)
-        if (liveByBase.has(key)) continue; // ordered desc → latest container-close wins
-        liveByBase.set(key, { weight: m.kg || null, cbm: m.cbm || null });
-      }
-    }
+  // ETD/ETA (cols Y/Z ของ packing list · ปอน) — MOMO API ไม่ส่งมาต่อแทรค · เก็บอยู่ระดับ "ตู้"
+  // จากไฟล์ packing list ของแต้ม (taem_container_etd_eta · mig 0195 · แต้ม-primary).
+  // ว่างจนกว่าจะอัพ packing list ของตู้นั้น → fail-soft (ตารางไม่พังถ้า query มีปัญหา).
+  const etaByCabinet = new Map<string, { etd: string | null; eta: string | null }>();
+  if (containers.length > 0) {
+    const { data: etaRows, error: etaErr } = await admin
+      .from("taem_container_etd_eta")
+      .select("container_no, etd, eta")
+      .in("container_no", containers);
+    if (etaErr) console.error("[momo-containers etd/eta] failed", { code: etaErr.code, message: etaErr.message });
+    else
+      for (const row of (etaRows ?? []) as Array<{ container_no: string; etd: string | null; eta: string | null }>)
+        etaByCabinet.set(row.container_no, { etd: row.etd, eta: row.eta });
   }
 
   const tracks: IngestTrack[] = intermediate.map((r) => {
-    const base = r.tracking ? baseTrackingOf(r.tracking) : "";
-    const pk = base ? packingByBase.get(base) : undefined;
-    const lv = base ? liveByBase.get(base) : undefined;
+    const pk = r.tracking ? packingByBase.get(baseTrackingOf(r.tracking)) : undefined;
     return {
       ...r,
       userIdValid: r.guessedUserId == null ? null : knownUserIds.has(r.guessedUserId.toUpperCase()),
@@ -189,32 +187,10 @@ export default async function MomoContainersPage() {
       packingWeight: pk?.weight ?? null,
       packingCbm: pk?.cbm ?? null,
       packingBoxes: pk?.boxes ?? null,
-      hasLive: !!lv,
-      liveWeight: lv?.weight ?? null,
-      liveCbm: lv?.cbm ?? null,
+      etd: (r.container && etaByCabinet.get(r.container)?.etd) || null,
+      eta: (r.container && etaByCabinet.get(r.container)?.eta) || null,
     };
   });
-
-  // เฟส C — พัสดุขาด: bases in the packing list but NOT in the MOMO API feed
-  // (MOMO API drops advanced parcels · the ฿294k recovery). Packing carries the PR
-  // (member code) + cabinet + weight/cbm → enough to CREATE via the proven, guarded
-  // addMissingMomoParcel. Live-only-missing (no PR) is out of scope here — those need
-  // a manual PR chase on the MOMO web (the /drift page covers them).
-  const apiBases = new Set(intermediate.map((r) => (r.tracking ? baseTrackingOf(r.tracking) : "")).filter(Boolean));
-  const missing: MissingParcel[] = [];
-  for (const [base, pk] of packingByBase) {
-    if (apiBases.has(base) || !pk.container) continue;
-    missing.push({
-      tracking: base,
-      cabinet: pk.container,
-      code: pk.code,
-      weight: pk.weight,
-      cbm: pk.cbm,
-      boxes: pk.boxes,
-      inLive: liveByBase.has(base),
-    });
-  }
-  missing.sort((a, b) => a.cabinet.localeCompare(b.cabinet));
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-6 space-y-5">
@@ -236,7 +212,7 @@ export default async function MomoContainersPage() {
           ))}
         </div>
       </header>
-      <MomoIngestClient tracks={tracks} missing={missing} loadError={error?.message ?? null} />
+      <MomoIngestClient tracks={tracks} loadError={error?.message ?? null} />
     </div>
   );
 }

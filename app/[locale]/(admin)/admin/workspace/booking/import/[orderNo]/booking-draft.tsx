@@ -212,7 +212,7 @@ export function BookingDraftPreview({
               <div className="flex min-w-0 flex-1 flex-col items-center">
                 <div className="flex flex-wrap items-center justify-center gap-1 text-center text-[11px] font-semibold text-primary-600"><Svc className="h-4 w-4 shrink-0" /> {cond.carrier || svc.label}{usesLoadType(cond.service) ? ` · ${cond.loadType}` : ""}{usesContainer(cond.loadType) ? ` · ${cond.container}` : ""}</div>
                 <div className="my-1 h-0.5 w-full bg-primary-500" />
-                <div className="text-[10px] text-muted">Direct / Indirect: {cond.enter === "Normal" ? "ยังไม่ระบุ" : cond.enter}</div>
+                <div className="text-[10px] text-muted">Direct / Indirect: {cond.transit || "ยังไม่ระบุ"}</div>
               </div>
               <div className="shrink-0 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary-600 text-sm font-bold text-white">{countryCode(cond.pod.country)}</div>
