@@ -175,6 +175,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
   const [perPage, setPerPage] = useState(50);
   const [page, setPage] = useState(1);
   const [copied, setCopied] = useState(false);
+  const [view, setView] = useState<"table" | "card">("table"); // grid-toggle (ภูม)
   // reorderable columns (drag · เฟส A-3b)
   const { order: colOrder, move: moveCol, reset: resetCols } = useColumnOrder(DATA_KEYS);
   const [dragKey, setDragKey] = useState<string | null>(null);
@@ -542,8 +543,14 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           <option value={200}>200 / หน้า</option>
           <option value={99999}>ทั้งหมด</option>
         </select>
-        <button type="button" onClick={resetCols} title="รีเซ็ตลำดับคอลัมน์"
-          className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt">↺ คอลัมน์</button>
+        {view === "table" && (
+          <button type="button" onClick={resetCols} title="รีเซ็ตลำดับคอลัมน์"
+            className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt">↺ คอลัมน์</button>
+        )}
+        <div className="inline-flex overflow-hidden rounded-full border border-border text-xs font-medium">
+          <button type="button" onClick={() => setView("table")} className={`px-3 py-1 ${view === "table" ? "bg-primary-600 text-white" : "bg-white dark:bg-surface hover:bg-surface-alt"}`} title="มุมมองตาราง (แก้ไข/เรียง/ลากคอลัมน์)">📋 ตาราง</button>
+          <button type="button" onClick={() => setView("card")} className={`px-3 py-1 ${view === "card" ? "bg-primary-600 text-white" : "bg-white dark:bg-surface hover:bg-surface-alt"}`} title="มุมมองการ์ด (ดูรูป+ข้อมูลเร็วๆ)">🔲 การ์ด</button>
+        </div>
       </div>
 
       {loadError && (
@@ -553,6 +560,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
         <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">{liveMsg}</div>
       )}
 
+      {view === "table" && (
       <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
         <table className="w-full text-xs border-collapse [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border min-w-[1080px]">
           <thead className="bg-surface-alt/60 text-[11px] uppercase tracking-wide text-muted">
@@ -634,6 +642,58 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           </tbody>
         </table>
       </div>
+      )}
+
+      {view === "card" && (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {paged.length === 0 && <div className="col-span-full rounded-xl border border-dashed border-border py-8 text-center text-xs text-muted">ไม่มีรายการตามเงื่อนไข</div>}
+          {paged.map((t) => {
+            const rr = rowResult[t.id];
+            const done = t.committed || rr?.ok;
+            const fid = t.committedForwarderId ?? rr?.fid ?? null;
+            return (
+              <div key={t.id} className={`rounded-xl border p-3 shadow-sm ${done ? "border-emerald-200 bg-emerald-50/40" : selected.has(t.id) ? "border-primary-300 bg-primary-50/40" : "border-border bg-white dark:bg-surface"}`}>
+                <div className="flex items-start gap-2">
+                  {t.images.length > 0 ? (
+                    <button type="button" onClick={() => setZoom({ urls: t.images, tracking: t.tracking ?? "—" })} className="relative shrink-0">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={t.images[0]} alt="ป้าย" loading="lazy" className="h-14 w-14 rounded-lg border border-border object-cover" />
+                      {t.images.length > 1 && <span className="absolute -top-1 -right-1 rounded-full bg-primary-500 px-1 text-[11px] font-bold text-white">+{t.images.length - 1}</span>}
+                    </button>
+                  ) : <div className="grid h-14 w-14 shrink-0 place-items-center rounded-lg border border-dashed border-border text-[11px] text-gray-300">ไม่มีรูป</div>}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="truncate font-mono text-xs font-bold">{t.tracking ?? "—"}</span>
+                      {isSelectable(t) && <input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleRow(t.id)} className="cursor-pointer" />}
+                    </div>
+                    <div className="mt-0.5 text-[11px]">
+                      {t.guessedUserId ? <span className="font-mono font-semibold">{t.guessedUserId}</span> : <span className="text-amber-600">MOMO ไม่ส่ง PR</span>}
+                      {!t.committed && t.userIdValid === false && t.guessedUserId && <span className="ml-1 rounded bg-red-100 px-1 text-[10px] font-bold text-red-700">ไม่มีในระบบ</span>}
+                    </div>
+                    <div className="text-[11px] text-muted">
+                      {t.container ? <Link href={`/admin/momo-containers/${encodeURIComponent(t.container)}`} className="font-mono text-sky-700 hover:underline">{t.container}</Link> : <span className="text-amber-600">⏳ ยังไม่เข้าตู้ปิด</span>}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-1 text-center text-[11px]">
+                  <div className="rounded bg-surface-alt/50 py-1"><div className="font-mono font-semibold">{n2(t.weightKg)}</div><div className="text-[10px] text-muted">กก.{t.hasPacking && t.packingWeight != null ? (pkWtDiff(t) ? " ⚠" : " ✓") : ""}</div></div>
+                  <div className="rounded bg-surface-alt/50 py-1"><div className="font-mono font-semibold">{n6(t.cbm)}</div><div className="text-[10px] text-muted">คิว{t.hasPacking && t.packingCbm != null ? (pkVolDiff(t) ? " ⚠" : " ✓") : ""}</div></div>
+                  <div className="rounded bg-surface-alt/50 py-1"><div className="font-semibold">{PRODUCT_TYPE_TH[t.guessedProductType] ?? "—"}</div><div className="text-[10px] text-muted">{t.qty ?? "—"} ชิ้น</div></div>
+                </div>
+                <div className="mt-2">
+                  {done ? (
+                    fid ? <Link href={`/admin/forwarders/${fid}`} className="block rounded-lg border border-emerald-200 bg-emerald-100 py-1.5 text-center text-[11px] font-bold text-emerald-700 hover:bg-emerald-200">✅ เข้าระบบแล้ว #{fid}</Link>
+                        : <span className="block rounded-lg border border-emerald-200 bg-emerald-100 py-1.5 text-center text-[11px] font-bold text-emerald-700">✅ เข้าระบบแล้ว</span>
+                  ) : (
+                    <button type="button" onClick={() => openImport(t)} className="block w-full rounded-lg border border-primary-300 bg-primary-50 py-1.5 text-center text-[11px] font-bold text-primary-700 hover:bg-primary-100">📦 นำเข้าระบบ</button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {perPage < ALL && totalPages > 1 && (
         <div className="flex items-center justify-between gap-2 text-xs text-muted">
           <span>แสดง {(curPage - 1) * perPage + 1}–{Math.min(curPage * perPage, sorted.length)} จาก {sorted.length}</span>
