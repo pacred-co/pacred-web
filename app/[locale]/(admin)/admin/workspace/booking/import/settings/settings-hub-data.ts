@@ -30,6 +30,39 @@ export const STATS: StatCardData[] = [
   { key: "documents", tone: "teal", title: "เอกสารทั้งหมด", value: 23, unit: "รายการ", active: 21 },
 ];
 
+// ═══════════════ MASTER DATA (แหล่งจริง Pacred) — form ใบเสนอราคาดึงไปใช้ผ่าน quotation-data ═══════════════
+// owner ปอน 2026-07-14: "ตั้งค่าเรท" = source of truth ของตัวเลือกในฟอร์ม (ท่า/สายเรือ/เอเจนต์/คลัง).
+export const BOOKING_COUNTRIES = ["จีน", "ไทย"];
+
+export const BOOKING_PORTS: Record<string, Record<string, string[]>> = {
+  จีน: {
+    SEA: ["กวางโจว", "อี้อู", "หนิงโบ", "หนานซา", "เซินเจิ้น", "เซี่ยงไฮ้", "ชิงเต่า"],
+    TRUCK: ["กวางโจว", "คุนหมิง", "หนานหนิง"],
+    AIR: ["กวางโจว (CAN)", "เซินเจิ้น (SZX)", "เซี่ยงไฮ้ (PVG)", "ปักกิ่ง (PEK)"],
+  },
+  ไทย: {
+    SEA: ["แหลมฉบัง", "กรุงเทพ (คลองเตย)"],
+    TRUCK: ["กรุงเทพฯ", "เชียงของ", "นครพนม", "มุกดาหาร"],
+    AIR: ["สุวรรณภูมิ (BKK)", "ดอนเมือง (DMK)"],
+  },
+};
+
+export const BOOKING_WAREHOUSES: Record<string, string[]> = {
+  จีน: ["กวางโจว", "อี้อู"],
+  ไทย: ["โกดังเพชรเกษม 118"],
+};
+
+export const BOOKING_CARRIERS: Record<string, string[]> = {
+  SEA: ["Maersk", "MSC", "ONE", "Evergreen", "Wan Hai", "COSCO", "Yang Ming", "OOCL", "Hapag-Lloyd", "SITC", "อื่นๆ"],
+  AIR: ["Thai Airways (TG)", "Cathay Pacific (CX)", "China Airlines (CI)", "EVA Air (BR)", "Emirates (EK)", "Singapore (SQ)", "อื่นๆ"],
+  TRUCK: ["รถบริษัท (Pacred)", "รถร่วม", "Kerry", "อื่นๆ"],
+};
+
+export const BOOKING_AGENTS = ["Pacred", "TTP", "AXELRA", "HUAHAI", "FEISHENG", "อื่นๆ"];
+
+const PORT_TYPE_BY_MODE: Record<string, string> = { SEA: "ท่าเรือ", AIR: "สนามบิน", TRUCK: "ด่านรถ" };
+const MODE_LABEL: Record<string, string> = { SEA: "Sea", AIR: "Air", TRUCK: "Truck" };
+
 // ── สายเรือ (shipping lines) ─────────────────────────────────────────────
 export type ShippingLine = {
   name: string;
@@ -70,24 +103,22 @@ export const COUNTRY_ROWS: SimpleRow[] = [
 ];
 export const COUNTRY_HEADERS = ["ประเทศ", "รหัส ISO", "จำนวนเอเจนต์", "ท่าเรือ / สนามบิน"];
 
-export const AGENT_ROWS: SimpleRow[] = [
-  { cells: ["Sino Trans Logistics", "จีน", "Air / Sea", "Guangzhou, Shenzhen, Shanghai"], active: true },
-  { cells: ["Dragon Worldwide", "จีน", "Sea / Truck", "Guangzhou, Yiwu"], active: true },
-  { cells: ["Thai Cargo Partner", "ไทย", "Air", "Bangkok, Suvarnabhumi"], active: true },
-  { cells: ["Vietnam Freight Hub", "เวียดนาม", "Sea / Truck", "Ho Chi Minh, Hanoi"], active: true },
-  { cells: ["Tokyo Global Link", "ญี่ปุ่น", "Air / Sea", "Tokyo, Osaka, Yokohama"], active: true },
-  { cells: ["Korea Bridge Cargo", "เกาหลีใต้", "Air / Sea", "Incheon, Busan"], active: false },
-];
+// เอเจนต์จริง Pacred (มาจาก BOOKING_AGENTS)
+export const AGENT_ROWS: SimpleRow[] = BOOKING_AGENTS.filter((a) => a !== "อื่นๆ").map((name) => ({
+  cells: [name, "จีน / ไทย", "รถ / เรือ / แอร์", "—"],
+  active: true,
+}));
 export const AGENT_HEADERS = ["ชื่อเอเจนต์", "ประเทศ", "ประเภทขนส่ง", "พื้นที่ให้บริการ"];
 
-export const PORT_ROWS: SimpleRow[] = [
-  { cells: ["Shanghai Port", "CNSHA", "จีน", "ท่าเรือ", "Sea"], active: true },
-  { cells: ["Ningbo-Zhoushan Port", "CNNGB", "จีน", "ท่าเรือ", "Sea"], active: true },
-  { cells: ["Guangzhou Baiyun Airport", "CAN", "จีน", "สนามบิน", "Air"], active: true },
-  { cells: ["Suvarnabhumi Airport", "BKK", "ไทย", "สนามบิน", "Air"], active: true },
-  { cells: ["Laem Chabang Port", "THLCH", "ไทย", "ท่าเรือ", "Sea"], active: true },
-  { cells: ["Vienna International Airport", "VIE", "ออสเตรีย", "สนามบิน", "Air"], active: true },
-];
+// ท่า/คลังจริง Pacred (มาจาก BOOKING_PORTS · จีน/ไทย × ทะเล/อากาศ/รถ)
+export const PORT_ROWS: SimpleRow[] = BOOKING_COUNTRIES.flatMap((country) =>
+  (["SEA", "AIR", "TRUCK"] as const).flatMap((mode) =>
+    (BOOKING_PORTS[country]?.[mode] ?? []).map((name) => ({
+      cells: [name, "—", country, PORT_TYPE_BY_MODE[mode], MODE_LABEL[mode]],
+      active: true,
+    })),
+  ),
+);
 export const PORT_HEADERS = ["ชื่อ", "รหัส", "ประเทศ", "ประเภท", "Mode"];
 
 export const DOCUMENT_ROWS: SimpleRow[] = [

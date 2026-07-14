@@ -184,6 +184,8 @@
 .qt th { background: #f4f5f7; color: #525761; border-top: 1px solid #e2e4ea; border-bottom: 1px solid #e2e4ea; font-size: 12px; padding: 10px 8px; text-align: left; white-space: nowrap; }
 .qt th:first-child { border-left: 1px solid #e2e4ea; border-radius: 12px 0 0 0; }
 .qt th:last-child { border-right: 1px solid #e2e4ea; border-radius: 0 12px 0 0; }
+/* หัวคอลัมน์กึ่งกลางทุกช่อง (ชนะ .money/.center ที่ th · ไม่แตะ text-align ของข้อมูลในแถว) */
+.qt thead th { text-align: center; }
 .qt td { border-bottom: 1px solid #eeeef3; font-size: 12.8px; padding: 9px 8px; vertical-align: top; }
 .qt .no { width: 30px; color: #6b7280; font-weight: 700; }
 .qt .cat { font-weight: 800; color: #23272f; white-space: nowrap; }

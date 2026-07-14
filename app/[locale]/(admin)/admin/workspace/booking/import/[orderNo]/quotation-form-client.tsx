@@ -10,12 +10,12 @@
  *   ราคาที่โชว์ = SELL · COST/PROFIT ไม่โชว์บนใบลูกค้า. ยัง prototype (client-state · ยังไม่ต่อ DB).
  */
 
-import { useMemo, useState, type ChangeEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 import { Link, useRouter } from "@/i18n/navigation";
 import { ArrowLeft, Paperclip, Trash2, Settings, ChevronDown, FilePlus2, Calculator, UserRoundCheck, CalendarClock, CalendarCheck2, CircleCheckBig, Search, Ship, Truck, Plane, Clock3, Check, Sparkles, ArrowRight, PackageCheck, ShieldCheck, FileText, Maximize2 } from "lucide-react";
 import { BOOKING_STATUS_META, type Booking, type BookingStatus } from "../booking-data";
 import {
-  TERM_OPTIONS, ENTER_OPTIONS, SPECIAL_OPTIONS, PRODUCT_TYPE_OPTIONS, docModeOptions, LOAD_TYPE_OPTIONS, CONTAINER_OPTIONS, TRANSPORT_TABS, PORT_COUNTRIES, PORT_CATALOG, WAREHOUSE_CATALOG, firstPort, directionOf,
+  TERM_OPTIONS, ENTER_OPTIONS, SPECIAL_OPTIONS, PRODUCT_TYPE_OPTIONS, docModeOptions, LOAD_TYPE_OPTIONS, TRANSPORT_TABS, PORT_COUNTRIES, PORT_CATALOG, WAREHOUSE_CATALOG, firstPort, directionOf,
   CARRIER_LABEL, CARRIER_CATALOG, AGENT_OPTIONS, carrierValidFor,
   linesForConditions, computeQuoteTotals, bahtFmt, templateKeyOf, usesLoadType, usesContainer, noteForConditions, PACRED_ISSUER,
   type QuoteConditions, type PortSel, type QuoteLine,
@@ -24,6 +24,7 @@ import type { CatalogTemplate } from "@/lib/booking/catalog";
 import { lookupMemberByCode } from "@/actions/admin/booking-member-lookup";
 import { CARGO_PROMO_PACKAGES, rateFor, MIN_CHARGE, DEFAULT_COMPARISON, type QuoteMode, type WarehouseKey, type CargoPromoPackage } from "@/lib/quote/cargo-promo-packages";
 import { BookingDraftPreview } from "./booking-draft";
+import { SubProcessTimeline } from "@/components/workspace/booking-journey";
 import { FieldHint, TRANSPORT_HINT, LOADTYPE_HINT, TERM_HINT, ENTER_HINT, PRODUCT_HINT, SPECIAL_HINT, DOCMODE_HINT, POL_HINT, POD_HINT, COMMODITY_HINT, CARRIER_HINT, WEIGHT_HINT, CBM_HINT, AGENT_HINT } from "./booking-hints";
 import styles from "./quotation-mockup.module.css";
 
@@ -35,6 +36,16 @@ const STEPPER: BookingStatus[] = [
 // ไอคอนประจำแต่ละสถานะ = Lucide (คลีน · ปรับสีตามสถานะ · ปอน 2026-07-10 แทนรูป PNG)
 // เทา = ยังไม่ถึง · ปัจจุบัน = วงแหวนแดง · ผ่านแล้ว = เติมแดงทึบ.
 const STEP_ICONS = [FilePlus2, Calculator, UserRoundCheck, CalendarClock, CalendarCheck2, CircleCheckBig];
+
+// process ย่อยของแต่ละสถานะ QT/Booking (placeholder · owner แก้ได้) — โผล่เมื่อกดสถานะหลัก
+const QT_SUBS: Partial<Record<BookingStatus, string[]>> = {
+  customer_created: ["ลูกค้า/เซลกรอกคำขอ", "เลือกเงื่อนไข (Term × ขนส่ง)", "ส่งให้ Pricing ทำราคา"],
+  pending_pricing: ["Pricing ตรวจต้นทุน", "ตั้งราคาขาย / กำไร", "ส่งใบเสนอราคากลับ"],
+  awaiting_confirm: ["ส่งใบเสนอราคาให้ลูกค้า", "ลูกค้าพิจารณา", "ลูกค้ายืนยันราคา"],
+  awaiting_booking: ["เปิด Booking กับสายเรือ/เอเจนต์", "จองระวาง / เที่ยว", "รอยืนยันจอง"],
+  booking_confirmed: ["ได้เลข Booking / Shipment", "ออกเอกสาร Booking", "ส่งเข้าคิวงานนำเข้า"],
+  success: ["งานเข้าสู่รายการนำเข้า", "ดำเนินการตาม journey", "ปิดงาน"],
+};
 
 function formStatusLabel(s: BookingStatus): string {
   return s === "customer_created" ? "กำลังสร้าง QT/Booking" : BOOKING_STATUS_META[s].label;
@@ -49,7 +60,7 @@ function deriveConditions(b: Booking | null): QuoteConditions {
     service,
     pol: { country: "จีน", port: firstPort("จีน", service) },
     pod: { country: "ไทย", port: firstPort("ไทย", service) },
-    loadType, container: "1×20'", carrier: "", weight: "", cbm: "", agent: "", productType: "ทั่วไป", docMode: "ไม่รับเอกสาร",
+    loadType, container: "20' GP × 1", carrier: "", weight: "", cbm: "", agent: "", productType: "ทั่วไป", docMode: "ไม่รับเอกสาร",
     term, enter: "Normal", special: [],
   };
 }
@@ -105,6 +116,7 @@ export function QuotationFormClient({
   const [mode, setMode] = useState<"recommend" | "create">("recommend");
   const [searched, setSearched] = useState(false);
   const [bookingFull, setBookingFull] = useState(false); // ขยายใบ Booking เต็มความกว้าง (owner ปอน 2026-07-10)
+  const [openStep, setOpenStep] = useState<number | null>(null); // สถานะ QT ที่กดขยาย process ย่อย
   const [compare, setCompare] = useState<string[]>([]); // แพ็กเกจที่ติ๊กเปรียบเทียบ (owner พี่ป๊อป 2026-07-10)
   function selectPackage(pkg: CargoPromoPackage) {
     // เลือกแพ็กเกจ → ไปหน้าสร้าง (เงื่อนไขเดิม) + จดชื่อแพ็กเกจใน "หมายเหตุ" ถ้ายังว่าง
@@ -192,11 +204,40 @@ export function QuotationFormClient({
     .map((dt) => `${dt.short}×${filesFor(dt.key).length}`)
     .join(" · ");
 
-  const status: BookingStatus = booking?.status ?? "customer_created";
+  const [status, setStatus] = useState<BookingStatus>(booking?.status ?? "customer_created");
+  // draft ที่บันทึกไว้ (localStorage) เปิดจากลิสต์ → server หาไม่เจอใน seed → โหลดมาเติมฟอร์มเองฝั่ง client (กัน 404 + โชว์ข้อมูล draft)
+  useEffect(() => {
+    if (isNew || booking) return;
+    try {
+      const raw = localStorage.getItem("pacred_booking_drafts_import");
+      const arr: Booking[] = raw ? JSON.parse(raw) : [];
+      const d = arr.find((x) => x?.orderNo === docNo.replace(/^QO-/, ""));
+      if (!d) return;
+      const c = deriveConditions(d);
+      /* eslint-disable react-hooks/set-state-in-effect -- โหลด draft จาก localStorage ตอน mount (client-only) จำเป็นต้อง set state */
+      setCond(c);
+      setLines(linesForConditions(c, catalog));
+      setStatus(d.status);
+      setDoc((prev) => ({
+        ...prev,
+        billName: d.customerName && d.customerName !== "—" ? d.customerName : prev.billName,
+        consignee: d.customerName && d.customerName !== "—" ? d.customerName : prev.consignee,
+        product: d.product || prev.product,
+        pol: d.pol || prev.pol,
+        pod: d.pod || prev.pod,
+      }));
+      /* eslint-enable react-hooks/set-state-in-effect */
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const meta = BOOKING_STATUS_META[status];
   const totals = useMemo(() => computeQuoteTotals(lines), [lines]);
   const hasTemplate = (catalog[templateKeyOf(cond)]?.lines ?? []).length > 0;
-  const canSeeMoney = showCost || showProfit; // viewer = Pricing/Ultra/Super (เห็นต้นทุน/กำไร)
+  // ต้นทุน/กำไร = งานของ Pricing (ขั้นถัดไป) — ตอน "สร้าง" (customer_created) ยังไม่เห็น แม้จะมีสิทธิ์
+  const atCreate = status === "customer_created";
+  const canSeeMoney = (showCost || showProfit) && !atCreate; // viewer = Pricing/Ultra/Super + ผ่านขั้นสร้างแล้ว
+  const showCostNow = showCost && !atCreate;
+  const showProfitNow = showProfit && !atCreate;
   const isPricingStage = status === "pending_pricing";
   // กำไร/มาร์จิน (ภายใน): cost-viewer = ยอดขาย(ไม่รวม receipt) − ต้นทุน · super = กำไรตั้งต้นจาก catalog
   const sellNonReceipt = totals.vatBase + totals.nonVat;
@@ -207,7 +248,7 @@ export function QuotationFormClient({
   const canSave = doc.billName.trim() !== "" && doc.product.trim() !== "";
 
   function saveQuotation() {
-    if (!canSave) return;
+    // prototype: ไม่บล็อก — กดไปต่อได้เลย (ถ้ายังไม่กรอกใช้ค่า placeholder) เพื่อเดินสถานะ → ส่ง Pricing
     const now = new Date();
     const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
     const dateStr = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
@@ -216,7 +257,7 @@ export function QuotationFormClient({
       id: `draft-${now.getTime()}`,
       orderNo: isNew ? `${ymd}-${String(now.getTime()).slice(-3)}` : (booking?.orderNo ?? `${ymd}-000`),
       date: dateStr, status: "pending_pricing", company: "PACRED",
-      customerName: doc.billName || doc.consignee, product: doc.product, sales: salesName,
+      customerName: doc.billName || doc.consignee || "ลูกค้าใหม่ (ยังไม่กรอก)", product: doc.product || "— ยังไม่ระบุสินค้า —", sales: salesName,
       pricing: booking?.pricing || "WEB", term: `IM ${cond.term}`,
       transport: /AIR/i.test(svc) ? "AIR" : /TRUCK/i.test(svc) ? "TRUCK" : "SEA",
       fclLcl: cond.loadType,
@@ -338,7 +379,9 @@ export function QuotationFormClient({
                 <button key={t.id} type="button"
                   className={cx(styles.transportTab, cond.service === t.id && styles.transportTabActive)}
                   onClick={() => setC("service", t.id)}>
-                  <span className={styles.transportIcon}>{t.icon}</span> {t.label}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/images/status/${t.id.toLowerCase()}.png`} alt="" className={cx("h-[18px] w-[18px] object-contain", cond.service === t.id && "brightness-0 invert")} />
+                  {t.label}
                 </button>
               ))}
               <FieldHint content={TRANSPORT_HINT} />
@@ -439,6 +482,7 @@ export function QuotationFormClient({
                   🛑 รายการนี้ถูกยกเลิก{booking?.note ? ` — ${booking.note}` : ""}
                 </div>
               ) : (
+                <>
                 <ol className="flex items-start gap-1 overflow-x-auto scrollbar-x-visible py-1">
                   {STEPPER.map((s, i) => {
                     const activeIdx = STEPPER.indexOf(status);
@@ -448,22 +492,41 @@ export function QuotationFormClient({
                       <li key={s} className="flex min-w-[92px] flex-1 flex-col items-center text-center">
                         <div className="flex w-full items-center">
                           <span className={`h-0.5 flex-1 ${i === 0 ? "opacity-0" : state === "todo" ? "bg-[#e9e9ee]" : "bg-primary-600"}`} />
-                          <span aria-label={formStatusLabel(s)}
+                          <button type="button" aria-label={formStatusLabel(s)} title="กดดูขั้นตอนย่อย" onClick={() => setOpenStep(openStep === i ? null : i)}
                             className={cx(
-                              "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all",
+                              "flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-xl transition-all",
                               state === "todo"
                                 ? "bg-[#f1f1f4] text-[#c4c8cf]"
                                 : "bg-primary-600 text-white shadow-sm",
                             )}>
                             <Icon className="h-[22px] w-[22px]" strokeWidth={state === "todo" ? 2 : 2.2} />
-                          </span>
+                          </button>
                           <span className={`h-0.5 flex-1 ${i === STEPPER.length - 1 ? "opacity-0" : i < activeIdx ? "bg-primary-600" : "bg-[#e9e9ee]"}`} />
                         </div>
-                        <span className={`mt-1.5 text-[11px] leading-tight ${state === "current" ? "font-semibold text-[#1f2937]" : "text-[#6f7278]"}`}>{formStatusLabel(s)}</span>
+                        <button type="button" onClick={() => setOpenStep(openStep === i ? null : i)} aria-expanded={openStep === i} title="กดดูขั้นตอนย่อย"
+                          className={cx("mt-1.5 inline-flex items-center gap-1 rounded px-1 py-0.5 text-[11px] leading-tight transition-colors hover:bg-primary-50",
+                            state === "current" ? "font-semibold text-[#1f2937]" : "text-[#6f7278]",
+                            openStep === i ? "bg-primary-50" : "")}>
+                          {formStatusLabel(s)}
+                          <ChevronDown className={cx("h-3 w-3 transition-transform", openStep === i ? "rotate-180 text-primary-600" : "text-[#c4c8cf]")} />
+                        </button>
                       </li>
                     );
                   })}
                 </ol>
+                {openStep !== null && (() => {
+                  const StepIcon = STEP_ICONS[openStep];
+                  return (
+                    <div className="mt-3 w-[240px] max-w-full" style={{ marginInlineStart: `clamp(0px, calc(${((openStep + 0.5) / STEPPER.length) * 100}% - 1.25rem), calc(100% - 240px))` }}>
+                      <SubProcessTimeline
+                        title={formStatusLabel(STEPPER[openStep])}
+                        subs={QT_SUBS[STEPPER[openStep]] ?? []}
+                        icon={<StepIcon className="h-4 w-4" />}
+                      />
+                    </div>
+                  );
+                })()}
+                </>
               )}
             </div>
 
@@ -499,7 +562,7 @@ export function QuotationFormClient({
                   <KvInput label="Commodity" value={doc.product} onChange={setF("product")} placeholder="ชื่อสินค้า" />
                   <KvInput label="POL" value={doc.pol} onChange={setF("pol")} placeholder="ท่า/เมืองต้นทาง" />
                   <div className={styles.k}>POD</div>
-                  <div className={styles.v}>{cond.pod.country} · {cond.pod.port} <span style={{ color: "#9aa0a8", fontWeight: 400, fontSize: 11 }}>← จาก POD</span></div>
+                  <div className={styles.v}>{cond.pod.country} · {cond.pod.port}</div>
                 </div>
               </div>
 
@@ -552,8 +615,8 @@ export function QuotationFormClient({
                       <tr>
                         <th>#</th><th>คำอธิบาย</th>
                         <th className={styles.center}>Qty</th><th className={styles.money}>ราคาขาย</th>
-                        {showCost && <th className={styles.money}>ต้นทุน</th>}
-                        {showProfit && <th className={styles.money}>กำไร</th>}
+                        {showCostNow && <th className={styles.money}>ต้นทุน</th>}
+                        {showProfitNow && <th className={styles.money}>กำไร</th>}
                         <th className={styles.center}>VAT</th><th className={styles.center}>WHT</th><th className={styles.center} />
                       </tr>
                     </thead>
@@ -572,14 +635,14 @@ export function QuotationFormClient({
                             <td className={styles.money}>
                               <input type="number" className={cx(styles.cellIn, styles.priceIn)} value={l.unitPrice} onChange={(e) => editLine(l.id, { unitPrice: Number(e.target.value) })} />
                             </td>
-                            {showCost && (
+                            {showCostNow && (
                               <td className={styles.money}>
                                 {l.receipt ? <span style={{ color: "#9aa0a8" }}>—</span> : (
                                   <input type="number" className={cx(styles.cellIn, styles.priceIn)} value={l.cost ?? 0} onChange={(e) => editLine(l.id, { cost: Number(e.target.value) })} />
                                 )}
                               </td>
                             )}
-                            {showProfit && (
+                            {showProfitNow && (
                               <td className={styles.money}>
                                 {l.receipt ? <span style={{ color: "#9aa0a8" }}>—</span> : (
                                   <span style={{ fontWeight: 700, color: lineMargin(l) < 0 ? "#dc2626" : "#159447" }}>{bahtFmt(lineMargin(l))}</span>
@@ -611,7 +674,7 @@ export function QuotationFormClient({
                 {/* ต้นทุน/กำไร (ภายใน · ไม่โชว์ลูกค้า) — Pricing เท่านั้น */}
                 {canSeeMoney && (
                   <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed #d9dce3" }}>
-                    {showCost && (
+                    {showCostNow && (
                       <div className={styles.totalLine}><span>ต้นทุนรวม 🔒</span><span className={styles.amt}>{bahtFmt(totals.costTotal)}</span></div>
                     )}
                     <div className={styles.totalLine}>
@@ -684,7 +747,7 @@ export function QuotationFormClient({
                     })}
                   </div>
                 </div>
-                <button type="button" className={styles.saveBtn} onClick={saveQuotation} disabled={!canSave} title={canSave ? "" : "กรอก ชื่อลูกค้า + สินค้า ก่อน"}>
+                <button type="button" className={styles.saveBtn} onClick={saveQuotation} title={canSave ? "" : "แนะนำให้กรอกชื่อลูกค้า + สินค้าก่อน (prototype ข้ามได้)"}>
                   บันทึกใบเสนอราคา → ส่ง Pricing
                 </button>
                 <p className={styles.saveHint}>💾 บันทึกแล้วเข้าสถานะ “รอดำเนินการ (ทำราคา)” ให้ Pricing ตรวจ · prototype เก็บชั่วคราวในเครื่อง (ต่อ DB จริง step ถัดไป)</p>
@@ -858,6 +921,28 @@ function PortPicker({
 
 // ประเภท + ขนาดตู้ = picker เดียว (สไตล์เดียวกับ PortPicker · owner 2026-07-10).
 // ซ้าย = LCL / FCL · ขวา = ถ้า FCL → ขนาดตู้ให้จิ้มเลย · LCL = รวมตู้ (ไม่มีขนาด → เลือกแล้วปิด).
+// FCL: ขนาดตู้มาตรฐาน (เลือกได้หลายขนาด + ระบุจำนวนต่อขนาด) — owner ปอน 2026-07-14
+const FCL_SIZES = [
+  { code: "20' GP", desc: "ตู้มาตรฐาน 20 ฟุต" },
+  { code: "40' GP", desc: "ตู้มาตรฐาน 40 ฟุต" },
+  { code: "40' HC", desc: "ตู้สูง 40 ฟุต" },
+  { code: "45' HC", desc: "ตู้สูง 45 ฟุต" },
+];
+/** map จำนวนตู้ → ข้อความสรุปอ่านง่าย เช่น "20' GP × 1 · 40' HC × 2" */
+function composeContainer(qty: Record<string, number>): string {
+  return FCL_SIZES.filter((s) => (qty[s.code] ?? 0) > 0).map((s) => `${s.code} × ${qty[s.code]}`).join(" · ");
+}
+/** parse ข้อความสรุปกลับเป็น map จำนวน (รองรับ × / x) */
+function parseContainer(s: string): Record<string, number> {
+  const q: Record<string, number> = {};
+  for (const sz of FCL_SIZES) {
+    const esc = sz.code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const m = s.match(new RegExp(`${esc}\\s*[×xX]\\s*(\\d+)`));
+    if (m) q[sz.code] = Number(m[1]);
+  }
+  return q;
+}
+
 function LoadTypePicker({
   loadType, container, onChange, hint,
 }: {
@@ -865,11 +950,16 @@ function LoadTypePicker({
 }) {
   const [open, setOpen] = useState(false);
   const [activeType, setActiveType] = useState(loadType || "LCL");
+  const [qty, setQty] = useState<Record<string, number>>(() => parseContainer(container));
+  const total = FCL_SIZES.reduce((n, s) => n + (qty[s.code] ?? 0), 0);
+  const summary = composeContainer(qty);
+  const bump = (code: string, d: number) => setQty((q) => ({ ...q, [code]: Math.max(0, (q[code] ?? 0) + d) }));
+  const confirm = () => { onChange({ loadType: "FCL", container: summary || "20' GP × 1" }); setOpen(false); };
   return (
     <div className={styles.portField}>
       <div className={styles.portLabel}>ประเภท / ขนาดตู้{hint}</div>
       <button type="button" className={styles.portBtn}
-        onClick={() => { setActiveType(loadType || "LCL"); setOpen((o) => !o); }}>
+        onClick={() => { setActiveType(loadType || "LCL"); setQty(parseContainer(container)); setOpen((o) => !o); }}>
         <span className={styles.portVal}>
           <b>{loadType}</b>{loadType === "FCL" && container ? <><span className={styles.portSep}>·</span>{container}</> : null}
         </span>
@@ -878,24 +968,57 @@ function LoadTypePicker({
       {open && (
         <>
           <div className={styles.portBackdrop} onClick={() => setOpen(false)} />
-          <div className={styles.portPop}>
+          <div className={styles.portPop} style={activeType === "FCL" ? { width: "min(540px, 94vw)" } : undefined}>
             <div className={styles.portCountries}>
               {LOAD_TYPE_OPTIONS.map((lt) => (
                 <button key={lt} type="button"
                   className={cx(styles.portCountry, lt === activeType && styles.portCountryActive)}
                   onClick={() => {
                     if (lt === "LCL") { onChange({ loadType: "LCL", container }); setOpen(false); } // LCL = ไม่มีขนาด → เลือกเลย
-                    else setActiveType("FCL"); // FCL → โชว์ขนาดตู้ด้านขวา
+                    else setActiveType("FCL"); // FCL → เลือกขนาด+จำนวนด้านขวา
                   }}>{lt}</button>
               ))}
             </div>
-            <div className={styles.portList}>
+            <div className={styles.portList} style={activeType === "FCL" ? { maxHeight: 420 } : undefined}>
               {activeType === "FCL" ? (
-                CONTAINER_OPTIONS.map((c) => (
-                  <button key={c} type="button"
-                    className={cx(styles.portItem, loadType === "FCL" && container === c && styles.portItemActive)}
-                    onClick={() => { onChange({ loadType: "FCL", container: c }); setOpen(false); }}>{c}</button>
-                ))
+                <div className="p-1">
+                  <div className="mb-2 flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-[13px] font-bold text-[#1f2937]">FCL — เลือกขนาดและจำนวนตู้</p>
+                      <p className="text-[11px] text-[#6f7278]">เลือกได้มากกว่า 1 ขนาดใน Booking เดียว</p>
+                    </div>
+                    <button type="button" onClick={() => setQty({})} className="shrink-0 text-[11px] font-semibold text-primary-600 hover:underline">ล้างทั้งหมด</button>
+                  </div>
+                  <div className="space-y-1.5">
+                    {FCL_SIZES.map((sz) => {
+                      const n = qty[sz.code] ?? 0;
+                      const on = n > 0;
+                      return (
+                        <div key={sz.code} className={cx("flex items-center gap-2.5 rounded-xl border px-3 py-2", on ? "border-primary-400 bg-primary-50/60" : "border-[#e2e4ea] bg-white")}>
+                          <button type="button" aria-label={sz.code} onClick={() => bump(sz.code, on ? -n : 1)}
+                            className={cx("grid h-5 w-5 shrink-0 place-items-center rounded border", on ? "border-primary-600 bg-primary-600 text-white" : "border-[#cdd1db] bg-white text-transparent")}>
+                            <Check className="h-3.5 w-3.5" />
+                          </button>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[13px] font-bold text-[#1f2937]">{sz.code}</div>
+                            <div className="text-[11px] text-[#6f7278]">{sz.desc}</div>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <button type="button" aria-label="ลด" onClick={() => bump(sz.code, -1)} disabled={n <= 0}
+                              className="grid h-7 w-7 place-items-center rounded-lg border border-[#e2e4ea] bg-white text-[15px] font-bold text-[#4b5563] hover:bg-[#f2f3f7] disabled:opacity-40">−</button>
+                            <span className="w-6 text-center text-[13px] font-bold tabular-nums text-[#1f2937]">{n}</span>
+                            <button type="button" aria-label="เพิ่ม" onClick={() => bump(sz.code, 1)}
+                              className="grid h-7 w-7 place-items-center rounded-lg border border-[#e2e4ea] bg-white text-[15px] font-bold text-[#4b5563] hover:bg-[#f2f3f7]">+</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-[#eef0f4] pt-2.5">
+                    <span className="text-[11px] text-[#6f7278]">เลือกแล้ว: <b className="text-[#1f2937]">{summary || "— ยังไม่เลือก —"}</b>{total > 0 ? ` · รวม ${total} ตู้` : ""}</span>
+                    <button type="button" onClick={confirm} className="shrink-0 rounded-lg bg-primary-600 px-4 py-1.5 text-[12px] font-bold text-white transition-colors hover:bg-primary-700">ยืนยัน</button>
+                  </div>
+                </div>
               ) : (
                 <div className={styles.portEmpty}>LCL = รวมตู้ · ไม่มีขนาดตู้</div>
               )}
