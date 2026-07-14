@@ -9,12 +9,13 @@
  * กดเลขตู้ → หน้า detail /[cabinet] (เก็บไว้).
  */
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { CheckCircle2, AlertCircle, RefreshCw, X, PackageCheck, Truck } from "lucide-react";
+import { CheckCircle2, AlertCircle, RefreshCw, X, PackageCheck, Truck, Check } from "lucide-react";
 import { commitMomoRowToForwarder, commitMomoRowsBatch } from "@/actions/admin/momo-commit";
+import { updateMomoImportTrackFields } from "@/actions/admin/momo-ingest-edit";
 // Import the input TYPE from the auth-agnostic core, NOT the "use server" file
 // (a type re-export from a "use server" module hits a Turbopack analyzer bug).
 import type { CommitMomoRowInput } from "@/lib/admin/commit-momo-row-core";
@@ -103,6 +104,10 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
+  // inline edit (เฟส A-2) — แก้ น้ำหนัก/คิว/จำนวน ก่อนนำเข้า (pending only · money-safe)
+  const [editing, setEditing] = useState<null | { id: string; field: "weightKg" | "cbm" | "qty"; value: string }>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editErr, setEditErr] = useState<string | null>(null);
 
   const counts = useMemo(() => ({
     all: tracks.length,
@@ -208,6 +213,57 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
     } finally {
       setBulkBusy(false);
     }
+  }
+
+  async function saveEdit() {
+    if (!editing) return;
+    const numVal = Number(editing.value);
+    if (!Number.isFinite(numVal) || numVal < 0) { setEditErr("ค่าไม่ถูกต้อง"); return; }
+    const payload: Record<string, unknown> = { rowId: editing.id };
+    if (editing.field === "weightKg") payload.weightKg = numVal;
+    else if (editing.field === "cbm") payload.cbm = numVal;
+    else payload.quantity = Math.round(numVal);
+    setSavingEdit(true);
+    setEditErr(null);
+    try {
+      const res = await updateMomoImportTrackFields(payload);
+      if (res.ok) { setEditing(null); startTransition(() => router.refresh()); }
+      else setEditErr(res.error);
+    } catch (err) {
+      setEditErr(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  // inline-editable measurement cell — click value → input → ✓ save / ✕ cancel.
+  // Only PENDING rows are editable (isSelectable); committed rows show read-only.
+  function editableCell(t: IngestTrack, field: "weightKg" | "cbm" | "qty", display: ReactNode) {
+    const canEdit = isSelectable(t);
+    const isEditing = editing?.id === t.id && editing.field === field;
+    if (isEditing) {
+      return (
+        <span className="inline-flex flex-col items-end gap-0.5">
+          <span className="inline-flex items-center gap-0.5">
+            <input autoFocus type="number" step="any" value={editing.value} disabled={savingEdit}
+              onChange={(e) => setEditing((ed) => (ed ? { ...ed, value: e.target.value } : ed))}
+              onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); else if (e.key === "Escape") { setEditing(null); setEditErr(null); } }}
+              className="w-16 rounded border border-primary-400 px-1 py-0.5 text-right text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary-300" />
+            <button type="button" onClick={saveEdit} disabled={savingEdit} className="text-emerald-600 hover:text-emerald-700" title="บันทึก"><Check className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={() => { setEditing(null); setEditErr(null); }} className="text-gray-400 hover:text-gray-600" title="ยกเลิก"><X className="h-3 w-3" /></button>
+          </span>
+          {editErr && <span className="text-[10px] text-red-600">{editErr}</span>}
+        </span>
+      );
+    }
+    if (!canEdit) return display;
+    return (
+      <span className="group inline-flex cursor-pointer items-center gap-0.5 rounded px-0.5 hover:bg-amber-50"
+        onClick={() => { setEditErr(null); setEditing({ id: t.id, field, value: String(t[field] ?? "") }); }}
+        title="คลิกเพื่อแก้ไข (ก่อนนำเข้า)">
+        {display}<span className="text-[10px] text-gray-300 group-hover:text-amber-500">✎</span>
+      </span>
+    );
   }
 
   return (
@@ -317,7 +373,7 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
                     )}
                   </td>
                   <td className="px-2 py-1.5 text-right tabular-nums">
-                    {t.weightKg > 0 ? <span className="font-mono">{n2(t.weightKg)}</span> : <span className="rounded bg-amber-50 px-1 text-[11px] text-amber-700" title="MOMO ยังไม่ได้ชั่ง">⏳ รอชั่ง</span>}
+                    {editableCell(t, "weightKg", t.weightKg > 0 ? <span className="font-mono">{n2(t.weightKg)}</span> : <span className="text-[11px] text-amber-700" title="MOMO ยังไม่ได้ชั่ง">⏳ รอชั่ง</span>)}
                     {t.hasPacking && t.packingWeight != null && (
                       <div className={`text-[11px] ${wDiff ? "text-rose-600 font-semibold" : "text-emerald-600"}`} title="น้ำหนักจาก packing list">
                         📦{n2(t.packingWeight)}{wDiff ? " ⚠" : " ✓"}
@@ -325,14 +381,14 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
                     )}
                   </td>
                   <td className="px-2 py-1.5 text-right tabular-nums">
-                    <span className="font-mono">{n6(t.cbm)}</span>
+                    {editableCell(t, "cbm", <span className="font-mono">{n6(t.cbm)}</span>)}
                     {t.hasPacking && t.packingCbm != null && (
                       <div className={`text-[11px] ${vDiff ? "text-rose-600 font-semibold" : "text-emerald-600"}`} title="คิวจาก packing list">
                         📦{n6(t.packingCbm)}{vDiff ? " ⚠" : " ✓"}
                       </div>
                     )}
                   </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{t.qty ?? "—"}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{editableCell(t, "qty", <span>{t.qty ?? "—"}</span>)}</td>
                   <td className="px-2 py-1.5 whitespace-nowrap">{PRODUCT_TYPE_TH[t.guessedProductType] ?? "—"}{t.guessedProductType === "3" && <span className="ml-1 rounded bg-amber-100 px-1 text-[11px] font-semibold text-amber-700">อย.</span>}</td>
                   <td className="px-2 py-1.5 text-[11px] text-muted whitespace-nowrap max-w-[10rem] truncate" title={t.adminStatusText ?? ""}>{t.adminStatusText ?? t.phase ?? "—"}</td>
                   <td className="px-2 py-1.5 text-center">
