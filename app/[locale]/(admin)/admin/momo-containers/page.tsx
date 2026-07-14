@@ -83,6 +83,13 @@ export default async function MomoContainersPage() {
       phase: row.phase ?? null,
       adminStatusText: (row.admin_status_text as string | null) ?? null,
       guessedUserId,
+      // packing-list (Shipment Report) columns MOMO DOES feed — the grid mirrors
+      // แต้ม's sheet layout (owner ปอน 2026-07-14 · CANON in lib/admin/taem-reconcile-parser).
+      smDate: str("created_date"),        // C "SM Date" — วันที่ MOMO รับเข้าโกดัง
+      userCode: userCodeRaw,              // I "Code" — รหัสลูกค้าฝั่ง MOMO (ที่ derive เป็น PR)
+      cgNo: str("CG_NO"),                 // T "CG." — เลข CG ของ MOMO
+      // V "Service fee." — MOMO ส่งมาเป็น extra_cost (ค่าตีลังไม้/ค่าใช้จ่ายเพิ่ม · extractCrateFromMomoRaw)
+      serviceFee: raw && typeof raw === "object" && raw.extra_cost != null ? num(raw.extra_cost) : null,
       guessedShipBy: str("ship_by"),
       guessedProductType: momoTypeToProductType(str("type")),
       qty: colQ > 0 ? colQ : (numFromRaw("quantity") || null),
@@ -125,9 +132,29 @@ export default async function MomoContainersPage() {
       );
   }
 
+  // ETD/ETA (cols Y/Z ของ packing list) — MOMO API ไม่ส่งมาต่อแทรค · เก็บอยู่ระดับ "ตู้"
+  // จากไฟล์ packing list ของแต้ม (taem_container_etd_eta · mig 0195 · แต้ม-primary).
+  // ว่างจนกว่าจะอัพ packing list ของตู้นั้น → fail-soft (ตารางไม่พังถ้า query มีปัญหา).
+  const cabinetNos = Array.from(
+    new Set(intermediate.map((r) => r.container).filter((v): v is string => !!v)),
+  );
+  const etaByCabinet = new Map<string, { etd: string | null; eta: string | null }>();
+  if (cabinetNos.length > 0) {
+    const { data: etaRows, error: etaErr } = await admin
+      .from("taem_container_etd_eta")
+      .select("container_no, etd, eta")
+      .in("container_no", cabinetNos);
+    if (etaErr) console.error("[momo-containers etd/eta] failed", { code: etaErr.code, message: etaErr.message });
+    else
+      for (const row of (etaRows ?? []) as Array<{ container_no: string; etd: string | null; eta: string | null }>)
+        etaByCabinet.set(row.container_no, { etd: row.etd, eta: row.eta });
+  }
+
   const tracks: IngestTrack[] = intermediate.map((r) => ({
     ...r,
     userIdValid: r.guessedUserId == null ? null : knownUserIds.has(r.guessedUserId.toUpperCase()),
+    etd: (r.container && etaByCabinet.get(r.container)?.etd) || null,
+    eta: (r.container && etaByCabinet.get(r.container)?.eta) || null,
   }));
 
   return (

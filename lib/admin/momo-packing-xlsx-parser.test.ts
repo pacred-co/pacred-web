@@ -60,6 +60,33 @@ ok("Format A: the PR10190 row is parsed by header name (Code=G, Tracking=H)", ()
   assert.strictEqual(row!.cg, "CG81337997530");
 });
 
+// owner ปอน 2026-07-14: the grid must show every column the FILE carries (ไม่มั่ว —
+// ถ้าไฟล์มี ต้องดึงมา ไม่ใช่ปล่อยว่าง). These 6 were silently dropped before.
+ok("Format A: reference cols (Trans/SM. Date/Branch/Product/Dum/Remark) are parsed", () => {
+  const row = A.rows.find((r) => r.tracking === "1781309805");
+  assert.ok(row, "tracking 1781309805 not found");
+  assert.strictEqual(row!.trans, "SEA");
+  assert.strictEqual(row!.smDate, "2026/06/13");
+  assert.strictEqual(row!.branch, "PACRED");
+  assert.strictEqual(row!.product, "铝箔盒");
+  assert.strictEqual(row!.dum, 1);
+  assert.strictEqual(row!.remark, "6");
+  // the file's OWN per-box Weight(KG)/CBM — must be read, never re-derived
+  assert.strictEqual(row!.weightKg, 335);
+  assert.ok(Math.abs((row!.cbm ?? 0) - 1.05) < 1e-9, `cbm=${row!.cbm}`);
+});
+
+ok("Format A: aggregated carries the reference cols from the first sub", () => {
+  const a = A.aggregated.find((r) => r.baseTracking === "1781332284");
+  assert.ok(a, "aggregated base 1781332284 not found");
+  assert.strictEqual(a!.branch, "PACRED");
+  assert.strictEqual(a!.product, "吊牌");
+  assert.strictEqual(a!.remark, "1-5");
+  assert.strictEqual(a!.weightKg, 31);       // per-box (file) — Total Weight = 155 = 31×5
+  assert.ok(Math.abs((a!.cbm ?? 0) - 0.0891) < 1e-9, `cbm=${a!.cbm}`);
+  assert.strictEqual(a!.totalWeight, 155);   // SELL basis untouched
+});
+
 ok("Format A: raw grid exposes a data header for the Excel-view", () => {
   assert.ok(A.rawGrid, "rawGrid missing");
   const hdr = A.rawGrid!.header.map((h) => h.toLowerCase());
@@ -85,6 +112,7 @@ ok("aggregate: sums a multi-box base (2 sub-rows) exactly", () => {
     tracking, baseTracking: base, code: "PR555", productType: "ทั่วไป",
     width: 10, length: 20, height: 30, parcelCount: parcel,
     weightKg: wt / parcel, cbm: cbm / parcel, totalWeight: wt, totalCbm: cbm, cg: "CG1",
+    trans: "SEA", smDate: "2026/06/13", branch: "PACRED", product: "ของทดสอบ", dum: 1, remark: "1-2",
   });
   const agg = aggregatePackingRowsByBase([
     mk("SF1567683726553-1/2", "SF1567683726553", 1, 10, 0.1),
@@ -103,6 +131,7 @@ ok("aggregate: a field stays null only when EVERY sub is null", () => {
     tracking: "X-1", baseTracking: "X", code: null, productType: null,
     width: null, length: null, height: null, parcelCount: null,
     weightKg: null, cbm: null, totalWeight: null, totalCbm: null, cg: null,
+    trans: null, smDate: null, branch: null, product: null, dum: null, remark: null,
   };
   const agg = aggregatePackingRowsByBase([
     { ...base, tracking: "X-1", totalWeight: null },

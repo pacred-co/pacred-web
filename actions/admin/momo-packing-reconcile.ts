@@ -86,6 +86,15 @@ export type MomoPackingPreviewRow = {
   packingWidth: number | null;
   packingLength: number | null;
   packingHeight: number | null;
+  // reference columns straight from the packing list (owner ปอน 2026-07-14) — the grid
+  // shows every column the file carries. DISPLAY ONLY: never written, never priced.
+  packingSmDate: string | null;   // B "SM. Date"
+  packingBranch: string | null;   // C "Branch"
+  packingProduct: string | null;  // D "Product" (ชื่อสินค้าจีน)
+  packingDum: number | null;      // E "Dum"
+  packingRemark: string | null;   // Q "Remark Number"
+  packingWtPerBox: number | null; // M "Weight(KG)" — น้ำหนัก/กล่อง ที่ไฟล์เขียนมาเอง
+  packingCbmPerBox: number | null;// N "CBM" — คิว/กล่อง ที่ไฟล์เขียนมาเอง
   // container (meta — every row inherits it)
   container: string | null;
   transportMode: "1" | "2" | "3" | null; // derived from the container name
@@ -240,6 +249,13 @@ async function buildPreview(bytes: Uint8Array): Promise<MomoPackingPreview> {
       packingWidth: a.width,
       packingLength: a.length,
       packingHeight: a.height,
+      packingSmDate: a.smDate,
+      packingBranch: a.branch,
+      packingProduct: a.product,
+      packingDum: a.dum,
+      packingRemark: a.remark,
+      packingWtPerBox: a.weightKg,
+      packingCbmPerBox: a.cbm,
       container,
       transportMode: containerMode,
       matched,
