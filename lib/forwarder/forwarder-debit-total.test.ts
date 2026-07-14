@@ -59,6 +59,7 @@ function row(p: Partial<ForwarderDebitRow> & { id: number | string }): Forwarder
     id: p.id,
     fshipby: p.fshipby ?? null,
     ftrackingchn: p.ftrackingchn ?? null,
+    fcabinetnumber: p.fcabinetnumber ?? null,
     ftotalprice: p.ftotalprice ?? 0,
     ftransportprice: p.ftransportprice ?? 0,
     fpriceupdate: p.fpriceupdate ?? 0,
@@ -286,6 +287,68 @@ console.log("computeForwarderDebitBatch — เหมาๆ anchored to base tra
   assertClose("sub-row -3 no fee", b.lines[2].price_thb, 100);
   assertEq("fix-id = base row", b.pcsfTransportFixId, "1");
   assertClose("batch total = 400 (300 + one ฿100)", b.total_thb, 400);
+}
+
+// ── เหมาๆ = ฿100 ONCE per DELIVERY (container) — owner 2026-07-14 ────────────────
+// "ส่งลอบเดียวกัน ไม่เก็บเหมาๆ สองลอบ": two DIFFERENT base trackings packed into ONE
+// container ship together as one delivery → the ฿100 fee fires ONCE, not per-base-
+// tracking. This is the owner's reported bug (52118 SF1555179376071 + 52119
+// SF1575462811144 · both GZS260626-1 · PRF · both ฿200 before → ฿100 after).
+console.log("computeForwarderDebitBatch — เหมาๆ once per DELIVERY (container)");
+{
+  // the exact owner case: 2 base trackings, SAME container → ฿100 once.
+  const b = computeForwarderDebitBatch(
+    [
+      row({ id: 52118, ftrackingchn: "SF1555179376071", fcabinetnumber: "GZS260626-1", fshipby: "PRF", ftransportprice: 0, ftotalprice: 250 }),
+      row({ id: 52119, ftrackingchn: "SF1575462811144", fcabinetnumber: "GZS260626-1", fshipby: "PRF", ftransportprice: 0, ftotalprice: 250 }),
+    ],
+    { userId: "PR143", isCorporate: false },
+  );
+  assertEq("same-container: exactly ONE เหมาๆ anchor", b.lines.filter((l) => l.isPcsfFirst).length, 1);
+  assertEq("same-container: anchor is the first base row", b.pcsfTransportFixId, "52118");
+  assertClose("same-container: first base carries +100", b.lines[0].price_thb, 350);
+  assertClose("same-container: second base NO fee", b.lines[1].price_thb, 250);
+  assertClose("same-container: total = 600 (500 + ฿100 once, NOT 700)", b.total_thb, 600);
+}
+{
+  // DIFFERENT containers = separate deliveries → ฿100 EACH (guardrail c: no regression).
+  const b = computeForwarderDebitBatch(
+    [
+      row({ id: 1, ftrackingchn: "SF-A", fcabinetnumber: "GZS260626-1", fshipby: "PRF", ftransportprice: 0, ftotalprice: 250 }),
+      row({ id: 2, ftrackingchn: "SF-B", fcabinetnumber: "GZE260704-1", fshipby: "PRF", ftransportprice: 0, ftotalprice: 250 }),
+    ],
+    { userId: "PR143", isCorporate: false },
+  );
+  assertEq("diff-container: TWO เหมาๆ anchors", b.lines.filter((l) => l.isPcsfFirst).length, 2);
+  assertClose("diff-container: each base carries +100", b.lines[0].price_thb, 350);
+  assertClose("diff-container: second base +100 too", b.lines[1].price_thb, 350);
+  assertClose("diff-container: total = 700 (500 + ฿100 × 2 containers)", b.total_thb, 700);
+}
+{
+  // split-box guard preserved: base + -N siblings of ONE container → only the base anchors.
+  const b = computeForwarderDebitBatch(
+    [
+      row({ id: 1, ftrackingchn: "SFX",   fcabinetnumber: "GZS260626-1", fshipby: "PRF", ftransportprice: 0, ftotalprice: 100 }),
+      row({ id: 2, ftrackingchn: "SFX-2", fcabinetnumber: "GZS260626-1", fshipby: "PRF", ftransportprice: 0, ftotalprice: 100 }),
+      row({ id: 3, ftrackingchn: "SFX-3", fcabinetnumber: "GZS260626-1", fshipby: "PRF", ftransportprice: 0, ftotalprice: 100 }),
+    ],
+    { userId: "PR143", isCorporate: false },
+  );
+  assertEq("split-box: exactly ONE anchor (the base)", b.lines.filter((l) => l.isPcsfFirst).length, 1);
+  assertEq("split-box: -N sub-rows never anchor", b.pcsfTransportFixId, "1");
+  assertClose("split-box: total = 400 (300 + ฿100 once)", b.total_thb, 400);
+}
+{
+  // no fcabinetnumber → per-base-tracking preserved (2 distinct base trackings → ฿100 each).
+  const b = computeForwarderDebitBatch(
+    [
+      row({ id: 1, ftrackingchn: "AAA", fshipby: "PRF", ftransportprice: 0, ftotalprice: 250 }),
+      row({ id: 2, ftrackingchn: "BBB", fshipby: "PRF", ftransportprice: 0, ftotalprice: 250 }),
+    ],
+    { userId: "PR143", isCorporate: false },
+  );
+  assertEq("no-container: falls back to per-base-tracking (2 anchors)", b.lines.filter((l) => l.isPcsfFirst).length, 2);
+  assertClose("no-container: total = 700 (unchanged legacy per-tracking)", b.total_thb, 700);
 }
 // ── B1 (2026-07-13) N-box เหมาๆ = ฿100 ONCE ─────────────────────────────────
 // resolveAutoThShippingFill now auto-fills a เหมาๆ row as PRF · ftransportprice ฿0

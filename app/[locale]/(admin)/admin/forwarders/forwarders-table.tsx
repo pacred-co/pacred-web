@@ -417,6 +417,14 @@ function isMomoRoutingBatch(cab: string | null | undefined): boolean {
  *  zero weight. A bare row WITH weight is a real order (legacy `-1` groups) and
  *  is kept — no regression.
  *
+ *  money guard (2026-07-14 · box-count off-by-one · owner 52336/1783051207): a
+ *  bare row that carries billable money (ftotalprice>0 → `total_price`) is a REAL
+ *  priced box (e.g. box #1 of a shipment with no `-1` sibling · fweight was 0 until
+ *  the warehouse weighed it) — it must NEVER be dropped from the box-count Σ (that
+ *  under-counted 75→74). Mirrors the detail-page guard in forwarder-siblings.ts. It
+ *  only KEEPS more rows — a genuine หัวบิล placeholder is ฿0 + weight-0 → still dropped
+ *  → no double-count regression.
+ *
  *  Delegates to the shared `filterCountableForwarderRows`: a display group's
  *  members all share one (baseTracking, userid), so filtering that group ==
  *  the old local logic (verified identical · locked by momo-bill-header.test). */
@@ -425,6 +433,7 @@ function countableGroupMembers(members: Row[]): Row[] {
     tracking: (m) => m.tracking_chn,
     weight: (m) => m.weight_kg,
     userid: (m) => m.customer?.userid ?? "",
+    money: (m) => m.total_price,
   });
 }
 

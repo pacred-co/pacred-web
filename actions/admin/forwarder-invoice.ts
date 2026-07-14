@@ -111,8 +111,9 @@ type ForwarderRowForReceipt = {
   fcredit: string | null;
   paydeposit: string | null;
   ftrackingchn: string | null;
-  // ค่าส่งเหมาๆ anchor — the carrier code (PCSF/PRF) + tracking decide the
-  // once-per-shipment เหมาๆ flat fee (computeForwarderDebitBatch).
+  // ค่าส่งเหมาๆ anchor — the carrier code (PCSF/PRF) + tracking + container decide the
+  // once-per-DELIVERY เหมาๆ flat fee (computeForwarderDebitBatch · one container = one fee).
+  fcabinetnumber: string | null;
   fshipby: string | null;
   // For per-row totals (matches grenrateReceiptF L548)
   ftotalprice: number | string | null;
@@ -247,7 +248,7 @@ export async function adminIssueForwarderInvoice(
       const { data: fwRows, error: readErr } = await admin
         .from("tb_forwarder")
         .select(
-          "id, userid, fstatus, fcredit, paydeposit, ftrackingchn, fshipby, " +
+          "id, userid, fstatus, fcredit, paydeposit, ftrackingchn, fcabinetnumber, fshipby, " +
             "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
             "pricecrate, ftransportpricechnthb, priceother, fdiscount",
         )
@@ -332,7 +333,7 @@ export async function adminIssueForwarderInvoice(
       // the two docs reconcile to the satang.
       const maoBatch = computeForwarderDebitBatch(
         rows.map((r) => ({
-          id: r.id, fshipby: r.fshipby, ftrackingchn: r.ftrackingchn,
+          id: r.id, fshipby: r.fshipby, ftrackingchn: r.ftrackingchn, fcabinetnumber: r.fcabinetnumber,
           ftotalprice: r.ftotalprice, ftransportprice: r.ftransportprice,
           fpriceupdate: r.fpriceupdate, fshippingservice: r.fshippingservice,
           pricecrate: r.pricecrate, ftransportpricechnthb: r.ftransportpricechnthb,

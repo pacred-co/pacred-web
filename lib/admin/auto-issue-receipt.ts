@@ -316,14 +316,14 @@ export async function autoIssueReceiptOnPaymentLand(
   //    cached row data from the caller's snapshot).
   type FwRow = ForwarderPriceFields & {
     id: number; userid: string; tax_doc_pref: string | null;
-    fshipby: string | null; ftrackingchn: string | null;
+    fshipby: string | null; ftrackingchn: string | null; fcabinetnumber: string | null;
   };
   const { data: fwRows, error: fwErr } = await admin
     .from("tb_forwarder")
     .select(
       "id, userid, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
       "pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany, tax_doc_pref, " +
-      "fshipby, ftrackingchn",
+      "fshipby, ftrackingchn, fcabinetnumber",
     )
     .in("id", fids)
     .eq("userid", userid);
@@ -393,7 +393,7 @@ export async function autoIssueReceiptOnPaymentLand(
   // own line on the receipt paper, mirroring the bill.
   const maoBatch = computeForwarderDebitBatch(
     rows.map((r) => ({
-      id: r.id, fshipby: r.fshipby, ftrackingchn: r.ftrackingchn,
+      id: r.id, fshipby: r.fshipby, ftrackingchn: r.ftrackingchn, fcabinetnumber: r.fcabinetnumber,
       ftotalprice: r.ftotalprice, ftransportprice: r.ftransportprice,
       fpriceupdate: r.fpriceupdate, fshippingservice: r.fshippingservice,
       pricecrate: r.pricecrate, ftransportpricechnthb: r.ftransportpricechnthb,
