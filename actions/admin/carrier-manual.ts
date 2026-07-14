@@ -45,6 +45,7 @@ import {
 } from "@/lib/carrier/registry";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { ADDRESSES } from "@/components/seo/site";
+import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — clip to 10 chars (`tb_forwarder.adminid*` = varchar(10)).
@@ -233,6 +234,13 @@ export async function adminCarrierManualInsert(
           addresstel:          addrRow.addresstel,
           addresstel2:         addrRow.addresstel2 ?? "",
         };
+      }
+
+      // 🔴 CLOSED LIST (owner 2026-07-14) — the ขนส่งเอกชน must be in the owner's workbook
+      // AND run in the resolved delivery province. Own-fleet (PCS/PCSF/PCSE) exempt.
+      {
+        const coverage = checkCarrierForProvince(d.shipBy, addr.addressprovince);
+        if (!coverage.ok) return { ok: false, error: coverage.error };
       }
 
       // ─── Pricing — shared rule (legacy L78-86) ────────────────────

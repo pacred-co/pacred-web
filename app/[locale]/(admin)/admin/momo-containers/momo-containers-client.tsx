@@ -10,6 +10,7 @@
  */
 
 import { useMemo, useState, useTransition } from "react";
+import { ALL_WORKBOOK_CARRIER_OPTIONS } from "@/lib/cart/ship-by-eligibility";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
@@ -69,17 +70,17 @@ function pkVolDiff(t: IngestTrack): boolean {
   return t.hasPacking && t.packingCbm != null && t.cbm > 0 && Math.abs(t.cbm - t.packingCbm) > VOL_EPS;
 }
 
+// 🔴 CLOSED CARRIER LIST (owner 2026-07-14) — "บังคับให้เลือกให้ใส่แค่ที่มีในไฟล์ที่ส่งให้เท่านั้น".
+// The hardcoded list here used to offer DHL (1) · Kerry (4) · Nim Express (5) · ไปรษณีย์ไทย (11) —
+// none of which are in the owner's workbook → gone. At MOMO-commit time the delivery address is
+// often still unknown, so the list is the whole CLOSED workbook (28); the per-province half of the
+// rule is enforced server-side (commitMomoRowToForwarder → checkCarrierForProvince) once an
+// address IS attached, and on every later edit.
 const SHIP_BY_OPTIONS: { value: string; label: string }[] = [
-  { value: "", label: "— ยังไม่ระบุ (เซล/ลูกค้ากรอกภายหลัง) —" },
+  // ภูม 2026-06-25 ("ตัดออก") — default ว่าง · ไม่บังคับเลือกตอน commit MOMO.
+  { value: "",    label: "— ยังไม่ระบุ (เซล/ลูกค้ากรอกภายหลัง) —" },
   { value: "PCS", label: "รับเองโกดัง Pacred (สมุทรสาคร)" },
-  { value: "2", label: "Flash Express" },
-  { value: "3", label: "J.K. เอ็กซ์เพรส" },
-  { value: "21", label: "นิ่มซี่เส็งขนส่ง" },
-  { value: "5", label: "Nim Express" },
-  { value: "11", label: "ไปรษณีย์ไทย" },
-  { value: "24", label: "J&T Express" },
-  { value: "1", label: "DHL Express" },
-  { value: "4", label: "Kerry Express" },
+  ...ALL_WORKBOOK_CARRIER_OPTIONS.map((c) => ({ value: c.id, label: c.name })),
 ];
 const PRODUCT_TYPE_OPTIONS: { value: "1" | "2" | "3" | "4"; label: string }[] = [
   { value: "1", label: "ทั่วไป" },

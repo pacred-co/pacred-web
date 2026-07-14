@@ -23,6 +23,7 @@ import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { derivePayMethod } from "@/lib/forwarder/pay-method";
 import { resolveMaomaoCarrier } from "@/lib/forwarder/resolve-maomao";
 import { MAO_FLAT_FEE, MAO_CARRIER_CODE } from "@/lib/forwarder/mao-fee";
+import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
 import {
   modeFromPref,
@@ -484,6 +485,15 @@ async function submitCartOrderImpl(
     }
     hShipBy = mao.carrier;
     if (!mao.maoApplied) fShippingService = 0; // promo dropped → no เหมาๆ fee
+  }
+
+  // 🔴 CLOSED LIST (owner 2026-07-14) — the ขนส่งเอกชน the customer submitted must be in
+  // the owner's workbook AND run in the resolved delivery province. The cart <select> is
+  // already province-filtered server-side (getShipByOptionsForAddress → shipByByAddress);
+  // this refuses a raw action post. Own-fleet (PCS/PCSF/PCSE) + no-carrier are exempt.
+  {
+    const coverage = checkCarrierForProvince(hShipBy, addr.addressProvince);
+    if (!coverage.ok) return { ok: false, error: coverage.error };
   }
 
   // ── Money-ceiling guard (no silent overflow) ────────────────────────

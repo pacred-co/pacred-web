@@ -257,7 +257,9 @@ export function ForwarderInlineEdits(p: Props) {
   const initialPay = (p.paymethod === "2" ? "2" : "1") as "1" | "2";
   const initialAmountCount = (p.famountcount === "1" ? "1" : "2") as "1" | "2";
   const isPresetShipBy = SHIPBY_PRESETS.includes((p.fshipby ?? "") as (typeof SHIPBY_PRESETS)[number]);
-  const initialShipByMode = isPresetShipBy ? (p.fshipby as (typeof SHIPBY_PRESETS)[number]) : (p.fshipby && p.fshipby.trim() !== "" ? "_ext" : "PCS");
+  const initialShipByMode = isPresetShipBy
+    ? (p.fshipby as (typeof SHIPBY_PRESETS)[number])
+    : (p.fshipby && p.fshipby.trim() !== "" ? p.fshipby.trim() : "PCS");
 
   const [userIdVal, setUserIdVal] = useState<string>(p.userid);
   const [userIdConfirm, setUserIdConfirm] = useState<string>("");
@@ -265,7 +267,6 @@ export function ForwarderInlineEdits(p: Props) {
   const [transportVal, setTransportVal] = useState<"1" | "2" | "3">(initialTransport);
   const [crateVal, setCrateVal] = useState<"1" | "2">(initialCrate);
   const [shipByMode, setShipByMode] = useState<string>(initialShipByMode);
-  const [shipByExt, setShipByExt] = useState<string>(isPresetShipBy ? "" : (p.fshipby ?? ""));
   const [payVal, setPayVal] = useState<"1" | "2">(initialPay);
   const [trackingChnVal, setTrackingChnVal] = useState<string>(p.ftrackingchn ?? "");
   const [dateCloseVal, setDateCloseVal] = useState<string>(
@@ -276,8 +277,11 @@ export function ForwarderInlineEdits(p: Props) {
   const [amountCountVal, setAmountCountVal] = useState<"1" | "2">(initialAmountCount);
   const [billToVal, setBillToVal] = useState<string>(p.fbilltoname ?? "");
 
-  // The carrier code actually sent: preset code OR free-text.
-  const effectiveShipBy = shipByMode === "_ext" ? shipByExt.trim() : shipByMode;
+  // The carrier code actually sent — an own-fleet preset only (the free-text escape hatch was
+  // removed 2026-07-14; ขนส่งเอกชน is picked province-filtered on the detail page).
+  const effectiveShipBy = SHIPBY_PRESETS.includes(shipByMode as (typeof SHIPBY_PRESETS)[number])
+    ? shipByMode
+    : "";
 
   // ftrackingchn is locked once delivered (legacy update.php L730 — only editable while fstatus<7).
   const trackingLocked = (p.fstatus ?? "") === "7";
@@ -503,20 +507,19 @@ export function ForwarderInlineEdits(p: Props) {
               <option value="PCS">PCS · รับเองที่โกดัง (ค่าขนส่ง 0)</option>
               <option value="PCSF">PCSF · ส่งฟรี (ค่าขนส่ง 0)</option>
               <option value="PCSE">PCSE · ส่งด่วน (ปริมาตร×120 · ขั้นต่ำ 50)</option>
-              <option value="_ext">ผู้ขนส่งภายนอก (กรอกชื่อเอง)…</option>
+              {/* 🔴 owner 2026-07-14 — the free-text "ผู้ขนส่งภายนอก (กรอกชื่อเอง)" option is
+                  GONE: a ขนส่งเอกชน may only come from the owner's workbook, filtered by the
+                  delivery province. Pick it on the detail page (<EditShipByField>), which
+                  knows faddressprovince; the server refuses anything else anyway. */}
+              {!isPresetShipBy && (p.fshipby ?? "").trim() !== "" && (
+                <option value={(p.fshipby ?? "").trim()} disabled>
+                  {carrierLabel(p.fshipby)} (ค่าเดิม · เลือกใหม่ไม่ได้)
+                </option>
+              )}
             </select>
-            {shipByMode === "_ext" && (
-              <input
-                type="text"
-                value={shipByExt}
-                onChange={(e) => setShipByExt(e.target.value)}
-                maxLength={50}
-                placeholder="ชื่อผู้ขนส่งภายนอก เช่น Flash Express"
-                className={inputCls}
-              />
-            )}
             <p className="text-[11px] text-muted">
-              PCS = ที่อยู่จะถูกแทนด้วยโกดัง Pacred (สมุทรสาคร) · PCS/PCSF/PCSE คิดค่าขนส่งใหม่อัตโนมัติ
+              PCS = ที่อยู่จะถูกแทนด้วยโกดัง Pacred (สมุทรสาคร) · PCS/PCSF/PCSE คิดค่าขนส่งใหม่อัตโนมัติ ·
+              “ขนส่งเอกชน” เลือกได้ที่หน้ารายละเอียด (ขึ้นตามจังหวัดปลายทาง · เฉพาะที่มีในไฟล์พื้นที่ขนส่ง)
             </p>
             <div className="flex gap-2">
               <button
@@ -1054,17 +1057,58 @@ export function EditPayMethodField({
   );
 }
 
-/** บริษัทขนส่ง · PCS L1579 — fshipby preset + free-text. */
-export function EditShipByField({ fId, fshipby }: { fId: number; fshipby: string | null }) {
+/** One selectable private courier — computed SERVER-side from the delivery province
+ *  (`getPrivateCarrierOptionsForProvince`) so the client never bundles the SOT.
+ *  `note` = the per-province delivery restriction · `notes` = carrier-level notes
+ *  ("เริ่มต้น 30" · "ไม่รับสาย" · "ต้องแจ้งอำเภอก่อน"). */
+export type CarrierPick = { id: string; name: string; note?: string; notes?: string[] };
+
+/**
+ * บริษัทขนส่ง · PCS L1579 — Pacred own-fleet preset · **ขนส่งเอกชนตามจังหวัดปลายทาง (CLOSED)**.
+ *
+ * 🔴 Owner 2026-07-14: "ให้อิง data ตามไฟล์นี้เลย · บังคับให้เลือกให้ใส่แค่ที่มีในไฟล์ที่ส่งให้เท่านั้น ·
+ * ไม่ให้เลือกหรือให้ใส่ นอกเหนือจาก data ตรงนี้" → the free-text "ผู้ขนส่งภายนอก อื่นๆ (กรอกชื่อเอง)"
+ * option is GONE. `carriers` is the province-filtered list from the owner's workbook
+ * (carrier-province-coverage), each with its delivery restriction ("ไม่เข้าวังน้ำเขียว",
+ * "ส่งแค่บางเลน", "ไม่ไป เบตง"). The server action re-checks it (checkCarrierForProvince) —
+ * this picker is the UX half of the rule, not the gate.
+ *
+ * A carrier ALREADY stored but no longer selectable (retired courier · legacy free text like
+ * "สมใจสาย4" · the address moved province) still RENDERS, and stays visible in the <select> as a
+ * disabled "ค่าเดิม" entry so staff can see what it was — but Save is blocked until they pick a
+ * valid one. Existing data is never silently rewritten or lost.
+ */
+export function EditShipByField({
+  fId,
+  fshipby,
+  province,
+  carriers = [],
+}: {
+  fId: number;
+  fshipby: string | null;
+  /** tb_forwarder.faddressprovince — shown in the group label. */
+  province?: string | null;
+  carriers?: CarrierPick[];
+}) {
   const { pending, err, run } = useEditor();
   const [editing, setEditing] = useState(false);
-  const isPresetShipBy = SHIPBY_PRESETS.includes((fshipby ?? "") as (typeof SHIPBY_PRESETS)[number]);
-  const initialShipByMode = isPresetShipBy
-    ? (fshipby as (typeof SHIPBY_PRESETS)[number])
-    : (fshipby && fshipby.trim() !== "" ? "_ext" : "PCS");
+
+  const cur = (fshipby ?? "").trim();
+  const isPresetShipBy = SHIPBY_PRESETS.includes(cur as (typeof SHIPBY_PRESETS)[number]);
+  const inCarrierList = carriers.some((c) => c.id === cur);
+  /** The stored value is not selectable any more (retired / off-workbook / wrong province). */
+  const staleCurrent = cur !== "" && !isPresetShipBy && !inCarrierList;
+
+  const initialShipByMode = cur !== "" ? cur : "PCS";
   const [shipByMode, setShipByMode] = useState<string>(initialShipByMode);
-  const [shipByExt, setShipByExt] = useState<string>(isPresetShipBy ? "" : (fshipby ?? ""));
-  const effectiveShipBy = shipByMode === "_ext" ? shipByExt.trim() : shipByMode;
+  const selected = carriers.find((c) => c.id === shipByMode);
+  const selectedNote = selected?.note ?? "";
+  const selectedNotes = selected?.notes ?? [];
+  /** Saving is only allowed for an own-fleet preset or a courier from THIS province's list. */
+  const canSave =
+    SHIPBY_PRESETS.includes(shipByMode as (typeof SHIPBY_PRESETS)[number]) ||
+    carriers.some((c) => c.id === shipByMode);
+
   return (
     <div>
       {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
@@ -1073,26 +1117,68 @@ export function EditShipByField({ fId, fshipby }: { fId: number; fshipby: string
         label="บริษัทขนส่ง"
         editing={editing}
         setEditing={setEditing}
-        display={<span className="break-words">{carrierLabel(fshipby)}</span>}
+        display={
+          <span className="inline-flex flex-col gap-0.5">
+            <span className="break-words">{carrierLabel(fshipby)}</span>
+            {carrierProvinceNoteOf(carriers, cur) && (
+              <span className="text-[11px] text-amber-700">⚠ {carrierProvinceNoteOf(carriers, cur)}</span>
+            )}
+            {staleCurrent && (
+              <span className="text-[11px] text-amber-700">
+                ⚠ ไม่อยู่ในรายชื่อขนส่งที่วิ่ง{province ? ` จ.${province}` : "จังหวัดนี้"} — กรุณาเลือกใหม่
+              </span>
+            )}
+          </span>
+        }
       >
         {(close) => (
           <>
             <select className={selectCls} value={shipByMode} onChange={(e) => setShipByMode(e.target.value)}>
-              <option value="PCS">รับเองโกดัง Pacred (สมุทรสาคร) · ค่าขนส่ง 0</option>
-              <option value="PCSF">PRF เหมาๆ · ส่งฟรีในเขต (ค่าขนส่ง 0)</option>
-              <option value="PCSE">PRE Express · ส่งด่วน (ปริมาตร×120 · ขั้นต่ำ 50)</option>
-              <option value="_ext">ผู้ขนส่งภายนอก (กรอกชื่อเอง)…</option>
+              <optgroup label="Pacred (ส่งเอง)">
+                <option value="PCS">รับเองโกดัง Pacred (สมุทรสาคร) · ค่าขนส่ง 0</option>
+                <option value="PCSF">PRF เหมาๆ · ส่งฟรีในเขต (ค่าขนส่ง 0)</option>
+                <option value="PCSE">PRE Express · ส่งด่วน (ปริมาตร×120 · ขั้นต่ำ 50)</option>
+              </optgroup>
+              {carriers.length > 0 && (
+                <optgroup label={`ขนส่งเอกชน ที่วิ่ง${province ? ` จ.${province}` : "จังหวัดปลายทาง"} (${carriers.length})`}>
+                  {carriers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}{c.note ? ` — ${c.note}` : ""}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {staleCurrent && (
+                <optgroup label="ค่าเดิม (เลือกใหม่ไม่ได้ · ไม่อยู่ในไฟล์พื้นที่ขนส่ง)">
+                  <option value={cur} disabled>{carrierLabel(cur)}</option>
+                </optgroup>
+              )}
             </select>
-            {shipByMode === "_ext" && (
-              <input type="text" value={shipByExt} onChange={(e) => setShipByExt(e.target.value)} maxLength={50}
-                placeholder="ชื่อผู้ขนส่งภายนอก เช่น Flash Express" className={inputCls} />
+            {(selectedNote || selectedNotes.length > 0) && (
+              <div className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800 space-y-0.5">
+                {selectedNote && <p>⚠ พื้นที่ส่ง: {selectedNote}</p>}
+                {selectedNotes.map((n) => (
+                  <p key={n}>• {n}</p>
+                ))}
+              </div>
+            )}
+            {carriers.length === 0 && (
+              <p className="text-[11px] text-amber-700">
+                ยังไม่มีรายชื่อ “ขนส่งเอกชน” สำหรับจังหวัดปลายทางนี้ — ตั้ง/แก้ “ที่อยู่จัดส่ง” ให้จังหวัดถูกต้องก่อน
+                แล้วระบบจะขึ้นขนส่งที่วิ่งในจังหวัดนั้นให้เลือก (เลือกได้เฉพาะที่มีในไฟล์พื้นที่ขนส่งของบริษัท)
+              </p>
+            )}
+            {!canSave && (
+              <p className="text-[11px] text-red-700">
+                เลือกบริษัทขนส่งจากรายชื่อก่อน — ระบบไม่อนุญาตให้ใส่ขนส่งนอกไฟล์พื้นที่ขนส่ง
+              </p>
             )}
             <p className="text-[11px] text-muted">
               รับเองโกดัง Pacred → ที่อยู่จะถูกแทนด้วยโกดัง Pacred (สมุทรสาคร) · ตัวเลือก Pacred คิดค่าขนส่งใหม่อัตโนมัติ
             </p>
             <div className="flex gap-2">
-              <button type="button" disabled={pending || !effectiveShipBy} className={btnSave}
-                onClick={() => run(() => adminUpdateForwarderShipBy({ fId, fShipBy: effectiveShipBy }), close)}>บันทึก</button>
+              <button type="button" disabled={pending || !canSave} className={btnSave}
+                onClick={() => run(() => adminUpdateForwarderShipBy({ fId, fShipBy: shipByMode }), close)}>บันทึก</button>
               <button type="button" disabled={pending} className={btnCancel} onClick={close}>ยกเลิก</button>
             </div>
           </>
@@ -1100,6 +1186,12 @@ export function EditShipByField({ fId, fshipby }: { fId: number; fshipby: string
       </EditableRow>
     </div>
   );
+}
+
+/** The restriction note of the CURRENTLY-stored carrier in this province (display badge). */
+function carrierProvinceNoteOf(carriers: CarrierPick[], code: string): string {
+  if (!code) return "";
+  return carriers.find((c) => c.id === code)?.note ?? "";
 }
 
 /**

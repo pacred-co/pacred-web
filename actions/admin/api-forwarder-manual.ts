@@ -32,6 +32,7 @@ import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { ADDRESSES } from "@/components/seo/site";
+import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
 
 // ────────────────────────────────────────────────────────────
 // Carrier discriminator. Both MOMO + CargoCenter use the same legacy
@@ -410,6 +411,13 @@ export async function adminApiForwarderManualInsert(
           // No address at all — fallback to PCS pickup (legacy behaviour L117-130).
           addr = { ...PCS_PICKUP_ADDRESS };
         }
+      }
+
+      // 🔴 CLOSED LIST (owner 2026-07-14) — the ขนส่งเอกชน must be in the owner's workbook
+      // AND run in the resolved delivery province. Own-fleet (PCS/PCSF/PCSE) exempt.
+      {
+        const coverage = checkCarrierForProvince(d.fShipBy, addr.addressprovince);
+        if (!coverage.ok) return { ok: false, error: coverage.error };
       }
 
       // ── Cost-CHN split (legacy lines 207-215) ────────────────

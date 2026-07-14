@@ -33,6 +33,7 @@ import {
 } from "@/actions/admin/forwarders-new";
 import { adminCarrierManualInsert } from "@/actions/admin/carrier-manual";
 import { computeTransportPrice, type CarrierConfig } from "@/lib/carrier/registry";
+import { getPrivateCarrierOptionsForProvince } from "@/lib/cart/ship-by-eligibility";
 
 type CoidOption = { coID: string; coName: string };
 
@@ -40,51 +41,12 @@ type CoidOption = { coID: string; coName: string };
  *  (legacy `optionHShipByCart()` in pcs-admin/include/function.php L411-464).
  *  Kept inline so this form is self-contained; if we ever centralise it, both
  *  files import from one place. */
-const SHIP_BY_OPTIONS: { value: string; label: string }[] = [
-  { value: "PCS",  label: "🏬 รับเองโกดัง Pacred (สมุทรสาคร)"        },
-  { value: "2",    label: "Flash Express"                  },
-  { value: "3",    label: "J.K. เอ็กซ์เพรส"                 },
-  { value: "21",   label: "นิ่มซี่เส็งขนส่ง 1988"             },
-  { value: "5",    label: "Nim Express"                    },
-  { value: "6",    label: "S & J ขนส่งด่วนสุพรรณบุรี"       },
-  { value: "7",    label: "SB สมใจขนส่ง"                   },
-  { value: "9",    label: "เคพีเอ็น (2017)"                 },
-  { value: "10",   label: "เฟิร์ส เอ็กเพรส ขนส่ง"           },
-  { value: "11",   label: "ไปรษณีย์ไทย"                     },
-  { value: "12",   label: "จันทร์สว่างขนส่ง"                 },
-  { value: "13",   label: "ธนามัย ขนส่งด่วน"                },
-  { value: "14",   label: "บุญอนันต์ขนส่ง"                   },
-  { value: "15",   label: "พี.เจ. ด่วนอีสาน ขนส่ง"           },
-  { value: "16",   label: "มะม่วงขนส่ง"                      },
-  { value: "17",   label: "วันชนะ แอนด์ วันณิสา ขนส่ง"      },
-  { value: "18",   label: "สมพงษ์อุบลรัตน์ ขนส่ง"            },
-  { value: "19",   label: "อาร์.ซี.อาร์ เพลส (r.c.r. place)" },
-  { value: "20",   label: "ตองสอง ขนส่ง"                    },
-  { value: "22",   label: "ธนาไพศาล ขนส่ง"                   },
-  { value: "23",   label: "PL ขนส่งด่วน"                     },
-  { value: "24",   label: "J&T Express"                     },
-  { value: "25",   label: "มังกรทองขนส่ง 2019"               },
-  { value: "26",   label: "PM ชลบุรี ขนส่งด่วน"              },
-  { value: "27",   label: "ทรัพย์ปรีชา"                       },
-  { value: "28",   label: "พัฒนาเอ็กซ์เพลส"                   },
-  { value: "29",   label: "หาดใหญ่ทัวร์"                      },
-  { value: "30",   label: "หาดใหญ่ โอ.พี. 2012"              },
-  { value: "31",   label: "อาร์.ซี.เอ็กซเพรส"                 },
-  { value: "32",   label: "สี่สหาย"                           },
-  { value: "33",   label: "แพปลา​สมบัติ​วัฒนา"                },
-  { value: "34",   label: "ทวีทรัพย์ระยอง"                    },
-  { value: "35",   label: "ศิริสมบูรณ์"                        },
-  { value: "36",   label: "นิวสอง อัศวินขนส่ง"                },
-  { value: "37",   label: "โชคสถาพรขนส่ง"                    },
-  { value: "38",   label: "ทรัพย์สมบูรณ์ถาวร"                  },
-  { value: "39",   label: "MNB Transport"                   },
-  { value: "40",   label: "หจก.โชคพูลทรัพย์ขนส่ง 2014"        },
-  { value: "41",   label: "สิรินครขนส่ง"                       },
-  { value: "42",   label: "พาณิชย์การขนส่ง KSD"               },
-  { value: "43",   label: "นวรรณขนส่ง"                        },
-  { value: "44",   label: "กุญชรมณี ขนส่ง"                    },
-  { value: "45",   label: "เอ็มพอร์ท โลจิสติกส์"                },
-  { value: "46",   label: "ซี.เอ็น.ทรานสปอร์ต"                },
+// 🔴 CLOSED CARRIER LIST (owner 2026-07-14) — ขนส่งเอกชน comes from the owner's workbook,
+// filtered by the SELECTED ADDRESS'S PROVINCE (getPrivateCarrierOptionsForProvince). The old
+// hardcoded 47-carrier list (incl. DHL/Kerry/Nim/ไปรษณีย์/มังกรทอง/…) is gone. Own-fleet
+// PCS/PCSF/PCSE are Pacred's own delivery, not private couriers → still offered.
+const OWN_FLEET_OPTIONS: { value: string; label: string }[] = [
+  { value: "PCS", label: "🏬 รับเองโกดัง Pacred (สมุทรสาคร)" },
 ];
 
 /** Transport-type options (legacy modal L838-841 — only รถ/เรือ at create). */
@@ -261,6 +223,20 @@ export function CarrierManualForm({
     () => addresses.find((a) => a.addressid === addressId) ?? null,
     [addresses, addressId],
   );
+  // ขนส่งเอกชน ที่วิ่งจริงในจังหวัดปลายทาง (owner's workbook · CLOSED).
+  const privateCarriers = useMemo(
+    () => getPrivateCarrierOptionsForProvince(selectedAddress?.addressprovince ?? ""),
+    [selectedAddress],
+  );
+  // A carrier that does NOT serve the picked province must not stay silently selected. Derived
+  // during render (never setState-in-effect) — `shipByEff` is both what the <select> shows and
+  // what we submit, so a stale pick falls back to the placeholder and the form blocks.
+  const shipByEff =
+    !shipBy || shipBy === "PCS" || shipBy === "PCSF" || shipBy === "PCSE" ||
+    privateCarriers.some((c) => c.id === shipBy)
+      ? shipBy
+      : "";
+
 
   function resetForm() {
     setCoid("");
@@ -296,8 +272,8 @@ export function CarrierManualForm({
     if (!userid)             errs.add("userid");
     if (!trackingChn.trim()) errs.add("trackingChn");
     if (!detail.trim())      errs.add("detail");
-    if (!shipBy)             errs.add("shipBy");
-    if (shipBy !== "PCS" && !addressId) errs.add("addressId");
+    if (!shipByEff)          errs.add("shipBy");
+    if (shipByEff !== "PCS" && !addressId) errs.add("addressId");
 
     setFieldErrors(errs);
     if (errs.size > 0) {
@@ -318,8 +294,8 @@ export function CarrierManualForm({
         trackingChn2:   trackingChn2.trim() || null,
         detail:         detail.trim(),
         amount:         amountNum,
-        shipBy:         shipBy,
-        addressId:      shipBy === "PCS" ? null : addressId,
+        shipBy:         shipByEff,
+        addressId:      shipByEff === "PCS" ? null : addressId,
         transportType:  transportType,
         weightKg:       weightNum,
         volumeCbm:      volumeNum2,
@@ -646,7 +622,7 @@ export function CarrierManualForm({
             บริษัทขนส่ง <span className="text-red-500">*</span>
           </label>
           <select
-            value={shipBy}
+            value={shipByEff}
             onChange={(e) => {
               setShipBy(e.target.value);
               setFieldErrors((p) => { const n = new Set(p); n.delete("shipBy"); return n; });
@@ -656,14 +632,31 @@ export function CarrierManualForm({
             required
           >
             <option value="">— กรุณาเลือกบริษัทขนส่ง —</option>
-            {freeShipping && (
-              <option value="PCSF">📦 PRF เหมาๆ (50 บ.) — กทม + ปริมณฑล</option>
+            <optgroup label="Pacred (ส่งเอง)">
+              {freeShipping && (
+                <option value="PCSF">📦 PRF เหมาๆ (50 บ.) — กทม + ปริมณฑล</option>
+              )}
+              <option value="PCSE">📦 PRE ขนส่ง — คิดตาม CBM × 120 บ. (ขั้นต่ำ 50)</option>
+              {OWN_FLEET_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </optgroup>
+            {privateCarriers.length > 0 && (
+              <optgroup label={`ขนส่งเอกชน ที่วิ่ง จ.${selectedAddress?.addressprovince ?? ""} (${privateCarriers.length})`}>
+                {privateCarriers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}{c.note ? ` — ${c.note}` : ""}
+                  </option>
+                ))}
+              </optgroup>
             )}
-            <option value="PCSE">📦 PRE ขนส่ง — คิดตาม CBM × 120 บ. (ขั้นต่ำ 50)</option>
-            {SHIP_BY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
           </select>
+          {privateCarriers.length === 0 && (
+            <p className="mt-1 text-[11px] text-amber-700">
+              เลือกสมาชิก + ที่อยู่จัดส่งก่อน ระบบจะขึ้นรายชื่อ “ขนส่งเอกชน” ที่วิ่งในจังหวัดนั้นให้เลือก
+              (เลือกได้เฉพาะที่มีในไฟล์พื้นที่ขนส่งของบริษัท · พิมพ์ชื่อขนส่งเองไม่ได้)
+            </p>
+          )}
 
           {/* Live transport-price preview — only when PCSE is picked */}
           {shipBy === "PCSE" && (
@@ -690,7 +683,7 @@ export function CarrierManualForm({
               โทร 02-421-3325
             </p>
           </div>
-        ) : shipBy ? (
+        ) : (
           <div className="mt-4">
             <label className="block text-xs font-medium text-muted mb-1">
               ที่อยู่ในการจัดส่ง <span className="text-red-500">*</span>
@@ -753,7 +746,7 @@ export function CarrierManualForm({
               </>
             )}
           </div>
-        ) : null}
+        )}
 
         {/* Transport type */}
         <div className="mt-4">
