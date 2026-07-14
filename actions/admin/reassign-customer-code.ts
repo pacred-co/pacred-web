@@ -60,12 +60,13 @@ export async function adminReassignCustomerCode(
   }
   const { memberCode, newCode } = parsed.data;
 
-  // withAdmin(["ultra"]) admits any god role; the isGodRole bypass means super +
-  // normies would pass. Re-assert ultra explicitly below — that is the real gate.
-  return withAdmin<AdminReassignCustomerCodeData>(["ultra"], async ({ adminId }) => {
+  // owner 2026-07-14: allow SUPER too (not only Ultra Admin Z). Re-assert the
+  // explicit role check (withAdmin's isGodRole bypass would admit normies, so we
+  // still gate to ultra OR super here — that is the real gate).
+  return withAdmin<AdminReassignCustomerCodeData>(["ultra", "super"], async ({ adminId }) => {
     const roles = (await getAdminRoles()) ?? [];
-    if (!roles.includes("ultra")) {
-      return { ok: false, error: "forbidden — เฉพาะ Ultra Admin Z รันเลข PR ใหม่ได้" };
+    if (!roles.includes("ultra") && !roles.includes("super")) {
+      return { ok: false, error: "forbidden — เฉพาะ Super / Ultra Admin Z รันเลข PR ใหม่ได้" };
     }
 
     const res = await moveMemberCode({ fromCode: memberCode, newCode: newCode ?? null });

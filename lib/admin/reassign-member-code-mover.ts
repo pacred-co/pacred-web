@@ -49,16 +49,47 @@ export type ReassignMoveResult =
     }
   | { ok: false; error: string };
 
-function connString(): string {
+/**
+ * Candidate connection strings, tried in order. The prod pooler is on **aws-1**
+ * (the earlier default `aws-0` never connects → `c.connect()` threw → the generic
+ * "Something went wrong" error page the owner hit). Mirror the proven multi-host
+ * fallback the migration scripts use: aws-1 then aws-0 · session(5432) then
+ * transaction(6543) pooler · then the direct db host. An explicit SUPABASE_DB_URL
+ * / SUPABASE_DB_HOST override still wins.
+ */
+function connCandidates(): string[] {
   const password = process.env.SUPABASE_DB_PASSWORD || process.env.PG_PASSWORD;
   if (!password) throw new Error("SUPABASE_DB_PASSWORD not configured");
-  // Prefer an explicit pooled connection string if the deployment provides one;
-  // else assemble the session-pooler URL for the prod ref (matches the scripts).
-  if (process.env.SUPABASE_DB_URL) return process.env.SUPABASE_DB_URL;
+  if (process.env.SUPABASE_DB_URL) return [process.env.SUPABASE_DB_URL];
   const ref = process.env.SUPABASE_DB_PROJECT_REF || "yzljakczhwrpbxflnmco";
-  const host = process.env.SUPABASE_DB_HOST || "aws-0-ap-southeast-1.pooler.supabase.com";
   const enc = encodeURIComponent(password);
-  return `postgresql://postgres.${ref}:${enc}@${host}:5432/postgres`;
+  const hosts = process.env.SUPABASE_DB_HOST
+    ? [process.env.SUPABASE_DB_HOST]
+    : ["aws-1-ap-southeast-1.pooler.supabase.com", "aws-0-ap-southeast-1.pooler.supabase.com"];
+  return [
+    ...hosts.flatMap((h) => [
+      `postgresql://postgres.${ref}:${enc}@${h}:5432/postgres`,
+      `postgresql://postgres.${ref}:${enc}@${h}:6543/postgres`,
+    ]),
+    `postgresql://postgres:${enc}@db.${ref}.supabase.co:5432/postgres`,
+  ];
+}
+
+/** Open a pg client, trying each candidate until one connects. */
+async function openClient(): Promise<InstanceType<typeof Client>> {
+  const candidates = connCandidates();
+  let lastErr: unknown;
+  for (const connectionString of candidates) {
+    const client = new Client({ connectionString, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 10000 });
+    try {
+      await client.connect();
+      return client;
+    } catch (e) {
+      lastErr = e;
+      try { await client.end(); } catch { /* ignore */ }
+    }
+  }
+  throw new Error(`db_connect_failed: ${(lastErr as Error)?.message ?? "unknown"}`);
 }
 
 /**
@@ -75,8 +106,14 @@ export async function moveMemberCode(args: {
   if (explicitTo && !PR_CODE_RE.test(explicitTo)) return { ok: false, error: "invalid_new_code" };
   if (explicitTo && explicitTo === from) return { ok: false, error: "new_code_equals_old" };
 
-  const c = new Client({ connectionString: connString(), ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 10000 });
-  await c.connect();
+  let c: InstanceType<typeof Client>;
+  try {
+    c = await openClient();
+  } catch (e) {
+    // Connect / env failure → a clean handled error (the caller shows it) instead
+    // of an uncaught throw → the generic "Something went wrong" page.
+    return { ok: false, error: (e as Error).message };
+  }
   try {
     // 1. Customer must exist at `from`.
     const who = (await c.query(`SELECT "userID" FROM tb_users WHERE "userID"=$1`, [from])).rows;
@@ -181,6 +218,10 @@ export async function moveMemberCode(args: {
     }
 
     return { ok: true, plan, movedRows: moved, authRealigned, authWarning };
+  } catch (e) {
+    // Any unexpected throw outside the committed txn (introspection / auth API) →
+    // handled error, not the crash page. The BEGIN/COMMIT block already rolls back.
+    return { ok: false, error: `reassign_failed:${(e as Error).message}` };
   } finally {
     await c.end();
   }
