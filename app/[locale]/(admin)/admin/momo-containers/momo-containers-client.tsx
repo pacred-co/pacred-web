@@ -10,6 +10,7 @@
  */
 
 import { useMemo, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { CheckCircle2, AlertCircle, RefreshCw, X, PackageCheck, Truck } from "lucide-react";
@@ -267,9 +268,11 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
         พรีวิว+ยืนยัน → INSERT ลง tb_forwarder · น้ำหนัก/คิว = ค่ารวมทั้งชิปเมนต์จาก MOMO (ตรงกับที่จะคิดเงิน) · กดเลขตู้เพื่อดูรายละเอียดทั้งตู้.
       </p>
 
-      {/* import preview + confirm modal */}
-      {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => !committing && setModal(null)} role="button" tabIndex={-1}>
+      {/* import preview + confirm modal — portal to body so `fixed` is relative
+          to the viewport, not a transformed layout ancestor (else it opens
+          mid-page and you must scroll to it · ภูม 2026-07-14). */}
+      {modal && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => !committing && setModal(null)} role="button" tabIndex={-1}>
           <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-surface p-5 shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold flex items-center gap-2"><PackageCheck className="h-5 w-5 text-primary-600" /> ยืนยันนำเข้าระบบ</h3>
@@ -330,12 +333,13 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {/* image lightbox */}
-      {zoom && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-4 cursor-zoom-out" onClick={() => setZoom(null)} role="button" tabIndex={-1}>
+      {/* image lightbox — portal to body too (same fixed-positioning reason) */}
+      {zoom && createPortal(
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-4 cursor-zoom-out" onClick={() => setZoom(null)} role="button" tabIndex={-1}>
           <div className="relative max-w-3xl w-full space-y-2" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between text-white">
               <span className="font-mono text-sm font-bold">{zoom.tracking} · ป้าย MOMO ({zoom.urls.length})</span>
@@ -349,7 +353,8 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
             </div>
             <p className="text-[11px] text-white/60 text-center">⚠️ ตรวจเลข PR บนป้ายให้ตรงก่อนนำเข้าระบบ</p>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
