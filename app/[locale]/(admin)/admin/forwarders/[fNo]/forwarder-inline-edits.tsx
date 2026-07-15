@@ -1183,21 +1183,31 @@ export function EditShipByField({
       >
         {(close) => (
           <>
-            {/* จังหวัดปลายทาง — set/override here so the courier list works even on a row that
-                had no province stored (owner 2026-07-15: "ที่อยู่เขาก็มีอยู่แล้ว · มันเลือกได้ตรงไหน").
-                Changing it refreshes the ขนส่งเอกชน list LIVE. */}
-            <div>
-              <label className="block text-[11px] text-muted mb-0.5">จังหวัดปลายทาง</label>
-              <select className={selectCls} value={selectedProvince} onChange={(e) => onProvinceChange(e.target.value)}>
-                <option value="">— เลือกจังหวัด —</option>
-                {THAI_PROVINCES.map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-              {effectiveProvince && selectedProvince !== effectiveProvince && (
-                <p className="text-[11px] text-muted mt-0.5">จังหวัดจากที่อยู่: {effectiveProvince}</p>
-              )}
-            </div>
+            {/* จังหวัดปลายทาง — owner 2026-07-15: "ที่อยู่จัดส่งมีจังหวัดอยู่แล้ว · lock auto ·
+                ห้ามให้เลือกจังหวัดอีก". When the delivery address gives us a province, LOCK it
+                (the ขนส่งเอกชน list below filters by it automatically) — the province follows the
+                address, not a separate picker. Only when there's NO address province (address-less
+                row) do we fall back to a manual <select> so the courier list is still reachable. */}
+            {effectiveProvince ? (
+              <div>
+                <label className="block text-[11px] text-muted mb-0.5">จังหวัดปลายทาง</label>
+                <div className="rounded-md border border-border bg-surface-alt/50 px-2.5 py-1.5 text-sm font-medium flex flex-wrap items-center gap-1.5">
+                  🔒 {effectiveProvince}
+                  <span className="text-[11px] text-muted font-normal">(จากที่อยู่จัดส่ง · อัตโนมัติ)</span>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-[11px] text-muted mb-0.5">จังหวัดปลายทาง</label>
+                <select className={selectCls} value={selectedProvince} onChange={(e) => onProvinceChange(e.target.value)}>
+                  <option value="">— เลือกจังหวัด —</option>
+                  {THAI_PROVINCES.map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted mt-0.5">ลูกค้ายังไม่มีที่อยู่จัดส่งที่มีจังหวัด — เลือกจังหวัดเพื่อให้ขึ้นขนส่งเอกชนในพื้นที่</p>
+              </div>
+            )}
             <div>
               <label className="block text-[11px] text-muted mb-0.5">บริษัทขนส่ง</label>
               <select className={selectCls} value={shipByMode} onChange={(e) => setShipByMode(e.target.value)}>
