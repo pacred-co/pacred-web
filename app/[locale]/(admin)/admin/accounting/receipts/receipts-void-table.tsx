@@ -283,13 +283,22 @@ export function ReceiptsVoidTable({
                     {/* ③ วันที่ออก (rdate) */}
                     <td className="px-2 py-2 whitespace-nowrap text-slate-700">{fmtDate(r.rdate)}</td>
                     {/* ④ สลิป — tb_receipt has NO imagesslip column; the slip lives on the
-                        linked wallet-deposit (refwhid → tb_wallet_hs). Link there if present. */}
+                        payment that funded it: the wallet-deposit (refwhid → tb_wallet_hs)
+                        OR — for a billing-run receipt — the ใบวางบิล (slip_path). Link there. */}
                     <td className="px-2 py-2 text-center">
                       {r.refwhid ? (
                         <Link
                           href={`/admin/wallet/${r.refwhid}`}
                           className="text-sky-700 hover:underline whitespace-nowrap"
                           title="ดูสลิปที่รายการเติมเงินที่อ้างอิง"
+                        >
+                          กดเพื่อดูสลิป
+                        </Link>
+                      ) : r.billingRunId ? (
+                        <Link
+                          href={`/admin/billing-run/${r.billingRunId}`}
+                          className="text-sky-700 hover:underline whitespace-nowrap"
+                          title="ดูสลิปที่ใบวางบิลที่อ้างอิง"
                         >
                           กดเพื่อดูสลิป
                         </Link>
@@ -358,14 +367,25 @@ export function ReceiptsVoidTable({
                         >
                           ดูใบเสร็จ
                         </Link>
-                        {r.refwhid && (
+                        {/* อ้างอิงชำระเงิน — the payment that funded this receipt:
+                            wallet-deposit (refwhid) OR the ใบวางบิล (billingRunId). Legacy
+                            shows it on every row; Pacred pays via both, so we link to
+                            whichever funded it → button on every real receipt. */}
+                        {r.refwhid ? (
                           <Link
                             href={`/admin/wallet/${r.refwhid}`}
                             className="rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-amber-600 whitespace-nowrap"
                           >
                             อ้างอิงชำระเงิน
                           </Link>
-                        )}
+                        ) : r.billingRunId ? (
+                          <Link
+                            href={`/admin/billing-run/${r.billingRunId}`}
+                            className="rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-amber-600 whitespace-nowrap"
+                          >
+                            อ้างอิงชำระเงิน
+                          </Link>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

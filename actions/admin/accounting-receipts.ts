@@ -110,7 +110,8 @@ export type ReceiptListRow = {
   customerLabel: string;       // recompname OR "userName userLastName" OR userid
   isCorporate: boolean;
   recompnumber: string | null; // เลขผู้เสียภาษี (tb_receipt.recompnumber · varchar(13))
-  refwhid: number | null;      // อ้างอิงรายการเติมเงิน → /admin/wallet/[refwhid]
+  refwhid: number | null;      // อ้างอิงชำระเงิน (wallet) → /admin/wallet/[refwhid]
+  billingRunId: number | null; // อ้างอิงชำระเงิน fallback (บิล) → /admin/billing-run/[id]
   totalBeforeWithholding: number;
   ramount: number;
   whtAmount: number;           // totalBeforeWithholding − ramount
@@ -489,6 +490,36 @@ export async function getReceiptList(
     }
   }
 
+  // ── อ้างอิงชำระเงิน fallback → the ใบวางบิล (billing-run invoice) that billed this
+  //    receipt's fids. Legacy shows the button on EVERY receipt because every payment
+  //    was a wallet topup; Pacred also pays via ใบวางบิล, so a receipt with no wallet
+  //    ref (refwhid) links to its billing-run invoice instead → the button renders on
+  //    every real receipt like legacy. Derived READ-ONLY from tb_forwarder_invoice_item
+  //    (forwarder_id → invoice_id · the newest invoice wins per fid).
+  const billByRid = new Map<string, number>();
+  const allFids = Array.from(new Set([...fidsByRid.values()].flat()));
+  if (allFids.length > 0) {
+    const { data: invItems, error: invErr } = await admin
+      .from("tb_forwarder_invoice_item")
+      .select("forwarder_id, invoice_id")
+      .in("forwarder_id", allFids);
+    if (invErr) {
+      console.error(`[tb_forwarder_invoice_item] failed`, { code: invErr.code, message: invErr.message });
+    }
+    const invByFid = new Map<number, number>();
+    for (const ii of (invItems ?? []) as Array<{ forwarder_id: number | null; invoice_id: number | null }>) {
+      if (ii.forwarder_id != null && ii.invoice_id != null) {
+        invByFid.set(Number(ii.forwarder_id), Number(ii.invoice_id));
+      }
+    }
+    for (const [rid, fids] of fidsByRid) {
+      for (const fid of fids) {
+        const inv = invByFid.get(fid);
+        if (inv) { billByRid.set(rid, inv); break; }
+      }
+    }
+  }
+
   // ── Materialise display rows ─────────────────────────────────
   const rows: ReceiptListRow[] = receipts.map((r) => {
     const tb = toNumber(r.totalbeforewithholding);
@@ -505,6 +536,7 @@ export async function getReceiptList(
       isCorporate:            r.corporatetype === "1",
       recompnumber:           (r.recompnumber ?? "").trim() || null,
       refwhid:                r.refwhid != null && Number(r.refwhid) > 0 ? Number(r.refwhid) : null,
+      billingRunId:           billByRid.get(r.rid) ?? null,
       totalBeforeWithholding: tb,
       ramount:                amt,
       whtAmount:              tb - amt,
