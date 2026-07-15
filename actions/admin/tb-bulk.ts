@@ -167,7 +167,11 @@ async function adminBulkApproveWalletHsImpl(
       let processed = 0;
       let failed = 0;
       const errors: string[] = [];
-      const receiptBatches = new Map<string, { userid: string; dateSlip: Date; fids: number[] }>();
+      // refWhId = a REPRESENTATIVE wallet_hs.id of the batch (the first slip that
+      // formed it). Same-customer same-day batch → any funding slip is a valid
+      // "อ้างอิงชำระเงิน" jump-off; the receipt list links there. (Legacy: 1 receipt
+      // ← 1 topup; Pacred bulk may fold several same-day slips into 1 receipt.)
+      const receiptBatches = new Map<string, { userid: string; dateSlip: Date; fids: number[]; refWhId: number }>();
       // BUG-1 — track which (userid · dateSlip-day) receipt batches have already
       // had the PCSF เหมาๆ ฿50 persisted to a forwarder row, so a batch with
       // multiple PCSF-zero rows gets the ฿50 on the FIRST one only (the receipt
@@ -424,7 +428,7 @@ async function adminBulkApproveWalletHsImpl(
             if (existing) {
               existing.fids.push(fid);
             } else {
-              receiptBatches.set(dayKey, { userid: r.userid, dateSlip: dt, fids: [fid] });
+              receiptBatches.set(dayKey, { userid: r.userid, dateSlip: dt, fids: [fid], refWhId: Number(r.id) });
             }
           }
         }
@@ -461,6 +465,7 @@ async function adminBulkApproveWalletHsImpl(
           fids:     batch.fids,
           dateSlip: batch.dateSlip,
           source:   "wallet_hs.bulk_approve",
+          refWhId:  batch.refWhId,   // อ้างอิงชำระเงิน → funding slip (batch representative)
         });
         if (r.ok) {
           receiptsIssued.push({ rid: r.data.rid, fids: batch.fids });

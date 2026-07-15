@@ -212,6 +212,20 @@ export function ReceiptsVoidTable({
             </tr>
           </thead>
           <tbody className="text-[11px]">
+            {/* แถบสรุป "รวม" — ด้านบน (legacy bg-acc no-sort · gradient ม่วง→ฟ้า · prepend) */}
+            {rows.length > 0 && (
+              <tr
+                className="font-semibold text-white [&>td]:border-white/25"
+                style={{ background: "linear-gradient(90deg, #6C6DF2 0%, #44E5E6 100%)" }}
+              >
+                <td colSpan={11} className="px-3 py-2.5 text-right">
+                  รวม {rows.length.toLocaleString()} รายการ ในหน้านี้
+                </td>
+                <td className="px-2 py-2.5 text-right tabular-nums">฿{fmtThb(totals.totalBeforeWithholding)}</td>
+                <td className="px-2 py-2.5 text-right tabular-nums">฿{fmtThb(totals.ramount)}</td>
+                <td colSpan={4} />
+              </tr>
+            )}
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={17} className="px-3 py-12 text-center text-slate-500 text-sm">
@@ -283,13 +297,22 @@ export function ReceiptsVoidTable({
                     {/* ③ วันที่ออก (rdate) */}
                     <td className="px-2 py-2 whitespace-nowrap text-slate-700">{fmtDate(r.rdate)}</td>
                     {/* ④ สลิป — tb_receipt has NO imagesslip column; the slip lives on the
-                        linked wallet-deposit (refwhid → tb_wallet_hs). Link there if present. */}
+                        payment that funded it: the wallet-deposit (refwhid → tb_wallet_hs)
+                        OR — for a billing-run receipt — the ใบวางบิล (slip_path). Link there. */}
                     <td className="px-2 py-2 text-center">
                       {r.refwhid ? (
                         <Link
                           href={`/admin/wallet/${r.refwhid}`}
                           className="text-sky-700 hover:underline whitespace-nowrap"
                           title="ดูสลิปที่รายการเติมเงินที่อ้างอิง"
+                        >
+                          กดเพื่อดูสลิป
+                        </Link>
+                      ) : r.billingRunId ? (
+                        <Link
+                          href={`/admin/billing-run/${r.billingRunId}`}
+                          className="text-sky-700 hover:underline whitespace-nowrap"
+                          title="ดูสลิปที่ใบวางบิลที่อ้างอิง"
                         >
                           กดเพื่อดูสลิป
                         </Link>
@@ -354,18 +377,29 @@ export function ReceiptsVoidTable({
                       <div className="flex flex-wrap items-center gap-1">
                         <Link
                           href={`/admin/accounting/forwarder-invoice/${r.id}`}
-                          className="rounded-full bg-emerald-500 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-emerald-600 whitespace-nowrap"
+                          className="rounded-full bg-[#28D094] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#22b681] whitespace-nowrap"
                         >
                           ดูใบเสร็จ
                         </Link>
-                        {r.refwhid && (
+                        {/* อ้างอิงชำระเงิน — the payment that funded this receipt:
+                            wallet-deposit (refwhid) OR the ใบวางบิล (billingRunId). Legacy
+                            shows it on every row; Pacred pays via both, so we link to
+                            whichever funded it → button on every real receipt. */}
+                        {r.refwhid ? (
                           <Link
                             href={`/admin/wallet/${r.refwhid}`}
-                            className="rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-amber-600 whitespace-nowrap"
+                            className="rounded-full bg-[#FF9149] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#f57c2e] whitespace-nowrap"
                           >
                             อ้างอิงชำระเงิน
                           </Link>
-                        )}
+                        ) : r.billingRunId ? (
+                          <Link
+                            href={`/admin/billing-run/${r.billingRunId}`}
+                            className="rounded-full bg-[#FF9149] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#f57c2e] whitespace-nowrap"
+                          >
+                            อ้างอิงชำระเงิน
+                          </Link>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -373,18 +407,6 @@ export function ReceiptsVoidTable({
               })
             )}
           </tbody>
-          {rows.length > 0 && (
-            <tfoot>
-              <tr className="bg-cyan-100 font-semibold text-sm text-cyan-900 [&>td]:border-cyan-200">
-                <td colSpan={11} className="px-3 py-2.5 text-right">
-                  รวม {rows.length.toLocaleString()} รายการ ในหน้านี้
-                </td>
-                <td className="px-2 py-2.5 text-right tabular-nums">฿{fmtThb(totals.totalBeforeWithholding)}</td>
-                <td className="px-2 py-2.5 text-right tabular-nums">฿{fmtThb(totals.ramount)}</td>
-                <td colSpan={4} />
-              </tr>
-            </tfoot>
-          )}
         </table>
       </div>
 

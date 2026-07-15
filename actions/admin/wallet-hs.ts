@@ -1365,6 +1365,7 @@ async function adminApproveWalletDepositImpl(
             source: "wallet_hs.approve_deposit.direct",
             // STEP-2: accounting-chosen ใบเสร็จ เลขที่ (dup-validated in the helper).
             overrideRid,
+            refWhId: Number(id),   // อ้างอิงชำระเงิน → this funding wallet_hs/slip
           });
           if (!rcpt.ok && !rcpt.alreadyIssued) {
             logger.warn("wallet-hs", "auto-receipt failed (non-fatal)", { wallet_hs_id: id, userid, fid, error: rcpt.error });

@@ -170,8 +170,9 @@ export function ReceiptExportToolbar({
     });
 
   // Legacy `btn btn-sm btn-outline-info btn-rounded` = blue-outline rounded pill.
+  // Exact legacy btn-outline-info = #1E9FF2 (border + text).
   const pill =
-    "inline-flex items-center gap-1.5 rounded-full border border-sky-400 bg-white px-3 py-1.5 text-sm font-medium text-sky-600 hover:bg-sky-50 disabled:opacity-40";
+    "inline-flex items-center gap-1.5 rounded-full border border-[#1E9FF2] bg-white px-3 py-1.5 text-sm font-medium text-[#1E9FF2] hover:bg-[#1E9FF2]/10 disabled:opacity-40";
 
   return (
     <div className="flex flex-wrap items-center gap-2">
