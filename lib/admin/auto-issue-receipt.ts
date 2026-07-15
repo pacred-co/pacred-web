@@ -154,6 +154,17 @@ export interface AutoIssueReceiptOpts {
    * recompaddress unchanged.
    */
   deliveryAddressOverride?: string;
+  /**
+   * อ้างอิงชำระเงิน (refWHID · legacy) — the tb_wallet_hs.id of the wallet-deposit /
+   * slip whose approval FUNDED this receipt. Set by the 3 wallet-approve callers
+   * (wallet-hs / tb-bulk / wallet-trans), which hold the wallet_hs id at call time.
+   * Persisted to tb_receipt.refwhid so the receipt list can render the orange
+   * "อ้างอิงชำระเงิน" button → /admin/wallet/[refwhid] (jump to the funding slip),
+   * exactly like legacy `receipt-forwarder-item` (`if($row['refWHID']!=0)`).
+   * Absent (billing-run path — the customer paid a ใบวางบิล, no wallet topup) → null,
+   * and the button correctly stays hidden (legacy behaviour — no wallet ref exists).
+   */
+  refWhId?: number;
 }
 
 export type AutoIssueReceiptResult =
@@ -587,7 +598,10 @@ export async function autoIssueReceiptOnPaymentLand(
                             ),
     documentissuer:         "ระบบอัตโนมัติ",
     documentapprover:       "",
-    refwhid:                null,
+    // อ้างอิงชำระเงิน (refWHID) — the funding wallet_hs.id (wallet-approve paths only).
+    // Powers the receipt list's orange "อ้างอิงชำระเงิน" button. null on the
+    // billing-run path (no wallet topup) → button hidden, per legacy.
+    refwhid:                opts.refWhId ?? null,
   };
 
   const { data: receiptRow, error: insertErr } = await admin

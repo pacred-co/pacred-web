@@ -473,6 +473,7 @@ export async function adminApproveWalletHs(
             fids: [fid],
             dateSlip,
             source: "wallet_hs.approve.single",
+            refWhId: Number(id),   // อ้างอิงชำระเงิน → this funding wallet_hs/slip
           });
           if (!r.ok && !r.alreadyIssued) {
             logger.warn("wallet-trans", "auto-receipt failed (non-fatal)", {
