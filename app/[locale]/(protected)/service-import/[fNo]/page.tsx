@@ -945,12 +945,15 @@ export default async function ServiceImportDetailPage({
   // total. fetchCountableForwarderSiblings falls back to [landed] on any error.
   const collectSiblings = await fetchCountableForwarderSiblings(admin, {
     id: row.id, ftrackingchn: row.ftrackingchn, userid: row.userid, fweight: row.fweight,
-    fshipby: row.fshipby, ftotalprice: fTotalPrice, ftransportprice: fTransportPrice,
+    fshipby: row.fshipby, paymethod: row.paymethod, ftotalprice: fTotalPrice, ftransportprice: fTransportPrice,
     fpriceupdate: fPriceUpdate, fshippingservice: fShippingService, pricecrate: priceCrate,
     ftransportpricechnthb: fTransportPriceChnThb, priceother: priceOther, fdiscount: fDiscount,
   });
+  // COD-aware (2026-07-15 · F1) — carry paymethod so the (COD-aware) computeForwarderDebitBatch
+  // excludes a ปลายทาง row's domestic leg → the customer's ยอดเก็บจริง preview == the charge
+  // (submitForwarderPayment · computeForwarderCollectTotal is already COD-aware).
   const collectRows: ForwarderDebitRow[] = collectSiblings.map((s) => ({
-    id: s.id, fshipby: s.fshipby, ftotalprice: s.ftotalprice, ftransportprice: s.ftransportprice,
+    id: s.id, fshipby: s.fshipby, paymethod: s.paymethod, ftotalprice: s.ftotalprice, ftransportprice: s.ftransportprice,
     fpriceupdate: s.fpriceupdate, fshippingservice: s.fshippingservice, pricecrate: s.pricecrate,
     ftransportpricechnthb: s.ftransportpricechnthb, priceother: s.priceother, fdiscount: s.fdiscount,
   }));

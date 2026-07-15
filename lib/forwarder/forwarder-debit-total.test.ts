@@ -19,6 +19,7 @@ import {
   computeForwarderDebitBatch,
   type ForwarderDebitRow,
 } from "./forwarder-debit-total";
+import { computeForwarderCollectTotal } from "./forwarder-collect-total";
 
 let pass = 0;
 let fail = 0;
@@ -60,6 +61,7 @@ function row(p: Partial<ForwarderDebitRow> & { id: number | string }): Forwarder
     fshipby: p.fshipby ?? null,
     ftrackingchn: p.ftrackingchn ?? null,
     fcabinetnumber: p.fcabinetnumber ?? null,
+    paymethod: p.paymethod ?? null,
     ftotalprice: p.ftotalprice ?? 0,
     ftransportprice: p.ftransportprice ?? 0,
     fpriceupdate: p.fpriceupdate ?? 0,
@@ -405,6 +407,72 @@ console.log("computeForwarderDebitBatch — B1 N-box เหมาๆ (PRF-zero) 
   );
   assertClose("legacy: first row +100", b.lines[0].price_thb, 200);
   assertClose("legacy: second row no fee", b.lines[1].price_thb, 100);
+}
+
+// ── COD (ปลายทาง · paymethod='2') excludes the domestic leg — F1/F2 (2026-07-15) ──
+// A COD row's ftransportprice is collected at the door by the courier, so it must NOT
+// be folded into the Pacred upfront collect/debit total (else it is charged twice).
+// Asserted across BOTH collect engines: computeForwarderDebitBatch (admin/invoice/
+// receipt) AND computeForwarderCollectTotal (customer self-pay). perRowRaw (a private
+// closure in auto-issue-receipt.ts) applies the identical `paymethod===2 ? 0 : …` guard.
+console.log("computeForwarderDebitBatch — COD (paymethod=2) excludes the domestic leg");
+{
+  const prepaid = computeForwarderDebitBatch(
+    [row({ id: 1, paymethod: "1", ftotalprice: 1000, ftransportprice: 200 })],
+    { userId: "PR124", isCorporate: false },
+  );
+  assertClose("prepaid bills the domestic leg (1200)", prepaid.lines[0].price_thb, 1200);
+  assertClose("prepaid breakdown.otherCharges = 200", prepaid.lines[0].breakdown.otherCharges, 200);
+
+  const cod = computeForwarderDebitBatch(
+    [row({ id: 1, paymethod: "2", ftotalprice: 1000, ftransportprice: 200 })],
+    { userId: "PR124", isCorporate: false },
+  );
+  assertClose("COD excludes the domestic leg (1000)", cod.lines[0].price_thb, 1000);
+  assertEq("COD breakdown.otherCharges = 0", cod.lines[0].breakdown.otherCharges, 0);
+
+  // COD skips ONLY the domestic leg — crate/chn/service/other still bill.
+  const codMixed = computeForwarderDebitBatch(
+    [row({ id: 1, paymethod: "2", ftotalprice: 1000, ftransportprice: 200, pricecrate: 50, ftransportpricechnthb: 30 })],
+    { userId: "PR124", isCorporate: false },
+  );
+  assertClose("COD keeps crate+chn (1080), drops only the ฿200 domestic leg", codMixed.lines[0].price_thb, 1080);
+
+  // numeric 2 (not just string "2") also triggers the skip.
+  const codNum = computeForwarderDebitBatch(
+    [row({ id: 1, paymethod: 2, ftotalprice: 1000, ftransportprice: 200 })],
+    { userId: "PR124", isCorporate: false },
+  );
+  assertClose("COD numeric paymethod=2 also skips (1000)", codNum.lines[0].price_thb, 1000);
+
+  // absent paymethod → prepaid (no regression for callers that don't SELECT it).
+  const noPay = computeForwarderDebitBatch(
+    [row({ id: 1, ftotalprice: 1000, ftransportprice: 200 })],
+    { userId: "PR124", isCorporate: false },
+  );
+  assertClose("absent paymethod → prepaid (1200)", noPay.lines[0].price_thb, 1200);
+
+  // COD row is still eligible for the เหมาๆ ฿100 (mao is not the domestic leg).
+  const codMao = computeForwarderDebitBatch(
+    [row({ id: 1, paymethod: "2", fshipby: "PRF", ftransportprice: 0, ftotalprice: 250 })],
+    { userId: "PR124", isCorporate: false },
+  );
+  assertClose("COD PRF-zero still gets เหมาๆ ฿100 (350)", codMao.lines[0].price_thb, 350);
+}
+
+// The customer self-pay engine agrees on the COD skip (display == charge · F1).
+console.log("computeForwarderCollectTotal — COD (paymethod=2) excludes the domestic leg");
+{
+  const prepaid = computeForwarderCollectTotal(
+    [{ fshipby: null, paymethod: "1", faddressdistrict: null, ftotalprice: 1000, ftransportprice: 200, fpriceupdate: 0, fshippingservice: 0, pricecrate: 0, ftransportpricechnthb: 0, priceother: 0, fdiscount: 0 }],
+    { userId: "PR124", userCompany: "" },
+  );
+  assertClose("collect prepaid = 1200", prepaid.total, 1200);
+  const cod = computeForwarderCollectTotal(
+    [{ fshipby: null, paymethod: "2", faddressdistrict: null, ftotalprice: 1000, ftransportprice: 200, fpriceupdate: 0, fshippingservice: 0, pricecrate: 0, ftransportpricechnthb: 0, priceother: 0, fdiscount: 0 }],
+    { userId: "PR124", userCompany: "" },
+  );
+  assertClose("collect COD = 1000 (domestic leg dropped)", cod.total, 1000);
 }
 
 console.log(`\nforwarder-debit-total: ${pass} passed, ${fail} failed`);

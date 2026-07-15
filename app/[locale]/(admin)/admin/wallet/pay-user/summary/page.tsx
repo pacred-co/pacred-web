@@ -21,6 +21,8 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeForwarderDebitBatch, type ForwarderDebitRow } from "@/lib/forwarder/forwarder-debit-total";
+import { computeBillWht } from "@/lib/billing/wht";
+import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { PrintButton } from "./print-button";
 import { PaymentSummaryDoc, type SummaryRow } from "./summary-doc";
 
@@ -66,6 +68,7 @@ const PRODUCT_TYPE_LABEL: Record<string, string> = {
 
 type FwRow = {
   id: number;
+  paymethod: string | null;
   fpriceupdate: number | string | null;
   fshippingservice: number | string | null;
   ftransportpricechnthb: number | string | null;
@@ -133,7 +136,7 @@ export default async function PaymentSummaryPage({
   const { data: fwData, error: fwErr } = await admin
     .from("tb_forwarder")
     .select(
-      "id, fpriceupdate, fshippingservice, ftransportpricechnthb, pricecrate, priceother, fdiscount, ftotalprice, ftransportprice, fshipby, famount, fvolume, fweight, ftrackingchn, userid, fproductstype, fwarehousechina, ftransporttype, frefrate",
+      "id, paymethod, fpriceupdate, fshippingservice, ftransportpricechnthb, pricecrate, priceother, fdiscount, ftotalprice, ftransportprice, fshipby, famount, fvolume, fweight, ftrackingchn, userid, fproductstype, fwarehousechina, ftransporttype, frefrate",
     )
     .in("id", fids);
   if (fwErr) {
@@ -182,7 +185,7 @@ export default async function PaymentSummaryPage({
 
   type CorpRow = { corporatename: string | null; corporatenumber: string | null; corporateaddress: string | null };
   let corp: CorpRow | null = null;
-  type UserRow = { userID: string; userName: string | null; userLastName: string | null };
+  type UserRow = { userID: string; userName: string | null; userLastName: string | null; userCompany: string | number | null };
   let userRow: UserRow | null = null;
 
   if (userid) {
@@ -200,7 +203,7 @@ export default async function PaymentSummaryPage({
 
     const { data: uData, error: uErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName")
+      .select("userID, userName, userLastName, userCompany")
       .eq("userID", userid)
       .maybeSingle<UserRow>();
     if (uErr && uErr.code !== "PGRST116") {
@@ -211,12 +214,22 @@ export default async function PaymentSummaryPage({
     userRow = uData ?? null;
   }
 
-  // name + juristic flag (legacy: corporatename present → juristic).
-  const reCorporate = corp?.corporatename ? true : false;
-  const customerName = reCorporate
-    ? `${userid} ${corp!.corporatename}`.trim()
-    : `${userid} ${userRow?.userName ?? ""} ${userRow?.userLastName ?? ""}`.trim();
-  const customerTaxId = corp?.corporatenumber || "-";
+  // name + juristic flag — via the billing-identity SOT (F5 + F6 · 2026-07-15). The old
+  // block keyed juristic ONLY on corporatename presence (missing ~few migrated นิติบุคคล
+  // that carry userCompany='1' with a blank corp name/number) AND prepended the PR code to
+  // the name. resolveBillingIdentity is the union rule (userCompany==='1' OR a corp tax-id)
+  // + a bare name (no PR prefix) — so this ใบสรุป classifies + names the customer EXACTLY
+  // like the ใบวางบิล (billing-run-paper) + ใบเสร็จ (load-receipt-document). The PR code
+  // stays in the อ้างอิง/order column of the table, not the identity line (owner 2026-07-10).
+  const identity = resolveBillingIdentity({
+    userCompany: userRow?.userCompany != null ? String(userRow.userCompany) : null,
+    userName: userRow?.userName ?? null,
+    userLastName: userRow?.userLastName ?? null,
+    corp,
+  });
+  const reCorporate = identity.isJuristic;
+  const customerName = identity.name;
+  const customerTaxId = identity.taxId || "-";
 
   // address — corporate address, else fall back to the customer's main address.
   let customerAddress = corp?.corporateaddress || "";
@@ -278,27 +291,40 @@ export default async function PaymentSummaryPage({
     amount: num(r.ftotalprice),
   }));
 
-  // ⚠️ SINGLE SOURCE OF TRUTH (owner 2026-07-15 · "ดึงจากแหล่งเดียวกัน") — the ยอดที่ต้องชำระ +
-  // ค่าส่งเหมาๆ + หัก ณ ที่จ่าย on THIS customer-facing PDF MUST equal the pay-user list + pay
-  // modal, which both derive from computeForwarderDebitBatch (the mao/WHT SOT). The old hand-
-  // rolled sum missed the เหมาๆ ฿100 (a VIRTUAL flat fee — NOT a stored column) and ran WHT on
-  // the wrong base → PDF ฿7,220.51 vs modal ฿7,319.51. Route through the SAME SOT so all three
-  // surfaces reconcile to the satang.
+  // ⚠️ SINGLE SOURCE OF TRUTH — the ยอดที่ต้องชำระ + ค่าส่งเหมาๆ + หัก ณ ที่จ่าย on THIS
+  // customer-facing PDF derive from the SAME SOTs as the ใบวางบิล + ใบเสร็จ:
+  //   • gross + เหมาๆ  → computeForwarderDebitBatch breakdown (the mao/pricing SOT · owner
+  //                       2026-07-15 · เหมาๆ ฿100 is a VIRTUAL flat fee, NOT a stored column)
+  //   • WHT + net      → computeBillWht (the bill/receipt WHT SOT · F4 · single 1% of the
+  //                       grand total when juristic & ≥ ฿1,000). The old per-row Σ 1% drifted
+  //                       by satang on multi-row juristic bills → now all three docs match.
+  //   • COD (F1)       → a ปลายทาง row's domestic leg is excluded from the gross (the batch
+  //                       is COD-aware via paymethod) so the PDF == the actual charge.
   const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
   const batch = computeForwarderDebitBatch(rowsFw as unknown as ForwarderDebitRow[], {
     userId: userid,
     isCorporate: reCorporate,
   });
   const maoFeeTotal = round2(batch.lines.reduce((s, l) => s + l.breakdown.maoFee, 0));
-  const whtAmount = round2(batch.lines.reduce((s, l) => s + l.breakdown.wht1pct, 0));
-  const totalAmount = batch.total_thb;                    // net = what the customer pays (== modal)
-  const totalPriceAll = round2(totalAmount + whtAmount);  // gross (pre-WHT · == modal base)
+  // GROSS (pre-WHT) from the SOT breakdown — freight + otherCharges (COD-aware · F1) + เหมาๆ − ส่วนลด.
+  const totalPriceAll = round2(
+    batch.lines.reduce(
+      (s, l) => s + l.breakdown.freight + l.breakdown.otherCharges + l.breakdown.maoFee - l.breakdown.discount,
+      0,
+    ),
+  );
+  const wht = computeBillWht(reCorporate, totalPriceAll);
+  const whtAmount = wht.wht_amount;
+  const totalAmount = wht.net_payable;   // net = what the customer pays
 
   const sumTotal = rowsFw.reduce((s, r) => s + num(r.ftotalprice), 0);
   const sumDeliveryChn = rowsFw.reduce((s, r) => s + num(r.ftransportpricechnthb), 0);
-  // ค่าส่งเหมาๆ ฿100 is a Thailand delivery fee → fold it into Delivery Charge TH so the PDF's
-  // Delivery-TH line shows it (was ฿0.00 · the missing ฿100 the owner flagged).
-  const sumDeliveryTh = round2(rowsFw.reduce((s, r) => s + num(r.ftransportprice), 0) + maoFeeTotal);
+  // ค่าส่งในไทย: a COD (ปลายทาง · paymethod='2') row's ftransportprice is collected at the door by
+  // the courier → excluded (F1), matching the COD-aware gross above. + ค่าส่งเหมาๆ ฿100 folded here
+  // so the Delivery-TH line shows it → Total + CHN + TH + Other − Discount − WHT reconciles to Total Amount.
+  const sumDeliveryTh = round2(
+    rowsFw.reduce((s, r) => s + (num(r.paymethod) === 2 ? 0 : num(r.ftransportprice)), 0) + maoFeeTotal,
+  );
   const sumOther = rowsFw.reduce(
     (s, r) => s + num(r.fpriceupdate) + num(r.fshippingservice) + num(r.pricecrate) + num(r.priceother),
     0,

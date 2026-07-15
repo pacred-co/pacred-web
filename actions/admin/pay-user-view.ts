@@ -165,7 +165,7 @@ export type PayUserFwdRow = {
 };
 
 const FWD_VIEW_COLS =
-  "id, fdate, fshipby, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, " +
+  "id, fdate, fshipby, paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, " +
   "ftransportpricechnthb, priceother, fdiscount, fusercompany, ftrackingchn, fstatus, fcredit, " +
   "fdatetothai, ftransporttype, fcover, fdetail, fproductstype, adminidcreator, reforder, " +
   "fnote, fnoteuser, fweight, fvolume, famount, famountcount, adminidkey, fcabinetnumber, " +

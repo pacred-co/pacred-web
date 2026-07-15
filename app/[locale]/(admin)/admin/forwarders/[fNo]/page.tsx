@@ -802,6 +802,57 @@ async function tryRenderTbForwarder(
           { freight: 0, otherCharges: 0, discount: 0, maoFee: 0, wht1pct: 0, total: collectBatch.total_thb },
         )
       : null;
+
+  // ── เอกสารของออเดอร์นี้ (owner 2026-07-15 · "เข้าไปดูได้หมด · เชื่อมโยง อ้างอิงถึงกัน" · F9) ──
+  // Resolve every document that covers THIS shipment's sibling rows — ใบวางบิล
+  // (tb_forwarder_invoice_item.forwarder_id) · ใบเสร็จ (tb_receipt_item.fid) · ใบส่งของ
+  // (tb_forwarder_driver_item.fid → fdid) — so staff jump from the order to each issued
+  // doc in ≤1 click (§0d). READ-ONLY joins; soft-fail so a doc-lookup can't blank the page.
+  const docFids = advanceSiblingIds.length > 0 ? advanceSiblingIds : [r.id];
+  const linkedBills: Array<{ id: number; docNo: string; status: string }> = [];
+  const linkedReceipts: Array<{ id: number; rid: string; status: string }> = [];
+  const linkedDriverRuns: Array<{ id: number; name: string; date: string | null }> = [];
+  {
+    const { data: biItems, error: biErr } = await admin
+      .from("tb_forwarder_invoice_item").select("invoice_id").in("forwarder_id", docFids);
+    if (biErr) console.error("[forwarder detail] linked-bill items failed", { code: biErr.code, message: biErr.message, fId: r.id });
+    const invIds = Array.from(new Set(((biItems ?? []) as { invoice_id: number }[]).map((x) => x.invoice_id)));
+    if (invIds.length > 0) {
+      const { data: invs, error: invErr } = await admin
+        .from("tb_forwarder_invoice").select("id, doc_no, status").in("id", invIds).order("id", { ascending: false });
+      if (invErr) console.error("[forwarder detail] linked-bill headers failed", { code: invErr.code, message: invErr.message, fId: r.id });
+      for (const iv of (invs ?? []) as Array<{ id: number; doc_no: string | null; status: string | null }>)
+        linkedBills.push({ id: iv.id, docNo: (iv.doc_no ?? "").trim() || `#${iv.id}`, status: (iv.status ?? "").trim() });
+    }
+
+    const { data: rItems, error: riErr } = await admin
+      .from("tb_receipt_item").select("rid").in("fid", docFids);
+    if (riErr) console.error("[forwarder detail] linked-receipt items failed", { code: riErr.code, message: riErr.message, fId: r.id });
+    const rids = Array.from(new Set(((rItems ?? []) as { rid: string | null }[]).map((x) => (x.rid ?? "").trim()).filter(Boolean)));
+    if (rids.length > 0) {
+      const { data: recs, error: recErr } = await admin
+        .from("tb_receipt").select("id, rid, rstatus").in("rid", rids).order("id", { ascending: false });
+      if (recErr) console.error("[forwarder detail] linked-receipt headers failed", { code: recErr.code, message: recErr.message, fId: r.id });
+      for (const rc of (recs ?? []) as Array<{ id: number; rid: string | null; rstatus: string | null }>)
+        linkedReceipts.push({ id: rc.id, rid: (rc.rid ?? "").trim() || `#${rc.id}`, status: (rc.rstatus ?? "").trim() });
+    }
+
+    const { data: dItems, error: diErr } = await admin
+      .from("tb_forwarder_driver_item").select("fdid").in("fid", docFids);
+    if (diErr) console.error("[forwarder detail] linked-driver items failed", { code: diErr.code, message: diErr.message, fId: r.id });
+    const fdids = Array.from(new Set(((dItems ?? []) as { fdid: number | null }[]).map((x) => x.fdid).filter((n): n is number => Number.isInteger(n) && (n as number) > 0)));
+    if (fdids.length > 0) {
+      const { data: runs, error: runErr } = await admin
+        .from("tb_forwarder_driver").select("id, fdname, fddate").in("id", fdids).order("id", { ascending: false });
+      if (runErr) console.error("[forwarder detail] linked-driver runs failed", { code: runErr.code, message: runErr.message, fId: r.id });
+      for (const dr of (runs ?? []) as Array<{ id: number; fdname: string | null; fddate: string | null }>)
+        linkedDriverRuns.push({ id: dr.id, name: (dr.fdname ?? "").trim() || `รอบ #${dr.id}`, date: dr.fddate });
+    }
+  }
+  const hasLinkedDocs = linkedBills.length + linkedReceipts.length + linkedDriverRuns.length > 0;
+  const BILL_STATUS_LABEL: Record<string, string> = { issued: "ออกบิลแล้ว", paid: "ชำระแล้ว", cancelled: "ยกเลิก" };
+  const RECEIPT_STATUS_LABEL: Record<string, string> = { "0": "ร่าง", "1": "ชำระแล้ว", "2": "ยกเลิก", "3": "รอชำระ" };
+
   // Show the panel when the row is still collectible (รอชำระเงิน fstatus='5' OR
   // ติดเครดิต fcredit='1') — i.e. before the ฿50 is persisted, which is exactly
   // when the freight-only number on the page would mislead.
@@ -1328,6 +1379,49 @@ async function tryRenderTbForwarder(
           />
           <CreateOrderBillButton fId={r.id} fstatus={r.fstatus} advanceConfirmed={advanceConfirmed} />
         </div>
+
+        {/* ── เอกสารของออเดอร์นี้ (owner 2026-07-15 · "เข้าไปดูได้หมด") — one-click jump to
+           every issued ใบวางบิล / ใบเสร็จ / ใบส่งของ covering this shipment (F9). ── */}
+        {hasLinkedDocs && (
+          <div className="mt-3 rounded-2xl border border-sky-200 bg-sky-50/50 p-4">
+            <h4 className="text-sm font-bold text-sky-800">เอกสารของออเดอร์นี้</h4>
+            <div className="mt-2 space-y-2 text-sm">
+              {linkedBills.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-muted">🧾 ใบวางบิล :</span>
+                  {linkedBills.map((b) => (
+                    <Link key={b.id} href={`/admin/billing-run/${b.id}`}
+                      className="inline-flex items-center gap-1 rounded-full border border-sky-300 bg-white px-2.5 py-1 font-mono text-xs text-sky-700 hover:bg-sky-100">
+                      {b.docNo}{b.status ? ` · ${BILL_STATUS_LABEL[b.status] ?? b.status}` : ""} →
+                    </Link>
+                  ))}
+                </div>
+              )}
+              {linkedReceipts.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-muted">🧾 ใบเสร็จ :</span>
+                  {linkedReceipts.map((rc) => (
+                    <Link key={rc.id} href={`/admin/accounting/forwarder-invoice/${rc.id}`}
+                      className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-white px-2.5 py-1 font-mono text-xs text-emerald-700 hover:bg-emerald-100">
+                      {rc.rid}{rc.status ? ` · ${RECEIPT_STATUS_LABEL[rc.status] ?? rc.status}` : ""} →
+                    </Link>
+                  ))}
+                </div>
+              )}
+              {linkedDriverRuns.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-muted">🚚 ใบส่งของ :</span>
+                  {linkedDriverRuns.map((d) => (
+                    <Link key={d.id} href={`/admin/drivers/${d.id}/print`}
+                      className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-white px-2.5 py-1 text-xs text-amber-700 hover:bg-amber-100">
+                      {d.name}{d.date ? ` · ${(d.date ?? "").slice(0, 10)}` : ""} →
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── "จัดส่งในไทย" (DomesticShippingSelector) REMOVED — owner/ภูม 2026-07-03:
            ซ้ำซ้อนกับ "บริษัทขนส่ง" (EditShipByField) + "ที่อยู่จัดส่ง" (auto ขนส่งตามจังหวัด) →

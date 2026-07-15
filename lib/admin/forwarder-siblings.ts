@@ -30,7 +30,7 @@ import {
 // collect-calc pricing fields (fshipby drives the เหมาๆ/PCSF detection). A caller
 // may pass a narrower select; the default covers everything.
 export const FORWARDER_SIBLING_SELECT =
-  "id, userid, fshipby, ftrackingchn, reforder, fdetail, fproductstype, famount, famountcount, " +
+  "id, userid, fshipby, paymethod, ftrackingchn, reforder, fdetail, fproductstype, famount, famountcount, " +
   "fweight, fvolume, fwidth, flength, fheight, fwarehousename, frefprice, frefrate, ftotalprice, " +
   "fpriceupdate, pricecrate, ftransportpricechnthb, ftransportprice, fshippingservice, priceother, fdiscount";
 
