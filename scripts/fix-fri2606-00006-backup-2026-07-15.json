@@ -1,0 +1,30 @@
+{
+  "invoice": {
+    "id": "6",
+    "doc_no": "FRI2606-00006",
+    "userid": "PR7429",
+    "is_juristic": true,
+    "subtotal_thb": "2057.00",
+    "delivery_th_thb": "100.00",
+    "mao_fee_thb": "0.00",
+    "total_thb": "2157.00",
+    "status": "paid"
+  },
+  "receipts": [
+    {
+      "rid": "FRC2606-00002",
+      "corporatetype": "1",
+      "recompnumber": "0105565133245",
+      "ramount": "2135.43",
+      "totalbeforewithholding": "2157.00",
+      "mao_fee_thb": "100.00",
+      "rstatus": "1"
+    }
+  ],
+  "paid": 2085.93,
+  "target": {
+    "newDeliveryTh": 50,
+    "newTotalGross": 2107,
+    "newNet": 2085.93
+  }
+}
