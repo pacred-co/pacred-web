@@ -440,7 +440,7 @@ export function parseMomoPackingXlsx(buf: Uint8Array | Buffer): MomoPackingParse
 }
 
 /** "SEA" | "EK" | null from the container code / a data-row Type token. */
-function deriveTransportHint(
+export function deriveTransportHint(
   container: string | null,
   rows: MomoPackingRow[],
 ): "SEA" | "EK" | null {
