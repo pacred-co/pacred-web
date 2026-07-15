@@ -95,10 +95,20 @@ export function SalesTeamManager({ initialRows }: { initialRows: StaffSalesFlagR
                 return (
                   <tr key={row.adminID} className="border-t border-border hover:bg-surface-alt/40">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-foreground">{row.name}</div>
-                      {row.fullName !== row.name && (
-                        <div className="text-[11px] text-muted">{row.fullName}</div>
-                      )}
+                      <div className="flex items-center gap-2.5">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={row.photo ?? "/legacy/pcs/admin/images/user.jpg"}
+                          alt={row.name}
+                          className="h-8 w-8 shrink-0 rounded-full object-cover border border-border"
+                        />
+                        <div className="min-w-0">
+                          <div className="font-medium text-foreground truncate">{row.name}</div>
+                          {row.fullName !== row.name && (
+                            <div className="text-[11px] text-muted truncate">{row.fullName}</div>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-muted">{row.adminID}</td>
                     <td className="px-4 py-3 text-xs">
