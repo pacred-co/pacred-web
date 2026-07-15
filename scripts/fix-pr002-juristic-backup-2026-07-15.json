@@ -1,0 +1,51 @@
+{
+  "at": "2026-07-15",
+  "invoices": [
+    {
+      "id": "54",
+      "doc_no": "FRI2607-00019",
+      "status": "paid",
+      "is_juristic": false,
+      "buyer_name": "ณัฐภัทร บูรณะพงษ์ศักดิ์",
+      "buyer_tax_id": "",
+      "buyer_address": "",
+      "total_thb": "1251.96"
+    },
+    {
+      "id": "91",
+      "doc_no": "FRI2607-00056",
+      "status": "issued",
+      "is_juristic": false,
+      "buyer_name": "ณัฐภัทร บูรณะพงษ์ศักดิ์",
+      "buyer_tax_id": "",
+      "buyer_address": "",
+      "total_thb": "163.42"
+    },
+    {
+      "id": "92",
+      "doc_no": "FRI2607-00057",
+      "status": "issued",
+      "is_juristic": false,
+      "buyer_name": "ณัฐภัทร บูรณะพงษ์ศักดิ์",
+      "buyer_tax_id": "",
+      "buyer_address": "",
+      "total_thb": "141.66"
+    }
+  ],
+  "receipts": [
+    {
+      "rid": "FRG2607-00010",
+      "rstatus": "1",
+      "corporatetype": "2",
+      "recompname": "ณัฐภัทร บูรณะพงษ์ศักดิ์",
+      "recompnumber": "",
+      "ramount": "1151.96",
+      "totalbeforewithholding": "1151.96"
+    }
+  ],
+  "newIdentity": {
+    "name": "บริษัท เดอะ แฟมิลี่ แบทซ์ จำกัด",
+    "taxId": "0105569091806",
+    "address": "89/52 หมู่บ้าน โนเบิล นอร์ส กรุงเทพกรีฑา ถนนศรีนครินทร์-ร่มเกล้า แขวงทับช้าง เขตสะพานสูง กรุงเทพมหานคร 10250"
+  }
+}

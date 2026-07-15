@@ -15,6 +15,7 @@
 
 import { useState, useTransition, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { Link } from "@/i18n/navigation";
 import {
   listEligibleForwarders,
   createBillingRunInvoice,
@@ -609,7 +610,13 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs">{f.ftrackingchn}</td>
+                    <td className="px-3 py-2 font-mono text-xs">
+                      {/* กดเข้าแทรคกิ้งย้อนดูรายการนี้ — link to the forwarder detail (per-tracking
+                          amount view · was dead plain text). Row checkbox still toggles selection. */}
+                      <Link href={`/admin/forwarders/${f.id}`} className="text-primary-600 hover:underline">
+                        {f.ftrackingchn}
+                      </Link>
+                    </td>
                     <td className="px-3 py-2 text-right">{f.famount ?? "—"}</td>
                     <td className="px-3 py-2 text-right">{f.fweight ?? "—"}</td>
                     <td className="px-3 py-2 text-right">{f.fvolume ?? "—"}</td>

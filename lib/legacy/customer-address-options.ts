@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { provinceFromAddressText } from "@/lib/forwarder/carrier-province-coverage";
 
 /**
  * Customer address-picker options for the inline "แก้ไข ที่อยู่จัดส่ง" forms.
@@ -276,7 +277,15 @@ export async function loadCustomerPrimaryAddress(
  * fallback (ภูม 2026-06-18): a juristic customer who never saved a tb_address row
  * still entered a company address at signup — show that instead of the warehouse.
  */
-export type CustomerCorporateAddress = { name: string; addressLine: string };
+export type CustomerCorporateAddress = {
+  name: string;
+  addressLine: string;
+  /** Best-effort canonical province parsed from the free-form `corporateaddress`
+   *  ("" when none recognised). Feeds the delivery-province fallback so the
+   *  carrier picker can show couriers for a juristic customer who never saved a
+   *  structured tb_address. */
+  province: string;
+};
 
 export async function loadJuristicCorporateAddress(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -295,5 +304,10 @@ export async function loadJuristicCorporateAddress(
   }
   const addressLine = (data?.corporateaddress ?? "").trim();
   if (!addressLine) return null;
-  return { name: (data?.corporatename ?? "").trim(), addressLine };
+  return {
+    name: (data?.corporatename ?? "").trim(),
+    addressLine,
+    // tb_corporate has no structured province column — parse it out of the blob.
+    province: provinceFromAddressText(addressLine),
+  };
 }

@@ -82,6 +82,7 @@ import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { roundUp } from "@/lib/admin/shop-disbursement-calc";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
 import { isValidShopCarrierCode } from "@/lib/freight/shipping-methods";
+import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
 
 // ────────────────────────────────────────────────────────────
 // Resolve current admin's legacy adminID (tb_header_order.adminidupdate
@@ -193,13 +194,15 @@ export async function adminUpdateOrderShipBy(
       // 1. Verify the order exists + capture before-state for audit log.
       const { data: before, error: readErr } = await admin
         .from("tb_header_order")
-        .select("id, hno, hshipby, hstatus")
+        // haddressprovince — the CLOSED-LIST province gate (owner 2026-07-14).
+        .select("id, hno, hshipby, hstatus, haddressprovince")
         .eq("hno", d.h_no)
         .maybeSingle<{
           id: number;
           hno: string;
           hshipby: string | null;
           hstatus: string | null;
+          haddressprovince: string | null;
         }>();
       if (readErr) {
         console.error(`[adminUpdateOrderShipBy read] failed`, {
@@ -213,6 +216,15 @@ export async function adminUpdateOrderShipBy(
       if (beforeShipBy === d.ship_by) {
         return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (ผู้ขนส่งเดิม)" };
       }
+
+      // 🔴 CLOSED LIST (owner 2026-07-14) — the ขนส่งเอกชน must be in the owner's workbook
+      // AND run in this order's delivery province. Own-fleet (PCS/PCSF/PCSE) exempt; the
+      // schema `isValidShopCarrierCode` already narrows to the workbook codes, this adds
+      // the per-province coverage half of the rule.
+      const coverage = checkCarrierForProvince(d.ship_by, before.haddressprovince, {
+        previous: before.hshipby,
+      });
+      if (!coverage.ok) return { ok: false, error: coverage.error };
 
       // 2. Build the UPDATE. Legacy L1313 always writes hshipby + adminID.
       const update: Record<string, string | number> = {

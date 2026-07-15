@@ -25,7 +25,7 @@
 
 import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { calPriceFlash } from "@/lib/tools/flash-price";
-import { resolveShipByCarriers } from "@/lib/tools/thai-shipby-rules";
+import { getPrivateCarrierOptionsForProvince } from "@/lib/cart/ship-by-eligibility";
 import { MAO_FLAT_FEE, MAO_CARRIER_CODE, isMaoCarrier } from "./mao-fee";
 
 export type DomesticZone = "self_pickup" | "maomao" | "upcountry";
@@ -147,14 +147,22 @@ export function domesticShippingOptions(args: DomesticShipArgs): { zone: Domesti
         note: surcharge ? "รวมพื้นที่ห่างไกล/ท่องเที่ยว +50 · เก็บปลายทาง" : "คิดตามน้ำหนัก/กล่อง · เก็บปลายทาง",
       });
     }
-    // J&T + ไปรษณีย์ — manual cost (legacy shows them; price entered by staff).
-    options.push({ carrier: "24", label: "J&T Express (กรอกค่าส่งเอง)", cost: 0, payMethod: "2", forceCod: true, manual: true, note: "เก็บปลายทาง" });
-    options.push({ carrier: "11", label: "ไปรษณีย์ไทย (กรอกค่าส่งเอง)", cost: 0, payMethod: "2", forceCod: true, manual: true, note: "เก็บปลายทาง" });
-    // any regional carriers the province/amphoe allows (manual cost).
-    const regional = resolveShipByCarriers((args.province ?? "").trim(), (args.amphoe ?? "").trim());
+    // 🔴 CLOSED CARRIER LIST (owner 2026-07-14) — every ขนส่งเอกชน offered here comes from the
+    // owner's workbook, for THIS province. ไปรษณีย์ไทย (11) used to be hardcoded here; it is not in
+    // the workbook → removed. J&T (24) stays only because the workbook has it (it serves all 77).
+    // The per-province restriction note ("ไม่เข้าวังน้ำเขียว" …) rides along on the label.
+    const regional = getPrivateCarrierOptionsForProvince((args.province ?? "").trim());
     for (const c of regional) {
-      if (c.id === "2" || c.id === "24" || c.id === "11") continue; // already added
-      options.push({ carrier: c.id, label: `${c.name} (กรอกค่าส่งเอง)`, cost: 0, payMethod: "2", forceCod: true, manual: true, note: "เก็บปลายทาง" });
+      if (c.id === "2") continue; // Flash already added above (auto-priced)
+      options.push({
+        carrier: c.id,
+        label: `${c.name} (กรอกค่าส่งเอง)${c.note ? ` — ${c.note}` : ""}`,
+        cost: 0,
+        payMethod: "2",
+        forceCod: true,
+        manual: true,
+        note: c.note ? `เก็บปลายทาง · ${c.note}` : "เก็บปลายทาง",
+      });
     }
     // PRE Express — near-zone Pacred truck, manual amount.
     options.push({ carrier: "PCSE", label: "PRE Express (กรอกค่าส่งเอง)", cost: 0, payMethod: "1", forceCod: false, manual: true, note: "รถบริษัทส่ง พื้นที่ใกล้" });

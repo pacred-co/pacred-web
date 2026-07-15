@@ -1,0 +1,364 @@
+/**
+ * legacy-report-cnt.css — faithful 1:1 visual clone of the legacy PCS Cargo
+ * `report-cnt.php?id=<cnt>` detail view (ADR-0017 "copy 100% ก่อน").
+ *
+ * Every selector is scoped under `.pcs-rc` so it can't leak into the rest of
+ * the Pacred admin shell. Colours come from the Modern-Admin (Pixinvent) theme
+ * the legacy app is built on + the inline <style> block in report-cnt.php's
+ * <head> (`.price h4` 1.12rem · `.font-2rem` · `.bg-color` orange→red gradient ·
+ * `.bg-color-select` · `.bg-color-check` · `#myTable` 0.9rem · `.table td/th`
+ * padding · `.badge` 0.80rem · `.font-12`/`.font-10` = 12px · `.nav-link h4`
+ * 1.1rem active #cc3333). ปอน 2026-07-14.
+ */
+
+.pcs-rc {
+  font-family: "Prompt", -apple-system, "Segoe UI", sans-serif;
+  color: #4e5154;
+  line-height: 1.45;
+  background: #f4f5f7;   /* ปอน 2026-07-15: พื้นหลังหน้าเทาอ่อน · การ์ด pcs-card คงขาว → ลอยเด่น */
+}
+
+/* ── generic helpers (legacy Bootstrap-4 utilities) ── */
+.pcs-rc h3 { font-size: 1.5rem; font-weight: 600; margin: 0 0 0.4rem; }
+.pcs-rc h4 { font-size: 1.12rem; font-weight: 400; margin: 0 0 0.35rem; }
+.pcs-rc .price h4 { font-size: 1.12rem; }
+.pcs-rc .font-2rem { font-size: 2rem; }
+.pcs-rc .font-30 { font-size: 30px; line-height: 1; }
+.pcs-rc .font-12 { font-size: 12px !important; }
+.pcs-rc .font-10 { font-size: 12px !important; } /* legacy: font-10 renders at 12px */
+.pcs-rc .text-danger { color: #ff4961 !important; }
+.pcs-rc .text-success { color: #28d094 !important; }
+.pcs-rc .text-info { color: #1e9ff2 !important; }
+.pcs-rc .text-white { color: #fff !important; }
+.pcs-rc .text-right { text-align: right; }
+.pcs-rc .text-center { text-align: center; }
+.pcs-rc .text-left { text-align: left; }
+.pcs-rc .cursor-pointer { cursor: pointer; }
+.pcs-rc .p-05 { padding: 0.5rem !important; }
+.pcs-rc .p-025 { padding: 0.25rem !important; }
+.pcs-rc .d-inline-block { display: inline-block; }
+.pcs-rc .float-right { float: right; }
+.pcs-rc .mr-1 { margin-right: 0.5rem; }
+.pcs-rc .mb-1 { margin-bottom: 0.5rem; }
+.pcs-rc .max-w { max-width: 150px; }
+.pcs-rc .short-text { overflow: hidden; text-overflow: ellipsis; }
+.pcs-rc a { color: #1e9ff2; text-decoration: none; }
+.pcs-rc a:hover { text-decoration: underline; }
+
+/* Exception-tab chips (<TopMenuReport embedded>) render INSIDE .pcs-rc, so the
+   two generic link rules above would paint them blue + underline them on hover.
+   Re-assert the pill styling: BLACK label, never underlined (ปอน 2026-07-15
+   "font สีดำ · ไม่มีขีดเส้นใต้"). Selector specificity (.pcs-rc + class + a)
+   beats `.pcs-rc a`. The active pill still stands out via its Tailwind bg-red-50
+   + red dashed frame — untouched by these text rules. */
+.pcs-rc .pcs-legacy-top-menu a,
+.pcs-rc .pcs-legacy-top-menu a:hover {
+  color: #1a1a1a;
+  text-decoration: none;
+}
+
+/* Soft dashed frame via SVG background instead of `border` — border-width can't
+   render 1.5px at DPR 1 (rounds to 1px), so a rect stroke gives a crisp ~1.5px
+   line with fine dashes + rounder corners (ปอน 2026-07-15 "มน · หนากว่า 1px นิด ·
+   ถี่"). stroke-width 2 sits half-inside so it reads ~1.5px; dasharray 5 4 = fine. */
+.pcs-rc .pcs-dashsoft {
+  border: 0 !important;
+  border-radius: 0.9rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' fill='none'%3E%3Crect x='0.5' y='0.5' width='99%25' height='97%25' rx='14' ry='14' stroke='%23ef9aa8' stroke-width='2' stroke-dasharray='5 4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+}
+.pcs-rc .pcs-dashsoft.is-active {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' fill='none'%3E%3Crect x='0.5' y='0.5' width='99%25' height='97%25' rx='14' ry='14' stroke='%23cc3333' stroke-width='2' stroke-dasharray='5 4'/%3E%3C/svg%3E");
+}
+
+/* Header top-right ghost toolbar — the "พิมพ์ป้าย" print LINK is an <a> inside
+   .pcs-rc, so the generic `.pcs-rc a` (blue + hover underline) would repaint it.
+   Keep it amber + never underlined; the sibling buttons are <button> and aren't
+   affected (ปอน 2026-07-15). */
+.pcs-rc .pcs-header-tools a,
+.pcs-rc .pcs-header-tools a:hover {
+  color: #d97706;
+  text-decoration: none;
+}
+
+/* toolbar controls a touch bigger (ปอน 2026-07-15 "ใหญ่ขึ้นอีกนิดหน่อย") —
+   bump the text-xs (12px) links + buttons + their icons uniformly. */
+.pcs-rc .pcs-header-tools a,
+.pcs-rc .pcs-header-tools button {
+  font-size: 0.85rem;
+  padding: 0.32rem 0.6rem;
+}
+.pcs-rc .pcs-header-tools svg {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+/* ── legacy "card" chrome (white panel + soft shadow) ── */
+.pcs-rc .pcs-card {
+  background: #fff;
+  border: 1px solid #e4e7ea;
+  border-radius: 0.75rem;   /* ปอน 2026-07-15: ขอบการ์ดมนกลมขึ้น (จาก 0.267rem ที่คมไป) */
+  box-shadow: 0 1px 15px rgba(0, 0, 0, 0.04), 0 1px 6px rgba(0, 0, 0, 0.04);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+:root[data-theme="dark"] .pcs-rc .pcs-card,
+.pcs-rc .pcs-card { background: #fff; } /* legacy is light-only */
+
+/* the 26-column table card breaks out to (nearly) the full admin-content width so
+   every column shows like legacy — legacy runs edge-to-edge, we lose ~96px to card+
+   main padding (ปอน 2026-07-15 "ขยายพื้นที่เราขึ้นไปอีก · เท่าเขาเป๊ะ"). Slim side
+   padding on the card + pull the table-wrap out to the card edge. */
+.pcs-rc .pcs-card--flush {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+.pcs-rc .pcs-card--flush .pcs-table-wrap {
+  margin-left: -0.25rem;
+  margin-right: -0.25rem;
+}
+
+/* ── settings gear ("ตั้งค่าต้นทุนตู้") ── */
+.pcs-rc .pcs-gear-wrap { display: inline-flex; flex-direction: column; align-items: center; }
+.pcs-rc .pcs-gear {
+  border: 0; background: transparent; color: #ff9149; cursor: pointer; padding: 0; line-height: 0;
+}
+.pcs-rc .pcs-gear:hover { transform: translateY(-2px); }
+
+/* ── tabs: "มุมมอง PCS Cargo | ปรับต้นทุนตู้ใหม่" — DASHED pills, full-width split
+   (ปอน 2026-07-15 "เส้นประแบบในรูป · เต็มเหมือนในรูป") · matches the chip menu:
+   inactive = pink dashed + black label · active = red dashed + red label on
+   red-50 · each <li> flex:1 so the two tabs fill the row evenly. ── */
+.pcs-rc .pcs-tabs {
+  display: flex; list-style: none; padding: 0; margin: 0 0 0.75rem;
+  gap: 0.375rem;
+}
+.pcs-rc .pcs-tabs li { flex: 1 1 0; }
+.pcs-rc .pcs-tabs .pcs-tab {
+  display: flex; align-items: center; justify-content: center;
+  padding: 0.5rem 1rem; white-space: nowrap; text-decoration: none;
+  border: 0; border-radius: 0.9rem; color: #1a1a1a;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' fill='none'%3E%3Crect x='0.5' y='0.5' width='99%25' height='97%25' rx='14' ry='14' stroke='%23ef9aa8' stroke-width='2' stroke-dasharray='5 4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: center;
+  transition: background-color .15s, color .15s;
+}
+.pcs-rc .pcs-tabs .pcs-tab:hover { background-color: #fef2f2; text-decoration: none; }
+.pcs-rc .pcs-tabs .pcs-tab.active {
+  background-color: #fef2f2; color: #cc3333;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' fill='none'%3E%3Crect x='0.5' y='0.5' width='99%25' height='97%25' rx='14' ry='14' stroke='%23cc3333' stroke-width='2' stroke-dasharray='5 4'/%3E%3C/svg%3E");
+}
+
+/* ── exception top-menu strip (report tabs · h4 + red pill) ── */
+.pcs-report-menu {
+  display: flex; flex-wrap: wrap; align-items: stretch; list-style: none;
+  padding: 0.25rem 0.25rem 0; margin: 0; border-bottom: 1px solid #dfe3e7;
+  gap: 0.15rem;
+}
+.pcs-report-menu .pcs-report-tab {
+  display: flex; align-items: center; padding: 0.4rem 0.75rem; color: #6b6f82;
+  text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap;
+}
+.pcs-report-menu .pcs-report-tab:hover { color: #4e5154; text-decoration: none; }
+.pcs-report-menu .pcs-report-tab.active { color: #cc3333; border-bottom-color: #cc3333; }
+.pcs-report-menu .pcs-report-tab h4 {
+  font-size: 1.1rem; margin: 0; display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 400;
+}
+.pcs-report-menu .pcs-report-tab.active h4 { color: #cc3333; }
+.pcs-report-menu .pcs-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.35rem; height: 1.35rem; padding: 0 0.45rem; border-radius: 10rem;
+  font-size: 0.8rem; font-weight: 600; background: #ff4961; color: #fff; line-height: 1;
+}
+
+/* ── filter buttons ── */
+.pcs-rc .btn {
+  display: inline-block; padding: 0.4rem 0.85rem; border-radius: 0.267rem;
+  font-size: 0.9rem; border: 1px solid transparent; cursor: pointer;
+  color: #fff; line-height: 1.25; text-align: center; user-select: none;
+}
+.pcs-rc .btn-sm { padding: 0.22rem 0.7rem; font-size: 0.8rem; }
+.pcs-rc .btn-rounded { border-radius: 10rem; }
+.pcs-rc .btn-danger { background: #ff4961; }
+.pcs-rc .btn-warning { background: #ff9149; }
+.pcs-rc .btn-success { background: #28d094; }
+.pcs-rc .btn-info { background: #1e9ff2; }
+.pcs-rc .btn-primary { background: #666ee8; }
+.pcs-rc .btn-secondary { background: #868e96; }
+.pcs-rc .bg-color-select { background: linear-gradient(to right, #27b836, #1f81b3); color: #fff; }
+.pcs-rc .bg-color-check { background: linear-gradient(to right, #2c3e50, #bdc3c7); color: #fff; }
+.pcs-rc .btn-color-main { background: linear-gradient(to right, #cc3333, #f15a24); color: #fff; }
+.pcs-rc .box-shadow-2 { box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15); }
+.pcs-rc .btn[disabled], .pcs-rc .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ── DataTable (#myTable → .pcs-table) ── */
+.pcs-rc .pcs-table-wrap { overflow-x: auto; }
+.pcs-rc .pcs-table {
+  /* 27 dense columns → compact font + tight padding so the whole table fits the
+     screen without a big horizontal scroll (ปอน 2026-07-15 "จัด font · text พอดีจอ
+     เหมือน legacy"). */
+  /* 1:1 with the legacy PCS report-cnt table (ปอน 2026-07-15 handed the page source
+     · "ทำให้เป็นแบบเขา ช่างแม่ง"): legacy `#myTable{font-size:0.9rem}` +
+     `.table td{padding:.4rem .25rem}` `.table th{padding:.5rem .25rem}`. 27 columns
+     at 0.9rem overflow → the wrap scrolls horizontally, exactly like the legacy
+     DataTables. Header line-breaks are placed per-column (explicit <br/>) to match
+     legacy; number cells stay nowrap. */
+  width: 100%; border-collapse: collapse; font-size: 0.85rem; background: #fff;
+  color: #4e5154; font-weight: 400; word-break: break-word;
+}
+.pcs-rc .pcs-table thead th {
+  padding: 0.5rem 0.12rem; border: 1px solid #ddd; text-align: center;
+  background: #fff; vertical-align: middle; font-weight: 400; white-space: nowrap;
+  font-size: 0.85rem; line-height: 1.25;
+}
+.pcs-rc .pcs-table tbody td {
+  padding: 0.4rem 0.12rem; border: 1px solid #ddd; vertical-align: top;
+}
+/* money / numeric cells never wrap (ปอน 2026-07-15 "ราคา หรือ ตัวเลข ห้ามขึ้น 2
+   บรรทัด") — the text columns (tracking / detail / address / carrier) still wrap via
+   the table word-break so the whole 26-column table fits the screen. */
+.pcs-rc .pcs-table td.text-right { white-space: nowrap; }
+
+/* selection checkbox — bigger + orange tick, like legacy (ปอน 2026-07-15
+   "กรอบติ๊กเอาให้ใหญ่ขึ้นอีกแบบเขา"). Disabled boxes (rows not yet ถึงไทยแล้ว)
+   still render bigger but greyed. */
+.pcs-rc .pcs-table input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  accent-color: #f97316;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.pcs-rc .pcs-table input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+/* summary row — orange→red gradient (.bg-color) · lives in <thead> so it needs
+   its own padding/border (the tbody td rule doesn't reach it) */
+.pcs-rc .pcs-table tr.pcs-sum {
+  /* ONE gradient across the WHOLE row (ปอน 2026-07-15 "ไล่เฉดทั้งแถวต่อเนื่อง ·
+     ไม่ใช่ไล่ซ้ำทีละช่อง"): the gradient lives on the ROW and the cells are
+     transparent, so orange→red flows continuously across all <td> instead of
+     restarting inside each one. */
+  background: linear-gradient(to right, #ee7411 0%, #c24e4e 100%);
+}
+.pcs-rc .pcs-table tr.pcs-sum td {
+  padding: 0.35rem 0.14rem; border: 1px solid rgba(255, 255, 255, 0.28);
+  background: transparent;
+  color: #fff !important; font-weight: 400; vertical-align: middle;
+}
+/* legacy uses NO bold anywhere in this table (ปอน 2026-07-15 "ไม่ใช้ font ตัวหนา
+   สักอัน") — kill every Tailwind font-semibold/bold on cells + their descendants. */
+.pcs-rc .pcs-table th,
+.pcs-rc .pcs-table td,
+.pcs-rc .pcs-table td * { font-weight: 400 !important; }
+
+/* base data row — legacy Bootstrap alert-danger: SOFT pink bg + dark text (ปอน
+   2026-07-15 "ของเราเข้มไป · อ่านยาก · เอาสีอ่อนตามภาพ legacy"). No white-text
+   override → links stay blue, badges keep their own colors, numbers read dark. */
+.pcs-rc .pcs-table tr.pcs-row td { background: #f5aab0; color: #960014; }
+.pcs-rc .pcs-table tr.pcs-row a { color: #1e5f8c; }
+/* profit/loss figures = WHITE on the coloured rows (ปอน 2026-07-15 inspected legacy:
+   text #960014 · "สีเขียวไม่ใช้ · ใช้ขาว" · "เลือกแล้ว font ขาว") — our port renders
+   them with Tailwind text-green-* / text-red-*. NOT the white check rows (there the
+   green/red must stay readable on white). */
+.pcs-rc .pcs-table tr.pcs-row td [class*="text-green"],
+.pcs-rc .pcs-table tr.pcs-row td [class*="text-red"],
+.pcs-rc .pcs-table tr.pcs-row-selected td [class*="text-green"],
+.pcs-rc .pcs-table tr.pcs-row-selected td [class*="text-red"] { color: #fff !important; }
+
+/* selected → magenta→orange gradient CONTINUOUS across the WHOLE ROW (ปอน 2026-07-15
+   "ไล่เฉดทั้งแถว ไม่ใช่ทีละช่อง · ทุกอันเลย") — the gradient lives on the <tr> and the
+   cells are transparent, so it flows ONCE across every cell instead of restarting in
+   each <td>. Exact legacy `.alert-danger.bg-color-select` colours + light grid so the
+   sweep reads continuous. */
+.pcs-rc .pcs-table tr.pcs-row-selected {
+  background: linear-gradient(to right, #ce35a1 0%, #ee7411 100%) !important;
+}
+.pcs-rc .pcs-table tr.pcs-row-selected td {
+  background: transparent !important;
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff !important;
+}
+/* every text in a selected row = white (ปอน 2026-07-15 "เลือกแล้ว text เป็นสีขาว")
+   — links + success/danger figures are coloured by default → force white so they
+   read on the magenta gradient. */
+.pcs-rc .pcs-table tr.pcs-row-selected a,
+.pcs-rc .pcs-table tr.pcs-row-selected .text-success,
+.pcs-rc .pcs-table tr.pcs-row-selected .text-danger {
+  color: #fff !important;
+}
+/* already-in-check-queue → WHITE bg + dark text (ปอน 2026-07-15 "ต้องเป็นสีขาว text
+   ดำ · ไม่ใช่ระบายดำแบบนี้") — the legacy dark bg-color-check read as an ugly black
+   band; a clean white row marks "already checked" without the heavy shade. */
+.pcs-rc .pcs-table tr.pcs-row-check td { background: #fff !important; color: #4e5154; }
+.pcs-rc .pcs-table tr.pcs-row-check a { color: #1e5f8c; }
+.pcs-rc .pcs-table tr.pcs-row-check .text-success { color: #1f9d57 !important; }
+.pcs-rc .pcs-table tr.pcs-row-check .text-danger { color: #d63354 !important; }
+
+.pcs-rc .prod-img {
+  width: 40px; height: 40px; object-fit: cover; border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 2px; background: #fff;
+}
+
+/* ── badges ── */
+.pcs-rc .badge {
+  display: inline-block; padding: 0.32em 0.55em; font-size: 0.8rem; font-weight: 600;
+  line-height: 1; border-radius: 0.267rem; color: #fff; white-space: nowrap;
+}
+.pcs-rc .badge-pill { border-radius: 10rem; }
+.pcs-rc .badge-danger { background: #ff4961; }
+.pcs-rc .badge-warning { background: #ff9149; }
+.pcs-rc .badge-success { background: #28d094; }
+.pcs-rc .badge-info { background: #1e9ff2; }
+.pcs-rc .badge-primary { background: #666ee8; }
+.pcs-rc .badge-secondary { background: #868e96; }
+.pcs-rc .badge-pink { background: #e100a4; } /* legacy fstatus-3 magenta */
+.pcs-rc .badge-brown { background: #9f6213; } /* legacy fstatus-4 golden-brown */
+.pcs-rc .badge-vip { background: linear-gradient(45deg, #f23e33, #fbb73c); } /* legacy SVIP/นิติ red→gold */
+.pcs-rc .bg-danger { background: #ff4961; color: #fff; padding: 0 0.25rem; border-radius: 2px; }
+/* in-row status pills — slimmer + lighter text (ปอน 2026-07-15 "สถานะใหญ่ไป ·
+   บางๆ · text ไม่หนา"): thinner vertical padding, normal weight (not 600),
+   11px. !important beats the .font-10/.font-12 12px on the pills that carry it. */
+.pcs-rc .pcs-table tbody .badge {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  /* legacy pill size (ปอน 2026-07-15 "ทำให้เป็นแบบเขา"): legacy `.badge{font-size:
+     0.80rem}` · light weight kept (ปอน dislikes bold). */
+  padding: 0.28em 0.62em;
+  font-weight: 400;
+  font-size: 0.8rem !important;
+  line-height: 1.2;
+  /* every in-row status pill = WHITE text (ปอน 2026-07-15 "text ต้องขาวหมด") —
+     beats the .pcs-rc a blue+underline that hijacks the <a> badges (เครดิตได้). */
+  color: #fff !important;
+  text-decoration: none !important;
+}
+
+/* ── fixed bottom action bar ── */
+.pcs-rc .pcs-fixed-actions {
+  position: fixed; bottom: 20px; left: 20px; z-index: 40;   /* มุมซ้ายล่าง · ปอน 2026-07-15 (was bottom-center) */
+  display: inline-flex; align-items: center; gap: 0; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+  border-radius: 10rem;
+}
+/* Desktop (lg+) shows the 64px admin sidebar rail on the left — clear it so the
+   avatar / nav icons don't cover the bar's first button (ปอน 2026-07-15 "โดนบัง").
+   Mobile has no rail, so it stays at 20px. */
+@media (min-width: 1024px) {
+  .pcs-rc .pcs-fixed-actions { left: 80px; }
+}
+.pcs-rc .pcs-fixed-actions .btn { border-radius: 0; }
+.pcs-rc .pcs-fixed-actions .btn:first-child { border-top-left-radius: 10rem; border-bottom-left-radius: 10rem; }
+.pcs-rc .pcs-fixed-actions .btn:last-child { border-top-right-radius: 10rem; border-bottom-right-radius: 10rem; }
+.pcs-rc .pcs-fixed-actions .btn a { color: #fff; }
+
+/* ── filter-button active state + grouped-row + inline label ── */
+.pcs-rc .btn.is-active { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.75), 0 2px 8px rgba(0, 0, 0, 0.3); }
+.pcs-rc .pcs-filter-label { font-size: 0.85rem; color: #6b6f82; align-self: center; margin: 0 0.15rem; white-space: nowrap; }
+.pcs-rc .pcs-table tr.pcs-row-member td:first-child { border-left: 3px solid #b30000; }
+.pcs-rc .pcs-table tr.pcs-row-group td { font-weight: 600; }
+.pcs-rc .pcs-count-badge {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 1.1rem; height: 1.1rem;
+  padding: 0 0.35rem; margin-left: 0.35rem; border-radius: 10rem; font-size: 0.72rem; font-weight: 700;
+  background: rgba(0, 0, 0, 0.28); color: #fff; line-height: 1;
+}

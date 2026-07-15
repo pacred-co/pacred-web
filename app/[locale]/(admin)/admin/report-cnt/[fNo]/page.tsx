@@ -33,6 +33,7 @@
  */
 
 import { notFound } from "next/navigation";
+import { ChevronDown, Truck } from "lucide-react";
 import { requireAdmin, hasRole } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
@@ -57,6 +58,7 @@ import { resolveMomoContainerInfo } from "@/lib/admin/momo-container-resolve";
 import { buildContainerJourney, type JourneyForwarderRow } from "@/lib/admin/container-journey";
 import { loadWechatContainerContext } from "@/lib/admin/wechat-forwarder-context";
 import { ContainerJourneyPanel } from "./container-journey-panel";
+import "./legacy-report-cnt.css";
 
 export const dynamic = "force-dynamic";
 
@@ -590,6 +592,11 @@ export default async function AdminReportCntDetailPage({
   const warehouseLabel = WAREHOUSE_LABEL[fWarehouseName] ?? fWarehouseName;
   const warehouseChinaLabel = WAREHOUSE_CHINA_LABEL[fWarehouseChina] ?? fWarehouseChina;
   const transportLabel = TRANSPORT_LABEL[fTransportType] ?? fTransportType;
+  // Legacy nameTransportType2 (function.php L660-668) colours the transport pill
+  // BY MODE: ทางรถ (1) = badge-info (blue) · ทางเรือ (2) = badge-success (green).
+  // ทางอากาศ (3) has no legacy colour → badge-primary (Pacred addition).
+  const transportBadgeClass =
+    fTransportType === "2" ? "badge-success" : fTransportType === "3" ? "badge-primary" : "badge-info";
 
   // Wave 16 Follow-up C — derive container-wide cost mode from row data.
   // fRefPrice '1' = น้ำหนัก (weight); '' / '2' / null = ปริมาตร (cbm).
@@ -671,129 +678,55 @@ export default async function AdminReportCntDetailPage({
     }
   }
 
+  // Legacy "จำนวนรายการที่ขาด" = items whose goods aren't fully scanned into the
+  // TH warehouse yet (report-cnt.php countNotCom · unit = รายการ, not กล่อง).
+  const missingItems = Math.max(0, completeness.forwardersTotal - completeness.forwardersComplete);
+  const missingBoxes = Math.max(0, completeness.expected - completeness.scanned);
+  const fmt2 = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const cabHref = `/admin/report-cnt/${encodeURIComponent(fCabinetNumber)}`;
+
   return (
     <>
-      <TopMenuReport activeHref="/admin/report-cnt" />
-      <main className="p-4 lg:p-6 space-y-4 pb-32">
+      {/* Legacy order: breadcrumb at the VERY TOP → exception tabs → header card
+          (ปอน 2026-07-14 "บนสุดต้องเป็น หน้าแรก › รายงานตู้สินค้า › ตู้").
+          2026-07-14 (ปอน) — the exception-tabs strip moved INSIDE the header
+          .pcs-card (embedded) so the chip menu + รายงานตู้ share ONE framed box. */}
+      <div className="px-4 pt-3 lg:px-6 bg-[#f4f5f7]">
         <Breadcrumb fCabinetNumber={fCabinetNumber} />
-
-        {/* พี่ป๊อป spec (2026-07-06 · TASK #2) — the ขาด/ครบ completeness banner.
-            ครบ = green ✅ (every forwarder scanned ≥ famount) · ขาด = 💗 ชมพู, led
-            by the box gap ("ขาด N กล่อง") which is the owner's headline number.
-            (Pink is the spec's colour for the ขาด sub-status — distinct from the
-            KEEP-amber status-4 pill.) */}
-        {completeness.forwardersTotal > 0 && (
-          completeness.isComplete ? (
-            <div className="rounded-2xl border border-emerald-300 bg-emerald-50 dark:bg-emerald-900/20 p-4 text-sm text-emerald-800 dark:text-emerald-200">
-              <p className="font-semibold flex items-center gap-2">
-                <span className="text-lg">✅</span>
-                <span>
-                  ยิงครบทุกรายการ ({completeness.forwardersComplete}/{completeness.forwardersTotal} รายการ
-                  · ยิง {completeness.scanned.toLocaleString()}/{completeness.expected.toLocaleString()} กล่อง · {completeness.pct}%)
-                </span>
-              </p>
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-pink-300 bg-pink-50 dark:bg-pink-900/20 p-4 text-sm text-pink-800 dark:text-pink-200">
-              <p className="font-semibold flex items-center gap-2">
-                <span>
-                  ขาด {Math.max(0, completeness.expected - completeness.scanned).toLocaleString()} กล่อง
-                  {" "}(ยิง {completeness.scanned.toLocaleString()}/{completeness.expected.toLocaleString()} กล่อง
-                  · ยิงครบ {completeness.forwardersComplete}/{completeness.forwardersTotal} รายการ
-                  · {completeness.pct}%)
-                </span>
-              </p>
-            </div>
-          )
-        )}
-
-        {/* Header summary card */}
-        <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm p-4 lg:p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold uppercase tracking-widest text-primary-600">ADMIN · WAREHOUSE</p>
-              <h1 className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight flex flex-wrap items-center gap-2">
-                รายงานตู้สินค้า
-                <span className="font-mono font-semibold text-primary-600">{fCabinetNumber}</span>
-                <span className="text-sm font-normal text-muted">· {transportLabel}</span>
-              </h1>
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-y-1 text-sm">
-                <div>โกดังจีน: <span className="font-medium">{warehouseLabel}</span> ({warehouseChinaLabel})</div>
-                {/* V-D3 — carrier physical container number (from MOMO). Only
-                    shows when known; the Pacred code is in the title above. */}
-                {carrierContainerNo && (
-                  <div>
-                    เลขตู้สายเรือ (carrier):{" "}
-                    <span className="font-mono font-medium" title="เลขตู้คอนเทนเนอร์จริงของสายเรือ/ผู้ขนส่ง (จาก B/L)">
-                      {carrierContainerNo}
-                    </span>
-                  </div>
-                )}
-                <div>
-                  สถานะตู้สินค้า:{" "}
-                  {cabinetIsPaid ? (
-                    <span className="inline-block rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-xs">จ่ายเงินแล้ว</span>
-                  ) : (
-                    <span className="inline-block rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-xs">ยังไม่จ่ายเงิน</span>
-                  )}
-                </div>
-                <div>
-                  จำนวนรายการทั้งหมด: <span className="font-medium">{detailRows.length.toLocaleString()}</span> รายการ
-                </div>
-                {showMoney && (
-                  <div>
-                    ราคาขายตู้: <span className="font-medium">{totalPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> บาท
-                  </div>
-                )}
-                {showMoney && (
-                  <div>
-                    ราคาต้นทุนตู้: <span className="font-medium text-red-600">{totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span> บาท
-                  </div>
-                )}
-                {showMoney && (
-                  <div>
-                    กำไรตู้:{" "}
-                    <span className={`font-bold text-lg ${totalProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      {totalProfit >= 0 ? "+" : ""}
-                      {totalProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>{" "}
-                    บาท
-                  </div>
-                )}
-              </div>
-              {cabinetIsPaid && showMoney && (
-                <p className="mt-3 text-xs text-red-600">
-                  ไม่สามารถแก้ไขต้นทุนรายตู้ได้เนื่องจากรายการนี้จ่ายเงินค่าตู้แล้ว{" "}
-                  {paidCntId && (
-                    <Link
-                      href={`/admin/cnt-hs/${paidCntId}`}
-                      className="text-primary-600 hover:underline"
-                    >
-                      ไปยังรายการจ่ายเงินตู้เพื่อแก้ไขต้นทุนจากบิลจ่ายเงิน
-                    </Link>
-                  )}
-                </p>
-              )}
-            </div>
-
-            <div className="flex flex-col items-end gap-2">
-              {/* re-sweep A2 #8 — print all box-labels for this cabinet in one motion (printAll port). */}
+      </div>
+      {/* .pcs-rc scopes the faithful legacy PCS Cargo look (legacy-report-cnt.css)
+          to this content only — the rest of the admin shell keeps its own theme.
+          Faithful port of report-cnt.php?id=<cnt> (ADR-0017 · ปอน 2026-07-14). */}
+      <main className="pcs-rc px-1 py-4 lg:px-1 lg:py-6 pb-32">
+        {/* ── SECTION 1 · header card (report-cnt.php L1504-1576) ── */}
+        <section className="pcs-card mt-3">
+          {/* exception-tabs strip — embedded as the card's top header row */}
+          <TopMenuReport activeHref="/admin/report-cnt" embedded />
+          {/* title + top-right tools (legacy .float-md-right ตั้งค่าต้นทุนตู้ gear) */}
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <h3>
+              <Truck size={28} strokeWidth={1.5} className="inline-block align-[-5px]" aria-hidden />{" "}
+              รายงานตู้สินค้า {fCabinetNumber}{" "}
+              <span className={`badge ${transportBadgeClass} badge-pill`}>{transportLabel}</span>
+            </h3>
+            {/* top-right toolbar — ALL tools inline as GHOST buttons (icon + text,
+                no frame · ปอน 2026-07-15 "เอาไปแถวเดียวกับตั้งค่าต้นทุน · เอากรอบปุ่ม
+                ออก มีแต่ไอคอนกับ text"): print + accounting-handoff + pay-slip + the
+                cost-rate gear. `.pcs-header-tools` lets legacy-report-cnt.css stop
+                `.pcs-rc a` from repainting the print <Link> blue/underlined. */}
+            <div className="pcs-header-tools flex flex-wrap items-center justify-end gap-x-1 gap-y-0.5">
               <Link
                 href={`/admin/printAll?cabinet=${encodeURIComponent(fCabinetNumber)}`}
                 target="_blank"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-primary-500 bg-primary-50 px-3 py-1.5 text-sm text-primary-700 font-medium hover:bg-primary-100"
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors hover:bg-amber-50"
               >
                 🖨 พิมพ์ป้ายกล่องทั้งตู้
               </Link>
-              {/* พี่ป๊อป spec (2026-07-06 · TASK #4) — warehouse → accounting
-                  handoff. STATUS-ONLY (notify + audit · no fstatus flip · no
-                  money). Shown to everyone who reaches this page (warehouse/
-                  ops/super) once the cabinet has forwarders. */}
               {completeness.forwardersTotal > 0 && (
-                <WarehouseHandoffButton
-                  fCabinetNumber={fCabinetNumber}
-                  isComplete={completeness.isComplete}
-                />
+                <WarehouseHandoffButton fCabinetNumber={fCabinetNumber} isComplete={completeness.isComplete} />
+              )}
+              {showMoney && !cabinetIsPaid && (
+                <CntPaySlipPanel fCabinetNumber={fCabinetNumber} suggestedAmount={totalCost} />
               )}
               {canEditCost && (
                 <CostRateModal
@@ -811,83 +744,196 @@ export default async function AdminReportCntDetailPage({
                   }}
                 />
               )}
-              {/* re-sweep A2 #5 — single-container cnt-payment + slip image.
-                  Shown only to money-tier roles when the cabinet is unpaid. */}
-              {showMoney && !cabinetIsPaid && (
-                <CntPaySlipPanel fCabinetNumber={fCabinetNumber} suggestedAmount={totalCost} />
+            </div>
+          </div>
+
+          {/* body: .price block (left) + status/note (right) — legacy 2-col */}
+          <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="price">
+              <h4>ชื่อโกดังจีน : <span style={{ fontWeight: 500 }}>{warehouseLabel}</span> ({warehouseChinaLabel})</h4>
+              {carrierContainerNo && (
+                <h4>
+                  เลขตู้สายเรือ :{" "}
+                  <span
+                    className="font-mono"
+                    title="เลขตู้คอนเทนเนอร์จริงของสายเรือ/ผู้ขนส่ง (จาก B/L)"
+                    style={{ fontWeight: 500 }}
+                  >
+                    {carrierContainerNo}
+                  </span>
+                </h4>
+              )}
+              <h4>
+                สถานะตู้สินค้า{" "}
+                {cabinetIsPaid ? (
+                  <span className="badge badge-success badge-rounded">จ่ายเงินแล้ว</span>
+                ) : (
+                  <span className="badge badge-warning badge-rounded">ยังไม่จ่ายเงิน</span>
+                )}
+              </h4>
+              <h4>จำนวนรายการทั้งหมด {detailRows.length.toLocaleString()} รายการ</h4>
+              {missingItems > 0 && (
+                <h4 className="bg-danger d-inline-block p-05">
+                  จำนวนรายการที่ขาด {missingItems.toLocaleString()} รายการ
+                </h4>
+              )}
+              {showMoney && (
+                <>
+                  <h3 className="text-danger">ราคาต้นทุนตู้ {fmt2(totalCost)} บาท</h3>
+                  <h4>ราคาขายตู้ {fmt2(totalPrice)} บาท</h4>
+                  <h4>
+                    กำไรตู้{" "}
+                    <span className="font-2rem">
+                      {totalProfit >= 0 ? (
+                        <span className="text-success">+{fmt2(totalProfit)}</span>
+                      ) : (
+                        <span className="text-danger">{fmt2(totalProfit)}</span>
+                      )}
+                    </span>{" "}
+                    บาท
+                  </h4>
+                </>
+              )}
+              <p className="font-12" style={{ color: "#8a8d90", marginTop: ".5rem", marginBottom: 0 }}>**หมายเหตุ</p>
+              <p className="font-12" style={{ color: "#8a8d90", margin: 0 }}>
+                1. รายการที่ขาด คือ รายการที่สินค้าไม่ได้มีการยิงเข้าในประวัติสินค้าถึงโกดังไทย
+              </p>
+            </div>
+
+            <div>
+              {/* legacy right col — scan-progress as a SOLID red/green box, white
+                  text (report-cnt.php count-fCostTotalPrice · bg-danger text-white
+                  p-05 d-inline-block · ปอน 2026-07-14 · "เอาขึ้นมาไว้ข้างบน"). */}
+              {completeness.forwardersTotal > 0 && (
+                <div
+                  className="d-inline-block p-05 text-white"
+                  style={{
+                    fontSize: "0.95rem",
+                    fontWeight: 600,
+                    borderRadius: "0.25rem",
+                    background: completeness.isComplete ? "#28d094" : "#ff4961",
+                    whiteSpace: "normal",
+                  }}
+                >
+                  {completeness.isComplete
+                    ? `ยิงครบทุกรายการ · ยิง ${completeness.scanned.toLocaleString()}/${completeness.expected.toLocaleString()} กล่อง (${completeness.pct}%)`
+                    : `ขาด ${missingBoxes.toLocaleString()} กล่อง · ยิง ${completeness.scanned.toLocaleString()}/${completeness.expected.toLocaleString()} กล่อง (${completeness.pct}%)`}
+                </div>
+              )}
+              {cabinetIsPaid && showMoney && (
+                <p className="text-danger" style={{ fontSize: "0.85rem", marginTop: ".6rem" }}>
+                  ไม่สามารถแก้ไขต้นทุนรายตู้ได้เนื่องจากรายการนี้จ่ายเงินค่าตู้แล้ว{" "}
+                  {paidCntId && (
+                    <Link href={`/admin/cnt-hs/${paidCntId}`}>
+                      ไปยังรายการจ่ายเงินตู้เพื่อแก้ไขต้นทุนจากบิลจ่ายเงิน
+                    </Link>
+                  )}
+                </p>
               )}
             </div>
           </div>
+
+          {/* (Pacred quick tools moved up into the header's top-right ghost toolbar
+              · ปอน 2026-07-15) */}
         </section>
 
-        {/* G4 — container JOURNEY timeline (read-only · "ตู้นี้ถึงไหนแล้ว").
-            Shows the ordered stage strip (ปิดตู้→กำลังมา→ถึงท่า→ตรวจปล่อย→โกดัง→
-            เตรียมส่ง→ส่งลูกค้า) with real dates, a stuck-container cue, and the
-            China-ops WeChat mini-feed for this container. Visible to every role
-            that reaches this page (no money fields). */}
-        <ContainerJourneyPanel
-          journey={journey}
-          totals={journeyTotals}
-          etd={journeyEtd}
-          eta={journeyEta}
-          wechat={wechatContext}
-        />
+        {/* ── SECTION 2 · table card (report-cnt.php L1582-1651) ── */}
+        <section className="pcs-card pcs-card--flush">
+          <h3>
+            <Truck size={28} strokeWidth={1.5} className="inline-block align-[-5px]" aria-hidden />{" "}
+            รายงานตู้สินค้า {fCabinetNumber}
+          </h3>
+          {/* view tabs: มุมมอง PCS Cargo | ปรับต้นทุนตู้ใหม่ (nav-underline) */}
+          <ul className="pcs-tabs">
+            <li>
+              <TabLink href={cabHref} active={!isCostUpdate}>มุมมอง Pacred Cargo</TabLink>
+            </li>
+            <li>
+              <TabLink href={`${cabHref}?action=cost-update`} active={isCostUpdate}>ปรับต้นทุนตู้ใหม่</TabLink>
+            </li>
+          </ul>
 
-        {/* View tabs */}
-        <div className="flex gap-1 border-b border-border">
-          <TabLink href={`/admin/report-cnt/${encodeURIComponent(fCabinetNumber)}`} active={!isCostUpdate}>
-            มุมมอง PCS Cargo
-          </TabLink>
-          <TabLink href={`/admin/report-cnt/${encodeURIComponent(fCabinetNumber)}?action=cost-update`} active={isCostUpdate}>
-            ปรับต้นทุนตู้ใหม่
-          </TabLink>
-        </div>
-
-        {isCostUpdate ? (
-          showMoney ? (
-            <CostUpdateView
-              fCabinetNumber={fCabinetNumber}
-              warehouseLabel={warehouseLabel}
-              rows={detailRows}
-              sheetParcels={sheetParcels}
-              sheetSource={sheetSource}
-              sheetUnavailable={sheetUnavailable}
-              cabinetIsPaid={cabinetIsPaid}
-              paidCntId={paidCntId}
-            />
+          {isCostUpdate ? (
+            showMoney ? (
+              <CostUpdateView
+                fCabinetNumber={fCabinetNumber}
+                warehouseLabel={warehouseLabel}
+                rows={detailRows}
+                sheetParcels={sheetParcels}
+                sheetSource={sheetSource}
+                sheetUnavailable={sheetUnavailable}
+                cabinetIsPaid={cabinetIsPaid}
+                paidCntId={paidCntId}
+              />
+            ) : (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
+                <p className="font-semibold">ไม่มีสิทธิ์เข้าถึง</p>
+                <p className="mt-2 text-xs">
+                  การปรับต้นทุนตู้ใหม่ต้องใช้สิทธิ์ ultra / accounting / pricing
+                  (บัญชีอื่นดูตู้ได้แต่ไม่เห็นต้นทุน/กำไร).
+                </p>
+              </div>
+            )
           ) : (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-6 text-sm text-amber-800 dark:text-amber-200">
-              <p className="font-semibold">ไม่มีสิทธิ์เข้าถึง</p>
-              <p className="mt-2 text-xs">
-                การปรับต้นทุนตู้ใหม่ต้องใช้สิทธิ์ ultra / accounting / pricing
-                (บัญชีอื่นดูตู้ได้แต่ไม่เห็นต้นทุน/กำไร).
-              </p>
-            </div>
-          )
-        ) : (
-          <ContainerDetailClient
-            rows={
-              // DATA-LAYER hide (security · mig 0189): when the viewer may NOT
-              // see money internals, strip the per-row cost/profit/cost-rate
-              // fields BEFORE they serialize to the client — never ship a
-              // hidden-but-present cost. profitItem is derived (sell − cost), so
-              // it's zeroed alongside cost to close the derived-value leak.
-              showMoney
-                ? detailRows
-                : detailRows.map((r) => ({
-                    ...r,
-                    rate: 0,
-                    fcosttotalprice: 0,
-                    fcosttotalpricesheet: 0,
-                    profitItem: 0,
-                  }))
-            }
-            showMoney={showMoney}
-            canCheckFlow={canCheckFlow}
-            cabinetIsPaid={cabinetIsPaid}
-            billByFid={billByFid}
-          />
-        )}
+            <ContainerDetailClient
+              rows={
+                // DATA-LAYER hide (security · mig 0189): when the viewer may NOT
+                // see money internals, strip the per-row cost/profit/cost-rate
+                // fields BEFORE they serialize to the client — never ship a
+                // hidden-but-present cost. profitItem is derived (sell − cost), so
+                // it's zeroed alongside cost to close the derived-value leak.
+                showMoney
+                  ? detailRows
+                  : detailRows.map((r) => ({
+                      ...r,
+                      rate: 0,
+                      fcosttotalprice: 0,
+                      fcosttotalpricesheet: 0,
+                      profitItem: 0,
+                    }))
+              }
+              showMoney={showMoney}
+              canCheckFlow={canCheckFlow}
+              cabinetIsPaid={cabinetIsPaid}
+              billByFid={billByFid}
+              transportLabel={transportLabel}
+              transportBadgeClass={transportBadgeClass}
+            />
+          )}
+        </section>
+
+        {/* ปอน 2026-07-15 — "เส้นทางตู้ + แชทจีน" (Pacred journey/China-chat panel,
+            not in legacy report-cnt.php) moved to the BOTTOM, below the table.
+            Collapsed by default; a stuck container still warns on the summary bar. */}
+        <details className="group rounded-2xl border border-border bg-white shadow-sm mt-4">
+          <summary className="flex cursor-pointer select-none list-none items-center justify-between gap-2 px-4 lg:px-6 py-3 [&::-webkit-details-marker]:hidden">
+            <span className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+              🗺️ เส้นทางตู้ + แชทจีน
+              <span className="hidden text-[11px] font-normal text-muted sm:inline">
+                ตู้นี้ถึงไหนแล้ว · จีนว่าไงเรื่องตู้นี้
+              </span>
+              {journey.isStuck && (
+                <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[11px] font-medium">
+                  ⚠️ ตู้ค้าง
+                </span>
+              )}
+            </span>
+            <span className="flex shrink-0 items-center gap-1 text-[11px] text-muted">
+              <span className="group-open:hidden">แสดง</span>
+              <span className="hidden group-open:inline">ซ่อน</span>
+              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+            </span>
+          </summary>
+          <div className="border-t border-border p-3 lg:p-4">
+            <ContainerJourneyPanel
+              journey={journey}
+              totals={journeyTotals}
+              etd={journeyEtd}
+              eta={journeyEta}
+              wechat={wechatContext}
+            />
+          </div>
+        </details>
       </main>
     </>
   );
@@ -912,13 +958,9 @@ function Breadcrumb({ fCabinetNumber }: { fCabinetNumber: string }) {
 }
 
 function TabLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  // Legacy report-cnt.php nav-underline tab (.pcs-tab · active = red #cc3333).
   return (
-    <Link
-      href={href}
-      className={`inline-flex items-center px-3 py-2 text-sm font-medium border-b-2 ${
-        active ? "border-primary-500 text-primary-700" : "border-transparent text-muted hover:text-foreground"
-      }`}
-    >
+    <Link href={href} className={`pcs-tab${active ? " active" : ""}`}>
       {children}
     </Link>
   );

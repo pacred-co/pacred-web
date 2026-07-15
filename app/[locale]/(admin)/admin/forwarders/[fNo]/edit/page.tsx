@@ -62,6 +62,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
+import { getPrivateCarrierOptionsForProvince } from "@/lib/cart/ship-by-eligibility";
 
 import { TbForwarderActionPanel } from "../tb-action-panel";
 // 2026-06-05 (ภูม flag — "ไหนวะ ไม่เห็นมีอะไรเพิ่ม"): the AdminForwarderEditForm
@@ -649,8 +650,15 @@ export default async function AdminForwarderEditPage({
           {/* การเก็บเงินค่าขนส่งในไทย — inline edit */}
           <EditPayMethodField fId={r.id} paymethod={r.paymethod} />
 
-          {/* บริษัทขนส่ง — inline edit (PCS/PCSF/PCSE preset + external) */}
-          <EditShipByField fId={r.id} fshipby={r.fshipby} />
+          {/* บริษัทขนส่ง — inline edit (Pacred preset + ขนส่งเอกชนตามจังหวัดปลายทาง + free-text).
+              owner 2026-07-14: the private-courier list is filtered to the couriers that
+              actually run in this delivery province (workbook SOT), each with its restriction. */}
+          <EditShipByField
+            fId={r.id}
+            fshipby={r.fshipby}
+            province={r.faddressprovince}
+            carriers={getPrivateCarrierOptionsForProvince(r.faddressprovince)}
+          />
 
           <div>
             <p className="text-xs text-muted mb-0.5">ที่อยู่จัดส่งสินค้า:</p>

@@ -20,6 +20,7 @@ import {
   userNotPCS50,
   type ForwarderCollectRow,
 } from "@/lib/forwarder/forwarder-collect-total";
+import { MAO_FLAT_FEE, isMaoCarrier } from "@/lib/forwarder/mao-fee";
 // F3 — server-side capture rail (see actions/admin/wallet-hs.ts docblock). A
 // "use server" file may only EXPORT async functions, so the throwing payment
 // action delegates to a non-exported *Impl run through withObservability:
@@ -456,7 +457,7 @@ async function submitForwarderPaymentImpl(
   const isExemptPcsfRow = (r: (typeof eligible)[number]) =>
     isAllowlisted50 && !!r.faddressdistrict && r.faddressdistrict.indexOf("หนองแขม") !== -1;
   const isCountablePcsfRow = (r: (typeof eligible)[number]) =>
-    r.fshipby === "PCSF" && Number(r.ftransportprice ?? 0) === 0 && !isExemptPcsfRow(r);
+    isMaoCarrier(r.fshipby) && Number(r.ftransportprice ?? 0) === 0 && !isExemptPcsfRow(r);
   const countPricePCSF = eligible.filter(isCountablePcsfRow).length;
 
   // forwarder.php L256-257 — per-row composite total (NO +50/no 1% here; those
@@ -543,7 +544,11 @@ async function submitForwarderPaymentImpl(
     // must too). `countPricePCSF` is the survivor count (== the helper's
     // countPCSF); `applied50` is the helper's batch decision.
     if (applied50 && countPricePCSF >= 1 && isCountablePcsfRow(r)) {
-      amount += 50 / countPricePCSF;
+      // 🔴 owner 2026-07-14: distribute the FULL เหมาๆ fee (MAO_FLAT_FEE ฿100), not the
+      // legacy ฿50. The headline (computeForwarderCollectTotal) was raised ฿50→฿100 in
+      // 2026-06-19 but THIS per-row split still hardcoded 50 → the customer paid ฿50 for
+      // the เหมาๆ while the bill/back-end showed ฿100 ("หลังบ้าน 100 เก็บลูกค้า 50").
+      amount += MAO_FLAT_FEE / countPricePCSF;
     }
     // forwarder.php L329-331 — juristic 1% reduction applied per row (the
     // helper decided `applyNiti` off userCompany — BUG-2b fix).

@@ -24,6 +24,12 @@
  * (G3) where it can query the address row.
  */
 
+// The owner's CLOSED carrier workbook (2026-07-14) — the shop-order carrier dropdown +
+// its server-side validator derive from it so they can never offer a courier the company
+// does not use. `SHIPPING_METHODS` below stays the FULL legacy registry because
+// `nameShipBy()` must still render every historical code stored on old rows.
+import { CARRIER_PROVINCE_COVERAGE } from "@/lib/forwarder/carrier-province-coverage";
+
 /** Legacy single-letter cargo-type code (PCS API "Shipment Report"). */
 export type LegacyCargoCode = "A" | "M" | "X" | "O" | "Z";
 
@@ -180,13 +186,20 @@ export function nameShipBy(code: string | null | undefined): string {
 // (the nameTh in SHIPPING_METHODS already carries the rebrand).
 // ════════════════════════════════════════════════════════════════════════
 
-/** Numeric carrier codes the legacy shop dropdown offers (optionHShipBy). */
-const SHOP_NUMERIC_CARRIER_CODES: readonly string[] = [
-  "2", "3", "21", "5", "6", "7", "9", "10", "11", "12", "13", "14", "15",
-  "16", "17", "18", "19", "20", "22", "23", "24", "25", "26", "27", "28",
-  "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40",
-  "41", "42", "43", "44", "45", "46",
-];
+/**
+ * Numeric carrier codes the shop dropdown offers.
+ *
+ * 🔴 2026-07-14 (owner) — CLOSED to the owner's workbook. This used to be the legacy
+ * `optionHShipBy()` set (2..46 minus 1/4/8/47), which still offered ~16 couriers the
+ * company no longer uses (5 Nim · 11 ไปรษณีย์ · 25 มังกรทอง · 35-46 …). The owner's
+ * rule: "บังคับให้เลือกให้ใส่แค่ที่มีในไฟล์ที่ส่งให้เท่านั้น · ไม่ให้เลือกหรือให้ใส่ นอกเหนือจาก
+ * data ตรงนี้" → derive from `CARRIER_PROVINCE_COVERAGE` (the generated workbook SOT) so
+ * this list can never drift from it. Province coverage itself is enforced by
+ * `checkCarrierForProvince()` in the write path.
+ */
+const SHOP_NUMERIC_CARRIER_CODES: readonly string[] = CARRIER_PROVINCE_COVERAGE
+  .map((c) => c.code)
+  .filter((c) => c !== "");
 
 export type ShipByOption = { code: string; label: string };
 

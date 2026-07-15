@@ -15,8 +15,10 @@ import { Explain, GUIDE } from "@/components/ui/tooltip";
 import { BillingRunActions } from "./billing-run-actions";
 import { BillingRunReceiptButton } from "./billing-run-receipt-button";
 import { BillingRunDeliveryAddressEditor } from "./billing-run-delivery-address-editor";
+import { BillingRunBuyerEditor } from "./billing-run-buyer-editor";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadCustomerAddressRows } from "@/lib/legacy/customer-address-options";
+import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
 
@@ -83,7 +85,26 @@ export default async function BillingRunDetailPage({
 
   // Customer saved-address rows for the reusable <CustomerAddressPicker> on the
   // "แก้ที่อยู่จัดส่ง (บนใบ)" editor (ship-to snapshot · DISPLAY-only).
-  const custAddresses = await loadCustomerAddressRows(createAdminClient(), header.userid);
+  const admin = createAdminClient();
+  const custAddresses = await loadCustomerAddressRows(admin, header.userid);
+
+  // The customer's CURRENT registered identity (tb_users.userCompany + tb_corporate)
+  // for the "✏️ แก้ผู้ซื้อ (บนเอกสาร)" editor's "ดึงข้อมูลนิติปัจจุบัน" prefill — a customer
+  // who upgraded to นิติ AFTER the bill was issued (owner 2026-07-15 · PR002). Resolved
+  // through the shared SOT so the prefill matches how the bill snapshots identity.
+  const [{ data: liveUser }, { data: liveCorpRow }] = await Promise.all([
+    admin.from("tb_users").select("\"userCompany\", \"userName\", \"userLastName\"").eq("userID", header.userid).maybeSingle<{ userCompany: string | null; userName: string | null; userLastName: string | null }>(),
+    admin.from("tb_corporate").select("corporatename, corporatenumber, corporateaddress").eq("userid", header.userid).maybeSingle<{ corporatename: string | null; corporatenumber: string | null; corporateaddress: string | null }>(),
+  ]);
+  const liveIdentity = resolveBillingIdentity({
+    userCompany: liveUser?.userCompany,
+    userName: liveUser?.userName,
+    userLastName: liveUser?.userLastName,
+    corp: liveCorpRow ?? null,
+  });
+  const liveCorp = liveIdentity.isJuristic && liveIdentity.taxId
+    ? { name: liveIdentity.name, taxId: liveIdentity.taxId, address: liveIdentity.registeredAddress }
+    : null;
 
   // Sign EVERY slip (multi · ภูม 2026-06-30) via the service-role client so any
   // accounting admin can view slips the SALES uploaded (private "slips" bucket,
@@ -218,6 +239,18 @@ export default async function BillingRunDetailPage({
             <div>{header.buyer_address || "—"}</div>
           </div>
         </div>
+        <BillingRunBuyerEditor
+          invoiceId={header.id}
+          current={{
+            isJuristic: header.is_juristic,
+            buyerName: header.buyer_name ?? "",
+            buyerTaxId: header.buyer_tax_id ?? "",
+            buyerAddress: header.buyer_address ?? "",
+            buyerBranch: header.buyer_branch ?? "",
+          }}
+          liveCorp={liveCorp}
+          isPaid={header.status === "paid"}
+        />
         <BillingRunDeliveryAddressEditor
           invoiceId={header.id}
           customerId={header.userid}
@@ -252,7 +285,13 @@ export default async function BillingRunDetailPage({
                       #{it.forwarder_id}
                     </Link>
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs">{it.forwarder?.ftrackingchn ?? "—"}</td>
+                  <td className="px-3 py-2 font-mono text-xs">
+                    {/* กดเข้าแทรคกิ้งย้อนดูรายการนี้ — link to the forwarder detail (per-tracking
+                        amount view), same target as the order-# above (was dead plain text). */}
+                    <Link href={`/admin/forwarders/${it.forwarder_id}`} className="text-primary-600 hover:underline">
+                      {it.forwarder?.ftrackingchn ?? "—"}
+                    </Link>
+                  </td>
                   <td className="px-3 py-2 text-right">{it.forwarder?.famount ?? "—"}</td>
                   <td className="px-3 py-2 text-right">{it.forwarder?.fweight ?? "—"}</td>
                   <td className="px-3 py-2 text-right">{it.forwarder?.fvolume ?? "—"}</td>

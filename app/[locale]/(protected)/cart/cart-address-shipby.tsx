@@ -42,6 +42,10 @@ export type CartAddressOption = {
 export type ShipByOption = {
   id:   string;
   name: string;
+  /** Delivery restriction for this carrier IN THIS PROVINCE, from the owner's
+   *  carrier×province workbook ("ไม่เข้าวังน้ำเขียว" · "ส่งแค่บางเลน" · "ไม่ไป เบตง").
+   *  Display-only — appended to the option label so the customer/staff sees it. */
+  note?: string;
 };
 
 export type CartAddressBlockMode =
@@ -351,7 +355,7 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
                   )}
                   {currentShipBy.map((opt) => (
                     <option key={opt.id} value={opt.id}>
-                      {opt.name}
+                      {opt.name}{opt.note ? ` — ${opt.note}` : ""}
                     </option>
                   ))}
                 </select>

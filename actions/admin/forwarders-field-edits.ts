@@ -85,6 +85,8 @@ import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
+import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
+import { canonicalProvince } from "@/lib/forwarder/carrier-province-coverage";
 
 /** Pacred's own delivery family (รับเองโกดัง / เหมาๆ / ด่วน) — works any province. */
 const PCS_FAMILY = new Set(["PCS", "PCSF", "PCSE"]);
@@ -98,8 +100,15 @@ const PCS_FAMILY = new Set(["PCS", "PCSF", "PCSE"]);
  *     HIDING quirk (the maomao branch hides the picker), NOT "Flash is the carrier". The real
  *     zone carrier is เหมาๆ. (This is why order #52142 นนทบุรี wrongly auto-picked "2"=Flash.)
  *   - Upcountry → the first province-eligible courier (COD collected at delivery).
- *   - Else keep the current carrier if still eligible / fall back to it (don't blank it).
+ *   - Else "" → leave the carrier alone (staff picks).
  * The result is ALWAYS staff-editable afterward via <EditShipByField>.
+ *
+ * 2026-07-14 (owner · CLOSED LIST): `getShipByOptionsForAddress` now returns ONLY the
+ * couriers in the owner's workbook for that province → the suggestion can no longer land
+ * on a retired/off-workbook courier. It returns "" (→ caller does NOT write fshipby)
+ * rather than falling back to the current value, so an existing free-text carrier
+ * ("สมใจสาย4", "เรียกรถขนส่ง" — ~35 such rows on prod) is never re-written into a row whose
+ * province cannot back it. The caller still runs `checkCarrierForProvince` before writing.
  */
 function suggestCarrierForAddress(
   current: string,
@@ -110,7 +119,7 @@ function suggestCarrierForAddress(
   if (isFreeShippingZip(ctx.zip)) return "PCSF"; // เหมาๆ zone → เหมาๆ, not the Flash-only quirk
   const eligible = getShipByOptionsForAddress(ctx);
   if (c && eligible.some((o) => o.id === c)) return c;
-  return eligible[0]?.id ?? c;
+  return eligible[0]?.id ?? "";
 }
 
 /** Re-price ftransportprice by carrier (mirrors adminUpdateForwarderShipBy · legacy L1595):
@@ -198,8 +207,15 @@ export async function adminPickForwarderAddress(
       amphoe:   (addr.addressdistrict ?? "").trim() || null,
       userID:   fwd.userid,
     });
+    // CLOSED-LIST backstop (owner 2026-07-14): never write a carrier the new province
+    // cannot back. Blank → leave fshipby untouched; staff picks from <EditShipByField>.
+    const carrierWritable =
+      carrier !== "" && checkCarrierForProvince(carrier, addr.addressprovince).ok;
     const fStatusInt = parseInt(fwd.fstatus ?? "0", 10);
-    const reprice = fStatusInt <= 5 ? repriceTransportForCarrier(carrier, Number(fwd.fvolume ?? 0)) : null;
+    const reprice =
+      carrierWritable && fStatusInt <= 5
+        ? repriceTransportForCarrier(carrier, Number(fwd.fvolume ?? 0))
+        : null;
 
     // 3. Copy the SNAPSHOT into tb_forwarder.fAddress* (legacy L1737-1739) + carrier + payMethod.
     const { error: updErr } = await admin
@@ -215,7 +231,7 @@ export async function adminPickForwarderAddress(
         faddressnote:        addr.addressnote ?? "",
         faddresstel:         addr.addresstel ?? "",
         faddresstel2:        addr.addresstel2 ?? "",
-        ...(carrier ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: addr.addresszipcode }) } : {}),
+        ...(carrierWritable ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: addr.addresszipcode }) } : {}),
         ...(reprice != null ? { ftransportprice: reprice } : {}),
         adminidupdate:       legacyAdminId,
       })
@@ -284,8 +300,14 @@ export async function adminUpdateForwarderAddressDetails(
     const carrier = suggestCarrierForAddress((fwd.fshipby ?? "").trim(), {
       zip: d.zipcode, province: d.province, amphoe: d.district || null, userID: fwd.userid,
     });
+    // CLOSED-LIST backstop (owner 2026-07-14) — see adminPickForwarderAddress.
+    const carrierWritable =
+      carrier !== "" && checkCarrierForProvince(carrier, d.province).ok;
     const fStatusInt = parseInt(fwd.fstatus ?? "0", 10);
-    const reprice = fStatusInt <= 5 ? repriceTransportForCarrier(carrier, Number(fwd.fvolume ?? 0)) : null;
+    const reprice =
+      carrierWritable && fStatusInt <= 5
+        ? repriceTransportForCarrier(carrier, Number(fwd.fvolume ?? 0))
+        : null;
 
     const { error: updErr } = await admin
       .from("tb_forwarder")
@@ -300,7 +322,7 @@ export async function adminUpdateForwarderAddressDetails(
         faddresstel:         d.tel,
         faddresstel2:        d.tel2,
         faddressnote:        d.note,
-        ...(carrier ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: d.zipcode }) } : {}),
+        ...(carrierWritable ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: d.zipcode }) } : {}),
         ...(reprice != null ? { ftransportprice: reprice } : {}),
         adminidupdate:       legacyAdminId,
       })
@@ -664,6 +686,11 @@ const FPCS_DEPOT_ADDRESS = {
 const shipBySchema = z.object({
   fId:     z.number().int().positive(),
   fShipBy: z.string().trim().min(1).max(50),
+  // Optional — the delivery จังหวัดปลายทาง the staff picked in <EditShipByField>. When a
+  // PRIVATE courier is chosen for a row whose faddressprovince was empty (address-less /
+  // juristic), this is the province the coverage guard checks against + is persisted so
+  // it's remembered (own-fleet PCS/PCSF/PCSE ignore it). Canonicalised server-side.
+  province: z.string().trim().max(60).optional(),
 });
 export type AdminUpdateForwarderShipByInput = z.infer<typeof shipBySchema>;
 
@@ -683,12 +710,13 @@ export async function adminUpdateForwarderShipBy(
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 
-    // 1. Read fStatus + fVolume (legacy L1586-1592 reads these to decide re-price).
+    // 1. Read fStatus + fVolume (legacy L1586-1592 reads these to decide re-price)
+    //    + faddressprovince (the CLOSED-LIST province gate, owner 2026-07-14).
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, fstatus, fvolume, fshipby")
+      .select("id, fstatus, fvolume, fshipby, faddressprovince")
       .eq("id", d.fId)
-      .maybeSingle<{ id: number; fstatus: string | null; fvolume: number | string | null; fshipby: string | null }>();
+      .maybeSingle<{ id: number; fstatus: string | null; fvolume: number | string | null; fshipby: string | null; faddressprovince: string | null }>();
     if (fwdErr) {
       console.error(`[adminUpdateForwarderShipBy read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
       return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
@@ -697,6 +725,19 @@ export async function adminUpdateForwarderShipBy(
     if ((fwd.fshipby ?? "").trim() === fShipBy) {
       return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (ผู้ขนส่งเดิม)" };
     }
+
+    // 🔴 CLOSED LIST (owner 2026-07-14/15) — a private courier must exist in the owner's
+    // workbook AND actually run in the delivery province. Own-fleet (PCS/PCSF/PCSE) is exempt.
+    // Enforce against the province the staff PICKED in <EditShipByField> (the picker filters by
+    // it); fall back to the stored faddressprovince when the client sent none. This is the REAL
+    // gate — the picker filter alone cannot stop a raw action post.
+    const pickedProvince = canonicalProvince(d.province ?? "");
+    const storedProvince = (fwd.faddressprovince ?? "").trim();
+    const guardProvince = pickedProvince || storedProvince;
+    const coverage = checkCarrierForProvince(fShipBy, guardProvince, {
+      previous: fwd.fshipby,
+    });
+    if (!coverage.ok) return { ok: false, error: coverage.error };
 
     // 2. Build the UPDATE. fShipBy + adminIDUpdate always; conditionally
     //    fTransportPrice + the PCS depot address (legacy L1595-1627).
@@ -721,6 +762,17 @@ export async function adminUpdateForwarderShipBy(
     // Legacy L1612-1626: 'PCS' rewrites the snapshot address to the depot.
     if (fShipBy === "PCS") Object.assign(update, FPCS_DEPOT_ADDRESS);
 
+    // Owner 2026-07-15 — persist the chosen delivery province for a PRIVATE courier when it
+    // differs from what's stored (own-fleet PCS/PCSF/PCSE need none; 'PCS' already rewrote the
+    // depot province above). This "remembers" the province so the บิล/เอกสาร province is right +
+    // next time the picker/guard work straight off faddressprovince. Already coverage-verified.
+    const isOwnFleetShipBy = ["PCS", "PCSF", "PCSE"].includes(fShipBy);
+    const persistedProvince =
+      !isOwnFleetShipBy && pickedProvince && pickedProvince !== storedProvince
+        ? pickedProvince
+        : null;
+    if (persistedProvince) update.faddressprovince = persistedProvince;
+
     const { error: updErr } = await admin
       .from("tb_forwarder")
       .update(update)
@@ -735,6 +787,7 @@ export async function adminUpdateForwarderShipBy(
       reprice: fStatusInt <= 5 && ["PCS", "PCSF", "PCSE"].includes(fShipBy)
         ? update.ftransportprice : "unchanged",
       pcsDepotAddr: fShipBy === "PCS",
+      provinceSet: persistedProvince ?? "unchanged",
     });
 
     revalidatePath(`/admin/forwarders/${d.fId}`);

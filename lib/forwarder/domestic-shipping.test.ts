@@ -9,6 +9,7 @@ import {
   resolveThShippingAutoPrice,
 } from "./domestic-shipping";
 import { MAO_FLAT_FEE, MAO_CARRIER_CODE } from "./mao-fee";
+import { getPrivateCarrierOptionsForProvince } from "@/lib/cart/ship-by-eligibility";
 
 // ── zone classification ──
 assert.equal(classifyDomesticZone({ addressID: "PCS", zip: "10110" }), "self_pickup", "PCS = self-pickup regardless of zip");
@@ -81,12 +82,35 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
 }
 
 // ── a single combined >50kg parcel trips Flash's 50kg cap → Flash omitted ──
+// (province supplied: 2026-07-14 the ขนส่งเอกชน options are CLOSED to the owner's workbook and
+//  derived from the delivery PROVINCE — no province → no private courier, by design.)
 {
   const { options } = domesticShippingOptions({
-    addressID: "123", zip: "74130", weightKg: 104, width: 55, length: 44, height: 31,
+    addressID: "123", zip: "74130", province: "สมุทรสาคร", amphoe: "กระทุ่มแบน",
+    weightKg: 104, width: 55, length: 44, height: 31,
   });
   assert.ok(!options.some((o) => o.carrier === "2"), "single 104kg parcel exceeds Flash 50kg cap → Flash omitted");
   assert.ok(options.some((o) => o.carrier === "24"), "manual J&T still offered when Flash unavailable");
+}
+
+// ── CLOSED LIST (owner 2026-07-14) ────────────────────────────────────────────
+// ไปรษณีย์ไทย (11) is NOT in the owner's workbook → must never be offered again.
+{
+  const { options } = domesticShippingOptions({
+    addressID: "123", zip: "74130", province: "สมุทรสาคร", amphoe: "กระทุ่มแบน", weightKg: 13,
+  });
+  assert.ok(!options.some((o) => o.carrier === "11"), "ไปรษณีย์ไทย (11) is retired — never offered");
+  const allowed = new Set(getPrivateCarrierOptionsForProvince("สมุทรสาคร").map((c) => c.id));
+  for (const o of options) {
+    if (o.carrier === "PCS" || o.carrier === "PCSE" || o.carrier === "PCSF") continue;
+    assert.ok(allowed.has(o.carrier), `${o.carrier} must be a workbook courier for สมุทรสาคร`);
+  }
+}
+{
+  // no province → no ขนส่งเอกชน at all (empty-state, never a free list)
+  const { options } = domesticShippingOptions({ addressID: "123", zip: "74130", weightKg: 13 });
+  const privates = options.filter((o) => !["PCS", "PCSE", "PCSF", "2"].includes(o.carrier));
+  assert.equal(privates.length, 0, "unknown province → no ขนส่งเอกชน offered");
 }
 
 // ── any one box >50kg in the parcel set → Flash omitted (can't auto-quote) ──

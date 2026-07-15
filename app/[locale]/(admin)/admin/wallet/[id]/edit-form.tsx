@@ -146,9 +146,11 @@ export function EditDateSlipForm({
         </p>
       )}
       {open && (
-        <form onSubmit={onSubmit} className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
-          <p className="text-[11px] font-semibold text-amber-900">
-            กรอกวันที่ให้ตรงกับสลิป (รูปแบบ ปี ค.ศ./เดือน/วัน · มิฉะนั้นระบบจะไม่จับรายการใกล้เคียง)
+        /* Legacy shape (ปอน 2026-07-15): a flat block — solid-red warning bar,
+           then the field, then the actions right-aligned. No amber card. */
+        <form onSubmit={onSubmit} className="mt-2 space-y-2">
+          <p className="rounded bg-red-600 px-2 py-1 text-[11px] font-semibold text-white">
+            *กรุณากรอกวันให้ตรงกับสลิป มิฉะนั้น ระบบรายการใกล้เคียงจะไม่ทำงาน [รูปแบบวัน (ปี ค.ศ./เดือน/วัน)]
           </p>
           {/* ภูม 2026-06-30 — 24 ชม. (เลิก AM/PM ที่พนักงานงง). Chrome ไม่ honor lang
               บน datetime-local → ใช้ DateTime24Field (date + เลือก ชม./นาที 00–23). */}
@@ -161,7 +163,16 @@ export function EditDateSlipForm({
           {error && (
             <p className="text-[11px] text-red-700">{error}</p>
           )}
-          <div className="flex gap-2">
+          {/* legacy: actions right-aligned · ยกเลิก as plain text · save in red */}
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => { setOpen(false); setError(null); setValue(toLocalInput(initialDateSlip)); }}
+              disabled={pending}
+              className="text-xs text-muted hover:text-foreground hover:underline disabled:opacity-50"
+            >
+              ยกเลิก
+            </button>
             <button
               type="submit"
               disabled={pending}
@@ -172,14 +183,6 @@ export function EditDateSlipForm({
               ) : (
                 needsRound1 ? "บันทึกวันที่โอน · ตรวจซ้ำ · ผ่านรอบ 1" : "บันทึกวันที่โอน และตรวจสอบรายการซ้ำ"
               )}
-            </button>
-            <button
-              type="button"
-              onClick={() => { setOpen(false); setError(null); setValue(toLocalInput(initialDateSlip)); }}
-              disabled={pending}
-              className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:bg-surface-alt"
-            >
-              ยกเลิก
             </button>
           </div>
         </form>
@@ -450,7 +453,7 @@ export function ApproveRejectForm({
               round-1 is still pending the banner points left + the approve is disabled. */}
           {!isWithdraw && needsRound1 && (
             <div className={`rounded-lg border px-3 py-1.5 text-[11px] mb-2 ${reviewedAt ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
-              {reviewedAt ? "✓ ตรวจสลิป รอบ 1 แล้ว — กดอนุมัติ + ตัดจ่าย (รอบ 2) ได้เลย" : "ขั้นที่ 1: ยืนยันวันที่โอน + ตรวจซ้ำ (รอบ 1) ทางด้านซ้ายก่อน แล้วจึงอนุมัติ + ตัดจ่าย (รอบ 2)"}
+              {reviewedAt ? "✓ ตรวจสลิป รอบ 1 แล้ว — กดอนุมัติ + ตัดจ่าย (รอบ 2) ได้เลย" : "ขั้นที่ 1: ยืนยันวันที่โอน + ตรวจซ้ำ (รอบ 1) ที่ช่อง ‘วันเวลาที่โอนในสลิป’ ด้านบนก่อน แล้วจึงอนุมัติ + ตัดจ่าย (รอบ 2)"}
             </div>
           )}
           {/* STEP-2 — doc-number panel (ออกเลขที่ใบเสร็จ) for a receipt-issuing slip. */}
@@ -470,7 +473,7 @@ export function ApproveRejectForm({
               type="button"
               onClick={approve}
               disabled={pending || round1Pending}
-              title={round1Pending ? "ยืนยันวันที่โอน + ตรวจซ้ำ (รอบ 1) ทางด้านซ้ายก่อน" : undefined}
+              title={round1Pending ? "ยืนยันวันที่โอน + ตรวจซ้ำ (รอบ 1) ที่ช่อง ‘วันเวลาที่โอนในสลิป’ ด้านบนก่อน" : undefined}
               className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-green-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
             >
               {pending ? (
@@ -500,7 +503,7 @@ export function ApproveRejectForm({
           {!isWithdraw && (
             <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-900">
               💡 ถ้าแค่ <b>ยอด</b> หรือ <b>วันที่</b> ไม่ตรงเล็กน้อย — กด
-              &lsquo;แก้ไขจำนวนเงิน&rsquo; / &lsquo;แก้ไขเวลา&rsquo; ทางด้านซ้าย
+              &lsquo;แก้ไขจำนวนเงิน&rsquo; (ด้านซ้าย) / &lsquo;แก้ไขเวลา&rsquo; (ด้านบน)
               แล้วกด <b>อนุมัติ</b> ได้เลย <b>ไม่ต้อง</b>ให้ลูกค้าทำสลิปใหม่ ·
               ปฏิเสธเฉพาะเมื่อสลิปใช้ไม่ได้จริง
             </div>

@@ -97,12 +97,14 @@ export function TbForwarderEditPanel(p: Props) {
   );
   // transport
   const [transport, setTransport] = useState<TransportType>(p.currentTransportType);
-  // ship-by carrier — "PCS"/"PCSF"/"PCSE" pick a preset, "_ext" = free-text other
+  // ship-by carrier — own-fleet presets only ("PCS"/"PCSF"/"PCSE"). ขนส่งเอกชน is picked on the
+  // detail page (province-filtered, closed to the owner's workbook — owner 2026-07-14).
   const isPresetShipBy = SHIP_BY_PCS_OPTIONS.some((o) => o.v === p.currentShipBy);
   const [shipByMode, setShipByMode] = useState<string>(
-    isPresetShipBy ? p.currentShipBy : (p.currentShipBy ? "_ext" : "PCS"),
+    isPresetShipBy ? p.currentShipBy : (p.currentShipBy || "PCS"),
   );
-  const [shipByExt, setShipByExt] = useState<string>(isPresetShipBy ? "" : p.currentShipBy);
+
+
   // pricing basis
   const [amountCount, setAmountCount] = useState<AmountCount>(p.currentAmountCount);
   // cost-adjust (3 manual money columns)
@@ -118,7 +120,11 @@ export function TbForwarderEditPanel(p: Props) {
   const coverInputRef = useRef<HTMLInputElement>(null);
 
   // The carrier string actually submitted: preset code OR the free-text name.
-  const effectiveShipBy = shipByMode === "_ext" ? shipByExt.trim() : shipByMode;
+  // 🔴 owner 2026-07-14 (CLOSED list) — the free-text "ผู้ขนส่งภายนอก (กรอกชื่อเอง)" escape hatch is
+  // GONE: ขนส่งเอกชน may only be picked from the owner's workbook, filtered by the delivery
+  // province (this panel has no province context → own-fleet only; pick a courier on the detail
+  // page's <EditShipByField>). The server refuses anything else regardless.
+  const effectiveShipBy = SHIP_BY_PCS_OPTIONS.some((o) => o.v === shipByMode) ? shipByMode : "";
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>, okText: string) {
     setMsg(null);
@@ -165,7 +171,7 @@ export function TbForwarderEditPanel(p: Props) {
 
   async function onSaveShipBy() {
     const code = effectiveShipBy;
-    if (!code) { setMsg({ kind: "err", text: "เลือกผู้ขนส่ง หรือกรอกชื่อผู้ขนส่งภายนอก" }); return; }
+    if (!code) { setMsg({ kind: "err", text: "เลือกผู้ขนส่งจากรายชื่อ (ขนส่งเอกชน เลือกที่หน้ารายละเอียด · ขึ้นตามจังหวัดปลายทาง)" }); return; }
     if (code === p.currentShipBy) { setMsg({ kind: "err", text: "ไม่มีการเปลี่ยนแปลง" }); return; }
     const extra = code === "PCS"
       ? "\n\nผู้ขนส่ง PCS = รับเองที่โกดัง — ที่อยู่จัดส่งจะถูกแทนที่ด้วยที่อยู่โกดัง Pacred (สมุทรสาคร)"
@@ -308,19 +314,15 @@ export function TbForwarderEditPanel(p: Props) {
           {SHIP_BY_PCS_OPTIONS.map((o) => (
             <option key={o.v} value={o.v}>{o.l}</option>
           ))}
-          <option value="_ext">ผู้ขนส่งภายนอก (กรอกชื่อเอง)…</option>
+          {!isPresetShipBy && p.currentShipBy !== "" && (
+            <option value={p.currentShipBy} disabled>
+              {p.currentShipBy} (ค่าเดิม · เลือกใหม่ไม่ได้)
+            </option>
+          )}
         </select>
-        {shipByMode === "_ext" && (
-          <input
-            type="text"
-            value={shipByExt}
-            onChange={(e) => setShipByExt(e.target.value)}
-            disabled={pending}
-            maxLength={50}
-            placeholder="ชื่อผู้ขนส่งภายนอก เช่น Flash Express"
-            className={INPUT_CLS}
-          />
-        )}
+        <p className="text-[11px] text-muted">
+          “ขนส่งเอกชน” เลือกได้ที่หน้ารายละเอียด — ระบบจะขึ้นเฉพาะเจ้าที่วิ่งในจังหวัดปลายทาง (ตามไฟล์พื้นที่ขนส่ง) · พิมพ์ชื่อขนส่งเองไม่ได้
+        </p>
         <button
           type="button"
           onClick={onSaveShipBy}

@@ -41,6 +41,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
+import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
 import { sendNotification } from "@/lib/notifications";
 import { logger, redactId } from "@/lib/logger";
 import { maybeCompleteShopOrder } from "@/lib/admin/maybe-complete-shop-order";
@@ -209,6 +210,16 @@ export async function spawnForwardersFromShopOrder(
 
         // fShipBy / fTransportType — prefer per-tracking override, else header.
         const fShipBy        = (t.fShipBy ?? header.hshipby ?? "PCS").slice(0, 10);
+        // 🔴 CLOSED LIST (owner 2026-07-14) — only when the admin OVERRIDES the carrier for
+        // this tracking. Carrying `header.hshipby` through is exempt (`previous`), so an old
+        // shop order holding a legacy free-text carrier ("สมใจสาย4" · "เรียกรถขนส่ง" — ~35 such
+        // rows on prod) still spawns its forwarder rows.
+        {
+          const coverage = checkCarrierForProvince(fShipBy, header.haddressprovince, {
+            previous: header.hshipby,
+          });
+          if (!coverage.ok) return { ok: false, error: coverage.error };
+        }
         const fTransportType = (t.fTransportType ?? header.htransporttype ?? "1").slice(0, 1);
         const fFreeShipping  = (t.fFreeShipping ?? header.hfreeshipping ?? "0").slice(0, 1);
         // fShippingService — legacy shops.php L1671-1673: 0 always when fShipBy='PCSF',

@@ -55,6 +55,7 @@ import { ADDRESSES } from "@/components/seo/site";
 import { modeFromPref, prefFromMode } from "@/lib/tax/tax-doc-mode";
 import { GENERAL_COID_VALUES, isGeneralCoid } from "@/lib/forwarder/coid";
 import { fetchCorporateNameMap } from "@/lib/admin/customer-identity";
+import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — clip to 10 chars (tb_forwarder.adminid* is varchar(10)).
@@ -541,6 +542,14 @@ export async function adminCreateForwarder(
           addresstel:         addrRow.addresstel,
           addresstel2:        addrRow.addresstel2 ?? "",
         };
+      }
+
+      // 🔴 CLOSED LIST (owner 2026-07-14) — the ขนส่งเอกชน must be in the owner's workbook
+      // AND run in this delivery province. Own-fleet (PCS/PCSF/PCSE) exempt. The form's
+      // picker is already province-filtered; this refuses a raw action post.
+      {
+        const coverage = checkCarrierForProvince(d.shipBy, addr.addressprovince);
+        if (!coverage.ok) return { ok: false, error: coverage.error };
       }
 
       // fShippingService — legacy sets to 0 always at create-time (lines 111-114).
