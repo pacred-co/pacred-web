@@ -297,22 +297,15 @@ export function ReceiptsVoidTable({
                     {/* ③ วันที่ออก (rdate) */}
                     <td className="px-2 py-2 whitespace-nowrap text-slate-700">{fmtDate(r.rdate)}</td>
                     {/* ④ สลิป — tb_receipt has NO imagesslip column; the slip lives on the
-                        payment that funded it: the wallet-deposit (refwhid → tb_wallet_hs)
-                        OR — for a billing-run receipt — the ใบวางบิล (slip_path). Link there. */}
+                        wallet payment record (tb_wallet_hs) that funded it — refwhid, or
+                        derived via reforder=fid. Links to /admin/wallet/[id] (legacy
+                        wallet/deposit page). No record → "—". */}
                     <td className="px-2 py-2 text-center">
-                      {r.refwhid ? (
+                      {(r.refwhid ?? r.paymentWalletId) ? (
                         <Link
-                          href={`/admin/wallet/${r.refwhid}`}
+                          href={`/admin/wallet/${r.refwhid ?? r.paymentWalletId}`}
                           className="text-sky-700 hover:underline whitespace-nowrap"
-                          title="ดูสลิปที่รายการเติมเงินที่อ้างอิง"
-                        >
-                          กดเพื่อดูสลิป
-                        </Link>
-                      ) : r.billingRunId ? (
-                        <Link
-                          href={`/admin/billing-run/${r.billingRunId}`}
-                          className="text-sky-700 hover:underline whitespace-nowrap"
-                          title="ดูสลิปที่ใบวางบิลที่อ้างอิง"
+                          title="ดูสลิปที่รายการชำระเงินที่อ้างอิง"
                         >
                           กดเพื่อดูสลิป
                         </Link>
@@ -381,20 +374,13 @@ export function ReceiptsVoidTable({
                         >
                           ดูใบเสร็จ
                         </Link>
-                        {/* อ้างอิงชำระเงิน — the payment that funded this receipt:
-                            wallet-deposit (refwhid) OR the ใบวางบิล (billingRunId). Legacy
-                            shows it on every row; Pacred pays via both, so we link to
-                            whichever funded it → button on every real receipt. */}
-                        {r.refwhid ? (
+                        {/* อ้างอิงชำระเงิน → the wallet payment record (tb_wallet_hs) that
+                            funded this receipt = /admin/wallet/[id], EXACTLY like legacy
+                            (home.php L269 · wallet/deposit/[refWHID]). refwhid direct, or
+                            derived via reforder=fid. No record → no button (legacy refWHID=0). */}
+                        {(r.refwhid ?? r.paymentWalletId) ? (
                           <Link
-                            href={`/admin/wallet/${r.refwhid}`}
-                            className="rounded-full bg-[#FF9149] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#f57c2e] whitespace-nowrap"
-                          >
-                            อ้างอิงชำระเงิน
-                          </Link>
-                        ) : r.billingRunId ? (
-                          <Link
-                            href={`/admin/billing-run/${r.billingRunId}`}
+                            href={`/admin/wallet/${r.refwhid ?? r.paymentWalletId}`}
                             className="rounded-full bg-[#FF9149] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#f57c2e] whitespace-nowrap"
                           >
                             อ้างอิงชำระเงิน
