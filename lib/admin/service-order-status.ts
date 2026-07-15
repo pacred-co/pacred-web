@@ -20,13 +20,14 @@
 // emphasised so a queue is scannable at a glance). Shown under the status pill on
 // every list/detail that reads this SOT.
 export const HSTATUS_CFG: Record<string, { label: string; chip: string; next: string; act: boolean }> = {
-  "1":  { label: "รอดำเนินการ",      chip: "bg-amber-100 text-amber-800 border border-amber-300",       next: "ตรวจ/เปิดราคา",        act: true  },
-  "2":  { label: "รอชำระเงิน",        chip: "bg-red-100 text-red-700 border border-red-300",             next: "รอลูกค้าชำระ/ตรวจสลิป", act: true  },
-  "3":  { label: "สั่งสินค้า",         chip: "bg-blue-100 text-blue-700 border border-blue-300",          next: "สั่งซื้อจากจีน",        act: true  },
-  "4":  { label: "รอร้านจีนจัดส่ง",   chip: "bg-indigo-100 text-indigo-700 border border-indigo-300",    next: "รอร้านส่งเข้าโกดังจีน",  act: false },
-  "40": { label: "ถึงโกดังจีน",        chip: "bg-teal-100 text-teal-800 border border-teal-300",          next: "รอเปิดฝากนำเข้า",       act: true  },
-  "5":  { label: "สำเร็จ",            chip: "bg-emerald-100 text-emerald-700 border border-emerald-300", next: "เสร็จสิ้น — ตามต่อที่ฝากนำเข้า", act: false },
-  "6":  { label: "ยกเลิก",            chip: "bg-gray-100 text-gray-600 border border-gray-300",          next: "—",                    act: false },
+  // owner 2026-07-15 — "แสบตาแบบ PCS" (mirrors FSTATUS_CFG · LOUD solid chip · state-encoding).
+  "1":  { label: "รอดำเนินการ",      chip: "bg-amber-500 text-white border border-amber-600 font-bold",         next: "ตรวจ/เปิดราคา",        act: true  },
+  "2":  { label: "รอชำระเงิน",        chip: "bg-red-600 text-white border border-red-700 font-bold",             next: "รอลูกค้าชำระ/ตรวจสลิป", act: true  },
+  "3":  { label: "สั่งสินค้า",         chip: "bg-blue-600 text-white border border-blue-700 font-bold",           next: "สั่งซื้อจากจีน",        act: true  },
+  "4":  { label: "รอร้านจีนจัดส่ง",   chip: "bg-indigo-500 text-white border border-indigo-600 font-bold",       next: "รอร้านส่งเข้าโกดังจีน",  act: false },
+  "40": { label: "ถึงโกดังจีน",        chip: "bg-teal-500 text-white border border-teal-600 font-bold",           next: "รอเปิดฝากนำเข้า",       act: true  },
+  "5":  { label: "สำเร็จ",            chip: "bg-emerald-600 text-white border border-emerald-700 font-bold",     next: "เสร็จสิ้น — ตามต่อที่ฝากนำเข้า", act: false },
+  "6":  { label: "ยกเลิก",            chip: "bg-gray-500 text-white border border-gray-600 font-bold",           next: "—",                    act: false },
 };
 
 export function hstatusBadge(hstatus: string): { label: string; chip: string; next: string; act: boolean } {

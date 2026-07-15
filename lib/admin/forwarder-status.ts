@@ -48,13 +48,17 @@ export const FSTATUS_CFG: Record<
   FStatus,
   { label: string; chip: string; rowBg: string; next: string; act: boolean }
 > = {
-  "1": { label: "รอเข้าโกดังจีน",  chip: "bg-yellow-100 text-yellow-800 border border-yellow-300",  rowBg: "bg-yellow-50",  next: "รอสินค้าเข้าโกดังจีน",  act: false },
-  "2": { label: "ถึงโกดังจีนแล้ว", chip: "bg-cyan-100 text-cyan-800 border border-cyan-300",        rowBg: "bg-cyan-50",    next: "รอส่งมาไทย",          act: false },
-  "3": { label: "กำลังส่งมาไทย",   chip: "bg-pink-100 text-pink-700 border border-pink-300",        rowBg: "bg-pink-50",    next: "กำลังมา — รอถึงไทย",   act: false },
-  "4": { label: "ถึงไทยแล้ว",       chip: "bg-[#d7ccc8] text-[#5d4037] border border-[#a1887f]",     rowBg: "bg-[#efebe9]",  next: "ตรวจ/แจ้งเก็บเงิน",     act: true  },
-  "5": { label: "รอชำระเงิน",       chip: "bg-red-100 text-red-700 border border-red-300",           rowBg: "bg-red-50",     next: "รอลูกค้าชำระ/ตรวจสลิป", act: true  },
-  "6": { label: "เตรียมส่ง",        chip: "bg-blue-100 text-blue-700 border border-blue-300",        rowBg: "bg-blue-50",    next: "มอบงานคนขับ/จัดรถ",     act: true  },
-  "7": { label: "ส่งแล้ว",          chip: "bg-emerald-100 text-emerald-700 border border-emerald-300", rowBg: "bg-emerald-50", next: "เสร็จสิ้น",            act: false },
+  // owner 2026-07-15 — "จี๊ดจ๊าดไม่พอ · แสบตาแบบ PCS · สีสถานะที่ต้องมอง/กด ต้องเด่น" →
+  // REVERSES the 2026-06-19 soften: the chip is now a LOUD solid fill (state-encoding ·
+  // easy to find/read/click). rowBg bumped -50→-100 for a touch more presence (still
+  // readable). Actionable statuses (4/5/6 · act:true) get the strongest fills.
+  "1": { label: "รอเข้าโกดังจีน",  chip: "bg-yellow-400 text-yellow-950 border border-yellow-500 font-bold",  rowBg: "bg-yellow-100",  next: "รอสินค้าเข้าโกดังจีน",  act: false },
+  "2": { label: "ถึงโกดังจีนแล้ว", chip: "bg-cyan-500 text-white border border-cyan-600 font-bold",           rowBg: "bg-cyan-100",    next: "รอส่งมาไทย",          act: false },
+  "3": { label: "กำลังส่งมาไทย",   chip: "bg-pink-500 text-white border border-pink-600 font-bold",           rowBg: "bg-pink-100",    next: "กำลังมา — รอถึงไทย",   act: false },
+  "4": { label: "ถึงไทยแล้ว",       chip: "bg-[#8d6e63] text-white border border-[#5d4037] font-bold",         rowBg: "bg-[#d7ccc8]",   next: "ตรวจ/แจ้งเก็บเงิน",     act: true  },
+  "5": { label: "รอชำระเงิน",       chip: "bg-red-600 text-white border border-red-700 font-bold",             rowBg: "bg-red-100",     next: "รอลูกค้าชำระ/ตรวจสลิป", act: true  },
+  "6": { label: "เตรียมส่ง",        chip: "bg-blue-600 text-white border border-blue-700 font-bold",           rowBg: "bg-blue-100",    next: "มอบงานคนขับ/จัดรถ",     act: true  },
+  "7": { label: "ส่งแล้ว",          chip: "bg-emerald-600 text-white border border-emerald-700 font-bold",     rowBg: "bg-emerald-100", next: "เสร็จสิ้น",            act: false },
 };
 
 export function fstatusBadge(fstatus: string): { label: string; chip: string; rowBg: string; next: string; act: boolean } {
