@@ -50,8 +50,16 @@ export function MomoGuideButton() {
                 <strong className="text-rose-600">⚠</strong> ไม่ตรง (รวมดูที่แท็บ ❗ ไม่ตรง).
               </li>
               <li>
+                <strong>📦↳ กางกล่องย่อย 1:1:</strong> แทรคที่ MOMO แตกหลายกล่อง (น้ำหนักไม่เท่ากัน) จะ<strong>กางแถวย่อยจริงต่อกล่อง</strong> (📦↳) ใต้แถวหลัก —
+                โชว์ tracking/ขนาด/จำนวน/น้ำหนัก/คิว ต่อกล่องจริง ตรงกับ MOMO Live 1:1 (เลขเฉลี่ยในแถวหลักจะได้ไม่หลอกตา).
+              </li>
+              <li>
+                <strong>🚩 flag &quot;MOMO มั่ว&quot;:</strong> แถวที่มี <span className="font-semibold text-red-700">🚩 พื้นแดง</span> = ข้อมูลกล่องของ MOMO (box_detail) <strong>ขัดกันเอง</strong>
+                {" "}(แถวย่อยรวมหนักเกินก้อนรวม) → ต้อง<strong>อัพ packing list แต้ม</strong> ที่ตู้นั้น (auto ซ่อมไม่ได้) · กด pill 🚩 บนแถบบน = กรองเฉพาะแถวมั่ว.
+              </li>
+              <li>
                 <strong>ตรวจ PR ให้ถูก:</strong> คลิกรูปป้ายเพื่อดู PR บนกล่อง · ป้าย <span className="font-semibold text-emerald-700">พบในระบบ</span> = PR ใช้ได้ ·{" "}
-                <span className="font-semibold text-red-700">ไม่มีในระบบ</span> = ต้องแก้ PR ก่อน (ข้อ 6).
+                <span className="font-semibold text-red-700">ไม่มีในระบบ</span> = ต้องแก้ PR ก่อน (ข้อ 8).
               </li>
               <li>
                 <strong>แก้ข้อมูลที่ MOMO ส่งผิด:</strong> คลิกค่าที่มีดินสอ <span className="text-amber-600">✎</span> เพื่อแก้ได้ทันที —
