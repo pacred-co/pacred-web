@@ -882,6 +882,56 @@ export async function listStaffSalesFlags(): Promise<AdminActionResult<{ rows: S
         isSales:  (r.adminStatusSale ?? "").trim() === "1",
       });
     }
+
+    // 4) UNION the Pacred-native active staff that have NO tb_admin row yet — the
+    //    "hollow account" gap (owner 2026-07-15 · "2 หน้าไม่ลิงค์กัน" · เซล ลูกนัท+แบม
+    //    created via /admin/admins แต่ mirror ล้มเหลว → ไม่โผล่ที่นี่ → ติ๊กเป็นเซลไม่ได้).
+    //    Surface them here (un-flagged) so EVERY staffer on /admin/admins appears on the
+    //    sales-team page and can be flagged in one toggle — adminSetSalesRepFlag mirrors
+    //    them into tb_admin + links the bridge on flag-ON. Keyed by admin_login_id (= the
+    //    tb_admin adminID key). Best-effort: a failure here never breaks the legacy list.
+    const covered = new Set(rows.map((r) => r.adminID));
+    const { data: activeAdmins, error: aaErr } = await admin
+      .from("admins")
+      .select("profile_id")
+      .eq("is_active", true);
+    if (aaErr) {
+      console.error("[listStaffSalesFlags] active admins fetch failed", { message: aaErr.message });
+    } else {
+      const staffIds = [...new Set(((activeAdmins ?? []) as Array<{ profile_id: string }>).map((a) => a.profile_id).filter(Boolean))];
+      if (staffIds.length > 0) {
+        const { data: staffProfs, error: spErr } = await admin
+          .from("profiles")
+          .select("id, admin_login_id, first_name, last_name, phone, avatar_url")
+          .in("id", staffIds)
+          .not("admin_login_id", "is", null);
+        if (spErr) {
+          console.error("[listStaffSalesFlags] staff profiles fetch failed", { message: spErr.message });
+        } else {
+          for (const p of (staffProfs ?? []) as Array<{
+            id: string; admin_login_id: string | null; first_name: string | null;
+            last_name: string | null; phone: string | null; avatar_url: string | null;
+          }>) {
+            const loginId = (p.admin_login_id ?? "").trim();
+            if (!loginId || covered.has(loginId)) continue; // already has a tb_admin row → shown above
+            covered.add(loginId);
+            const full = `${(p.first_name ?? "").trim()} ${(p.last_name ?? "").trim()}`.trim();
+            const rawPhone = (p.phone ?? "").trim();
+            rows.push({
+              adminID:  loginId,
+              name:     full || loginId,
+              fullName: full || loginId,
+              tel:      rawPhone.startsWith("+66") ? "0" + rawPhone.slice(3) : rawPhone,
+              photo:    usableImageSrcOr(p.avatar_url, "") || null,
+              isSales:  false, // hollow → not yet a rep; the toggle mirrors + flags on ON
+            });
+          }
+        }
+      }
+    }
+
+    // sales reps first, then the rest alphabetically (stable for the UI).
+    rows.sort((a, b) => (a.isSales === b.isSales ? a.adminID.localeCompare(b.adminID) : a.isSales ? -1 : 1));
     return { ok: true, data: { rows } };
   });
 }
@@ -960,9 +1010,9 @@ export async function adminSetSalesRepFlag(
       }
       const { data: prof, error: profErr } = await admin
         .from("profiles")
-        .select("first_name, last_name, email, admin_login_id")
+        .select("id, first_name, last_name, email, admin_login_id")
         .eq("admin_login_id", adminID)
-        .maybeSingle<{ first_name: string | null; last_name: string | null; email: string | null; admin_login_id: string | null }>();
+        .maybeSingle<{ id: string; first_name: string | null; last_name: string | null; email: string | null; admin_login_id: string | null }>();
       if (profErr) console.error("[adminSetSalesRepFlag profile lookup]", { adminID, message: profErr.message });
       const mirror = await ensureLegacyAdminRow(admin, {
         adminID,
@@ -975,6 +1025,17 @@ export async function adminSetSalesRepFlag(
       if (!mirror.ok) {
         console.error("[adminSetSalesRepFlag mirror]", { adminID, error: mirror.error });
         return { ok: false, error: "ไม่พบพนักงาน (สถานะ active) รหัสนี้ และสร้างไม่สำเร็จ" };
+      }
+      // Bridge tb_admin.adminID ↔ the real profile so the sales-team display + the
+      // transfer-rep flow resolve the live identity (owner 2026-07-15 "ให้ลิงก์กัน").
+      // ensureLegacyAdminRow creates the tb_admin row but does NOT set this link.
+      if (prof?.id) {
+        const { error: bridgeErr } = await admin
+          .from("admin_contact_extras")
+          .update({ legacy_admin_id: adminID })
+          .eq("profile_id", prof.id)
+          .or("legacy_admin_id.is.null,legacy_admin_id.eq.");
+        if (bridgeErr) console.error("[adminSetSalesRepFlag bridge]", { adminID, message: bridgeErr.message });
       }
     }
     await logAdminAction(adminId, "admin.set_sales_flag", "tb_admin", adminID, { isSales });
