@@ -311,7 +311,9 @@ console.log("computeForwarderDebitBatch — เหมาๆ once per DELIVERY (c
   assertClose("same-container: total = 600 (500 + ฿100 once, NOT 700)", b.total_thb, 600);
 }
 {
-  // DIFFERENT containers = separate deliveries → ฿100 EACH (guardrail c: no regression).
+  // PER-BILL rule (owner 2026-07-15): DIFFERENT containers in ONE bill/pay = ฿100 ONCE
+  // (a single collection event), NOT ฿100 per container. This is the "เก็บเหมาๆ ซ้ำตอนรวม
+  // หลายการจ่ายแทนลูกค้า" fix — matches computeForwarderCollectTotal (self-pay = ฿100/batch).
   const b = computeForwarderDebitBatch(
     [
       row({ id: 1, ftrackingchn: "SF-A", fcabinetnumber: "GZS260626-1", fshipby: "PRF", ftransportprice: 0, ftotalprice: 250 }),
@@ -319,10 +321,10 @@ console.log("computeForwarderDebitBatch — เหมาๆ once per DELIVERY (c
     ],
     { userId: "PR143", isCorporate: false },
   );
-  assertEq("diff-container: TWO เหมาๆ anchors", b.lines.filter((l) => l.isPcsfFirst).length, 2);
-  assertClose("diff-container: each base carries +100", b.lines[0].price_thb, 350);
-  assertClose("diff-container: second base +100 too", b.lines[1].price_thb, 350);
-  assertClose("diff-container: total = 700 (500 + ฿100 × 2 containers)", b.total_thb, 700);
+  assertEq("diff-container: ONE เหมาๆ anchor per bill", b.lines.filter((l) => l.isPcsfFirst).length, 1);
+  assertClose("diff-container: first base carries +100", b.lines[0].price_thb, 350);
+  assertClose("diff-container: second base NO fee (per-bill)", b.lines[1].price_thb, 250);
+  assertClose("diff-container: total = 600 (500 + ฿100 once, NOT 700)", b.total_thb, 600);
 }
 {
   // split-box guard preserved: base + -N siblings of ONE container → only the base anchors.
@@ -339,7 +341,7 @@ console.log("computeForwarderDebitBatch — เหมาๆ once per DELIVERY (c
   assertClose("split-box: total = 400 (300 + ฿100 once)", b.total_thb, 400);
 }
 {
-  // no fcabinetnumber → per-base-tracking preserved (2 distinct base trackings → ฿100 each).
+  // no fcabinetnumber, 2 distinct base trackings in ONE bill → still ฿100 ONCE (per-bill).
   const b = computeForwarderDebitBatch(
     [
       row({ id: 1, ftrackingchn: "AAA", fshipby: "PRF", ftransportprice: 0, ftotalprice: 250 }),
@@ -347,8 +349,8 @@ console.log("computeForwarderDebitBatch — เหมาๆ once per DELIVERY (c
     ],
     { userId: "PR143", isCorporate: false },
   );
-  assertEq("no-container: falls back to per-base-tracking (2 anchors)", b.lines.filter((l) => l.isPcsfFirst).length, 2);
-  assertClose("no-container: total = 700 (unchanged legacy per-tracking)", b.total_thb, 700);
+  assertEq("no-container: ONE anchor per bill", b.lines.filter((l) => l.isPcsfFirst).length, 1);
+  assertClose("no-container: total = 600 (500 + ฿100 once)", b.total_thb, 600);
 }
 // ── B1 (2026-07-13) N-box เหมาๆ = ฿100 ONCE ─────────────────────────────────
 // resolveAutoThShippingFill now auto-fills a เหมาๆ row as PRF · ftransportprice ฿0

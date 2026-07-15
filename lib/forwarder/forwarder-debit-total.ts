@@ -52,7 +52,7 @@
  */
 
 import { MAO_FLAT_FEE, isMaoCarrier } from "./mao-fee";
-import { baseTracking, trackingSuffix } from "@/lib/admin/momo-bill-header";
+import { trackingSuffix } from "@/lib/admin/momo-bill-header";
 
 /** One unpaid forwarder row's pricing inputs (lowercase = PostgREST casing). */
 export interface ForwarderDebitRow {
@@ -158,20 +158,20 @@ export function computeForwarderDebitBatch(
   const userId = (opts.userId ?? "").trim();
   const exemptPcsf = userId === "PCS999";
 
-  // ── pass 1: locate the เหมาๆ flat-fee ANCHOR row(s) — ONE per DELIVERY batch ──
-  // owner 2026-07-14 (ส่งลอบเดียวกัน ไม่เก็บเหมาๆ สองลอบ): the เหมาๆ ฿100 is the flat
-  // in-Thailand DELIVERY fee → ONE physical delivery = ONE fee. A delivery batch = the
-  // CONTAINER (fcabinetnumber): all of a customer's trackings in one container arrive +
-  // ship together in one truck run. So the fee fires ONCE per delivery-batch key, where
-  // the key = the container (falling back to the base tracking when there's no container,
-  // then the row id). Two BASE trackings of one container (52118+52119 · GZS260626-1) →
-  // ฿100 ONCE, not ฿200. Trackings in DIFFERENT containers keep their own ฿100 (separate
-  // deliveries).
+  // ── pass 1: locate the เหมาๆ flat-fee ANCHOR — ONE per BILL / pay-batch ──
+  // owner 2026-07-15 (rule ratified · "เก็บเหมาๆ ซ้ำตอนรวมหลายการจ่ายแทนลูกค้า"): the เหมาๆ
+  // ฿100 fires ONCE per COLLECTION EVENT — one ใบวางบิล / one pay-on-behalf transaction —
+  // regardless of how many containers it spans. The whole `rows` set IS that one event, so
+  // there is exactly ONE anchor across the entire batch. This aligns the admin/consolidate
+  // engine with the customer SELF-PAY engine (computeForwarderCollectTotal · already ฿100
+  // once per batch) → หน้าลูกค้า == ในงาน. (Supersedes the 2026-07-14 per-CONTAINER rule:
+  // per-bill is the strictly-lower, single-collection reading the owner chose — a bill over
+  // 2 containers = ฿100, not ฿200. Same-container 52118+52119 = ฿100 still holds.)
   //
-  // A row can only ANCHOR if it is a เหมาๆ-eligible BASE row (suffix 0). That preserves
-  // the split-box guard (owner 2026-06-23 · กันเก็บตังเบิ้ล): a -N box sub-row never
-  // anchors, so paying it solo never re-fires the fee; only the base row can carry it.
-  // Legacy callers that don't pass ftrackingchn fall back to first-PCSF-in-batch.
+  // A row can only ANCHOR if it is a เหมาๆ-eligible BASE row (suffix 0). That preserves the
+  // split-box guard (owner 2026-06-23 · กันเก็บตังเบิ้ล): a -N box sub-row never anchors, so
+  // paying it solo never fires the fee; only the base row can carry it. Legacy callers that
+  // don't pass ftrackingchn fall back to the first PCSF row in the batch.
   const haveTracking = rows.some((r) => (r.ftrackingchn ?? "").trim() !== "");
   let firstPcsfIdx = -1;
   rows.forEach((r, i) => {
@@ -182,18 +182,10 @@ export function computeForwarderDebitBatch(
     // eligible base = the base tracking (suffix 0); legacy (no tracking) = first in batch.
     return haveTracking ? trackingSuffix(r.ftrackingchn) === 0 : i === firstPcsfIdx;
   };
-  // The delivery-batch key: container wins; else the base tracking; else the row id.
-  const deliveryKey = (r: ForwarderDebitRow): string =>
-    (r.fcabinetnumber ?? "").trim() || baseTracking(r.ftrackingchn) || String(r.id);
-  const seenDeliveryKeys = new Set<string>();
+  // ONE anchor for the whole batch = the FIRST เหมาๆ-eligible base row (per-bill rule).
   const anchorIds = new Set<string>();
-  rows.forEach((r, i) => {
-    if (!isMaoBase(r, i)) return;
-    const key = deliveryKey(r);
-    if (seenDeliveryKeys.has(key)) return; // already have the เหมาๆ for this delivery
-    seenDeliveryKeys.add(key);
-    anchorIds.add(String(r.id));
-  });
+  const firstAnchor = rows.find((r, i) => isMaoBase(r, i));
+  if (firstAnchor) anchorIds.add(String(firstAnchor.id));
   const isMaoAnchor = (r: ForwarderDebitRow): boolean => anchorIds.has(String(r.id));
   const anchorIdx = rows.findIndex((r) => isMaoAnchor(r));
 
