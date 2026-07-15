@@ -6,6 +6,7 @@ import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
 import { ForwarderStepRevert } from "./forwarder-step-revert";
 import { CreateOrderBillButton } from "./create-order-bill-button";
+import { IssueReceiptButton } from "./issue-receipt-button";
 import { AdvanceBillConfirmButton } from "./advance-bill-confirm-button";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 // 2026-06-18 (ภูม) — ที่อยู่จัดส่งสินค้า: when a delivery carrier (not 'PCS'
@@ -850,6 +851,11 @@ async function tryRenderTbForwarder(
     }
   }
   const hasLinkedDocs = linkedBills.length + linkedReceipts.length + linkedDriverRuns.length > 0;
+  // A PAID order (fstatus ≥ 6 = เตรียมส่ง/กำลังจัดส่ง/สำเร็จ) with NO active receipt → offer to
+  // ออกใบเสร็จ (owner 2026-07-15 · pay-on-behalf auto-issue is best-effort so some paid orders
+  // have money taken but no receipt · PR215/PR217). Show the doc block for these too.
+  const fPaid = Number.isFinite(parseInt(r.fstatus ?? "", 10)) && parseInt(r.fstatus ?? "", 10) >= 6;
+  const isPaidNoReceipt = fPaid && linkedReceipts.length === 0;
   const BILL_STATUS_LABEL: Record<string, string> = { issued: "ออกบิลแล้ว", paid: "ชำระแล้ว", cancelled: "ยกเลิก" };
   const RECEIPT_STATUS_LABEL: Record<string, string> = { "0": "ร่าง", "1": "ชำระแล้ว", "2": "ยกเลิก", "3": "รอชำระ" };
 
@@ -1382,7 +1388,7 @@ async function tryRenderTbForwarder(
 
         {/* ── เอกสารของออเดอร์นี้ (owner 2026-07-15 · "เข้าไปดูได้หมด") — one-click jump to
            every issued ใบวางบิล / ใบเสร็จ / ใบส่งของ covering this shipment (F9). ── */}
-        {hasLinkedDocs && (
+        {(hasLinkedDocs || isPaidNoReceipt) && (
           <div className="mt-3 rounded-2xl border border-sky-200 bg-sky-50/50 p-4">
             <h4 className="text-sm font-bold text-sky-800">เอกสารของออเดอร์นี้</h4>
             <div className="mt-2 space-y-2 text-sm">
@@ -1397,17 +1403,23 @@ async function tryRenderTbForwarder(
                   ))}
                 </div>
               )}
-              {linkedReceipts.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-muted">🧾 ใบเสร็จ :</span>
-                  {linkedReceipts.map((rc) => (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-muted">🧾 ใบเสร็จ :</span>
+                {linkedReceipts.length > 0 ? (
+                  linkedReceipts.map((rc) => (
                     <Link key={rc.id} href={`/admin/accounting/forwarder-invoice/${rc.id}`}
                       className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-white px-2.5 py-1 font-mono text-xs text-emerald-700 hover:bg-emerald-100">
                       {rc.rid}{rc.status ? ` · ${RECEIPT_STATUS_LABEL[rc.status] ?? rc.status}` : ""} →
                     </Link>
-                  ))}
-                </div>
-              )}
+                  ))
+                ) : (
+                  /* PAID but no receipt → ออกใบเสร็จ (owner 2026-07-15 · closes the money loop). */
+                  <>
+                    <span className="text-[11px] text-amber-700">ยังไม่มีใบเสร็จ (เก็บเงินแล้ว)</span>
+                    <IssueReceiptButton fid={r.id} />
+                  </>
+                )}
+              </div>
               {linkedDriverRuns.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-muted">🚚 ใบส่งของ :</span>
