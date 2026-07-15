@@ -530,7 +530,10 @@ export function CntListTable({
       </div>
 
       <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
-        <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
+        {/* Compact + clearer grid to match legacy #myTable (owner 2026-07-16 "ตารางบวมไป ·
+            zebra ของ legacy ชัดกว่า"): tight cell padding (py-1 body / py-1.5 head · legacy
+            .table td padding 0.25rem) + a visible #ddd-ish grid. Zebra lives on the rows. */}
+        <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-[#dcdfe4] [&>thead>tr>th]:py-1.5 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-[#dcdfe4] [&>tbody>tr>td]:py-1">
           {/* Legacy report-cnt table header — black-on-white, NOT uppercase (owner
               2026-07-16 fidelity pass · matches report-cnt.php #myTable thead). */}
           <thead className="bg-white dark:bg-surface text-[11px] text-foreground/80">
@@ -625,9 +628,11 @@ export function CntListTable({
               // interaction feedback for the checkbox + floating action bar).
               // Subtle zebra on the un-selected rows (ภูม 2026-06-30 · ไม่ลายตา ·
               // legacy PCS has this). The selection highlight wins when ticked.
+              // Zebra CLEARER than before (owner 2026-07-16 "ของเราดูขาวหมด · legacy ชัดกว่า"):
+              // a visible light-gray on even rows + a clear hover, like legacy .table-striped.
               const rowTint = isOn
                 ? "bg-emerald-50 ring-1 ring-inset ring-emerald-300"
-                : "even:bg-surface-alt/20 hover:bg-surface-alt/40";
+                : "even:bg-[#f1f4f8] hover:bg-[#e6edf6]";
               const isExpanded = expanded.has(r.fcabinetnumber);
               // report-cnt #4 (C) — for a MOMO "SEA0x" placeholder cabinet, the
               // real container / sack number MOMO carries (resolved server-side).
