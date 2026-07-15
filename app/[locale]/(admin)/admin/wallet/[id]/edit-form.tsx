@@ -20,7 +20,8 @@
  * (avoids stale client state vs. the server-fetched summary cards).
  */
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Calendar, CheckCircle2, XCircle, Loader2, Pencil } from "lucide-react";
 import { RejectReasonPicker } from "@/components/admin/reject-reason-picker";
@@ -42,6 +43,9 @@ import {
   // it dispatches deposit-vs-withdraw on the `kind` prop below.
   adminApproveWithdraw,
   adminRejectWithdraw,
+  // ตรวจสลิปซ้ำสด (owner 2026-07-15): กรอกวันที่ → เช็คซ้ำ → กดบันทึกไม่ได้ถ้าซ้ำ.
+  checkSlipDuplicatePreview,
+  type SlipDuplicateMatch,
 } from "@/actions/admin/wallet-hs";
 
 // ────────────────────────────────────────────────────────────
@@ -73,8 +77,71 @@ export function EditDateSlipForm({
   const [value, setValue] = useState<string>(toLocalInput(initialDateSlip));
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // ตรวจสลิปซ้ำสด (owner 2026-07-15): พอกรอกวันที่โอน → เช็คว่าสลิป (วัน+ยอด+ลูกค้า)
+  // ซ้ำในระบบไหม → ถ้าซ้ำ กดบันทึกไม่ได้ + โชว์รายการที่ซ้ำ (วันเวลา/ชื่อ/ยอด).
+  // แค่ preview เตือนหน้าจอ (read-only) — gate จริงยังอยู่ที่ round-2 (findDuplicateSlips).
+  const [dupMatches, setDupMatches] = useState<SlipDuplicateMatch[]>([]);
+  const [dupChecking, setDupChecking] = useState(false);
+  const [confirmDupOpen, setConfirmDupOpen] = useState(false); // popup ยืนยันเมื่อพบซ้ำ
+
+  useEffect(() => {
+    let alive = true;
+    // ทุก setState อยู่ใน timeout (async) — เลี่ยง setState ตรงๆ ใน effect (cascading render).
+    // เปิด+มีวัน → debounce 400ms แล้วเช็คซ้ำ · ไม่งั้น → เคลียร์ทันที (0ms).
+    const t = window.setTimeout(() => {
+      if (!alive) return;
+      if (!open || !value) {
+        setDupMatches([]);
+        setDupChecking(false);
+        return;
+      }
+      setDupChecking(true);
+      checkSlipDuplicatePreview({ id, dateslipIso: value })
+        .then((res) => {
+          if (!alive) return;
+          setDupChecking(false);
+          setDupMatches(res.ok && res.data ? res.data.matches : []);
+        })
+        .catch(() => {
+          if (!alive) return;
+          setDupChecking(false);
+          setDupMatches([]);
+        });
+    }, open && value ? 400 : 0);
+    return () => {
+      alive = false;
+      window.clearTimeout(t);
+    };
+  }, [value, id, open]);
+  const hasDup = dupMatches.length > 0;
 
   const round1Pending = needsRound1 && !reviewedAt;
+
+  // บันทึกจริง — เขียนวันที่โอน + ผ่านรอบ 1 (best-effort stamp). เรียกได้ทั้งกรณี
+  // ไม่ซ้ำ (กดบันทึกตรงๆ) และกรณีซ้ำแล้ว admin กด "ดำเนินการต่อ" ใน popup.
+  function doSave() {
+    setConfirmDupOpen(false);
+    setError(null);
+    startTransition(async () => {
+      const res = await adminUpdateWalletHsDateSlip({ id, dateslip: value });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      // STEP-1 fold: กรอกวันที่โอน → ตรวจรายการซ้ำ → ผ่านรอบ 1 = ต่อเนื่องขั้นเดียว.
+      // ต้องผ่านรอบ 1 สำเร็จก่อน จึงจะไปหน้าออกใบเสร็จ (รอบ 2). ถ้ารอบ 1 พลาด →
+      // โชว์เหตุผล (ไม่ค้างเงียบๆ) แล้วไม่ refresh (คงหน้าเดิมให้ลองใหม่).
+      if (needsRound1) {
+        const r1 = await adminReviewSlipRound1({ id });
+        if (!r1.ok) {
+          setError(r1.error);
+          return;
+        }
+      }
+      setOpen(false);
+      router.refresh(); // reviewed_at ถูก stamp → server re-render → หน้าออกใบเสร็จ (รอบ 2)
+    });
+  }
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -83,21 +150,12 @@ export function EditDateSlipForm({
       setError("กรุณาเลือกวันที่");
       return;
     }
-    startTransition(async () => {
-      const res = await adminUpdateWalletHsDateSlip({ id, dateslip: value });
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      // STEP-1 fold: กรอกวันที่โอน → ตรวจรายการซ้ำ → ผ่านรอบ 1 = ต่อเนื่องขั้นเดียว.
-      // Stamp round-1 on success for the payment-slip types. Best-effort — a stamp
-      // failure doesn't undo the saved date (the admin can re-confirm round-1).
-      if (needsRound1) {
-        await adminReviewSlipRound1({ id });
-      }
-      router.refresh();
-      setOpen(false);
-    });
+    // พบสลิปซ้ำ → ไม่บล็อกทันที · เปิด popup แจ้ง + ถาม "ดำเนินการต่อ?" (owner 2026-07-15)
+    if (hasDup) {
+      setConfirmDupOpen(true);
+      return;
+    }
+    doSave();
   }
 
   // Confirm round-1 WITHOUT re-editing the date (a row that already has a
@@ -159,6 +217,12 @@ export function EditDateSlipForm({
             onChange={setValue}
             max={toLocalInput(new Date().toISOString()).split("T")[0]}
           />
+          {/* ตรวจสลิปซ้ำสด — ถ้าซ้ำ กดบันทึกไม่ได้ (owner 2026-07-15) */}
+          {dupChecking && value ? (
+            <p className="inline-flex items-center gap-1 text-[11px] text-muted">
+              <Loader2 className="h-3 w-3 animate-spin" /> กำลังตรวจสลิปซ้ำในระบบ…
+            </p>
+          ) : null}
           {error && (
             <p className="text-[11px] text-red-700">{error}</p>
           )}
@@ -174,7 +238,7 @@ export function EditDateSlipForm({
             </button>
             <button
               type="submit"
-              disabled={pending}
+              disabled={pending || dupChecking}
               className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-primary-600 disabled:opacity-50"
             >
               {pending ? (
@@ -186,6 +250,69 @@ export function EditDateSlipForm({
           </div>
         </form>
       )}
+
+      {/* popup ยืนยันเมื่อพบสลิปซ้ำ (owner 2026-07-15) — แจ้งรายการซ้ำ + ถาม "ดำเนินการต่อ?" */}
+      {confirmDupOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4"
+              onClick={() => setConfirmDupOpen(false)}
+            >
+              <div
+                className="w-[min(460px,94vw)] rounded-2xl bg-white p-4 shadow-2xl dark:bg-surface"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <p className="text-base font-bold text-red-700">⚠️ พบสลิปซ้ำ {dupMatches.length} รายการ</p>
+                <p className="mt-1 text-xs text-muted">
+                  มีรายการต่อไปนี้ที่วัน + ยอดตรงกับสลิปนี้ — คุณต้องการดำเนินการต่อหรือไม่?
+                </p>
+                <div className="mt-2 max-h-52 space-y-1 overflow-y-auto">
+                  {dupMatches.map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[11px] text-red-900"
+                    >
+                      <span>วันที่/เวลา: <b className="font-mono">{fmtDupStamp(m.dateSlip)}</b></span>
+                      <span>ชื่อ: <b>{m.name}</b></span>
+                      <span>ยอด: <b className="font-mono">{m.amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</b></span>
+                      <a
+                        href={`/admin/wallet/${m.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-auto font-mono font-semibold text-red-700 underline hover:text-red-800"
+                      >
+                        #{m.id} →
+                      </a>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDupOpen(false)}
+                    disabled={pending}
+                    className="rounded-lg px-3 py-2 text-sm text-muted hover:text-foreground hover:underline disabled:opacity-50"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="button"
+                    onClick={doSave}
+                    disabled={pending}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-4 py-2 text-sm font-bold text-white hover:bg-primary-600 disabled:opacity-50"
+                  >
+                    {pending ? (
+                      <><Loader2 className="h-4 w-4 animate-spin" /> กำลังบันทึก…</>
+                    ) : (
+                      "ดำเนินการต่อ · บันทึก · ผ่านรอบ 1"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -310,6 +437,7 @@ export function ApproveRejectForm({
   needsRound1 = false,
   reviewedAt = null,
   receiptContext = null,
+  showRound1Banner = true,
 }: {
   id: number;
   hasDateSlip: boolean;
@@ -342,6 +470,12 @@ export function ApproveRejectForm({
    * before it's minted. Absent → no panel (the row issues no receipt at approve).
    */
   receiptContext?: { fid: number; userid: string; dateSlipIso: string | null } | null;
+  /**
+   * 2-screen split (owner 2026-07-15): when the round-1 status is already shown by
+   * a separate date-panel header above, suppress this form's own round-1 banner to
+   * avoid a duplicate "✓ ตรวจสลิป รอบ 1 แล้ว". Default true (single-screen).
+   */
+  showRound1Banner?: boolean;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<"idle" | "reject">("idle");
@@ -394,7 +528,14 @@ export function ApproveRejectForm({
             overrideRid: overrideRid ?? undefined,
           });
       if (res.ok) {
-        router.refresh();
+        // จบลูป (owner 2026-07-15): a receipt-issuing DIRECT slip → หลังยืนยัน + สร้าง
+        // ใบเสร็จแล้ว พาไปหน้าประวัติใบเสร็จ (ที่ใบเสร็จเพิ่งออกไปอยู่). อื่นๆ (topup /
+        // withdraw · ไม่ออกใบเสร็จ) → refresh อยู่หน้าเดิม แสดงสถานะ "ทำรายการแล้ว".
+        if (!isWithdraw && receiptContext) {
+          router.push("/admin/accounting/receipts");
+        } else {
+          router.refresh();
+        }
       } else {
         setError(res.error);
       }
@@ -450,7 +591,7 @@ export function ApproveRejectForm({
           {/* A4 — show the 2 rounds explicitly (owner 2026-06-21). STEP-1 fold: round-1
               is confirmed on the LEFT date panel; the approve here is round-2. When
               round-1 is still pending the banner points left + the approve is disabled. */}
-          {!isWithdraw && needsRound1 && (
+          {!isWithdraw && needsRound1 && showRound1Banner && (
             <div className={`rounded-lg border px-3 py-1.5 text-[11px] mb-2 ${reviewedAt ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
               {reviewedAt ? "✓ ตรวจสลิป รอบ 1 แล้ว — กดอนุมัติ + ตัดจ่าย (รอบ 2) ได้เลย" : "ขั้นที่ 1: ยืนยันวันที่โอน + ตรวจซ้ำ (รอบ 1) ที่ช่อง ‘วันเวลาที่โอนในสลิป’ ด้านบนก่อน แล้วจึงอนุมัติ + ตัดจ่าย (รอบ 2)"}
             </div>
@@ -554,4 +695,13 @@ function toLocalInput(iso: string | null | undefined): string {
   if (Number.isNaN(d.getTime())) return "";
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Duplicate-slip stamp: `2026-07-15 09:33` (Gregorian, minute) for the dup list. */
+function fmtDupStamp(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

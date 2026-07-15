@@ -69,12 +69,12 @@
  */
 
 import { notFound } from "next/navigation";
-import { Plus, User as UserIcon, AlertTriangle } from "lucide-react";
+import { Plus, User as UserIcon } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
-import { SlipImage } from "@/components/admin/slip-image";
+import { SlipCompare } from "@/components/admin/slip-compare";
 import { EditDateSlipForm, ApproveRejectForm } from "./edit-form";
 import { classifyWalletHsRow } from "@/lib/wallet/classify-approve-row";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
@@ -183,9 +183,19 @@ type SimilarRow = {
   id: number;
   status: string | null;
   imagesslip: string | null;
+  dateslip: string | null;
+  amount: number | string | null;
+  userid: string | null;
 };
 
-type SimilarResolved = SimilarRow & { slipUrl: string | null };
+type SimilarResolved = {
+  id: number;
+  status: string | null;
+  slipUrl: string | null;
+  dateSlip: string | null;
+  amount: number;
+  name: string;
+};
 
 export default async function AdminWalletDetail({
   params,
@@ -413,7 +423,7 @@ export default async function AdminWalletDetail({
       dayEnd.setHours(23, 59, 59, 999);
       const { data: simRaw, error: simErr } = await admin
         .from("tb_wallet_hs")
-        .select("id,status,imagesslip")
+        .select("id,status,imagesslip,dateslip,amount,userid")
         .eq("amount", row.amount)
         .neq("id", row.id)
         .neq("type", "5")
@@ -423,8 +433,29 @@ export default async function AdminWalletDetail({
         console.error(`[tb_wallet_hs similar] failed`, { code: simErr.code, message: simErr.message });
       } else {
         const sims = (simRaw ?? []) as unknown as SimilarRow[];
+        // resolve each dup's customer name (junk "0"/"" → empty · นิติ→corp · else ชื่อคน)
+        const cleanNm = (s: string | null | undefined) => { const v = (s ?? "").trim(); return v && v !== "0" ? v : ""; };
+        const uids = [...new Set(sims.map((s) => s.userid).filter((x): x is string => !!x))];
+        const nameByUid = new Map<string, string>();
+        if (uids.length) {
+          const { data: us, error: usErr } = await admin.from("tb_users").select("userID,userName,userLastName,userCompany").in("userID", uids);
+          const { data: cs, error: csErr } = await admin.from("tb_corporate").select("userid,corporatename").in("userid", uids);
+          if (usErr) console.error(`[similar names: tb_users]`, { code: usErr.code, message: usErr.message });
+          if (csErr) console.error(`[similar names: tb_corporate]`, { code: csErr.code, message: csErr.message });
+          const corpBy = new Map((cs ?? []).map((c) => [(c as { userid: string }).userid, (c as { corporatename: string | null }).corporatename]));
+          for (const u of (us ?? []) as Array<{ userID: string; userName: string | null; userLastName: string | null; userCompany: string | null }>) {
+            nameByUid.set(u.userID, cleanNm(corpBy.get(u.userID)) || `${cleanNm(u.userName)} ${cleanNm(u.userLastName)}`.trim() || cleanNm(u.userCompany) || u.userID);
+          }
+        }
         similar = await Promise.all(
-          sims.map(async (s) => ({ ...s, slipUrl: await resolveLegacyUrl(s.imagesslip, "slip") })),
+          sims.map(async (s) => ({
+            id: s.id,
+            status: s.status,
+            slipUrl: await resolveLegacyUrl(s.imagesslip, "slip"),
+            dateSlip: s.dateslip,
+            amount: Number(s.amount ?? 0),
+            name: (s.userid ? nameByUid.get(s.userid) : undefined) || s.userid || "—",
+          })),
         );
       }
     }
@@ -469,6 +500,20 @@ export default async function AdminWalletDetail({
   // left date panel (<EditDateSlipForm>), so pass the flag + stamp there too.
   const reviewedAt = (row as { reviewed_at?: string | null }).reviewed_at ?? null;
   const needsRound1 = row.type === "1" || row.type === "4" || row.type === "8";
+
+  // Slip-compare (owner 2026-07-15): the customer's real slip (green frame) beside
+  // the duplicate slip(s) (red frame). Customer slip = own slip, else the paired
+  // topup's slip (cascade). One reason string preserves the old 6-branch fallbacks.
+  const customerSlipUrl = slipUrl ?? partnerSlipUrl;
+  const customerSlipMissingReason: string | null = customerSlipUrl
+    ? null
+    : row.imagesslip
+      ? `⚠ ไม่สามารถสร้างลิงก์สลิปได้ (${row.imagesslip})`
+      : partnerSlipFilename
+        ? `⚠ ไม่สามารถสร้างลิงก์สลิปจากรายการคู่กันได้ (#${partnerTopupId})`
+        : !shouldHaveOwnSlip
+          ? `ไม่จำเป็นต้องมีสลิปสำหรับรายการประเภทนี้ (${typeLabel} — หักจากกระเป๋าโดยตรง)`
+          : "ลูกค้ายังไม่ได้อัพโหลดสลิป";
 
   // ────────────────────────────────────────────────────────────
   // RENDER
@@ -536,8 +581,8 @@ export default async function AdminWalletDetail({
                 genuine transfer. */}
             <KV label="เวลาทำรายการ" value={row.date ? formatLegacyStamp(row.date) : "—"} />
 
-            <div className="text-[18.48px]">
-              <span className="text-muted">จาก: </span>
+            <div className="flex items-center gap-1.5 text-[18.48px]">
+              <span className="text-muted">จาก:</span>
               <Link
                 href={`/admin/customers/${userid}`}
                 className="inline-flex items-center gap-2 text-primary-600 hover:underline"
@@ -603,7 +648,7 @@ export default async function AdminWalletDetail({
               {isCredit || isDirectSlip || isDebit ? (
                 <>
                   <span className="font-bold text-[#28D094]">จำนวนเงินในสลิป : </span>
-                  <span className="font-mono font-bold text-[#28D094]">
+                  <span className="font-mono font-extrabold text-[#28D094]">
                     +{amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
                   </span>
                 </>
@@ -645,59 +690,21 @@ export default async function AdminWalletDetail({
               )}
             </div>
 
-            {/* ── SLIP (legacy: bottom of the LEFT pane, centred, under a small
-                   "Pay slip" caption) — Wave 19 BUG #4's 6-branch render kept
-                   verbatim; only its position + centring changed. ── */}
-            <div className="pt-2">
-              <p className="mb-2 text-center text-xs text-muted">Pay slip</p>
-              {slipUrl ? (
-                <a
-                  href={slipUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block"
-                >
-                  <SlipImage src={slipUrl} className="mx-auto max-w-full" fallbackClassName="h-40 w-full" />
-                </a>
-              ) : row.imagesslip ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                  <p className="font-semibold">⚠ ไม่สามารถสร้างลิงก์สลิปได้</p>
-                  <p className="mt-1 font-mono text-[11px] break-all text-amber-800">
-                    filename = {row.imagesslip}
-                  </p>
-                </div>
-              ) : partnerSlipUrl ? (
-                /* No "สลิปนี้มาจากรายการคู่กัน" banner here — the right pane already
-                   states it ("📎 สลิปอยู่ที่รายการชำระเงินคู่กัน #N →"), so this was
-                   the same fact twice on one screen. */
-                <a
-                  href={partnerSlipUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block"
-                >
-                  <SlipImage src={partnerSlipUrl} className="mx-auto max-w-full" fallbackClassName="h-40 w-full" />
-                </a>
-              ) : partnerSlipFilename ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                  <p className="font-semibold">⚠ ไม่สามารถสร้างลิงก์สลิปจากรายการคู่กันได้</p>
-                  <p className="mt-1 font-mono text-[11px] break-all text-amber-800">
-                    partner #{partnerTopupId} · filename = {partnerSlipFilename}
-                  </p>
-                </div>
-              ) : !shouldHaveOwnSlip ? (
-                <div className="rounded-lg border border-dashed border-border bg-surface-alt/40 p-4 text-center text-xs text-muted">
-                  <p className="font-medium">ไม่จำเป็นต้องมีสลิปสำหรับรายการประเภทนี้</p>
-                  <p className="mt-1 italic">
-                    ({typeLabel} — ระบบหักเงินจากกระเป๋าโดยตรง ไม่มีการโอนจากธนาคาร)
-                  </p>
-                </div>
-              ) : (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-center text-xs text-red-700 italic">
-                  ลูกค้ายังไม่ได้อัพโหลดสลิป
-                </div>
-              )}
-            </div>
+            {/* ── SLIP COMPARE (owner 2026-07-15): 2 กรอบเทียบกัน — เขียว = สลิป
+                   ลูกค้าตัวจริง · แดง = สลิปที่ซ้ำ (+N นับจำนวน · เลื่อนดูได้). ── */}
+            <SlipCompare
+              customerSlipUrl={customerSlipUrl}
+              customerSlipMissingReason={customerSlipMissingReason}
+              customerName={customerName}
+              dups={similar.map((s) => ({
+                id: s.id,
+                slipUrl: s.slipUrl,
+                dateSlip: s.dateSlip,
+                amount: s.amount,
+                name: s.name,
+                status: s.status,
+              }))}
+            />
           </div>
 
           {/* RIGHT — status + linked payments + date/approve pane */}
@@ -716,7 +723,7 @@ export default async function AdminWalletDetail({
                 "สถานะรายการ : รอดำเนินการ" — i.e. the pill sits INSIDE the heading,
                 not beside it. Ours had them as siblings at 16px, so the line read
                 small and screen readers announced the label without its value. */}
-            <h3 className="mb-[7px] flex items-center justify-end gap-2 text-[21.14px] font-light text-[#464855] dark:text-foreground">
+            <h3 className="mb-[7px] flex items-center justify-end gap-2 text-[21.14px] font-medium text-[#464855] dark:text-foreground">
               สถานะรายการ :
               <span className={`rounded-full border px-3 py-0.5 text-[14px] font-medium ${STATUS_CLS[status]}`}>
                 {STATUS_LABEL[status] ?? `status ${status}`}
@@ -725,31 +732,34 @@ export default async function AdminWalletDetail({
 
             {(isCredit ? paymentTargets.length > 0 : Boolean(isDebit && row.reforder)) && (
               <div className="border-t border-border pt-3 text-right space-y-1">
-                <p className="text-sm font-semibold text-foreground">รายการนี้มาพร้อมกับรายการชำระเงิน</p>
+                <p className="text-base font-semibold text-foreground">รายการนี้มาพร้อมกับรายการชำระเงิน</p>
                 {(isCredit ? paymentTargets.map((t) => t.hno) : [row.reforder!]).map((hno, i) => {
                   const c = classifyHno(hno);
                   const due = dueByHno.get(hno);
                   return (
                     <div key={`${hno}-${i}`}>
-                      <p className="text-xs">
-                        <span className="text-sky-700">
-                          {i + 1}. รายการชำระเงิน{c.kind === "shop" ? "ฝากสั่งซื้อ" : "ฝากนำเข้า"} :{" "}
-                        </span>
+                      <p className="text-sm">
                         {c.href ? (
-                          <Link href={c.href} className="font-mono font-bold text-sky-700 hover:underline">{c.label} →</Link>
+                          <Link href={c.href} className="text-sky-700 hover:underline">
+                            {i + 1}. รายการชำระเงิน{c.kind === "shop" ? "ฝากสั่งซื้อ" : "ฝากนำเข้า"} :{" "}
+                            <span className="font-mono font-bold">{c.label} →</span>
+                          </Link>
                         ) : (
-                          <span className="font-mono font-bold">{c.label}</span>
+                          <span className="text-sky-700">
+                            {i + 1}. รายการชำระเงิน{c.kind === "shop" ? "ฝากสั่งซื้อ" : "ฝากนำเข้า"} :{" "}
+                            <span className="font-mono font-bold">{c.label}</span>
+                          </span>
                         )}
                       </p>
                       {due !== undefined && (
-                        <p className="text-[11px] text-muted">
+                        <p className="text-xs text-muted">
                           ยอดที่ต้องชำระ : {due.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                         </p>
                       )}
                     </div>
                   );
                 })}
-                <p className="text-xs font-semibold text-green-700">
+                <p className="mt-1 border-t border-border/70 pt-2 text-[21.14px] font-medium text-green-700">
                   จำนวนเงินในสลิป : {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                   <span className="ml-3 text-red-700">
                     ยอดรวมทุกรายการ : {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
@@ -758,12 +768,18 @@ export default async function AdminWalletDetail({
               </div>
             )}
 
-            {/* ── วันเวลาที่โอนในสลิป — the date editor (legacy: right pane, above
-                   the action buttons). Round-1 is stamped here, so the approve
-                   below reads as one continuous top-to-bottom flow. ── */}
-            {isPending && (
+            {/* ── SLIP-VERIFY FLOW · แยกเป็น 2 หน้า (owner 2026-07-15) ──
+                   หน้า 1 = กรอกวันเวลาที่โอน (รอบ 1) → กดบันทึก → advance →
+                   หน้า 2 = ออกเลขที่ใบเสร็จ + อนุมัติ (รอบ 2). รายการที่ไม่ต้อง
+                   รอบ 1 (ถอนเงิน type='3') ข้ามไปหน้า 2 เลย. Completed → audit. */}
+
+            {/* หน้า 1 — วันเวลาที่โอนในสลิป (ยังไม่ผ่านรอบ 1) */}
+            {isPending && needsRound1 && !reviewedAt && (
               <div className="border-t border-border pt-3">
                 <p className="text-sm font-semibold text-foreground">วันเวลาที่โอนในสลิป</p>
+                <p className="mt-0.5 mb-1 text-[11px] text-muted">
+                  ขั้นที่ 1 · กรอกวันเวลาให้ตรงสลิป แล้วกดบันทึก จึงจะไปหน้าออกใบเสร็จ (รอบ 2)
+                </p>
                 <EditDateSlipForm
                   id={row.id}
                   initialDateSlip={row.dateslip}
@@ -773,91 +789,56 @@ export default async function AdminWalletDetail({
               </div>
             )}
 
-            {/* Pending → action form · Completed → audit line.
-                P1-25/26 (ADR-0018): for a customer-withdraw row (type='3')
-                the form dispatches to adminApproveWithdraw/Reject (approve =
-                pay out, no balance change · reject = refund). Every other
-                pending type keeps the deposit approve/reject path. */}
-            {isPending ? (
-              <ApproveRejectForm
-                id={row.id}
-                hasDateSlip={Boolean(row.dateslip)}
-                kind={row.type === "3" ? "withdraw" : "deposit"}
-                // ชั้น-1 dup gate: only a pending('1')/approved('2') same-day
-                // same-amount twin is a double-pay risk (a rejected '3' twin is
-                // harmless) — mirror the server's findDuplicateSlips predicate.
-                hasDuplicate={similar.some(
-                  (s) => s.status === "1" || s.status === "2",
+            {/* หน้า 2 — ออกเลขที่ใบเสร็จ + อนุมัติ (ผ่านรอบ 1 แล้ว · หรือไม่ต้องรอบ 1) */}
+            {isPending && (!needsRound1 || reviewedAt) && (
+              <>
+                {/* header ย่อ: ผ่านรอบ 1 แล้ว + ปุ่มแก้ไขเวลา (ย้อนกลับได้) */}
+                {needsRound1 && reviewedAt && (
+                  <div className="border-t border-border pt-3">
+                    <EditDateSlipForm
+                      id={row.id}
+                      initialDateSlip={row.dateslip}
+                      needsRound1={needsRound1}
+                      reviewedAt={reviewedAt}
+                      showLabel="แก้ไขเวลาที่โอน"
+                    />
+                  </div>
                 )}
-                // A4 two-round verify — customer payment slips (type 1/4/8) must
-                // be round-1 reviewed (on the left date panel) before approve (round-2).
-                needsRound1={needsRound1}
-                reviewedAt={reviewedAt}
-                // STEP-2 doc-number panel (2026-07-07): a ฝากนำเข้า DIRECT slip issues
-                // a ใบเสร็จ at approve time → let accounting see/edit the receipt เลขที่
-                // + live dup-check before it's minted.
-                receiptContext={
-                  isDirectSlip && row.reforder && /^\d+$/.test(String(row.reforder))
-                    ? { fid: Number(row.reforder), userid, dateSlipIso: row.dateslip }
-                    : null
-                }
-              />
-            ) : (
+                <ApproveRejectForm
+                  id={row.id}
+                  hasDateSlip={Boolean(row.dateslip)}
+                  kind={row.type === "3" ? "withdraw" : "deposit"}
+                  // ชั้น-1 dup gate: only a pending('1')/approved('2') same-day
+                  // same-amount twin is a double-pay risk (a rejected '3' twin is
+                  // harmless) — mirror the server's findDuplicateSlips predicate.
+                  hasDuplicate={similar.some(
+                    (s) => s.status === "1" || s.status === "2",
+                  )}
+                  needsRound1={needsRound1}
+                  reviewedAt={reviewedAt}
+                  // round-1 status shown in the header above → don't repeat the banner
+                  showRound1Banner={false}
+                  // STEP-2 doc-number panel: a ฝากนำเข้า DIRECT slip issues a ใบเสร็จ at
+                  // approve → let accounting see/edit the receipt เลขที่ before it's minted.
+                  receiptContext={
+                    isDirectSlip && row.reforder && /^\d+$/.test(String(row.reforder))
+                      ? { fid: Number(row.reforder), userid, dateSlipIso: row.dateslip }
+                      : null
+                  }
+                />
+              </>
+            )}
+
+            {/* Completed → audit line */}
+            {!isPending && (
               <div className="rounded-xl border border-border bg-surface-alt/40 px-3 py-2 text-xs text-muted">
                 ดำเนินรายการแล้ว โดย: <span className="font-mono text-foreground">{row.adminidupdate ?? "—"}</span>
               </div>
             )}
 
-            {/* Bank mini-table — account NAME only. The number now rides on the
-                left pane's "โอนเข้าบัญชี" line (legacy's one-string form), so
-                repeating it here would just be the same figure twice. */}
-            {row.nameuserbank && (
-              <dl className="grid grid-cols-3 gap-x-2 gap-y-1.5 text-xs pt-2 border-t border-border/50">
-                <Field label="ชื่อบัญชี" value={row.nameuserbank} />
-              </dl>
-            )}
-
           </div>
         </div>
       </section>
-
-      {/* ── 4. SIMILAR-TX WARNING (legacy L487-501) ── */}
-      {similar.length > 0 && (
-        <section className="rounded-2xl border-2 border-red-400 bg-red-50 p-4 space-y-3 animate-pulse-slow">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-red-600" />
-            <h3 className="text-base font-bold text-red-900">
-              รายการนี้ใกล้เคียงกับรายการอื่น ({similar.length} รายการ)
-            </h3>
-          </div>
-          <p className="text-xs text-red-800">
-            พบ tb_wallet_hs อื่นที่วันที่+จำนวนเงินเหมือนรายการนี้ — ตรวจสอบก่อนอนุมัติเพื่อหลีกเลี่ยงเครดิตซ้ำ
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {similar.map((s) => (
-              <Link
-                key={s.id}
-                href={`/admin/wallet/${s.id}`}
-                target="_blank"
-                className="block rounded-xl border border-red-200 bg-white p-2 hover:border-red-500"
-              >
-                <div className="flex items-baseline justify-between">
-                  <span className="font-mono text-sm text-red-700">#{s.id}</span>
-                  <span className={`rounded-full border px-2 py-0.5 text-[11px] ${STATUS_CLS[s.status ?? "1"]}`}>
-                    {STATUS_LABEL[s.status ?? "1"] ?? s.status}
-                  </span>
-                </div>
-                {s.slipUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={s.slipUrl} alt="slip" className="mt-1 max-h-32 w-full object-contain" />
-                ) : (
-                  <p className="mt-1 text-[11px] text-muted italic">ไม่มีสลิป</p>
-                )}
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
 
     </main>
   );
@@ -982,15 +963,6 @@ function KV({ label, value }: { label: string; value: string }) {
       <span className="text-muted">{label} : </span>
       <span className="font-medium">{value}</span>
     </p>
-  );
-}
-
-function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <>
-      <dt className="text-muted col-span-1">{label}</dt>
-      <dd className={`col-span-2 ${mono ? "font-mono" : ""}`}>{value}</dd>
-    </>
   );
 }
 

@@ -1,14 +1,15 @@
 "use client";
 
 /**
- * STEP-2 doc-number panel (2026-07-07) — the missing legacy create-f-receipt
- * "ออกเลขบิล" step, shared by the two surfaces that issue a ใบเสร็จ at settle:
+ * STEP-2 doc-number panel (2026-07-07 · legacy create-f-receipt table · ปอน 2026-07-15)
+ * — the "ออกเลขบิล" step, shown after round-1 on the two settle surfaces:
  *   • /admin/wallet/[id]      — a ฝากนำเข้า DIRECT forwarder-slip (approve).
  *   • /admin/billing-run/[id] — a ใบวางบิล (FRI) mark-paid.
  *
- * Shows the auto-mint suggestion for the ใบเสร็จ เลขที่ (rID) as an EDITABLE input
- * with a LIVE dup-check (legacy checkRIDF), the previous doc-no, the customer
- * identity, and the "ระบบจะสร้างใบเสร็จอัตโนมัติ" note.
+ * Layout ported 1:1 from legacy PCS create-f-receipt (2-col label/value table ·
+ * เลขที่ใบแจ้งหนี้ที่อ้างอิง · เลขที่เอกสารฉบับนี้ [editable rID + dup-check] ·
+ * เลขที่เอกสารก่อนหน้า · เวลาในสลิปก่อนหน้า · วันที่ออกเอกสารนี้ · ประเภทสมาชิก ·
+ * เลขผู้เสียภาษี · ชื่อ · ที่อยู่ · หัก ณ ที่จ่าย · ผู้อนุมัติ).
  *
  * READ-only server calls only (previewReceiptDocNo · checkReceiptRidAvailable).
  * The chosen rID flows up via `onOverrideRidChange`:
@@ -17,7 +18,7 @@
  *             settle, which re-validates it unique server-side before insert.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { FileText, Loader2, ExternalLink } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import {
@@ -26,11 +27,27 @@ import {
   type ReceiptDocNoPreview,
 } from "@/actions/admin/wallet-hs";
 
-function fmtDate(iso: string | null): string {
+/** Legacy stamp: `2026-07-15 09:33:00` — Gregorian, to the second (matches PCS). */
+function fmtDT(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("th-TH", { dateStyle: "medium" });
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/** One legacy label/value row — rose label cell (right-aligned) + zebra value cell. */
+function Row({ label, children, alt = false }: { label: string; children: ReactNode; alt?: boolean }) {
+  return (
+    <tr>
+      <td className="w-[44%] whitespace-nowrap border-b border-border/50 bg-primary-50 px-3 py-2 text-right align-top font-medium text-muted dark:bg-primary-500/10">
+        {label}
+      </td>
+      <td className={`border-b border-border/50 px-3 py-2 align-top text-foreground ${alt ? "bg-surface-alt/25" : ""}`}>
+        {children}
+      </td>
+    </tr>
+  );
 }
 
 export function ReceiptDocNoEditor({
@@ -52,8 +69,8 @@ export function ReceiptDocNoEditor({
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [rid, setRid] = useState<string>("");
   const [avail, setAvail] = useState<"unknown" | "checking" | "free" | "taken">("unknown");
-  // Stored in state (not a ref) so the "กลับไปใช้เลขที่ระบบแนะนำ (X)" hint can read
-  // it during render without touching a ref value in render.
+  // Stored in state (not a ref) so the "ใช้เลขที่ระบบแนะนำ (X)" hint can read it
+  // during render without touching a ref value in render.
   const [defaultRid, setDefaultRid] = useState<string>("");
   const checkSeq = useRef(0);
 
@@ -102,73 +119,125 @@ export function ReceiptDocNoEditor({
   }
 
   return (
-    <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-3 space-y-2.5">
-      <div className="flex items-center gap-2">
-        <FileText className="h-4 w-4 text-indigo-700" />
-        <h4 className="text-sm font-bold text-indigo-900">ออกเลขที่ใบเสร็จ (ก่อนตัดจ่าย)</h4>
+    <div className="overflow-hidden">
+      {/* header — ออกเลขที่ใบเสร็จ + note (legacy create-f-receipt) */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-alt/50 px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-primary-600" />
+          <h4 className="text-sm font-bold text-foreground">ออกเลขที่ใบเสร็จ (ก่อนตัดจ่าย)</h4>
+        </div>
+        <span className="text-[11px] text-muted">ระบบจะมีการสร้างใบเสร็จโดยอัตโนมัติ หากสถานะสำเร็จ</span>
       </div>
 
       {loadErr ? (
-        <p className="text-[11px] text-red-700">โหลดเลขที่ใบเสร็จไม่สำเร็จ: {loadErr} · ระบบจะออกเลขอัตโนมัติตอนตัดจ่าย</p>
+        <p className="px-3 py-3 text-[11px] text-red-700">โหลดเลขที่ใบเสร็จไม่สำเร็จ: {loadErr} · ระบบจะออกเลขอัตโนมัติตอนตัดจ่าย</p>
       ) : !preview ? (
-        <p className="inline-flex items-center gap-1 text-[11px] text-muted">
+        <p className="inline-flex items-center gap-1 px-3 py-3 text-[11px] text-muted">
           <Loader2 className="h-3 w-3 animate-spin" /> กำลังเตรียมเลขที่ใบเสร็จ…
         </p>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-1.5 text-[11px] text-indigo-900">
-            <div>
-              เลขที่เอกสารก่อนหน้า:{" "}
-              <span className="font-mono font-semibold">{preview.previousRid ?? "— (รายแรกของเดือน)"}</span>
-              {preview.previousIssueDate ? <span className="text-muted"> · {fmtDate(preview.previousIssueDate)}</span> : null}
-            </div>
-            <div>ประเภท: <span className="font-semibold">{preview.corporate === 1 ? "นิติบุคคล (FRC)" : "บุคคลธรรมดา (FRG)"}</span></div>
-          </div>
+          <table className="w-full border-collapse text-[11.5px]">
+            <tbody>
+              <Row label="เลขที่ใบแจ้งหนี้ที่อ้างอิง">
+                <span className="italic text-muted">กำลังพัฒนา</span>
+              </Row>
 
-          <label className="block">
-            <span className="block text-[11px] font-semibold text-indigo-900 mb-1">เลขที่ใบเสร็จ (rID) — แก้ไขได้</span>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={rid}
-                onChange={(e) => onRidInput(e.target.value)}
-                disabled={disabled}
-                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm font-mono disabled:opacity-50"
-              />
-              <span className="shrink-0 text-[11px] font-semibold">
-                {avail === "checking" ? (
-                  <span className="inline-flex items-center gap-1 text-muted"><Loader2 className="h-3 w-3 animate-spin" /> ตรวจ…</span>
-                ) : avail === "free" ? (
-                  <span className="text-emerald-700">✓ ว่าง</span>
-                ) : avail === "taken" ? (
-                  <span className="text-red-700">✕ ซ้ำ</span>
+              <Row label="เลขที่เอกสารฉบับนี้" alt>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={rid}
+                    onChange={(e) => onRidInput(e.target.value)}
+                    disabled={disabled}
+                    className="w-40 rounded-md border border-primary-500 bg-white px-2.5 py-1.5 font-mono text-[13px] font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary-500/40 disabled:opacity-50 dark:bg-surface"
+                  />
+                  <span className="text-[11px] font-semibold">
+                    {avail === "checking" ? (
+                      <span className="inline-flex items-center gap-1 text-muted"><Loader2 className="h-3 w-3 animate-spin" /> ตรวจ…</span>
+                    ) : avail === "free" ? (
+                      <span className="text-emerald-700">✓ ว่าง</span>
+                    ) : avail === "taken" ? (
+                      <span className="text-red-700">✕ ซ้ำ</span>
+                    ) : null}
+                  </span>
+                  {rid.trim() !== defaultRid && defaultRid ? (
+                    <button
+                      type="button"
+                      onClick={() => onRidInput(defaultRid)}
+                      disabled={disabled}
+                      title={`ใช้เลขที่ระบบแนะนำ ${defaultRid}`}
+                      className="inline-flex items-center gap-1 rounded-md bg-primary-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
+                    >
+                      ↺ ใช้เลขที่แนะนำ
+                    </button>
+                  ) : (
+                    <span className="text-[11px] text-muted">🛈 แก้ไขเลขที่ได้</span>
+                  )}
+                </div>
+                {avail === "taken" ? (
+                  <p className="mt-1 text-[11px] text-red-700">เลขที่นี้ถูกใช้แล้ว — เปลี่ยนเลขอื่น หรือกดใช้เลขที่ระบบแนะนำ ({defaultRid})</p>
                 ) : null}
-              </span>
-            </div>
-            {avail === "taken" && (
-              <p className="mt-1 text-[11px] text-red-700">เลขที่นี้ถูกใช้แล้ว — เปลี่ยนเลขอื่น หรือกลับไปใช้เลขที่ระบบแนะนำ ({defaultRid})</p>
-            )}
-          </label>
+              </Row>
 
-          <div className="rounded-lg border border-border bg-white/70 p-2 text-[11px] text-foreground space-y-0.5">
-            <div className="font-semibold text-muted">ข้อมูลลูกค้าบนใบเสร็จ</div>
-            {preview.recompNumber && <div>เลขผู้เสียภาษี: <span className="font-mono">{preview.recompNumber}</span></div>}
-            <div>ชื่อ: {preview.recompName || "—"}</div>
-            <div>ที่อยู่: {preview.recompAddress || "—"}</div>
-            <div className="text-muted">ผู้อนุมัติ: {preview.approver || "—"}</div>
-          </div>
+              <Row label="เลขที่เอกสารก่อนหน้าตามเวลานี้">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono font-semibold text-foreground">{preview.previousRid ?? "— (รายแรกของเดือน)"}</span>
+                  <Link
+                    href="/admin/accounting/receipts"
+                    target="_blank"
+                    className="inline-flex items-center gap-1 rounded-md bg-orange-500 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-orange-600"
+                  >
+                    ไปยังประวัติใบเสร็จ →
+                  </Link>
+                </div>
+              </Row>
 
-          <p className="text-[11px] text-indigo-800">
-            ระบบจะสร้างใบเสร็จอัตโนมัติ หากสถานะสำเร็จ (ตามเลขที่ + ข้อมูลข้างต้น)
-          </p>
+              <Row label="เวลาในสลิปเอกสารก่อนหน้านี้" alt>
+                <span className="font-mono text-foreground">{fmtDT(preview.previousIssueDate)}</span>
+              </Row>
+
+              <Row label="วันที่ออกเอกสารนี้">
+                <span className="font-mono text-foreground">{fmtDT(dateSlipIso)}</span>
+              </Row>
+
+              <Row label="ประเภทสมาชิก" alt>
+                <b className="text-foreground">{preview.corporate === 1 ? "นิติบุคคล" : "บุคคลธรรมดา"}</b>
+                <span className="ml-1 text-muted">({preview.corporate === 1 ? "FRC" : "FRG"})</span>
+              </Row>
+
+              <Row label="เลขประจำตัวผู้เสียภาษีลูกค้า">
+                <span className="font-mono text-foreground">{preview.recompNumber || "—"}</span>
+              </Row>
+
+              <Row label="ชื่อ-นามสกุลลูกค้า" alt>
+                <span className="text-foreground">{preview.recompName || "—"}</span>
+              </Row>
+
+              <Row label="ที่อยู่ลูกค้า">
+                <span className="text-foreground">{preview.recompAddress || "—"}</span>
+              </Row>
+
+              <Row label="ข้อมูลการหัก ณ ที่จ่าย" alt>
+                <span className="text-muted">—</span>
+              </Row>
+
+              <Row label="ผู้อนุมัติเอกสาร">
+                <span className="text-foreground">{preview.approver || "—"}</span>
+              </Row>
+            </tbody>
+          </table>
+
           {fid ? (
-            <Link
-              href={`/service-import/${fid}/receipt`}
-              target="_blank"
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700 hover:underline"
-            >
-              <ExternalLink className="h-3 w-3" /> ดูตัวอย่างใบเสร็จ
-            </Link>
+            <div className="border-t border-border px-3 py-2">
+              <Link
+                href={`/service-import/${fid}/receipt`}
+                target="_blank"
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary-600 hover:underline"
+              >
+                <ExternalLink className="h-3 w-3" /> ดูตัวอย่างใบเสร็จ
+              </Link>
+            </div>
           ) : null}
         </>
       )}

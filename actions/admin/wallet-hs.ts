@@ -884,6 +884,89 @@ export async function checkReceiptRidAvailable(
   });
 }
 
+/**
+ * LIVE duplicate-slip check for the round-1 date panel (owner 2026-07-15 · "ถ้าสลิป
+ * ซ้ำในระบบ ก็ให้กดไม่ได้"). Given the ENTERED dateslip (before it is saved), returns
+ * the OTHER same-customer slips that look like the same one — same calendar day +
+ * same amount + type≠5 + status ∈ {pending '1', approved '2'} + exclude self — with
+ * enough detail (วันที่/เวลา · ชื่อ · ยอด) to list them under the blocked save button.
+ * Mirrors `findDuplicateSlips` so the round-1 block and the round-2 gate agree.
+ * READ-ONLY. Fail-OPEN (matches=[]) on a transient read error — the round-2 approve
+ * still runs findDuplicateSlips as the hard money gate, so a missed preview can never
+ * let a real duplicate settle.
+ */
+export type SlipDuplicateMatch = {
+  id: number;
+  /** the matching slip's transfer date (dateslip · falls back to the tx date) */
+  dateSlip: string | null;
+  name: string;
+  amount: number;
+  status: string | null;
+};
+export async function checkSlipDuplicatePreview(
+  input: { id: number; dateslipIso: string | null },
+): Promise<AdminActionResult<{ matches: SlipDuplicateMatch[] }>> {
+  const id = Number(input?.id);
+  if (!Number.isFinite(id)) return { ok: false, error: "invalid_id" };
+  return withAdmin<{ matches: SlipDuplicateMatch[] }>(["accounting"], async () => {
+    const admin = createAdminClient();
+    if (!input.dateslipIso) return { ok: true, data: { matches: [] } };
+    const d = new Date(input.dateslipIso);
+    if (Number.isNaN(d.getTime())) return { ok: true, data: { matches: [] } };
+
+    // this row's amount + customer (the dup rule is same-customer · same-day · same-amount)
+    const { data: row, error: rowErr } = await admin
+      .from("tb_wallet_hs").select("amount, userid").eq("id", id)
+      .maybeSingle<{ amount: number | string | null; userid: string | null }>();
+    if (rowErr) { console.error(`[checkSlipDuplicatePreview: row]`, { code: rowErr.code, message: rowErr.message }); return { ok: true, data: { matches: [] } }; }
+    if (!row) return { ok: true, data: { matches: [] } };
+
+    const dayStart = new Date(d); dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(d); dayEnd.setHours(23, 59, 59, 999);
+    let q = admin
+      .from("tb_wallet_hs")
+      .select("id, status, amount, dateslip, date, userid")
+      .eq("amount", row.amount)
+      .neq("id", id)
+      .neq("type", "5")
+      .in("status", ["1", "2"])
+      .gte("dateslip", dayStart.toISOString())
+      .lte("dateslip", dayEnd.toISOString());
+    if (row.userid) q = q.eq("userid", row.userid);
+    const { data: dups, error: dupErr } = await q;
+    if (dupErr) { console.error(`[checkSlipDuplicatePreview: dups]`, { code: dupErr.code, message: dupErr.message }); return { ok: true, data: { matches: [] } }; }
+
+    const rows = (dups ?? []) as unknown as Array<{ id: number; status: string | null; amount: number | string | null; dateslip: string | null; date: string | null; userid: string | null }>;
+
+    // Resolve each matched slip's OWN customer name (the dup list can span
+    // customers when the current row has no userid). Junk "0"/"" is treated as
+    // empty; juristic → corporatename, else บุคคล = userName + userLastName.
+    const clean = (s: string | null | undefined) => { const v = (s ?? "").trim(); return v && v !== "0" ? v : ""; };
+    const uids = [...new Set(rows.map((r) => r.userid).filter((x): x is string => !!x))];
+    const nameByUid = new Map<string, string>();
+    if (uids.length) {
+      const { data: us, error: usErr } = await admin.from("tb_users").select("userID, userName, userLastName, userCompany").in("userID", uids);
+      const { data: cs, error: csErr } = await admin.from("tb_corporate").select("userid, corporatename").in("userid", uids);
+      if (usErr) console.error(`[checkSlipDuplicatePreview: names tb_users]`, { code: usErr.code, message: usErr.message });
+      if (csErr) console.error(`[checkSlipDuplicatePreview: names tb_corporate]`, { code: csErr.code, message: csErr.message });
+      const corpBy = new Map((cs ?? []).map((c) => [(c as { userid: string }).userid, (c as { corporatename: string | null }).corporatename]));
+      for (const u of (us ?? []) as Array<{ userID: string; userName: string | null; userLastName: string | null; userCompany: string | null }>) {
+        const nm = clean(corpBy.get(u.userID)) || `${clean(u.userName)} ${clean(u.userLastName)}`.trim() || clean(u.userCompany) || u.userID;
+        nameByUid.set(u.userID, nm);
+      }
+    }
+
+    const matches: SlipDuplicateMatch[] = rows.map((s) => ({
+      id: s.id,
+      dateSlip: s.dateslip ?? s.date ?? null,
+      name: (s.userid ? nameByUid.get(s.userid) : undefined) || s.userid || "—",
+      amount: Number(s.amount ?? 0),
+      status: s.status ?? null,
+    }));
+    return { ok: true, data: { matches } };
+  });
+}
+
 // ─────────────────────────────────────────────────────────────
 // #6 (ภูม 2026-06-26) — EDIT the slip amount during review.
 //
