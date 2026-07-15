@@ -172,7 +172,20 @@ export default async function AdminWalletPayUserPage({
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right font-mono font-semibold text-gray-900">{thb(r.amount)}</td>
-                  <td className="px-3 py-2 font-mono text-gray-600">{r.reforder ?? "—"}</td>
+                  {/* รายการอ้างอิง → กดเข้า order เพื่อวนไปเอกสาร (ใบวางบิล/ใบเสร็จ) — owner 2026-07-15
+                      "ต้องวนไปเอาใบเสร็จได้ เข้า loop เงินปกติ". ฝากนำเข้า → forwarder detail (มีบล็อก
+                      "เอกสารของออเดอร์นี้" ลิงก์ใบวางบิล/ใบเสร็จ) · ฝากสั่งซื้อ → shop order detail. */}
+                  <td className="px-3 py-2 font-mono">
+                    {r.reforder ? (
+                      <Link
+                        href={r.service_label === "ฝากนำเข้า" ? `/admin/forwarders/${r.reforder}` : `/admin/service-orders/${r.reforder}`}
+                        className="text-sky-600 hover:underline"
+                        title="เปิดออเดอร์ → ใบวางบิล/ใบเสร็จ"
+                      >
+                        {r.reforder} ↗
+                      </Link>
+                    ) : <span className="text-gray-600">—</span>}
+                  </td>
                   <td className="px-3 py-2 text-center"><StatusPill status={r.status} /></td>
                   <td className="px-3 py-2 text-gray-600">{r.admin_crate ?? "—"}</td>
                 </tr>
