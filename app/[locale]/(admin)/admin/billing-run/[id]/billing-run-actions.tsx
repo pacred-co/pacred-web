@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import {
   markBillingRunPaid,
   cancelBillingRunInvoice,
+  adminReverseBillingRunPaid,
   sendBillingRunNotification,
   uploadBillingRunSlip,
   reviewBillingRunSlipRound1,
@@ -106,6 +107,9 @@ export function BillingRunActions({
 
   const [cancelReason, setCancelReason] = useState("");
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  // ↩ ย้อนการรับชำระ (paid → issued · owner 2026-07-16)
+  const [reverseReason, setReverseReason] = useState("");
+  const [reversing, startReverse] = useTransition();
 
   // STEP-2 doc-number panel (2026-07-07). null = keep the auto-mint suggestion;
   // string = accounting hand-picked the ใบเสร็จ เลขที่ (passed as overrideRid).
@@ -182,6 +186,31 @@ export function BillingRunActions({
     </div>
   ) : null;
 
+  // ↩ ย้อนการรับชำระ handler — §0f confirm ก่อน · unwind ที่ server (adminReverseBillingRunPaid).
+  function onReversePaid() {
+    const reason = reverseReason.trim();
+    if (reason.length < 3) return;
+    if (
+      !confirm(
+        `↩ ย้อนการรับชำระ ${docNo}?\n\nระบบจะ: ถอยบิลเป็น "ออกแล้ว (ยังไม่ชำระ)" · ถอยออเดอร์กลับ รอชำระเงิน (5) · คืนวงเงินเครดิต (ถ้ามี) · ยกเลิกใบเสร็จอัตโนมัติ\n\nเหตุผล: ${reason}`,
+      )
+    )
+      return;
+    startReverse(async () => {
+      const res = await adminReverseBillingRunPaid({ invoiceId, reason });
+      if (res.ok && res.data) {
+        const d = res.data;
+        setMsg({
+          kind: "ok",
+          text: `↩ ย้อนการรับชำระแล้ว · ถอยออเดอร์ ${d.revertedForwarders} รายการ${d.creditRestored > 0 ? ` · คืนเครดิต ${d.creditRestored} รายการ` : ""}${d.receiptVoided ? ` · ยกเลิกใบเสร็จ ${d.receiptVoided}` : ""}`,
+        });
+        router.refresh();
+      } else {
+        setMsg({ kind: "err", text: res.ok ? "ไม่สามารถย้อนได้" : res.error });
+      }
+    });
+  }
+
   if (status === "paid") {
     return (
       <section className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
@@ -195,6 +224,40 @@ export function BillingRunActions({
               <div className="font-semibold">สลิปที่ยืนยันแล้ว ({slipSignedUrls.length} รูป)</div>
               <div>แนบโดย {slipUploadedBy ?? "—"} · {fmtDateTime(slipUploadedAt)}</div>
             </div>
+          </div>
+        )}
+        {/* ↩ ย้อนการรับชำระ (owner 2026-07-16 "ยกเลิกเอกสารแล้วสถานะต้องถอยเป็นเส้นตรง") —
+            unwind ครบวงจร: บิล paid→issued · เครดิตคืน · ออเดอร์ 6→5 · ใบเสร็จที่ออก
+            อัตโนมัติถูก void → รายการกลับเข้าคิววางบิล เลือกรวมกับรายการอื่นได้. */}
+        {canSettle && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2">
+            <p className="text-[13px] font-semibold text-amber-800">
+              ↩ ย้อนการรับชำระ (ถอยกลับ &ldquo;รอชำระเงิน&rdquo; เพื่อแก้ไข/วางบิลใหม่รวมกับรายการอื่น)
+            </p>
+            <p className="text-[12px] text-amber-700">
+              ระบบจะ: ถอยบิลเป็น &ldquo;ออกแล้ว (ยังไม่ชำระ)&rdquo; · ถอยออเดอร์ 6→5 · คืนวงเงินเครดิต (ถ้ามี) ·
+              ยกเลิกใบเสร็จที่ออกอัตโนมัติ — จากนั้นกด &ldquo;ยกเลิกใบวางบิล&rdquo; ต่อได้เลย
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={reverseReason}
+                onChange={(e) => setReverseReason(e.target.value)}
+                placeholder="เหตุผลที่ย้อน (อย่างน้อย 3 ตัวอักษร)"
+                className={inputCls + " max-w-xs !py-1.5 text-[13px]"}
+                disabled={reversing}
+              />
+              <button
+                type="button"
+                disabled={reversing || reverseReason.trim().length < 3}
+                onClick={onReversePaid}
+                className="rounded-lg bg-amber-600 px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {reversing ? "กำลังย้อน..." : "↩ ย้อนการรับชำระ"}
+              </button>
+            </div>
+            {msg && (
+              <p className={`text-[12px] font-medium ${msg.kind === "ok" ? "text-emerald-700" : "text-red-600"}`}>{msg.text}</p>
+            )}
           </div>
         )}
       </section>

@@ -78,6 +78,9 @@ export function PayUserAddClient() {
   const [panel, setPanel] = useState<PayUserPanel | null>(null);
   const [fwdRows, setFwdRows] = useState<PayUserFwdRow[]>([]);
   const [shopRows, setShopRows] = useState<PayUserShopRow[]>([]);
+  // §0g — when the payable list is empty, the customer's order-count by fstatus
+  // (so the page EXPLAINS why nothing is payable · owner 2026-07-16 PR139).
+  const [pendingByStatus, setPendingByStatus] = useState<Array<{ fstatus: string; n: number }>>([]);
 
   // ── selection ──
   const [selFwds, setSelFwds] = useState<Set<string>>(new Set());
@@ -95,6 +98,7 @@ export function PayUserAddClient() {
     setPanel(null);
     setFwdRows([]);
     setShopRows([]);
+    setPendingByStatus([]);
     setSelFwds(new Set());
     setSelShops(new Set());
     closeModal();
@@ -116,6 +120,7 @@ export function PayUserAddClient() {
         if (res.ok && res.data) {
           setPanel(res.data.panel);
           setFwdRows(res.data.rows);
+          setPendingByStatus(res.data.pendingByStatus ?? []);
           setSelFwds(new Set()); // forwarder rows do NOT auto-select
         } else {
           setErr(res.ok ? "ไม่พบข้อมูล" : res.error);
@@ -393,8 +398,10 @@ export function PayUserAddClient() {
             </div>
           </div>
           {panel.is_juristic && keyType === "2" && (
-            <div className="mt-3 rounded-lg border border-red-300 bg-red-50 p-2.5 text-[13px] font-medium text-red-700">
-              ลูกค้าเป็นนิติบุคคล ไม่สามารถใช้ยอดเงินในกระเป๋าตัดจ่ายค่าฝากนำเข้าได้ — ต้องชำระด้วยสลิปการโอน
+            <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-[13px] text-amber-800">
+              <span className="font-semibold">ลูกค้านิติบุคคล:</span> ชำระในหน้านี้ได้ตามปกติ —
+              ใช้ <span className="font-semibold">สลิปการโอน</span> (แนบในขั้นตอนชำระเงิน · ระบบไม่ตัดจากกระเป๋า)
+              · หัก ณ ที่จ่าย 1% อัตโนมัติเมื่อยอด ≥ ฿1,000 · ชำระแล้วระบบออกใบเสร็จให้เอง
             </div>
           )}
         </div>
@@ -402,10 +409,33 @@ export function PayUserAddClient() {
 
       {/* ── C. item table ── */}
       {panel && !hasRows && (
-        <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
-          {keyType === "2"
-            ? "ไม่มีรายการฝากนำเข้าที่รอชำระเงินของลูกค้ารายนี้"
-            : "ไม่มีรายการฝากสั่งที่รอชำระเงินของลูกค้ารายนี้"}
+        <div className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-600">
+          <p className="text-center font-medium text-gray-700">
+            {keyType === "2"
+              ? "ไม่มีรายการฝากนำเข้าที่รอชำระเงิน (สถานะ 5) ของลูกค้ารายนี้"
+              : "ไม่มีรายการฝากสั่งที่รอชำระเงินของลูกค้ารายนี้"}
+          </p>
+          {/* §0g — explain WHY nothing is payable (owner 2026-07-16 PR139): the orders
+              exist but sit BEFORE รอชำระ → show the per-status breakdown + what to do. */}
+          {keyType === "2" && pendingByStatus.length > 0 && (
+            <div className="mx-auto mt-4 max-w-2xl rounded-lg border border-sky-200 bg-sky-50 p-3 text-[13px] text-sky-900">
+              <p className="font-semibold">ลูกค้ามีงานนำเข้าอยู่ในระบบ แต่ยังไม่ถึงขั้นชำระเงิน:</p>
+              <ul className="mt-1.5 space-y-0.5">
+                {pendingByStatus.map((s) => {
+                  const st = fstatusBadge(s.fstatus);
+                  return (
+                    <li key={s.fstatus}>
+                      • <span className="font-medium">{s.n} รายการ</span> — สถานะ {s.fstatus} {st.label}
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="mt-2 text-[12px] text-sky-700">
+                รายการจะชำระได้เมื่อ <span className="font-semibold">ถึงไทย + ตั้งราคาแล้ว (สถานะ 5 รอชำระเงิน)</span> —
+                ถ้าของถึงแล้วแต่สถานะยังไม่ขยับ ให้โกดังยิงรับเข้าไทย / CS ตั้งราคาก่อน
+              </p>
+            </div>
+          )}
         </div>
       )}
 

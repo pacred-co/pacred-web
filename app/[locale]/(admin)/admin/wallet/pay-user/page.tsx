@@ -59,12 +59,25 @@ export default async function AdminWalletPayUserPage({
           <span>›</span>
           <span className="text-foreground font-medium">ทำรายการแทน</span>
         </nav>
-        <header>
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · WALLET · PAY ON BEHALF</p>
-          <h1 className="mt-1 text-2xl font-bold text-gray-900">ทำรายการจ่ายเงินแทนลูกค้า</h1>
-          <p className="mt-1 text-sm text-muted">
-            เลือกบริการ → กรอกรหัสลูกค้า → เลือกออเดอร์ที่ค้างชำระ → กด &ldquo;ชำระเงินแทนลูกค้า&rdquo;
-          </p>
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · WALLET · PAY ON BEHALF</p>
+            <h1 className="mt-1 text-2xl font-bold text-gray-900">
+              ทำรายการจ่ายเงินแทนลูกค้า <span className="text-lg font-semibold text-gray-500">(ลูกค้าเงินสด — ชำระทันที → ใบเสร็จ/ใบแจ้งหนี้)</span>
+            </h1>
+            <p className="mt-1 text-sm text-muted">
+              เลือกบริการ → กรอกรหัสลูกค้า → เลือกออเดอร์ที่ค้างชำระ (สถานะ 5) → กด &ldquo;ชำระเงินแทนลูกค้า&rdquo; + แนบสลิป → ระบบออกใบเสร็จให้อัตโนมัติ
+            </p>
+          </div>
+          {/* owner 2026-07-16 doc-model: เงินสด → หน้านี้ (ใบแจ้งหนี้/ใบเสร็จ) · เครดิต →
+              ใบวางบิล (เรียกเก็บทีหลัง) ที่ billing-run — ปุ่มชี้ทางให้ staff เลือกถูกใบ */}
+          <Link
+            href="/admin/billing-run/add"
+            className="inline-flex items-center gap-2 rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+            title="ลูกค้าเครดิต ไม่ชำระทันที — สร้างใบวางบิลเรียกเก็บ (FRI) ที่หน้าวางบิล"
+          >
+            🧾 ลูกค้าเครดิต → สร้างใบวางบิล (เรียกเก็บ)
+          </Link>
         </header>
         <PayUserAddClient />
       </main>

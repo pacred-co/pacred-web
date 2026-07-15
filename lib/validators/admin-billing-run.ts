@@ -179,6 +179,19 @@ export type CancelBillingRunInvoiceInput = z.infer<
 >;
 
 // ────────────────────────────────────────────────────────────────────────
+// REVERSE PAID — "ย้อนการรับชำระ" (paid → issued · unwind the settle · owner 2026-07-16)
+// ────────────────────────────────────────────────────────────────────────
+
+export const reverseBillingRunPaidSchema = z.object({
+  invoiceId: z.number().int().positive(),
+  reason: z.string().trim().min(3, "กรุณาระบุเหตุผล (อย่างน้อย 3 ตัวอักษร)").max(500),
+});
+
+export type ReverseBillingRunPaidInput = z.infer<
+  typeof reverseBillingRunPaidSchema
+>;
+
+// ────────────────────────────────────────────────────────────────────────
 // SEND NOTIFICATION — staff-triggered email/LINE push (idempotent retry)
 // ────────────────────────────────────────────────────────────────────────
 

@@ -269,7 +269,7 @@ type FwdRaw = ForwarderDebitRow & {
 
 export async function getPayUserForwarderView(
   userCode: string,
-): Promise<AdminActionResult<{ panel: PayUserPanel; rows: PayUserFwdRow[] }>> {
+): Promise<AdminActionResult<{ panel: PayUserPanel; rows: PayUserFwdRow[]; pendingByStatus?: Array<{ fstatus: string; n: number }> }>> {
   return withAdmin(undefined, async () => {
     const code = (userCode ?? "").trim().toUpperCase();
     if (!code) return { ok: false, error: "กรุณากรอกรหัสลูกค้า" };
@@ -369,7 +369,31 @@ export async function getPayUserForwarderView(
       };
     }).filter((r) => Number.isFinite(r.price_thb) && r.price_thb > 0);
 
-    return { ok: true, data: { panel: p.panel, rows: out } };
+    // §0g self-explaining (owner 2026-07-16 PR139 "ทำไมกดจ่ายไม่ได้"): when the
+    // payable list is EMPTY, tell the staff WHY — the customer's orders exist but
+    // sit at an earlier fstatus (e.g. '3' กำลังส่งมาไทย → ยังตั้งราคา/ชำระไม่ได้).
+    // One cheap aggregate over the customer's non-final rows; read-only.
+    let pendingByStatus: Array<{ fstatus: string; n: number }> = [];
+    if (out.length === 0) {
+      const { data: allRows, error: allErr } = await admin
+        .from("tb_forwarder")
+        .select("fstatus")
+        .eq("userid", code)
+        .in("fstatus", ["1", "2", "3", "4", "5", "6"])
+        .limit(2000);
+      if (allErr) {
+        console.error("[getPayUserForwarderView status-summary] failed", { code: allErr.code, message: allErr.message, userid: code });
+      } else {
+        const cnt = new Map<string, number>();
+        for (const r of (allRows ?? []) as Array<{ fstatus: string | null }>) {
+          const s = (r.fstatus ?? "").trim();
+          if (s) cnt.set(s, (cnt.get(s) ?? 0) + 1);
+        }
+        pendingByStatus = [...cnt.entries()].map(([fstatus, n]) => ({ fstatus, n })).sort((a, b) => a.fstatus.localeCompare(b.fstatus));
+      }
+    }
+
+    return { ok: true, data: { panel: p.panel, rows: out, pendingByStatus } };
   });
 }
 

@@ -68,10 +68,12 @@ import {
   createBillingRunInvoiceSchema,
   markBillingRunPaidSchema,
   cancelBillingRunInvoiceSchema,
+  reverseBillingRunPaidSchema,
   sendBillingRunNotificationSchema,
   type CreateBillingRunInvoiceInput,
   type MarkBillingRunPaidInput,
   type CancelBillingRunInvoiceInput,
+  type ReverseBillingRunPaidInput,
   type SendBillingRunNotificationInput,
 } from "@/lib/validators/admin-billing-run";
 
@@ -2498,6 +2500,252 @@ export async function cancelBillingRunInvoice(
       revalidatePath("/[locale]/(admin)/admin/forwarders", "page");
 
       return { ok: true, data: { invoiceId: v.invoiceId } };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 7a-bis. REVERSE a PAID bill — "ย้อนการรับชำระ" (owner 2026-07-16)
+// ────────────────────────────────────────────────────────────────────────
+//
+// Owner: "ใบวางบิล/ใบเสร็จที่ยกเลิกไปแล้ว ต้องถอยสถานะมาชำระใหม่พร้อมกับอีกรายการได้ ·
+// ยกเลิกเอกสารแล้วสถานะงานต้องถอยเป็นเส้นตรงของ flow". The doc-void
+// (voidBillingRunInvoices / adminVoidReceipts) is DOC-ONLY by design, so a paid
+// bill's forwarders stayed stuck at เตรียมส่ง(6)/paydeposit='1' with no way back
+// (the exact PR143 #52118 state). This action is the MIRROR-IMAGE of
+// markBillingRunPaid — it unwinds, in reverse order, exactly what the settle wrote:
+//
+//   1. ATOMIC CLAIM  invoice 'paid' → 'issued' (single winner · idempotent). The
+//      paid_* audit values are logged BEFORE they are cleared.
+//   2. CREDIT un-settle — markBillingRunPaid's FIX-D logged the exact settle
+//      (admin_audit_log action='billing_run.credit_settled' · settled_fids +
+//      settled_amount). Restore fcredit='1' on those fids (guard .eq(fcredit,''))
+//      + re-increase tb_credit.creditvalue by the same amount → the credit line
+//      + AR-aging return to the pre-settle truth.
+//   3. FORWARDER revert 6 → 5 (+ fdatestatus6=null) on the linked fids.
+//   4. ADVANCE-bill paydeposit '1' → '' (advance_bill_confirmed rows the settle
+//      stamped) so the re-collect isn't blocked.
+//   5. VOID the covering ใบเสร็จ (rstatus '1'/'3' → '2' · fully-covered only) —
+//      the receipt the settle auto-issued/synced must not survive an un-settle.
+//
+// GUARDS (money-safe · REFUSE, never partial):
+//   - invoice must be 'paid' (issued → use cancel; cancelled → nothing to reverse).
+//   - REFUSE when any linked fid is จัดส่ง/สำเร็จ (fstatus ≥ 7) or sits on an OPEN
+//     driver assignment (fdistatus='1') — un-collecting a dispatched order would
+//     strand the driver run; remove it from the batch first.
+//   - Steps 2-5 are best-effort AFTER the claim (mirrors the settle's own
+//     best-effort structure); every step logs loudly on failure.
+//
+// After the reverse the bill is 'issued' again → the EXISTING
+// cancelBillingRunInvoice can cancel it (reverting any leftover 6→5), and the
+// fids re-enter listEligibleForwarders → staff re-bills them TOGETHER with other
+// items (the owner's "ชำระใหม่พร้อมกับอีกรายการ").
+// ────────────────────────────────────────────────────────────────────────
+
+export async function adminReverseBillingRunPaid(
+  input: ReverseBillingRunPaidInput,
+): Promise<AdminActionResult<{ invoiceId: number; revertedForwarders: number; creditRestored: number; receiptVoided: string | null }>> {
+  const parsed = reverseBillingRunPaidSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+  const v = parsed.data;
+
+  return withAdmin<{ invoiceId: number; revertedForwarders: number; creditRestored: number; receiptVoided: string | null }>(
+    ["super", "accounting"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // 0. Load + guard.
+      const { data: cur, error: curErr } = await admin
+        .from("tb_forwarder_invoice")
+        .select("id, doc_no, status, userid, total_thb, paid_at, paid_by, payment_method, payment_reference")
+        .eq("id", v.invoiceId)
+        .maybeSingle<{
+          id: number; doc_no: string; status: string; userid: string | null;
+          total_thb: number | string; paid_at: string | null; paid_by: string | null;
+          payment_method: string | null; payment_reference: string | null;
+        }>();
+      if (curErr) {
+        console.error("[adminReverseBillingRunPaid current] failed", { code: curErr.code, message: curErr.message });
+        return { ok: false, error: curErr.message };
+      }
+      if (!cur) return { ok: false, error: "not_found" };
+      if (cur.status !== "paid") {
+        return { ok: false, error: `ใบวางบิล ${cur.doc_no} ไม่ได้อยู่สถานะรับชำระแล้ว (${cur.status}) — ${cur.status === "issued" ? "ใช้ปุ่มยกเลิกใบวางบิลได้เลย" : "ไม่มีการชำระให้ย้อน"}` };
+      }
+
+      const { data: linkItems, error: linkErr } = await admin
+        .from("tb_forwarder_invoice_item")
+        .select("forwarder_id")
+        .eq("invoice_id", v.invoiceId);
+      if (linkErr) {
+        console.error("[adminReverseBillingRunPaid items] failed", { code: linkErr.code, message: linkErr.message });
+        return { ok: false, error: linkErr.message };
+      }
+      const fids = ((linkItems ?? []) as Array<{ forwarder_id: number }>)
+        .map((r) => r.forwarder_id)
+        .filter((n): n is number => typeof n === "number");
+
+      // Guard: no linked order may be delivered/shipping or on an open driver run.
+      if (fids.length > 0) {
+        const { data: fwds, error: fwdErr } = await admin
+          .from("tb_forwarder")
+          .select("id, fstatus")
+          .in("id", fids);
+        if (fwdErr) {
+          console.error("[adminReverseBillingRunPaid fwd read] failed", { code: fwdErr.code, message: fwdErr.message });
+          return { ok: false, error: fwdErr.message };
+        }
+        const shipped = ((fwds ?? []) as Array<{ id: number; fstatus: string | null }>)
+          .filter((f) => Number((f.fstatus ?? "").trim()) >= 7);
+        if (shipped.length > 0) {
+          return { ok: false, error: `ออเดอร์ ${shipped.map((s) => `#${s.id}`).join(", ")} จัดส่ง/สำเร็จแล้ว — ย้อนการรับชำระไม่ได้` };
+        }
+        const { data: openDrv, error: drvErr } = await admin
+          .from("tb_forwarder_driver_item")
+          .select("fid")
+          .in("fid", fids.map(String))
+          .eq("fdistatus", "1");
+        if (drvErr) {
+          console.error("[adminReverseBillingRunPaid driver check] failed", { code: drvErr.code, message: drvErr.message });
+        } else if ((openDrv ?? []).length > 0) {
+          const drvFids = Array.from(new Set(((openDrv ?? []) as Array<{ fid: string }>).map((d) => `#${d.fid}`)));
+          return { ok: false, error: `ออเดอร์ ${drvFids.join(", ")} อยู่ในรอบมอบหมายคนขับที่ยังไม่จบ — เอาออกจากรอบคนขับก่อน แล้วค่อยย้อนการรับชำระ` };
+        }
+      }
+
+      // 1. ATOMIC CLAIM paid → issued (single winner). Log the paid_* BEFORE clearing.
+      await logAdminAction(adminId, "billing_run.reverse_paid", "forwarder_invoice", String(v.invoiceId), {
+        doc_no: cur.doc_no, reason: v.reason, was_paid_at: cur.paid_at, was_paid_by: cur.paid_by,
+        was_payment_method: cur.payment_method, was_payment_reference: cur.payment_reference,
+        total_thb: Number(cur.total_thb), fids,
+      });
+      const { data: claimed, error: claimErr } = await admin
+        .from("tb_forwarder_invoice")
+        .update({ status: "issued", paid_at: null, paid_by: null, payment_method: null, payment_reference: null })
+        .eq("id", v.invoiceId)
+        .eq("status", "paid")
+        .select("id");
+      if (claimErr) {
+        console.error("[adminReverseBillingRunPaid claim] failed", { code: claimErr.code, message: claimErr.message });
+        return { ok: false, error: claimErr.message };
+      }
+      if ((claimed ?? []).length === 0) {
+        return { ok: false, error: "มีคนย้อนรายการนี้ไปแล้ว (สถานะเปลี่ยนระหว่างทำรายการ)" };
+      }
+
+      // 2. CREDIT un-settle — restore exactly what FIX-D settled (from its audit row).
+      let creditRestored = 0;
+      try {
+        const { data: logRows, error: logErr } = await admin
+          .from("admin_audit_log")
+          .select("payload")
+          .eq("action", "billing_run.credit_settled")
+          .eq("target_id", String(v.invoiceId))
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (logErr) {
+          console.error("[adminReverseBillingRunPaid credit-log read] failed", { code: logErr.code, message: logErr.message });
+        } else {
+          const payload = (logRows ?? [])[0]?.payload as { settled_fids?: number[]; settled_amount?: number } | null;
+          const settledFids = (payload?.settled_fids ?? []).filter((n): n is number => typeof n === "number");
+          const settledAmount = Number(payload?.settled_amount ?? 0) || 0;
+          if (settledFids.length > 0) {
+            const { data: restored, error: restErr } = await admin
+              .from("tb_forwarder")
+              .update({ fcredit: "1" })
+              .in("id", settledFids)
+              .eq("fcredit", "")
+              .select("id");
+            if (restErr) {
+              console.error("[adminReverseBillingRunPaid credit-restore] failed", { code: restErr.code, message: restErr.message });
+            } else {
+              creditRestored = (restored ?? []).length;
+            }
+            if (creditRestored > 0 && settledAmount > 0 && cur.userid) {
+              const { data: creditRow, error: crErr } = await admin
+                .from("tb_credit")
+                .select("creditvalue")
+                .eq("userid", cur.userid)
+                .maybeSingle<{ creditvalue: number | string | null }>();
+              if (crErr) {
+                console.error("[adminReverseBillingRunPaid credit-increment read] failed", { code: crErr.code, message: crErr.message });
+              } else if (creditRow) {
+                const next = Math.round(((Number(creditRow.creditvalue ?? 0) || 0) + settledAmount) * 100) / 100;
+                const { error: crUpdErr } = await admin
+                  .from("tb_credit").update({ creditvalue: next }).eq("userid", cur.userid);
+                if (crUpdErr) console.error("[adminReverseBillingRunPaid credit-increment] failed", { code: crUpdErr.code, message: crUpdErr.message });
+                else await logAdminAction(adminId, "billing_run.credit_unsettled", "forwarder_invoice", String(v.invoiceId), {
+                  doc_no: cur.doc_no, restored_fids: settledFids, restored_amount: settledAmount,
+                });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[adminReverseBillingRunPaid credit-unsettle] unexpected", { message: String(e) });
+      }
+
+      // 3+4. FORWARDER revert 6→5 + clear the advance paydeposit stamp.
+      let revertedForwarders = 0;
+      if (fids.length > 0) {
+        const { data: rev, error: revErr } = await admin
+          .from("tb_forwarder")
+          .update({ fstatus: "5", fdatestatus6: null })
+          .in("id", fids)
+          .eq("fstatus", "6")
+          .select("id");
+        if (revErr) {
+          console.error("[adminReverseBillingRunPaid forwarder revert] failed", { code: revErr.code, message: revErr.message });
+        } else {
+          revertedForwarders = (rev ?? []).length;
+        }
+        const { error: advErr } = await admin
+          .from("tb_forwarder")
+          .update({ paydeposit: "" })
+          .in("id", fids)
+          .eq("advance_bill_confirmed", "1")
+          .eq("paydeposit", "1");
+        if (advErr) console.error("[adminReverseBillingRunPaid advance-clear] failed", { code: advErr.code, message: advErr.message });
+      }
+
+      // 5. VOID the covering receipt (fully-covered · active only) — the settle's
+      //    auto-issued/synced ใบเสร็จ must not survive the un-settle.
+      let receiptVoided: string | null = null;
+      try {
+        const active = await findActiveReceiptForFids(admin, fids);
+        if (active) {
+          // full-coverage check: every fid on the receipt must belong to this invoice.
+          const { data: rItems } = await admin
+            .from("tb_receipt_item").select("fid").eq("rid", active.rid);
+          const rFids = ((rItems ?? []) as Array<{ fid: number }>).map((r) => r.fid);
+          const fidSet = new Set(fids);
+          if (rFids.length > 0 && rFids.every((f) => fidSet.has(f))) {
+            const { error: voidErr } = await admin
+              .from("tb_receipt")
+              .update({ rstatus: "2" })
+              .eq("id", active.receiptId)
+              .in("rstatus", ["1", "3"]);
+            if (voidErr) {
+              console.error("[adminReverseBillingRunPaid receipt-void] failed", { code: voidErr.code, message: voidErr.message });
+            } else {
+              receiptVoided = active.rid;
+              await logAdminAction(adminId, "receipt.void", "tb_receipt", String(active.receiptId), {
+                rid: active.rid, reason: `ย้อนการรับชำระใบวางบิล ${cur.doc_no}: ${v.reason}`,
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[adminReverseBillingRunPaid receipt-void] unexpected", { message: String(e) });
+      }
+
+      revalidatePath("/[locale]/(admin)/admin/billing-run", "page");
+      revalidatePath("/[locale]/(admin)/admin/billing-run/[id]", "page");
+      revalidatePath("/[locale]/(admin)/admin/forwarders", "page");
+
+      return { ok: true, data: { invoiceId: v.invoiceId, revertedForwarders, creditRestored, receiptVoided } };
     },
   );
 }
