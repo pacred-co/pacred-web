@@ -121,7 +121,7 @@ const STATUS_BADGE_BG: Record<ReceiptTab, string> = {
   all:       "bg-slate-500",
   draft:     "bg-slate-500",
   pending:   "bg-amber-500",
-  issued:    "bg-emerald-600",
+  issued:    "bg-[#28D094]",
   cancelled: "bg-red-600",
 };
 
@@ -401,7 +401,7 @@ export default async function ReceiptsListPage({
                 </label>
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-emerald-500 bg-white text-sm font-medium text-emerald-600 hover:bg-emerald-50"
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-[#28D094] bg-white text-sm font-medium text-[#28D094] hover:bg-[#28D094]/10"
                 >
                   <Search className="size-4" /> ค้นหาข้อมูล
                 </button>
