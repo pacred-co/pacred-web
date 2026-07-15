@@ -39,10 +39,10 @@
  *
  * ─────────────────────────────────────────────────────────────────────
  * Layout (top-to-bottom):
- *   1. TWO TOP CARDS  — left: this customer's wallet + cash-back balance
+ *   1. BREADCRUMB     — หน้าแรก / กระเป๋าสตางค์ / <type-label> / #<id>
+ *   2. TWO TOP CARDS  — left: this customer's wallet + cash-back balance
  *                       right: system-wide wallet + cash-back totals
  *                       Each has a "+ ชำระเงิน" CTA → /admin/wallet/add
- *   2. BREADCRUMB     — หน้าแรก / กระเป๋าสตางค์ / <type-label> / #<id>
  *   3. DETAIL CARD (2-col on md+):
  *      LEFT  — rich row info: timestamp, customer link, target bank,
  *              slip date (with collapsible <EditDateSlipForm>), amount
@@ -78,6 +78,7 @@ import { SlipImage } from "@/components/admin/slip-image";
 import { EditDateSlipForm, EditAmountForm, ApproveRejectForm } from "./edit-form";
 import { classifyWalletHsRow } from "@/lib/wallet/classify-approve-row";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
+import { calcForwarderOutstanding, type ForwarderPriceFields } from "@/lib/forwarder/outstanding";
 
 export const dynamic = "force-dynamic";
 
@@ -86,10 +87,17 @@ const STATUS_LABEL: Record<string, string> = {
   "2": "อนุมัติแล้ว",
   "3": "ปฏิเสธ",
 };
+/**
+ * Solid legacy badges (ปอน 2026-07-15). Legacy is the Modern Admin theme — the
+ * same palette its .text-danger/#FF4961 and .tam-counter/#FF9149 come from — so
+ * its status pills are solid warning/success/danger with white text, not the
+ * tinted pastels we had. Mapping: 1 pending → warning · 2 approved → success ·
+ * 3 rejected → danger.
+ */
 const STATUS_CLS: Record<string, string> = {
-  "1": "bg-yellow-100 text-yellow-700 border-yellow-200",
-  "2": "bg-green-100 text-green-700 border-green-200",
-  "3": "bg-red-100 text-red-700 border-red-200",
+  "1": "bg-[#FF9149] text-white border-[#FF9149]",
+  "2": "bg-[#28D094] text-white border-[#28D094]",
+  "3": "bg-[#FF4961] text-white border-[#FF4961]",
 };
 
 // Wave 19 BUG #4: type→label mapping. Covers all 7 wallet types so the
@@ -357,6 +365,40 @@ export default async function AdminWalletDetail({
     }
   }
 
+  // ── "ยอดที่ต้องชำระ" per linked payment (legacy right pane) ──
+  // Legacy prints the amount each linked target actually owes next to the slip
+  // figure, so the reviewer can eyeball slip-vs-due before approving. The
+  // targets are forwarder f_no (a shop hNo has no equivalent single figure, so
+  // it's simply omitted rather than guessed). Money SOT: calcForwarderOutstanding
+  // — the NET "ยอดเก็บจริง" (legacy calPriceForwarderMain), which is what a
+  // customer slip is paid against. NOT calcForwarderGross (that's the ใบวางบิล
+  // pre-WHT figure) — mixing them would show a 1% gap on juristic rows.
+  // DISPLAY-only: no write, no bill/receipt coupling.
+  const dueByHno = new Map<string, number>();
+  {
+    const hnos = isCreditType(row.type)
+      ? paymentTargets.map((t) => t.hno)
+      : row.reforder ? [row.reforder] : [];
+    const fwdIds = hnos.filter((h) => /^\d+$/.test(h));
+    if (fwdIds.length > 0) {
+      const { data: fwdRows, error: fwdErr } = await admin
+        .from("tb_forwarder")
+        .select(
+          "id,ftotalprice,ftransportprice,fpriceupdate,fshippingservice,pricecrate,ftransportpricechnthb,priceother,fdiscount,fusercompany,paymethod",
+        )
+        .in("id", fwdIds.map(Number));
+      if (fwdErr) {
+        // Fail-soft: the due figure is an aid, not a gate — the page must still
+        // render (and the approve still guards) if this read fails.
+        console.error(`[tb_forwarder due-lookup] failed`, { code: fwdErr.code, message: fwdErr.message });
+      } else {
+        for (const f of (fwdRows ?? []) as Array<ForwarderPriceFields & { id: number }>) {
+          dueByHno.set(String(f.id), calcForwarderOutstanding(f));
+        }
+      }
+    }
+  }
+
   // ── Similar-tx detector (legacy L487-501): same DATE(dateslip) + amount,
   //    type<>5, exclude self. Render as red banner.
   //    PostgREST has no DATE() helper, so we filter by [day_start, day_end]
@@ -432,9 +474,34 @@ export default async function AdminWalletDetail({
   // RENDER
   // ────────────────────────────────────────────────────────────
   return (
-    <main className="p-4 lg:p-6 space-y-4">
-      {/* ── 1. TOP CARDS: per-user + system-wide ── */}
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    /* Legacy-faithful page canvas: a light-grey field so the white cards read as
+       cards (the default --background is #fff → white-on-white, which is why this
+       page looked flat). LIGHT only — in dark the tokens already give contrast
+       (page #0d0d0d vs card #1a1a1a); painting dark:bg-surface here would instead
+       make the cards blend into the canvas.
+       Height: fill the viewport BELOW the fixed h-14 header so a short row (e.g.
+       an approved one, no form) still paints grey to the bottom. The 3.5rem must
+       track the layout's own `header h-14` + `.admin-content pt-14` — a plain
+       min-h-screen here overflows by exactly that header (verified: +56px). */
+    <main className="p-4 lg:p-6 space-y-4 min-h-[calc(100vh-3.5rem)] bg-surface dark:bg-background">
+      {/* ── 1. BREADCRUMB — Wave 19 BUG #4: type-aware label.
+          Sits ABOVE the balance cards (legacy order · ปอน 2026-07-15): the trail
+          is page chrome, so it leads; the cards are content. ── */}
+      <nav aria-label="breadcrumb" className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
+        <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
+        <span>/</span>
+        <Link href="/admin/wallet" className="hover:text-primary-600">กระเป๋าสตางค์</Link>
+        <span>/</span>
+        <Link href="/admin/wallet?view=tx" className="hover:text-primary-600">{typeLabel}</Link>
+        <span>/</span>
+        <span className="font-mono text-foreground">#{row.id}</span>
+      </nav>
+
+      {/* ── 2. TOP CARDS: per-user + system-wide ──
+          gap-8 (32px) ≈ legacy's Bootstrap-4 row gutter (30px), which is what
+          gives the pair their distinct separation; our old gap-3 (12px) read as
+          one block. mb-5 reserves room for the CTA pill that overhangs each. */}
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-5">
         <BalanceCard
           title="ยอดเงินของสมาชิก"
           subtitle={`กระเป๋าสตางค์ ${userid} (บาท)`}
@@ -446,34 +513,30 @@ export default async function AdminWalletDetail({
           subtitle="กระเป๋าสตางค์ (บาท)"
           amount={walletTotalAll}
           cashback={cbTotalAll}
+          titleTone="ink"
         />
       </section>
-
-      {/* ── 2. BREADCRUMB — Wave 19 BUG #4: type-aware label ── */}
-      <nav aria-label="breadcrumb" className="text-xs text-muted flex gap-1.5 items-center flex-wrap">
-        <Link href="/admin" className="hover:text-primary-600">หน้าแรก</Link>
-        <span>/</span>
-        <Link href="/admin/wallet" className="hover:text-primary-600">กระเป๋าสตางค์</Link>
-        <span>/</span>
-        <Link href="/admin/wallet?view=tx" className="hover:text-primary-600">{typeLabel}</Link>
-        <span>/</span>
-        <span className="font-mono text-foreground">#{row.id}</span>
-      </nav>
 
       {/* ── 3. DETAIL CARD (2-col) ── */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
           {/* LEFT — info pane */}
           <div className="p-5 space-y-3 border-b md:border-b-0 md:border-r border-border">
-            <h2 className="text-xl font-bold tracking-tight text-foreground leading-tight">
+            <h2 className="text-xl font-light tracking-tight text-foreground leading-tight">
               {/* §0h — detail header is a real page-title tier (was text-lg).
-                  Wave 19 BUG #4: type-aware title (was hard-coded "รายการชำระเงิน") */}
-              รายการ{typeLabel}กระเป๋าสตางค์ <span className="font-mono text-primary-600">#{row.id}</span>
+                  Wave 19 BUG #4: type-aware title (was hard-coded "รายการชำระเงิน").
+                  Legacy sets the whole line in plain ink, id included. */}
+              รายการ{typeLabel}กระเป๋าสตางค์ <span className="font-mono">#{row.id}</span>
             </h2>
 
-            <KV label="เวลาทำรายการ" value={row.date ? formatThai(row.date) : "—"} />
+            {/* Legacy prints the raw stamp — `2026-07-15 09:45:31`, Gregorian, to
+                the second. Ours re-formatted to พ.ศ. and dropped the seconds, so
+                the two pages couldn't be reconciled row-by-row. The second is the
+                point here: it's what separates a double-submitted slip from one
+                genuine transfer. */}
+            <KV label="เวลาทำรายการ" value={row.date ? formatLegacyStamp(row.date) : "—"} />
 
-            <div className="text-sm">
+            <div className="text-[18.48px]">
               <span className="text-muted">จาก: </span>
               <Link
                 href={`/admin/customers/${userid}`}
@@ -496,55 +559,52 @@ export default async function AdminWalletDetail({
               </Link>
             </div>
 
-            <div className="text-sm">
+            {/* Legacy prints the DESTINATION account as one string —
+                `KBANK-064-174-3836` (bank + number). Ours showed the bank alone
+                and stranded the number in a mini-table in the other pane, so the
+                reviewer couldn't tell WHICH Pacred account a slip was paid into
+                without hunting. Joined here, as legacy does; the number is
+                dropped only when the row genuinely lacks one. */}
+            <div className="text-[18.48px]">
               <span className="text-red-700 font-semibold">โอนเข้าบัญชี: </span>
-              <span>{row.depositnamebank || "—"}</span>
-            </div>
-
-            <div className="text-sm">
-              <span className={
-                `inline-block rounded px-2 py-0.5 text-xs font-semibold ` +
-                (isPending && !row.dateslip ? "bg-red-600 text-white" : "bg-amber-100 text-amber-900")
-              }>
-                เวลาโอนเงินในสลิป: {row.dateslip ? formatThai(row.dateslip) : "(ยังไม่ได้กรอก)"}
+              <span>
+                {[row.depositnamebank, row.nouserbank].filter(Boolean).join("-") || "—"}
               </span>
-              {isPending && (
-                <EditDateSlipForm
-                  id={row.id}
-                  initialDateSlip={row.dateslip}
-                  needsRound1={needsRound1}
-                  reviewedAt={reviewedAt}
-                />
-              )}
             </div>
 
-            <div className="text-sm">
-              {/* Wave 19 BUG #4 + DIRECT-CUT (2026-07-02): sign-aware amount label.
-                  Credit (type 1/2): green "+เข้ากระเป๋า"
-                  Direct-slip (type 4 direct-cut): neutral blue "ชำระโดยสลิป / โอนเข้าบัญชี"
-                    — money settled from the BANK, the wallet is untouched, so the
-                    red "−หักจากกระเป๋า" would be a lie.
-                  Debit (type 3/4-cascade/6/7): red "−หักจากกระเป๋า"
-                  type 5 (admin manual): neutral — let the raw sign speak. */}
-              {isCredit ? (
+            {/* Legacy renders the slip-transfer time as a solid danger-red badge on
+                the LEFT (display) while the EDITOR lives on the right, above the
+                approve. Ported: the value stays here, <EditDateSlipForm> moved
+                to the right pane so the fill-date → dup-check → approve flow
+                reads top-to-bottom in one column (as legacy does).
+
+                The badge wraps "label + whatever value exists" — with no date it
+                ends at the colon, exactly as legacy leaves it. It does NOT append
+                a "(ยังไม่ได้กรอก)": the empty tail already says that, and the red
+                is the alarm. Red stays on even once filled — legacy keeps this
+                line flagged because matching it to the slip is the whole job. */}
+            <div className="text-[18.48px]">
+              <span className="inline-block rounded px-2 py-0.5 text-[18.48px] font-semibold bg-[#FF4961] text-white">
+                เวลาโอนเงินในสลิป : {row.dateslip ? formatLegacyStamp(row.dateslip) : ""}
+              </span>
+            </div>
+
+            <div className="text-[18.48px]">
+              {/* "จำนวนเงินในสลิป : +X บาท" in legacy's success green — legacy's own
+                  wording (ปอน 2026-07-15, owner-directed), and it reads true for
+                  every slip-backed type: the line describes THE SLIP (money the
+                  customer sent us), not the wallet delta. That's why the "+" is
+                  honest even on a type-4 cascade spend, whose wallet leg is −X:
+                  the slip really is +X incoming. The wallet direction is carried
+                  by the row's own title ("รายการจ่ายค่าฝากนำเข้า…") and the right
+                  pane's ยอดที่ต้องชำระ, not by this figure.
+                  Type 5 (admin manual) keeps the neutral label: there IS no slip,
+                  so "จำนวนเงินในสลิป" would name a document that doesn't exist. */}
+              {isCredit || isDirectSlip || isDebit ? (
                 <>
-                  <span className="font-semibold text-green-700">จำนวนเงินเข้ากระเป๋า: </span>
-                  <span className="font-mono font-bold text-green-700">
+                  <span className="font-semibold text-[#28D094]">จำนวนเงินในสลิป : </span>
+                  <span className="font-mono font-bold text-[#28D094]">
                     +{amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
-                  </span>
-                </>
-              ) : isDirectSlip ? (
-                <>
-                  <span className="font-semibold text-sky-700">ชำระโดยสลิป / โอนเข้าบัญชี: </span>
-                  <span className="font-mono font-bold text-sky-700">
-                    {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
-                  </span>
-                </>
-              ) : isDebit ? (
-                <>
-                  <span className="font-semibold text-red-700">จำนวนเงินที่หักจากกระเป๋า: </span>
-                  <span className="font-mono font-bold text-red-700">
-                    −{amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
                   </span>
                 </>
               ) : (
@@ -565,65 +625,6 @@ export default async function AdminWalletDetail({
                 <EditAmountForm id={row.id} currentAmount={amount} />
               )}
             </div>
-
-            {/* Wave 19 BUG #4: source/target reference block.
-                Credit → "เงินนี้ใช้จ่ายค่า" + targets
-                Debit  → "นี่คือการจ่ายค่า X · สลิปอยู่ที่ #partnerId" */}
-            {isCredit && paymentTargets.length > 0 && (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 space-y-1">
-                <p className="font-semibold">💰 เงินก้อนนี้ใช้จ่ายค่า:</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {paymentTargets.map((t, i) => {
-                    const c = classifyHno(t.hno);
-                    return c.href ? (
-                      <Link
-                        key={`${t.hno}-${i}`}
-                        href={c.href}
-                        className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white px-2 py-0.5 font-mono text-[11px] text-emerald-700 hover:bg-emerald-100 hover:underline"
-                      >
-                        {c.label} →
-                      </Link>
-                    ) : (
-                      <span
-                        key={`${t.hno}-${i}`}
-                        className="inline-flex items-center rounded-md border border-emerald-300 bg-white px-2 py-0.5 font-mono text-[11px] text-emerald-700"
-                      >
-                        {c.label}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {isDebit && row.reforder && row.reforder !== "" && (
-              <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900 space-y-1">
-                <p>
-                  <span className="font-semibold">💸 นี่คือการจ่ายค่า: </span>
-                  {(() => {
-                    const c = classifyHno(row.reforder);
-                    return c.href ? (
-                      <Link href={c.href} className="font-mono font-bold text-sky-700 hover:underline">
-                        {c.label} →
-                      </Link>
-                    ) : (
-                      <span className="font-mono font-bold">{c.label}</span>
-                    );
-                  })()}
-                </p>
-                {partnerTopupId !== null && (
-                  <p>
-                    <span className="font-semibold">📎 สลิปอยู่ที่รายการชำระเงินคู่กัน: </span>
-                    <Link
-                      href={`/admin/wallet/${partnerTopupId}`}
-                      className="font-mono font-bold text-sky-700 hover:underline"
-                    >
-                      #{partnerTopupId} →
-                    </Link>
-                  </p>
-                )}
-              </div>
-            )}
 
             {linkedRows.length > 0 && (
               <div className="text-sm space-y-1 rounded-lg border border-border bg-surface-alt/40 p-2">
@@ -652,16 +653,142 @@ export default async function AdminWalletDetail({
                 <p className="mt-2 text-xs text-muted whitespace-pre-line">หมายเหตุ: {row.note}</p>
               )}
             </div>
+
+            {/* ── SLIP (legacy: bottom of the LEFT pane, centred, under a small
+                   "Pay slip" caption) — Wave 19 BUG #4's 6-branch render kept
+                   verbatim; only its position + centring changed. ── */}
+            <div className="pt-2">
+              <p className="mb-2 text-center text-xs text-muted">Pay slip</p>
+              {slipUrl ? (
+                <a
+                  href={slipUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  <SlipImage src={slipUrl} className="mx-auto max-w-full" fallbackClassName="h-40 w-full" />
+                </a>
+              ) : row.imagesslip ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  <p className="font-semibold">⚠ ไม่สามารถสร้างลิงก์สลิปได้</p>
+                  <p className="mt-1 font-mono text-[11px] break-all text-amber-800">
+                    filename = {row.imagesslip}
+                  </p>
+                </div>
+              ) : partnerSlipUrl ? (
+                /* No "สลิปนี้มาจากรายการคู่กัน" banner here — the right pane already
+                   states it ("📎 สลิปอยู่ที่รายการชำระเงินคู่กัน #N →"), so this was
+                   the same fact twice on one screen. */
+                <a
+                  href={partnerSlipUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  <SlipImage src={partnerSlipUrl} className="mx-auto max-w-full" fallbackClassName="h-40 w-full" />
+                </a>
+              ) : partnerSlipFilename ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  <p className="font-semibold">⚠ ไม่สามารถสร้างลิงก์สลิปจากรายการคู่กันได้</p>
+                  <p className="mt-1 font-mono text-[11px] break-all text-amber-800">
+                    partner #{partnerTopupId} · filename = {partnerSlipFilename}
+                  </p>
+                </div>
+              ) : !shouldHaveOwnSlip ? (
+                <div className="rounded-lg border border-dashed border-border bg-surface-alt/40 p-4 text-center text-xs text-muted">
+                  <p className="font-medium">ไม่จำเป็นต้องมีสลิปสำหรับรายการประเภทนี้</p>
+                  <p className="mt-1 italic">
+                    ({typeLabel} — ระบบหักเงินจากกระเป๋าโดยตรง ไม่มีการโอนจากธนาคาร)
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-center text-xs text-red-700 italic">
+                  ลูกค้ายังไม่ได้อัพโหลดสลิป
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* RIGHT — slip + actions pane */}
+          {/* RIGHT — status + linked payments + date/approve pane */}
           <div className="p-5 space-y-3">
-            <div className="flex items-baseline justify-between">
-              <h3 className="text-sm font-semibold text-muted">สถานะรายการ</h3>
-              <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_CLS[status]}`}>
+            {/* Legacy right pane is a right-aligned column of plain lines split by
+                rules — no nested cards. Ported shape:
+                  สถานะรายการ : [pill]
+                  ───────────────────────
+                  รายการนี้มาพร้อมกับรายการชำระเงิน
+                  1. รายการชำระเงินฝากนำเข้า : <no>
+                     ยอดที่ต้องชำระ : <due>
+                  จำนวนเงินในสลิป : <x>   ยอดรวมทุกรายการ : <x>
+                  ───────────────────────
+                  วันเวลาที่โอนในสลิป … */}
+            {/* Legacy: one <h3> at 21.14px / #464855 whose accessible name reads
+                "สถานะรายการ : รอดำเนินการ" — i.e. the pill sits INSIDE the heading,
+                not beside it. Ours had them as siblings at 16px, so the line read
+                small and screen readers announced the label without its value. */}
+            <h3 className="mb-[7px] flex items-center justify-end gap-2 text-[21.14px] font-light text-[#464855] dark:text-foreground">
+              สถานะรายการ :
+              <span className={`rounded-full border px-3 py-0.5 text-[14px] font-medium ${STATUS_CLS[status]}`}>
                 {STATUS_LABEL[status] ?? `status ${status}`}
               </span>
-            </div>
+            </h3>
+
+            {(isCredit ? paymentTargets.length > 0 : Boolean(isDebit && row.reforder)) && (
+              <div className="border-t border-border pt-3 text-right space-y-1">
+                <p className="text-sm font-semibold text-foreground">รายการนี้มาพร้อมกับรายการชำระเงิน</p>
+                {(isCredit ? paymentTargets.map((t) => t.hno) : [row.reforder!]).map((hno, i) => {
+                  const c = classifyHno(hno);
+                  const due = dueByHno.get(hno);
+                  return (
+                    <div key={`${hno}-${i}`}>
+                      <p className="text-xs">
+                        <span className="text-muted">
+                          {i + 1}. รายการชำระเงิน{c.kind === "shop" ? "ฝากสั่งซื้อ" : "ฝากนำเข้า"} :{" "}
+                        </span>
+                        {c.href ? (
+                          <Link href={c.href} className="font-mono font-bold text-sky-700 hover:underline">{c.label} →</Link>
+                        ) : (
+                          <span className="font-mono font-bold">{c.label}</span>
+                        )}
+                      </p>
+                      {due !== undefined && (
+                        <p className="text-[11px] text-muted">
+                          ยอดที่ต้องชำระ : {due.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+                <p className="text-xs font-semibold text-green-700">
+                  จำนวนเงินในสลิป : {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                  <span className="ml-3">
+                    ยอดรวมทุกรายการ : {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                  </span>
+                </p>
+                {partnerTopupId !== null && (
+                  <p className="text-[11px] text-muted">
+                    📎 สลิปอยู่ที่รายการชำระเงินคู่กัน{" "}
+                    <Link href={`/admin/wallet/${partnerTopupId}`} className="font-mono font-bold text-sky-700 hover:underline">
+                      #{partnerTopupId} →
+                    </Link>
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* ── วันเวลาที่โอนในสลิป — the date editor (legacy: right pane, above
+                   the action buttons). Round-1 is stamped here, so the approve
+                   below reads as one continuous top-to-bottom flow. ── */}
+            {isPending && (
+              <div className="border-t border-border pt-3">
+                <p className="text-sm font-semibold text-foreground">วันเวลาที่โอนในสลิป</p>
+                <EditDateSlipForm
+                  id={row.id}
+                  initialDateSlip={row.dateslip}
+                  needsRound1={needsRound1}
+                  reviewedAt={reviewedAt}
+                />
+              </div>
+            )}
 
             {/* Pending → action form · Completed → audit line.
                 P1-25/26 (ADR-0018): for a customer-withdraw row (type='3')
@@ -698,77 +825,12 @@ export default async function AdminWalletDetail({
               </div>
             )}
 
-            {/* Slip image — Wave 19 BUG #4: 5-branch render.
-                1. own slipUrl present                      → render image (legacy parity)
-                2. own slip filename but resolver failed    → amber warning with filename
-                3. partner topup slipUrl present (spend rows) → render partner's image + banner
-                4. partner topup filename but resolver failed → amber warning with partner filename
-                5. type is no-slip-required (2/4/5/6/7)     → gray "ไม่จำเป็นต้องมีสลิป"
-                6. type SHOULD have slip but doesn't        → red "ลูกค้ายังไม่อัพ" */}
-            <div className="pt-2">
-              <p className="text-xs font-semibold text-muted mb-2">หลักฐานการโอน (Pay slip)</p>
-              {slipUrl ? (
-                <a
-                  href={slipUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block rounded-lg border border-border overflow-hidden hover:border-primary-500 bg-black/5 dark:bg-black/30"
-                >
-                  <SlipImage src={slipUrl} className="max-w-full max-h-[420px] mx-auto object-contain" fallbackClassName="h-40 w-full" />
-                </a>
-              ) : row.imagesslip ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                  <p className="font-semibold">⚠ ไม่สามารถสร้างลิงก์สลิปได้</p>
-                  <p className="mt-1 font-mono text-[11px] break-all text-amber-800">
-                    filename = {row.imagesslip}
-                  </p>
-                </div>
-              ) : partnerSlipUrl ? (
-                <div className="space-y-2">
-                  <div className="rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-800">
-                    💡 สลิปนี้มาจากรายการชำระเงินคู่กัน{" "}
-                    <Link
-                      href={`/admin/wallet/${partnerTopupId}`}
-                      className="font-mono font-bold text-sky-700 hover:underline"
-                    >
-                      #{partnerTopupId}
-                    </Link>
-                  </div>
-                  <a
-                    href={partnerSlipUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block rounded-lg border border-border overflow-hidden hover:border-primary-500 bg-black/5 dark:bg-black/30"
-                  >
-                    <SlipImage src={partnerSlipUrl} className="max-w-full max-h-[420px] mx-auto object-contain" fallbackClassName="h-40 w-full" />
-                  </a>
-                </div>
-              ) : partnerSlipFilename ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                  <p className="font-semibold">⚠ ไม่สามารถสร้างลิงก์สลิปจากรายการคู่กันได้</p>
-                  <p className="mt-1 font-mono text-[11px] break-all text-amber-800">
-                    partner #{partnerTopupId} · filename = {partnerSlipFilename}
-                  </p>
-                </div>
-              ) : !shouldHaveOwnSlip ? (
-                <div className="rounded-lg border border-dashed border-border bg-surface-alt/40 p-4 text-center text-xs text-muted">
-                  <p className="font-medium">ไม่จำเป็นต้องมีสลิปสำหรับรายการประเภทนี้</p>
-                  <p className="mt-1 italic">
-                    ({typeLabel} — ระบบหักเงินจากกระเป๋าโดยตรง ไม่มีการโอนจากธนาคาร)
-                  </p>
-                </div>
-              ) : (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-center text-xs text-red-700 italic">
-                  ลูกค้ายังไม่ได้อัพโหลดสลิป
-                </div>
-              )}
-            </div>
-
-            {/* Bank/ref mini-table */}
-            {(row.nameuserbank || row.nouserbank) && (
+            {/* Bank mini-table — account NAME only. The number now rides on the
+                left pane's "โอนเข้าบัญชี" line (legacy's one-string form), so
+                repeating it here would just be the same figure twice. */}
+            {row.nameuserbank && (
               <dl className="grid grid-cols-3 gap-x-2 gap-y-1.5 text-xs pt-2 border-t border-border/50">
-                {row.nameuserbank && <Field label="ชื่อบัญชี" value={row.nameuserbank} />}
-                {row.nouserbank && <Field label="เลขที่บัญชี" value={row.nouserbank} mono />}
+                <Field label="ชื่อบัญชี" value={row.nameuserbank} />
               </dl>
             )}
           </div>
@@ -836,49 +898,119 @@ export default async function AdminWalletDetail({
 // Sub-components
 // ────────────────────────────────────────────────────────────
 
+/**
+ * Legacy-faithful balance card (ปอน 2026-07-15 · owner-directed).
+ *
+ * Type + palette read off the live legacy page's own computed styles:
+ *   title      .text-black-1.text-danger → #FF4961 · 21.14px Prompt   (member card)
+ *              .text-black-1            → #464855 · 21.14px Prompt   (system card)
+ *   figure     .tam-counter.font-3rem   → #FF9149 · 42px Prompt      (ORANGE, not
+ *              the frame's red — legacy deliberately splits the two)
+ *   cash-back  .text-black-1.font-14    → #464855 · 14px Prompt
+ *   frame      → #FF4961
+ * (legacy's rem base is 14px, hence `font-3rem` computing to 42px — so the px
+ * figures above are what must be reproduced here, not the rem names.)
+ *
+ * Written as literal arbitrary values, not theme tokens — they're legacy's brand
+ * colours, and folding them into --primary/--muted would drag every other Pacred
+ * surface with them. (Literals are also required: Tailwind scans for whole class
+ * strings, so a `border-[${CONST}]` would never be generated.)
+ *
+ * Matches `pcs-admin` wallet detail: a thick red frame, the brand mark top-right,
+ * the balance as a big red numeral, a full-width orange rule, and the CTA pill
+ * straddling the bottom border. Ours is the PR mark, not PCS cargo — the look is
+ * ported, the brand is not (D1 rebrand `PCS` → `PR`).
+ *
+ * `titleTone` mirrors legacy's own asymmetry: the member-balance card titles in
+ * danger-red, the system-total card in plain ink.
+ *
+ * The pill is absolutely positioned and overhangs the frame, so the card
+ * reserves bottom padding (`pb-8`) and the grid that hosts it reserves margin.
+ */
 function BalanceCard({
   title,
   subtitle,
   amount,
   cashback,
+  titleTone = "danger",
 }: {
   title: string;
   subtitle: string;
   amount: number;
   cashback: number;
+  titleTone?: "danger" | "ink";
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
-      <div className="p-4 flex items-start justify-between gap-3">
-        <div className="space-y-0.5">
-          <p className="text-xs font-semibold text-red-700">{title}</p>
-          <p className="text-[11px] text-muted">{subtitle}</p>
-          <p className="mt-1 text-3xl font-bold text-foreground font-mono">
-            ฿{amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+    /* shadow: an even halo, not Tailwind's shadow-lg (which offsets 10px DOWN and
+       reads as a drop under the card). pb-2, NOT pb-8: the CTA pill is absolute,
+       so it needs no in-flow room — pb-8 was 32px of dead space that, with the
+       inner p-4, left 48px under the rule where legacy leaves ~10px. */
+    <div className="relative rounded-3xl border-[3px] border-[#FF4961] bg-white dark:bg-surface shadow-[0_0_18px_rgba(0,0,0,0.18)] pb-2">
+      {/* Legacy puts the PCS-cargo badge here; ours is the Pacred "P" mark (D1
+          rebrand). Same file as the app favicon (app/icon.png) — this is the
+          public/ copy, since app/icon.png is served under a build hash.
+          ABSOLUTE, deliberately: as a flex sibling of the heading the mark SET
+          the row's height, so enlarging it pushed the figure — and everything
+          under it — down and grew the card (measured: an 80px mark turned a 43px
+          heading row into an 80px one). Out of flow it can grow freely and
+          nothing else moves. `pr-24` on the text block is the only coupling (it
+          keeps the heading clear of the mark) — bump the two together. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/images/pdiwaicon.png"
+        alt="Pacred"
+        className="absolute right-4 top-4 h-20 w-20 rounded-xl object-contain"
+      />
+      <div className="p-4">
+        <div className="pr-24 space-y-0.5">
+          {/* ink tone: #464855 is near-black, so dark mode hands off to the
+              theme foreground rather than sinking into the dark canvas. */}
+          <p
+            className={
+              "text-[21.14px] font-light leading-tight " +
+              (titleTone === "danger" ? "text-[#FF4961]" : "text-[#464855] dark:text-foreground")
+            }
+          >
+            {title}
           </p>
-          <p className="text-[11px] text-purple-700">
-            Cash Back: {cashback.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
-          </p>
+          <p className="text-xs text-muted">{subtitle}</p>
         </div>
+        {/* NOT font-mono: the system mono stack ships 400/700 only, so a 300 here
+            gets faux-thinned (or ignored) rather than rendered. Prompt has a real
+            300 — and legacy sets this figure in Prompt too, not a mono face.
+            tabular-nums still keeps the digits from jittering as amounts change. */}
+        <p className="mt-1 text-[42px] font-light tabular-nums leading-none text-[#FF9149]">
+          {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+        </p>
+        {/* #464855 is near-black → dark mode hands off to the muted token. */}
+        <p className="mt-1 text-[14px] text-[#464855] dark:text-muted">
+          Cash Back : {cashback.toLocaleString("th-TH", { minimumFractionDigits: 2 })} (บาท)
+        </p>
+        <div className="mt-3 h-1.5 rounded-full bg-orange-500" />
       </div>
-      {/* Progress bar — kept as a visual nod to legacy (decorative) */}
-      <div className="h-1 bg-gradient-to-r from-amber-400 to-amber-200" />
-      <div className="px-4 py-2 text-center">
-        <Link
-          href="/admin/wallet/add"
-          className="inline-flex items-center gap-1 rounded-full bg-primary-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-600"
-        >
-          <Plus className="h-3 w-3" /> ชำระเงิน
-        </Link>
-      </div>
+      <Link
+        href="/admin/wallet/add"
+        className="absolute -bottom-3.5 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full bg-primary-700 px-4 py-1.5 text-xs font-bold text-white shadow-md hover:bg-primary-800"
+      >
+        <Plus className="h-3 w-3" /> ชำระเงิน
+      </Link>
     </div>
   );
 }
 
+/**
+ * A label:value line at legacy's own scale — 18.48px Prompt / #464855, read off
+ * `h4.pt-1` on the live legacy page (its rem base is 14px, so this is 1.32rem).
+ * Ours sat at 14px, which is what made every left-column line read small.
+ *
+ * Rendered as a <p>, not the <h4> legacy uses: this is a data line, not a
+ * section heading, and emitting a heading here would put a bogus rung in the
+ * document outline for screen readers. Size + colour are what must match.
+ */
 function KV({ label, value }: { label: string; value: string }) {
   return (
-    <p className="text-sm">
-      <span className="text-muted">{label}: </span>
+    <p className="text-[18.48px] text-[#464855] dark:text-foreground">
+      <span className="text-muted">{label} : </span>
       <span className="font-medium">{value}</span>
     </p>
   );
@@ -893,8 +1025,19 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
   );
 }
 
-function formatThai(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+/**
+ * The legacy stamp: `2026-07-15 09:45:31` — Gregorian, to the second, exactly as
+ * `tb_wallet_hs.date` holds it. Reproduced verbatim so a row on this page can be
+ * reconciled 1:1 against the legacy screen (and against the bank slip, where the
+ * SECOND is what tells a double-submit apart from one real transfer).
+ *
+ * These columns are naive local-time strings, NOT timestamptz — so slice the raw
+ * value rather than `new Date()`, which would re-interpret it as UTC and shift
+ * the clock by the Bangkok offset.
+ */
+function formatLegacyStamp(raw: string): string {
+  const m = raw.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/);
+  if (m) return `${m[1]} ${m[2]}`;
+  const short = raw.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/);
+  return short ? `${short[1]} ${short[2]}:00` : raw;
 }

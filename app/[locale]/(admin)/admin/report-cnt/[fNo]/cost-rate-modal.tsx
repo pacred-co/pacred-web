@@ -119,7 +119,7 @@ export function CostRateModal({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 rounded-md border border-border bg-white dark:bg-surface px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface-alt"
+        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100"
         title="ตั้งค่าต้นทุนตู้"
       >
         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
