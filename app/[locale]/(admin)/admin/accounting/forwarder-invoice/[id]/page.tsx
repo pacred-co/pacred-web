@@ -32,14 +32,19 @@ export const dynamic = "force-dynamic";
 
 export default async function ForwarderInvoicePrintPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ copy?: string }>;
 }) {
   // Phase 2 ops-workflow audit unlock 2026-06-05 — Doc roles view + print
   // receipts (`docs/research/ops-workflow-audit-2026-06-05.md` §28).
   await requireAdmin(["super", "accounting", "freight_export_doc", "freight_import_doc"]);
 
   const { id } = await params;
+  // `?copy=0` → พิมพ์ ต้นฉบับ อย่างเดียว (the "พิมพ์ใบเสร็จ ต้นฉบับ" button).
+  // absent / any other value → ต้นฉบับ + สำเนา (legacy default · 2 sides).
+  const withCopy = (await searchParams).copy !== "0";
   const numId = Number(id);
   if (!Number.isFinite(numId) || numId <= 0) notFound();
 
@@ -164,7 +169,8 @@ export default async function ForwarderInvoicePrintPage({
           )}
 
           <div className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            <b>ตัวอย่างก่อนพิมพ์</b> — ใบเสร็จจะออกมา <b>2 หน้า</b> (ต้นฉบับ + สำเนา) เมื่อกดพิมพ์ ·
+            <b>ตัวอย่างก่อนพิมพ์</b> — ใบเสร็จจะออกมา{" "}
+            <b>{withCopy ? "ต้นฉบับ + สำเนา" : "ต้นฉบับ อย่างเดียว"}</b> เมื่อกดพิมพ์ ·
             กดปุ่ม &ldquo;พิมพ์ใบเสร็จ&rdquo; ด้านบนเพื่อบันทึกสถานะ <code>statusPrint=1</code> และเปิดหน้าต่างพิมพ์
             <br />
             <b className="mt-1 inline-block">หน้าต่างพิมพ์ Chrome:</b> ตั้ง <b>&ldquo;More settings → Headers and footers: ปิด&rdquo;</b> +
@@ -211,7 +217,7 @@ export default async function ForwarderInvoicePrintPage({
             ต้นฉบับ, then a second loop for สำเนา. Each side gets its own
             page-count (1/N, 2/N, ..., N/N), totalling 2N printed pages.
         */}
-        <ReceiptPaper pages={doc.pages} qrDataUrl={qrDataUrl} {...doc.commonProps} />
+        <ReceiptPaper pages={doc.pages} qrDataUrl={qrDataUrl} withCopy={withCopy} {...doc.commonProps} />
       </div>
     </div>
   );

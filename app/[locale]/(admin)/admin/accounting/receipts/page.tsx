@@ -42,6 +42,7 @@ import { type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { Info, Plus, Printer, Search } from "lucide-react";
 import { ReceiptsVoidTable } from "./receipts-void-table";
 import { ReceiptExportToolbar } from "./receipt-export-toolbar";
+import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 
 // CSV columns — mirror the on-screen table.
 const CSV_COLS: CsvCol[] = [
@@ -252,6 +253,10 @@ export default async function ReceiptsListPage({
   return (
     <div className="min-h-screen bg-slate-50">
       <div className=" px-4 py-6 space-y-5">
+        {/* ── Legacy blue header menubar (ภูม 2026-07-15) — the same
+            acc-system-cargo blue bar the accounting home shows, at the top. ── */}
+        <AccountingMenubar activeHref="/admin/accounting/receipts" />
+
         {/* ── Breadcrumb ── */}
         <nav className="text-xs text-slate-500">
           <Link href="/admin" className="hover:text-indigo-700">หน้าแรก</Link>
