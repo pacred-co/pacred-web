@@ -225,6 +225,39 @@ export default async function DriverPickingSlipPrintPage({
     }
   }
 
+  // ── เอกสารอ้างอิงของรอบนี้ (owner 2026-07-15 · "เชื่อมโยง อ้างอิงถึงกัน" · F11) ──
+  // The ใบวางบิล / ใบเสร็จ covering this run's parcels — surfaced in the on-screen
+  // toolbar (NOT on the printed manifest, which is the driver/customer copy) so staff
+  // cross-check the delivery note against the money docs in ≤1 click. READ-ONLY; soft-fail.
+  // (Ship-to reconciliation between faddress* and the bill/receipt delivery_address is a
+  // separate owner decision · not changed here.)
+  const refBills: Array<{ id: number; docNo: string }> = [];
+  const refReceipts: Array<{ id: number; rid: string }> = [];
+  if (fwdIds.length > 0) {
+    const { data: biItems, error: biErr } = await admin
+      .from("tb_forwarder_invoice_item").select("invoice_id").in("forwarder_id", fwdIds);
+    if (biErr) console.error("[drivers/[id]/print] ref-bill items failed", { code: biErr.code, message: biErr.message, batchId });
+    const invIds = Array.from(new Set(((biItems ?? []) as { invoice_id: number }[]).map((x) => x.invoice_id)));
+    if (invIds.length > 0) {
+      const { data: invs, error: invErr } = await admin
+        .from("tb_forwarder_invoice").select("id, doc_no").in("id", invIds).order("id", { ascending: false });
+      if (invErr) console.error("[drivers/[id]/print] ref-bill headers failed", { code: invErr.code, message: invErr.message, batchId });
+      for (const iv of (invs ?? []) as Array<{ id: number; doc_no: string | null }>)
+        refBills.push({ id: iv.id, docNo: (iv.doc_no ?? "").trim() || `#${iv.id}` });
+    }
+    const { data: rItems, error: riErr } = await admin
+      .from("tb_receipt_item").select("rid").in("fid", fwdIds);
+    if (riErr) console.error("[drivers/[id]/print] ref-receipt items failed", { code: riErr.code, message: riErr.message, batchId });
+    const rids = Array.from(new Set(((rItems ?? []) as { rid: string | null }[]).map((x) => (x.rid ?? "").trim()).filter(Boolean)));
+    if (rids.length > 0) {
+      const { data: recs, error: recErr } = await admin
+        .from("tb_receipt").select("id, rid").in("rid", rids).order("id", { ascending: false });
+      if (recErr) console.error("[drivers/[id]/print] ref-receipt headers failed", { code: recErr.code, message: recErr.message, batchId });
+      for (const rc of (recs ?? []) as Array<{ id: number; rid: string | null }>)
+        refReceipts.push({ id: rc.id, rid: (rc.rid ?? "").trim() || `#${rc.id}` });
+    }
+  }
+
   // Header aggregates — printDriver.php L30-38 (SUM/COUNT).
   const totalBoxes = forwarders.reduce((s, f) => s + Number(f.famount ?? 0), 0);
   const totalTrackings = forwarders.length;
@@ -272,6 +305,19 @@ export default async function DriverPickingSlipPrintPage({
           <span className="text-xs text-gray-500">
             บิลจัดส่ง · รอบ #{batch.id} · {totalTrackings} แทรคกิ้ง
           </span>
+          {/* เอกสารอ้างอิง — ใบวางบิล / ใบเสร็จ ของรอบนี้ (F11 · no-print) */}
+          {refBills.map((b) => (
+            <Link key={`b${b.id}`} href={`/admin/billing-run/${b.id}`}
+              className="rounded-full border border-sky-300 bg-sky-50 px-2 py-0.5 font-mono text-xs text-sky-700 hover:bg-sky-100">
+              🧾 {b.docNo} →
+            </Link>
+          ))}
+          {refReceipts.map((rc) => (
+            <Link key={`r${rc.id}`} href={`/admin/accounting/forwarder-invoice/${rc.id}`}
+              className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 font-mono text-xs text-emerald-700 hover:bg-emerald-100">
+              🧾 {rc.rid} →
+            </Link>
+          ))}
         </div>
         <PrintButton label="🖨 พิมพ์บิลจัดส่ง" />
       </div>

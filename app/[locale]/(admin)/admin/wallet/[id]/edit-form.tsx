@@ -149,7 +149,7 @@ export function EditDateSlipForm({
         /* Legacy shape (ปอน 2026-07-15): a flat block — solid-red warning bar,
            then the field, then the actions right-aligned. No amber card. */
         <form onSubmit={onSubmit} className="mt-2 space-y-2">
-          <p className="rounded bg-red-600 px-2 py-1 text-[11px] font-semibold text-white">
+          <p className="rounded bg-[#FF4961] px-2 py-1 text-[15px] font-semibold text-white">
             *กรุณากรอกวันให้ตรงกับสลิป มิฉะนั้น ระบบรายการใกล้เคียงจะไม่ทำงาน [รูปแบบวัน (ปี ค.ศ./เดือน/วัน)]
           </p>
           {/* ภูม 2026-06-30 — 24 ชม. (เลิก AM/PM ที่พนักงานงง). Chrome ไม่ honor lang
@@ -158,7 +158,6 @@ export function EditDateSlipForm({
             value={value}
             onChange={setValue}
             max={toLocalInput(new Date().toISOString()).split("T")[0]}
-            required
           />
           {error && (
             <p className="text-[11px] text-red-700">{error}</p>
@@ -169,17 +168,17 @@ export function EditDateSlipForm({
               type="button"
               onClick={() => { setOpen(false); setError(null); setValue(toLocalInput(initialDateSlip)); }}
               disabled={pending}
-              className="text-xs text-muted hover:text-foreground hover:underline disabled:opacity-50"
+              className="rounded-lg px-3 py-2.5 text-sm text-muted hover:text-foreground hover:underline disabled:opacity-50"
             >
               ยกเลิก
             </button>
             <button
               type="submit"
               disabled={pending}
-              className="inline-flex items-center gap-1 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-primary-600 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-primary-600 disabled:opacity-50"
             >
               {pending ? (
-                <><Loader2 className="h-3 w-3 animate-spin" /> กำลังบันทึก…</>
+                <><Loader2 className="h-4 w-4 animate-spin" /> กำลังบันทึก…</>
               ) : (
                 needsRound1 ? "บันทึกวันที่โอน · ตรวจซ้ำ · ผ่านรอบ 1" : "บันทึกวันที่โอน และตรวจสอบรายการซ้ำ"
               )}
@@ -434,11 +433,11 @@ export function ApproveRejectForm({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
-        {isWithdraw
-          ? "ตรวจบัญชีปลายทาง + จำนวนเงินทางด้านซ้ายก่อน. กด ‘ยืนยันจ่ายเงิน’ เมื่อโอนเข้าบัญชีลูกค้าแล้ว (ยอดถูกหักจากกระเป๋าตั้งแต่ลูกค้ากดถอน) · กด ‘ปฏิเสธ’ เพื่อคืนเงินเข้ากระเป๋า"
-          : "กรุณาตรวจสอบวันที่โอนทางด้านซ้ายกับวันที่ในสลิป พร้อมดูรายการใกล้เคียงด้านล่าง (ถ้ามี) ก่อนอนุมัติ"}
-      </div>
+      {isWithdraw && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+          ตรวจบัญชีปลายทาง + จำนวนเงินทางด้านซ้ายก่อน. กด ‘ยืนยันจ่ายเงิน’ เมื่อโอนเข้าบัญชีลูกค้าแล้ว (ยอดถูกหักจากกระเป๋าตั้งแต่ลูกค้ากดถอน) · กด ‘ปฏิเสธ’ เพื่อคืนเงินเข้ากระเป๋า
+        </div>
+      )}
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
@@ -502,10 +501,9 @@ export function ApproveRejectForm({
               the admin there first; reject only when the slip is truly unusable. */}
           {!isWithdraw && (
             <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-900">
-              💡 ถ้าแค่ <b>ยอด</b> หรือ <b>วันที่</b> ไม่ตรงเล็กน้อย — กด
-              &lsquo;แก้ไขจำนวนเงิน&rsquo; (ด้านซ้าย) / &lsquo;แก้ไขเวลา&rsquo; (ด้านบน)
-              แล้วกด <b>อนุมัติ</b> ได้เลย <b>ไม่ต้อง</b>ให้ลูกค้าทำสลิปใหม่ ·
-              ปฏิเสธเฉพาะเมื่อสลิปใช้ไม่ได้จริง
+              💡 ถ้าแค่ <b>วันที่</b> ไม่ตรงเล็กน้อย — กด
+              &lsquo;แก้ไขเวลา&rsquo; (ด้านบน) แล้วกด <b>อนุมัติ</b> ได้เลย
+              <b>ไม่ต้อง</b>ให้ลูกค้าทำสลิปใหม่ · ปฏิเสธเฉพาะเมื่อสลิปใช้ไม่ได้จริง
             </div>
           )}
           <p className="text-xs font-bold text-red-900">

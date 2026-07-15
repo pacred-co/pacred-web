@@ -332,7 +332,7 @@ export async function autoIssueReceiptOnPaymentLand(
   const { data: fwRows, error: fwErr } = await admin
     .from("tb_forwarder")
     .select(
-      "id, userid, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+      "id, userid, paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
       "pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany, tax_doc_pref, " +
       "fshipby, ftrackingchn, fcabinetnumber",
     )
@@ -384,9 +384,15 @@ export async function autoIssueReceiptOnPaymentLand(
     const n = parseFloat(v);
     return Number.isFinite(n) ? n : 0;
   };
+  // COD (2026-07-15 · MONEY · F2) — a COD (ปลายทาง · paymethod='2') row's ftransportprice
+  // is collected at the door by the courier, so it must NOT be folded into the receipt
+  // total (else the domestic leg is double-charged: once on the receipt + once by the
+  // courier). Mirrors outstanding.ts:87 + computeForwarderDebitBatch. When the receipt is
+  // pinned to a paid bill (totalOverride) this raw sum is only a drift-log baseline, but
+  // making it COD-aware keeps the DIRECT-slip / wallet receipt (no override) correct.
   const perRowRaw = (r: FwRow): number =>
     num(r.ftotalprice) +
-    num(r.ftransportprice) +
+    (num(r.paymethod) === 2 ? 0 : num(r.ftransportprice)) +
     num(r.fpriceupdate) +
     num(r.fshippingservice) +
     num(r.pricecrate) +
@@ -405,7 +411,7 @@ export async function autoIssueReceiptOnPaymentLand(
   const maoBatch = computeForwarderDebitBatch(
     rows.map((r) => ({
       id: r.id, fshipby: r.fshipby, ftrackingchn: r.ftrackingchn, fcabinetnumber: r.fcabinetnumber,
-      ftotalprice: r.ftotalprice, ftransportprice: r.ftransportprice,
+      paymethod: r.paymethod, ftotalprice: r.ftotalprice, ftransportprice: r.ftransportprice,
       fpriceupdate: r.fpriceupdate, fshippingservice: r.fshippingservice,
       pricecrate: r.pricecrate, ftransportpricechnthb: r.ftransportpricechnthb,
       priceother: r.priceother, fdiscount: r.fdiscount,

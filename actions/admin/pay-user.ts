@@ -81,7 +81,7 @@ const PAYUSER_DEPOSIT_NAMEBANK = `KBANK-${BANK.accountNumber}`;
 // lib/forwarder/outstanding.ts). Kept as one constant so the SELECT and the
 // helper stay in lock-step.
 const FORWARDER_PRICE_COLS =
-  "id, fshipby, fcabinetnumber, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount" as const;
+  "id, fshipby, fcabinetnumber, paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount" as const;
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — local copy (same pattern as service-orders.ts L29

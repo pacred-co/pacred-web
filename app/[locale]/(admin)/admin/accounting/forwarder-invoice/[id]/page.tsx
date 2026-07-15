@@ -18,6 +18,7 @@
 import { Link } from "@/i18n/navigation";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { SITE_URL } from "@/components/seo/site";
 import QRCode from "qrcode";
 import { Printer } from "lucide-react";
@@ -52,6 +53,33 @@ export default async function ForwarderInvoicePrintPage({
 
   const { receipt } = doc;
   const { issueDate, documentIssuer } = doc.commonProps;
+
+  // ── อ้างอิง / เอกสารต้นทาง (owner 2026-07-15 · "เชื่อมโยง อ้างอิงถึงกัน" · F10) ──
+  // Resolve (a) the covered forwarder order ids → each links to /admin/forwarders/[id],
+  // (b) the source ใบวางบิล (FRI) this receipt was minted from (tb_forwarder_invoice_item).
+  // ADMIN-SHELL ONLY — NOT the shared <ReceiptPaper> (the public /r/[token] page reuses it,
+  // so it must never carry admin links). Soft-fail: a lookup miss never blanks the receipt.
+  const receiptFids = Array.from(
+    new Set(doc.pages.flatMap((p) => p.rows.map((row) => row.fid)).filter((f): f is string => !!f)),
+  );
+  const sourceBills: Array<{ id: number; docNo: string }> = [];
+  {
+    const numericFids = receiptFids.map((f) => Number(f)).filter((n) => Number.isInteger(n) && n > 0);
+    if (numericFids.length > 0) {
+      const admin = createAdminClient();
+      const { data: biItems, error: biErr } = await admin
+        .from("tb_forwarder_invoice_item").select("invoice_id").in("forwarder_id", numericFids);
+      if (biErr) console.error("[forwarder-invoice receipt] source-bill items failed", { code: biErr.code, message: biErr.message, rid: receipt.rid });
+      const invIds = Array.from(new Set(((biItems ?? []) as { invoice_id: number }[]).map((x) => x.invoice_id)));
+      if (invIds.length > 0) {
+        const { data: invs, error: invErr } = await admin
+          .from("tb_forwarder_invoice").select("id, doc_no").in("id", invIds).order("id", { ascending: false });
+        if (invErr) console.error("[forwarder-invoice receipt] source-bill headers failed", { code: invErr.code, message: invErr.message, rid: receipt.rid });
+        for (const iv of (invs ?? []) as Array<{ id: number; doc_no: string | null }>)
+          sourceBills.push({ id: iv.id, docNo: (iv.doc_no ?? "").trim() || `#${iv.id}` });
+      }
+    }
+  }
 
   // Peak's "สแกนเพื่อเปิดด้วยเว็บไซต์" QR. 2026-06-10 ภูม flag round 8 (point 4):
   // REPOINTED from the admin URL (which forced a customer to /login) to the
@@ -111,6 +139,34 @@ export default async function ForwarderInvoicePrintPage({
               </PrintButton>
             </div>
           </div>
+
+          {/* ── อ้างอิง / เอกสารต้นทาง (owner 2026-07-15 · "เข้าไปดูได้หมด" · F10) ── */}
+          {(sourceBills.length > 0 || receiptFids.length > 0) && (
+            <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded border border-sky-200 bg-sky-50 px-3 py-2 text-xs">
+              {sourceBills.length > 0 && (
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span className="font-medium text-sky-800">🧾 ใบวางบิลต้นทาง :</span>
+                  {sourceBills.map((b) => (
+                    <Link key={b.id} href={`/admin/billing-run/${b.id}`}
+                      className="rounded-full border border-sky-300 bg-white px-2 py-0.5 font-mono text-sky-700 hover:bg-sky-100">
+                      {b.docNo} →
+                    </Link>
+                  ))}
+                </span>
+              )}
+              {receiptFids.length > 0 && (
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span className="font-medium text-sky-800">ออเดอร์ :</span>
+                  {receiptFids.map((f) => (
+                    <Link key={f} href={`/admin/forwarders/${f}`}
+                      className="rounded-full border border-slate-300 bg-white px-2 py-0.5 font-mono text-slate-700 hover:bg-slate-100">
+                      #{f} →
+                    </Link>
+                  ))}
+                </span>
+              )}
+            </div>
+          )}
 
           <div className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
             <b>ตัวอย่างก่อนพิมพ์</b> — ใบเสร็จจะออกมา{" "}

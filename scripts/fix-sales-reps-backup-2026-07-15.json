@@ -1,0 +1,23 @@
+{
+  "plan": [
+    {
+      "login": "admin_looknut",
+      "name": "ณัฐริกา จันทำ",
+      "nick": "ลูกนัท",
+      "profileId": "9e94e7ff-10a8-435b-b7b3-e376ce3fca70",
+      "legacyLinked": false,
+      "exists": false,
+      "action": "INSERT tb_admin (ID=234) + link"
+    },
+    {
+      "login": "admin_bam",
+      "name": "บุญนภาลัย พรหมมาศ",
+      "nick": "แบม",
+      "profileId": "5020d76c-dfa0-497b-b6ae-dc0d7f404d16",
+      "legacyLinked": false,
+      "exists": false,
+      "action": "INSERT tb_admin (ID=235) + link"
+    }
+  ],
+  "at": "2026-07-15"
+}

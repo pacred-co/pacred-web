@@ -74,6 +74,17 @@ export interface ForwarderDebitRow {
    * Optional: callers that omit it fall back to per-base-tracking (unchanged).
    */
   fcabinetnumber?: string | null;
+  /**
+   * '1'=ต้นทาง (prepaid) · '2'=ปลายทาง (COD — the courier collects the domestic leg at
+   * the door). A COD row's `ftransportprice` is the AT-DOOR amount, so it must NOT be
+   * folded into the Pacred upfront collect/debit total (else the domestic leg is
+   * double-charged: once on the bill + once by the courier). Mirrors the customer
+   * self-pay engine (forwarder-collect-total.ts:136) + the list-page outstanding
+   * (outstanding.ts:87) so the collect surfaces never drift. OPTIONAL: absent/undefined
+   * → treated as prepaid → the domestic leg is added as before (no regression for
+   * callers that don't SELECT paymethod).
+   */
+  paymethod?: number | string | null;
   ftotalprice: number | string | null;
   ftransportprice: number | string | null;
   fpriceupdate: number | string | null;
@@ -193,8 +204,15 @@ export function computeForwarderDebitBatch(
   // The เหมาๆ anchor row carries +MAO_FLAT_FEE on its transport leg (L387).
   const baseLines = rows.map((r) => {
     const freight = toNumber(r.ftotalprice);
+    // D1 (2026-07-15 · MONEY · F1) — the DOMESTIC leg (ftransportprice) is billed upfront
+    // ONLY for a prepaid (ต้นทาง) row. A COD (ปลายทาง · paymethod='2') row's ftransportprice
+    // is collected at the door by the courier, so it is NOT folded into the Pacred
+    // collect/debit total (else the domestic leg is double-charged). Absent paymethod ⇒
+    // prepaid ⇒ unchanged. Mirrors outstanding.ts:87 + forwarder-collect-total.ts:136 so the
+    // four collect surfaces (ใบวางบิล · ใบแจ้งหนี้ · ใบเสร็จ · pay-bar) never drift on COD.
+    const domesticLeg = toNumber(r.paymethod) === 2 ? 0 : toNumber(r.ftransportprice);
     const otherCharges =
-      toNumber(r.ftransportprice) +
+      domesticLeg +
       toNumber(r.fpriceupdate) +
       toNumber(r.fshippingservice) +
       toNumber(r.pricecrate) +

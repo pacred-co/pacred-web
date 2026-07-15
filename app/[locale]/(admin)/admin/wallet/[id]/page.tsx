@@ -69,13 +69,13 @@
  */
 
 import { notFound } from "next/navigation";
-import { ArrowLeft, Plus, User as UserIcon, AlertTriangle } from "lucide-react";
+import { Plus, User as UserIcon, AlertTriangle } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { SlipImage } from "@/components/admin/slip-image";
-import { EditDateSlipForm, EditAmountForm, ApproveRejectForm } from "./edit-form";
+import { EditDateSlipForm, ApproveRejectForm } from "./edit-form";
 import { classifyWalletHsRow } from "@/lib/wallet/classify-approve-row";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { calcForwarderOutstanding, type ForwarderPriceFields } from "@/lib/forwarder/outstanding";
@@ -520,8 +520,8 @@ export default async function AdminWalletDetail({
       {/* ── 3. DETAIL CARD (2-col) ── */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
-          {/* LEFT — info pane */}
-          <div className="p-5 space-y-3 border-b md:border-b-0 md:border-r border-border">
+          {/* LEFT — info pane (no divider between panes · ปอน 2026-07-15) */}
+          <div className="p-5 space-y-3">
             <h2 className="text-xl font-light tracking-tight text-foreground leading-tight">
               {/* §0h — detail header is a real page-title tier (was text-lg).
                   Wave 19 BUG #4: type-aware title (was hard-coded "รายการชำระเงิน").
@@ -547,11 +547,11 @@ export default async function AdminWalletDetail({
                   <img
                     src={userAvatar}
                     alt={customerName}
-                    className="h-7 w-7 rounded-full object-cover border border-border"
+                    className="h-10 w-10 rounded-full object-cover border border-border"
                   />
                 ) : (
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-surface-alt text-muted">
-                    <UserIcon className="h-3.5 w-3.5" />
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-surface-alt text-muted">
+                    <UserIcon className="h-5 w-5" />
                   </span>
                 )}
                 <span className="font-mono">[{userid}]</span>
@@ -584,7 +584,7 @@ export default async function AdminWalletDetail({
                 is the alarm. Red stays on even once filled — legacy keeps this
                 line flagged because matching it to the slip is the whole job. */}
             <div className="text-[18.48px]">
-              <span className="inline-block rounded px-2 py-0.5 text-[18.48px] font-semibold bg-[#FF4961] text-white">
+              <span className="inline-block rounded px-2 py-0.5 text-[15px] font-semibold bg-[#FF4961] text-white">
                 เวลาโอนเงินในสลิป : {row.dateslip ? formatLegacyStamp(row.dateslip) : ""}
               </span>
             </div>
@@ -602,7 +602,7 @@ export default async function AdminWalletDetail({
                   so "จำนวนเงินในสลิป" would name a document that doesn't exist. */}
               {isCredit || isDirectSlip || isDebit ? (
                 <>
-                  <span className="font-semibold text-[#28D094]">จำนวนเงินในสลิป : </span>
+                  <span className="font-bold text-[#28D094]">จำนวนเงินในสลิป : </span>
                   <span className="font-mono font-bold text-[#28D094]">
                     +{amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
                   </span>
@@ -614,15 +614,6 @@ export default async function AdminWalletDetail({
                     {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })} บาท
                   </span>
                 </>
-              )}
-              {/* #6 (owner 2026-06-26) — correct the slip amount.
-                  Pending customer-slip rows (type 1/4/8 · server refuses linked
-                  "เติม-แล้วจ่าย" topups) — PLUS an APPROVED ฝากสั่งซื้อ slip
-                  (status='2' · type='8', delta=0 = money-neutral record fix, e.g.
-                  #105519 approved at a 0.01-wrong figure). */}
-              {((isPending && (typeKey === "1" || typeKey === "4" || typeKey === "8")) ||
-                (status === "2" && typeKey === "8")) && (
-                <EditAmountForm id={row.id} currentAmount={amount} />
               )}
             </div>
 
@@ -741,7 +732,7 @@ export default async function AdminWalletDetail({
                   return (
                     <div key={`${hno}-${i}`}>
                       <p className="text-xs">
-                        <span className="text-muted">
+                        <span className="text-sky-700">
                           {i + 1}. รายการชำระเงิน{c.kind === "shop" ? "ฝากสั่งซื้อ" : "ฝากนำเข้า"} :{" "}
                         </span>
                         {c.href ? (
@@ -760,18 +751,10 @@ export default async function AdminWalletDetail({
                 })}
                 <p className="text-xs font-semibold text-green-700">
                   จำนวนเงินในสลิป : {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-                  <span className="ml-3">
+                  <span className="ml-3 text-red-700">
                     ยอดรวมทุกรายการ : {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                   </span>
                 </p>
-                {partnerTopupId !== null && (
-                  <p className="text-[11px] text-muted">
-                    📎 สลิปอยู่ที่รายการชำระเงินคู่กัน{" "}
-                    <Link href={`/admin/wallet/${partnerTopupId}`} className="font-mono font-bold text-sky-700 hover:underline">
-                      #{partnerTopupId} →
-                    </Link>
-                  </p>
-                )}
               </div>
             )}
 
@@ -833,6 +816,7 @@ export default async function AdminWalletDetail({
                 <Field label="ชื่อบัญชี" value={row.nameuserbank} />
               </dl>
             )}
+
           </div>
         </div>
       </section>
@@ -875,21 +859,6 @@ export default async function AdminWalletDetail({
         </section>
       )}
 
-      {/* ── Footer nav ── */}
-      <div className="flex flex-wrap gap-2 pt-2">
-        <Link
-          href="/admin/wallet?view=tx"
-          className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-3 py-2 text-xs hover:bg-surface-alt"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" /> ย้อนกลับ
-        </Link>
-        <Link
-          href={`/admin/wallet?userid=${encodeURIComponent(userid)}`}
-          className="inline-flex items-center rounded-lg border border-primary-500 bg-primary-500 px-3 py-2 text-xs text-white hover:bg-primary-600"
-        >
-          ดูประวัติ wallet ของลูกค้านี้ →
-        </Link>
-      </div>
     </main>
   );
 }
