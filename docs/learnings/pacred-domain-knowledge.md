@@ -910,3 +910,16 @@ charge. Cross-link: [[sell-floor-rate-model]] · `lib/forwarder/resolve-rate.ts`
 **Why this matters next time:** when an agent's money diff says "same marker another block uses", verify the OTHER block's context — the advance-paid block sets `paydeposit='1'` at fstatus 2/3/4 (pre-arrival, where the dispatch gate can't see it yet, and the arrival scan handles the 6-hop); copying it onto rows already AT 6 changes queue membership. Column semantics are position-dependent in this schema.
 
 **Cross-links:** [[faithful-port-carry-not-rederive]] · the fstatus two-axis overload (juristic+credit loop 2026-06-14) · `lib/admin/pending-dispatch.ts` · G6 in the 2026-07-08 save-point.
+
+## [2026-07-15] "MOMO มั่ว" 🚩 flag — EXCLUDE already-split rows, use tb_forwarder.fweight, suffix-based split detection
+
+**Context:** built the ตรวจตู้ 🚩 flag (owner/ภูม) that marks rows where MOMO's per-box `momo_box_detail` contradicts the aggregate (แถวย่อยหนักเกินก้อนรวม · e.g. fwd 52137: box Σ 20,141kg vs aggregate 150kg). Pure detector `lib/admin/momo-box-consistency.ts` mirrors `planBoxRowSplit` guard-7 (box total = weight_kg×qty · 2% tol · dims-volume fallback).
+
+**Three traps found via a read-only prod/dev probe (`scripts/probe-momo-box-garbage-2026-07-15.ts`) BEFORE shipping:**
+1. **A naive "Σ box weight > aggregate" over-flags ~50 rows** — many are the *folded-discovery* convention-mix (box_detail stores per-piece on the bare box + box-total on the "-N" siblings → Σ×qty double-counts). The dims fallback reconciles those; only rows where **even dims can't reconcile** are genuinely มั่ว. Mirror the split guard's dims check or you cry wolf.
+2. **After a box-split, the anchor's `fweight` is REDUCED to box-1's share** — comparing that reduced anchor to the FULL `momo_box_detail` Σ false-flags every already-resolved shipment. **MUST exclude already-split rows** (a base with `<base>-N` siblings in tb_forwarder). Prod probe: 55 split / 0 true-garbage; dev: 51 split / 1 true-garbage.
+3. **Cabinet-scoped split detection under-counts → mass over-flag (verified DEV: 105 vs a true 1).** `momo_import_tracks.container_batch_no` is often null while the split siblings sit in a cabinet (or vice-versa), so `.in("fcabinetnumber", containers)` misses them. Use **SUFFIX-based** detection: `ftrackingchn.eq.<base>` OR `ftrackingchn.like.<base>-*` (chunked `.or()` to bound URLs). Also use **tb_forwarder.fweight** (the billed aggregate) as the reference on BOTH the ingest grid + detail page — NOT `momo_import_tracks.weight_kg` (which a later Live sync may have overwritten to match box_detail, hiding the tb-vs-MOMO contradiction the flag is meant to surface).
+
+**Why this matters next time:** any "aggregate vs breakdown" reconcile on MOMO data must (a) exclude resolved/split rows, (b) use the billed aggregate not the raw feed, (c) detect split by tracking-suffix not cabinet. And ALWAYS probe real prod+dev data before trusting a threshold — the naive count (105) vs the correct one (1) differed by 100×.
+
+**Cross-links:** `lib/integrations/momo-web/split-box-rows-plan.ts` (the guard mirrored) · `lib/admin/momo-bill-header.ts` (baseTracking/suffix) · `lib/admin/momo-box-consistency.test.ts`.

@@ -15,6 +15,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { momoTypeToProductType } from "@/lib/admin/momo-live-discovery-plan";
 import { deriveMomoMemberCode, baseTrackingOf, aggregateTrackDetailMetrics } from "@/lib/admin/momo-raw-helpers";
+import { deriveMomoBoxConsistency, type BoxConsistencyInput } from "@/lib/admin/momo-box-consistency";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import type { PackingUploadSnapshot } from "@/actions/admin/momo-packing-history";
 import { MomoIngestClient, type IngestTrack, type MissingParcel } from "./momo-containers-client";
@@ -203,6 +204,85 @@ export default async function MomoContainersPage() {
     }
   }
 
+  // 🚩 "MOMO มั่ว" (owner/ภูม 2026-07-15) — a base whose momo_box_detail (>1 box)
+  // contradicts its MOMO aggregate weight/คิว AND whose dims can't reconcile → the
+  // auto box-split refuses it → the row needs a real แต้ม packing list. Already-split
+  // shipments (a base with sibling tb_forwarder rows in its cabinet) are SKIPPED —
+  // they're resolved, and the split reduces the anchor weight so a naive compare would
+  // false-flag them. See lib/admin/momo-box-consistency.ts (mirrors planBoxRowSplit).
+  const garbageByBase = new Map<string, IngestTrack["momoGarbage"]>();
+  {
+    const allBases = [...new Set(intermediate.map((r) => (r.tracking ? baseTrackingOf(r.tracking) : "")).filter(Boolean))];
+    if (allBases.length > 0) {
+      // box_detail for these bases (chunked · avoid a huge IN list)
+      const boxesByBase = new Map<string, BoxConsistencyInput[]>();
+      const CHUNK = 300;
+      for (let i = 0; i < allBases.length; i += CHUNK) {
+        const slice = allBases.slice(i, i + CHUNK);
+        const { data: bd, error: bdErr } = await admin
+          .from("momo_box_detail")
+          .select("base_tracking, box_tracking, weight_kg, cbm, width, length, height, quantity")
+          .in("base_tracking", slice);
+        if (bdErr) { console.error("[momo-containers box_detail] failed", { code: bdErr.code, message: bdErr.message }); continue; }
+        for (const r of (bd ?? []) as Array<Record<string, number | string | null>>) {
+          const b = String(r.base_tracking ?? "").trim();
+          if (!b) continue;
+          const arr = boxesByBase.get(b) ?? [];
+          arr.push({
+            boxTracking: String(r.box_tracking ?? "").trim(),
+            weightKgPerPiece: num(r.weight_kg), cbmPerPiece: num(r.cbm),
+            width: num(r.width), length: num(r.length), height: num(r.height), quantity: num(r.quantity),
+          });
+          boxesByBase.set(b, arr);
+        }
+      }
+      // Load the tb_forwarder rows for these bases (BARE + "<base>-N" siblings) so we can
+      // (a) DETECT a split — a base with >1 row was already split → resolved → skip — and
+      // (b) use the BARE aggregate's fweight/fvolume as the reference (the value that will
+      // be BILLED), consistent with the detail page + the robust reconcile. This is
+      // SUFFIX-based (robust) not cabinet-scoped: box-split siblings can sit in an
+      // uncabineted / different cabinet than the ingest row's container_batch_no, so a
+      // cabinet-scoped count under-detects splits and mass over-flags (verified DEV: 105
+      // vs a true 1). Chunked `.or()` keeps each URL bounded.
+      const rowCountByBase = new Map<string, number>();
+      const bareByBase = new Map<string, { w: number; c: number }>();
+      const OR_CHUNK = 40;
+      for (let i = 0; i < allBases.length; i += OR_CHUNK) {
+        const slice = allBases.slice(i, i + OR_CHUNK);
+        const orFilter = slice.flatMap((b) => [`ftrackingchn.eq.${b}`, `ftrackingchn.like.${b}-*`]).join(",");
+        const { data: fw, error: fwErr } = await admin
+          .from("tb_forwarder").select("ftrackingchn, fweight, fvolume").or(orFilter).limit(6000);
+        if (fwErr) { console.error("[momo-containers split-detect] failed", { code: fwErr.code, message: fwErr.message }); continue; }
+        for (const r of (fw ?? []) as Array<{ ftrackingchn: string | null; fweight: number | string | null; fvolume: number | string | null }>) {
+          const ftk = (r.ftrackingchn ?? "").trim();
+          const b = baseTrackingOf(ftk);
+          if (!b) continue;
+          rowCountByBase.set(b, (rowCountByBase.get(b) ?? 0) + 1);
+          if (ftk === b) bareByBase.set(b, { w: num(r.fweight), c: num(r.fvolume) }); // the bare aggregate row
+        }
+      }
+      // fallback aggregate for a PENDING base (no tb_forwarder row yet) = the MOMO ingest value.
+      const momoAggByBase = new Map<string, { w: number; c: number }>();
+      for (const r of intermediate) {
+        const b = r.tracking ? baseTrackingOf(r.tracking) : "";
+        if (b && !momoAggByBase.has(b)) momoAggByBase.set(b, { w: r.weightKg, c: r.cbm });
+      }
+      for (const [b, boxes] of boxesByBase) {
+        if (boxes.length <= 1) continue;
+        if ((rowCountByBase.get(b) ?? 0) > 1) continue; // already split (>1 tb_forwarder row) → skip
+        const agg = bareByBase.get(b) ?? momoAggByBase.get(b);
+        if (!agg) continue;
+        const v = deriveMomoBoxConsistency({ fweight: agg.w, fvolume: agg.c }, boxes);
+        if (v.garbage && v.reason) {
+          garbageByBase.set(b, {
+            reason: v.reason, boxCount: v.boxCount,
+            boxWeightSum: v.boxWeightSum, aggWeight: v.aggWeight, boxCbmSum: v.boxCbmSum, aggCbm: v.aggCbm,
+          });
+        }
+      }
+    }
+  }
+
   const tracks: IngestTrack[] = intermediate.map((r) => {
     const base = r.tracking ? baseTrackingOf(r.tracking) : "";
     const pk = base ? packingByBase.get(base) : undefined;
@@ -217,6 +297,7 @@ export default async function MomoContainersPage() {
       hasLive: !!lv,
       liveWeight: lv?.weight ?? null,
       liveCbm: lv?.cbm ?? null,
+      momoGarbage: base ? garbageByBase.get(base) ?? null : null,
       etd: (r.container && etaByCabinet.get(r.container)?.etd) || null,
       eta: (r.container && etaByCabinet.get(r.container)?.eta) || null,
     };

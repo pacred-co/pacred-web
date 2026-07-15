@@ -67,6 +67,16 @@ export type IngestTrack = {
   hasLive: boolean;
   liveWeight: number | null;
   liveCbm: number | null;
+  // 🚩 "MOMO มั่ว" — box_detail ต่อกล่องขัดกับก้อนรวม + dims ก็ซ่อมไม่ได้ (แถวย่อยหนัก
+  // เกินก้อนรวม) → แตกกล่องอัตโนมัติไม่ได้ · ต้องอัพ packing list แต้ม. null = ปกติ.
+  momoGarbage: {
+    reason: "weight" | "cbm";
+    boxCount: number;
+    boxWeightSum: number;
+    aggWeight: number;
+    boxCbmSum: number;
+    aggCbm: number;
+  } | null;
 };
 
 // เฟส C — a parcel in the packing list that MOMO API never sent (พัสดุขาด).
@@ -172,7 +182,7 @@ const DATA_KEYS = [
   "serviceFee", "status", "return", "etd", "eta",
 ];
 
-type Tab = "pending" | "committed" | "all" | "mismatch";
+type Tab = "pending" | "committed" | "all" | "mismatch" | "garbage";
 
 export function MomoIngestClient({ tracks, missing, loadError }: { tracks: IngestTrack[]; missing: MissingParcel[]; loadError: string | null }) {
   const router = useRouter();
@@ -211,6 +221,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     pending: tracks.filter((t) => !t.committed).length,
     committed: tracks.filter((t) => t.committed).length,
     mismatch: tracks.filter((t) => pkWtDiff(t) || pkVolDiff(t) || liveWtDiff(t) || liveVolDiff(t)).length,
+    garbage: tracks.filter((t) => t.momoGarbage).length,
   }), [tracks]);
   const invalidPr = useMemo(() => tracks.filter((t) => !t.committed && t.userIdValid === false).length, [tracks]);
 
@@ -219,6 +230,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     if (tab === "pending") list = list.filter((t) => !t.committed);
     else if (tab === "committed") list = list.filter((t) => t.committed);
     else if (tab === "mismatch") list = list.filter((t) => pkWtDiff(t) || pkVolDiff(t) || liveWtDiff(t) || liveVolDiff(t));
+    else if (tab === "garbage") list = list.filter((t) => t.momoGarbage);
     const term = q.trim().toLowerCase();
     if (term)
       list = list.filter((t) =>
@@ -567,6 +579,16 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
             <Link href={`/admin/momo-containers/${encodeURIComponent(t.container)}`} className="font-mono font-semibold text-sky-700 hover:underline">{t.container}</Link>
           ) : (<span className="text-[11px] text-amber-600" title={t.routingBatch ?? ""}>⏳ ยังไม่เข้าตู้ปิด</span>)}
           {t.sack && <div className="text-[11px] text-muted">กระสอบ: {t.sack}</div>}
+          {t.momoGarbage && (
+            <div className="mt-0.5 inline-flex items-center gap-0.5 rounded bg-red-600 px-1 py-0.5 text-[11px] font-bold text-white"
+              title={`MOMO มั่ว — box_detail ${t.momoGarbage.boxCount} กล่อง รวม${
+                t.momoGarbage.reason === "weight"
+                  ? `น้ำหนัก ${n2(t.momoGarbage.boxWeightSum)} กก. เกินก้อนรวม ${n2(t.momoGarbage.aggWeight)} กก.`
+                  : `คิว ${n6(t.momoGarbage.boxCbmSum)} เกินก้อนรวม ${n6(t.momoGarbage.aggCbm)}`
+              } · ขนาดกล่องก็เช็คไม่ได้ → แตกกล่องอัตโนมัติไม่ได้ · ต้องอัพ packing list แต้ม`}>
+              🚩 MOMO มั่ว
+            </div>
+          )}
         </>
       ),
     },
@@ -643,6 +665,13 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700">
             <AlertCircle className="h-3 w-3" /> PR ไม่มีในระบบ {invalidPr}
           </span>
+        )}
+        {counts.garbage > 0 && (
+          <button type="button" onClick={() => setTab("garbage")}
+            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${tab === "garbage" ? "bg-red-600 text-white" : "bg-red-100 text-red-700 hover:bg-red-200"}`}
+            title="MOMO ส่งน้ำหนัก/คิว ต่อกล่อง ขัดกับก้อนรวม (แถวย่อยหนักเกินก้อนรวม) · ระบบแตกกล่องอัตโนมัติไม่ได้ → ต้องอัพ packing list แต้ม">
+            🚩 MOMO มั่ว {counts.garbage}
+          </button>
         )}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหา แทรคกิ้ง / PR / เลขตู้…"
           className="ml-auto rounded-full border border-border bg-white dark:bg-surface px-3 py-1 text-xs w-56" />
@@ -766,7 +795,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
               const done = t.committed || rr?.ok;
               const fid = t.committedForwarderId ?? rr?.fid ?? null;
               return (
-                <tr key={t.id} className={`align-top ${done ? "bg-emerald-50/40" : sel.has(t.id) ? "bg-primary-50/60" : t.userIdValid === false ? "bg-red-50/30" : ""}`}>
+                <tr key={t.id} className={`align-top ${done ? "bg-emerald-50/40" : sel.has(t.id) ? "bg-primary-50/60" : t.momoGarbage ? "bg-red-50" : t.userIdValid === false ? "bg-red-50/30" : ""}`}>
                   {/* ติ๊กเลือก + เลขแถว · แถวที่เข้าระบบแล้ว = ลิงก์ไปใบนำเข้า (ย้ายมาจากคอลัมน์
                       "นำเข้าระบบ" ที่ owner ให้เอาออก — ข้อมูลไม่หาย) */}
                   <td className="px-2 py-1.5 text-center">
