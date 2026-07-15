@@ -90,6 +90,7 @@ export async function propagateMomoLiveStatusNow(): Promise<
     data: LiveStatusAndDataResult["data"];
     cabinet: LiveStatusAndDataResult["cabinet"];
     boxSplit: LiveStatusAndDataResult["boxSplit"];
+    staging: LiveStatusAndDataResult["staging"];
   }>
 > {
   return withAdmin<{
@@ -97,6 +98,7 @@ export async function propagateMomoLiveStatusNow(): Promise<
     data: LiveStatusAndDataResult["data"];
     cabinet: LiveStatusAndDataResult["cabinet"];
     boxSplit: LiveStatusAndDataResult["boxSplit"];
+    staging: LiveStatusAndDataResult["staging"];
   }>(
     ["super", "ops", "warehouse", "accounting"],
     async ({ adminId }) => {
@@ -105,7 +107,7 @@ export async function propagateMomoLiveStatusNow(): Promise<
       }
       try {
         const admin = createAdminClient();
-        const { status: summary, data, cabinet, boxSplit } = await propagateMomoLiveStatusAndData(admin);
+        const { status: summary, data, cabinet, boxSplit, staging } = await propagateMomoLiveStatusAndData(admin);
         // Audit the bulk status + data push (best-effort · non-fatal).
         await logAdminAction(adminId, "momo_live_status_propagate", "tb_forwarder", "bulk", {
           matched: summary.matched,
@@ -119,8 +121,9 @@ export async function propagateMomoLiveStatusNow(): Promise<
           closeDateFilled: cabinet.closeDateFilled,
           boxSplitSplit: boxSplit.split,
           boxSplitSiblingsCreated: boxSplit.siblingsCreated,
+          stagingFilled: staging.filled,
         });
-        return { ok: true, data: { summary, data, cabinet, boxSplit } };
+        return { ok: true, data: { summary, data, cabinet, boxSplit, staging } };
       } catch (e) {
         console.error("[momo-web-live] status+data propagate failed", e);
         return {

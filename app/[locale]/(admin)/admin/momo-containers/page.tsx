@@ -14,10 +14,11 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { momoTypeToProductType } from "@/lib/admin/momo-live-discovery-plan";
-import { deriveMomoMemberCode, baseTrackingOf } from "@/lib/admin/momo-raw-helpers";
+import { deriveMomoMemberCode, baseTrackingOf, aggregateTrackDetailMetrics } from "@/lib/admin/momo-raw-helpers";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import type { PackingUploadSnapshot } from "@/actions/admin/momo-packing-history";
-import { MomoIngestClient, type IngestTrack } from "./momo-containers-client";
+import { MomoIngestClient, type IngestTrack, type MissingParcel } from "./momo-containers-client";
+import { MomoGuideButton } from "./momo-guide-button";
 
 export const dynamic = "force-dynamic";
 
@@ -140,7 +141,7 @@ export default async function MomoContainersPage() {
   // packing upload for each container present, aggregate the snapshot rows by base
   // tracking → a map. weight_kg above is the SHIPMENT aggregate (same basis the
   // packing baseTracking uses), so the compare in the client is apples-to-apples.
-  const packingByBase = new Map<string, { weight: number | null; cbm: number | null; boxes: number | null }>();
+  const packingByBase = new Map<string, { weight: number | null; cbm: number | null; boxes: number | null; code: string | null; container: string }>();
   if (containers.length > 0) {
     const { data: pkUploads, error: pkErr } = await admin
       .from("momo_packing_upload")
@@ -158,7 +159,7 @@ export default async function MomoContainersPage() {
       for (const row of snap?.rows ?? []) {
         const b = baseTrackingOf(row.baseTracking ?? "");
         if (!b || packingByBase.has(b)) continue; // latest upload wins
-        packingByBase.set(b, { weight: row.weight, cbm: row.cbm, boxes: row.boxes });
+        packingByBase.set(b, { weight: row.weight, cbm: row.cbm, boxes: row.boxes, code: row.code, container: cab });
       }
     }
   }
@@ -178,8 +179,34 @@ export default async function MomoContainersPage() {
         etaByCabinet.set(row.container_no, { etd: row.etd, eta: row.eta });
   }
 
+  // MOMO Live match (เฟส B) — the closed-container manifest (track_details) is the
+  // MOST complete source: it lists every parcel MOMO knows, even ones the API feed
+  // dropped. Read the CACHED momo_container_closed (cron pulls Live ~ทุก 5 นาที) →
+  // aggregate track_details by base tracking (Σ across split parcels · reuse the
+  // proven helper) → a base→{kg,cbm} map. Fast (DB read, no scrape) + apples-to-apples.
+  const liveByBase = new Map<string, { weight: number | null; cbm: number | null }>();
+  {
+    const { data: ccRows, error: ccErr } = await admin
+      .from("momo_container_closed")
+      .select("raw")
+      .order("last_synced_at", { ascending: false })
+      .limit(400);
+    if (ccErr) console.error("[momo-containers live load] failed", { code: ccErr.code, message: ccErr.message });
+    for (const cc of (ccRows ?? []) as Array<{ raw: unknown }>) {
+      const td = cc.raw && typeof cc.raw === "object" ? (cc.raw as Record<string, unknown>).track_details : null;
+      const agg = aggregateTrackDetailMetrics(Array.isArray(td) ? td : []);
+      for (const [key, m] of Object.entries(agg)) {
+        if (key !== baseTrackingOf(key)) continue; // keep only the base/aggregate entries (Σ)
+        if (liveByBase.has(key)) continue; // ordered desc → latest container-close wins
+        liveByBase.set(key, { weight: m.kg || null, cbm: m.cbm || null });
+      }
+    }
+  }
+
   const tracks: IngestTrack[] = intermediate.map((r) => {
-    const pk = r.tracking ? packingByBase.get(baseTrackingOf(r.tracking)) : undefined;
+    const base = r.tracking ? baseTrackingOf(r.tracking) : "";
+    const pk = base ? packingByBase.get(base) : undefined;
+    const lv = base ? liveByBase.get(base) : undefined;
     return {
       ...r,
       userIdValid: r.guessedUserId == null ? null : knownUserIds.has(r.guessedUserId.toUpperCase()),
@@ -187,10 +214,33 @@ export default async function MomoContainersPage() {
       packingWeight: pk?.weight ?? null,
       packingCbm: pk?.cbm ?? null,
       packingBoxes: pk?.boxes ?? null,
+      hasLive: !!lv,
+      liveWeight: lv?.weight ?? null,
+      liveCbm: lv?.cbm ?? null,
       etd: (r.container && etaByCabinet.get(r.container)?.etd) || null,
       eta: (r.container && etaByCabinet.get(r.container)?.eta) || null,
     };
   });
+
+  // เฟส C — พัสดุขาด: bases in the packing list but NOT in the MOMO API feed
+  // (MOMO API drops advanced parcels · the ฿294k recovery). Packing carries the PR
+  // (member code) + cabinet + weight/cbm → enough to CREATE via the proven, guarded
+  // addMissingMomoParcel. Live-only-missing (no PR) is out of scope here (→ /drift page).
+  const apiBases = new Set(intermediate.map((r) => (r.tracking ? baseTrackingOf(r.tracking) : "")).filter(Boolean));
+  const missing: MissingParcel[] = [];
+  for (const [base, pk] of packingByBase) {
+    if (apiBases.has(base) || !pk.container) continue;
+    missing.push({
+      tracking: base,
+      cabinet: pk.container,
+      code: pk.code,
+      weight: pk.weight,
+      cbm: pk.cbm,
+      boxes: pk.boxes,
+      inLive: liveByBase.has(base),
+    });
+  }
+  missing.sort((a, b) => a.cabinet.localeCompare(b.cabinet));
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-6 space-y-5">
@@ -210,9 +260,11 @@ export default async function MomoContainersPage() {
               {l.label}
             </Link>
           ))}
+          <MomoGuideButton />
         </div>
       </header>
-      <MomoIngestClient tracks={tracks} loadError={error?.message ?? null} />
+
+      <MomoIngestClient tracks={tracks} missing={missing} loadError={error?.message ?? null} />
     </div>
   );
 }

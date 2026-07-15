@@ -9,13 +9,18 @@
  * กดเลขตู้ → หน้า detail /[cabinet] (เก็บไว้).
  */
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { ALL_WORKBOOK_CARRIER_OPTIONS } from "@/lib/cart/ship-by-eligibility";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { CheckCircle2, AlertCircle, RefreshCw, X, PackageCheck, Truck } from "lucide-react";
+import { CheckCircle2, AlertCircle, RefreshCw, X, PackageCheck, Truck, Check } from "lucide-react";
 import { commitMomoRowToForwarder } from "@/actions/admin/momo-commit";
+import { propagateMomoLiveStatusNow } from "@/actions/admin/momo-web-live";
+import { addMissingMomoParcelsBulk } from "@/actions/admin/momo-add-missing";
+import { updateMomoImportTrackFields } from "@/actions/admin/momo-ingest-edit";
+import { confirm } from "@/components/ui/confirm";
+import { useColumnOrder } from "@/lib/hooks/use-column-order";
 // Import the input TYPE from the auth-agnostic core, NOT the "use server" file
 // (a type re-export from a "use server" module hits a Turbopack analyzer bug).
 import type { CommitMomoRowInput } from "@/lib/admin/commit-momo-row-core";
@@ -58,6 +63,21 @@ export type IngestTrack = {
   packingWeight: number | null;
   packingCbm: number | null;
   packingBoxes: number | null;
+  // เฟส B — MOMO Live match (closed-container manifest · null = ไม่มีใน Live)
+  hasLive: boolean;
+  liveWeight: number | null;
+  liveCbm: number | null;
+};
+
+// เฟส C — a parcel in the packing list that MOMO API never sent (พัสดุขาด).
+export type MissingParcel = {
+  tracking: string;
+  cabinet: string;
+  code: string | null; // PR from packing (may be non-PR → ต้องกรอกเอง)
+  weight: number | null;
+  cbm: number | null;
+  boxes: number | null;
+  inLive: boolean;
 };
 
 const WT_EPS = 0.01;
@@ -68,6 +88,13 @@ function pkWtDiff(t: IngestTrack): boolean {
 }
 function pkVolDiff(t: IngestTrack): boolean {
   return t.hasPacking && t.packingCbm != null && t.cbm > 0 && Math.abs(t.cbm - t.packingCbm) > VOL_EPS;
+}
+/** API weight/cbm disagrees with MOMO Live (closed-container manifest). */
+function liveWtDiff(t: IngestTrack): boolean {
+  return t.hasLive && t.liveWeight != null && t.weightKg > 0 && Math.abs(t.weightKg - t.liveWeight) > WT_EPS;
+}
+function liveVolDiff(t: IngestTrack): boolean {
+  return t.hasLive && t.liveCbm != null && t.cbm > 0 && Math.abs(t.cbm - t.liveCbm) > VOL_EPS;
 }
 
 // 🔴 CLOSED CARRIER LIST (owner 2026-07-14) — "บังคับให้เลือกให้ใส่แค่ที่มีในไฟล์ที่ส่งให้เท่านั้น".
@@ -106,14 +133,68 @@ const thNoFeed = "px-2 py-2 text-center font-normal italic text-muted/50";
 const tdNoFeed = "px-2 py-1.5 text-center text-gray-300";
 const DASH = <span className="text-gray-300">—</span>;
 
+// export column set (Copy/Excel · เฟส A-4)
+const EXPORT_COLS: { label: string; val: (t: IngestTrack) => string | number }[] = [
+  { label: "แทรคกิ้ง", val: (t) => t.tracking ?? "" },
+  { label: "ตู้", val: (t) => t.container ?? "" },
+  { label: "ลูกค้า (PR)", val: (t) => t.guessedUserId ?? "" },
+  { label: "น้ำหนัก", val: (t) => t.weightKg || "" },
+  { label: "คิว", val: (t) => t.cbm || "" },
+  { label: "น้ำหนัก(packing)", val: (t) => t.packingWeight ?? "" },
+  { label: "คิว(packing)", val: (t) => t.packingCbm ?? "" },
+  { label: "น้ำหนัก(Live)", val: (t) => t.liveWeight ?? "" },
+  { label: "คิว(Live)", val: (t) => t.liveCbm ?? "" },
+  { label: "จำนวน", val: (t) => t.qty ?? "" },
+  { label: "ขนาด(กxยxส)", val: (t) => (t.width || t.length || t.height) ? `${t.width}x${t.length}x${t.height}` : "" },
+  { label: "ประเภท", val: (t) => PRODUCT_TYPE_TH[t.guessedProductType] ?? "" },
+  { label: "สถานะ MOMO", val: (t) => t.adminStatusText ?? "" },
+  { label: "เข้าระบบ", val: (t) => (t.committed ? `#${t.committedForwarderId ?? ""}` : "ยังไม่เข้า") },
+];
+
+// ⇅ sortable columns → value getter (คีย์ = sortKey ของแต่ละคอลัมน์)
+const SORT_VAL: Record<string, (t: IngestTrack) => string | number> = {
+  container: (t) => t.container ?? "",
+  smDate: (t) => t.smDate ?? "",
+  type: (t) => t.guessedProductType,
+  pr: (t) => t.guessedUserId ?? "",
+  tracking: (t) => t.tracking ?? "",
+  w: (t) => t.width || 0,
+  l: (t) => t.length || 0,
+  h: (t) => t.height || 0,
+  qty: (t) => t.qty ?? -1,
+  weight: (t) => t.weightKg,
+  cbm: (t) => t.cbm,
+};
+// ⋮⋮ default column order (checkbox # = คอลัมน์แรกตายตัว · 27 ตัวนี้ลากย้ายได้ · = ลำดับตารางปอนเป๊ะ)
+const DATA_KEYS = [
+  "image", "container", "trans", "smDate", "smNumber", "branch", "product", "dum", "type", "code",
+  "tracking", "w", "l", "h", "totalParcel", "wt", "vol", "totalWt", "totalVol", "rem", "cg", "note",
+  "serviceFee", "status", "return", "etd", "eta",
+];
+
 type Tab = "pending" | "committed" | "all" | "mismatch";
 
-export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[]; loadError: string | null }) {
+export function MomoIngestClient({ tracks, missing, loadError }: { tracks: IngestTrack[]; missing: MissingParcel[]; loadError: string | null }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [tab, setTab] = useState<Tab>("pending");
   const [q, setQ] = useState("");
   const [zoom, setZoom] = useState<{ urls: string[]; tracking: string } | null>(null);
+  // เฟส B/C — Live pull + Copy/Excel + missing-parcel recovery (ภูม · re-added on ปอน table 2026-07-14)
+  const [liveBusy, setLiveBusy] = useState(false);
+  const [liveMsg, setLiveMsg] = useState<string | null>(null);
+  const [liveConfirm, setLiveConfirm] = useState(false); // preview-before-pull modal
+  const [missingBusy, setMissingBusy] = useState(false);
+  const [missingMsg, setMissingMsg] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  // ⇅ sort + ⋮⋮ reorderable columns (ไอแต้ม-style · re-added on ปอน table 2026-07-14)
+  const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" } | null>(null);
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const { order: colOrder, move: moveCol, reset: resetCols } = useColumnOrder(DATA_KEYS);
+  // ✎ inline-edit น้ำหนัก/คิว/จำนวน (pending only · updateMomoImportTrackFields · แก้ก่อนนำเข้า)
+  const [editing, setEditing] = useState<{ id: string; field: "weightKg" | "cbm" | "qty" | "width" | "length" | "height" | "pr"; value: string } | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editErr, setEditErr] = useState<string | null>(null);
   // per-row result after commit (so a just-imported row flips without waiting for refresh)
   const [rowResult, setRowResult] = useState<Record<string, { ok: boolean; message: string; fid?: number }>>({});
   // the import preview/confirm modal
@@ -129,7 +210,7 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
     all: tracks.length,
     pending: tracks.filter((t) => !t.committed).length,
     committed: tracks.filter((t) => t.committed).length,
-    mismatch: tracks.filter((t) => pkWtDiff(t) || pkVolDiff(t)).length,
+    mismatch: tracks.filter((t) => pkWtDiff(t) || pkVolDiff(t) || liveWtDiff(t) || liveVolDiff(t)).length,
   }), [tracks]);
   const invalidPr = useMemo(() => tracks.filter((t) => !t.committed && t.userIdValid === false).length, [tracks]);
 
@@ -137,7 +218,7 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
     let list = tracks;
     if (tab === "pending") list = list.filter((t) => !t.committed);
     else if (tab === "committed") list = list.filter((t) => t.committed);
-    else if (tab === "mismatch") list = list.filter((t) => pkWtDiff(t) || pkVolDiff(t));
+    else if (tab === "mismatch") list = list.filter((t) => pkWtDiff(t) || pkVolDiff(t) || liveWtDiff(t) || liveVolDiff(t));
     const term = q.trim().toLowerCase();
     if (term)
       list = list.filter((t) =>
@@ -146,6 +227,24 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
         (t.container ?? "").toLowerCase().includes(term));
     return list;
   }, [tracks, tab, q]);
+
+  // apply ⇅ sort (in-session · stable when no sort) — the table renders `sorted`
+  const sorted = useMemo(() => {
+    if (!sort) return filtered;
+    const get = SORT_VAL[sort.key];
+    if (!get) return filtered;
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      const va = get(a), vb = get(b);
+      if (va < vb) return sort.dir === "asc" ? -1 : 1;
+      if (va > vb) return sort.dir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return arr;
+  }, [filtered, sort]);
+  const toggleSort = (key: string) =>
+    setSort((s) => (s?.key === key ? (s.dir === "asc" ? { key, dir: "desc" } : null) : { key, dir: "asc" }));
+  const sortIcon = (key: string) => (sort?.key === key ? (sort.dir === "asc" ? "↑" : "↓") : "⇅");
 
   // ── ติ๊กเลือก — เลือกได้เฉพาะแถวที่ "ยังไม่เข้าระบบ" และอยู่ในผลกรองปัจจุบัน ──
   const allPendingIds = useMemo(
@@ -233,6 +332,113 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
     startTransition(() => router.refresh());
   }
 
+  // ── เฟส C — พัสดุขาด (packing มี · API ไม่ส่ง) → ดึงเข้าระบบผ่าน addMissingMomoParcelsBulk (guarded) ──
+  const isValidPr = (pr: string | null) => /^PR\d+$/i.test((pr ?? "").trim());
+  const missingReady = missing.filter((m) => isValidPr(m.code));
+  const missingNoPr = missing.filter((m) => !isValidPr(m.code));
+
+  async function onCreateMissing() {
+    if (missingReady.length === 0) return;
+    if (!(await confirm(`ดึงพัสดุที่ขาด ${missingReady.length} รายการ เข้าระบบ?\n\nสร้างรายการ tb_forwarder ให้พัสดุที่มีใน packing list แต่ MOMO API ไม่ส่ง (ใช้ PR/น้ำหนัก/คิว จาก packing · ข้ามรายการที่มีในระบบแล้วอัตโนมัติ · มี guard กันซ้ำ + เช็ค PR)`))) return;
+    setMissingBusy(true);
+    setMissingMsg(null);
+    try {
+      const rows = missingReady.map((m) => ({
+        tracking: m.tracking,
+        cabinet: m.cabinet,
+        memberCode: (m.code ?? "").toUpperCase(),
+        weightKg: m.weight ?? 0,
+        cbm: m.cbm ?? 0,
+        boxCount: m.boxes && m.boxes > 0 ? m.boxes : undefined,
+      }));
+      const res = await addMissingMomoParcelsBulk(rows);
+      if (res.ok && res.data) {
+        setMissingMsg(`✅ ดึงเข้าระบบ ${res.data.added} · ข้าม (มีแล้ว) ${res.data.skipped} · ล้มเหลว ${res.data.failed}`);
+        startTransition(() => router.refresh());
+      } else {
+        setMissingMsg(res.ok ? "เสร็จ" : `⚠️ ${res.error}`);
+      }
+    } catch (err) {
+      setMissingMsg(err instanceof Error ? `⚠️ ${err.message}` : "⚠️ ดึงไม่สำเร็จ");
+    } finally {
+      setMissingBusy(false);
+    }
+  }
+
+  // ── เฟส B — ดึง Live สด (propagateMomoLiveStatusNow · เติม tb_forwarder ที่ commit แล้ว + staging pending) ──
+  async function onPullLive() {
+    setLiveConfirm(false);
+    setLiveBusy(true);
+    setLiveMsg(null);
+    try {
+      const res = await propagateMomoLiveStatusNow();
+      if (res.ok && res.data) {
+        const s = res.data;
+        setLiveMsg(`✅ ดึง Live สำเร็จ · อัปเดตสถานะ ${s.summary.advanced} · เติมข้อมูล(เข้าระบบแล้ว) ${s.data.filled} · เติมข้อมูล(ยังไม่นำเข้า) ${s.staging.filled} · เลขตู้ ${s.cabinet.filled} · แตกกล่อง ${s.boxSplit.split}`);
+        startTransition(() => router.refresh());
+      } else {
+        setLiveMsg(res.ok ? "ดึง Live เสร็จ" : `⚠️ ดึง Live ไม่สำเร็จ: ${res.error}`);
+      }
+    } catch (err) {
+      setLiveMsg(err instanceof Error ? `⚠️ ดึง Live ไม่สำเร็จ: ${err.message}` : "⚠️ ดึง Live ไม่สำเร็จ");
+    } finally {
+      setLiveBusy(false);
+    }
+  }
+
+  // Copy/Excel export — ส่งออก "ตามที่กรองอยู่" (filtered) · Copy=TSV clipboard · Excel=CSV (UTF-8 BOM · formula-safe)
+  function exportRows(kind: "copy" | "excel") {
+    const header = EXPORT_COLS.map((c) => c.label);
+    const rows = sorted.map((t) => EXPORT_COLS.map((c) => String(c.val(t) ?? "")));
+    if (kind === "copy") {
+      const tsv = [header, ...rows].map((r) => r.join("\t")).join("\n");
+      navigator.clipboard?.writeText(tsv).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {});
+      return;
+    }
+    const esc = (v: string) => {
+      const s = /^[=+\-@]/.test(v) ? `'${v}` : v;
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv = [header, ...rows].map((r) => r.map((c) => esc(c)).join(",")).join("\r\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `momo-tracks-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // full-data preview table — for the Live modal (show incomplete pending rows to verify · ภูม "โชว์ครบเหมือนตาราง").
+  function previewTable(rows: IngestTrack[]) {
+    return (
+      <div className="max-h-72 overflow-auto rounded-lg border border-border">
+        <table className="w-full whitespace-nowrap border-collapse text-[11px] [&_td]:border [&_td]:border-border [&_th]:border [&_th]:border-border">
+          <thead className="sticky top-0 bg-surface-alt/60 text-muted"><tr>
+            <th className="px-2 py-1 text-left">แทรคกิ้ง</th><th className="px-2 py-1 text-left">ตู้</th><th className="px-2 py-1 text-left">PR</th>
+            <th className="px-2 py-1 text-right">น้ำหนัก</th><th className="px-2 py-1 text-right">คิว</th><th className="px-2 py-1 text-right">จำนวน</th>
+            <th className="px-2 py-1 text-left">ขนาด</th><th className="px-2 py-1 text-left">ประเภท</th><th className="px-2 py-1 text-left">สถานะ MOMO</th>
+          </tr></thead>
+          <tbody>
+            {rows.map((t) => (
+              <tr key={t.id}>
+                <td className="px-2 py-1 font-mono font-semibold">{t.tracking}</td>
+                <td className="px-2 py-1 font-mono">{t.container ?? <span className="text-amber-600">ยังไม่เข้าตู้</span>}</td>
+                <td className="px-2 py-1 font-mono">{t.guessedUserId}</td>
+                <td className="px-2 py-1 text-right font-mono">{t.weightKg > 0 ? n2(t.weightKg) : <span className="text-amber-600">รอชั่ง</span>}</td>
+                <td className="px-2 py-1 text-right font-mono">{n6(t.cbm)}</td>
+                <td className="px-2 py-1 text-right">{t.qty ?? "—"}</td>
+                <td className="px-2 py-1 font-mono">{t.width > 0 || t.length > 0 || t.height > 0 ? `${t.width}×${t.length}×${t.height}` : "—"}</td>
+                <td className="px-2 py-1">{PRODUCT_TYPE_TH[t.guessedProductType] ?? "—"}</td>
+                <td className="max-w-[9rem] truncate px-2 py-1" title={t.adminStatusText ?? ""}>{t.adminStatusText ?? t.phase ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
   async function confirmImport() {
     if (!modal) return;
     const userID = modal.userID.trim().toUpperCase();
@@ -263,11 +469,171 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
 
   const modalUserValid = modal ? /^PR\d+$/i.test(modal.userID.trim()) : false;
 
+  // ✎ บันทึกการแก้ไข น้ำหนัก/คิว/จำนวน — wrap updateMomoImportTrackFields (pending-only · money-safe)
+  async function saveEdit() {
+    if (!editing) return;
+    const payload: Record<string, unknown> = { rowId: editing.id };
+    if (editing.field === "pr") {
+      payload.memberCode = editing.value.trim().toUpperCase(); // "" = เคลียร์ PR
+    } else {
+      const numVal = Number(editing.value);
+      if (!Number.isFinite(numVal) || numVal < 0) { setEditErr("ค่าไม่ถูกต้อง"); return; }
+      if (editing.field === "weightKg") payload.weightKg = numVal;
+      else if (editing.field === "cbm") payload.cbm = numVal;
+      else if (editing.field === "qty") payload.quantity = Math.round(numVal);
+      else if (editing.field === "width") payload.width = numVal;
+      else if (editing.field === "length") payload.length = numVal;
+      else payload.height = numVal; // "height"
+    }
+    setSavingEdit(true);
+    setEditErr(null);
+    try {
+      const res = await updateMomoImportTrackFields(payload);
+      if (res.ok) { setEditing(null); startTransition(() => router.refresh()); }
+      else setEditErr(res.error);
+    } catch (err) {
+      setEditErr(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  // ค่าเริ่มต้นของช่องแก้ไขต่อ field (PR = guessedUserId · dims/measure = คอลัมน์)
+  function fieldInitValue(t: IngestTrack, field: NonNullable<typeof editing>["field"]): string {
+    switch (field) {
+      case "pr": return t.guessedUserId ?? "";
+      case "weightKg": return t.weightKg > 0 ? String(t.weightKg) : "";
+      case "cbm": return t.cbm > 0 ? String(t.cbm) : "";
+      case "qty": return t.qty != null ? String(t.qty) : "";
+      case "width": return t.width > 0 ? String(t.width) : "";
+      case "length": return t.length > 0 ? String(t.length) : "";
+      case "height": return t.height > 0 ? String(t.height) : "";
+    }
+  }
+
+  // inline-editable cell — click value → input → ✓ save / ✕ cancel. Only PENDING rows editable
+  // (not committed / not just-imported). PR = text (parse → member_code) · อื่น = number.
+  function editableCell(t: IngestTrack, field: NonNullable<typeof editing>["field"], display: ReactNode) {
+    const canEdit = !t.committed && !rowResult[t.id]?.ok;
+    const isEditing = editing?.id === t.id && editing.field === field;
+    const isPr = field === "pr";
+    if (isEditing) {
+      return (
+        <span className="inline-flex flex-col items-end gap-0.5">
+          <span className="inline-flex items-center gap-0.5">
+            <input autoFocus type={isPr ? "text" : "number"} step={isPr ? undefined : "any"} value={editing.value} disabled={savingEdit}
+              placeholder={isPr ? "PR545" : undefined}
+              onChange={(e) => setEditing((ed) => (ed ? { ...ed, value: isPr ? e.target.value.toUpperCase() : e.target.value } : ed))}
+              onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); else if (e.key === "Escape") { setEditing(null); setEditErr(null); } }}
+              className={`${isPr ? "w-20 text-left uppercase" : "w-16 text-right"} rounded border border-primary-400 px-1 py-0.5 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary-300`} />
+            <button type="button" onClick={saveEdit} disabled={savingEdit} className="text-emerald-600 hover:text-emerald-700" title="บันทึก"><Check className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={() => { setEditing(null); setEditErr(null); }} className="text-gray-400 hover:text-gray-600" title="ยกเลิก"><X className="h-3 w-3" /></button>
+          </span>
+          {editErr && <span className="text-[10px] text-red-600">{editErr}</span>}
+        </span>
+      );
+    }
+    if (!canEdit) return display;
+    return (
+      <span className="group inline-flex cursor-pointer items-center gap-0.5 rounded px-0.5 hover:bg-amber-50"
+        onClick={() => { setEditErr(null); setEditing({ id: t.id, field, value: fieldInitValue(t, field) }); }}
+        title="คลิกเพื่อแก้ไข (ก่อนนำเข้า)">
+        {display}<span className="text-[10px] text-gray-300 group-hover:text-amber-500">✎</span>
+      </span>
+    );
+  }
+
+  // คอลัมน์ตาราง (config-driven · ลากย้าย/เรียงได้ · เนื้อหา = ตารางปอนเป๊ะ) — checkbox #
+  // เป็นคอลัมน์แรกตายตัว (render แยกในตาราง) · 27 ตัวนี้อยู่ใน DATA_KEYS/colOrder.
+  const colDefs: Record<string, {
+    label: string; sortKey?: string; thTitle?: string; noFeed?: boolean;
+    tdClass: string; tdTitle?: (t: IngestTrack) => string | undefined; td: (t: IngestTrack) => ReactNode;
+  }> = {
+    image: {
+      label: "รูป", tdClass: "px-2 py-1.5 text-center",
+      td: (t) => t.images.length > 0 ? (
+        <button type="button" onClick={() => setZoom({ urls: t.images, tracking: t.tracking ?? "—" })} className="relative inline-block" title="คลิกดูรูปป้าย (ตรวจ PR)">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={t.images[0]} alt="ป้าย MOMO" loading="lazy" className="h-9 w-9 rounded border border-border object-cover hover:ring-2 hover:ring-primary-400" />
+          {t.images.length > 1 && <span className="absolute -top-1.5 -right-1.5 rounded-full bg-primary-500 px-1 text-[11px] font-bold text-white">+{t.images.length - 1}</span>}
+        </button>
+      ) : <span className="text-gray-300">—</span>,
+    },
+    container: {
+      label: "Container Name", sortKey: "container", tdClass: "px-2 py-1.5 whitespace-nowrap",
+      td: (t) => (
+        <>
+          {t.container ? (
+            <Link href={`/admin/momo-containers/${encodeURIComponent(t.container)}`} className="font-mono font-semibold text-sky-700 hover:underline">{t.container}</Link>
+          ) : (<span className="text-[11px] text-amber-600" title={t.routingBatch ?? ""}>⏳ ยังไม่เข้าตู้ปิด</span>)}
+          {t.sack && <div className="text-[11px] text-muted">กระสอบ: {t.sack}</div>}
+        </>
+      ),
+    },
+    trans: { label: "Trans", tdClass: "px-2 py-1.5 text-center whitespace-nowrap", td: (t) => (t.transport && TRANSPORT_TH[t.transport]) || DASH },
+    smDate: { label: "SM Date", sortKey: "smDate", tdClass: "px-2 py-1.5 text-center tabular-nums whitespace-nowrap", tdTitle: (t) => t.smDate ?? "", td: (t) => dateOnly(t.smDate) ?? DASH },
+    smNumber: { label: "SM Number", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
+    branch: { label: "Branch", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
+    product: { label: "Product", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
+    dum: { label: "Dum", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
+    type: {
+      label: "Type", sortKey: "type", tdClass: "px-2 py-1.5 text-center whitespace-nowrap",
+      td: (t) => (<>{PRODUCT_TYPE_TH[t.guessedProductType] ?? "—"}{t.guessedProductType === "3" && <span className="ml-1 rounded bg-amber-100 px-1 text-[11px] font-semibold text-amber-700">อย.</span>}</>),
+    },
+    code: {
+      label: "Code", sortKey: "pr", tdClass: "px-2 py-1.5 whitespace-nowrap",
+      td: (t) => (
+        <>
+          {editableCell(t, "pr", t.guessedUserId ? <span className="font-mono font-semibold">{t.guessedUserId}</span> : <span className="text-[11px] text-amber-600">MOMO ไม่ส่ง PR</span>)}
+          {t.userCode && <span className="ml-1 text-[11px] text-muted" title="รหัสลูกค้าดิบจาก MOMO (user_code)">({t.userCode})</span>}
+          {!t.committed && t.userIdValid === false && t.guessedUserId && (<div className="mt-0.5 inline-flex items-center gap-1 rounded bg-red-100 px-1 py-0.5 text-[11px] font-bold text-red-700"><AlertCircle className="h-2.5 w-2.5" /> ไม่มีในระบบ</div>)}
+          {!t.committed && t.userIdValid === true && (<div className="mt-0.5 inline-flex items-center gap-1 rounded bg-emerald-100 px-1 py-0.5 text-[11px] font-bold text-emerald-700"><CheckCircle2 className="h-2.5 w-2.5" /> พบในระบบ</div>)}
+          {t.committed && t.commitUserId && t.commitUserId !== t.guessedUserId && (<div className="text-[11px] text-muted">→ {t.commitUserId}</div>)}
+        </>
+      ),
+    },
+    tracking: { label: "Tracking", sortKey: "tracking", tdClass: "px-2 py-1.5 font-mono font-semibold text-foreground whitespace-nowrap", td: (t) => t.tracking ?? "—" },
+    w: { label: "W.", sortKey: "w", thTitle: "กว้าง (ซม.) ต่อกล่อง · แก้ไขได้", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => editableCell(t, "width", t.width > 0 ? t.width : DASH) },
+    l: { label: "L.", sortKey: "l", thTitle: "ยาว (ซม.) ต่อกล่อง · แก้ไขได้", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => editableCell(t, "length", t.length > 0 ? t.length : DASH) },
+    h: { label: "H.", sortKey: "h", thTitle: "สูง (ซม.) ต่อกล่อง · แก้ไขได้", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => editableCell(t, "height", t.height > 0 ? t.height : DASH) },
+    totalParcel: { label: "Total Parcel", sortKey: "qty", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => editableCell(t, "qty", t.qty ?? DASH) },
+    wt: { label: "Wt.", thTitle: "น้ำหนักต่อกล่อง = Total Wt. ÷ Total Parcel", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono text-muted", td: (t) => t.weightKg > 0 ? fx(perBox(t.weightKg, t.qty), 2) : DASH },
+    vol: { label: "Vol.", thTitle: "คิวต่อกล่อง = W×L×H", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono text-muted", td: (t) => t.cbm > 0 ? fx(perBox(t.cbm, t.qty), 6) : DASH },
+    totalWt: {
+      label: "Total Wt.", sortKey: "weight", thTitle: "น้ำหนักรวมทั้งแทรค — ค่าที่ใช้คิดเงิน", tdClass: "px-2 py-1.5 text-right tabular-nums",
+      td: (t) => (
+        <>
+          {editableCell(t, "weightKg", t.weightKg > 0 ? <span className="font-mono font-semibold">{fx(t.weightKg, 2)}</span> : <span className="rounded bg-amber-50 px-1 text-[11px] text-amber-700" title="MOMO ยังไม่ได้ชั่ง">⏳ รอชั่ง</span>)}
+          {t.hasPacking && t.packingWeight != null && (<div className={`text-[11px] font-normal ${pkWtDiff(t) ? "text-rose-600 font-semibold" : "text-emerald-600"}`} title="น้ำหนักจาก packing list">📦{n2(t.packingWeight)}{pkWtDiff(t) ? " ⚠" : " ✓"}</div>)}
+          {t.hasLive && t.liveWeight != null && (<div className={`text-[11px] font-normal ${liveWtDiff(t) ? "text-rose-600 font-semibold" : "text-sky-600"}`} title="น้ำหนักจาก MOMO Live (ตู้ปิด)">🟢{n2(t.liveWeight)}{liveWtDiff(t) ? " ⚠" : " ✓"}</div>)}
+        </>
+      ),
+    },
+    totalVol: {
+      label: "Total Vol.", sortKey: "cbm", thTitle: "คิวรวมทั้งแทรค — ค่าที่ใช้คิดเงิน", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono font-semibold",
+      td: (t) => (
+        <>
+          {editableCell(t, "cbm", t.cbm > 0 ? <span>{fx(t.cbm, 6)}</span> : DASH)}
+          {t.hasPacking && t.packingCbm != null && (<div className={`text-[11px] font-normal ${pkVolDiff(t) ? "text-rose-600 font-semibold" : "text-emerald-600"}`} title="คิวจาก packing list">📦{n6(t.packingCbm)}{pkVolDiff(t) ? " ⚠" : " ✓"}</div>)}
+          {t.hasLive && t.liveCbm != null && (<div className={`text-[11px] font-normal ${liveVolDiff(t) ? "text-rose-600 font-semibold" : "text-sky-600"}`} title="คิวจาก MOMO Live (ตู้ปิด)">🟢{n6(t.liveCbm)}{liveVolDiff(t) ? " ⚠" : " ✓"}</div>)}
+        </>
+      ),
+    },
+    rem: { label: "Rem", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
+    cg: { label: "CG.", tdClass: "px-2 py-1.5 text-center font-mono text-[11px] whitespace-nowrap", td: (t) => t.cgNo ?? DASH },
+    note: { label: "Note.", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
+    serviceFee: { label: "Service Fee", thTitle: "MOMO ส่งมาเป็น extra_cost (ค่าตีลังไม้ / ค่าใช้จ่ายเพิ่ม)", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", tdTitle: () => "extra_cost จาก MOMO (ค่าตีลังไม้ / ค่าใช้จ่ายเพิ่ม)", td: (t) => fx(t.serviceFee, 2) ?? DASH },
+    status: { label: "Status", tdClass: "px-2 py-1.5 text-[11px] text-muted whitespace-nowrap max-w-[10rem] truncate", tdTitle: (t) => t.adminStatusText ?? "", td: (t) => t.adminStatusText ?? t.phase ?? "—" },
+    return: { label: "Return", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
+    etd: { label: "ETD", thTitle: "วันออกจากจีน — จากไฟล์ packing list (ระดับตู้)", tdClass: "px-2 py-1.5 text-center tabular-nums text-[11px] whitespace-nowrap", td: (t) => t.etd ?? DASH },
+    eta: { label: "ETA", thTitle: "วันถึงไทย — จากไฟล์ packing list (ระดับตู้)", tdClass: "px-2 py-1.5 text-center tabular-nums text-[11px] whitespace-nowrap", td: (t) => t.eta ?? DASH },
+  };
+
   return (
     <div className="space-y-3">
       {/* tabs + search */}
       <div className="flex flex-wrap items-center gap-2">
-        {([["pending", "🟡 ยังไม่เข้าระบบ"], ["committed", "✅ เข้าระบบแล้ว"], ["mismatch", "❗ ไม่ตรง packing"], ["all", "ทั้งหมด"]] as [Tab, string][]).map(([k, label]) => (
+        {([["pending", "🟡 ยังไม่เข้าระบบ"], ["committed", "✅ เข้าระบบแล้ว"], ["mismatch", "❗ ไม่ตรง (Packing/Live)"], ["all", "ทั้งหมด"]] as [Tab, string][]).map(([k, label]) => (
           <button key={k} type="button" onClick={() => setTab(k)}
             className={`rounded-full px-3 py-1 text-xs font-medium ${tab === k ? "bg-primary-600 text-white" : "bg-surface-alt text-muted hover:bg-surface-alt/70"}`}>
             {label} <span className="opacity-70">{counts[k]}</span>
@@ -284,10 +650,23 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
           className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt disabled:opacity-50">
           <RefreshCw className={`h-3 w-3 ${pending ? "animate-spin" : ""}`} /> รีเฟรช
         </button>
+        <button type="button" onClick={() => setLiveConfirm(true)} disabled={liveBusy} title="ดึงข้อมูลสดจากเว็บ MOMO เดี๋ยวนี้ (อัปเดตสถานะ + เติมข้อมูลที่ยังว่าง · รวมแถวที่ยังไม่นำเข้า)"
+          className="inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50">
+          <RefreshCw className={`h-3 w-3 ${liveBusy ? "animate-spin" : ""}`} /> {liveBusy ? "กำลังดึง Live…" : "🔄 ดึง Live เดี๋ยวนี้"}
+        </button>
+        <button type="button" onClick={() => exportRows("copy")} title="คัดลอกเป็นตาราง (วางใน Excel/Sheet ได้)"
+          className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt">{copied ? "✓ คัดลอกแล้ว" : "📋 Copy"}</button>
+        <button type="button" onClick={() => exportRows("excel")} title="ดาวน์โหลด .csv เปิดใน Excel"
+          className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100">⬇ Excel</button>
+        <button type="button" onClick={resetCols} title="รีเซ็ตลำดับคอลัมน์กลับค่าเริ่มต้น"
+          className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt">↺ คอลัมน์</button>
       </div>
 
       {loadError && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">โหลดข้อมูลไม่สำเร็จ: {loadError}</div>
+      )}
+      {liveMsg && (
+        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">{liveMsg}</div>
       )}
 
       {/* ผลนำเข้ารอบล่าสุด (เลือกหลายรายการ) */}
@@ -353,45 +732,39 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
                   <span className="text-[11px] font-normal">#</span>
                 </label>
               </th>
-              <th className="px-2 py-2 text-center w-14">รูป</th>
-              <th className="px-2 py-2 text-center">Container Name</th>
-              <th className="px-2 py-2 text-center">Trans</th>
-              <th className="px-2 py-2 text-center">SM Date</th>
-              <th className={thNoFeed} title={NO_FEED}>SM Number</th>
-              <th className={thNoFeed} title={NO_FEED}>Branch</th>
-              <th className={thNoFeed} title={NO_FEED}>Product</th>
-              <th className={thNoFeed} title={NO_FEED}>Dum</th>
-              <th className="px-2 py-2 text-center">Type</th>
-              <th className="px-2 py-2 text-center">Code</th>
-              <th className="px-2 py-2 text-center">Tracking</th>
-              <th className="px-2 py-2 text-center" title="กว้าง (ซม.) ต่อกล่อง">W.</th>
-              <th className="px-2 py-2 text-center" title="ยาว (ซม.) ต่อกล่อง">L.</th>
-              <th className="px-2 py-2 text-center" title="สูง (ซม.) ต่อกล่อง">H.</th>
-              <th className="px-2 py-2 text-center">Total Parcel</th>
-              <th className="px-2 py-2 text-center" title="น้ำหนักต่อกล่อง = Total Wt. ÷ Total Parcel">Wt.</th>
-              <th className="px-2 py-2 text-center" title="คิวต่อกล่อง = W×L×H">Vol.</th>
-              <th className="px-2 py-2 text-center" title="น้ำหนักรวมทั้งแทรค — ค่าที่ใช้คิดเงิน">Total Wt.</th>
-              <th className="px-2 py-2 text-center" title="คิวรวมทั้งแทรค — ค่าที่ใช้คิดเงิน">Total Vol.</th>
-              <th className={thNoFeed} title={NO_FEED}>Rem</th>
-              <th className="px-2 py-2 text-center">CG.</th>
-              <th className={thNoFeed} title={NO_FEED}>Note.</th>
-              <th className="px-2 py-2 text-center" title="MOMO ส่งมาเป็น extra_cost (ค่าตีลังไม้ / ค่าใช้จ่ายเพิ่ม)">Service Fee</th>
-              <th className="px-2 py-2 text-center">Status</th>
-              <th className={thNoFeed} title={NO_FEED}>Return</th>
-              <th className="px-2 py-2 text-center" title="วันออกจากจีน — จากไฟล์ packing list (ระดับตู้)">ETD</th>
-              <th className="px-2 py-2 text-center" title="วันถึงไทย — จากไฟล์ packing list (ระดับตู้)">ETA</th>
+              {/* 27 คอลัมน์ที่เหลือ — ลากย้ายได้ (⋮⋮) + เรียงได้ (⇅) · ลำดับ = colOrder (default = ตารางปอน) */}
+              {colOrder.map((key) => {
+                const c = colDefs[key];
+                if (!c) return null;
+                return (
+                  <th key={key}
+                    onDragOver={(e) => { e.preventDefault(); }}
+                    onDrop={() => { if (dragKey && dragKey !== key) moveCol(dragKey, key); setDragKey(null); }}
+                    className={`${c.noFeed ? thNoFeed : "px-2 py-2 text-center"} ${dragKey === key ? "bg-primary-100/70" : ""}`}
+                    title={c.noFeed ? NO_FEED : c.thTitle}>
+                    <span className="inline-flex items-center justify-center gap-1">
+                      <span draggable onDragStart={() => setDragKey(key)} onDragEnd={() => setDragKey(null)}
+                        className="cursor-move text-gray-300 hover:text-gray-500" title="ลากเพื่อย้ายคอลัมน์">⋮⋮</span>
+                      {c.label}
+                      {c.sortKey && (
+                        <button type="button" onClick={() => toggleSort(c.sortKey!)}
+                          className={`ml-0.5 ${sort?.key === c.sortKey ? "text-primary-600" : "text-gray-400 hover:text-primary-600"}`}
+                          title="คลิกเพื่อเรียง">{sortIcon(c.sortKey)}</button>
+                      )}
+                    </span>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && (
-              <tr><td colSpan={28} className="px-3 py-6 text-center text-xs text-muted">ไม่มีรายการตามเงื่อนไข</td></tr>
+            {sorted.length === 0 && (
+              <tr><td colSpan={1 + colOrder.length} className="px-3 py-6 text-center text-xs text-muted">ไม่มีรายการตามเงื่อนไข</td></tr>
             )}
-            {filtered.map((t, i) => {
+            {sorted.map((t, i) => {
               const rr = rowResult[t.id];
               const done = t.committed || rr?.ok;
               const fid = t.committedForwarderId ?? rr?.fid ?? null;
-              const wDiff = pkWtDiff(t);
-              const vDiff = pkVolDiff(t);
               return (
                 <tr key={t.id} className={`align-top ${done ? "bg-emerald-50/40" : sel.has(t.id) ? "bg-primary-50/60" : t.userIdValid === false ? "bg-red-50/30" : ""}`}>
                   {/* ติ๊กเลือก + เลขแถว · แถวที่เข้าระบบแล้ว = ลิงก์ไปใบนำเข้า (ย้ายมาจากคอลัมน์
@@ -417,100 +790,12 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
                       <div className="mt-0.5 text-[11px] font-semibold text-red-700" title={rr.message}>ไม่สำเร็จ</div>
                     )}
                   </td>
-                  <td className="px-2 py-1.5 text-center">
-                    {t.images.length > 0 ? (
-                      <button type="button" onClick={() => setZoom({ urls: t.images, tracking: t.tracking ?? "—" })} className="relative inline-block" title="คลิกดูรูปป้าย (ตรวจ PR)">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={t.images[0]} alt="ป้าย MOMO" loading="lazy" className="h-9 w-9 rounded border border-border object-cover hover:ring-2 hover:ring-primary-400" />
-                        {t.images.length > 1 && <span className="absolute -top-1.5 -right-1.5 rounded-full bg-primary-500 px-1 text-[11px] font-bold text-white">+{t.images.length - 1}</span>}
-                      </button>
-                    ) : <span className="text-gray-300">—</span>}
-                  </td>
-                  {/* A Container Name */}
-                  <td className="px-2 py-1.5 whitespace-nowrap">
-                    {t.container ? (
-                      <Link href={`/admin/momo-containers/${encodeURIComponent(t.container)}`} className="font-mono font-semibold text-sky-700 hover:underline">
-                        {t.container}
-                      </Link>
-                    ) : (
-                      <span className="text-[11px] text-amber-600" title={t.routingBatch ?? ""}>⏳ ยังไม่เข้าตู้ปิด</span>
-                    )}
-                    {t.sack && <div className="text-[11px] text-muted">กระสอบ: {t.sack}</div>}
-                  </td>
-                  {/* B Trans */}
-                  <td className="px-2 py-1.5 text-center whitespace-nowrap">{(t.transport && TRANSPORT_TH[t.transport]) || DASH}</td>
-                  {/* C SM Date — วันที่ MOMO รับเข้าโกดัง */}
-                  <td className="px-2 py-1.5 text-center tabular-nums whitespace-nowrap" title={t.smDate ?? ""}>{dateOnly(t.smDate) ?? DASH}</td>
-                  {/* D SM Number · E Branch · F Product · G Dum — MOMO API ไม่ส่งมา */}
-                  <td className={tdNoFeed} title={NO_FEED}>—</td>
-                  <td className={tdNoFeed} title={NO_FEED}>—</td>
-                  <td className={tdNoFeed} title={NO_FEED}>—</td>
-                  <td className={tdNoFeed} title={NO_FEED}>—</td>
-                  {/* H Type */}
-                  <td className="px-2 py-1.5 text-center whitespace-nowrap">
-                    {PRODUCT_TYPE_TH[t.guessedProductType] ?? "—"}
-                    {t.guessedProductType === "3" && <span className="ml-1 rounded bg-amber-100 px-1 text-[11px] font-semibold text-amber-700">อย.</span>}
-                  </td>
-                  {/* I Code — รหัสลูกค้าฝั่ง MOMO → PR ของเรา (+ ผลตรวจ tb_users) */}
-                  <td className="px-2 py-1.5 whitespace-nowrap">
-                    {t.guessedUserId ? (
-                      <span className="font-mono font-semibold">{t.guessedUserId}</span>
-                    ) : <span className="text-[11px] text-amber-600">MOMO ไม่ส่ง PR</span>}
-                    {t.userCode && <span className="ml-1 text-[11px] text-muted" title="รหัสลูกค้าดิบจาก MOMO (user_code)">({t.userCode})</span>}
-                    {!t.committed && t.userIdValid === false && t.guessedUserId && (
-                      <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-red-100 px-1 py-0.5 text-[11px] font-bold text-red-700"><AlertCircle className="h-2.5 w-2.5" /> ไม่มีในระบบ</div>
-                    )}
-                    {!t.committed && t.userIdValid === true && (
-                      <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-emerald-100 px-1 py-0.5 text-[11px] font-bold text-emerald-700"><CheckCircle2 className="h-2.5 w-2.5" /> พบในระบบ</div>
-                    )}
-                    {t.committed && t.commitUserId && t.commitUserId !== t.guessedUserId && (
-                      <div className="text-[11px] text-muted">→ {t.commitUserId}</div>
-                    )}
-                  </td>
-                  {/* J Tracking */}
-                  <td className="px-2 py-1.5 font-mono font-semibold text-foreground whitespace-nowrap">{t.tracking ?? "—"}</td>
-                  {/* K/L/M W. L. H. — ขนาดต่อกล่อง (ซม.) */}
-                  <td className="px-2 py-1.5 text-right tabular-nums font-mono">{t.width > 0 ? t.width : DASH}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums font-mono">{t.length > 0 ? t.length : DASH}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums font-mono">{t.height > 0 ? t.height : DASH}</td>
-                  {/* N Total Parcel */}
-                  <td className="px-2 py-1.5 text-right tabular-nums font-mono">{t.qty ?? DASH}</td>
-                  {/* O/P Wt. Vol. — ต่อกล่อง (คำนวณจากยอดรวม ÷ จำนวน · เทาไว้ = ค่าที่ derive ไม่ใช่ค่าที่คิดเงิน) */}
-                  <td className="px-2 py-1.5 text-right tabular-nums font-mono text-muted">{t.weightKg > 0 ? fx(perBox(t.weightKg, t.qty), 2) : DASH}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums font-mono text-muted">{t.cbm > 0 ? fx(perBox(t.cbm, t.qty), 6) : DASH}</td>
-                  {/* Q/R Total Wt. Total Vol. — ยอดรวมทั้งแทรค = ค่าที่ใช้คิดเงิน (เข้ม) */}
-                  <td className="px-2 py-1.5 text-right tabular-nums">
-                    {t.weightKg > 0 ? <span className="font-mono font-semibold">{fx(t.weightKg, 2)}</span> : <span className="rounded bg-amber-50 px-1 text-[11px] text-amber-700" title="MOMO ยังไม่ได้ชั่ง">⏳ รอชั่ง</span>}
-                    {/* Slice 2 (ภูม) — เทียบกับ packing list · อยู่ใต้ Total Wt. เพราะเทียบยอดรวมกับยอดรวม */}
-                    {t.hasPacking && t.packingWeight != null && (
-                      <div className={`text-[11px] font-normal ${wDiff ? "text-rose-600 font-semibold" : "text-emerald-600"}`} title="น้ำหนักจาก packing list">
-                        📦{n2(t.packingWeight)}{wDiff ? " ⚠" : " ✓"}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums font-mono font-semibold">
-                    {t.cbm > 0 ? fx(t.cbm, 6) : DASH}
-                    {t.hasPacking && t.packingCbm != null && (
-                      <div className={`text-[11px] font-normal ${vDiff ? "text-rose-600 font-semibold" : "text-emerald-600"}`} title="คิวจาก packing list">
-                        📦{n6(t.packingCbm)}{vDiff ? " ⚠" : " ✓"}
-                      </div>
-                    )}
-                  </td>
-                  {/* S Rem (Remark Number) — MOMO ไม่ส่ง */}
-                  <td className={tdNoFeed} title={NO_FEED}>—</td>
-                  {/* T CG. */}
-                  <td className="px-2 py-1.5 text-center font-mono text-[11px] whitespace-nowrap">{t.cgNo ?? DASH}</td>
-                  {/* U Note. — MOMO ไม่ส่ง */}
-                  <td className={tdNoFeed} title={NO_FEED}>—</td>
-                  {/* V Service Fee = extra_cost ของ MOMO */}
-                  <td className="px-2 py-1.5 text-right tabular-nums font-mono" title="extra_cost จาก MOMO (ค่าตีลังไม้ / ค่าใช้จ่ายเพิ่ม)">{fx(t.serviceFee, 2) ?? DASH}</td>
-                  {/* W Status */}
-                  <td className="px-2 py-1.5 text-[11px] text-muted whitespace-nowrap max-w-[10rem] truncate" title={t.adminStatusText ?? ""}>{t.adminStatusText ?? t.phase ?? "—"}</td>
-                  {/* X Return — MOMO ไม่ส่ง */}
-                  <td className={tdNoFeed} title={NO_FEED}>—</td>
-                  {/* Y/Z ETD / ETA — จาก packing list ระดับตู้ */}
-                  <td className="px-2 py-1.5 text-center tabular-nums text-[11px] whitespace-nowrap">{t.etd ?? DASH}</td>
-                  <td className="px-2 py-1.5 text-center tabular-nums text-[11px] whitespace-nowrap">{t.eta ?? DASH}</td>
+                  {/* คอลัมน์ที่ลากย้ายได้ — render จาก colOrder (เนื้อหา = ตารางปอนเป๊ะ · ผ่าน colDefs) */}
+                  {colOrder.map((key) => {
+                    const c = colDefs[key];
+                    if (!c) return null;
+                    return <td key={key} className={c.tdClass} title={c.tdTitle?.(t)}>{c.td(t)}</td>;
+                  })}
                 </tr>
               );
             })}
@@ -544,7 +829,7 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
           เลือก 1 รายการจะไม่มาที่นี่ (ไป modal ตรวจ/แก้ PR ทีละใบแทน). */}
       {bulkOpen && createPortal(
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => !bulkRunning && setBulkOpen(false)} role="button" tabIndex={-1}>
-          <div className="w-full max-w-lg rounded-2xl bg-white dark:bg-surface p-5 shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-3xl rounded-2xl bg-white dark:bg-surface p-5 shadow-2xl space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold flex items-center gap-2"><PackageCheck className="h-5 w-5 text-primary-600" /> ยืนยันนำเข้าระบบ {selectedTracks.length} รายการ</h3>
               <button type="button" onClick={() => !bulkRunning && setBulkOpen(false)} className="rounded-lg border border-border px-2 py-0.5 text-xs hover:bg-surface-alt"><X className="h-3.5 w-3.5" /></button>
@@ -562,23 +847,8 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
                   <span>{invalidSelected} รายการ PR ไม่ตรง tb_users → ระบบจะปฏิเสธเอง (ไม่เดา PR ให้) — ติ๊กทีละรายการเพื่อแก้ PR ก่อน</span>
                 </p>
               )}
-              <div className="max-h-40 overflow-y-auto rounded border border-border bg-white dark:bg-surface">
-                <table className="w-full text-[11px]">
-                  <tbody>
-                    {selectedTracks.slice(0, 50).map((t) => (
-                      <tr key={t.id} className="border-b border-border last:border-0">
-                        <td className="px-2 py-1 font-mono">{t.tracking ?? "—"}</td>
-                        <td className="px-2 py-1">
-                          {t.guessedUserId ? <span className={`font-mono font-semibold ${t.userIdValid === true ? "" : "text-red-600"}`}>{t.guessedUserId}</span> : <span className="text-red-600">ไม่มี PR</span>}
-                        </td>
-                        <td className="px-2 py-1 text-right tabular-nums font-mono text-muted">{fx(t.weightKg, 2) ?? "—"} กก.</td>
-                        <td className="px-2 py-1 text-right tabular-nums font-mono text-muted">{fx(t.cbm, 6) ?? "—"} คิว</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {selectedTracks.length > 50 && <div className="px-2 py-1 text-[11px] text-muted">…และอีก {selectedTracks.length - 50} รายการ</div>}
-              </div>
+              {/* full-data preview — โชว์ครบเหมือนตาราง (ภูม: "แสดงข้อมูลให้ครบทั้งหมด เพื่อตรวจอีกที") */}
+              {previewTable(selectedTracks)}
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-1">
@@ -679,6 +949,89 @@ export function MomoIngestClient({ tracks, loadError }: { tracks: IngestTrack[];
             <p className="text-[11px] text-white/60 text-center">⚠️ ตรวจเลข PR บนป้ายให้ตรงก่อนนำเข้าระบบ</p>
           </div>
         </div>,
+        document.body,
+      )}
+
+      {/* เฟส C — missing-parcel recovery panel (พัสดุที่ MOMO API ไม่ส่ง แต่มีใน packing · ฿294k) */}
+      {missing.length > 0 && (
+        <section className="space-y-2 rounded-2xl border-2 border-red-200 bg-red-50/40 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-red-800">🔴 พัสดุที่ MOMO API ไม่ส่ง (มีใน packing list) — {missing.length} รายการ</h3>
+            {missingReady.length > 0 && (
+              <button type="button" onClick={onCreateMissing} disabled={missingBusy}
+                className="inline-flex items-center gap-1 rounded-lg border border-red-600 bg-red-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50">
+                <PackageCheck className="h-3.5 w-3.5" /> {missingBusy ? "กำลังดึง…" : `ดึงเข้าระบบทั้งหมด (${missingReady.length})`}
+              </button>
+            )}
+          </div>
+          {missingMsg && <div className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-[11px] text-red-800">{missingMsg}</div>}
+          {missingNoPr.length > 0 && (
+            <div className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">⚠️ {missingNoPr.length} รายการไม่มี PR (packing ไม่ระบุรหัสลูกค้า) — ต้องตามเก็บ PR ที่หน้าเว็บ MOMO ก่อน · ดึงอัตโนมัติไม่ได้</div>
+          )}
+          <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-red-200 bg-white">
+            <table className="w-full text-[11px] border-collapse [&_th]:border [&_th]:border-red-100 [&_td]:border [&_td]:border-red-100">
+              <thead className="bg-red-100/50 text-red-700"><tr>
+                <th className="px-2 py-1 text-left">แทรคกิ้ง</th><th className="px-2 py-1 text-left">ตู้</th><th className="px-2 py-1 text-left">PR</th>
+                <th className="px-2 py-1 text-right">นน.</th><th className="px-2 py-1 text-right">คิว</th><th className="px-2 py-1 text-right">กล่อง</th><th className="px-2 py-1 text-center">Live</th>
+              </tr></thead>
+              <tbody>
+                {missing.map((m) => (
+                  <tr key={m.tracking} className={isValidPr(m.code) ? "" : "bg-amber-50/40"}>
+                    <td className="px-2 py-1 font-mono">{m.tracking}</td>
+                    <td className="px-2 py-1 font-mono">{m.cabinet}</td>
+                    <td className="px-2 py-1 font-mono">{isValidPr(m.code) ? m.code : <span className="text-amber-600">{m.code || "ไม่มี PR"}</span>}</td>
+                    <td className="px-2 py-1 text-right font-mono">{n2(m.weight ?? 0)}</td>
+                    <td className="px-2 py-1 text-right font-mono">{n6(m.cbm ?? 0)}</td>
+                    <td className="px-2 py-1 text-right">{m.boxes ?? "—"}</td>
+                    <td className="px-2 py-1 text-center">{m.inLive ? "🟢" : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] text-red-700/80">พัสดุพวกนี้ MOMO API ไม่ส่งมา (สถานะขยับเกิน status แรก) แต่ packing list มี → กด &quot;ดึงเข้าระบบ&quot; จะสร้าง billable row ให้ (ปลอดภัย · กันซ้ำ + คิดราคาอัตโนมัติ) = ตัวเดียวกับหน้า drift.</p>
+        </section>
+      )}
+
+      {/* ดึง Live — พรีวิวช่องว่างปัจจุบันก่อนดึง → ยืนยัน (portal to body · ภูม) */}
+      {liveConfirm && createPortal(
+        (() => {
+          const noWeight = tracks.filter((t) => !t.committed && t.weightKg <= 0).length;
+          const noCbm = tracks.filter((t) => !t.committed && t.cbm <= 0).length;
+          const noCabinet = tracks.filter((t) => !t.container).length;
+          const incompleteRows = tracks.filter((t) => !t.committed && (t.weightKg <= 0 || t.cbm <= 0));
+          return (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => setLiveConfirm(false)} role="button" tabIndex={-1}>
+              <div className="w-full max-w-3xl rounded-2xl bg-white dark:bg-surface p-5 shadow-2xl space-y-3.5" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold flex items-center gap-2"><RefreshCw className="h-5 w-5 text-sky-600" /> ดึงข้อมูลสดจาก MOMO</h3>
+                  <button type="button" onClick={() => setLiveConfirm(false)} className="rounded-lg border border-border px-2 py-0.5 text-xs hover:bg-surface-alt"><X className="h-3.5 w-3.5" /></button>
+                </div>
+                <p className="text-xs text-muted">ตอนนี้ในระบบยังขาด/ไม่ครบ — กดดึง Live เพื่อให้ MOMO เว็บเติมให้ (รวมแถวที่ยังไม่นำเข้า):</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2"><div className="text-lg font-extrabold text-amber-700">{noWeight}</div><div className="text-[11px] text-amber-700/80">ยังไม่มีน้ำหนัก</div></div>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2"><div className="text-lg font-extrabold text-amber-700">{noCbm}</div><div className="text-[11px] text-amber-700/80">ยังไม่มีคิว</div></div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2"><div className="text-lg font-extrabold text-slate-700">{noCabinet}</div><div className="text-[11px] text-slate-600">ยังไม่เข้าตู้ปิด</div></div>
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2"><div className="text-lg font-extrabold text-red-700">{missing.length}</div><div className="text-[11px] text-red-600">พัสดุขาด (packing มี · API ไม่มี)</div></div>
+                </div>
+                {incompleteRows.length > 0 && (
+                  <div>
+                    <div className="mb-1 text-[11px] font-semibold text-amber-700">📋 รายการที่ข้อมูลยังไม่ครบ (Live จะเติมให้ถ้า MOMO มี) — {incompleteRows.length} รายการ:</div>
+                    {previewTable(incompleteRows)}
+                  </div>
+                )}
+                <div className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-800">กดยืนยัน → login เว็บ MOMO สด → อัปเดตสถานะ + เติม น้ำหนัก/คิว/จำนวน ที่ยังว่าง ทั้งแถวที่เข้าระบบแล้ว (tb_forwarder) และยังไม่นำเข้า (staging · ข้ามบิลแล้ว · ไม่ทับค่าที่มี). ใช้เวลาสักครู่.</div>
+                <div className="flex items-center justify-end gap-2">
+                  <button type="button" onClick={() => setLiveConfirm(false)} className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt">ยกเลิก</button>
+                  <button type="button" onClick={onPullLive}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-sky-700 bg-sky-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-sky-700">
+                    <RefreshCw className="h-3.5 w-3.5" /> ยืนยันดึง Live เดี๋ยวนี้
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })(),
         document.body,
       )}
     </div>

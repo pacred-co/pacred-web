@@ -322,6 +322,114 @@ export async function fillLiveDataForParcels(
   return result;
 }
 
+// ── PENDING STAGING fill (momo_import_tracks) — the /admin/momo-containers "ดึง Live"
+//    use case: MOMO API dropped/withheld a pending tracking's weight/คิว (รอชั่ง) but
+//    MOMO's web still has it. Fill the STAGING row so the eventual commit values the
+//    bill from the right number. Twin of fillLiveDataForParcels (which fills the
+//    COMMITTED tb_forwarder rows); this one fills the ones NOT yet imported. ─────────
+export type LiveStagingFillResult = {
+  /** Pending momo_import_tracks rows matched by tracking (exact OR base). */
+  matched: number;
+  /** Pending rows whose empty weight/คิว/จำนวน were filled from the Live total. */
+  filled: number;
+  /** Pending rows skipped because they already had a value. */
+  skippedHasValue: number;
+  errors: Array<{ scope: string; message: string }>;
+};
+
+export function emptyStagingFillResult(): LiveStagingFillResult {
+  return { matched: 0, filled: 0, skippedHasValue: 0, errors: [] };
+}
+
+type StagingMetricRow = {
+  id: string;
+  momo_tracking_no: string | null;
+  weight_kg: number | null;
+  cbm: number | null;
+  quantity: number | null;
+};
+
+/**
+ * Fill PENDING momo_import_tracks staging rows from the SAME Live parcels.
+ *
+ * 🔒 MONEY-SAFETY (same envelope as updateMomoImportTrackFields):
+ *   - PENDING ONLY (`.is('committed_at', null)`): a committed row is a billable
+ *     tb_forwarder row handled by fillLiveDataForParcels — never touched here.
+ *   - FILL-WHEN-EMPTY: write weight_kg/cbm/quantity ONLY when currently 0/null;
+ *     never overwrite a non-zero value (a staff edit or a good API value).
+ *   - TOTAL by base tracking (Σ across "-i/n" splits) = the SAME basis
+ *     commitMomoRowCore values the bill from at import time.
+ *   - best-effort per row; a failing row is skipped, not fatal.
+ */
+export async function fillPendingStagingFromLive(
+  admin: SupabaseClient,
+  parcels: readonly MomoLiveParcel[],
+  result: LiveStagingFillResult = emptyStagingFillResult(),
+): Promise<LiveStagingFillResult> {
+  const byBase = aggregateLiveMetricsByBase(parcels);
+  if (byBase.size === 0) return result;
+
+  // Pending staging rows may store momo_tracking_no as a base OR a suffixed exact
+  // form → look up on BOTH (mirror fillLiveDataForParcels).
+  const exactTrackings = new Set<string>();
+  for (const p of parcels) {
+    const t = (p.tracking ?? "").trim();
+    if (t) exactTrackings.add(t);
+  }
+  const lookupKeys = Array.from(new Set<string>([...byBase.keys(), ...exactTrackings]));
+
+  const rowsById = new Map<string, StagingMetricRow>();
+  const CHUNK = 200;
+  for (let i = 0; i < lookupKeys.length; i += CHUNK) {
+    const slice = lookupKeys.slice(i, i + CHUNK);
+    const { data, error } = await admin
+      .from("momo_import_tracks")
+      .select("id, momo_tracking_no, weight_kg, cbm, quantity")
+      .in("momo_tracking_no", slice)
+      .is("committed_at", null);
+    if (error) {
+      console.error("[fillPendingStaging] lookup failed", { code: error.code, message: error.message });
+      result.errors.push({ scope: "lookup", message: `${error.code} ${error.message}` });
+      continue;
+    }
+    for (const row of (data ?? []) as unknown as StagingMetricRow[]) rowsById.set(row.id, row);
+  }
+  result.matched = rowsById.size;
+
+  for (const row of rowsById.values()) {
+    const base = baseTrackingOf((row.momo_tracking_no ?? "").trim());
+    const agg = byBase.get(base);
+    if (!agg) continue;
+
+    // FILL-WHEN-EMPTY per field (never overwrite a staff edit / good API value).
+    const update: Record<string, number> = {};
+    if (!(Number(row.weight_kg ?? 0) > 0) && agg.weightKg > 0) update.weight_kg = r2(agg.weightKg);
+    if (!(Number(row.cbm ?? 0) > 0) && agg.cbm > 0) update.cbm = r6(agg.cbm);
+    if (!(Number(row.quantity ?? 0) > 0) && agg.quantity > 0) update.quantity = agg.quantity;
+    if (Object.keys(update).length === 0) {
+      result.skippedHasValue += 1;
+      continue;
+    }
+
+    // TOCTOU-safe: only while STILL pending (a race into commit → 0 rows → skip).
+    const { data: updRows, error: updErr } = await admin
+      .from("momo_import_tracks")
+      .update({ ...update, updated_at: new Date().toISOString() })
+      .eq("id", row.id)
+      .is("committed_at", null)
+      .select("id");
+    if (updErr) {
+      console.error("[fillPendingStaging] update failed", { id: row.id, code: updErr.code, message: updErr.message });
+      result.errors.push({ scope: `staging:${row.id}`, message: `${updErr.code} ${updErr.message}` });
+      continue;
+    }
+    if (!updRows || updRows.length === 0) continue; // raced into commit
+    result.filled += 1;
+  }
+
+  return result;
+}
+
 /** Combined result of one "propagate status + fill data" run over the Live boards. */
 export type LiveStatusAndDataResult = {
   status: LiveStatusPropagationResult;
@@ -334,6 +442,8 @@ export type LiveStatusAndDataResult = {
    *  momo_box_detail) split into N sibling rows (one per box · matches MOMO's "-i/n").
    *  Money-neutral guard (unbilled · unpriced · Σ preserved) · idempotent · best-effort. */
   boxSplit: BoxSplitResult;
+  /** PENDING momo_import_tracks rows filled from Live (the "ดึง Live" staging fill · best-effort). */
+  staging: LiveStagingFillResult;
 };
 
 /**
@@ -443,11 +553,25 @@ export async function propagateMomoLiveStatusAndData(
     boxSplitResult.errors.push({ scope: "box-split", message: e instanceof Error ? e.message : "unknown" });
   }
 
+  // ── pass 6: PENDING STAGING fill (momo_import_tracks · the "ดึง Live" fix · owner/ภูม
+  //    2026-07-14). Fill weight/คิว/จำนวน on rows NOT yet imported (fill-when-empty ·
+  //    pending-only) so a "รอชั่ง" staging row gets MOMO's real measurement BEFORE the
+  //    staff imports it — the /admin/momo-containers preview promised this. best-effort:
+  //    a failure NEVER undoes the passes above. ──
+  const stagingResult = emptyStagingFillResult();
+  try {
+    await fillPendingStagingFromLive(admin, parcels, stagingResult);
+  } catch (e) {
+    console.error("[propagateMomoLiveStatusAndData] staging-fill threw", e);
+    stagingResult.errors.push({ scope: "staging-fill", message: e instanceof Error ? e.message : "unknown" });
+  }
+
   return {
     status: statusResult,
     data: dataResult,
     boxDetail: boxDetailResult,
     cabinet: cabinetResult,
     boxSplit: boxSplitResult,
+    staging: stagingResult,
   };
 }
