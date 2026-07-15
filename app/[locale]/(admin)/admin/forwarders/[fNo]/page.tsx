@@ -14,6 +14,7 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { loadCustomerPrimaryAddress, loadJuristicCorporateAddress, loadCustomerAddressRows } from "@/lib/legacy/customer-address-options";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
 import { getPrivateCarrierOptionsForProvince } from "@/lib/cart/ship-by-eligibility";
+import { canonicalProvince } from "@/lib/forwarder/carrier-province-coverage";
 // 2026-06-10 (ปอน) — Code128 tracking barcode, same local SVG generator the
 // customer page /service-import/[fNo] uses (copy the header 1:1).
 import { code128SvgDataUrl } from "@/lib/barcode";
@@ -439,7 +440,7 @@ async function tryRenderTbForwarder(
   // structured tb_address still has a company address in tb_corporate (a single
   // string). When the tb_address fallback finds nothing, show that. Holds
   // {name, addressLine} so the render switches to the free-form layout.
-  let deliveryAddrCorp: { name: string; addressLine: string } | null = null;
+  let deliveryAddrCorp: { name: string; addressLine: string; province: string } | null = null;
   if (!isSelfPickup && faddrIsWarehouseDefault) {
     const primary = await loadCustomerPrimaryAddress(admin, r.userid);
     if (primary && (primary.no.trim() || primary.province.trim())) {
@@ -461,6 +462,17 @@ async function tryRenderTbForwarder(
       deliveryAddrCorp = await loadJuristicCorporateAddress(admin, r.userid);
     }
   }
+
+  // ── EFFECTIVE delivery province (owner 2026-07-15: "ที่อยู่เขาก็มีอยู่แล้ว · มันเลือกได้ตรงไหน") ──
+  // The carrier picker must use the SAME province the human SEES in the address block, not the
+  // raw (often-empty) tb_forwarder.faddressprovince. Precedence:
+  //   (1) the order's own province → (2) the customer's primary tb_address → (3) the juristic
+  //       company address (parsed from tb_corporate). Canonicalised for the closed-list match.
+  const effectiveProvince = canonicalProvince(
+    (r.faddressprovince ?? "").trim() ||
+      (deliveryAddrFromProfile ? deliveryAddr.province : "") ||
+      (deliveryAddrCorp?.province ?? ""),
+  );
 
   // ── ภูม 2026-07-03: saved-address list for the inline "แก้ไขที่อยู่จัดส่ง" picker ──
   // Staff can re-pick from the customer's saved tb_address (like the ship-by edit) OR type a
@@ -1010,14 +1022,16 @@ async function tryRenderTbForwarder(
             <EditPalletField fId={r.id} fpallet={r.fpallet} />
             <EditCrateField fId={r.id} crate={r.crate} pricecrate={r.pricecrate} />
             <EditPayMethodField fId={r.id} paymethod={r.paymethod} zip={r.faddresszipcode} fshipby={r.fshipby} />
-            {/* ขนส่งเอกชน = ตามจังหวัดปลายทาง (owner 2026-07-14) — the option list is
-                computed SERVER-side from the delivery province, incl. each courier's
-                delivery restriction ("ไม่เข้าวังน้ำเขียว" ฯลฯ). */}
+            {/* ขนส่งเอกชน = ตามจังหวัดปลายทาง (owner 2026-07-14/15) — the option list is
+                computed from the EFFECTIVE delivery province (the one shown in the address
+                block: order → primary address → juristic company), not the raw
+                faddressprovince (empty on ~148 rows). The picker also lets staff change the
+                province inline (client-side) so it's usable even on an address-less row. */}
             <EditShipByField
               fId={r.id}
               fshipby={r.fshipby}
-              province={r.faddressprovince}
-              carriers={getPrivateCarrierOptionsForProvince(r.faddressprovince)}
+              province={effectiveProvince}
+              carriers={getPrivateCarrierOptionsForProvince(effectiveProvince)}
             />
             <div className="text-foreground">
               <b className="font-semibold">ที่อยู่จัดส่งสินค้า : </b>

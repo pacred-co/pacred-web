@@ -23,7 +23,12 @@
 
 // The 77 canonical provinces live in ONE place (docs/conventions §13) —
 // `lib/thai-provinces.ts`; the generator asserts parity with it before emitting.
-import { isThaiProvince } from "@/lib/thai-provinces";
+import { isThaiProvince, THAI_PROVINCES } from "@/lib/thai-provinces";
+
+// Re-export so the carrier pickers (client + server) pull the 77-province list
+// from THIS pure SOT — the same module that holds `carriersForProvince` /
+// `canonicalProvince` — instead of reaching for a second import.
+export { THAI_PROVINCES } from "@/lib/thai-provinces";
 
 /** ภาคอีสาน — the 20 provinces "ภาคอีสานทุกจังหวัด" expands to. */
 export const ISAAN_PROVINCES: readonly string[] = [
@@ -355,4 +360,39 @@ export function carrierProvinceNote(
     (c) => c.name === nameOrCode || c.code === nameOrCode,
   );
   return (p && hit?.provinceNotes?.[p]) || "";
+}
+
+/**
+ * Best-effort province extraction from a FREE-FORM Thai address string —
+ * e.g. `tb_corporate.corporateaddress`, which a juristic customer typed as one
+ * blob with no structured province column. Returns the canonical province, or ""
+ * when none can be recognised (staff then pick it on the carrier field).
+ *
+ * Strategy (best-effort — a wrong guess is harmless; staff can override):
+ *   1) an explicit "จังหวัด…" / "จ.…" marker (most reliable), then
+ *   2) the LONGEST canonical province name or known alias appearing as a
+ *      substring (longest-first so a real "นครราชสีมา" wins over a stray "เลย").
+ */
+export function provinceFromAddressText(raw: string | null | undefined): string {
+  const text = String(raw ?? "")
+    .replace(/[​-‏⁠﻿ ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text) return "";
+
+  // 1) explicit marker — "จ.<name>" / "จังหวัด <name>" (captures the Thai run).
+  const marker = text.match(/จ(?:ังหวัด|\.)\s*([ก-๛]+)/);
+  if (marker) {
+    const c = canonicalProvince(marker[1]);
+    if (c) return c;
+  }
+
+  // 2) substring scan — longest canonical name / alias that appears in the text.
+  const candidates = [...THAI_PROVINCES, ...Object.keys(PROVINCE_ALIASES)].sort(
+    (a, b) => b.length - a.length,
+  );
+  for (const name of candidates) {
+    if (text.includes(name)) return canonicalProvince(name);
+  }
+  return "";
 }

@@ -86,6 +86,7 @@ import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
 import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
+import { canonicalProvince } from "@/lib/forwarder/carrier-province-coverage";
 
 /** Pacred's own delivery family (รับเองโกดัง / เหมาๆ / ด่วน) — works any province. */
 const PCS_FAMILY = new Set(["PCS", "PCSF", "PCSE"]);
@@ -685,6 +686,11 @@ const FPCS_DEPOT_ADDRESS = {
 const shipBySchema = z.object({
   fId:     z.number().int().positive(),
   fShipBy: z.string().trim().min(1).max(50),
+  // Optional — the delivery จังหวัดปลายทาง the staff picked in <EditShipByField>. When a
+  // PRIVATE courier is chosen for a row whose faddressprovince was empty (address-less /
+  // juristic), this is the province the coverage guard checks against + is persisted so
+  // it's remembered (own-fleet PCS/PCSF/PCSE ignore it). Canonicalised server-side.
+  province: z.string().trim().max(60).optional(),
 });
 export type AdminUpdateForwarderShipByInput = z.infer<typeof shipBySchema>;
 
@@ -720,10 +726,15 @@ export async function adminUpdateForwarderShipBy(
       return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (ผู้ขนส่งเดิม)" };
     }
 
-    // 🔴 CLOSED LIST (owner 2026-07-14) — a private courier must exist in the owner's
-    // workbook AND actually run in this delivery province. Own-fleet (PCS/PCSF/PCSE) is
-    // exempt. This is the REAL gate: the picker filter alone cannot stop a raw action post.
-    const coverage = checkCarrierForProvince(fShipBy, fwd.faddressprovince, {
+    // 🔴 CLOSED LIST (owner 2026-07-14/15) — a private courier must exist in the owner's
+    // workbook AND actually run in the delivery province. Own-fleet (PCS/PCSF/PCSE) is exempt.
+    // Enforce against the province the staff PICKED in <EditShipByField> (the picker filters by
+    // it); fall back to the stored faddressprovince when the client sent none. This is the REAL
+    // gate — the picker filter alone cannot stop a raw action post.
+    const pickedProvince = canonicalProvince(d.province ?? "");
+    const storedProvince = (fwd.faddressprovince ?? "").trim();
+    const guardProvince = pickedProvince || storedProvince;
+    const coverage = checkCarrierForProvince(fShipBy, guardProvince, {
       previous: fwd.fshipby,
     });
     if (!coverage.ok) return { ok: false, error: coverage.error };
@@ -751,6 +762,17 @@ export async function adminUpdateForwarderShipBy(
     // Legacy L1612-1626: 'PCS' rewrites the snapshot address to the depot.
     if (fShipBy === "PCS") Object.assign(update, FPCS_DEPOT_ADDRESS);
 
+    // Owner 2026-07-15 — persist the chosen delivery province for a PRIVATE courier when it
+    // differs from what's stored (own-fleet PCS/PCSF/PCSE need none; 'PCS' already rewrote the
+    // depot province above). This "remembers" the province so the บิล/เอกสาร province is right +
+    // next time the picker/guard work straight off faddressprovince. Already coverage-verified.
+    const isOwnFleetShipBy = ["PCS", "PCSF", "PCSE"].includes(fShipBy);
+    const persistedProvince =
+      !isOwnFleetShipBy && pickedProvince && pickedProvince !== storedProvince
+        ? pickedProvince
+        : null;
+    if (persistedProvince) update.faddressprovince = persistedProvince;
+
     const { error: updErr } = await admin
       .from("tb_forwarder")
       .update(update)
@@ -765,6 +787,7 @@ export async function adminUpdateForwarderShipBy(
       reprice: fStatusInt <= 5 && ["PCS", "PCSF", "PCSE"].includes(fShipBy)
         ? update.ftransportprice : "unchanged",
       pcsDepotAddr: fShipBy === "PCS",
+      provinceSet: persistedProvince ?? "unchanged",
     });
 
     revalidatePath(`/admin/forwarders/${d.fId}`);

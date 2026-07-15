@@ -42,7 +42,7 @@
  * acknowledges the cascading impact before reassigning.
  */
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, AlertTriangle, Camera, Trash2 } from "lucide-react";
 import {
@@ -68,6 +68,11 @@ import { adminSetForwarderBillToOverride } from "@/actions/admin/forwarders";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { confirm } from "@/components/ui/confirm";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
+import {
+  THAI_PROVINCES,
+  carriersForProvince,
+  canonicalProvince,
+} from "@/lib/forwarder/carrier-province-coverage";
 import { deriveContainerCloseDate } from "@/lib/admin/forwarder-status";
 import {
   TAX_DOC_MODES,
@@ -1064,6 +1069,24 @@ export function EditPayMethodField({
 export type CarrierPick = { id: string; name: string; note?: string; notes?: string[] };
 
 /**
+ * CLIENT-side carrier options for a province — the exact shape the server passes via
+ * `getPrivateCarrierOptionsForProvince`, computed here from the pure SOT so the province
+ * <select> can refresh the courier list LIVE (even on a row that had no province stored).
+ * `note` = this province's delivery restriction · `notes` = carrier-level notes.
+ */
+function carrierPicksForProvince(province: string | null | undefined): CarrierPick[] {
+  const p = canonicalProvince(province);
+  if (!p) return [];
+  return carriersForProvince(p).map((c) => {
+    const pick: CarrierPick = { id: c.code, name: c.name };
+    const note = c.provinceNotes?.[p];
+    if (note) pick.note = note;
+    if (c.notes?.length) pick.notes = [...c.notes];
+    return pick;
+  });
+}
+
+/**
  * บริษัทขนส่ง · PCS L1579 — Pacred own-fleet preset · **ขนส่งเอกชนตามจังหวัดปลายทาง (CLOSED)**.
  *
  * 🔴 Owner 2026-07-14: "ให้อิง data ตามไฟล์นี้เลย · บังคับให้เลือกให้ใส่แค่ที่มีในไฟล์ที่ส่งให้เท่านั้น ·
@@ -1086,8 +1109,12 @@ export function EditShipByField({
 }: {
   fId: number;
   fshipby: string | null;
-  /** tb_forwarder.faddressprovince — shown in the group label. */
+  /** The EFFECTIVE delivery province (order → customer primary address → juristic company
+   *  address), canonicalised server-side. Seeds the inline "จังหวัดปลายทาง" <select> +
+   *  the initial courier list, so the picker is usable even when faddressprovince is empty. */
   province?: string | null;
+  /** Server-computed courier list for `province` (first paint / read-view badge). The editor
+   *  recomputes it LIVE from the chosen จังหวัด via `carrierPicksForProvince`. */
   carriers?: CarrierPick[];
 }) {
   const { pending, err, run } = useEditor();
@@ -1095,19 +1122,42 @@ export function EditShipByField({
 
   const cur = (fshipby ?? "").trim();
   const isPresetShipBy = SHIPBY_PRESETS.includes(cur as (typeof SHIPBY_PRESETS)[number]);
-  const inCarrierList = carriers.some((c) => c.id === cur);
-  /** The stored value is not selectable any more (retired / off-workbook / wrong province). */
-  const staleCurrent = cur !== "" && !isPresetShipBy && !inCarrierList;
+  const effectiveProvince = canonicalProvince(province ?? "");
+  /** Read-view badge: is the STORED carrier valid for the address's (effective) province? */
+  const staleCurrent = cur !== "" && !isPresetShipBy && !carriers.some((c) => c.id === cur);
+
+  // "จังหวัดปลายทาง" the picker filters by — starts at the effective (shown) province, but
+  // staff can change it inline so an address-less / juristic row is still usable in one place.
+  const [selectedProvince, setSelectedProvince] = useState<string>(effectiveProvince);
+  // Live courier list for the chosen province (client-side, same pure SOT the server used).
+  // The editor is only rendered after "แก้ไข" (client) so there is no SSR hydration to match.
+  const liveCarriers = useMemo<CarrierPick[]>(
+    () => carrierPicksForProvince(selectedProvince),
+    [selectedProvince],
+  );
 
   const initialShipByMode = cur !== "" ? cur : "PCS";
   const [shipByMode, setShipByMode] = useState<string>(initialShipByMode);
-  const selected = carriers.find((c) => c.id === shipByMode);
+  const selected = liveCarriers.find((c) => c.id === shipByMode);
   const selectedNote = selected?.note ?? "";
   const selectedNotes = selected?.notes ?? [];
-  /** Saving is only allowed for an own-fleet preset or a courier from THIS province's list. */
+  /** The stored carrier isn't selectable in the CHOSEN province's list → show as disabled "ค่าเดิม". */
+  const curStaleInLive = cur !== "" && !isPresetShipBy && !liveCarriers.some((c) => c.id === cur);
+  /** Saving is only allowed for an own-fleet preset or a courier that runs in the chosen province. */
   const canSave =
     SHIPBY_PRESETS.includes(shipByMode as (typeof SHIPBY_PRESETS)[number]) ||
-    carriers.some((c) => c.id === shipByMode);
+    liveCarriers.some((c) => c.id === shipByMode);
+
+  function onProvinceChange(next: string) {
+    setSelectedProvince(next);
+    // Keep own-fleet presets; drop a private carrier the NEW province cannot back (→ re-pick).
+    if (
+      !SHIPBY_PRESETS.includes(shipByMode as (typeof SHIPBY_PRESETS)[number]) &&
+      !carrierPicksForProvince(next).some((c) => c.id === shipByMode)
+    ) {
+      setShipByMode("PCS");
+    }
+  }
 
   return (
     <div>
@@ -1125,7 +1175,7 @@ export function EditShipByField({
             )}
             {staleCurrent && (
               <span className="text-[11px] text-amber-700">
-                ⚠ ไม่อยู่ในรายชื่อขนส่งที่วิ่ง{province ? ` จ.${province}` : "จังหวัดนี้"} — กรุณาเลือกใหม่
+                ⚠ ไม่อยู่ในรายชื่อขนส่งที่วิ่ง{effectiveProvince ? ` จ.${effectiveProvince}` : "จังหวัดนี้"} — กรุณาเลือกใหม่
               </span>
             )}
           </span>
@@ -1133,27 +1183,45 @@ export function EditShipByField({
       >
         {(close) => (
           <>
-            <select className={selectCls} value={shipByMode} onChange={(e) => setShipByMode(e.target.value)}>
-              <optgroup label="Pacred (ส่งเอง)">
-                <option value="PCS">รับเองโกดัง Pacred (สมุทรสาคร) · ค่าขนส่ง 0</option>
-                <option value="PCSF">PRF เหมาๆ · ส่งฟรีในเขต (ค่าขนส่ง 0)</option>
-                <option value="PCSE">PRE Express · ส่งด่วน (ปริมาตร×120 · ขั้นต่ำ 50)</option>
-              </optgroup>
-              {carriers.length > 0 && (
-                <optgroup label={`ขนส่งเอกชน ที่วิ่ง${province ? ` จ.${province}` : "จังหวัดปลายทาง"} (${carriers.length})`}>
-                  {carriers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}{c.note ? ` — ${c.note}` : ""}
-                    </option>
-                  ))}
-                </optgroup>
+            {/* จังหวัดปลายทาง — set/override here so the courier list works even on a row that
+                had no province stored (owner 2026-07-15: "ที่อยู่เขาก็มีอยู่แล้ว · มันเลือกได้ตรงไหน").
+                Changing it refreshes the ขนส่งเอกชน list LIVE. */}
+            <div>
+              <label className="block text-[11px] text-muted mb-0.5">จังหวัดปลายทาง</label>
+              <select className={selectCls} value={selectedProvince} onChange={(e) => onProvinceChange(e.target.value)}>
+                <option value="">— เลือกจังหวัด —</option>
+                {THAI_PROVINCES.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+              {effectiveProvince && selectedProvince !== effectiveProvince && (
+                <p className="text-[11px] text-muted mt-0.5">จังหวัดจากที่อยู่: {effectiveProvince}</p>
               )}
-              {staleCurrent && (
-                <optgroup label="ค่าเดิม (เลือกใหม่ไม่ได้ · ไม่อยู่ในไฟล์พื้นที่ขนส่ง)">
-                  <option value={cur} disabled>{carrierLabel(cur)}</option>
+            </div>
+            <div>
+              <label className="block text-[11px] text-muted mb-0.5">บริษัทขนส่ง</label>
+              <select className={selectCls} value={shipByMode} onChange={(e) => setShipByMode(e.target.value)}>
+                <optgroup label="Pacred (ส่งเอง)">
+                  <option value="PCS">รับเองโกดัง Pacred (สมุทรสาคร) · ค่าขนส่ง 0</option>
+                  <option value="PCSF">PRF เหมาๆ · ส่งฟรีในเขต (ค่าขนส่ง 0)</option>
+                  <option value="PCSE">PRE Express · ส่งด่วน (ปริมาตร×120 · ขั้นต่ำ 50)</option>
                 </optgroup>
-              )}
-            </select>
+                {liveCarriers.length > 0 && (
+                  <optgroup label={`ขนส่งเอกชน ที่วิ่ง${selectedProvince ? ` จ.${selectedProvince}` : "จังหวัดปลายทาง"} (${liveCarriers.length})`}>
+                    {liveCarriers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}{c.note ? ` — ${c.note}` : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {curStaleInLive && (
+                  <optgroup label="ค่าเดิม (เลือกใหม่ไม่ได้ · ไม่อยู่ในไฟล์พื้นที่ขนส่ง)">
+                    <option value={cur} disabled>{carrierLabel(cur)}</option>
+                  </optgroup>
+                )}
+              </select>
+            </div>
             {(selectedNote || selectedNotes.length > 0) && (
               <div className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800 space-y-0.5">
                 {selectedNote && <p>⚠ พื้นที่ส่ง: {selectedNote}</p>}
@@ -1162,10 +1230,15 @@ export function EditShipByField({
                 ))}
               </div>
             )}
-            {carriers.length === 0 && (
+            {!selectedProvince && (
               <p className="text-[11px] text-amber-700">
-                ยังไม่มีรายชื่อ “ขนส่งเอกชน” สำหรับจังหวัดปลายทางนี้ — ตั้ง/แก้ “ที่อยู่จัดส่ง” ให้จังหวัดถูกต้องก่อน
-                แล้วระบบจะขึ้นขนส่งที่วิ่งในจังหวัดนั้นให้เลือก (เลือกได้เฉพาะที่มีในไฟล์พื้นที่ขนส่งของบริษัท)
+                เลือก “จังหวัดปลายทาง” ก่อน แล้วระบบจะขึ้นรายชื่อขนส่งเอกชนที่วิ่งในจังหวัดนั้นให้เลือก
+                (เลือกได้เฉพาะที่มีในไฟล์พื้นที่ขนส่งของบริษัท) — หรือเลือก Pacred (ส่งเอง) ได้เลย
+              </p>
+            )}
+            {selectedProvince && liveCarriers.length === 0 && (
+              <p className="text-[11px] text-amber-700">
+                ยังไม่มี “ขนส่งเอกชน” ที่วิ่ง จ.{selectedProvince} ในไฟล์พื้นที่ขนส่งของบริษัท — เลือก Pacred (ส่งเอง) หรือเปลี่ยนจังหวัด
               </p>
             )}
             {!canSave && (
@@ -1174,11 +1247,12 @@ export function EditShipByField({
               </p>
             )}
             <p className="text-[11px] text-muted">
-              รับเองโกดัง Pacred → ที่อยู่จะถูกแทนด้วยโกดัง Pacred (สมุทรสาคร) · ตัวเลือก Pacred คิดค่าขนส่งใหม่อัตโนมัติ
+              รับเองโกดัง Pacred → ที่อยู่จะถูกแทนด้วยโกดัง Pacred (สมุทรสาคร) · ตัวเลือก Pacred คิดค่าขนส่งใหม่อัตโนมัติ ·
+              เลือกขนส่งเอกชน → บันทึกจังหวัดปลายทางให้ด้วย (จำไว้ใช้ครั้งหน้า)
             </p>
             <div className="flex gap-2">
               <button type="button" disabled={pending || !canSave} className={btnSave}
-                onClick={() => run(() => adminUpdateForwarderShipBy({ fId, fShipBy: shipByMode }), close)}>บันทึก</button>
+                onClick={() => run(() => adminUpdateForwarderShipBy({ fId, fShipBy: shipByMode, province: selectedProvince }), close)}>บันทึก</button>
               <button type="button" disabled={pending} className={btnCancel} onClick={close}>ยกเลิก</button>
             </div>
           </>
