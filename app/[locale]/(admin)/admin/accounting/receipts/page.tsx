@@ -38,9 +38,10 @@ import {
   type ReceiptCTypeCounts,
 } from "@/actions/admin/accounting-receipts";
 import { exportReceiptsAll } from "@/actions/admin/export/acc-receipts";
-import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
+import { type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { Info, Plus, Printer, Search } from "lucide-react";
 import { ReceiptsVoidTable } from "./receipts-void-table";
+import { ReceiptExportToolbar } from "./receipt-export-toolbar";
 
 // CSV columns — mirror the on-screen table.
 const CSV_COLS: CsvCol[] = [
@@ -87,16 +88,42 @@ function defaultDateRange(): { from: string; to: string } {
 
 const STATUS_TABS: ReceiptTab[] = ["recent", "all", "draft", "pending", "issued", "cancelled"];
 
-function statusTabLabel(t: ReceiptTab, counts: ReceiptTabCounts): string {
+function statusTabText(t: ReceiptTab): string {
   switch (t) {
-    case "recent":    return `ล่าสุด`;
-    case "all":       return `ทั้งหมด (${counts.all.toLocaleString()})`;
-    case "draft":     return `ร่าง (${counts.draft.toLocaleString()})`;
-    case "pending":   return `รอชำระ (${counts.pending.toLocaleString()})`;
-    case "issued":    return `ออกแล้ว (${counts.issued.toLocaleString()})`;
-    case "cancelled": return `ยกเลิก (${counts.cancelled.toLocaleString()})`;
+    case "recent":    return "ล่าสุด";
+    case "all":       return "ทั้งหมด";
+    case "draft":     return "ร่าง";
+    case "pending":   return "รอชำระ";
+    case "issued":    return "ออกแล้ว";
+    case "cancelled": return "ยกเลิก";
   }
 }
+
+/** Per-status count for the badge (recent = no badge). */
+function statusTabCount(t: ReceiptTab, c: ReceiptTabCounts): number | null {
+  switch (t) {
+    case "recent":    return null;
+    case "all":       return c.all;
+    case "draft":     return c.draft;
+    case "pending":   return c.pending;
+    case "issued":    return c.issued;
+    case "cancelled": return c.cancelled;
+  }
+}
+
+/**
+ * Legacy badge colour per status (`queryGetRowCountBadge` color arg):
+ * ทั้งหมด/ร่าง = secondary(gray) · รอชำระ = warning(amber) ·
+ * ออกแล้ว = success(green) · ยกเลิก = danger(red).
+ */
+const STATUS_BADGE_BG: Record<ReceiptTab, string> = {
+  recent:    "",
+  all:       "bg-slate-500",
+  draft:     "bg-slate-500",
+  pending:   "bg-amber-500",
+  issued:    "bg-emerald-600",
+  cancelled: "bg-red-600",
+};
 
 const CTYPE_TABS: { key: ReceiptCType; label: string }[] = [
   { key: "all", label: "ทั้งหมด" },
@@ -211,6 +238,17 @@ export default async function ReceiptsListPage({
   };
   const tabParam = tab === "recent" ? undefined : tab;
 
+  // Server action returning ALL filtered rows — powers the Copy/CSV/Excel/Print
+  // toolbar above the table. Omitted on the "recent" landing tab (last-N
+  // snapshot has no filtered set to match — it would dump the whole table).
+  const fetchAllReceipts =
+    tab === "recent"
+      ? undefined
+      : async () => {
+          "use server";
+          return exportReceiptsAll({ tab, cType, dateFrom, dateTo, search: sp.q ?? "" });
+        };
+
   return (
     <div className="min-h-screen bg-slate-50">
       <div className=" px-4 py-6 space-y-5">
@@ -232,28 +270,7 @@ export default async function ReceiptsListPage({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* CSV export — page rows + drift-free "ทั้งหมด" (all filtered, audited).
-                Omitted on the "recent" landing tab (last-N snapshot has no filtered
-                set to match — it would dump the whole table). */}
-            <CsvButton
-              rows={csvRows}
-              cols={CSV_COLS}
-              filename="ใบเสร็จรับเงิน-ฝากนำเข้า.csv"
-              fetchAll={
-                tab === "recent"
-                  ? undefined
-                  : async () => {
-                      "use server";
-                      return exportReceiptsAll({
-                        tab,
-                        cType,
-                        dateFrom,
-                        dateTo,
-                        search: sp.q ?? "",
-                      });
-                    }
-              }
-            />
+            {/* Copy/CSV/Excel/Print live above the table (legacy-faithful). */}
             <Link
               href={`/admin/accounting/closing?year=${dateFrom.slice(0, 4)}&month=${Number.parseInt(dateFrom.slice(5, 7), 10)}`}
               className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
@@ -271,140 +288,181 @@ export default async function ReceiptsListPage({
           </div>
         </div>
 
-        {/* ── Tab row #1 — ประเภทลูกค้า (legacy · composes with the status tab) ── */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-slate-500 mr-1">ประเภทลูกค้า:</span>
-          {CTYPE_TABS.map((c) => {
-            const active = c.key === cType;
-            return (
-              <Link
-                key={c.key}
-                href={buildHref("/admin/accounting/receipts", spThrough, {
-                  tab:   tabParam,
-                  ctype: c.key === "all" ? undefined : c.key,
-                  page:  undefined,
-                })}
-                className={`inline-flex items-center gap-1.5 rounded-2xl border border-dashed px-3 py-1.5 text-sm font-medium ${
-                  active
-                    ? "border-red-400 bg-red-50 text-red-700"
-                    : "border-red-300 bg-white text-slate-600 hover:bg-red-50/50"
-                }`}
-              >
-                {c.label}
-                <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-semibold text-white">
-                  {cTypeCount(c.key, cTypeCounts).toLocaleString()}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-
-        {/* ── Tab row #2 — สถานะ (Pacred semantics · legacy dashed-pill look) ── */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-slate-500 mr-1">สถานะ:</span>
-          {STATUS_TABS.map((t) => (
-            <Link
-              key={t}
-              href={buildHref("/admin/accounting/receipts", spThrough, {
-                tab:  t === "recent" ? undefined : t,
-                page: undefined,
+        {/* ── 2-column top band (legacy row > col-md-8 + col-md-4) ────────
+            LEFT (2/3)  = ประเภทลูกค้า tabs + สถานะ tabs + date/search filter
+            RIGHT (1/3) = คำอธิบายระบบ card (green banner), side-by-side. ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+          {/* LEFT column */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* ประเภทลูกค้า tabs — red (danger) count badges, per legacy */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-slate-500 mr-1">ประเภทลูกค้า:</span>
+              {CTYPE_TABS.map((c) => {
+                const active = c.key === cType;
+                return (
+                  <Link
+                    key={c.key}
+                    href={buildHref("/admin/accounting/receipts", spThrough, {
+                      tab:   tabParam,
+                      ctype: c.key === "all" ? undefined : c.key,
+                      page:  undefined,
+                    })}
+                    className={`inline-flex items-center gap-1.5 rounded-2xl border border-dashed px-3 py-1.5 text-sm font-medium ${
+                      active
+                        ? "border-red-400 bg-red-50 text-red-700"
+                        : "border-red-300 bg-white text-slate-600 hover:bg-red-50/50"
+                    }`}
+                  >
+                    {c.label}
+                    <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-semibold text-white">
+                      {cTypeCount(c.key, cTypeCounts).toLocaleString()}
+                    </span>
+                  </Link>
+                );
               })}
-              className={`whitespace-nowrap rounded-2xl border border-dashed px-3 py-1.5 text-sm font-medium ${
-                t === tab
-                  ? "border-red-400 bg-red-50 text-red-700"
-                  : "border-red-300 bg-white text-slate-600 hover:bg-red-50/50"
-              }`}
+            </div>
+
+            {/* สถานะ tabs — colored count badge per status (legacy queryGetRowCountBadge) */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-slate-500 mr-1">สถานะ:</span>
+              {STATUS_TABS.map((t) => {
+                const cnt = statusTabCount(t, counts);
+                const badgeBg = STATUS_BADGE_BG[t];
+                return (
+                  <Link
+                    key={t}
+                    href={buildHref("/admin/accounting/receipts", spThrough, {
+                      tab:  t === "recent" ? undefined : t,
+                      page: undefined,
+                    })}
+                    className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-2xl border border-dashed px-3 py-1.5 text-sm font-medium ${
+                      t === tab
+                        ? "border-red-400 bg-red-50 text-red-700"
+                        : "border-red-300 bg-white text-slate-600 hover:bg-red-50/50"
+                    }`}
+                  >
+                    {statusTabText(t)}
+                    {cnt !== null && (
+                      <span
+                        className={`inline-flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold text-white ${badgeBg}`}
+                      >
+                        {cnt.toLocaleString()}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+
+            {/* Filter row — วันที่ออก date range + search (legacy date filter) */}
+            <form
+              method="GET"
+              action="/admin/accounting/receipts"
+              className="rounded-lg border border-slate-200 bg-white p-3 flex flex-wrap items-end gap-3"
             >
-              {statusTabLabel(t, counts)}
-            </Link>
-          ))}
-        </div>
+              {/* preserve tab + ctype + reset page on submit */}
+              {tab !== "recent" && <input type="hidden" name="tab" value={tab} />}
+              {cType !== "all" && <input type="hidden" name="ctype" value={cType} />}
 
-        {/* ── Filter + description (2-col on lg) ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Filter row — date range + search */}
-          <form
-            method="GET"
-            action="/admin/accounting/receipts"
-            className="lg:col-span-2 rounded-lg border border-slate-200 bg-white p-3 flex flex-wrap items-end gap-3"
-          >
-            {/* preserve tab + ctype + reset page on submit */}
-            {tab !== "recent" && <input type="hidden" name="tab" value={tab} />}
-            {cType !== "all" && <input type="hidden" name="ctype" value={cType} />}
-
-            <label className="flex flex-col text-xs text-slate-600">
-              <span>วันที่ออก ตั้งแต่</span>
-              <input
-                type="date"
-                name="date_from"
-                defaultValue={dateFrom}
-                className="mt-1 px-2 py-1.5 rounded border border-slate-300 text-sm"
-                aria-label={`ตั้งแต่ ${fmtDateInput(dateFrom)}`}
-              />
-            </label>
-            <label className="flex flex-col text-xs text-slate-600">
-              <span>ถึง</span>
-              <input
-                type="date"
-                name="date_to"
-                defaultValue={dateTo}
-                className="mt-1 px-2 py-1.5 rounded border border-slate-300 text-sm"
-                aria-label={`ถึง ${fmtDateInput(dateTo)}`}
-              />
-            </label>
-            <label className="flex flex-col text-xs text-slate-600 flex-1 min-w-[220px]">
-              <span>ค้นหา (เลขเอกสาร / รหัสลูกค้า / ชื่อบริษัท)</span>
-              <div className="mt-1 relative">
-                <Search className="absolute left-2 top-2.5 size-4 text-slate-400" />
+              <label className="flex flex-col text-xs text-slate-600">
+                <span>วันที่ออก ตั้งแต่</span>
                 <input
-                  type="text"
-                  name="q"
-                  defaultValue={sp.q ?? ""}
-                  placeholder="FRG2605-00220 หรือ PR10899"
-                  className="w-full pl-8 pr-2 py-1.5 rounded border border-slate-300 text-sm"
+                  type="date"
+                  name="date_from"
+                  defaultValue={dateFrom}
+                  className="mt-1 px-2 py-1.5 rounded border border-slate-300 text-sm"
+                  aria-label={`ตั้งแต่ ${fmtDateInput(dateFrom)}`}
                 />
-              </div>
-            </label>
-            <button
-              type="submit"
-              className="px-4 py-1.5 rounded bg-slate-900 text-white text-sm hover:bg-slate-800"
-            >
-              ค้นหา
-            </button>
-            {(sp.q || sp.date_from || sp.date_to) && (
-              <Link
-                href={buildHref("/admin/accounting/receipts", {}, {
-                  tab:   tabParam,
-                  ctype: cType === "all" ? undefined : cType,
-                })}
-                className="px-3 py-1.5 rounded border border-slate-300 text-sm hover:bg-slate-50 text-slate-600"
+              </label>
+              <label className="flex flex-col text-xs text-slate-600">
+                <span>ถึง</span>
+                <input
+                  type="date"
+                  name="date_to"
+                  defaultValue={dateTo}
+                  className="mt-1 px-2 py-1.5 rounded border border-slate-300 text-sm"
+                  aria-label={`ถึง ${fmtDateInput(dateTo)}`}
+                />
+              </label>
+              <label className="flex flex-col text-xs text-slate-600 flex-1 min-w-[220px]">
+                <span>ค้นหา (เลขเอกสาร / รหัสลูกค้า / ชื่อบริษัท)</span>
+                <div className="mt-1 relative">
+                  <Search className="absolute left-2 top-2.5 size-4 text-slate-400" />
+                  <input
+                    type="text"
+                    name="q"
+                    defaultValue={sp.q ?? ""}
+                    placeholder="FRG2605-00220 หรือ PR10899"
+                    className="w-full pl-8 pr-2 py-1.5 rounded border border-slate-300 text-sm"
+                  />
+                </div>
+              </label>
+              <button
+                type="submit"
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-emerald-500 bg-white text-sm font-medium text-emerald-600 hover:bg-emerald-50"
               >
-                ล้าง
-              </Link>
-            )}
-          </form>
+                <Search className="size-4" /> ค้นหาข้อมูล
+              </button>
+              {(sp.q || sp.date_from || sp.date_to) && (
+                <Link
+                  href={buildHref("/admin/accounting/receipts", {}, {
+                    tab:   tabParam,
+                    ctype: cType === "all" ? undefined : cType,
+                  })}
+                  className="px-3 py-1.5 rounded border border-slate-300 text-sm hover:bg-slate-50 text-slate-600"
+                >
+                  ล้าง
+                </Link>
+              )}
+            </form>
+          </div>
 
-          {/* คำอธิบายระบบ — numbering explainer (static · legacy green header) */}
+          {/* RIGHT column — คำอธิบายระบบ (green banner · legacy ol explainer) */}
           <aside className="rounded-lg border border-emerald-200 overflow-hidden text-xs text-slate-700">
             <div className="flex items-center gap-1.5 bg-emerald-500 px-3 py-2 font-semibold text-white">
               <Info className="size-4" /> คำอธิบายระบบ
             </div>
-            <div className="bg-white p-3 space-y-1.5">
-              <p>
-                บุคคลธรรมดา = <span className="font-mono font-medium">FRG</span>[ปี ค.ศ. 2 หลัก][เดือน 2 หลัก]-[ลำดับ]
-                <span className="text-slate-500"> (เช่น FRG2408-00001)</span>
-              </p>
-              <p>
-                นิติบุคคล = <span className="font-mono font-medium">FRC</span>[ปี ค.ศ. 2 หลัก][เดือน 2 หลัก]-[ลำดับ]
-              </p>
-              <p>ใบเสร็จถูกสร้างอัตโนมัติเมื่ออนุมัติสลิป</p>
-              <p>วันที่ออก = วันที่ในสลิป</p>
-            </div>
+            <ol className="bg-white p-3 pl-5 space-y-1.5 list-decimal max-h-[270px] overflow-auto">
+              <li>
+                หลักการสร้างใบเสร็จฝากนำเข้า จะแบ่งลูกค้าออกเป็น 2 ประเภท คือ บุคคลธรรมดา และนิติบุคคล
+                <ol className="pl-5 mt-1 space-y-1 list-[lower-alpha]">
+                  <li>
+                    ลูกค้าบุคคลธรรมดา ใบเสร็จรับเงินจะขึ้นต้นด้วย{" "}
+                    <span className="font-mono font-medium">FRG</span>[คศ 2 ตำแหน่ง][เดือน 2 ตำแหน่ง]-[ลำดับในเดือนนั้น]{" "}
+                    เช่น FRG2408-00001
+                  </li>
+                  <li>
+                    ลูกค้านิติบุคคล ใบเสร็จรับเงินจะขึ้นต้นด้วย{" "}
+                    <span className="font-mono font-medium">FRC</span>[คศ 2 ตำแหน่ง][เดือน 2 ตำแหน่ง]-[ลำดับในเดือนนั้น]{" "}
+                    เช่น FRC2408-00001
+                  </li>
+                </ol>
+              </li>
+              <li>การสร้างใบเสร็จฝากนำเข้าสินค้าจะเกิดขึ้นแบบอัตโนมัติ เมื่อมีการอนุมัติสลิปที่ตรวจสอบแล้ว</li>
+              <li>วันที่ออกเอกสารจะเป็นวันที่ในสลิปรายการเติมเงินนั้น</li>
+              <li>หากวันที่ออกเอกสารมีการแทรกเข้ามา จะใช้รายการใกล้เคียงของเลขที่เอกสารนั้นแทน เช่น FRG00001-1</li>
+            </ol>
           </aside>
         </div>
 
-        {/* ── Table — 13-col legacy layout + tick-to-VOID bulk action ── */}
-        <ReceiptsVoidTable rows={rows} totals={totals} />
+        {/* ── Results band — red heading + Copy/CSV/Excel/Print toolbar + table ── */}
+        <div className="space-y-3">
+          <h4 className="text-lg font-bold text-red-600">
+            ผลลัพธ์การค้นหา ตั้งแต่วันที่ : {dateFrom} - {dateTo}
+          </h4>
+
+          {/* Copy / CSV / Excel / Print — legacy DataTables Buttons (blue-outline) */}
+          <ReceiptExportToolbar
+            rows={csvRows}
+            cols={CSV_COLS}
+            filename="ใบเสร็จรับเงิน-ฝากนำเข้า.csv"
+            title="ใบเสร็จรับเงิน ฝากนำเข้าสินค้า"
+            fetchAll={fetchAllReceipts}
+          />
+
+          {/* Table — 13-col legacy layout + tick-to-VOID bulk action */}
+          <ReceiptsVoidTable rows={rows} totals={totals} />
+        </div>
 
         {/* ── Pagination — 10/page ── */}
         {totalRowCount > 0 && (
