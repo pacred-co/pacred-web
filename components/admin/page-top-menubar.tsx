@@ -90,11 +90,22 @@ export type PageTopMenubarProps = {
   items: MenubarItem[];
   /** Optional · highlight the active leaf (exact match on `href`). */
   activeHref?: string;
+  /**
+   * Colour scheme of the bar.
+   *   "brand-red"   (default) — Pacred red gradient (general admin pages:
+   *                 forwarders · service-orders · reports · leads · …).
+   *   "legacy-blue" — the legacy PCS `acc-system-cargo.php` header bar
+   *                 (`linear-gradient(90deg,#6C6DF2,#44E5E6)`). Used by the
+   *                 accounting cluster so every accounting page matches the
+   *                 legacy blue bar (ภูม 2026-07-15).
+   */
+  variant?: "brand-red" | "legacy-blue";
 };
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-export function PageTopMenubar({ items, activeHref }: PageTopMenubarProps) {
+export function PageTopMenubar({ items, activeHref, variant = "brand-red" }: PageTopMenubarProps) {
+  const isBlue = variant === "legacy-blue";
   // Which TOP item (by index) is currently "pinned" open via click. Hover
   // is handled by pure CSS `group-hover:` — this state is only the
   // click-to-pin layer for touch + keyboard.
@@ -146,7 +157,12 @@ export function PageTopMenubar({ items, activeHref }: PageTopMenubarProps) {
       // customers/credit · commissions · accounting/wht-certs ·
       // accounting/quote-compare · api-forwarder-momo ·
       // accounting/near-churn · reports/shops-profit-pay).
-      className="sticky top-14 z-30 rounded-xl shadow-md bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800 text-white"
+      className={`sticky top-14 z-30 rounded-xl shadow-md text-white ${
+        isBlue ? "" : "bg-gradient-to-r from-primary-600 via-primary-700 to-primary-800"
+      }`}
+      // legacy-blue = the exact PCS acc-system-cargo header gradient
+      // (#6C6DF2 → #44E5E6). Inline style so the 2-stop gradient is byte-exact.
+      style={isBlue ? { backgroundImage: "linear-gradient(90deg, #6C6DF2 0%, #44E5E6 100%)" } : undefined}
     >
       {/* Desktop · md+ — full cascading menubar */}
       <ul className="hidden md:flex flex-wrap items-stretch">

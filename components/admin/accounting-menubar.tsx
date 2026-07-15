@@ -11,5 +11,13 @@ import { getAccountingBadges, applyMenubarBadges } from "@/lib/admin/accounting-
  */
 export async function AccountingMenubar({ activeHref }: { activeHref?: string }) {
   const badges = await getAccountingBadges();
-  return <PageTopMenubar items={applyMenubarBadges(CARGO_MENUBAR, badges)} activeHref={activeHref} />;
+  // variant="legacy-blue" — the accounting cluster mirrors the legacy PCS
+  // `acc-system-cargo.php` blue header bar (#6C6DF2 → #44E5E6). ภูม 2026-07-15.
+  return (
+    <PageTopMenubar
+      items={applyMenubarBadges(CARGO_MENUBAR, badges)}
+      activeHref={activeHref}
+      variant="legacy-blue"
+    />
+  );
 }
