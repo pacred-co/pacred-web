@@ -41,6 +41,8 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { parseMomoPackingXlsx } from "@/lib/admin/momo-packing-xlsx-parser";
+import { parseYiwuPackingXlsx } from "@/lib/admin/yiwu-packing-xlsx-parser";
+import { detectPackingFormat, type PackingFormat } from "@/lib/admin/packing-xlsx-dispatch";
 import { baseTrackingOf } from "@/lib/admin/momo-raw-helpers";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
@@ -122,6 +124,7 @@ export type MomoPackingPreviewRow = {
 };
 
 export type MomoPackingPreview = {
+  format: PackingFormat; // "yiwu" = อี้อู (PREVIEW-ONLY · money-write guarded off) · "momo" = กวางโจว (full flow)
   listTitle: string | null;
   container: string | null;
   containerCode: string | null;
@@ -156,7 +159,11 @@ type FwdRow = {
 };
 
 async function buildPreview(bytes: Uint8Array): Promise<MomoPackingPreview> {
-  const parsed = parseMomoPackingXlsx(bytes);
+  // อี้อู(Yiwu) vs กวางโจว(MOMO) auto-detect from the bytes. Yiwu flows through this SAME
+  // read-only preview (parse → match → diff · NO writes); only the money-write APPLY is
+  // guarded MOMO-only (owner plan 2026-07-15: Yiwu import = a dedicated money-free path).
+  const format = detectPackingFormat(bytes);
+  const parsed = format === "yiwu" ? parseYiwuPackingXlsx(bytes) : parseMomoPackingXlsx(bytes);
   const admin = createAdminClient();
 
   // Match by BASE: a stored ftrackingchn may be the bare base OR a "-N" suffixed
@@ -275,6 +282,7 @@ async function buildPreview(bytes: Uint8Array): Promise<MomoPackingPreview> {
   });
 
   return {
+    format,
     listTitle: parsed.listTitle,
     container: parsed.container,
     containerCode: parsed.containerCode,
@@ -343,6 +351,13 @@ export async function applyMomoPacking(input: unknown): Promise<AdminActionResul
       bytes = Buffer.from(parsed.data.fileBase64, "base64");
     } catch {
       return { ok: false, error: "อ่านไฟล์ไม่สำเร็จ (base64 ไม่ถูกต้อง)" };
+    }
+    // 🔒 money-safety: Yiwu (อี้อู) is PREVIEW-ONLY on this page. Its import must run through
+    // the dedicated money-free delivery-note → box-split → upload-2 path — never the MOMO
+    // reconcile (a bare-单号 match could mis-price / cross-customer). Refuse here even if the
+    // client is bypassed, so a Yiwu file can NEVER money-write via this action.
+    if (detectPackingFormat(bytes) === "yiwu") {
+      return { ok: false, error: "packing list อี้อู: ยังไม่รองรับการนำเข้าระบบจากหน้านี้ (โหมดพรีวิวเท่านั้น · ต้องอัพใบส่งของก่อน)" };
     }
     const preview = await buildPreview(bytes);
     const admin = createAdminClient();

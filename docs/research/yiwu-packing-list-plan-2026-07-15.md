@@ -18,7 +18,9 @@ verify กับโค้ดจริงแล้ว + owner ภูม เคา
 >
 > **🔴 owner input ค้าง 1:** รหัสโกดังอี้อู (คนละที่กับกวางโจว · ภูมยืนยัน) → `fwarehousechina` แยก + `fwarehousename` ใหม่ (≠'8'=MOMO) + label "อี้อู" (propose ตอน Phase 3).
 >
-> **💡 UI ยังไม่ได้ทำ** (ภูม flag "ยังไม่เห็นหน้าตา" · Phase 1 = backend ล้วน). ตัวเลือกถัดไปให้ภูมเลือก: (ก) เพิ่มอี้อูเข้าหน้า `packing-upload` เดิมแบบ **preview-only** (ลากไฟล์→เห็นตารางแตกกล่อง · กดเข้าระบบไม่ได้จน Phase 3) · (ข) หรือหน้าใบส่งของ+OCR ก่อน.
+> **💡 UI Phase 2a ✅ DONE (2026-07-16 · owner "ลุยเลย" → เลือก option ก):** เพิ่ม **toggle กวางโจว/อี้อู** (pill แบบหน้าตรวจตู้) เข้าหน้า `packing-upload` เดิม + **rename MOMO→กวางโจว** (breadcrumb/header/label/tooltip) + อี้อู = **preview-only** (dispatcher auto-detect · `previewMomoPacking` คืน `format` · client ซ่อนปุ่มนำเข้า/ติ๊กสร้าง + banner "โหมดพรีวิว" · ไม่บันทึกประวัติ MOMO). **money-safe:** `applyMomoPacking` guard ปฏิเสธไฟล์ Yiwu (server) + `hasWork` gate (client) · reconcile คง **pristine** (ไม่มี LIKE broadening) · กวางโจว(MOMO) flow เดิม byte-identical. gate eslint0/tsc0/route-smoke307. ⚠️ ยัง**ไม่ authed-click-test** (ไม่มี admin login + Chrome MCP read glitch) → ภูม กดจริง: pill toggle · MOMO ทำงานครบ · Yiwu โชว์ตารางแตกกล่อง+banner+ไม่มีปุ่มนำเข้า. **NEXT = Phase 3** (create action แตกกล่องจากใบส่งของ → upload-2 dedicated money-free reconcile · §3-4).
+>
+> **💡 (เดิม) UI ยังไม่ได้ทำ** — Phase 1 = backend ล้วน · option (ข) หน้าใบส่งของ+OCR = ยังไม่เริ่ม (Phase 3).
 
 ## 0. Flow (owner เคาะแล้ว · ทุกข้อ)
 1. **อัพใบส่งของ (รูป) ก่อน** → OCR อ่าน**อัตโนมัติ แยกเป็นช่องให้ถูก** (เลขออเดอร์/PR/กล่อง/น้ำหนัก/ขนาด) → **พนักงานแก้เฉพาะช่องที่เพี้ยน** → กด "เอาเข้าระบบ" → สร้างออเดอร์ **แตกกล่อง** ที่ **"ถึงโกดังจีน"** + เก็บรูปไว้กับ shipment

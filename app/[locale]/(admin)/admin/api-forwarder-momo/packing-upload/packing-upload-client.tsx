@@ -9,6 +9,9 @@ import {
 } from "@/actions/admin/momo-packing-reconcile";
 import { recordMomoPackingUpload } from "@/actions/admin/momo-packing-history";
 import { PackingHistoryPanel } from "./packing-history-panel";
+import { Warehouse } from "lucide-react";
+
+type WarehouseKey = "guangzhou" | "yiwu";
 
 const n3 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 6 }));
 const n2 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 2 }));
@@ -17,8 +20,8 @@ const DASH = <span className="text-gray-300">—</span>;
 /** ป้ายเล็กใต้หัวคอลัมน์ที่โชว์เป็น diff (ค่าปัจจุบันในระบบ → ค่าจาก packing list) */
 const DiffHint = () => <div className="text-[11px] font-normal text-muted/70">ระบบ→packing</div>;
 /** คอลัมน์ที่ชีทมี แต่ไฟล์ packing list ของ MOMO ไม่มี — โชว์ไว้ให้ครบฟอร์ม (ไม่เดาค่า) */
-const NO_FEED = "ไฟล์ packing list ของ MOMO ไม่มีคอลัมน์นี้ (ไฟล์มี 18 คอลัมน์) — ไม่เดาค่าใส่";
-const NO_FEED_ETD = "ไฟล์ packing list ของ MOMO ไม่มี ETD/ETA — มาจากไฟล์ของแต้ม (ดูที่หน้า MOMO · ตู้)";
+const NO_FEED = "ไฟล์ packing list ของกวางโจว ไม่มีคอลัมน์นี้ (ไฟล์มี 18 คอลัมน์) — ไม่เดาค่าใส่";
+const NO_FEED_ETD = "ไฟล์ packing list ของกวางโจว ไม่มี ETD/ETA — มาจากไฟล์ของแต้ม (ดูที่หน้ากวางโจว · ตู้)";
 const thNoFeed = "px-2 py-2 text-center font-normal italic text-muted/50";
 const tdNoFeed = "px-2 py-1.5 text-center text-gray-300";
 
@@ -63,13 +66,30 @@ export function MomoPackingUploadClient() {
   // or breaks the preview/apply money path.
   const recordedB64Ref = useRef<string | null>(null);
   const [historyNonce, setHistoryNonce] = useState(0);
+  // คลังต้นทาง (ภูม 2026-07-16): กวางโจว (MOMO · มี API + reconcile เต็ม) vs อี้อู (Yiwu ·
+  // manual · โหมดพรีวิวเท่านั้น จนกว่าเส้นทาง "ใบส่งของ → แตกกล่อง" จะเปิด · owner-approved plan).
+  const [warehouse, setWarehouse] = useState<WarehouseKey>("guangzhou");
+  const isYiwu = warehouse === "yiwu";
+  const whLabel = isYiwu ? "อี้อู" : "กวางโจว";
+
+  function switchWarehouse(w: WarehouseKey) {
+    if (w === warehouse) return;
+    setWarehouse(w);
+    // เคลียร์ไฟล์/พรีวิวที่ค้าง ไม่ให้ไฟล์คลังหนึ่งหลุดข้ามไปอีกคลัง
+    setPreview(null);
+    setFileName(null);
+    setFileB64(null);
+    setToCreate(new Set());
+    setMsg(null);
+    recordedB64Ref.current = null;
+  }
 
   async function handleFile(file: File) {
     setMsg(null);
     setPreview(null);
     setToCreate(new Set());
     if (!/\.xlsx$/i.test(file.name)) {
-      setMsg({ kind: "err", text: "รองรับเฉพาะไฟล์ .xlsx (packing list ของ MOMO)" });
+      setMsg({ kind: "err", text: `รองรับเฉพาะไฟล์ .xlsx (packing list ของ${whLabel})` });
       return;
     }
     if (file.size > MAX_FILE_BYTES) {
@@ -96,12 +116,16 @@ export function MomoPackingUploadClient() {
       const res = await previewMomoPacking({ fileBase64: b64 });
       if (!res.ok || !res.data) { setMsg({ kind: "err", text: res.ok ? "อ่านไม่สำเร็จ" : res.error }); return; }
       setPreview(res.data);
+      // ให้ปุ่มคลังตรงกับไฟล์จริงเสมอ (ตรวจจากไฟล์ชนะปุ่ม) → UI ปลอดภัย ไม่หลอกตา
+      const detectedWh: WarehouseKey = res.data.format === "yiwu" ? "yiwu" : "guangzhou";
+      if (detectedWh !== warehouse) setWarehouse(detectedWh);
       if (res.data.rows.length === 0) {
         setMsg({ kind: "err", text: res.data.warnings[0] ?? "อ่านไม่พบรายการพัสดุในไฟล์" });
         return;
       }
-      // record this upload into history once per distinct file (fire-and-forget)
-      if (recordedB64Ref.current !== b64) {
+      // record this upload into history once per distinct file (fire-and-forget).
+      // อี้อู = โหมดพรีวิว → ไม่บันทึกลงประวัติ MOMO (reverse-check เทียบ MOMO API ไม่ตรงบริบท)
+      if (res.data.format === "momo" && recordedB64Ref.current !== b64) {
         recordedB64Ref.current = b64;
         void recordMomoPackingUpload({ fileBase64: b64, fileName: name }).then((rec) => {
           if (rec.ok) setHistoryNonce((v) => v + 1);
@@ -126,8 +150,10 @@ export function MomoPackingUploadClient() {
     });
   }
 
+  // อี้อู = โหมดพรีวิว → ไม่มีปุ่มนำเข้าระบบ (money-write guarded off ทั้ง client + server)
   const hasWork =
-    !!preview && (preview.summary.willUpdate > 0 || preview.summary.willAdvance > 0 || toCreate.size > 0);
+    !!preview && preview.format === "momo" &&
+    (preview.summary.willUpdate > 0 || preview.summary.willAdvance > 0 || toCreate.size > 0);
 
   function doApply() {
     if (!preview || !fileB64) return;
@@ -168,11 +194,44 @@ export function MomoPackingUploadClient() {
     <div className="space-y-5">
       {/* ── UPLOAD ────────────────────────────────────────────────────────────── */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
-        <label className="block text-sm font-medium">อัปโหลด packing list ของ MOMO (.xlsx)</label>
-        <p className="text-xs text-muted leading-relaxed">
-          อัปโหลด packing list ที่ MOMO ส่งมาตอนปิดตู้ (หนึ่งไฟล์ = หนึ่งตู้) → ระบบรวมกล่องย่อยของแต่ละแทรคกิ้ง แล้วเทียบกับข้อมูลในระบบให้
-          → ติ๊ก &quot;สร้างของที่หาย&quot; เฉพาะที่ต้องการ → กดยืนยัน. ระบบจะแก้เฉพาะรายการที่<strong>ยังไม่วางบิล</strong> แล้วคิดราคาขายใหม่ให้อัตโนมัติ.
-        </p>
+        {/* ── เลือกคลังต้นทาง (กวางโจว = MOMO · อี้อู = Yiwu) · pill แบบหน้า ตรวจตู้ ── */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted">เลือกคลังต้นทาง:</span>
+          <button type="button" onClick={() => switchWarehouse("guangzhou")}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors ${
+              !isYiwu
+                ? "border-primary-600 bg-primary-600 text-white shadow-sm"
+                : "border-border bg-white text-foreground/70 hover:bg-surface-alt dark:bg-surface"
+            }`}>
+            <Warehouse className="h-3.5 w-3.5" /> กวางโจว
+          </button>
+          <button type="button" onClick={() => switchWarehouse("yiwu")}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors ${
+              isYiwu
+                ? "border-primary-600 bg-primary-600 text-white shadow-sm"
+                : "border-border bg-white text-foreground/70 hover:bg-surface-alt dark:bg-surface"
+            }`}>
+            <Warehouse className="h-3.5 w-3.5" /> อี้อู
+          </button>
+          {isYiwu && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+              โหมดพรีวิว — ยังนำเข้าระบบไม่ได้
+            </span>
+          )}
+        </div>
+
+        <label className="block text-sm font-medium">อัปโหลด packing list ของ{whLabel} (.xlsx)</label>
+        {isYiwu ? (
+          <p className="text-xs text-muted leading-relaxed">
+            ลากไฟล์ packing list ของ<strong>อี้อู</strong> (sheet 收货 · หัวจีน) มาดู — ระบบจะ<strong>แตกข้อมูลต่อ 单号</strong> ให้ตรวจ.
+            ตอนนี้เป็น<strong>โหมดพรีวิว</strong> (ยังกดนำเข้าระบบไม่ได้ · การนำเข้าอี้อูต้องอัพใบส่งของก่อน — กำลังพัฒนา).
+          </p>
+        ) : (
+          <p className="text-xs text-muted leading-relaxed">
+            อัปโหลด packing list ที่ <strong>กวางโจว (MOMO)</strong> ส่งมาตอนปิดตู้ (หนึ่งไฟล์ = หนึ่งตู้) → ระบบรวมกล่องย่อยของแต่ละแทรคกิ้ง แล้วเทียบกับข้อมูลในระบบให้
+            → ติ๊ก &quot;สร้างของที่หาย&quot; เฉพาะที่ต้องการ → กดยืนยัน. ระบบจะแก้เฉพาะรายการที่<strong>ยังไม่วางบิล</strong> แล้วคิดราคาขายใหม่ให้อัตโนมัติ.
+          </p>
+        )}
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
@@ -184,7 +243,7 @@ export function MomoPackingUploadClient() {
         >
           <span className="text-2xl">📦</span>
           <span className="text-sm font-medium">ลากไฟล์ .xlsx มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</span>
-          <span className="text-[11px] text-muted">packing list ปิดตู้ของ MOMO · จำกัด 35 MB</span>
+          <span className="text-[11px] text-muted">packing list ปิดตู้ของ{whLabel} · จำกัด 35 MB</span>
           {fileName && <span className="mt-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-800">📎 {fileName}</span>}
           <input
             ref={fileInputRef}
@@ -242,6 +301,14 @@ export function MomoPackingUploadClient() {
             {preview.summary.billedDiffer > 0 && <span className="rounded-full bg-gray-200 text-gray-700 px-2 py-0.5">🔒 วางบิลแล้ว {preview.summary.billedDiffer}</span>}
             {preview.summary.willAdvance > 0 && <span className="rounded-full bg-indigo-100 text-indigo-800 px-2 py-0.5 font-medium">→ เลื่อนสถานะมาไทย {preview.summary.willAdvance}</span>}
           </div>
+
+          {preview.format === "yiwu" && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
+              <strong>โหมดพรีวิว อี้อู (Yiwu):</strong> ตรวจข้อมูล<strong>แตกกล่องต่อ 单号</strong> จากไฟล์ packing list ได้ที่นี่ —
+              แต่<strong>ยังกดนำเข้าระบบจากหน้านี้ไม่ได้</strong>. การนำเข้าอี้อูต้อง<strong>อัพใบส่งของ (รูป) ก่อน</strong>
+              เพื่อสร้างแถวแตกกล่องที่ &quot;ถึงโกดังจีน&quot; แล้วค่อยผูกตู้ (กำลังพัฒนา · money-safe).
+            </div>
+          )}
 
           {hasWork && (
             <button
@@ -361,7 +428,7 @@ export function MomoPackingUploadClient() {
                       {/* ผล — ของเรา (ไม่ใช่คอลัมน์ในชีท) */}
                       <td className="px-2 py-1.5 text-center">
                         <span className={`inline-block rounded-full px-1.5 py-0.5 text-[11px] font-medium ${v.cls}`}>{v.label}</span>
-                        {isMissing && r.code && /^PR\d+$/i.test(r.code) && (
+                        {preview.format === "momo" && isMissing && r.code && /^PR\d+$/i.test(r.code) && (
                           <label className="mt-1 flex items-center justify-center gap-1 text-[11px] text-red-700 cursor-pointer">
                             <input
                               type="checkbox"
@@ -378,14 +445,16 @@ export function MomoPackingUploadClient() {
               </tbody>
             </table>
           </div>
-          <p className="text-[11px] text-muted leading-relaxed">
-            หัวตาราง = ชีท &quot;ข้อมูลรายละเอียดสินค้าในตู้&quot; · <strong>Wt./Vol.</strong> = ค่าต่อกล่องที่ไฟล์เขียนมาเอง (คอลัมน์ M/N) ·{" "}
-            <strong>Total Wt./Total Vol.</strong> = รวมทั้งแทรค = ค่าที่ใช้คิดเงิน · คอลัมน์ที่จางไว้ (SM Number · Note. · Service Fee · Return · ETD · ETA) = ไฟล์ packing list ของ MOMO ไม่มี (18 คอลัมน์) ·{" "}
-            [เลขในวงเล็บ] = สถานะ fstatus ปัจจุบัน · &quot;ระบบ→packing&quot; = ค่าปัจจุบันในระบบ → ค่าจาก packing list (รวมกล่องย่อยแล้ว) ·
-            🟠 กล่องขาด = ระบบนับกล่อง/น้ำหนักน้อยกว่า packing → จะแก้ให้ตรง · 🔴 ไม่พบ = MOMO มีแต่ระบบไม่รู้จัก → ติ๊ก &quot;สร้าง&quot; เพื่อสร้างรายการให้ ·
-            🟣 หลายแถว = ระบบมีหลายรายการยังไม่วางบิลของแทรคเดียว → ไม่แก้อัตโนมัติ (ตรวจเอง กันคิดเงินซ้ำ) · 🔒 วางบิลแล้ว = ข้าม (แก้บิลเอง) ·
-            เมื่อบันทึกจะคิดราคาขายใหม่จากค่าที่อัปเดต · famountcount ถูกตั้งเป็น 1 (คิวรวมอยู่แล้ว)
-          </p>
+          {preview.format === "momo" && (
+            <p className="text-[11px] text-muted leading-relaxed">
+              หัวตาราง = ชีท &quot;ข้อมูลรายละเอียดสินค้าในตู้&quot; · <strong>Wt./Vol.</strong> = ค่าต่อกล่องที่ไฟล์เขียนมาเอง (คอลัมน์ M/N) ·{" "}
+              <strong>Total Wt./Total Vol.</strong> = รวมทั้งแทรค = ค่าที่ใช้คิดเงิน · คอลัมน์ที่จางไว้ (SM Number · Note. · Service Fee · Return · ETD · ETA) = ไฟล์ packing list ของกวางโจว ไม่มี (18 คอลัมน์) ·{" "}
+              [เลขในวงเล็บ] = สถานะ fstatus ปัจจุบัน · &quot;ระบบ→packing&quot; = ค่าปัจจุบันในระบบ → ค่าจาก packing list (รวมกล่องย่อยแล้ว) ·
+              🟠 กล่องขาด = ระบบนับกล่อง/น้ำหนักน้อยกว่า packing → จะแก้ให้ตรง · 🔴 ไม่พบ = กวางโจวมีแต่ระบบไม่รู้จัก → ติ๊ก &quot;สร้าง&quot; เพื่อสร้างรายการให้ ·
+              🟣 หลายแถว = ระบบมีหลายรายการยังไม่วางบิลของแทรคเดียว → ไม่แก้อัตโนมัติ (ตรวจเอง กันคิดเงินซ้ำ) · 🔒 วางบิลแล้ว = ข้าม (แก้บิลเอง) ·
+              เมื่อบันทึกจะคิดราคาขายใหม่จากค่าที่อัปเดต · famountcount ถูกตั้งเป็น 1 (คิวรวมอยู่แล้ว)
+            </p>
+          )}
         </section>
       )}
 

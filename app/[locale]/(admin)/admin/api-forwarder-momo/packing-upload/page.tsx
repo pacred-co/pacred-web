@@ -22,21 +22,22 @@ export default async function MomoPackingUploadPage() {
       <nav className="flex items-center gap-1.5 text-xs text-muted">
         <Link href="/admin" className="hover:text-primary-600">Admin</Link>
         <span>›</span>
-        <Link href="/admin/api-forwarder-momo" className="hover:text-primary-600">MOMO</Link>
+        <Link href="/admin/api-forwarder-momo" className="hover:text-primary-600">กวางโจว</Link>
         <span>›</span>
         <span className="text-foreground font-medium">อัปโหลด packing list (ปิดตู้)</span>
       </nav>
 
       <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · MOMO · PACKING LIST</p>
-        <h1 className="mt-1 text-2xl font-bold">อัปโหลด packing list ปิดตู้ (MOMO .xlsx)</h1>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · กวางโจว / อี้อู · PACKING LIST</p>
+        <h1 className="mt-1 text-2xl font-bold">อัปโหลด packing list ปิดตู้ (กวางโจว / อี้อู · .xlsx)</h1>
         <p className="mt-1.5 text-sm text-muted">
-          เมื่อ MOMO <strong>ปิดตู้</strong> (ของกำลังส่งมาไทย) จะส่งไฟล์ <strong>PACKING LIST (.xlsx)</strong> ต่อหนึ่งตู้มาให้ —
+          เมื่อ <strong>กวางโจว (MOMO)</strong> <strong>ปิดตู้</strong> (ของกำลังส่งมาไทย) จะส่งไฟล์ <strong>PACKING LIST (.xlsx)</strong> ต่อหนึ่งตู้มาให้ —
           <strong>โยนไฟล์เข้ามาได้เลย</strong> ระบบจะอ่านไฟล์ (แตกไฟล์ + อ่านเอง · SheetJS อ่านไฟล์นี้ไม่ได้) →
           แสดงตาราง Excel ให้ตรวจ → จับคู่ตามเลขแทรคกิ้ง → เทียบ <strong>น้ำหนัก/คิว/กล่อง/เลขตู้</strong> กับระบบ +
           แจ้ง <strong>แทรคตกหล่น (🔴 มีในไฟล์แต่ระบบไม่พบ)</strong> → ให้ตรวจก่อนบันทึก. เมื่อบันทึก จะอัปเดตเฉพาะรายการ
           ที่ <strong>ยังไม่วางบิล</strong> · เลื่อนสถานะ <strong>1/2 → 3 (กำลังส่งมาไทย)</strong> · แล้ว
           <strong>คิดราคาขายใหม่อัตโนมัติ</strong> จากค่าที่อัปเดต. รายการที่วางบิลแล้วจะถูกข้าม (แสดง ⚠ ให้ตรวจเอง).
+          {" · "}<strong>อี้อู (Yiwu)</strong> เลือกปุ่มคลังด้านล่าง — ตอนนี้เป็นโหมดพรีวิว (ดูข้อมูลแตกกล่องได้ · ยังนำเข้าระบบไม่ได้).
         </p>
       </header>
 
