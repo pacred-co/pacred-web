@@ -9,7 +9,7 @@
  * กดเลขตู้ → หน้า detail /[cabinet] (เก็บไว้).
  */
 
-import { useMemo, useState, useTransition, type ReactNode } from "react";
+import { Fragment, useMemo, useState, useTransition, type ReactNode } from "react";
 import { ALL_WORKBOOK_CARRIER_OPTIONS } from "@/lib/cart/ship-by-eligibility";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -77,6 +77,20 @@ export type IngestTrack = {
     boxCbmSum: number;
     aggCbm: number;
   } | null;
+  // กล่องย่อยที่ MOMO แตก (จาก momo_box_detail · >1 กล่อง) — กางออกเป็นแถวจริงใต้แถวหลัก
+  // ให้ตรงกับ MOMO Live 1:1 (owner/ภูม 2026-07-15). ว่าง = แทรคกล่องเดียว/ไม่มี box_detail.
+  boxes: IngestBoxRow[];
+};
+
+/** One MOMO box (per-BOX total metrics) — rendered as a sub-row under its tracking. */
+export type IngestBoxRow = {
+  tracking: string;
+  weight: number; // box total weight (kg) = per-piece × qty
+  cbm: number;    // box total คิว
+  w: number;
+  l: number;
+  h: number;
+  qty: number;
 };
 
 // เฟส C — a parcel in the packing list that MOMO API never sent (พัสดุขาด).
@@ -142,6 +156,24 @@ const NO_FEED = "MOMO API ไม่ส่งคอลัมน์นี้มา
 const thNoFeed = "px-2 py-2 text-center font-normal italic text-muted/50";
 const tdNoFeed = "px-2 py-1.5 text-center text-gray-300";
 const DASH = <span className="text-gray-300">—</span>;
+
+// กล่องย่อย (box sub-row) → ค่าที่โชว์ต่อคอลัมน์ (ตาม colOrder เพื่อให้ตรงหลักกับแถวหลัก).
+// โชว์เฉพาะคอลัมน์ที่มีความหมายต่อกล่อง (Tracking/W/L/H/จำนวน/น้ำหนัก/คิว) · ที่เหลือเว้นว่าง.
+function boxCell(box: IngestBoxRow, key: string): ReactNode {
+  switch (key) {
+    case "tracking":
+      return <span className="pl-3 font-mono text-[11px] text-sky-700">↳ {box.tracking}</span>;
+    case "w": return box.w > 0 ? box.w : DASH;
+    case "l": return box.l > 0 ? box.l : DASH;
+    case "h": return box.h > 0 ? box.h : DASH;
+    case "totalParcel": return box.qty;
+    case "wt": return box.qty > 0 ? fx(box.weight / box.qty, 2) : DASH;
+    case "vol": return box.qty > 0 ? fx(box.cbm / box.qty, 6) : DASH;
+    case "totalWt": return <span className="font-mono font-semibold">{fx(box.weight, 2)}</span>;
+    case "totalVol": return <span className="font-semibold">{fx(box.cbm, 6)}</span>;
+    default: return null; // คอลัมน์อื่น (รูป/ตู้/PR/ประเภท/สถานะ ฯลฯ) inherit จากแถวหลัก → เว้นว่าง
+  }
+}
 
 // export column set (Copy/Excel · เฟส A-4)
 const EXPORT_COLS: { label: string; val: (t: IngestTrack) => string | number }[] = [
@@ -795,7 +827,8 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
               const done = t.committed || rr?.ok;
               const fid = t.committedForwarderId ?? rr?.fid ?? null;
               return (
-                <tr key={t.id} className={`align-top ${done ? "bg-emerald-50/40" : sel.has(t.id) ? "bg-primary-50/60" : t.momoGarbage ? "bg-red-50" : t.userIdValid === false ? "bg-red-50/30" : ""}`}>
+                <Fragment key={t.id}>
+                <tr className={`align-top ${done ? "bg-emerald-50/40" : sel.has(t.id) ? "bg-primary-50/60" : t.momoGarbage ? "bg-red-50" : t.userIdValid === false ? "bg-red-50/30" : ""}`}>
                   {/* ติ๊กเลือก + เลขแถว · แถวที่เข้าระบบแล้ว = ลิงก์ไปใบนำเข้า (ย้ายมาจากคอลัมน์
                       "นำเข้าระบบ" ที่ owner ให้เอาออก — ข้อมูลไม่หาย) */}
                   <td className="px-2 py-1.5 text-center">
@@ -826,6 +859,17 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                     return <td key={key} className={c.tdClass} title={c.tdTitle?.(t)}>{c.td(t)}</td>;
                   })}
                 </tr>
+                {/* กล่องย่อยของ MOMO (แตกกล่อง >1) — กางออกเป็นแถวจริงใต้แถวหลัก · ตรง MOMO Live 1:1 */}
+                {t.boxes.map((box, bi) => (
+                  <tr key={`${t.id}-b${bi}`} className="bg-sky-50/40 text-[11px]">
+                    <td className="px-2 py-1 text-center text-muted" title="กล่องย่อยจาก MOMO (box_detail)">📦</td>
+                    {colOrder.map((key) => {
+                      const c = colDefs[key];
+                      return <td key={key} className={c?.tdClass ?? "px-2 py-1"}>{boxCell(box, key)}</td>;
+                    })}
+                  </tr>
+                ))}
+                </Fragment>
               );
             })}
           </tbody>
@@ -839,6 +883,10 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           <p>
             หัวตาราง = ไฟล์ <strong>packing list (Shipment Report)</strong> เรียงคอลัมน์ A→Z ตรงตัว · 1 แถว = 1 แทรคกิ้งลูกค้า (จาก MOMO API) ·
             ตรวจ PR / น้ำหนัก / คิว / ประเภท ให้ถูก แล้วติ๊กเลือก → กด <strong>&quot;นำเข้าระบบ&quot;</strong> → ยืนยัน → INSERT ลง tb_forwarder · กด Container Name เพื่อดูรายละเอียดทั้งตู้.
+          </p>
+          <p>
+            <strong className="text-sky-700">📦 ↳ แถวสีฟ้า = กล่องย่อยของ MOMO</strong> (เมื่อ MOMO แตกกล่อง &gt;1) — กางออกให้ครบทุกกล่องเป็นแถวจริง
+            ตรงกับ MOMO Live 1:1 (น้ำหนัก/คิว/ขนาด ต่อกล่อง) · <strong>อ่านอย่างเดียว</strong> (นำเข้าที่แถวหลัก · ระบบจะแตกให้เอง).
           </p>
           <p>
             <strong>Wt. / Vol.</strong> = ต่อกล่อง (คำนวณจาก Total ÷ Total Parcel · Vol. = W×L×H) ·{" "}
