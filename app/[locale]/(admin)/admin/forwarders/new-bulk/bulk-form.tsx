@@ -337,7 +337,7 @@ export function AdminForwarderNewBulkForm({
               >
                 <option value="">— กรุณาเลือก —</option>
                 <optgroup label="Pacred (ส่งเอง)">
-                  {freeShipping && <option value="PCSF">📦 PCSF · เหมาๆ 100 บาท</option>}
+                  {freeShipping && <option value="PCSF">📦 Pacred เหมาๆ · ส่งในเขต ฿100</option>}
                   {OWN_FLEET_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
