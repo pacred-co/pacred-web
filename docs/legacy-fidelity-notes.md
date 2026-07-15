@@ -56,8 +56,12 @@
 
 ### หน้าสร้างรายการขนส่ง (`/admin/drivers/new`) — legacy `forwarder-driver.php?page=add`
 - ✅ **แท็บ = legacy dashed pill แล้ว** (`drivers/new/page.tsx` · `<PcsDriverTab>` = `.pcs-dashsoft` ใน `.pcs-rc`+`.pcs-card` · import `../../report-cnt/[fNo]/legacy-report-cnt.css`) — 5 แท็บ: มอบงานคนขับ/รับเองหน้าโกดัง/Express/กำลังจัดส่ง·ติดตาม/เตรียมส่ง·อนุมัติจ่ายแล้ว(X/Y). commit `<drivers-tabs>`.
-- 🔴 **ตาราง form ยังไม่ทำ** (`create-batch-form.tsx` + `self-pickup-form.tsx`) — ภูม flag "ตารางยังไม่เหมือนเลย". ตอนนี้เป็น Tailwind (header bg-surface-alt uppercase · zebra จาง · บริษัทขนส่ง pill ฟ้าอ่อน · link primary-600 แดง · footer bar แดง sticky). **ต้องทำ:** header ดำบนขาว · zebra ชัด · carrier/ขนส่ง = badge สี legacy (info/success) · link = ฟ้า #1e9ff2 · compact · footer อาจ portal (เหมือน report-cnt) — ยึด legacy add-page table + `.pcs-table`. **ตาราง columns เราตรง legacy อยู่แล้ว** ([☑]/จำนวน/บริษัทขนส่ง/เลขแทรคกิ้ง(nested)/ลำดับส่ง/ที่อยู่) แค่สียังไม่ตรง.
-- ⚠️ footer action bar (create-batch-form) = `sticky bottom-3` · ถ้า owner บอกไม่คา ให้ portal→body เหมือน report-cnt.
+- 🟡 **ตาราง form (`create-batch-form.tsx`) — สีหลักตรง legacy แล้ว** (เทียบ browser จริง 2026-07-16): เลขออเดอร์/link = **ฟ้า #1e9ff2** · **แถวรวม = ชมพู #f5aab0/#7a0012** (legacy alert-danger) · **อำเภอ highlight = ส้ม #ff9149** ตัวขาว. columns ตรง legacy อยู่แล้ว ([☑]/จำนวน/บริษัทขนส่ง/เลขแทรคกิ้ง(nested)/ลำดับส่ง/ที่อยู่).
+  - เหลือ (ต่างจาก legacy เล็กน้อย · Pacred decoration · owner ยังไม่ flag): บริษัทขนส่ง = pill ฟ้า (legacy = text เปล่า "PCS เหมาเหมา") · ลำดับส่ง = badge ส้ม (legacy = เลขเปล่า) · header uppercase. ถ้า owner อยากเป๊ะกว่านี้ค่อยลดทอน.
+  - `self-pickup-form.tsx` = ยังไม่แตะ (tab รับเองหน้าโกดัง).
+- ⚠️ footer action bar (create-batch-form) = `sticky bottom-3` (ยังไม่ portal · ถ้า owner บอกไม่คา ให้ portal→body เหมือน report-cnt).
+
+### 🐛 บทเรียน 404 (2026-07-16): หลังแก้ report-cnt แล้วหน้าขึ้น 404 (authed) แต่ curl unauthed = 307 · ไม่มี console error = **Next dev route state ค้าง** (ไม่ใช่บั๊กโค้ด · หน้า render ปกติในรูปก่อนหน้า). **แก้: kill dev (`taskkill /F /PID <pid on :3000>`) → `rm -rf .next` → restart `NODE_OPTIONS=--max-http-header-size=131072 pnpm dev`** → verify browser statusCode 200. (curl unauthed จับไม่ได้เพราะ middleware redirect ก่อน route render.)
 
 ### หน้า list มอบหมายคนขับ (`/admin/drivers`) — legacy `forwarder-driver.php` (list mode) — 🔴 ยังไม่ทำ
 เรา `drivers/page.tsx` · ต้องแกะ legacy list + ทำสี/ตารางให้เหมือน (ยังไม่ได้อ่าน legacy list-mode markup).
