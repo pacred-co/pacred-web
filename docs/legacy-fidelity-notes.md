@@ -50,10 +50,18 @@
 - **commits:** `b00f5acf` (frame+totals+header) · `66547ed8` (ขนส่งสี/เลขตู้ฟ้า/portal) · `<compact+zebra นี้>`.
 - ⚠️ ยัง authed-click-test ไม่ได้ (Chrome glitch) → ภูม verify ตา.
 
-## 4. drivers — 🔴 IN PROGRESS (งานถัดไป · owner สั่ง 2026-07-16)
-เป้าหมาย: แกะสี+ตาราง legacy แล้วทำให้เหมือน (ไล่ทีละหัวข้อ).
-- **หน้า list มอบหมายคนขับ** — เรา `app/[locale]/(admin)/admin/drivers/page.tsx` · legacy `forwarder-driver.php`
-- **หน้าสร้างรายการขนส่ง** — เรา `drivers/new/page.tsx` + `drivers/new/create-batch-form.tsx` + `self-pickup-form.tsx` · legacy `forwarder-driver/add/`
-  - แท็บ legacy: มอบงานให้คนขับรถ · รับเองหน้าโกดัง · Express (ขนส่งภายนอก) · กำลังจัดส่ง · ติดตาม · เตรียมส่ง·อนุมัติจ่ายแล้ว
-  - ภูม flag: "ตารางเรายังไม่เหมือนเลย หน้านี้ไม่เหมือนเยอะ" → แกะละเอียด
-- **[เก็บ hex/notes ของ drivers ตรงนี้เมื่อทำ]**
+## 4. drivers — 🟡 IN PROGRESS (งานถัดไป · owner สั่ง 2026-07-16)
+เป้าหมาย: แกะสี+ตาราง legacy แล้วทำให้เหมือน (ไล่ทีละหัวข้อ). legacy source ที่เกี่ยว:
+`pcs-admin/forwarder-driver.php` (2103 บรรทัด · list + `?page=add` · tabs = `nav nav-tabs pcs-tabs` เหมือน report-cnt · icon la-truck/la-home 2.2rem).
+
+### หน้าสร้างรายการขนส่ง (`/admin/drivers/new`) — legacy `forwarder-driver.php?page=add`
+- ✅ **แท็บ = legacy dashed pill แล้ว** (`drivers/new/page.tsx` · `<PcsDriverTab>` = `.pcs-dashsoft` ใน `.pcs-rc`+`.pcs-card` · import `../../report-cnt/[fNo]/legacy-report-cnt.css`) — 5 แท็บ: มอบงานคนขับ/รับเองหน้าโกดัง/Express/กำลังจัดส่ง·ติดตาม/เตรียมส่ง·อนุมัติจ่ายแล้ว(X/Y). commit `<drivers-tabs>`.
+- 🔴 **ตาราง form ยังไม่ทำ** (`create-batch-form.tsx` + `self-pickup-form.tsx`) — ภูม flag "ตารางยังไม่เหมือนเลย". ตอนนี้เป็น Tailwind (header bg-surface-alt uppercase · zebra จาง · บริษัทขนส่ง pill ฟ้าอ่อน · link primary-600 แดง · footer bar แดง sticky). **ต้องทำ:** header ดำบนขาว · zebra ชัด · carrier/ขนส่ง = badge สี legacy (info/success) · link = ฟ้า #1e9ff2 · compact · footer อาจ portal (เหมือน report-cnt) — ยึด legacy add-page table + `.pcs-table`. **ตาราง columns เราตรง legacy อยู่แล้ว** ([☑]/จำนวน/บริษัทขนส่ง/เลขแทรคกิ้ง(nested)/ลำดับส่ง/ที่อยู่) แค่สียังไม่ตรง.
+- ⚠️ footer action bar (create-batch-form) = `sticky bottom-3` · ถ้า owner บอกไม่คา ให้ portal→body เหมือน report-cnt.
+
+### หน้า list มอบหมายคนขับ (`/admin/drivers`) — legacy `forwarder-driver.php` (list mode) — 🔴 ยังไม่ทำ
+เรา `drivers/page.tsx` · ต้องแกะ legacy list + ทำสี/ตารางให้เหมือน (ยังไม่ได้อ่าน legacy list-mode markup).
+
+### hex/สี drivers (เก็บเพิ่มเมื่อแกะ legacy add/list ละเอียด)
+- carrier badge สี = อิง `nameShipBy`/badge theme (info #1e9ff2 / success #28d094 · เหมือน report-cnt)
+- [เก็บเพิ่ม: legacy add-page table header สี · zebra · footer .m-driver-footer btn-color-main gradient #cc3333→#f15a24]
