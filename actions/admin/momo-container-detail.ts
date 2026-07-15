@@ -10,10 +10,11 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, type AdminActionResult } from "./common";
-import { filterCountableForwarderRows } from "@/lib/admin/momo-bill-header";
+import { filterCountableForwarderRows, baseTracking } from "@/lib/admin/momo-bill-header";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import { forwarderCoverUrl, NO_COVER_IMAGE } from "@/lib/legacy-image";
 import { deriveContainerVerify, type ContainerVerify } from "@/lib/admin/momo-container-view";
+import { deriveMomoBoxConsistency, type BoxConsistencyInput } from "@/lib/admin/momo-box-consistency";
 import type { PackingUploadSnapshot } from "./momo-packing-history";
 
 const num = (v: number | string | null | undefined): number | null =>
@@ -37,6 +38,17 @@ type FwdRow = {
   userid: string | null;
 };
 
+/** "MOMO มั่ว" data-quality flag on ONE row — MOMO's per-box numbers contradict the
+ *  aggregate AND dims can't reconcile → the auto box-split refuses it → ต้องอัพแต้ม. */
+export type MomoBoxGarbage = {
+  reason: "weight" | "cbm";
+  boxCount: number;
+  boxWeightSum: number;
+  aggWeight: number;
+  boxCbmSum: number;
+  aggCbm: number;
+};
+
 export type MomoContainerItem = {
   id: number;
   tracking: string | null;
@@ -50,6 +62,8 @@ export type MomoContainerItem = {
   h: number | null;
   productType: string | null;
   cover: string | null;
+  /** 🚩 set when this row's momo_box_detail contradicts its aggregate weight/คิว. */
+  garbage?: MomoBoxGarbage | null;
 };
 
 export type MomoContainerDetail = {
@@ -61,6 +75,8 @@ export type MomoContainerDetail = {
   cbm: number | null;
   billedCount: number;
   verify: ContainerVerify;
+  /** how many rows in this container carry a 🚩 "MOMO มั่ว" flag (0 = clean). */
+  garbageCount: number;
   items: MomoContainerItem[];
   perPr: Array<{ pr: string; count: number; boxes: number; weight: number; cbm: number }>;
   images: Array<{ src: string; tracking: string | null; pr: string | null }>;
@@ -143,6 +159,65 @@ export async function getMomoContainerDetail(cabinet: string): Promise<AdminActi
       .filter((i) => !!i.cover && i.cover !== NO_COVER_IMAGE)
       .map((i) => ({ src: i.cover as string, tracking: i.tracking, pr: i.pr }));
 
+    // 1.5 🚩 "MOMO มั่ว" flag — for each UNSPLIT aggregate (a base with exactly ONE
+    // tb_forwarder row in this cabinet) whose momo_box_detail (>1 box) contradicts the
+    // aggregate weight/คิว AND dims can't reconcile, the auto box-split refuses it →
+    // the row needs a real แต้ม packing list. Already-split shipments (a base with
+    // sibling rows here) are SKIPPED — the anchor's weight is reduced to box-1's share,
+    // so comparing it to the full box_detail would false-flag a resolved shipment.
+    let garbageCount = 0;
+    {
+      const rowsPerBase = new Map<string, number>();
+      for (const it of items) {
+        const b = baseTracking(it.tracking);
+        if (b) rowsPerBase.set(b, (rowsPerBase.get(b) ?? 0) + 1);
+      }
+      const unsplitBases = [...rowsPerBase.entries()].filter(([, n]) => n === 1).map(([b]) => b);
+      const boxesByBase = new Map<string, BoxConsistencyInput[]>();
+      const CHUNK = 200;
+      for (let i = 0; i < unsplitBases.length; i += CHUNK) {
+        const slice = unsplitBases.slice(i, i + CHUNK);
+        const { data: bd, error: bdErr } = await admin
+          .from("momo_box_detail")
+          .select("base_tracking, box_tracking, weight_kg, cbm, width, length, height, quantity")
+          .in("base_tracking", slice);
+        if (bdErr) {
+          console.error("[momo-container-detail] box_detail lookup failed", { code: bdErr.code, message: bdErr.message });
+          continue;
+        }
+        for (const r of (bd ?? []) as Array<Record<string, number | string | null>>) {
+          const b = String(r.base_tracking ?? "").trim();
+          if (!b) continue;
+          const arr = boxesByBase.get(b) ?? [];
+          arr.push({
+            boxTracking: String(r.box_tracking ?? "").trim(),
+            weightKgPerPiece: num(r.weight_kg) ?? 0,
+            cbmPerPiece: num(r.cbm) ?? 0,
+            width: num(r.width) ?? 0,
+            length: num(r.length) ?? 0,
+            height: num(r.height) ?? 0,
+            quantity: num(r.quantity) ?? 0,
+          });
+          boxesByBase.set(b, arr);
+        }
+      }
+      for (const it of items) {
+        const b = baseTracking(it.tracking);
+        if (!b || (rowsPerBase.get(b) ?? 0) !== 1) continue; // unsplit aggregate only
+        const boxes = boxesByBase.get(b);
+        if (!boxes || boxes.length <= 1) continue;
+        const v = deriveMomoBoxConsistency({ fweight: it.weight ?? 0, fvolume: it.cbm ?? 0 }, boxes);
+        if (v.garbage && v.reason) {
+          it.garbage = {
+            reason: v.reason, boxCount: v.boxCount,
+            boxWeightSum: v.boxWeightSum, aggWeight: v.aggWeight,
+            boxCbmSum: v.boxCbmSum, aggCbm: v.aggCbm,
+          };
+          garbageCount++;
+        }
+      }
+    }
+
     // 2. latest packing upload for this container (+ snapshot rows)
     const { data: pk, error: pkErr } = await admin
       .from("momo_packing_upload")
@@ -189,6 +264,7 @@ export async function getMomoContainerDetail(cabinet: string): Promise<AdminActi
         cbm,
         billedCount,
         verify,
+        garbageCount,
         items,
         perPr,
         images,

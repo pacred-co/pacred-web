@@ -32,6 +32,11 @@ export function ContainerDetailClient({ d }: { d: MomoContainerDetail }) {
               💗 API ขาด {d.verify.apiMissing}
             </span>
           )}
+          {d.garbageCount > 0 && (
+            <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white" title="ตัวเลข MOMO ขัดกันเอง (แถวย่อยหนักเกินก้อนรวม) — ระบบแตกกล่องอัตโนมัติไม่ได้ · ต้องอัพ packing list แต้ม">
+              🚩 MOMO มั่ว {d.garbageCount}
+            </span>
+          )}
         </div>
         <div className="mt-3 flex flex-wrap gap-4 text-sm">
           <Stat label="แทรคกิ้ง" value={String(d.trackCount)} />
@@ -41,6 +46,21 @@ export function ContainerDetailClient({ d }: { d: MomoContainerDetail }) {
           {d.billedCount > 0 && <Stat label="วางบิลแล้ว" value={`${d.billedCount} แถว`} />}
         </div>
       </section>
+
+      {/* ── 🚩 "MOMO มั่ว" alert — rows whose per-box numbers contradict the aggregate ── */}
+      {d.garbageCount > 0 && (
+        <section className="rounded-2xl border border-red-300 bg-red-50 px-4 py-3 shadow-sm">
+          <div className="text-sm font-semibold text-red-800">🚩 ตัวเลข MOMO ขัดกันเอง {d.garbageCount} แถว — ระบบแตกกล่องอัตโนมัติไม่ได้</div>
+          <p className="mt-1 text-[13px] leading-relaxed text-red-700">
+            แถวที่มี 🚩 ในตาราง = MOMO ส่งน้ำหนัก/คิว ต่อกล่อง <strong>ไม่ตรงกับก้อนรวม</strong> (แถวย่อยหนักเกินก้อนรวม)
+            และขนาดกล่อง (ก×ย×ส) ก็เช็คไม่ได้ → เชื่อตัวเลข MOMO ไม่ได้ · ต้อง{" "}
+            <Link href="/admin/api-forwarder-momo/packing-upload" className="font-semibold underline hover:text-red-900">
+              อัพ packing list ของแต้ม
+            </Link>{" "}
+            เพื่อได้ตัวเลขจริงก่อนวางบิล.
+          </p>
+        </section>
+      )}
 
       {/* ── PER-PR SUMMARY (ไอแต้ม "ข้อมูลสรุปในตู้") ─────────────────────── */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
@@ -107,14 +127,26 @@ export function ContainerDetailClient({ d }: { d: MomoContainerDetail }) {
             </thead>
             <tbody>
               {d.items.map((it, i) => (
-                <tr key={it.id} className="border-t border-border">
+                <tr key={it.id} className={`border-t border-border ${it.garbage ? "bg-red-50" : ""}`}>
                   <td className="px-2 py-1.5 text-right text-muted">{i + 1}</td>
-                  <td className="px-2 py-1.5 font-mono">{it.tracking ?? "—"}</td>
+                  <td className="px-2 py-1.5 font-mono">
+                    {it.garbage && (
+                      <span
+                        className="mr-1 cursor-help"
+                        title={`🚩 MOMO มั่ว — box_detail ${it.garbage.boxCount} กล่อง รวม${
+                          it.garbage.reason === "weight"
+                            ? `น้ำหนัก ${n2(it.garbage.boxWeightSum)} กก. เกินก้อนรวม ${n2(it.garbage.aggWeight)} กก.`
+                            : `คิว ${n3(it.garbage.boxCbmSum)} เกินก้อนรวม ${n3(it.garbage.aggCbm)}`
+                        } · ขนาดกล่องก็เช็คไม่ได้ → ต้องอัพ packing list แต้ม`}
+                      >🚩</span>
+                    )}
+                    {it.tracking ?? "—"}
+                  </td>
                   <td className="px-2 py-1.5 text-sky-700">{it.pr ?? "—"}</td>
                   <td className="px-2 py-1.5 text-right text-[11px] text-muted">{it.w ?? "—"}×{it.l ?? "—"}×{it.h ?? "—"}</td>
                   <td className="px-2 py-1.5 text-right">{it.boxes ?? "—"}</td>
-                  <td className="px-2 py-1.5 text-right">{n2(it.weight)}</td>
-                  <td className="px-2 py-1.5 text-right">{n3(it.cbm)}</td>
+                  <td className={`px-2 py-1.5 text-right ${it.garbage?.reason === "weight" ? "font-semibold text-red-700" : ""}`}>{n2(it.weight)}</td>
+                  <td className={`px-2 py-1.5 text-right ${it.garbage?.reason === "cbm" ? "font-semibold text-red-700" : ""}`}>{n3(it.cbm)}</td>
                   <td className="px-2 py-1.5 text-[11px]">{it.productType ?? "—"}</td>
                   <td className="px-2 py-1.5 text-[11px] text-muted">{it.status ? (FST[it.status] ?? `[${it.status}]`) : "—"}</td>
                 </tr>
