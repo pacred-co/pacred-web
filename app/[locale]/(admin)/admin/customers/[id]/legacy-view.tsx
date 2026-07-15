@@ -51,6 +51,7 @@ import { ResetPwdButton } from "../reset-pwd-button";
 import { ReassignCodeButton } from "./reassign-code-button";
 import { PricingTeamEditor } from "./pricing-team-editor";
 import { UpgradeJuristicPopup } from "./upgrade-juristic-popup";
+import { JuristicDocRestampPanel } from "./juristic-doc-restamp-panel";
 // CRM depth (2026-06-08) — tags + activity timeline panels.
 import { getTags } from "@/actions/admin/customer-tags";
 import { getCustomerActivity } from "@/actions/admin/customer-activity";
@@ -754,6 +755,15 @@ export async function renderLegacyCustomerView(
               <div className="pt-1 border-b border-border/40 pb-2">
                 <span className="text-muted">ที่อยู่จดทะเบียน (บริษัท · ออกใบกำกับ)</span>
                 <p className="mt-1 text-foreground">{identity.registeredAddress}</p>
+              </div>
+            ) : null}
+            {/* Self-service doc re-stamp (owner 2026-07-15) — a customer upgraded to นิติ
+                AFTER docs were issued: staff pick the already-issued ใบวางบิล/ใบเสร็จ and
+                Apply the company identity themselves. Collapsed by default (autoLoad off). */}
+            {isJuristic ? (
+              <div className="pt-2 border-b border-border/40 pb-2">
+                <div className="text-muted mb-1">เปลี่ยนเอกสารที่ออกไปแล้วเป็นนิติ</div>
+                <JuristicDocRestampPanel userid={u.userID} autoLoad={false} />
               </div>
             ) : null}
             <div className="pt-1">

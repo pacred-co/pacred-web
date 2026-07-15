@@ -33,6 +33,7 @@ import { useRouter } from "next/navigation";
 import { Building2, Plus, X, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConvertToJuristicFormBody } from "./convert-to-juristic/convert-to-juristic-form";
+import { JuristicDocRestampPanel } from "./juristic-doc-restamp-panel";
 import { adminUploadCorporateDoc } from "@/actions/admin/customer-profile";
 import { CORPORATE_DOC_TYPES, type CorporateDocType } from "@/lib/admin/corporate-docs";
 
@@ -174,6 +175,10 @@ export function UpgradeJuristicPopup({ userid }: { userid: string }) {
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
                     ✓ เปลี่ยนเป็นนิติบุคคลแล้ว — แนบเอกสารนิติบุคคลด้านล่าง (ไม่บังคับ · แนบเพิ่มภายหลังได้ในหน้าโปรไฟล์)
                   </div>
+
+                  {/* Self-service doc re-stamp (owner 2026-07-15) — เปลี่ยนเอกสารที่ออกไปแล้ว
+                      (ใบวางบิล/ใบเสร็จ) ให้เป็นนิติทันทีหลังอัพเกรด · เลือก + Apply เอง. */}
+                  <JuristicDocRestampPanel userid={userid} autoLoad />
 
                   {uploadError && (
                     <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
