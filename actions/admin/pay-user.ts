@@ -53,7 +53,7 @@ import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { withAdmin, type AdminActionResult } from "./common";
+import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
@@ -1489,4 +1489,255 @@ export async function adminPayForwardersWithTopUp(
       },
     };
   });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// F1 — adminReverseForwarderPayment (owner 2026-07-15 · PR178 · "สถานะไม่ยอมถอย")
+// ════════════════════════════════════════════════════════════════════════
+//
+// The MIRROR-IMAGE of adminPayForwardersOnBehalf: un-settle ONE settled
+// ฝากนำเข้า pay so the order returns to รอชำระเงิน and can be re-collected. This
+// is the "ย้อนการชำระ + ถอยสถานะ" the owner asked for — voiding the ใบเสร็จ
+// (adminVoidReceipts · doc-only) does NOT roll back the payment, so a paid order
+// stayed permanently "ชำระไปแล้ว" (the pay-user idempotency gate + assertNotRefunded
+// both keep skipping/blocking it while the settled tb_wallet_hs row survives).
+//
+// MONEY MODEL (mirrors the reject cascade in wallet-hs.ts adminRejectWalletDeposit
+// L2401-2470, but for a SETTLED status='2' row, not a PENDING status='1' one):
+//   funding row = tb_wallet_hs WHERE reforder=fid AND typeservice='2'
+//                 AND typenew ∈ {5,6} AND status='2' (newest) — the exact row the
+//                 pay-on-behalf / slip-approve settle wrote.
+//   Step order is money-safe: read forwarder (refuse ≥7) → resolve funding →
+//   cascade guard → ATOMIC CLAIM status 2→3 (single winner · idempotent) → refund
+//   → revert forwarder. Claim-BEFORE-refund guarantees a single refund even under
+//   concurrent clicks (only one call wins the 2→3 flip).
+//   By funding SHAPE:
+//     • topup-cascade (reforder2 set OR a tb_wallet_paydeposit link) → REFUSE.
+//       A settled combined "เติม-แล้วจ่าย" shares a type='7' consumed-balance refund
+//       + siblings; a single-order partial reverse would mis-refund → accounting
+//       must reverse the whole top-up group. Money-safe REFUSAL (no partial reverse).
+//     • wallet-funded (depositnamebank='WALLET' — the pay-on-behalf-from-wallet
+//       settle DEBITED the wallet) → REFUND wallet += funding.amount.
+//     • direct-slip (depositnamebank = a real bank · money is in the bank, wallet
+//       untouched · e.g. PR178) → NO wallet refund.
+//   Forwarder revert (mirror reject L2427-2447): credit-pay (wusercredit='1') →
+//   fcredit='1' paydeposit=''; PCSF-50 → fstatus='5' ftransportprice=0 fusercompany='';
+//   else fstatus='5' paydeposit=''. Non-credit guarded `.in('fstatus',['5','6'])`
+//   (defense-in-depth: never demote a concurrently-shipped order; the ≥7 refusal
+//   above is the primary gate). An already-reverted (fstatus=5) order un-settles
+//   cleanly — the 5→5 flip clears the leftover paydeposit and the un-settle is what
+//   re-opens the pay-user queue (the exact PR178 state).
+//   The covering ใบเสร็จ is NOT auto-voided here — the reverse (un-collect) and the
+//   doc-void are decoupled by design (void = doc-only · staff void separately via
+//   adminVoidReceipts · owner's common case for void is re-issue, not un-collect).
+// ════════════════════════════════════════════════════════════════════════
+
+const reverseForwarderPaymentSchema = z.object({
+  fid: z.string().trim().regex(/^\d+$/, "รหัสออเดอร์ไม่ถูกต้อง"),
+  reason: z.string().trim().max(500).optional(),
+});
+
+export type ReverseForwarderPaymentResult = {
+  fid: string;
+  fundingWalletHsId: number;
+  shape: "wallet-funded" | "direct-slip";
+  /** wallet += this (0 for direct-slip — money was in the bank). */
+  refunded: number;
+  /** true if the forwarder status actually flipped back (6→5 / credit / PCSF). */
+  forwarderReverted: boolean;
+};
+
+export async function adminReverseForwarderPayment(
+  input: unknown,
+): Promise<AdminActionResult<ReverseForwarderPaymentResult>> {
+  return withAdmin<ReverseForwarderPaymentResult>(
+    // Un-collecting money → money-tier gate (super/ultra via isGodRole + accounting).
+    ["super", "accounting"],
+    async ({ adminId }) => {
+      const parsed = reverseForwarderPaymentSchema.safeParse(input);
+      if (!parsed.success) {
+        return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+      }
+      const fid = parsed.data.fid;
+      const reason = (parsed.data.reason ?? "").trim();
+      const fidNum = Number(fid);
+      const admin = createAdminClient();
+      const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 10);
+
+      // 1. Load forwarder — NEVER un-collect a shipped/delivered order (fstatus ≥ 7
+      //    = กำลังจัดส่ง/สำเร็จ). Read BEFORE claiming so we don't un-settle then bail.
+      const { data: fwd, error: fErr } = await admin
+        .from("tb_forwarder")
+        .select("id, userid, fstatus, fshipby, ftransportprice, fcredit")
+        .eq("id", fidNum)
+        .maybeSingle<{
+          id: number;
+          userid: string | null;
+          fstatus: string | null;
+          fshipby: string | null;
+          ftransportprice: number | string | null;
+          fcredit: string | null;
+        }>();
+      if (fErr) {
+        console.error(`[adminReverseForwarderPayment tb_forwarder read] failed`, { code: fErr.code, message: fErr.message, fid });
+        return { ok: false, error: `db_error:${fErr.code ?? "unknown"}` };
+      }
+      if (!fwd) return { ok: false, error: `ไม่พบออเดอร์ฝากนำเข้า #${fid}` };
+      const userid = (fwd.userid ?? "").trim();
+      const fstatusNum = Number((fwd.fstatus ?? "").trim());
+      if (Number.isFinite(fstatusNum) && fstatusNum >= 7) {
+        return { ok: false, error: `ออเดอร์ #${fid} จัดส่ง/สำเร็จแล้ว (สถานะ ${fwd.fstatus}) — ย้อนการชำระไม่ได้` };
+      }
+
+      // 2. Resolve the SETTLED funding pay row (the row the settle wrote —
+      //    typenew∈{5,6} status='2' reforder=fid typeservice='2'; newest first).
+      const { data: fundingRows, error: pErr } = await admin
+        .from("tb_wallet_hs")
+        .select("id, amount, depositnamebank, reforder2, wusercredit")
+        .eq("reforder", fid)
+        .eq("typeservice", "2")
+        .in("typenew", ["5", "6"])
+        .eq("status", "2")
+        .order("id", { ascending: false })
+        .limit(1);
+      if (pErr) {
+        console.error(`[adminReverseForwarderPayment funding row] failed`, { code: pErr.code, message: pErr.message, fid });
+        return { ok: false, error: `db_error:${pErr.code ?? "unknown"}` };
+      }
+      const funding = (fundingRows ?? [])[0] as
+        | { id: number; amount: number | string | null; depositnamebank: string | null; reforder2: string | null; wusercredit: string | null }
+        | undefined;
+      if (!funding) {
+        return { ok: false, error: `ไม่พบรายการชำระที่ตัดจ่ายแล้วสำหรับออเดอร์ #${fid} (อาจย้อนไปแล้ว)` };
+      }
+
+      // 3. Cascade guard — a combined "เติม-แล้วจ่าย" settle shares a type='7'
+      //    consumed-balance refund + siblings; a single-order partial reverse
+      //    would mis-refund → REFUSE (accounting reverses the whole group).
+      const hasReforder2 = (funding.reforder2 ?? "").trim() !== "";
+      let hasPaydepositLink = false;
+      {
+        const { data: link, error: linkErr } = await admin
+          .from("tb_wallet_paydeposit")
+          .select("id")
+          .eq("hno", fid)
+          .limit(1)
+          .maybeSingle<{ id: number }>();
+        if (linkErr) {
+          console.error(`[adminReverseForwarderPayment paydeposit link probe] failed`, { code: linkErr.code, message: linkErr.message, fid });
+          return { ok: false, error: `db_error:${linkErr.code ?? "unknown"}` };
+        }
+        hasPaydepositLink = link != null;
+      }
+      if (hasReforder2 || hasPaydepositLink) {
+        return {
+          ok: false,
+          error: `ออเดอร์ #${fid} ชำระแบบรวมสลิป (เติม-แล้วจ่าย) — ต้องให้บัญชีย้อนทั้งชุดที่หน้าตรวจสลิป ไม่สามารถย้อนทีละออเดอร์ได้`,
+        };
+      }
+
+      // 4. ATOMIC CLAIM status 2→3 (single winner · idempotent — 0 rows = already
+      //    reversed by a concurrent click). Refund happens AFTER so it can never double.
+      const { data: claimed, error: claimErr } = await admin
+        .from("tb_wallet_hs")
+        .update({
+          status:        "3",
+          adminid:       legacyAdminId,
+          adminidupdate: legacyAdminId,
+          note:          reason || `ย้อนการชำระฝากนำเข้า #${fid} (เจ้าหน้าที่)`,
+        })
+        .eq("id", funding.id)
+        .eq("status", "2")
+        .select("id");
+      if (claimErr) {
+        console.error(`[adminReverseForwarderPayment claim] failed`, { code: claimErr.code, message: claimErr.message, fid });
+        return { ok: false, error: claimErr.message };
+      }
+      if (!claimed || claimed.length === 0) {
+        return { ok: false, error: "รายการนี้ถูกย้อนไปแล้ว (โปรดรีเฟรช)" };
+      }
+
+      // 5. REFUND — only when the settle DEBITED the wallet. The pay-on-behalf-
+      //    from-wallet path writes depositnamebank='WALLET'; a direct bank slip
+      //    (submitForwarderPayment) writes 'KBANK-…' → money is in the bank, no
+      //    wallet leg to return.
+      const isWalletFunded = (funding.depositnamebank ?? "").trim().toUpperCase() === "WALLET";
+      const refundAmount = isWalletFunded ? Math.round(Number(funding.amount ?? 0) * 100) / 100 : 0;
+      if (refundAmount > 0 && userid) {
+        const { data: wRow, error: wErr } = await admin
+          .from("tb_wallet")
+          .select("wallettotal")
+          .eq("userid", userid)
+          .maybeSingle<{ wallettotal: number | string | null }>();
+        if (wErr) {
+          console.error(`[adminReverseForwarderPayment wallet read for refund] failed`, { code: wErr.code, message: wErr.message, userid });
+        }
+        const before = Number(wRow?.wallettotal ?? 0);
+        const after = Math.round((before + refundAmount) * 100) / 100;
+        if (!wRow) {
+          const { error: insErr } = await admin.from("tb_wallet").insert({ userid, wallettotal: after });
+          if (insErr) console.error(`[adminReverseForwarderPayment wallet refund insert] FAILED — money not returned`, { code: insErr.code, message: insErr.message, userid, refundAmount });
+        } else {
+          const { error: wuErr } = await admin.from("tb_wallet").update({ wallettotal: after }).eq("userid", userid);
+          if (wuErr) console.error(`[adminReverseForwarderPayment wallet refund update] FAILED — money not returned`, { code: wuErr.code, message: wuErr.message, userid, refundAmount });
+        }
+      }
+
+      // 6. Revert the forwarder (mirror the reject cascade forwarder branch).
+      const isCreditPay = (funding.wusercredit ?? "").trim() === "1";
+      const isPCSF50 =
+        ["PCSF", "PRF"].includes((fwd.fshipby ?? "").trim()) &&
+        Number(fwd.ftransportprice) === MAO_FLAT_FEE;
+      let forwarderReverted = false;
+      if (isCreditPay) {
+        // credit pay set fcredit='' with NO fstatus flip → restore fcredit='1'.
+        const { data: fUpd, error: fUpdErr } = await admin
+          .from("tb_forwarder")
+          .update({ fcredit: "1", paydeposit: "", adminidupdate: legacyAdminId })
+          .eq("id", fidNum)
+          .select("id");
+        if (fUpdErr) console.error(`[adminReverseForwarderPayment forwarder revert · credit] failed`, { code: fUpdErr.code, message: fUpdErr.message, fid });
+        else forwarderReverted = (fUpd?.length ?? 0) > 0;
+      } else {
+        const patch: Record<string, unknown> = isPCSF50
+          ? { fstatus: "5", ftransportprice: 0, fusercompany: "", paydeposit: "", adminidupdate: legacyAdminId }
+          : { fstatus: "5", paydeposit: "", adminidupdate: legacyAdminId };
+        // Guard 5/6 only — the ≥7 refusal is primary; this stops a concurrent
+        // 6→7 advance from being demoted. 5→5 clears the leftover paydeposit.
+        const { data: fUpd, error: fUpdErr } = await admin
+          .from("tb_forwarder")
+          .update(patch)
+          .eq("id", fidNum)
+          .in("fstatus", ["5", "6"])
+          .select("id");
+        if (fUpdErr) console.error(`[adminReverseForwarderPayment forwarder revert · standard] failed`, { code: fUpdErr.code, message: fUpdErr.message, fid });
+        else forwarderReverted = (fUpd?.length ?? 0) > 0;
+      }
+
+      const shape: ReverseForwarderPaymentResult["shape"] = isWalletFunded ? "wallet-funded" : "direct-slip";
+      await logAdminAction(adminId, "pay-user.reverse-forwarder-payment", "tb_forwarder", fid, {
+        userid,
+        fundingWalletHsId: funding.id,
+        shape,
+        refunded: refundAmount,
+        forwarderReverted,
+        isCreditPay,
+        isPCSF50,
+        reason,
+      });
+
+      revalidatePath("/admin/wallet/pay-user");
+      revalidatePath("/admin/forwarders");
+      revalidatePath(`/admin/forwarders/${fid}`);
+      revalidatePath("/admin/wallet");
+      // Un-settled a pay → wallet totals + forwarder รอชำระ queue changed;
+      // refresh the admin sidebar/wallet-total badges immediately.
+      bustAdminChrome();
+
+      return {
+        ok: true,
+        data: { fid, fundingWalletHsId: funding.id, shape, refunded: refundAmount, forwarderReverted },
+      };
+    },
+  );
 }

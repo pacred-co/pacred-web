@@ -46,6 +46,87 @@ const num = (v: number | string | null | undefined): number => {
 };
 
 // ════════════════════════════════════════════════════════════
+// F5 — linked-document resolver (owner 2026-07-15 · PR178 · "pay-user
+// ต้องกดดูใบวางบิล/ใบเสร็จได้ตรงๆ"). Reuses the F9 doc-join pattern from
+// forwarders/[fNo]/page.tsx: for a set of forwarder ids, resolve the
+// ใบวางบิล (tb_forwarder_invoice_item.forwarder_id → tb_forwarder_invoice)
+// + ใบเสร็จ (tb_receipt_item.fid → tb_receipt) that cover each fid.
+// READ-ONLY joins · soft-fail (a doc-lookup can NEVER blank the page).
+// ════════════════════════════════════════════════════════════
+
+export type PayUserLinkedBill = { id: number; docNo: string; status: string };
+export type PayUserLinkedReceipt = { id: number; rid: string; status: string };
+
+async function resolveForwarderDocsByFid(
+  admin: ReturnType<typeof createAdminClient>,
+  fids: number[],
+): Promise<{
+  billsByFid: Map<number, PayUserLinkedBill[]>;
+  receiptsByFid: Map<number, PayUserLinkedReceipt[]>;
+}> {
+  const billsByFid = new Map<number, PayUserLinkedBill[]>();
+  const receiptsByFid = new Map<number, PayUserLinkedReceipt[]>();
+  const ids = Array.from(new Set(fids.filter((n) => Number.isInteger(n) && n > 0)));
+  if (ids.length === 0) return { billsByFid, receiptsByFid };
+
+  // ── ใบวางบิล: tb_forwarder_invoice_item.forwarder_id → tb_forwarder_invoice ──
+  const { data: biItems, error: biErr } = await admin
+    .from("tb_forwarder_invoice_item")
+    .select("invoice_id, forwarder_id")
+    .in("forwarder_id", ids);
+  if (biErr) console.error("[resolveForwarderDocsByFid bill items] failed", { code: biErr.code, message: biErr.message });
+  const biRows = (biItems ?? []) as Array<{ invoice_id: number; forwarder_id: number }>;
+  const invIds = Array.from(new Set(biRows.map((x) => x.invoice_id)));
+  const invById = new Map<number, PayUserLinkedBill>();
+  if (invIds.length > 0) {
+    const { data: invs, error: invErr } = await admin
+      .from("tb_forwarder_invoice")
+      .select("id, doc_no, status")
+      .in("id", invIds)
+      .order("id", { ascending: false });
+    if (invErr) console.error("[resolveForwarderDocsByFid bill headers] failed", { code: invErr.code, message: invErr.message });
+    for (const iv of (invs ?? []) as Array<{ id: number; doc_no: string | null; status: string | null }>)
+      invById.set(iv.id, { id: iv.id, docNo: (iv.doc_no ?? "").trim() || `#${iv.id}`, status: (iv.status ?? "").trim() });
+  }
+  for (const row of biRows) {
+    const bill = invById.get(row.invoice_id);
+    if (!bill) continue;
+    const list = billsByFid.get(row.forwarder_id) ?? [];
+    if (!list.some((b) => b.id === bill.id)) list.push(bill);
+    billsByFid.set(row.forwarder_id, list);
+  }
+
+  // ── ใบเสร็จ: tb_receipt_item.fid → tb_receipt ──
+  const { data: rItems, error: riErr } = await admin
+    .from("tb_receipt_item")
+    .select("rid, fid")
+    .in("fid", ids);
+  if (riErr) console.error("[resolveForwarderDocsByFid receipt items] failed", { code: riErr.code, message: riErr.message });
+  const riRows = (rItems ?? []) as Array<{ rid: string | null; fid: number }>;
+  const rids = Array.from(new Set(riRows.map((x) => (x.rid ?? "").trim()).filter(Boolean)));
+  const recByRid = new Map<string, PayUserLinkedReceipt>();
+  if (rids.length > 0) {
+    const { data: recs, error: recErr } = await admin
+      .from("tb_receipt")
+      .select("id, rid, rstatus")
+      .in("rid", rids)
+      .order("id", { ascending: false });
+    if (recErr) console.error("[resolveForwarderDocsByFid receipt headers] failed", { code: recErr.code, message: recErr.message });
+    for (const rc of (recs ?? []) as Array<{ id: number; rid: string | null; rstatus: string | null }>)
+      recByRid.set((rc.rid ?? "").trim(), { id: rc.id, rid: (rc.rid ?? "").trim() || `#${rc.id}`, status: (rc.rstatus ?? "").trim() });
+  }
+  for (const row of riRows) {
+    const rec = recByRid.get((row.rid ?? "").trim());
+    if (!rec) continue;
+    const list = receiptsByFid.get(row.fid) ?? [];
+    if (!list.some((r) => r.id === rec.id)) list.push(rec);
+    receiptsByFid.set(row.fid, list);
+  }
+
+  return { billsByFid, receiptsByFid };
+}
+
+// ════════════════════════════════════════════════════════════
 // PANEL — customer + wallet + juristic flag (getWallet.php)
 // ════════════════════════════════════════════════════════════
 
@@ -162,6 +243,9 @@ export type PayUserFwdRow = {
   // สถานะ / อัปเดต
   fstatus: string | null;
   adminid_update: string | null;
+  // F5 — เอกสารที่ครอบออเดอร์นี้ (ใบวางบิล / ใบเสร็จ) — pill links (owner PR178).
+  bills: PayUserLinkedBill[];
+  receipts: PayUserLinkedReceipt[];
 };
 
 const FWD_VIEW_COLS =
@@ -225,6 +309,13 @@ export async function getPayUserForwarderView(
       "cover",
     );
 
+    // F5 — batch-resolve ใบวางบิล/ใบเสร็จ that cover these fids (an unpaid item
+    // may already carry an issued-but-unpaid ใบวางบิล) · soft-fail.
+    const { billsByFid, receiptsByFid } = await resolveForwarderDocsByFid(
+      admin,
+      rows.map((r) => Number(r.id)),
+    );
+
     const out: PayUserFwdRow[] = rows.map((r) => {
       const line = lineById.get(String(r.id));
       const creator = (r.adminidcreator ?? "").trim();
@@ -273,6 +364,8 @@ export async function getPayUserForwarderView(
         fdatestatus4: r.fdatestatus4 && r.fdatestatus4 !== "0000-00-00 00:00:00" ? r.fdatestatus4 : null,
         fstatus: r.fstatus,
         adminid_update: (r.adminidupdate ?? "").trim() || null,
+        bills: billsByFid.get(Number(r.id)) ?? [],
+        receipts: receiptsByFid.get(Number(r.id)) ?? [],
       };
     }).filter((r) => Number.isFinite(r.price_thb) && r.price_thb > 0);
 
@@ -360,6 +453,10 @@ export type PayUserHistoryRow = {
   reforder: string | null;     // รายการอ้างอิง (hNo / forwarder id)
   status: string | null;       // 1 รอดำเนินการ · 2 สำเร็จ · 3 ไม่สำเร็จ
   admin_crate: string | null;  // ผู้ทำรายการ
+  /** F5 — ใบวางบิลที่ครอบออเดอร์นี้ (เฉพาะ ฝากนำเข้า type='4'). */
+  bills: PayUserLinkedBill[];
+  /** F5 — ใบเสร็จที่ครอบออเดอร์นี้ (เฉพาะ ฝากนำเข้า type='4'). */
+  receipts: PayUserLinkedReceipt[];
 };
 
 const HISTORY_PAGE_SIZE = 50;
@@ -412,17 +509,37 @@ export async function listPayUserHistory(
       }
     }
 
-    const rows: PayUserHistoryRow[] = raw.map((r) => ({
-      id: r.id,
-      date: r.date,
-      userid: r.userid,
-      name: nameByUser.get((r.userid ?? "").trim()) ?? (r.userid ?? "—"),
-      service_label: String(r.type) === "2" ? "ฝากสั่งซื้อ" : String(r.type) === "4" ? "ฝากนำเข้า" : "—",
-      amount: num(r.amount),
-      reforder: (r.reforder ?? "").trim() || null,
-      status: r.status,
-      admin_crate: (r.adminidcrate ?? "").trim() || null,
-    }));
+    // F5 — resolve ใบวางบิล/ใบเสร็จ per ฝากนำเข้า (type='4') row so staff jump
+    // straight to the covering docs (owner PR178 · "ต้องกดดูเอกสารได้ตรงๆ").
+    // Scope = type='4' only (reforder=forwarder id); type='2' shop rows keep the
+    // order-detail link (their docs live off the header, not a forwarder fid).
+    const fwdFids = Array.from(
+      new Set(
+        raw
+          .filter((r) => String(r.type) === "4")
+          .map((r) => Number((r.reforder ?? "").trim()))
+          .filter((n) => Number.isInteger(n) && n > 0),
+      ),
+    );
+    const { billsByFid, receiptsByFid } = await resolveForwarderDocsByFid(admin, fwdFids);
+
+    const rows: PayUserHistoryRow[] = raw.map((r) => {
+      const isFwd = String(r.type) === "4";
+      const fid = isFwd ? Number((r.reforder ?? "").trim()) : NaN;
+      return {
+        id: r.id,
+        date: r.date,
+        userid: r.userid,
+        name: nameByUser.get((r.userid ?? "").trim()) ?? (r.userid ?? "—"),
+        service_label: String(r.type) === "2" ? "ฝากสั่งซื้อ" : String(r.type) === "4" ? "ฝากนำเข้า" : "—",
+        amount: num(r.amount),
+        reforder: (r.reforder ?? "").trim() || null,
+        status: r.status,
+        admin_crate: (r.adminidcrate ?? "").trim() || null,
+        bills: isFwd && Number.isInteger(fid) ? billsByFid.get(fid) ?? [] : [],
+        receipts: isFwd && Number.isInteger(fid) ? receiptsByFid.get(fid) ?? [] : [],
+      };
+    });
 
     return { ok: true, data: { rows, total: count ?? rows.length, page, pageSize: HISTORY_PAGE_SIZE } };
   });

@@ -16,6 +16,12 @@
  * REFUSAL ONLY — this adds NO money mutation, changes no price/receipt/status
  * math; it just BLOCKS a flip-to-5/credit on a paid row. Fail-CLOSED: a failed
  * refund-check query refuses (does not proceed).
+ *
+ * F2 (owner 2026-07-15 · PR178) — a REVERSED/REJECTED pay row (status='3') must
+ * NOT count as "already paid": once `adminReverseForwarderPayment` un-settles the
+ * pay (status 2→3) the order legitimately returns to collectible, so the guard
+ * excludes status='3' rows. Without this, a reversed order stays permanently
+ * blocked from re-billing ("กันเรียกเก็บซ้ำ") — the exact over-block PR178 hit.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -34,6 +40,7 @@ export async function assertNotRefunded(
     .select("id")
     .eq("reforder", String(fid))
     .in("typenew", ["5", "6"])
+    .neq("status", "3")   // F2 — a reversed/rejected pay no longer blocks re-bill
     .limit(1);
   if (error) {
     // Fail CLOSED — a money guard we can't complete must hold, not silently allow.

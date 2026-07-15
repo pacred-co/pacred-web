@@ -4,6 +4,7 @@ import { UserPlus, Search } from "lucide-react";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 import { listPayUserHistory } from "@/actions/admin/pay-user-view";
 import { PayUserAddClient } from "./pay-user-add-client";
+import { PayUserReverseButton } from "./pay-user-reverse-button";
 
 /**
  * จ่ายเงินแทนลูกค้า (admin pay-on-behalf) — faithful port of legacy
@@ -177,16 +178,53 @@ export default async function AdminWalletPayUserPage({
                       "เอกสารของออเดอร์นี้" ลิงก์ใบวางบิล/ใบเสร็จ) · ฝากสั่งซื้อ → shop order detail. */}
                   <td className="px-3 py-2 font-mono">
                     {r.reforder ? (
-                      <Link
-                        href={r.service_label === "ฝากนำเข้า" ? `/admin/forwarders/${r.reforder}` : `/admin/service-orders/${r.reforder}`}
-                        className="text-sky-600 hover:underline"
-                        title="เปิดออเดอร์ → ใบวางบิล/ใบเสร็จ"
-                      >
-                        {r.reforder} ↗
-                      </Link>
+                      <div className="space-y-1">
+                        <Link
+                          href={r.service_label === "ฝากนำเข้า" ? `/admin/forwarders/${r.reforder}` : `/admin/service-orders/${r.reforder}`}
+                          className="text-sky-600 hover:underline"
+                          title="เปิดออเดอร์ → ใบวางบิล/ใบเสร็จ"
+                        >
+                          {r.reforder} ↗
+                        </Link>
+                        {/* F5 — direct ใบวางบิล/ใบเสร็จ links (owner PR178 · "กดดูเอกสารได้ตรงๆ") */}
+                        {(r.bills.length > 0 || r.receipts.length > 0) && (
+                          <div className="flex flex-wrap gap-1">
+                            {r.bills.map((b) => (
+                              <Link
+                                key={`b${b.id}`}
+                                href={`/admin/billing-run/${b.id}`}
+                                className="inline-flex items-center rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100"
+                                title="ดูใบวางบิล"
+                              >
+                                🧾 {b.docNo}
+                              </Link>
+                            ))}
+                            {r.receipts.map((rc) => (
+                              <Link
+                                key={`r${rc.id}`}
+                                href={`/admin/accounting/forwarder-invoice/${rc.id}`}
+                                className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-medium ${rc.status === "2" ? "border-gray-200 bg-gray-50 text-gray-400 line-through" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}
+                                title={rc.status === "2" ? "ใบเสร็จ(ยกเลิกแล้ว)" : "ดูใบเสร็จ"}
+                              >
+                                🧾 {rc.rid}
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     ) : <span className="text-gray-600">—</span>}
                   </td>
-                  <td className="px-3 py-2 text-center"><StatusPill status={r.status} /></td>
+                  <td className="px-3 py-2 text-center">
+                    <div className="flex flex-col items-center gap-1">
+                      <StatusPill status={r.status} />
+                      {/* F1 — un-settle a settled ฝากนำเข้า pay so the order re-opens
+                          for collection (owner PR178 · "สถานะไม่ยอมถอย"). Only on
+                          settled (status='2') ฝากนำเข้า rows that carry a forwarder fid. */}
+                      {r.status === "2" && r.service_label === "ฝากนำเข้า" && r.reforder && (
+                        <PayUserReverseButton fid={r.reforder} />
+                      )}
+                    </div>
+                  </td>
                   <td className="px-3 py-2 text-gray-600">{r.admin_crate ?? "—"}</td>
                 </tr>
               ))

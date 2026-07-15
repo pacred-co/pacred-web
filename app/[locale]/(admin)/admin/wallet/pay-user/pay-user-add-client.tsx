@@ -676,7 +676,36 @@ function ForwarderTable({
                     <div className="flex gap-2">
                       <Thumb url={r.cover_url} alt={`ออเดอร์ ${r.fid}`} />
                       <div className="min-w-0">
-                        <div className="font-semibold text-gray-900">ออเดอร์ #{r.fid}</div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Link
+                            href={`/admin/forwarders/${r.fid}`}
+                            className="font-semibold text-sky-600 hover:underline"
+                            title="เปิดออเดอร์ฝากนำเข้า"
+                          >
+                            ออเดอร์ #{r.fid} ↗
+                          </Link>
+                          {/* F5 — ใบวางบิล/ใบเสร็จ pill links (owner PR178) */}
+                          {r.bills.map((bl) => (
+                            <Link
+                              key={`b${bl.id}`}
+                              href={`/admin/billing-run/${bl.id}`}
+                              className="inline-flex items-center rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100"
+                              title="ดูใบวางบิล"
+                            >
+                              🧾 {bl.docNo}
+                            </Link>
+                          ))}
+                          {r.receipts.map((rc) => (
+                            <Link
+                              key={`r${rc.id}`}
+                              href={`/admin/accounting/forwarder-invoice/${rc.id}`}
+                              className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-medium ${rc.status === "2" ? "border-gray-200 bg-gray-50 text-gray-400 line-through" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}
+                              title={rc.status === "2" ? "ใบเสร็จ(ยกเลิกแล้ว)" : "ดูใบเสร็จ"}
+                            >
+                              🧾 {rc.rid}
+                            </Link>
+                          ))}
+                        </div>
                         {r.fdetail && (
                           <div className="line-clamp-2 text-gray-600">{r.fdetail}</div>
                         )}

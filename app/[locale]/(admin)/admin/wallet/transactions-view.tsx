@@ -257,6 +257,29 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
     groupedRows.push({ kind: "single", row: r });
   }
 
+  // F4 (owner 2026-07-15 · PR178) — a COMBINED direct slip splits into N
+  // per-forwarder pay rows that share ONE imagesslip (reforder2=NULL, so the
+  // เติม-แล้วจ่าย collapse above never folds them). Staff then review + edit each
+  // separately → งงยอด + เผลอเปลี่ยนยอดทีละงาน. Flag every row whose
+  // (userid + imagesslip) appears on ≥2 rows so the shared-slip relationship is
+  // visible at a glance. DISPLAY-only — rows stay individually selectable.
+  const slipGroupKey = (r: WhsRow): string | null =>
+    r.imagesslip && r.imagesslip.trim() && r.userid ? `${r.userid}|${r.imagesslip.trim()}` : null;
+  const slipGroupIds = new Map<string, number[]>();
+  for (const r of rows) {
+    const k = slipGroupKey(r);
+    if (!k) continue;
+    const arr = slipGroupIds.get(k) ?? [];
+    arr.push(r.id);
+    slipGroupIds.set(k, arr);
+  }
+  const sharedSlipCountFor = (r: WhsRow): number => {
+    const k = slipGroupKey(r);
+    if (!k) return 0;
+    const ids = slipGroupIds.get(k);
+    return ids && ids.length > 1 ? ids.length : 0;
+  };
+
   // Lane C 2026-06-02 — pre-compute sort hrefs for each tx column header.
   const sortHrefs: Record<string, string> = {};
   for (const k of Object.keys(TX_SORT_FIELDS)) {
@@ -376,7 +399,7 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
                 {groupedRows.map((g) => {
                   if (g.kind === "single") {
                     return (
-                      <TxRow key={g.row.id} row={g.row} userMap={userMap} corpNames={corpNames} slipUrlMap={slipUrlMap} />
+                      <TxRow key={g.row.id} row={g.row} userMap={userMap} corpNames={corpNames} slipUrlMap={slipUrlMap} sharedSlipCount={sharedSlipCountFor(g.row)} />
                     );
                   }
                   // Consolidated "เติม-แล้วจ่าย" group: ONE payment row (the
@@ -449,12 +472,15 @@ function TxRow({
   corpNames,
   slipUrlMap,
   groupContext,
+  sharedSlipCount = 0,
 }: {
   row: WhsRow;
   userMap: Map<string, URow>;
   corpNames: Map<string, string>;
   slipUrlMap: Record<string, string | null>;
   groupContext?: { siblings: WhsRow[]; ledgerCount: number };
+  /** F4 — >1 when this row shares its slip with other rows (combined payment). */
+  sharedSlipCount?: number;
 }) {
   const u = row.userid ? userMap.get(row.userid) : undefined;
   const rowStatus = row.status ?? "1";
@@ -513,6 +539,15 @@ function TxRow({
         </td>
         <td className={`px-3 py-3 text-right font-mono text-sm font-bold ${isNeg ? "text-red-600" : "text-foreground"}`}>
           {isNeg ? "−" : ""}฿{Math.abs(amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+          {/* F4 — shared-slip warning (owner PR178): this row's slip covers ≥2 รายการ. */}
+          {sharedSlipCount > 1 ? (
+            <div
+              className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700"
+              title="สลิปนี้ใช้ร่วมกับรายการอื่น (ชำระรวมสลิปเดียว) — ตรวจ/ตัดจ่ายพร้อมกัน ระวังยอดซ้ำ"
+            >
+              🔗 รวมสลิปเดียวกับ {sharedSlipCount} รายการ
+            </div>
+          ) : null}
         </td>
         <td className="px-3 py-3 text-xs">
           {row.depositnamebank ? (

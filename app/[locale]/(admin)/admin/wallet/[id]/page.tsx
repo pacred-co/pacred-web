@@ -461,6 +461,25 @@ export default async function AdminWalletDetail({
     }
   }
 
+  // ── F4 shared-imagesslip siblings (owner 2026-07-15 · PR178) ──
+  //    A COMBINED payment splits into N per-order pay rows that carry the SAME
+  //    uploaded slip file (imagesslip). Distinct from the same-date+amount dup
+  //    check above — this matches the EXACT slip filename + same customer. Warn
+  //    the reviewer so they treat + edit the group as ONE payment (avoid
+  //    "เผลอเปลี่ยนยอด 2 งาน" / double-count on ตัดจ่าย).
+  let sharedSlipSiblings: Array<{ id: number; reforder: string | null }> = [];
+  if (row.imagesslip && row.imagesslip.trim() && row.userid) {
+    const { data: shRaw, error: shErr } = await admin
+      .from("tb_wallet_hs")
+      .select("id,reforder")
+      .eq("userid", row.userid)
+      .eq("imagesslip", row.imagesslip.trim())
+      .neq("id", row.id)
+      .limit(50);
+    if (shErr) console.error(`[tb_wallet_hs shared-slip siblings] failed`, { code: shErr.code, message: shErr.message });
+    else sharedSlipSiblings = (shRaw ?? []) as Array<{ id: number; reforder: string | null }>;
+  }
+
   // ── Derive view-bits ──
   const amount = Number(row.amount ?? 0);
   const status = row.status ?? "1";
@@ -661,6 +680,29 @@ export default async function AdminWalletDetail({
                 </>
               )}
             </div>
+
+            {/* F4 — shared-slip warning (owner PR178): this slip covers ≥2 รายการ
+                (ชำระรวมสลิปเดียว). Treat + ตัดจ่าย as ONE payment · ระวังแก้ยอดกระทบงานอื่น. */}
+            {sharedSlipSiblings.length > 0 && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-sm text-amber-800">
+                <div className="font-semibold">🔗 สลิปนี้ใช้ร่วมกับอีก {sharedSlipSiblings.length} รายการ (ชำระรวมสลิปเดียว)</div>
+                <p className="mt-0.5 text-[13px]">
+                  ตรวจ/ตัดจ่ายพร้อมกันเป็นชุดเดียว · แก้ยอดรายการนี้อาจกระทบงานอื่น (ระวังยอด/เหมาๆ ซ้ำ)
+                </p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {sharedSlipSiblings.map((s) => (
+                    <Link
+                      key={s.id}
+                      href={`/admin/wallet/${s.id}`}
+                      className="inline-flex items-center rounded border border-amber-300 bg-white px-1.5 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100"
+                      title={s.reforder ? `ออเดอร์ #${s.reforder}` : undefined}
+                    >
+                      #{s.id}{s.reforder ? ` · ออเดอร์ ${s.reforder}` : ""} ↗
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {linkedRows.length > 0 && (
               <div className="text-sm space-y-1 rounded-lg border border-border bg-surface-alt/40 p-2">

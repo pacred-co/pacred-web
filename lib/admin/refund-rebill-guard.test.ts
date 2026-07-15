@@ -9,18 +9,21 @@ import { assertNotRefunded } from "./refund-rebill-guard";
 let pass = 0, fail = 0;
 const ok = (label: string, c: boolean) => { if (c) { pass++; console.log(`  ✓ ${label}`); } else { fail++; console.error(`  ✗ ${label}`); } };
 
-// Fake admin: .from().select().eq().in().limit() → resolves {data, error}.
-// `eqCalls`/`inCalls` record the filters so a test can assert the scoping.
+// Fake admin: .from().select().eq().in().neq().limit() → resolves {data, error}.
+// `eqCalls`/`inCalls`/`neqCalls` record the filters so a test can assert scoping.
 const eqCalls: Array<[string, unknown]> = [];
 const inCalls: Array<[string, unknown]> = [];
+const neqCalls: Array<[string, unknown]> = [];
 function fakeAdmin(result: { data: unknown[] | null; error: unknown }) {
   eqCalls.length = 0;
   inCalls.length = 0;
+  neqCalls.length = 0;
   const chain: Record<string, unknown> = {};
-  for (const m of ["select", "eq", "in", "limit"]) {
+  for (const m of ["select", "eq", "in", "neq", "limit"]) {
     chain[m] = (...args: unknown[]) => {
       if (m === "eq") eqCalls.push([args[0] as string, args[1]]);
       if (m === "in") inCalls.push([args[0] as string, args[1]]);
+      if (m === "neq") neqCalls.push([args[0] as string, args[1]]);
       return chain;
     };
   }
@@ -47,6 +50,11 @@ console.log("refund-rebill-guard:");
   await assertNotRefunded(fakeAdmin({ data: [], error: null }), 51999);
   ok("scoped with .eq('reforder', String(fid))", eqCalls.some(([c, v]) => c === "reforder" && v === "51999"));
   ok("scoped with .in('typenew', ['5','6'])", inCalls.some(([c, v]) => c === "typenew" && Array.isArray(v) && (v as string[]).join(",") === "5,6"));
+
+  // 5. F2 — a reversed/rejected pay (status='3') is EXCLUDED via .neq('status','3')
+  //    so a reversed order can be re-billed. Assert the filter is applied.
+  await assertNotRefunded(fakeAdmin({ data: [], error: null }), 51999);
+  ok("F2 · excludes reversed pay with .neq('status','3')", neqCalls.some(([c, v]) => c === "status" && v === "3"));
 
   console.log(`\nrefund-rebill-guard: ${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
