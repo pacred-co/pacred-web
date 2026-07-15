@@ -57,9 +57,9 @@ const TRANSPORT_OPTIONS: ReadonlyArray<{ v: TransportType; l: string }> = [
 // PCS-family ship-by options (the in-store/owned-courier set the legacy
 // update_fShipBy re-prices). An external carrier name goes in the free-text box.
 const SHIP_BY_PCS_OPTIONS: ReadonlyArray<{ v: string; l: string }> = [
-  { v: "PCS",  l: "PCS · รับเองที่โกดัง (ค่าขนส่ง 0)" },
-  { v: "PCSF", l: "PCSF · ส่งฟรี (ค่าขนส่ง 0)" },
-  { v: "PCSE", l: "PCSE · ส่งด่วน (ปริมาตร×120 · ขั้นต่ำ 50)" },
+  { v: "PCS",  l: "รับเองที่โกดัง Pacred (ไม่มีค่าส่ง)" },
+  { v: "PCSF", l: "Pacred เหมาๆ · ส่งในเขต ฿100" },
+  { v: "PCSE", l: "Pacred Express · ส่งด่วน (ปริมาตร×120 · ขั้นต่ำ ฿50)" },
 ];
 
 const AMOUNT_COUNT_OPTIONS: ReadonlyArray<{ v: AmountCount; l: string }> = [

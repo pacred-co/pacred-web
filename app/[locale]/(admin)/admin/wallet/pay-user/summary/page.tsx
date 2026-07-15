@@ -20,6 +20,7 @@
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { computeForwarderDebitBatch, type ForwarderDebitRow } from "@/lib/forwarder/forwarder-debit-total";
 import { PrintButton } from "./print-button";
 import { PaymentSummaryDoc, type SummaryRow } from "./summary-doc";
 
@@ -73,6 +74,7 @@ type FwRow = {
   fdiscount: number | string | null;
   ftotalprice: number | string | null;
   ftransportprice: number | string | null;
+  fshipby: string | null;
   famount: number | string | null;
   fvolume: number | string | null;
   fweight: number | string | null;
@@ -131,7 +133,7 @@ export default async function PaymentSummaryPage({
   const { data: fwData, error: fwErr } = await admin
     .from("tb_forwarder")
     .select(
-      "id, fpriceupdate, fshippingservice, ftransportpricechnthb, pricecrate, priceother, fdiscount, ftotalprice, ftransportprice, famount, fvolume, fweight, ftrackingchn, userid, fproductstype, fwarehousechina, ftransporttype, frefrate",
+      "id, fpriceupdate, fshippingservice, ftransportpricechnthb, pricecrate, priceother, fdiscount, ftotalprice, ftransportprice, fshipby, famount, fvolume, fweight, ftrackingchn, userid, fproductstype, fwarehousechina, ftransporttype, frefrate",
     )
     .in("id", fids);
   if (fwErr) {
@@ -276,32 +278,32 @@ export default async function PaymentSummaryPage({
     amount: num(r.ftotalprice),
   }));
 
-  // Per-row composite → grand total (legacy calPriceForwarderMain shape).
-  const totalPriceAll = rowsFw.reduce((s, r) => {
-    const composite =
-      num(r.ftotalprice) +
-      num(r.ftransportprice) +
-      num(r.fpriceupdate) +
-      num(r.fshippingservice) +
-      num(r.ftransportpricechnthb) +
-      num(r.pricecrate) +
-      num(r.priceother) -
-      num(r.fdiscount);
-    return s + composite;
-  }, 0);
+  // ⚠️ SINGLE SOURCE OF TRUTH (owner 2026-07-15 · "ดึงจากแหล่งเดียวกัน") — the ยอดที่ต้องชำระ +
+  // ค่าส่งเหมาๆ + หัก ณ ที่จ่าย on THIS customer-facing PDF MUST equal the pay-user list + pay
+  // modal, which both derive from computeForwarderDebitBatch (the mao/WHT SOT). The old hand-
+  // rolled sum missed the เหมาๆ ฿100 (a VIRTUAL flat fee — NOT a stored column) and ran WHT on
+  // the wrong base → PDF ฿7,220.51 vs modal ฿7,319.51. Route through the SAME SOT so all three
+  // surfaces reconcile to the satang.
+  const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
+  const batch = computeForwarderDebitBatch(rowsFw as unknown as ForwarderDebitRow[], {
+    userId: userid,
+    isCorporate: reCorporate,
+  });
+  const maoFeeTotal = round2(batch.lines.reduce((s, l) => s + l.breakdown.maoFee, 0));
+  const whtAmount = round2(batch.lines.reduce((s, l) => s + l.breakdown.wht1pct, 0));
+  const totalAmount = batch.total_thb;                    // net = what the customer pays (== modal)
+  const totalPriceAll = round2(totalAmount + whtAmount);  // gross (pre-WHT · == modal base)
 
   const sumTotal = rowsFw.reduce((s, r) => s + num(r.ftotalprice), 0);
   const sumDeliveryChn = rowsFw.reduce((s, r) => s + num(r.ftransportpricechnthb), 0);
-  const sumDeliveryTh = rowsFw.reduce((s, r) => s + num(r.ftransportprice), 0);
+  // ค่าส่งเหมาๆ ฿100 is a Thailand delivery fee → fold it into Delivery Charge TH so the PDF's
+  // Delivery-TH line shows it (was ฿0.00 · the missing ฿100 the owner flagged).
+  const sumDeliveryTh = round2(rowsFw.reduce((s, r) => s + num(r.ftransportprice), 0) + maoFeeTotal);
   const sumOther = rowsFw.reduce(
     (s, r) => s + num(r.fpriceupdate) + num(r.fshippingservice) + num(r.pricecrate) + num(r.priceother),
     0,
   );
   const sumDiscount = rowsFw.reduce((s, r) => s + num(r.fdiscount), 0);
-
-  // WHT 1%: juristic AND totalPriceAll ≥ 1000.
-  const whtAmount = reCorporate && totalPriceAll >= 1000 ? totalPriceAll * 0.01 : 0;
-  const totalAmount = totalPriceAll - whtAmount;
 
   return (
     <>
