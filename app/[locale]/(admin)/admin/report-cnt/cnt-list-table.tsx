@@ -515,7 +515,9 @@ export function CntListTable({
 
       <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
         <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
-          <thead className="bg-surface-alt/50 text-[11px] uppercase tracking-wide text-muted">
+          {/* Legacy report-cnt table header — black-on-white, NOT uppercase (owner
+              2026-07-16 fidelity pass · matches report-cnt.php #myTable thead). */}
+          <thead className="bg-white dark:bg-surface text-[11px] text-foreground/80">
             <tr>
               {canSelect && (
                 <th className="px-2 py-2 text-center w-8">
@@ -560,11 +562,11 @@ export function CntListTable({
             </tr>
           </thead>
           <tbody>
-            {/* Summary band — total container count + avg waiting/transit days
-                + per-column aggregates. Per owner (2026-06-19): kept WHITE (was
-                an orange→red gradient) — separated from data rows by bold text +
-                a heavier top/bottom border instead of a loud fill. */}
-            <tr className="bg-white dark:bg-surface text-foreground text-sm font-bold border-y-2 border-border">
+            {/* Summary band — total container count + avg waiting/transit days + per-column
+                aggregates. Owner 2026-07-16 fidelity pass: RESTORE the legacy orange→red
+                gradient (report-cnt.php .bg-color · #ee7411→#c24e4e · white text) — supersedes
+                the 2026-06-19 white variant (owner now wants it 100% เหมือน legacy). */}
+            <tr className="bg-gradient-to-r from-[#ee7411] to-[#c24e4e] text-white text-sm border-y border-white/25 [&>td]:!border-white/30">
               {canSelect && <td className="px-2 py-2"></td>}
               {/* colSpan covers หมายเลขตู้ + โกดัง + วันที่ปิดตู้ + ETD + ETA + T/T + ขนส่ง (7) */}
               <td className="px-2 py-2 text-base font-bold" colSpan={7}>รวม ({search ? `${filteredRows.length}/${rows.length}` : rows.length} ตู้)</td>

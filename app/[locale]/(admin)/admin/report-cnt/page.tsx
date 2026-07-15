@@ -42,9 +42,12 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { Truck } from "lucide-react";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
-import { PageHeader } from "@/components/admin/page-header";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+// Faithful legacy report-cnt.php look (ปอน's theme · scoped .pcs-rc) — reused from the
+// detail page so the LIST header/tabs get the same dashed-red-pill frame + colors.
+import "./[fNo]/legacy-report-cnt.css";
 import { Explain } from "@/components/ui/tooltip";
 import { exportReportCntAll } from "@/actions/admin/export/report-cnt";
 import { CntListTable, type CntListRow } from "./cnt-list-table";
@@ -453,24 +456,34 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
   }.csv`;
 
   return (
-    <>
-      <TopMenuReport activeHref="/admin/report-cnt" />
-      <main className="p-4 lg:p-6 space-y-4">
-        <PageHeader
-          eyebrow="ADMIN · WAREHOUSE"
-          title="รายงานตู้"
-          subtitle="กลุ่มตามหมายเลขตู้ (fCabinetNumber) — รวมจาก tb_forwarder"
-        />
+    <main className="p-4 lg:p-6 space-y-4">
+      {/* Faithful legacy report-cnt.php header (owner 2026-07-16 "ทำกรอบให้เหมือน legacy
+          เป๊ะๆ 100%"): exception-tabs + title + sub-tabs + transport all live in ONE framed
+          .pcs-card with ปอน's legacy dashed-red-pill tabs (.pcs-tabs). Scope .pcs-rc to the
+          header ONLY — the table below keeps its own Tailwind theme (no blast radius). */}
+      <div className="pcs-rc">
+        <section className="pcs-card">
+          {/* exception-tabs strip — embedded as the card's top header row (dashed frame) */}
+          <TopMenuReport activeHref="/admin/report-cnt" embedded />
 
-        {/* Tab: รอเข้าโกดังไทย / เข้าโกดังไทยแล้ว */}
-        <div className="flex gap-1 border-b border-border">
-          <TabLink href="/admin/report-cnt?page=waiting" active={isWaiting} count={counts.waiting}>
-            รอเข้าโกดังไทย
-          </TabLink>
-          <TabLink href="/admin/report-cnt?page=succeed" active={!isWaiting} count={counts.succeed}>
-            เข้าโกดังไทยแล้ว
-          </TabLink>
-        </div>
+          <h3 className="flex items-center gap-2">
+            <Truck size={24} strokeWidth={1.5} className="inline-block" aria-hidden /> รายงานตู้
+          </h3>
+          <p className="-mt-1 mb-2 text-[13px] text-[#6b6f82]">กลุ่มตามหมายเลขตู้ (fCabinetNumber) — รวมจาก tb_forwarder</p>
+
+          {/* Sub-tabs: รอเข้าโกดังไทย / เข้าโกดังไทยแล้ว — legacy dashed pills (.pcs-tabs) */}
+          <ul className="pcs-tabs">
+            <li>
+              <PcsTab href="/admin/report-cnt?page=waiting" active={isWaiting} count={counts.waiting}>
+                รอเข้าโกดังไทย
+              </PcsTab>
+            </li>
+            <li>
+              <PcsTab href="/admin/report-cnt?page=succeed" active={!isWaiting} count={counts.succeed}>
+                เข้าโกดังไทยแล้ว
+              </PcsTab>
+            </li>
+          </ul>
 
         {/* Search form — only on succeed page */}
         {!isWaiting && (
@@ -515,60 +528,31 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
           </form>
         )}
 
-        {/* Transport-mode tabs */}
-        <div className="flex gap-1 border-b border-border">
-          <TabLink
-            href={buildHref(sp, { transportType: "all" })}
-            active={transportType === "all"}
-            count={counts.transportAll(isWaiting)}
-          >🚛🚢 ทั้งหมด</TabLink>
-          <TabLink
-            href={buildHref(sp, { transportType: "1" })}
-            active={transportType === "1"}
-            count={counts.transportTruck(isWaiting)}
-          >🚛 ทางรถ</TabLink>
-          <TabLink
-            href={buildHref(sp, { transportType: "2" })}
-            active={transportType === "2"}
-            count={counts.transportShip(isWaiting)}
-          >🚢 ทางเรือ</TabLink>
-          {/* 2026-06-06 B3 (ภูม flag · late-PM save-point): 0 air rows
-              currently · but legacy TRANSPORT_LABEL has "3"="ทางอากาศ"
-              and the filter pill should match the dropdown for symmetry.
-              Renders 0 count gracefully when there are no air containers. */}
-          <TabLink
-            href={buildHref(sp, { transportType: "3" })}
-            active={transportType === "3"}
-            count={counts.transportAir(isWaiting)}
-          >✈️ ทางอากาศ</TabLink>
+          {/* Transport-mode tabs — legacy dashed pills (.pcs-tabs) */}
+          <ul className="pcs-tabs">
+            <li><PcsTab href={buildHref(sp, { transportType: "all" })} active={transportType === "all"} count={counts.transportAll(isWaiting)}>🚛🚢 ทั้งหมด</PcsTab></li>
+            <li><PcsTab href={buildHref(sp, { transportType: "1" })} active={transportType === "1"} count={counts.transportTruck(isWaiting)}>🚛 ทางรถ</PcsTab></li>
+            <li><PcsTab href={buildHref(sp, { transportType: "2" })} active={transportType === "2"} count={counts.transportShip(isWaiting)}>🚢 ทางเรือ</PcsTab></li>
+            {/* 2026-06-06 B3: air pill · renders 0 gracefully when there are no air containers. */}
+            <li><PcsTab href={buildHref(sp, { transportType: "3" })} active={transportType === "3"} count={counts.transportAir(isWaiting)}>✈️ ทางอากาศ</PcsTab></li>
+          </ul>
 
-          {/* 2026-06-06 (ภูม follow-up): CSV export for accountants.
-              Exports the EXACT filtered + grouped rows currently shown
-              in the table. Money columns honour the `showMoney` role gate. */}
-          <div className="ml-auto">
+          {/* CSV export (accountants) — exports the EXACT filtered + grouped rows shown.
+              Money columns honour the `showMoney` role gate; the page is un-paginated so
+              "ทั้งหมด" mirrors the on-screen CSV (its added value = admin_export_log audit). */}
+          <div className="flex justify-end pt-1.5">
             <CsvButton
               rows={csvRows}
               cols={Object.keys(csvRows[0] ?? {}).map((k) => ({ key: k, label: k }))}
               filename={csvFilename}
               fetchAll={async () => {
                 "use server";
-                // The page is NOT paginated (the get_container_summary RPC
-                // returns ALL distinct cabinets), so "ทั้งหมด" mirrors the same
-                // rows as the on-screen CSV — its added value is the
-                // admin_export_log audit trail. Re-runs the page's EXACT
-                // filtered pipeline (zero drift).
-                return exportReportCntAll({
-                  isWaiting,
-                  transportType,
-                  actionPay,
-                  startDate,
-                  endDate,
-                  showMoney,
-                });
+                return exportReportCntAll({ isWaiting, transportType, actionPay, startDate, endDate, showMoney });
               }}
             />
           </div>
-        </div>
+        </section>
+      </div>
 
         {queryFailed && (
           <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -608,31 +592,21 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
             packingByCab={packingByCab}
           />
         )}
-        {/* Wave 17 fix (2026-05-25 ค่ำ): the fixed-bottom action buttons
-            ("ทำรายการเบิกเงินค่าตู้" + "ประวัติรายการ") are now rendered
-            inside <CntListTable> so they only show on the succeed tab and
-            wire up to the per-row checkbox selection (matching the legacy
-            AJAX flow at report-cnt.php L502-505). No more navigating to
-            /admin/report-cnt/pay — the modal opens inline. */}
+        {/* The fixed-bottom action bar ("ทำรายการจ่ายเงินตู้" + billing entries) is
+            rendered inside <CntListTable> (per-row checkbox selection · legacy AJAX flow
+            report-cnt.php L502-505). */}
       </main>
-    </>
   );
 }
 
-function TabLink({ href, active, count, children }: { href: string; active: boolean; count: number; children: React.ReactNode }) {
+// Legacy report-cnt.php nav tab — a dashed red pill (.pcs-tab · inactive = pink dashed +
+// black label · active = red dashed #cc3333 on pink bg · red count badge). Styling comes
+// from ปอน's legacy-report-cnt.css (scoped .pcs-rc), matching the exception-tab strip.
+function PcsTab({ href, active, count, children }: { href: string; active: boolean; count: number; children: React.ReactNode }) {
   return (
-    <Link
-      href={href}
-      className={`inline-flex items-center gap-1 px-3 py-2 text-sm font-medium border-b-2 ${
-        active ? "border-primary-500 text-primary-700" : "border-transparent text-muted hover:text-foreground"
-      }`}
-    >
+    <Link href={href} className={`pcs-tab${active ? " active" : ""}`}>
       <span>{children}</span>
-      {count > 0 && (
-        <span className="inline-flex items-center justify-center rounded-full bg-red-500 text-white text-[11px] font-bold px-1.5 py-0.5">
-          {count}
-        </span>
-      )}
+      {count > 0 && <span className="badge badge-danger badge-pill ml-1.5">{count}</span>}
     </Link>
   );
 }
