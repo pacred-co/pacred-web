@@ -23,7 +23,8 @@
  * updates filling t7..t12 sums and t16 avg).
  */
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Loader2, Search } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { CntPaymentModal, type SelectedSummary } from "./cnt-payment-modal";
@@ -181,6 +182,16 @@ function fmtDate(d: string | null) {
   return d ? d.slice(0, 10) : "-";
 }
 
+// Legacy ขนส่ง-column pill colors — faithful to nameTransportType2()
+// (report-cnt.php · include/function.php L660-668): ทางรถ = badge-info (blue #1e9ff2) ·
+// ทางเรือ = badge-success (green #28d094). ทางอากาศ = Pacred air (legacy has no case →
+// badge-warning amber). Keyed by the resolved transport mode ("1"/"2"/"3").
+const TRANSPORT_PILL: Record<string, { label: string; cls: string }> = {
+  "1": { label: "ทางรถ",    cls: "bg-[#1e9ff2]" },
+  "2": { label: "ทางเรือ",  cls: "bg-[#28d094]" },
+  "3": { label: "ทางอากาศ", cls: "bg-[#ff9149]" },
+};
+
 // ── ETD/ETA cell (report-cnt #4) — แต้ม (iTAM) PRIMARY · MOMO fallback ──
 // Owner 2026-06-19/20: "ETD/ETA เอาของ MOMO มาเทียบ แต่ยึดของ iTAM (แต้ม) เป็นหลัก".
 // A small source dot distinguishes the two; when the displayed value is แต้ม's but
@@ -295,6 +306,11 @@ export function CntListTable({
   const [sortKey, setSortKey] = useState<SortKey>("fdatecontainerclose");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [search,  setSearch]  = useState("");
+  // Mount guard for the createPortal'd floating action bar (SSR has no document.body).
+  // Same accepted pattern as container-detail-client.tsx's portalled bar.
+  const [mounted, setMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setMounted(true), []);
 
   // ── Expandable box-dimension detail (owner ask 2026-06-19 · ปอน) ──
   // Click a container's chevron → drop down its box detail (กว้าง/ยาว/สูง/CBM/
@@ -658,7 +674,7 @@ export function CntListTable({
                         <span className="flex flex-col leading-tight">
                           <Link
                             href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
-                            className="font-semibold text-primary-600 hover:underline"
+                            className="font-semibold text-[#1e9ff2] hover:underline"
                             title={`เลขตู้จริง · placeholder MOMO = ${r.fcabinetnumber}`}
                           >
                             {momo.realContainer}
@@ -669,7 +685,7 @@ export function CntListTable({
                         <span className="flex flex-col leading-tight">
                           <Link
                             href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
-                            className="font-semibold text-primary-600 hover:underline"
+                            className="font-semibold text-[#1e9ff2] hover:underline"
                             title={`เลขตู้จริงรอจากแต้ม · ตอนนี้แสดงเลขกระสอบ · placeholder MOMO = ${r.fcabinetnumber}`}
                           >
                             {momo.sackNo}
@@ -687,7 +703,7 @@ export function CntListTable({
                         <span className="flex flex-col leading-tight">
                           <Link
                             href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
-                            className="font-semibold text-primary-600 hover:underline"
+                            className="font-semibold text-[#1e9ff2] hover:underline"
                             title="ตู้นี้ยังไม่ปิด — MOMO ยังไม่ให้เลขตู้จริง · จะเปลี่ยนเป็นเลขตู้จริงให้อัตโนมัติเมื่อ MOMO ปิดตู้/ผูกเลขตู้"
                           >
                             {r.fcabinetnumber}
@@ -697,7 +713,7 @@ export function CntListTable({
                       ) : (
                         <Link
                           href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
-                          className="font-semibold text-primary-600 hover:underline"
+                          className="font-semibold text-[#1e9ff2] hover:underline"
                           title="ดูรายละเอียดตู้นี้"
                         >
                           {r.fcabinetnumber}
@@ -748,7 +764,19 @@ export function CntListTable({
                       </td>
                     );
                   })()}
-                  <td className="px-2 py-2 text-center">{transportLabel[resolveTransportMode(r.fcabinetnumber, r.ftransporttype)] ?? r.ftransporttype}</td>
+                  {/* ขนส่ง — legacy colored pill (nameTransportType2 · ทางรถ=info/blue ·
+                      ทางเรือ=success/green). Owner 2026-07-16 "ใส่สีให้เหมือน legacy". */}
+                  <td className="px-2 py-2 text-center">
+                    {(() => {
+                      const mode = resolveTransportMode(r.fcabinetnumber, r.ftransporttype);
+                      const p = TRANSPORT_PILL[mode];
+                      return p ? (
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium text-white ${p.cls}`}>{p.label}</span>
+                      ) : (
+                        <span>{transportLabel[mode] ?? r.ftransporttype}</span>
+                      );
+                    })()}
+                  </td>
                   <td className="px-2 py-2 text-right">
                     {r.diffDay == null ? "-" : `${r.diffDay} วัน`}
                   </td>
@@ -836,8 +864,13 @@ export function CntListTable({
             📞 แจ้งชำระเงินลูกค้า → /admin/forwarder-check?page=succeed (bulk SMS/LINE)
             🧾 รวมบิลพิมพ์ → /admin/forwarders/combine-bill/add
           These show only on the "เข้าโกดังไทยแล้ว" tab (isWaiting=false). */}
-      {canSelect && (
-        <div className="pcs-safe-area-bottom fixed bottom-4 left-1/2 -translate-x-1/2 flex flex-wrap items-center justify-center gap-2 z-50 max-w-[calc(100vw-32px)]">
+      {/* Floating action bar — PORTALLED to <body> so `position: fixed` anchors to the
+          VIEWPORT and stays put on scroll (owner 2026-07-16 "ต้องคาอยู่ที่เดิม ไม่ใช่เลื่อน
+          ลงล่างสุดถึงเจอ"). Without the portal a transformed admin-shell ancestor becomes
+          the containing block → the bar scrolls to the page bottom. Bottom-LEFT like legacy
+          .pcs-fixed-actions (left-20 on lg clears the 64px sidebar rail). */}
+      {canSelect && mounted && createPortal(
+        <div className="pcs-safe-area-bottom fixed bottom-5 left-4 lg:left-20 flex flex-wrap items-center justify-start gap-2 z-[60] max-w-[calc(100vw-32px)]">
           <button
             type="button"
             onClick={() => setModalOpen(true)}
@@ -923,7 +956,8 @@ export function CntListTable({
               )}
             </>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
 
       <CntPaymentModal
