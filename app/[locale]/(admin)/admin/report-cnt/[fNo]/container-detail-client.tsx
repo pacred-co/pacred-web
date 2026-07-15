@@ -303,9 +303,10 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
     });
   }
 
-  // Total column count — for the empty-state colSpan (23 base cols incl. the
-  // legacy "ตัวเลือก" ฿-collect col + the select col + the 3 money cols).
-  const totalCols = 23 + (checkColumn ? 1 : 0) + (showMoney ? 3 : 0);
+  // Total column count — for the empty-state colSpan (22 always-on cols incl. the
+  // legacy "ตัวเลือก" ฿-collect col; + the select col + the 3 money cols when shown).
+  // (ID column removed 2026-07-15 · ปอน — base was 23.)
+  const totalCols = 22 + (checkColumn ? 1 : 0) + (showMoney ? 3 : 0);
 
   // Render list: a multi-box order emits a SUMMARY row (always) + its box rows
   // ONLY when expanded; a single-box order emits one plain row. Recomputes when
@@ -462,8 +463,6 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
             )}
           </td>
         )}
-        {/* ID — group marker */}
-        <td className="px-2 py-2 text-center text-muted">📦</td>
         {/* ID/CO */}
         <td className="px-2 py-2 font-mono text-[11px]">{a.fidorco || "—"}</td>
         {/* เลขแทรคกิ้ง — chevron toggle + base + count */}
@@ -649,7 +648,6 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                   />
                 </th>
               )}
-              <Th k="id"            onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">ID</Th>
               <Th k="fidorco"       onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">ID/CO</Th>
               <Th k="ftrackingchn"  onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">เลขแทรคกิ้ง</Th>
               <Th k="userid"        onSort={toggleSort} sortKey={sortKey} sortDir={sortDir} align="left">รหัส</Th>
@@ -684,8 +682,8 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                 One <td> per header column, in order. */}
             <tr className="pcs-sum">
               {checkColumn && <td className="px-2 py-1.5"></td>}
-              {/* ID / IDORCO / Tracking / รหัส — merged label */}
-              <td className="px-2 py-1.5" colSpan={4}>รวม {summary.count.toLocaleString()} รายการ</td>
+              {/* IDORCO / Tracking / รหัส — merged label */}
+              <td className="px-2 py-1.5" colSpan={3}>รวม {summary.count.toLocaleString()} รายการ</td>
               {/* รายละเอียด */}
               <td className="px-2 py-1.5 text-right">รวม</td>
               {/* ลัง */}
@@ -794,9 +792,6 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                       })()}
                     </td>
                   )}
-                  <td className="px-2 py-2 font-mono" title={r.inCheckQueue ? `เพิ่มแล้วโดย ${r.checkAdminId} เวลา: ${r.checkDate}` : undefined}>
-                    {r.id}
-                  </td>
                   <td className="px-2 py-2 font-mono text-[11px]">{r.fidorco ?? "-"}</td>
                   <td className="px-2 py-2 text-[11px]">
                     {/* ภูม #5 2026-05-29: legacy PHP linked to
