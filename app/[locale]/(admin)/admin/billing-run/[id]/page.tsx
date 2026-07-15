@@ -285,7 +285,13 @@ export default async function BillingRunDetailPage({
                       #{it.forwarder_id}
                     </Link>
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs">{it.forwarder?.ftrackingchn ?? "—"}</td>
+                  <td className="px-3 py-2 font-mono text-xs">
+                    {/* กดเข้าแทรคกิ้งย้อนดูรายการนี้ — link to the forwarder detail (per-tracking
+                        amount view), same target as the order-# above (was dead plain text). */}
+                    <Link href={`/admin/forwarders/${it.forwarder_id}`} className="text-primary-600 hover:underline">
+                      {it.forwarder?.ftrackingchn ?? "—"}
+                    </Link>
+                  </td>
                   <td className="px-3 py-2 text-right">{it.forwarder?.famount ?? "—"}</td>
                   <td className="px-3 py-2 text-right">{it.forwarder?.fweight ?? "—"}</td>
                   <td className="px-3 py-2 text-right">{it.forwarder?.fvolume ?? "—"}</td>

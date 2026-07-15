@@ -14,6 +14,7 @@ import type { ForwarderRow } from "./forwarder-row-view";
 import { OUTPUT_VAT_RATE } from "@/lib/payment/bank-accounts";
 import { serviceAccountFor } from "@/lib/services/service-catalog";
 import { modeFromPref } from "@/lib/tax/tax-doc-mode";
+import { MAO_FLAT_FEE, isMaoCarrier } from "@/lib/forwarder/mao-fee";
 import { PayDestination } from "@/components/payment/pay-destination";
 
 /**
@@ -112,10 +113,15 @@ export function ForwarderPayModal({
     let totalPriceAll = 0;
     for (const r of rows) totalPriceAll += perRowTotal(r);
 
+    // เหมาๆ (PCSF/PRF) flat delivery fee — the SOT is ฿100 (MAO_FLAT_FEE · owner
+    // 2026-06-19). Was hardcoded ฿50 + filtered only "PCSF" (missed the PRF rebrand),
+    // so the amount the customer SAW/QR/slip = ฿50 while the server split
+    // (actions/forwarder.ts) recorded ฿100 → "หลังบ้าน 100 เก็บลูกค้า 50". Now matches
+    // the SOT + isMaoCarrier so PCSF + PRF both price at ฿100.
     const countPricePCSF = rows.filter(
-      (r) => r.fshipby === "PCSF" && r.ftransportprice === 0,
+      (r) => isMaoCarrier(r.fshipby) && Number(r.ftransportprice) === 0,
     ).length;
-    const sumPricePCSF = countPricePCSF > 0 ? 50 : 0;
+    const sumPricePCSF = countPricePCSF > 0 ? MAO_FLAT_FEE : 0;
     totalPriceAll += sumPricePCSF;
 
     const totalNiTi =

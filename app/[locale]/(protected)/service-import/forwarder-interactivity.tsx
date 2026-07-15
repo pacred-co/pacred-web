@@ -10,6 +10,7 @@ import {
 import { Package, ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { calculateForwarderTotal } from "@/actions/forwarder";
+import { filterCountableForwarderRows } from "@/lib/admin/momo-bill-header";
 import {
   ForwarderRowView,
   calPriceForwarderSumCompany,
@@ -42,11 +43,23 @@ type ContainerSummary = { boxes: number; weight: number; volume: number; total: 
 // Roll-up of every item in a container — shown in the group header so the
 // customer sees the totals without expanding ("รวมสรุป รายละเอียดทั้งหมด").
 function summarizeContainer(rows: ForwarderRow[]): ContainerSummary {
+  // DUP-HEADER GUARD — drop the MOMO หัวบิล placeholder (bare tracking · fweight=0 · ฿0)
+  // so the customer-facing box/weight/CBM/total roll-up matches the admin countableGroupMembers
+  // (was double-counting boxes when a phantom header rode alongside its -N/M box siblings ·
+  // "ข้อมูลหน้าลูกค้ากับในงานไม่ตรง"). money accessor (ftotalprice) keeps a genuine priced box
+  // (fweight=0 but ftotalprice>0) — parity with forwarders-table.tsx. All rows here belong to
+  // ONE customer's container group → userid is constant (grouping is purely by base tracking).
+  const countable = filterCountableForwarderRows(rows, {
+    tracking: (r) => r.ftrackingchn,
+    weight: (r) => Number(r.fweight) || 0,
+    userid: () => "",
+    money: (r) => Number(r.ftotalprice) || 0,
+  });
   let boxes = 0,
     weight = 0,
     volume = 0,
     total = 0;
-  for (const r of rows) {
+  for (const r of countable) {
     boxes += Number(r.famount) || 0;
     weight += Number(r.fweight) || 0;
     volume += Number(r.fvolume) || 0;

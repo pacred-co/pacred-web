@@ -633,7 +633,36 @@ export async function listEligibleForwarders(
       // ITS OWN paymethod is '2' OR any sibling of its base-tracking is COD (a box-split
       // sibling may have kept paymethod='1'). Keeps this list flag == the create gate.
       const codBases = codBaseTrackings(fwd);
-      const rows: EligibleForwarderRow[] = fwd.map((f) => ({
+
+      // DUP-HEADER GUARD (owner 2026-07-14 · "เบิ้ลหัวบิล") — when MOMO SPLITS a parcel it
+      // commits a BARE tracking placeholder (no -N suffix · fweight=0 · ฿0 gross) whose famount
+      // is the DECLARED box count, PLUS the real boxes as -N/M siblings. Listing the bare
+      // header alongside its siblings surfaced a phantom selectable ฿0 line AND double-counted
+      // boxes/ready-count in the picker + consolidate. Drop it. WITH the money accessor so a
+      // genuine money-carrying split-anchor (dims-only box · fweight=0 but gross>0) survives.
+      // The เหมาๆ ฿100 a dropped header may ANCHOR is RE-ATTRIBUTED to a surviving sibling of the
+      // same base tracking below, so removing the ฿0 header NEVER drops the delivery fee (the
+      // /add form + batch path sum mao_fee_thb over the surviving rows). All rows here share
+      // this one customer → userid is constant (grouping is purely by base tracking).
+      const countableFwd = filterCountableForwarderRows(fwd, {
+        tracking: (r) => r.ftrackingchn,
+        weight: (r) => (r.fweight != null ? Number(r.fweight) : 0),
+        userid: () => userid,
+        money: (r) => calcForwarderGross(r),
+      });
+      if (countableFwd.length < fwd.length) {
+        const surviving = new Set(countableFwd.map((f) => f.id));
+        for (const dropped of fwd) {
+          if (surviving.has(dropped.id)) continue;
+          const fee = maoFeeById.get(dropped.id) ?? 0;
+          if (fee <= 0) continue; // header carried no เหมาๆ anchor → nothing to move
+          const base = baseTracking(dropped.ftrackingchn ?? "");
+          const heir = countableFwd.find((s) => baseTracking(s.ftrackingchn ?? "") === base);
+          if (heir) maoFeeById.set(heir.id, (maoFeeById.get(heir.id) ?? 0) + fee);
+        }
+      }
+
+      const rows: EligibleForwarderRow[] = countableFwd.map((f) => ({
         id:              f.id,
         ftrackingchn:    f.ftrackingchn ?? "",
         fdate:           f.fdate,
@@ -1593,6 +1622,23 @@ async function createBillingRunInvoiceImpl(
         }
       }
 
+      // DUP-HEADER GUARD backstop (owner 2026-07-14 · "เบิ้ลหัวบิล") — if a request
+      // selected a MOMO หัวบิล placeholder (bare tracking · fweight=0 · ฿0 gross) alongside
+      // its box-suffixed siblings, keep it OUT of the billed items + box count. The picker
+      // (listEligibleForwarders) already drops it, so this only fires on a crafted/stale
+      // POST. Its ฿0 gross means the subtotal is unchanged; the เหมาๆ anchor stays on the
+      // FULL selected set (maoBatch / autoMaoFee below) so the ฿100 delivery fee is NEVER
+      // dropped. A lone bare row (no box sibling in the selection) is KEPT (can't be proven
+      // a phantom). WITH the money accessor so a genuine money-carrying anchor survives.
+      const countableFwd = filterCountableForwarderRows(fwd, {
+        tracking: (r) => r.ftrackingchn,
+        weight: (r) => (r.fweight != null ? Number(r.fweight) : 0),
+        userid: (r) => r.userid,
+        money: (r) => calcForwarderGross(r),
+      });
+      const billableIds = new Set(countableFwd.map((f) => f.id));
+      const billForwarderIds = v.forwarderIds.filter((id) => billableIds.has(id));
+
       // (d) Compute subtotal + final total.
       // The per-line amount = calcForwarderGross (Σ 7 price columns − discount,
       // GROSS · NO juristic 1%), NOT ftotalprice alone. The 4 admin adjustment
@@ -1646,11 +1692,17 @@ async function createBillingRunInvoiceImpl(
         if (ov != null) return Math.round(ov * 100) / 100;
         return Math.round((outstandingByID.get(id) ?? 0) * 100) / 100;
       };
-      const overriddenIds = v.forwarderIds.filter((id) => overrideAmt(id) != null);
-      const subtotal = v.forwarderIds.reduce((sum, id) => sum + lineAmount(id), 0);
-      // เหมาๆ (PCSF ฿100) — a SEPARATE summary line, Σ the anchor fee over the
-      // selected rows (once per shipment). Kept OFF subtotal so subtotal = Σ items
-      // (mig 0138 invariant) holds — it rides total_thb only, stored in mao_fee_thb.
+      // DUP-HEADER GUARD — bill the COUNTABLE ids only (phantom หัวบิล excluded · see
+      // billForwarderIds above). subtotal + items run over the countable set so the header
+      // subtotal_thb == Σ item amount_thb (mig 0138 invariant) still holds and no phantom
+      // ฿0 line / double box-count is billed.
+      const overriddenIds = billForwarderIds.filter((id) => overrideAmt(id) != null);
+      const subtotal = billForwarderIds.reduce((sum, id) => sum + lineAmount(id), 0);
+      // เหมาๆ (PCSF ฿100) — a SEPARATE summary line, Σ the anchor fee over the FULL selected
+      // rows (once per shipment). Summed over v.forwarderIds (NOT billForwarderIds) so a
+      // dropped phantom that ANCHORED the เหมาๆ never drops the ฿100. Kept OFF subtotal so
+      // subtotal = Σ items (mig 0138 invariant) holds — it rides total_thb only, stored in
+      // mao_fee_thb.
       const autoMaoFee = Math.round(
         v.forwarderIds.reduce((sum, id) => sum + (maoFeeByID.get(id) ?? 0), 0) * 100,
       ) / 100;
@@ -1729,7 +1781,7 @@ async function createBillingRunInvoiceImpl(
       // (f) INSERT items (bulk · ON DELETE CASCADE protects rollback semantics).
       // Line amount = the GROSS composite (Σ subtotal of these lines == the
       // header subtotal, both from calcForwarderGross · WHT-fix 2026-06-25).
-      const itemsToInsert = v.forwarderIds.map((fid) => ({
+      const itemsToInsert = billForwarderIds.map((fid) => ({
         invoice_id:   invoiceId!,
         forwarder_id: fid,
         // D2 — the line bill amount: admin override if present, else the auto
