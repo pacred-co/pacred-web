@@ -1,0 +1,30 @@
+{
+  "rows": [
+    {
+      "fid": "52456",
+      "hsId": "105616",
+      "composite": 6422.92,
+      "paid": 6422.92,
+      "wht": 64.23,
+      "paidGross": true
+    },
+    {
+      "fid": "52473",
+      "hsId": "105617",
+      "composite": 10386.3,
+      "paid": 10386.3,
+      "wht": 103.86,
+      "paidGross": true
+    },
+    {
+      "fid": "52481",
+      "hsId": "105618",
+      "composite": 10511.44,
+      "paid": 10511.44,
+      "wht": 105.11,
+      "paidGross": true
+    }
+  ],
+  "totalWht": 273.2,
+  "curWallet": 0
+}

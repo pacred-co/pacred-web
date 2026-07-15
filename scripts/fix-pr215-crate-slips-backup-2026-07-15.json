@@ -1,0 +1,27 @@
+{
+  "forwarder": {
+    "id": "52328",
+    "userid": "PR215",
+    "ftotalprice": "7293.44",
+    "ftransportprice": "100.00",
+    "pricecrate": "0.00",
+    "paymethod": "1"
+  },
+  "grossAfter": 9293.44,
+  "whtAfter": 92.93,
+  "netAfter": 9200.51,
+  "SLIPS": [
+    {
+      "amount": 1808.79,
+      "ref": "016196163359ATF07185",
+      "time": "16:33"
+    },
+    {
+      "amount": 72.2,
+      "ref": "016196164053ATF09502",
+      "time": "16:40"
+    }
+  ],
+  "paidBefore": 7319.51,
+  "paidAfter": 9200.5
+}
