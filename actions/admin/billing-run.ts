@@ -1027,6 +1027,148 @@ export async function adminSetBillingRunDeliveryAddress(
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// 4a-bis. EDIT BUYER IDENTITY (บนเอกสาร) — owner 2026-07-15
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * ✏️ แก้ผู้ซื้อ (บนเอกสาร) — a customer who upgraded to นิติบุคคล AFTER a bill was
+ * issued (e.g. PR002) had every document frozen with the old บุคคลธรรมดา snapshot.
+ * This re-stamps the buyer identity on tb_forwarder_invoice (ชื่อ/ประเภท/เลขภาษี/
+ * ที่อยู่ออกบิล) AND mirrors the SAME identity onto the linked ใบเสร็จ (recompname/
+ * recompnumber/recompaddress/corporatetype) so EVERY document shows ONE identity —
+ * no cancel+reissue. The print + detail pages already read the snapshot columns, so
+ * they update the moment this writes. Mirrors adminSetBillingRunDeliveryAddress
+ * (same gate · same receipt-sync join · confirm-before-mutate on the client).
+ *
+ * 💰 MONEY-SAFETY — this NEVER changes a collected baht:
+ *   • total_thb (gross) / subtotal / mao / the wallet+payment records = UNTOUCHED.
+ *   • is_juristic drives ONLY the DISPLAY WHT: the invoice recomputes WHT live via
+ *     computeBillWht(is_juristic, total_thb); the ใบเสร็จ pins to its FROZEN totals
+ *     (resolveReceiptFrozenTotals → grandTotal = the frozen ramount the customer
+ *     actually paid), so a settled receipt whose stored pre-WHT == net shows WHT ฿0
+ *     and the SAME paid amount even after flipping to นิติ. On a PAID *ใบวางบิล* the
+ *     recomputed WHT line will appear (gross vs net) — the collected money is frozen;
+ *     the client warns before writing so the admin sees it.
+ */
+export async function adminSetBillingRunBuyerIdentity(
+  invoiceId: number,
+  input: {
+    isJuristic: boolean;
+    buyerName: string;
+    buyerTaxId: string;
+    buyerAddress: string;
+    buyerBranch: string;
+  },
+): Promise<AdminActionResult<{ syncedReceipts: number }>> {
+  if (!Number.isInteger(invoiceId) || invoiceId <= 0) return { ok: false, error: "invalid_invoice_id" };
+  const isJuristic = !!input.isJuristic;
+  const buyerName = (input.buyerName ?? "").trim();
+  const buyerTaxId = (input.buyerTaxId ?? "").trim();
+  const buyerAddress = (input.buyerAddress ?? "").trim();
+  const buyerBranch = (input.buyerBranch ?? "").trim();
+  if (!buyerName) return { ok: false, error: "กรอกชื่อผู้ซื้อ / ชื่อบริษัท" };
+  if (isJuristic && !/^\d{13}$/.test(buyerTaxId)) return { ok: false, error: "นิติบุคคลต้องมีเลขผู้เสียภาษี 13 หลัก" };
+
+  return withAdmin<{ syncedReceipts: number }>(
+    ["super", "accounting", "ops", "freight_export_doc", "freight_import_doc"],
+    async ({ adminId }) => {
+      const admin = createAdminClient();
+
+      // 1. Read the invoice (existence + userid for the log).
+      const { data: inv, error: invErr } = await admin
+        .from("tb_forwarder_invoice")
+        .select("id, userid, status")
+        .eq("id", invoiceId)
+        .maybeSingle<{ id: number; userid: string; status: string }>();
+      if (invErr) {
+        console.error(`[adminSetBillingRunBuyerIdentity invoice] failed`, { code: invErr.code, message: invErr.message, invoiceId });
+        return { ok: false, error: `อ่านใบวางบิลไม่สำเร็จ: ${invErr.message}` };
+      }
+      if (!inv) return { ok: false, error: "ไม่พบใบวางบิล" };
+
+      // 2. Re-stamp the buyer identity snapshot — NO amount/total/status touched.
+      //    buyer_tax_id/buyer_branch cleared for a person (บุคคลธรรมดา).
+      const { error: updErr } = await admin
+        .from("tb_forwarder_invoice")
+        .update({
+          buyer_name:   buyerName,
+          is_juristic:  isJuristic,
+          buyer_tax_id: isJuristic ? buyerTaxId : "",
+          buyer_address: buyerAddress,
+          buyer_branch: isJuristic ? buyerBranch : "",
+        })
+        .eq("id", invoiceId);
+      if (updErr) {
+        console.error(`[adminSetBillingRunBuyerIdentity update] failed`, { code: updErr.code, message: updErr.message, invoiceId });
+        return { ok: false, error: `บันทึกข้อมูลผู้ซื้อไม่สำเร็จ: ${updErr.message}` };
+      }
+
+      // 3. PROPAGATE the identity onto the linked ใบเสร็จ (same join as the
+      //    delivery-address sync: invoice_item.forwarder_id → receipt_item.fid →
+      //    receipt.rid). Active receipts only ('2' = ยกเลิก stays frozen).
+      //    corporatetype '1'=นิติ / '2'=บุคคล (receipt render: isCorporate =
+      //    corporatetype==='1' && recompnumber). recompaddress = tax identity
+      //    address (distinct from delivery_address ship-to). Best-effort.
+      let syncedReceipts = 0;
+      try {
+        const { data: invItems, error: invItemsErr } = await admin
+          .from("tb_forwarder_invoice_item")
+          .select("forwarder_id")
+          .eq("invoice_id", invoiceId);
+        if (invItemsErr) {
+          console.error(`[adminSetBillingRunBuyerIdentity receipt-sync items]`, { code: invItemsErr.code, message: invItemsErr.message, invoiceId });
+        }
+        const fids = Array.from(
+          new Set(((invItems ?? []) as Array<{ forwarder_id: number }>).map((r) => r.forwarder_id)),
+        );
+        if (fids.length > 0) {
+          const { data: rcptItems, error: rcptItemsErr } = await admin
+            .from("tb_receipt_item")
+            .select("rid")
+            .in("fid", fids);
+          if (rcptItemsErr) {
+            console.error(`[adminSetBillingRunBuyerIdentity receipt-sync rids]`, { code: rcptItemsErr.code, message: rcptItemsErr.message, invoiceId });
+          }
+          const rids = Array.from(
+            new Set(((rcptItems ?? []) as Array<{ rid: string | null }>).map((r) => r.rid).filter((x): x is string => !!x)),
+          );
+          if (rids.length > 0) {
+            const { data: synced, error: syncErr } = await admin
+              .from("tb_receipt")
+              .update({
+                recompname:    buyerName,
+                recompnumber:  isJuristic ? buyerTaxId : "",
+                recompaddress: buyerAddress,
+                corporatetype: isJuristic ? "1" : "2",
+              })
+              .in("rid", rids)
+              .neq("rstatus", "2")
+              .select("id, rid");
+            if (syncErr) {
+              console.error(`[adminSetBillingRunBuyerIdentity receipt-sync update]`, { code: syncErr.code, message: syncErr.message, invoiceId, rids });
+            } else {
+              syncedReceipts = (synced ?? []).length;
+            }
+          }
+        }
+      } catch (e) {
+        console.error(`[adminSetBillingRunBuyerIdentity receipt-sync] unexpected`, { message: String(e), invoiceId });
+      }
+
+      await logAdminAction(adminId, "tb_forwarder_invoice.set_buyer_identity", "tb_forwarder_invoice", String(invoiceId), {
+        userid: inv.userid, isJuristic, buyerName, buyerTaxId, synced_receipts: syncedReceipts,
+      });
+
+      revalidatePath(`/admin/billing-run/${invoiceId}`);
+      revalidatePath(`/admin/billing-run/${invoiceId}/print`);
+      revalidatePath("/[locale]/(admin)/admin/accounting/receipts", "page");
+      revalidatePath("/[locale]/(protected)/service-import/[fNo]/invoice", "page");
+      return { ok: true, data: { syncedReceipts } };
+    },
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
 // 4b. DUP-slip WARNING (READ-ONLY · display gate for the 3-step slip review)
 // ────────────────────────────────────────────────────────────────────────
 
