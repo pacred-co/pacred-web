@@ -23,6 +23,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { PackageOpen } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import {
   adminVoidReceipts,
@@ -159,6 +160,25 @@ export function ReceiptsVoidTable({
   }
 
   const selectedCount = selected.size;
+
+  /**
+   * พิมพ์ใบเสร็จ ที่ติ๊กเลือก — legacy fixed-bottom buttons (decorative in PHP,
+   * FUNCTIONAL here). `withCopy=false` → ต้นฉบับ อย่างเดียว (`?copy=0`);
+   * `true` → ต้นฉบับ + สำเนา (default). Opens each selected receipt's print
+   * view in a new tab; a soft cap confirms before opening many.
+   */
+  function printSelected(withCopy: boolean) {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    if (ids.length > 10 &&
+        !window.confirm(`จะเปิดหน้าพิมพ์ ${ids.length} แท็บ (1 แท็บ/ใบ) — ยืนยันหรือไม่?`)) {
+      return;
+    }
+    const suffix = withCopy ? "" : "?copy=0";
+    for (const id of ids) {
+      window.open(`/admin/accounting/forwarder-invoice/${id}${suffix}`, "_blank", "noopener");
+    }
+  }
 
   return (
     <>
@@ -394,6 +414,31 @@ export function ReceiptsVoidTable({
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* ── พิมพ์ใบเสร็จ ต้นฉบับ / ต้นฉบับ+สำเนา — fixed bottom-left (legacy
+          `btn-group position:fixed bottom:20px` · btn-color-main แดง). Legacy's
+          were decorative; ours WORK — but only after ≥1 row is ticked. ── */}
+      <div className="fixed bottom-5 left-5 z-30 flex overflow-hidden rounded-lg shadow-lg print:hidden">
+        <button
+          type="button"
+          onClick={() => printSelected(false)}
+          disabled={selectedCount === 0}
+          title={selectedCount === 0 ? "ติ๊กเลือกรายการก่อน" : `พิมพ์ต้นฉบับ ${selectedCount} ใบ`}
+          className="inline-flex items-center gap-2 bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <PackageOpen className="size-4" /> พิมพ์ใบเสร็จ ต้นฉบับ
+          {selectedCount > 0 && <span className="ml-0.5 rounded-full bg-white/25 px-1.5 text-[11px]">{selectedCount}</span>}
+        </button>
+        <button
+          type="button"
+          onClick={() => printSelected(true)}
+          disabled={selectedCount === 0}
+          title={selectedCount === 0 ? "ติ๊กเลือกรายการก่อน" : `พิมพ์ต้นฉบับ + สำเนา ${selectedCount} ใบ`}
+          className="inline-flex items-center gap-2 border-l border-white/25 bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <PackageOpen className="size-4" /> พิมพ์ใบเสร็จ ต้นฉบับ + สำเนา
+        </button>
       </div>
 
       {/* Sticky bulk bar — appears when ≥1 receipt is ticked */}

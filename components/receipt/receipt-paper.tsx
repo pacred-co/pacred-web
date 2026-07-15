@@ -124,6 +124,12 @@ export type ReceiptCommonProps = {
 export type ReceiptPaperProps = ReceiptCommonProps & {
   pages:     Array<{ pageNumber: number; rows: ReceiptPageRow[] }>;
   qrDataUrl: string;
+  /**
+   * Render the สำเนา (Copy) set after the ต้นฉบับ set. Default `true` (=
+   * legacy: ต้นฉบับ + สำเนา · 2N pages). Pass `false` for a ต้นฉบับ-only print
+   * (the "พิมพ์ใบเสร็จ ต้นฉบับ" button · legacy had the two separate buttons).
+   */
+  withCopy?: boolean;
 };
 
 // ── Number / format helpers (render-time) ────────────────────
@@ -764,7 +770,7 @@ export function ReceiptPage({
  * `qrDataUrl` is passed per-surface (admin → admin URL · public → public /r URL).
  * `common` is the shared object both surfaces compute identically.
  */
-export function ReceiptPaper({ pages, qrDataUrl, ...common }: ReceiptPaperProps) {
+export function ReceiptPaper({ pages, qrDataUrl, withCopy = true, ...common }: ReceiptPaperProps) {
   return (
     <>
       {/*
@@ -865,7 +871,7 @@ export function ReceiptPaper({ pages, qrDataUrl, ...common }: ReceiptPaperProps)
           qrDataUrl={qrDataUrl}
         />
       ))}
-      {pages.map((p) => (
+      {withCopy && pages.map((p) => (
         <ReceiptPage
           key={`copy-${p.pageNumber}`}
           label="สำเนา"
