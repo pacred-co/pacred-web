@@ -3565,6 +3565,7 @@
       "leadSource": "แหล่งที่มาของลูกค้า",
       "contactMessages": "ข้อความติดต่อจากลูกค้า",
       "leads": "โทรตามลูกค้า (Leads)",
+      "customsLeads": "ลูกค้าใช้ใบขน (โทรตาม)",
       "lineInbox": "กล่องข้อความ LINE",
       "taxInvoices": "ใบกำกับภาษี",
       "workboard": "Work Board (งานทีม)",

@@ -987,6 +987,11 @@ const blockExtContactMessages: MenuItem = {
 const blockExtLeads: MenuItem = {
   labelKey: "extension.leads", href: "/admin/leads", icon: "PhoneCall",
 };
+// ลูกค้าที่ใช้ใบขน (จาก NetBay import · customs_importer_lead · owner 2026-07-16) —
+// คิวเซลโทรตามมาเปิดใบขนกับเรา. Sales/ops/super (the page gates RBAC). CRM family.
+const blockExtCustomsLeads: MenuItem = {
+  labelKey: "extension.customsLeads", href: "/admin/customs-leads", icon: "FileText",
+};
 // 2026-05-31 sitting-H-fix #5 (ภูม): blockExtTaxInvoices DELETED. ใบกำกับภาษี
 // ขาย belongs in the accounting headmenu "รายรับ" (PEAK structure · per
 // `lib/admin/accounting-menubar.ts`), not in the sidebar Extension drawer.
@@ -1178,6 +1183,7 @@ const settingsDevChildren = (blockSettingsCargo.children ?? []).filter(
 // sub-teams work the same queues (ปอน 2026-06-10).
 const marketingCrmTools: MenuItem[] = [
   blockExtLeads,
+  blockExtCustomsLeads,
   blockExtCrm,
   blockExtContactMessages,
   blockExtLineInbox,
@@ -1527,6 +1533,7 @@ const menuManager: MenuSection[] = [
     blockExtWorkboard,
     blockExtInbox,
     blockExtLeads,
+    blockExtCustomsLeads,
     blockExtCrm,
     blockExtContactMessages,
     blockExtLineInbox,
@@ -1590,7 +1597,7 @@ const menuOps: MenuSection[] = [
   learningSection,
   // 2026-06-29 (gap-hunt §0d) — bookings (RFQ queue) + refunds (customer refund
   // money-queue) were orphan; ops is in both pages' RBAC gates → surfaced here.
-  extensionSection([blockExtLeads, blockExtCrm, blockExtJuristic, blockExtThaiTransport, blockExtThaiShippingTools, blockExtBookings, blockExtRefunds, blockExtIncidents]),
+  extensionSection([blockExtLeads, blockExtCustomsLeads, blockExtCrm, blockExtJuristic, blockExtThaiTransport, blockExtThaiShippingTools, blockExtBookings, blockExtRefunds, blockExtIncidents]),
 ];
 
 /**
