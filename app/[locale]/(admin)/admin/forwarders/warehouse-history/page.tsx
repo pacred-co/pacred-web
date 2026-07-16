@@ -898,7 +898,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
                           {/* 4 — รหัสลูกค้า + VIP + delta */}
                           <td className="px-3 py-2">
                             <Link
-                              href={`/admin/users/profile/${encodeURIComponent(row.f_userid ?? "")}`}
+                              href={`/admin/customers/${encodeURIComponent(row.f_userid ?? "")}`}
                               className="text-sky-700 hover:underline font-medium"
                             >
                               {row.f_userid}
@@ -976,7 +976,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
                                     </span>
                                   )}
                                   {row.f_reforder && row.f_reforder !== "" && (
-                                    <Link href={`/admin/shops/detail/${row.f_reforder}`}>
+                                    <Link href={`/admin/service-orders/${encodeURIComponent(row.f_reforder)}`}>
                                       <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-1.5 py-0.5 text-[11px] font-medium hover:bg-sky-200">
                                         ฝากสั่งซื้อ: {row.f_reforder}
                                       </span>
@@ -1013,7 +1013,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
                             <div className="text-[11px]">
                               เลขตู้:{" "}
                               <Link
-                                href={{ pathname: "/admin/cnt/report", query: { id: row.f_fcabinetnumber ?? "" } }}
+                                href={`/admin/report-cnt/${encodeURIComponent(row.f_fcabinetnumber ?? "")}`}
                                 target="_blank"
                                 className="text-sky-700 hover:underline font-medium"
                               >

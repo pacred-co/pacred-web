@@ -570,7 +570,7 @@ export default async function ReportSystemPage({
           <ChartTable
             head={["รหัสสมาชิก", "จำนวนครั้ง"]}
             rows={top20Users.map(([uid, n]) => [
-              <Link key={uid} href={`/admin/users/profile/${uid}`} className="text-primary-600 hover:underline font-mono text-xs">
+              <Link key={uid} href={`/admin/customers/${encodeURIComponent(uid)}`} className="text-primary-600 hover:underline font-mono text-xs">
                 {uid}
               </Link>,
               n.toLocaleString("th-TH"),
@@ -644,7 +644,7 @@ export default async function ReportSystemPage({
                     <td className="px-3 py-2 text-xs whitespace-nowrap">
                       {row.userid ? (
                         <Link
-                          href={`/admin/users/profile/${row.userid}`}
+                          href={`/admin/customers/${encodeURIComponent(row.userid)}`}
                           className="text-primary-600 hover:underline font-mono"
                         >
                           {row.userid}

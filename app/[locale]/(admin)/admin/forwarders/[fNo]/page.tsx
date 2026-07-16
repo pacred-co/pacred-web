@@ -813,6 +813,10 @@ async function tryRenderTbForwarder(
   const linkedBills: Array<{ id: number; docNo: string; status: string }> = [];
   const linkedReceipts: Array<{ id: number; rid: string; status: string }> = [];
   const linkedDriverRuns: Array<{ id: number; name: string; date: string | null }> = [];
+  // A5 (owner 2026-07-16 "กดอ้างอิงดูตรวจสอบกันได้หมด") — the order→slip reverse edge
+  // (only slip→order existed on the wallet detail). ฝากนำเข้า payment slips = tb_wallet_hs
+  // type='4', reforder = forwarder id (string).
+  const linkedSlips: Array<{ id: number; status: string; amount: number }> = [];
   {
     const { data: biItems, error: biErr } = await admin
       .from("tb_forwarder_invoice_item").select("invoice_id").in("forwarder_id", docFids);
@@ -849,8 +853,15 @@ async function tryRenderTbForwarder(
       for (const dr of (runs ?? []) as Array<{ id: number; fdname: string | null; fddate: string | null }>)
         linkedDriverRuns.push({ id: dr.id, name: (dr.fdname ?? "").trim() || `รอบ #${dr.id}`, date: dr.fddate });
     }
+
+    // A5 — payment slip(s) for this order (order→slip). type='4' = ชำระเงินฝากนำเข้า.
+    const { data: slipRows, error: slErr } = await admin
+      .from("tb_wallet_hs").select("id, status, amount").eq("type", "4").in("reforder", docFids.map(String)).order("id", { ascending: false });
+    if (slErr) console.error("[forwarder detail] linked-slip rows failed", { code: slErr.code, message: slErr.message, fId: r.id });
+    for (const s of (slipRows ?? []) as Array<{ id: number; status: string | null; amount: number | string | null }>)
+      linkedSlips.push({ id: s.id, status: (s.status ?? "").trim(), amount: Number(s.amount ?? 0) });
   }
-  const hasLinkedDocs = linkedBills.length + linkedReceipts.length + linkedDriverRuns.length > 0;
+  const hasLinkedDocs = linkedBills.length + linkedReceipts.length + linkedDriverRuns.length + linkedSlips.length > 0;
   // A PAID order (fstatus ≥ 6 = เตรียมส่ง/กำลังจัดส่ง/สำเร็จ) with NO active receipt → offer to
   // ออกใบเสร็จ (owner 2026-07-15 · pay-on-behalf auto-issue is best-effort so some paid orders
   // have money taken but no receipt · PR215/PR217). Show the doc block for these too.
@@ -858,6 +869,7 @@ async function tryRenderTbForwarder(
   const isPaidNoReceipt = fPaid && linkedReceipts.length === 0;
   const BILL_STATUS_LABEL: Record<string, string> = { issued: "ออกบิลแล้ว", paid: "ชำระแล้ว", cancelled: "ยกเลิก" };
   const RECEIPT_STATUS_LABEL: Record<string, string> = { "0": "ร่าง", "1": "ชำระแล้ว", "2": "ยกเลิก", "3": "รอชำระ" };
+  const WALLET_HS_STATUS_LABEL: Record<string, string> = { "1": "รอตรวจ", "2": "ชำระแล้ว", "3": "ยกเลิก/ปฏิเสธ" };
 
   // Show the panel when the row is still collectible (รอชำระเงิน fstatus='5' OR
   // ติดเครดิต fcredit='1') — i.e. before the ฿50 is persisted, which is exactly
@@ -1420,6 +1432,20 @@ async function tryRenderTbForwarder(
                   </>
                 )}
               </div>
+              {linkedSlips.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-muted">💳 สลิปชำระ :</span>
+                  {linkedSlips.map((s) => (
+                    <Link key={s.id} href={`/admin/wallet/${s.id}`}
+                      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs hover:opacity-80 ${
+                        s.status === "3" ? "border-stone-300 bg-stone-50 text-stone-500 line-through"
+                        : s.status === "2" ? "border-emerald-300 bg-white text-emerald-700"
+                        : "border-amber-300 bg-white text-amber-700"}`}>
+                      #{s.id}{WALLET_HS_STATUS_LABEL[s.status] ? ` · ${WALLET_HS_STATUS_LABEL[s.status]}` : ""} →
+                    </Link>
+                  ))}
+                </div>
+              )}
               {linkedDriverRuns.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-muted">🚚 ใบส่งของ :</span>

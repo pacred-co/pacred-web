@@ -127,6 +127,30 @@ export default async function BillingRunDetailPage({
     if (dupRes.ok) dupWarnings = dupRes.data!.matches;
   }
 
+  // A4 (owner 2026-07-16 · "กดอ้างอิงดูตรวจสอบกันได้หมด") — durable bill↔ใบเสร็จ
+  // cross-reference. Resolve the ใบเสร็จ(s) covering this bill's orders (mirror the F9
+  // block on forwarders/[fNo]): tb_receipt_item.fid → tb_receipt. Rendered as a visible
+  // reference (not just the action button); a voided receipt (after ↩ ย้อนการรับชำระ)
+  // still shows as a struck-through pointer. READ-ONLY · soft-fail (never blanks the page).
+  const billFids = items
+    .map((it) => it.forwarder_id)
+    .filter((n): n is number => Number.isInteger(n) && n > 0);
+  const linkedReceipts: Array<{ id: number; rid: string; status: string }> = [];
+  if (billFids.length > 0) {
+    const { data: rItems, error: riErr } = await admin
+      .from("tb_receipt_item").select("rid").in("fid", billFids);
+    if (riErr) console.error("[bill detail] linked-receipt items failed", { code: riErr.code, message: riErr.message, invoiceId });
+    const rids = Array.from(new Set(((rItems ?? []) as { rid: string | null }[]).map((x) => (x.rid ?? "").trim()).filter(Boolean)));
+    if (rids.length > 0) {
+      const { data: recs, error: recErr } = await admin
+        .from("tb_receipt").select("id, rid, rstatus").in("rid", rids).order("id", { ascending: false });
+      if (recErr) console.error("[bill detail] linked-receipt headers failed", { code: recErr.code, message: recErr.message, invoiceId });
+      for (const rc of (recs ?? []) as Array<{ id: number; rid: string | null; rstatus: string | null }>)
+        linkedReceipts.push({ id: rc.id, rid: (rc.rid ?? "").trim() || `#${rc.id}`, status: (rc.rstatus ?? "").trim() });
+    }
+  }
+  const RECEIPT_STATUS_LABEL: Record<string, string> = { "0": "ร่าง", "1": "ชำระแล้ว", "2": "ยกเลิก", "3": "รอชำระ" };
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <title>ใบวางบิล {header.doc_no} | PR Admin</title>
@@ -171,6 +195,27 @@ export default async function BillingRunDetailPage({
           )}
         </div>
       </header>
+
+      {/* A4 — durable bill→ใบเสร็จ reference (owner "กดอ้างอิงดูตรวจสอบกันได้หมด").
+          A voided receipt (after ↩ ย้อนการรับชำระ) still shows as a struck pointer. */}
+      {linkedReceipts.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted">🧾 ใบเสร็จของบิลนี้ :</span>
+          {linkedReceipts.map((rc) => (
+            <Link
+              key={rc.id}
+              href={`/admin/accounting/forwarder-invoice/${rc.id}`}
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 font-mono text-xs hover:opacity-80 ${
+                rc.status === "2"
+                  ? "border-stone-300 bg-stone-50 text-stone-500 line-through"
+                  : "border-emerald-300 bg-white text-emerald-700"
+              }`}
+            >
+              {rc.rid}{rc.status ? ` · ${RECEIPT_STATUS_LABEL[rc.status] ?? rc.status}` : ""} →
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* Money summary card */}
       <section className="rounded-2xl border border-border bg-gradient-to-br from-white to-amber-50/20 dark:from-surface dark:to-surface p-5 shadow-sm">

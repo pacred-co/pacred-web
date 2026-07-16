@@ -1189,7 +1189,7 @@ export function ForwardersTable({
                               {/* Block 2: shop-order link (additive · only when refOrder set) */}
                               {hasRefOrder && (
                                 <Link
-                                  href={`/admin/shops/detail/${r.ref_order}`}
+                                  href={`/admin/service-orders/${encodeURIComponent(r.ref_order ?? "")}`}
                                   className="rounded-full border bg-sky-50 text-sky-700 border-sky-200 px-1.5 py-0.5 text-[11px] hover:bg-sky-100"
                                   title="คลิกดูออเดอร์ฝากสั่งซื้อที่ spawn ฝากนำเข้านี้"
                                 >

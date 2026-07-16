@@ -2470,10 +2470,11 @@ export async function cancelBillingRunInvoice(
       // payment/receipt to unwind). Guard: only linked rows still at 5/6, NOT
       // settled (paydeposit≠'1') and NOT shipped (fstatus<'7'). Best-effort — never
       // fails the cancel.
-      const { data: linkItems } = await admin
+      const { data: linkItems, error: linkItemsErr } = await admin
         .from("tb_forwarder_invoice_item")
         .select("forwarder_id")
         .eq("invoice_id", v.invoiceId);
+      if (linkItemsErr) console.error("[cancelBillingRunInvoice link items] failed (best-effort)", { code: linkItemsErr.code, message: linkItemsErr.message, invoiceId: v.invoiceId });
       const linkedFids = (linkItems ?? [])
         .map((r) => (r as { forwarder_id: number }).forwarder_id)
         .filter((n): n is number => typeof n === "number");
@@ -2559,12 +2560,12 @@ export async function adminReverseBillingRunPaid(
       // 0. Load + guard.
       const { data: cur, error: curErr } = await admin
         .from("tb_forwarder_invoice")
-        .select("id, doc_no, status, userid, total_thb, paid_at, paid_by, payment_method, payment_reference")
+        .select("id, doc_no, status, userid, total_thb, paid_at, paid_by, payment_method, payment_reference, slip_status")
         .eq("id", v.invoiceId)
         .maybeSingle<{
           id: number; doc_no: string; status: string; userid: string | null;
           total_thb: number | string; paid_at: string | null; paid_by: string | null;
-          payment_method: string | null; payment_reference: string | null;
+          payment_method: string | null; payment_reference: string | null; slip_status: string | null;
         }>();
       if (curErr) {
         console.error("[adminReverseBillingRunPaid current] failed", { code: curErr.code, message: curErr.message });
@@ -2621,9 +2622,18 @@ export async function adminReverseBillingRunPaid(
         was_payment_method: cur.payment_method, was_payment_reference: cur.payment_reference,
         total_thb: Number(cur.total_thb), fids,
       });
+      // A3 (2026-07-16): if a real slip was verified AT settle (markBillingRunPaid
+      // promotes pending→'verified'), reset it to 'pending' + clear the round-1 review
+      // so a RE-settle re-runs "ตรวจสลิป รอบ 1" instead of falling through to the
+      // offline-confirm path (isOfflineSettle = slip_status!=='pending'). Untouched for
+      // an offline settle (slip_status null/'rejected') — there was no slip to re-review.
+      const slipReset =
+        cur.slip_status === "verified"
+          ? { slip_status: "pending", slip_reviewed_at: null, slip_reviewed_by: null }
+          : {};
       const { data: claimed, error: claimErr } = await admin
         .from("tb_forwarder_invoice")
-        .update({ status: "issued", paid_at: null, paid_by: null, payment_method: null, payment_reference: null })
+        .update({ status: "issued", paid_at: null, paid_by: null, payment_method: null, payment_reference: null, ...slipReset })
         .eq("id", v.invoiceId)
         .eq("status", "paid")
         .select("id");
@@ -2717,19 +2727,22 @@ export async function adminReverseBillingRunPaid(
         const active = await findActiveReceiptForFids(admin, fids);
         if (active) {
           // full-coverage check: every fid on the receipt must belong to this invoice.
-          const { data: rItems } = await admin
+          const { data: rItems, error: rItemsErr } = await admin
             .from("tb_receipt_item").select("fid").eq("rid", active.rid);
+          if (rItemsErr) console.error("[adminReverseBillingRunPaid receipt-coverage] failed", { code: rItemsErr.code, message: rItemsErr.message });
           const rFids = ((rItems ?? []) as Array<{ fid: number }>).map((r) => r.fid);
           const fidSet = new Set(fids);
           if (rFids.length > 0 && rFids.every((f) => fidSet.has(f))) {
-            const { error: voidErr } = await admin
+            const { data: voidedRc, error: voidErr } = await admin
               .from("tb_receipt")
               .update({ rstatus: "2" })
               .eq("id", active.receiptId)
-              .in("rstatus", ["1", "3"]);
+              .in("rstatus", ["1", "3"])
+              .select("id");
             if (voidErr) {
               console.error("[adminReverseBillingRunPaid receipt-void] failed", { code: voidErr.code, message: voidErr.message });
-            } else {
+            } else if ((voidedRc ?? []).length > 0) {
+              // only report/log a void that actually flipped a row (concurrent-void race guard)
               receiptVoided = active.rid;
               await logAdminAction(adminId, "receipt.void", "tb_receipt", String(active.receiptId), {
                 rid: active.rid, reason: `ย้อนการรับชำระใบวางบิล ${cur.doc_no}: ${v.reason}`,
@@ -2794,8 +2807,32 @@ export async function voidBillingRunInvoices(input: {
       const admin = createAdminClient();
       const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 50);
 
-      // Flip every NOT-already-cancelled invoice → cancelled (covers issued AND
-      // paid). Returns the rows it actually flipped so we report voided vs skipped.
+      // A2 (owner 2026-07-16 "ยกเลิกเอกสารแล้วสถานะต้องถอยเป็นเส้นตรง"): REFUSE voiding
+      // a PAID bill from the list. A list-void only flips the doc → 'cancelled'; a
+      // paid bill's order sits at เตรียมส่ง(6)/paydeposit=1 with an active auto-issued
+      // ใบเสร็จ + settled credit → voiding the doc alone would STRAND it (not re-billable,
+      // orphan receipt, credit still consumed). The full linear rollback lives on the
+      // detail page — "↩ ย้อนการรับชำระ" (adminReverseBillingRunPaid: credit un-settle +
+      // fwd 6→5 + receipt void) → steer staff there, then they can cancel the bill.
+      const { data: preRows, error: preErr } = await admin
+        .from("tb_forwarder_invoice")
+        .select("id, doc_no, status, paid_at")
+        .in("id", invoiceIds);
+      if (preErr) {
+        console.error("[voidBillingRunInvoices precheck] failed", { code: preErr.code, message: preErr.message });
+        return { ok: false, error: preErr.message };
+      }
+      const paidBlocked = ((preRows ?? []) as Array<{ id: number; doc_no: string; status: string; paid_at: string | null }>)
+        .filter((r) => r.status === "paid" || r.paid_at != null);
+      if (paidBlocked.length > 0) {
+        return {
+          ok: false,
+          error: `ใบวางบิล ${paidBlocked.map((r) => r.doc_no).join(", ")} รับชำระแล้ว — ยกเลิกจากลิสต์ไม่ได้ · กด "↩ ย้อนการรับชำระ" ที่หน้ารายละเอียดใบวางบิลก่อน (ระบบจะถอยออเดอร์ 6→5 + คืนวงเงินเครดิต + ยกเลิกใบเสร็จให้) แล้วจึงยกเลิกใบวางบิลได้`,
+        };
+      }
+
+      // Flip every NOT-already-cancelled invoice → cancelled. (All UNPAID here — the
+      // precheck refused any paid bill.) Returns the rows it flipped for voided/skipped.
       const { data: flipped, error: updErr } = await admin
         .from("tb_forwarder_invoice")
         .update({
@@ -2806,6 +2843,7 @@ export async function voidBillingRunInvoices(input: {
         })
         .in("id", invoiceIds)
         .neq("status", "cancelled")
+        .is("paid_at", null) // defense-in-depth vs a paid-after-precheck race (A2)
         .select("id, doc_no, paid_at");
       if (updErr) {
         console.error("[voidBillingRunInvoices] failed", { code: updErr.code, message: updErr.message });
@@ -2817,15 +2855,16 @@ export async function voidBillingRunInvoices(input: {
       const skipped = invoiceIds.length - voided;
 
       // 🔗 STATUS-SYNC (owner 2026-07-13 · same as cancelBillingRunInvoice): void
-      // an UNPAID bill → its forwarders "ถอยสถานะ" 6→5 so re-billing works. Only
-      // UNPAID invoices (paid_at null) — a PAID void keeps the money-safety invariant
-      // (its rows do NOT re-open · payment/receipt would otherwise need unwinding).
+      // an UNPAID bill → its forwarders "ถอยสถานะ" 6→5 so re-billing works. Every row
+      // here is UNPAID (the A2 precheck refused paid bills · a PAID bill unwinds via
+      // "↩ ย้อนการรับชำระ" on the detail page) — the filter below is now redundant-safe.
       const unpaidVoidedIds = voidedRows.filter((r) => !r.paid_at).map((r) => r.id);
       if (unpaidVoidedIds.length > 0) {
-        const { data: linkItems } = await admin
+        const { data: linkItems, error: linkItemsErr } = await admin
           .from("tb_forwarder_invoice_item")
           .select("forwarder_id")
           .in("invoice_id", unpaidVoidedIds);
+        if (linkItemsErr) console.error("[voidBillingRunInvoices link items] failed (best-effort)", { code: linkItemsErr.code, message: linkItemsErr.message });
         const linkedFids = (linkItems ?? [])
           .map((r) => (r as { forwarder_id: number }).forwarder_id)
           .filter((n): n is number => typeof n === "number");

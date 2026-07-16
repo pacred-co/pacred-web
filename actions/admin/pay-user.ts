@@ -1527,9 +1527,11 @@ export async function adminPayForwardersWithTopUp(
 //   above is the primary gate). An already-reverted (fstatus=5) order un-settles
 //   cleanly — the 5→5 flip clears the leftover paydeposit and the un-settle is what
 //   re-opens the pay-user queue (the exact PR178 state).
-//   The covering ใบเสร็จ is NOT auto-voided here — the reverse (un-collect) and the
-//   doc-void are decoupled by design (void = doc-only · staff void separately via
-//   adminVoidReceipts · owner's common case for void is re-issue, not un-collect).
+//   The covering ใบเสร็จ IS voided here (rstatus→'2') when it is fully-covered by
+//   THIS one order — owner "ยกเลิกงาน→สถานะถอยเป็นเส้นตรง": an un-collected order
+//   must not keep a valid/printable receipt (mirrors adminReverseBillingRunPaid
+//   step 5, 2026-07-16). A receipt SHARED with a sibling order (issued ด้วยกัน)
+//   is LEFT intact (staff void it separately) — we never un-document a live order.
 // ════════════════════════════════════════════════════════════════════════
 
 const reverseForwarderPaymentSchema = z.object({
@@ -1545,6 +1547,8 @@ export type ReverseForwarderPaymentResult = {
   refunded: number;
   /** true if the forwarder status actually flipped back (6→5 / credit / PCSF). */
   forwarderReverted: boolean;
+  /** rid of the ใบเสร็จ voided by this reverse (null = none / shared-receipt left intact). */
+  receiptVoided: string | null;
 };
 
 export async function adminReverseForwarderPayment(
@@ -1714,6 +1718,70 @@ export async function adminReverseForwarderPayment(
         else forwarderReverted = (fUpd?.length ?? 0) > 0;
       }
 
+      // 7. VOID the covering ใบเสร็จ (rstatus 1/3 → 2) — owner "ยกเลิกงาน→สถานะถอยเป็น
+      //    เส้นตรง". An un-collected order must not keep a valid/printable receipt.
+      //    Mirrors adminReverseBillingRunPaid step 5 + its conservative rule: void
+      //    ONLY when the receipt is fully-covered by THIS one fid; a receipt SHARED
+      //    with a sibling order (issued ด้วยกัน · e.g. PR143 #52118/#52119) is left
+      //    intact so we never un-document a still-live order. Best-effort (mirrors
+      //    the settle's own best-effort receipt step) — logs loudly on failure.
+      let receiptVoided: string | null = null;
+      try {
+        const { data: selfItems, error: riErr } = await admin
+          .from("tb_receipt_item")
+          .select("rid")
+          .eq("fid", fidNum);
+        if (riErr) {
+          console.error(`[adminReverseForwarderPayment receipt-items] failed`, { code: riErr.code, message: riErr.message, fid });
+        } else {
+          const rids = Array.from(
+            new Set(((selfItems ?? []) as Array<{ rid: string | null }>).map((r) => r.rid).filter((x): x is string => !!x)),
+          );
+          if (rids.length > 0) {
+            const { data: recs, error: recErr } = await admin
+              .from("tb_receipt")
+              .select("id, rid, rstatus")
+              .in("rid", rids)
+              .neq("rstatus", "2") // '2' = ยกเลิก — a cancelled receipt does not count
+              .order("id", { ascending: false })
+              .limit(1);
+            if (recErr) {
+              console.error(`[adminReverseForwarderPayment receipt read] failed`, { code: recErr.code, message: recErr.message, fid });
+            } else {
+              const rec = ((recs ?? []) as Array<{ id: number; rid: string; rstatus: string | null }>)[0];
+              if (rec) {
+                // full-coverage: every fid on the receipt must be THIS fid (else shared).
+                const { data: allItems, error: allItemsErr } = await admin
+                  .from("tb_receipt_item").select("fid").eq("rid", rec.rid);
+                if (allItemsErr) console.error(`[adminReverseForwarderPayment receipt-coverage] failed`, { code: allItemsErr.code, message: allItemsErr.message, fid, rid: rec.rid });
+                const recFids = ((allItems ?? []) as Array<{ fid: number }>).map((r) => r.fid);
+                if (recFids.length > 0 && recFids.every((f) => f === fidNum)) {
+                  const { data: voidedRc, error: voidErr } = await admin
+                    .from("tb_receipt")
+                    .update({ rstatus: "2" })
+                    .eq("id", rec.id)
+                    .in("rstatus", ["1", "3"])
+                    .select("id");
+                  if (voidErr) {
+                    console.error(`[adminReverseForwarderPayment receipt void] failed`, { code: voidErr.code, message: voidErr.message, fid, rid: rec.rid });
+                  } else if ((voidedRc ?? []).length > 0) {
+                    // only report/log a void that actually flipped a row (concurrent-void race guard)
+                    receiptVoided = rec.rid;
+                    await logAdminAction(adminId, "receipt.void", "tb_receipt", String(rec.id), {
+                      rid: rec.rid, reason: `ย้อนการชำระฝากนำเข้า #${fid}: ${reason || "(ไม่ระบุเหตุผล)"}`,
+                    });
+                  }
+                } else {
+                  console.warn(`[adminReverseForwarderPayment receipt void] ใบเสร็จ ${rec.rid} ครอบหลายออเดอร์ — ไม่ void อัตโนมัติ`, { fid, recFids });
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error(`[adminReverseForwarderPayment receipt void] unexpected`, { message: String(e), fid });
+      }
+
       const shape: ReverseForwarderPaymentResult["shape"] = isWalletFunded ? "wallet-funded" : "direct-slip";
       await logAdminAction(adminId, "pay-user.reverse-forwarder-payment", "tb_forwarder", fid, {
         userid,
@@ -1721,6 +1789,7 @@ export async function adminReverseForwarderPayment(
         shape,
         refunded: refundAmount,
         forwarderReverted,
+        receiptVoided,
         isCreditPay,
         isPCSF50,
         reason,
@@ -1736,7 +1805,7 @@ export async function adminReverseForwarderPayment(
 
       return {
         ok: true,
-        data: { fid, fundingWalletHsId: funding.id, shape, refunded: refundAmount, forwarderReverted },
+        data: { fid, fundingWalletHsId: funding.id, shape, refunded: refundAmount, forwarderReverted, receiptVoided },
       };
     },
   );

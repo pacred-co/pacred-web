@@ -8,10 +8,14 @@
  * soft-VOIDs the ticked ใบวางบิล via `voidBillingRunInvoices`.
  *
  * VOID = keep history: it flips status → 'cancelled' (badge "ยกเลิกแล้ว") and
- * stamps the existing cancelled_* columns. It works EVEN on a รับชำระแล้ว/paid
- * bill (owner: "even when status = รับชำระแล้ว, staff must be able to void"),
- * NEVER deletes, and NEVER moves money / re-opens forwarder rows / voids the
- * linked receipt. A confirm dialog + a required reason gate it (§0f).
+ * stamps the existing cancelled_* columns. It works on ISSUED (unpaid) bills only —
+ * NEVER deletes, and for an unpaid bill it revert-syncs the forwarder 6→5 so it's
+ * re-billable. A confirm dialog + a required reason gate it (§0f).
+ *
+ * A รับชำระแล้ว/PAID bill can NOT be voided here (A2 · owner 2026-07-16): voiding
+ * the doc alone would strand its order + orphan the auto-issued ใบเสร็จ + keep the
+ * credit settled. Staff must first "↩ ย้อนการรับชำระ" on the detail page (full
+ * linear rollback) — the checkbox is disabled for paid rows and the server refuses.
  *
  * Already-cancelled bills can't be re-ticked (checkbox hidden). The action is
  * idempotent regardless (race-guarded).
@@ -55,9 +59,10 @@ function statusBadge(status: "issued" | "paid" | "cancelled", isOverdue: boolean
   return <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-0.5 text-xs font-medium whitespace-nowrap">รอรับชำระ</span>;
 }
 
-/** A bill can be voided when it's NOT already cancelled (covers issued AND paid). */
+/** A bill can be voided from the list only when ISSUED (not yet paid). A รับชำระแล้ว
+ *  bill must first "↩ ย้อนการรับชำระ" on its detail page (full linear rollback) — A2. */
 function isVoidable(status: string): boolean {
-  return status !== "cancelled";
+  return status !== "cancelled" && status !== "paid";
 }
 
 export function BillingVoidTable({ rows }: { rows: BillingVoidRow[] }) {
@@ -182,7 +187,7 @@ export function BillingVoidTable({ rows }: { rows: BillingVoidRow[] }) {
                         checked={voidable ? checked : false}
                         onChange={() => voidable && toggleOne(r.id)}
                         disabled={!voidable}
-                        title={voidable ? undefined : "ยกเลิกไปแล้ว"}
+                        title={voidable ? undefined : r.status === "paid" ? "รับชำระแล้ว — กด ↩ ย้อนการรับชำระ ที่หน้ารายละเอียดก่อน" : "ยกเลิกไปแล้ว"}
                       />
                     </td>
                     <td className="px-3 py-2.5">
@@ -251,7 +256,8 @@ export function BillingVoidTable({ rows }: { rows: BillingVoidRow[] }) {
               จะยกเลิกใบวางบิลที่เลือก <span className="font-semibold">{selectedCount} ใบ</span> ·
               เอกสารจะถูกทำเครื่องหมาย <span className="font-medium text-red-700">ยกเลิก</span> แต่{" "}
               <span className="font-semibold">ยังเก็บประวัติไว้</span> (ไม่ลบ · ไม่ขยับเงิน · ไม่แตะใบเสร็จ).
-              รวมถึงใบที่ <span className="font-semibold">รับชำระแล้ว</span> ก็ยกเลิกได้.
+              ใบที่ <span className="font-semibold">รับชำระแล้ว</span> ต้องกด{" "}
+              <span className="font-semibold">&ldquo;↩ ย้อนการรับชำระ&rdquo;</span> ที่หน้ารายละเอียดก่อน จึงจะยกเลิกได้.
             </p>
             <label className="block">
               <span className="block text-xs font-medium text-muted mb-1">
