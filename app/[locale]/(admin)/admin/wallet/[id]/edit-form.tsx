@@ -318,6 +318,113 @@ export function EditDateSlipForm({
 }
 
 // ────────────────────────────────────────────────────────────
+// <RejectSlipInline> — ตีกลับสลิปลูกค้า on PAGE 1 (owner 2026-07-16)
+//
+// "ยกเลิกสลิปลูกค้า = ตีกลับสลิป = ถอยสถานะ กลับไปให้จ่ายใหม่" — for a slip that
+// is FAKE / DUPLICATE / doesn't match the amount.
+//
+// Before this, the round-1 date step (page 1: needsRound1 && !reviewedAt)
+// rendered NO reject affordance — the <ApproveRejectForm> "ปฏิเสธรายการ" only
+// appears on page 2 (AFTER round-1). So an admin who immediately spotted a bad
+// slip had to pass round-1 first just to reach the reject. This exposes the
+// SAME canonical reject (adminRejectWalletDeposit) right on page 1.
+//
+// MONEY-SAFE: this adds NO new money logic — it calls the existing, tested
+// reject action, which for a เติม-แล้วจ่าย topup (type='1') unwinds the cascade
+// (order → รอชำระเงิน · refund wallet + cashback) and for a DIRECT slip
+// (type='4'/'8') is a bare flip to '3' (the order was never advanced past
+// fStatus='5', so the customer can re-submit a new slip immediately).
+// ────────────────────────────────────────────────────────────
+
+export function RejectSlipInline({ id }: { id: number }) {
+  const router = useRouter();
+  const [mode, setMode] = useState<"idle" | "reject">("idle");
+  const [reason, setReason] = useState<string>("");
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function reject() {
+    setError(null);
+    // ห้ามพิมพ์ · กดเลือก (owner 2026-06-27) — a preset reason is required so
+    // the "why" stays systematic/groupable on the row's note.
+    if (!reason.trim()) {
+      setError("กรุณาเลือกเหตุผลที่ตีกลับสลิป");
+      return;
+    }
+    if (reason.trim().length < 3) {
+      setError("เหตุผลสั้นเกินไป");
+      return;
+    }
+    startTransition(async () => {
+      const res = await adminRejectWalletDeposit({ id, reason: reason.trim() });
+      if (res.ok) {
+        router.refresh(); // slip → '3' · order rolled back → server re-renders
+        setMode("idle");
+        setReason("");
+      } else {
+        setError(res.error);
+      }
+    });
+  }
+
+  return (
+    <div className="mt-3 border-t border-dashed border-border pt-3">
+      {mode === "idle" ? (
+        <div className="space-y-1">
+          <button
+            type="button"
+            onClick={() => { setMode("reject"); setError(null); }}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-red-500 bg-white px-3 py-2 text-sm font-bold text-red-700 hover:bg-red-50"
+          >
+            <XCircle className="h-4 w-4" /> ตีกลับสลิป (ปฏิเสธ · ให้ลูกค้าจ่ายใหม่)
+          </button>
+          <p className="text-[11px] text-muted">
+            ใช้เมื่อสลิปที่แนบมา <b>ปลอม · ซ้ำ · หรือไม่ตรงยอด</b> — ระบบจะถอยสถานะกลับไป
+            &lsquo;รอชำระเงิน&rsquo; ให้ลูกค้าโอนใหม่
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2 rounded-xl border border-red-300 bg-red-50 p-3">
+          <p className="text-xs font-bold text-red-900">
+            ตีกลับสลิปลูกค้า — ถอยสถานะกลับไปให้ลูกค้าโอนใหม่
+          </p>
+          <p className="text-[11px] text-red-800">
+            เมื่อยืนยัน: สลิปนี้จะถูก <b>ปฏิเสธ</b> และออเดอร์จะกลับไปสถานะ
+            <b> &lsquo;รอชำระเงิน&rsquo;</b> ให้ลูกค้าโอนใหม่ได้ (กรณี &lsquo;เติม-แล้วจ่าย&rsquo;
+            ระบบจะถอยรายการที่เกี่ยวข้อง + คืนเงินเข้ากระเป๋าให้อัตโนมัติ)
+          </p>
+          <p className="text-xs font-bold text-red-900">เลือกเหตุผลที่ตีกลับ (กดเลือก · จำเป็น)</p>
+          <RejectReasonPicker kind="deposit" onChange={setReason} disabled={pending} />
+          {error && <p className="text-[11px] text-red-700">{error}</p>}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={reject}
+              disabled={pending}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {pending ? (
+                <><Loader2 className="h-3 w-3 animate-spin" /> กำลังตีกลับ…</>
+              ) : (
+                "✓ ยืนยันตีกลับสลิป (ให้จ่ายใหม่)"
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode("idle"); setReason(""); setError(null); }}
+              disabled={pending}
+              className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs hover:bg-surface-alt"
+            >
+              ยกเลิก
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────
 // <EditAmountForm> — #6 (ภูม 2026-06-26)
 //
 // Lets the accountant CORRECT the slip amount while the row is still
