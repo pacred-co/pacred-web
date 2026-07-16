@@ -28,8 +28,8 @@ export default async function MomoPackingUploadPage() {
       </nav>
 
       <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · กวางโจว / อี้อู · PACKING LIST</p>
-        <h1 className="mt-1 text-2xl font-bold">อัปโหลด packing list ปิดตู้ (กวางโจว / อี้อู · .xlsx)</h1>
+        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · กวางโจว (MOMO) · PACKING LIST</p>
+        <h1 className="mt-1 text-2xl font-bold">อัปโหลด packing list ปิดตู้ (กวางโจว · .xlsx)</h1>
         <p className="mt-1.5 text-sm text-muted">
           เมื่อ <strong>กวางโจว (MOMO)</strong> <strong>ปิดตู้</strong> (ของกำลังส่งมาไทย) จะส่งไฟล์ <strong>PACKING LIST (.xlsx)</strong> ต่อหนึ่งตู้มาให้ —
           <strong>โยนไฟล์เข้ามาได้เลย</strong> ระบบจะอ่านไฟล์ (แตกไฟล์ + อ่านเอง · SheetJS อ่านไฟล์นี้ไม่ได้) →
@@ -37,7 +37,8 @@ export default async function MomoPackingUploadPage() {
           แจ้ง <strong>แทรคตกหล่น (🔴 มีในไฟล์แต่ระบบไม่พบ)</strong> → ให้ตรวจก่อนบันทึก. เมื่อบันทึก จะอัปเดตเฉพาะรายการ
           ที่ <strong>ยังไม่วางบิล</strong> · เลื่อนสถานะ <strong>1/2 → 3 (กำลังส่งมาไทย)</strong> · แล้ว
           <strong>คิดราคาขายใหม่อัตโนมัติ</strong> จากค่าที่อัปเดต. รายการที่วางบิลแล้วจะถูกข้าม (แสดง ⚠ ให้ตรวจเอง).
-          {" · "}<strong>อี้อู (Yiwu)</strong> เลือกปุ่มคลังด้านล่าง — ตอนนี้เป็นโหมดพรีวิว (ดูข้อมูลแตกกล่องได้ · ยังนำเข้าระบบไม่ได้).
+          {" · "}<strong>อี้อู (Yiwu)</strong> แยกไปหน้าเฉพาะแล้ว →{" "}
+          <Link href="/admin/api-forwarder-yiwu" className="font-medium text-primary-600 underline">อี้อู (ใบส่งของ)</Link>
         </p>
       </header>
 
