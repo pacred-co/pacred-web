@@ -3565,6 +3565,7 @@
       "leadSource": "Lead source",
       "contactMessages": "Customer contact messages",
       "leads": "Call leads (Leads)",
+      "customsLeads": "Customs-decl leads (call)",
       "lineInbox": "LINE Inbox",
       "taxInvoices": "Tax invoices",
       "workboard": "Work Board (team)",

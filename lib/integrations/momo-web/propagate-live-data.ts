@@ -62,6 +62,11 @@ import {
   emptyBoxSplitResult,
   type BoxSplitResult,
 } from "./split-box-rows";
+import {
+  reconcileMomoBoxDetailRows,
+  emptyBoxDetailReconcileResult,
+  type BoxDetailReconcileResult,
+} from "./box-detail-reconcile";
 
 /**
  * fstatus codes that are IN or THROUGH billing — a data-fill must NEVER touch
@@ -442,6 +447,11 @@ export type LiveStatusAndDataResult = {
    *  momo_box_detail) split into N sibling rows (one per box · matches MOMO's "-i/n").
    *  Money-neutral guard (unbilled · unpriced · Σ preserved) · idempotent · best-effort. */
   boxSplit: BoxSplitResult;
+  /** Box-count SELF-HEAL: converge an already-split base whose rows DRIFTED from the
+   *  momo_box_detail truth — a leftover aggregate-weight bare (double-count) or a "-N/M"
+   *  detail row carrying the aggregate. UNBILLED-only · momo-corroborated · never a
+   *  priced anchor · idempotent · best-effort (repairs what the idempotent split skips). */
+  boxDetailReconcile: BoxDetailReconcileResult;
   /** PENDING momo_import_tracks rows filled from Live (the "ดึง Live" staging fill · best-effort). */
   staging: LiveStagingFillResult;
 };
@@ -457,6 +467,10 @@ export type LiveStatusAndDataResult = {
  *   5. BOX-SPLIT        — split an aggregate row (famount=N · boxes in momo_box_detail)
  *                         into N sibling rows (one per box · matches MOMO's "-i/n").
  *                         Money-neutral guard + idempotent (see split-box-rows.ts).
+ *   6. BOX-COUNT HEAL   — converge an already-split base that DRIFTED from the momo
+ *                         truth (leftover aggregate bare · aggregate-on-a-detail-row) —
+ *                         the repair the idempotent split pass cannot do. UNBILLED-only ·
+ *                         momo-corroborated · never a priced anchor (box-detail-reconcile.ts).
  *
  * Sharing the fetched boards means only ONE MOMO login per run (MOMO is single-
  * session). Passes 2-4 are independent + best-effort — a failure never rolls back
@@ -553,7 +567,28 @@ export async function propagateMomoLiveStatusAndData(
     boxSplitResult.errors.push({ scope: "box-split", message: e instanceof Error ? e.message : "unknown" });
   }
 
-  // ── pass 6: PENDING STAGING fill (momo_import_tracks · the "ดึง Live" fix · owner/ภูม
+  // ── pass 6: BOX-COUNT SELF-HEAL (owner 2026-07-16 · "fix the SOURCE · the WHOLE class
+  //    can never recur"). Runs AFTER the split pass over the SAME durable multi-box set.
+  //    The split pass (pass 5) is IDEMPOTENT — once a base has ANY "-N/M" sibling it never
+  //    re-touches — so a base that got CORRUPTED (partial/duplicate split · a re-commit
+  //    that re-created a bare · a dangling committed_forwarder_id · a manual box edit · a
+  //    backfill) stays corrupt forever. THIS pass owns "make tb_forwarder match
+  //    momo_box_detail": it CONVERGES a leftover aggregate-weight BARE (double-count) or a
+  //    "-N/M" DETAIL row carrying the aggregate to the momo truth. UNBILLED-only ·
+  //    momo-corroborated (refuses the "MOMO มั่ว" weight cases) · NEVER a priced anchor ·
+  //    idempotent (healthy base = no-op). best-effort — a failure NEVER undoes the passes
+  //    above. Sources its own durable set (findMultiBoxBases) so a stranded corrupt base
+  //    that advanced off MOMO's boards is still healed. ──
+  const boxDetailReconcileResult = emptyBoxDetailReconcileResult();
+  try {
+    const durableBases = await findMultiBoxBases(admin);
+    await reconcileMomoBoxDetailRows(admin, durableBases, boxDetailReconcileResult);
+  } catch (e) {
+    console.error("[propagateMomoLiveStatusAndData] box-detail reconcile threw", e);
+    boxDetailReconcileResult.errors.push({ scope: "box-detail-reconcile", message: e instanceof Error ? e.message : "unknown" });
+  }
+
+  // ── pass 7: PENDING STAGING fill (momo_import_tracks · the "ดึง Live" fix · owner/ภูม
   //    2026-07-14). Fill weight/คิว/จำนวน on rows NOT yet imported (fill-when-empty ·
   //    pending-only) so a "รอชั่ง" staging row gets MOMO's real measurement BEFORE the
   //    staff imports it — the /admin/momo-containers preview promised this. best-effort:
@@ -572,6 +607,7 @@ export async function propagateMomoLiveStatusAndData(
     boxDetail: boxDetailResult,
     cabinet: cabinetResult,
     boxSplit: boxSplitResult,
+    boxDetailReconcile: boxDetailReconcileResult,
     staging: stagingResult,
   };
 }
