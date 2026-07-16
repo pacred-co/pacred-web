@@ -460,7 +460,7 @@ export function CreateBatchForm({
                               <td className="px-1.5 py-1">
                                 <Link
                                   href={`/admin/forwarders/${it.id}`}
-                                  className="font-mono text-primary-600 hover:underline"
+                                  className="font-mono text-[#1e9ff2] hover:underline"
                                   target="_blank"
                                 >
                                   {it.fidorco}
@@ -483,8 +483,9 @@ export function CreateBatchForm({
                               <td className="px-1.5 py-1 text-right tabular-nums">{it.fvolume.toFixed(3)}</td>
                             </tr>
                           ))}
-                          {/* รวม summary row */}
-                          <tr className="border-t border-border bg-surface-alt/60 font-semibold text-foreground">
+                          {/* รวม summary row — legacy PINK (alert-danger · #f5aab0/#960014),
+                              matches forwarder-driver.php add-page (owner 2026-07-16) */}
+                          <tr className="border-t border-border bg-[#f5aab0] font-semibold text-[#7a0012]">
                             <td colSpan={4} className="px-1.5 py-1 text-right">รวม</td>
                             <td className="px-1.5 py-1 text-right tabular-nums">{g.totalBoxes}</td>
                             <td className="px-1.5 py-1 text-right tabular-nums">{g.totalWeight.toFixed(2)}</td>
@@ -514,7 +515,7 @@ export function CreateBatchForm({
                         <span className="text-foreground/90 leading-relaxed">
                           {g.address.no}
                           {g.address.subDistrict ? <> ต.{g.address.subDistrict}</> : null}{" "}
-                          {g.address.district ? <>อ.<span className="bg-amber-200 px-1 rounded text-amber-900 font-medium">{g.address.district}</span>{" "}</> : null}
+                          {g.address.district ? <>อ.<span className="bg-[#ff9149] px-1 rounded text-white font-medium">{g.address.district}</span>{" "}</> : null}
                           {g.address.province ? <>จ.{g.address.province} </> : null}{g.address.zipCode}
                         </span>
                       )}
