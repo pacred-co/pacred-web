@@ -588,15 +588,29 @@ export async function adminPayForwardersOnBehalf(
         .maybeSingle<{ id: number }>();
       if (exErr) { skipped.push({ fid, reason: `db_error:${exErr.code ?? "unknown"}` }); continue; }
       if (existHs) {
-        // already debited — nudge forwarder forward if it stalled at 5.
-        // Match the pure-wallet flip (legacy L467/L469) — no paydeposit
-        // (path #2 creates no tb_wallet_paydeposit link row).
-        const fwdPatch: Record<string, unknown> = isCredit
-          ? { fcredit: "", fdateadminstatus: nowIso }
-          : { fstatus: "6", fdateadminstatus: nowIso, fdatestatus6: nowIso };
-        await admin.from("tb_forwarder").update(fwdPatch).eq("id", Number(fid)).eq("userid", userId);
-        skipped.push({ fid, reason: "ชำระไปแล้วก่อนหน้า (idempotent)" });
-        continue;
+        // A settled pay row exists for this order. It may be a STALE ORPHAN
+        // (owner PR178) — the docs were cancelled + the order rolled back to
+        // fStatus≤5 but the settle survived → the re-collect must not dead-end.
+        const heal = await reconcileStaleForwarderPayOrphan(admin, {
+          fidNum: Number(fid),
+          legacyAdminId,
+          reason: `เก็บเงินใหม่ #${fid} — ล้างรายการชำระค้างจากเอกสารที่ถูกยกเลิก (PR178)`,
+        });
+        if (!heal.ok) { skipped.push({ fid, reason: `db_error:${heal.dbError ?? "unknown"}` }); continue; }
+        if (heal.blocked) { skipped.push({ fid, reason: heal.blockReason ?? "ชำระไปแล้วก่อนหน้า (idempotent)" }); continue; }
+        if (!heal.unwound) {
+          // The probe matched a row the stricter helper didn't resolve
+          // (typeservice≠'2' = genuine paid, fStatus stalled) → keep the legacy
+          // nudge-to-6 (pure-wallet flip · legacy L467/L469 · no paydeposit).
+          const fwdPatch: Record<string, unknown> = isCredit
+            ? { fcredit: "", fdateadminstatus: nowIso }
+            : { fstatus: "6", fdateadminstatus: nowIso, fdatestatus6: nowIso };
+          await admin.from("tb_forwarder").update(fwdPatch).eq("id", Number(fid)).eq("userid", userId);
+          skipped.push({ fid, reason: "ชำระไปแล้วก่อนหน้า (idempotent)" });
+          continue;
+        }
+        // heal.unwound → the stale orphan was un-settled; DO NOT continue —
+        // fall through to the balance pre-check + collect this row.
       }
 
       // 2. balance pre-check (re-read per row)
@@ -1259,21 +1273,41 @@ export async function adminPayForwardersWithTopUp(
     if (!u) return { ok: false, error: `ไม่พบลูกค้า ${userId}` };
 
     // 1. idempotency — legacy L212: any already-SETTLED forwarder pay row for
-    //    these IDs (typeNew 5/6, status=2) means the batch was paid → bail.
+    //    these IDs (typeNew 5/6, status=2). But a settle that survives after its
+    //    ใบวางบิล/ใบเสร็จ were cancelled + the order rolled back to fStatus≤5 is a
+    //    STALE ORPHAN (owner PR178: "กดแนบสลิปแล้วไม่ไป") — it must NOT dead-end
+    //    the re-collect. For each blocking fid we auto-reconcile the orphan
+    //    (reconcileStaleForwarderPayOrphan): fStatus≥6 = genuinely paid → keep
+    //    blocking; single-order direct-slip orphan → un-settle then proceed;
+    //    combined-slip / credit / PCSF → block with a route to the manual reverse.
     const { data: settled, error: settledErr } = await admin
       .from("tb_wallet_hs")
       .select("reforder")
       .eq("userid", userId)
       .in("typenew", ["5", "6"])
       .eq("status", "2")
-      .in("reforder", fIds)
-      .limit(1);
+      .in("reforder", fIds);
     if (settledErr) {
       console.error(`[adminPayForwardersWithTopUp idempotency] failed`, { code: settledErr.code, message: settledErr.message, userId });
       return { ok: false, error: `db_error:${settledErr.code ?? "unknown"}` };
     }
-    if (settled && settled.length > 0) {
-      return { ok: false, error: "มีรายการที่ชำระไปแล้วในชุดนี้ — ยกเลิก (โปรดรีเฟรช)" };
+    const blockingFids = Array.from(
+      new Set(
+        ((settled ?? []) as Array<{ reforder: string | null }>)
+          .map((r) => (r.reforder ?? "").trim())
+          .filter((r) => fIds.includes(r)),
+      ),
+    );
+    for (const bf of blockingFids) {
+      const heal = await reconcileStaleForwarderPayOrphan(admin, {
+        fidNum: Number(bf),
+        legacyAdminId,
+        reason: `เก็บเงินใหม่ #${bf} — ล้างรายการชำระค้างจากเอกสารที่ถูกยกเลิก (PR178)`,
+      });
+      if (!heal.ok) return { ok: false, error: `db_error:${heal.dbError ?? "unknown"}` };
+      if (heal.blocked) {
+        return { ok: false, error: heal.blockReason ?? "มีรายการที่ชำระไปแล้วในชุดนี้ — ยกเลิก (โปรดรีเฟรช)" };
+      }
     }
 
     // 2. corporate flag (legacy L255) — gates the per-row 1% allowance.
@@ -1490,6 +1524,191 @@ export async function adminPayForwardersWithTopUp(
       },
     };
   });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// reconcileStaleForwarderPayOrphan — shared un-settle CORE (owner 2026-07-16 · PR178)
+// ════════════════════════════════════════════════════════════════════════
+//
+// The pay-on-behalf CREATE gates hard-bail if a settled tb_wallet_hs row exists
+// for the selected fids (typeNew 5/6 · status=2). But a settle that SURVIVES
+// after its ใบวางบิล/ใบเสร็จ were cancelled + the order rolled back to fStatus≤5
+// is a STALE ORPHAN (owner "กดแนบสลิปแล้วไม่ไป") — dead-ending the re-collect is
+// wrong. This helper is the shared un-settle core: it re-resolves its OWN
+// forwarder + funding row so the guard→claim→refund steps are BYTE-IDENTICAL to
+// adminReverseForwarderPayment steps 2–5, WITHOUT the extra reverse steps
+// (fStatus revert / driver-stop cleanup / receipt void — the order is already
+// ≤5 with cancelled docs, so those are no-ops here). Returns:
+//   • blocked=true  → the collect MUST NOT proceed (real double-pay: fStatus≥6,
+//     credit AR, combined-slip group, or a PCSF-50 stamp) — surface blockReason.
+//   • unwound=true  → a stale settled orphan was claimed 2→3 → the collect PROCEEDS.
+//   • unwound=false, blocked=false, ok=true → nothing to heal → proceed.
+//   • ok=false      → a db error → caller surfaces db_error.
+// Money-safe: atomic .eq('status','2') claim (single winner · idempotent) BEFORE
+// the refund, refund ONLY a wallet-funded settle (never a direct bank slip),
+// never touches a combined-slip group or an fStatus≥6 order.
+// ════════════════════════════════════════════════════════════════════════
+async function reconcileStaleForwarderPayOrphan(
+  admin: ReturnType<typeof createAdminClient>,
+  args: { fidNum: number; legacyAdminId: string; reason: string },
+): Promise<{
+  ok: boolean;          // false ONLY on a db error (caller surfaces db_error)
+  unwound: boolean;     // true = a stale settled orphan was claimed 2→3 → caller PROCEEDS
+  blocked: boolean;     // true = must NOT collect (keep the dead-end / skip)
+  blockReason?: string; // Thai message when blocked
+  fundingId?: number;   // the tb_wallet_hs id un-settled
+  refunded: number;     // wallet += this (0 for direct-slip / no-op)
+  dbError?: string;     // set iff ok=false
+}> {
+  const { fidNum, legacyAdminId, reason } = args;
+
+  // 1. Read the forwarder (re-resolve so the core is self-contained).
+  const { data: fwd, error: fErr } = await admin
+    .from("tb_forwarder")
+    .select("id, userid, fstatus, fshipby, ftransportprice")
+    .eq("id", fidNum)
+    .maybeSingle<{
+      id: number;
+      userid: string | null;
+      fstatus: string | null;
+      fshipby: string | null;
+      ftransportprice: number | string | null;
+    }>();
+  if (fErr) {
+    console.error(`[reconcileStaleForwarderPayOrphan tb_forwarder read] failed`, { code: fErr.code, message: fErr.message, fid: fidNum });
+    return { ok: false, unwound: false, blocked: false, refunded: 0, dbError: fErr.code ?? "unknown" };
+  }
+  if (!fwd) {
+    // no-op — the collect's own eligibility handles a missing row.
+    return { ok: true, unwound: false, blocked: false, refunded: 0 };
+  }
+  const userid = (fwd.userid ?? "").trim();
+
+  // 2. fStatus ≥ 6 = genuinely paid/prepared/dispatched → KEEP BLOCKING (real
+  //    double-pay guard). The collect gate only selects fStatus≤5, so a ≥6
+  //    blocker means the order genuinely advanced.
+  const fstatusNum = Number((fwd.fstatus ?? "").trim());
+  if (Number.isFinite(fstatusNum) && fstatusNum >= 6) {
+    return {
+      ok: true, unwound: false, blocked: true, refunded: 0,
+      blockReason: `ออเดอร์ #${fidNum} ชำระ/เตรียมส่งแล้ว (สถานะ ${fwd.fstatus}) — ตรวจสอบก่อน`,
+    };
+  }
+
+  // 3. Resolve the SETTLED funding pay row — EXACTLY as reverse steps 2
+  //    (typenew∈{5,6} status='2' reforder=fid typeservice='2'; newest first).
+  const { data: fundingRows, error: pErr } = await admin
+    .from("tb_wallet_hs")
+    .select("id, amount, depositnamebank, reforder2, wusercredit")
+    .eq("reforder", String(fidNum))
+    .eq("typeservice", "2")
+    .in("typenew", ["5", "6"])
+    .eq("status", "2")
+    .order("id", { ascending: false })
+    .limit(1);
+  if (pErr) {
+    console.error(`[reconcileStaleForwarderPayOrphan funding row] failed`, { code: pErr.code, message: pErr.message, fid: fidNum });
+    return { ok: false, unwound: false, blocked: false, refunded: 0, dbError: pErr.code ?? "unknown" };
+  }
+  const funding = (fundingRows ?? [])[0] as
+    | { id: number; amount: number | string | null; depositnamebank: string | null; reforder2: string | null; wusercredit: string | null }
+    | undefined;
+  if (!funding) {
+    // nothing settled to heal (or the gate matched a typeservice≠'2' row) →
+    // let the collect proceed / the caller apply its legacy nudge.
+    return { ok: true, unwound: false, blocked: false, refunded: 0 };
+  }
+
+  // 4. CREDIT guard — a credit settle sets fcredit='' with NO fStatus flip, so a
+  //    genuine AR order legitimately sits at fStatus≤5. Auto-healing it would
+  //    silently reverse AR → route to the manual reverse button.
+  if ((funding.wusercredit ?? "").trim() === "1") {
+    return {
+      ok: true, unwound: false, blocked: true, refunded: 0,
+      blockReason: `ออเดอร์ #${fidNum} ชำระด้วยเครดิต — ใช้ปุ่มย้อนการชำระ (บัญชี) ก่อน`,
+    };
+  }
+
+  // 5. GROUP guard — a combined "เติม-แล้วจ่าย" settle (reforder2 set OR a
+  //    tb_wallet_paydeposit link on hno=fid) shares a refund + siblings; never
+  //    partial-reverse → block. This blocks EVERY WithTopUp-origin settle (it
+  //    writes both), so only a direct-slip anchor (PR178) heals here.
+  const hasReforder2 = (funding.reforder2 ?? "").trim() !== "";
+  const { data: link, error: linkErr } = await admin
+    .from("tb_wallet_paydeposit")
+    .select("id")
+    .eq("hno", String(fidNum))
+    .limit(1)
+    .maybeSingle<{ id: number }>();
+  if (linkErr) {
+    console.error(`[reconcileStaleForwarderPayOrphan paydeposit link probe] failed`, { code: linkErr.code, message: linkErr.message, fid: fidNum });
+    return { ok: false, unwound: false, blocked: false, refunded: 0, dbError: linkErr.code ?? "unknown" };
+  }
+  if (hasReforder2 || link != null) {
+    return {
+      ok: true, unwound: false, blocked: true, refunded: 0,
+      blockReason: `ออเดอร์ #${fidNum} ชำระแบบรวมสลิป (เติม-แล้วจ่าย) — ให้บัญชีย้อนทั้งชุดที่หน้าตรวจสลิปก่อน`,
+    };
+  }
+
+  // 6. PCSF guard — the full reverse resets ftransportprice=0; auto-heal never
+  //    writes the forwarder, so a stale ftransportprice=50 would re-price wrong
+  //    in computeForwarderDebitBatch → route PCSF-stamped orphans to the manual
+  //    reverse. (PR178 = fshipby '2' J&T → unaffected.)
+  const isPCSF50 =
+    ["PCSF", "PRF"].includes((fwd.fshipby ?? "").trim()) &&
+    Number(fwd.ftransportprice) === MAO_FLAT_FEE;
+  if (isPCSF50) {
+    return {
+      ok: true, unwound: false, blocked: true, refunded: 0,
+      blockReason: `ออเดอร์ #${fidNum} เป็นเหมาๆ (PRF) — ใช้ปุ่มย้อนการชำระ (บัญชี) ก่อน`,
+    };
+  }
+
+  // 7. ATOMIC CLAIM status 2→3 (single winner · idempotent — 0 rows = a
+  //    concurrent click already healed → proceed). Claim BEFORE refund so a
+  //    refund can never double.
+  const { data: claimed, error: claimErr } = await admin
+    .from("tb_wallet_hs")
+    .update({ status: "3", adminid: legacyAdminId, adminidupdate: legacyAdminId, note: reason })
+    .eq("id", funding.id)
+    .eq("status", "2")
+    .select("id");
+  if (claimErr) {
+    console.error(`[reconcileStaleForwarderPayOrphan claim] failed`, { code: claimErr.code, message: claimErr.message, fid: fidNum });
+    return { ok: false, unwound: false, blocked: false, refunded: 0, dbError: claimErr.code ?? "unknown" };
+  }
+  if (!claimed || claimed.length === 0) {
+    // concurrent winner already healed → proceed idempotently.
+    return { ok: true, unwound: false, blocked: false, refunded: 0 };
+  }
+
+  // 8. REFUND — ONLY when the settle DEBITED the wallet (depositnamebank=
+  //    'WALLET'). A direct bank slip (PR178 'KBANK-…') = money in the bank →
+  //    NO wallet refund. Mirrors reverse step 5.
+  const isWalletFunded = (funding.depositnamebank ?? "").trim().toUpperCase() === "WALLET";
+  const refundAmount = isWalletFunded ? Math.round(Number(funding.amount ?? 0) * 100) / 100 : 0;
+  if (refundAmount > 0 && userid) {
+    const { data: wRow, error: wErr } = await admin
+      .from("tb_wallet")
+      .select("wallettotal")
+      .eq("userid", userid)
+      .maybeSingle<{ wallettotal: number | string | null }>();
+    if (wErr) {
+      console.error(`[reconcileStaleForwarderPayOrphan wallet read for refund] failed`, { code: wErr.code, message: wErr.message, userid });
+    }
+    const before = Number(wRow?.wallettotal ?? 0);
+    const after = Math.round((before + refundAmount) * 100) / 100;
+    if (!wRow) {
+      const { error: insErr } = await admin.from("tb_wallet").insert({ userid, wallettotal: after });
+      if (insErr) console.error(`[reconcileStaleForwarderPayOrphan wallet refund insert] FAILED — money not returned`, { code: insErr.code, message: insErr.message, userid, refundAmount });
+    } else {
+      const { error: wuErr } = await admin.from("tb_wallet").update({ wallettotal: after }).eq("userid", userid);
+      if (wuErr) console.error(`[reconcileStaleForwarderPayOrphan wallet refund update] FAILED — money not returned`, { code: wuErr.code, message: wuErr.message, userid, refundAmount });
+    }
+  }
+
+  return { ok: true, unwound: true, blocked: false, fundingId: funding.id, refunded: refundAmount };
 }
 
 // ════════════════════════════════════════════════════════════════════════
