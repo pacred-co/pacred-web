@@ -87,6 +87,7 @@ function bangkokParts(d: Date): {
   yearBE2: string;
   hour: string;
   minute: string;
+  second: string;
 } {
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Asia/Bangkok",
@@ -95,6 +96,7 @@ function bangkokParts(d: Date): {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     hour12: false,
   }).formatToParts(d);
 
@@ -116,6 +118,7 @@ function bangkokParts(d: Date): {
     yearBE2,
     hour,
     minute: get("minute"),
+    second: get("second"),
   };
 }
 
@@ -141,4 +144,14 @@ export function formatThaiTime(input: Date | string | number | null | undefined)
   if (!d) return EM_DASH;
   const { hour, minute } = bangkokParts(d);
   return `${hour}.${minute} น.`;
+}
+
+// Colon-separated (not the dot the minute-precision helpers use): with three
+// components "08.16.42" reads as a date, "08:16:42" reads as a clock.
+/** "HH:MM:SS น." in Asia/Bangkok (24-hour, to the second). null/invalid → "—". */
+export function formatThaiTimeWithSeconds(input: Date | string | number | null | undefined): string {
+  const d = toDate(input);
+  if (!d) return EM_DASH;
+  const { hour, minute, second } = bangkokParts(d);
+  return `${hour}:${minute}:${second} น.`;
 }

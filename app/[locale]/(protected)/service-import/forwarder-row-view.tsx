@@ -38,6 +38,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total";
 import { forwarderCoverUrl } from "@/lib/legacy-image";
+import { diffDateTimeNow } from "@/lib/utils/elapsed-thai";
 import { CoverThumb } from "./_shared/cover-thumb";
 import { cancelOwnForwarder } from "@/actions/forwarder";
 import { confirm } from "@/components/ui/confirm";
@@ -215,44 +216,11 @@ export function modifyDmy(dmyStr: string, days: number): string {
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
-/**
- * Legacy `diffDateTimeNow($datetime2)` — member/include/function.php
- * L1074-1093. Returns the elapsed time since the credit due-date as
- * a Thai string (used in the q===c view).
- */
-export function diffDateTimeNow(datetime2: string | null): string {
-  if (!datetime2) return "";
-  const d2 = new Date(datetime2.replace(" ", "T"));
-  if (isNaN(d2.getTime())) return "";
-  const now = new Date();
-  const from = d2 < now ? d2 : now;
-  const to = d2 < now ? now : d2;
-  let y = to.getFullYear() - from.getFullYear();
-  let m = to.getMonth() - from.getMonth();
-  let day = to.getDate() - from.getDate();
-  let h = to.getHours() - from.getHours();
-  let i = to.getMinutes() - from.getMinutes();
-  let s = to.getSeconds() - from.getSeconds();
-  if (s < 0) { s += 60; i -= 1; }
-  if (i < 0) { i += 60; h -= 1; }
-  if (h < 0) { h += 24; day -= 1; }
-  if (day < 0) {
-    const prevMonth = new Date(to.getFullYear(), to.getMonth(), 0).getDate();
-    day += prevMonth;
-    m -= 1;
-  }
-  if (m < 0) { m += 12; y -= 1; }
-  if (y === 0 && m === 0 && day === 0 && h === 0 && i === 0) return "";
-  if (y === 0 && m === 0 && day === 0 && h === 0)
-    return `${i} นาที ${s} วินาที `;
-  if (y === 0 && m === 0 && day === 0)
-    return `${h} ชั่วโมง ${i} นาที ${s} วินาที `;
-  if (y === 0 && m === 0)
-    return `${day} วัน ${h} ชั่วโมง ${i} นาที ${s} วินาที `;
-  if (y === 0)
-    return `${m} เดือน ${day} วัน ${h} ชั่วโมง ${i} นาที ${s} วินาที `;
-  return `${y} ปี ${m} เดือน ${day} วัน ${h} ชั่วโมง ${i} นาที ${s} วินาที `;
-}
+// Legacy `diffDateTimeNow($datetime2)` (member/include/function.php L1074-1093).
+// The body moved to lib/utils/elapsed-thai.ts (shared with the admin tables); it is
+// imported at the top of this file and re-exported here so external importers of
+// `forwarder-row-view`'s diffDateTimeNow keep working.
+export { diffDateTimeNow };
 
 // A forwarder list row, normalised to the legacy `$row` shape the
 // table loop (forwarder.php L666-815) consumes.
