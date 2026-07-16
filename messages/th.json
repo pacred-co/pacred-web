@@ -3455,7 +3455,7 @@
       "declarations": "ใบขนสินค้า",
       "costRates": "ต้นทุนเฟรทจีน (Cost Rates)",
       "cargoDeclarations": "ใบขนรวม (CARGO)",
-      "hsLibrary": "คลัง HS (อากร)",
+      "hsLibrary": "คลัง HS CODE LIBRARY",
       "hsTriage": "คิว HS (CS กรอกก่อน)",
       "hsConsult": "ปรึกษาพิกัด HS (ก่อนออเดอร์)"
     },

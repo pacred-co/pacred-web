@@ -39,6 +39,18 @@ type Lead = {
   assigned_sale: string | null;
   call_note: string | null;
   called_at: string | null;
+  match_source: string | null;
+  matched_lead_source: string | null;
+};
+
+/** How this importer matched an existing customer — shown so sales trusts (or
+ *  double-checks) the phone. 'name_fuzzy' = a near-name hit → eyeball it first. */
+const MATCH_LABEL: Record<string, { text: string; cls: string }> = {
+  tax:          { text: "ชนเลขนิติ", cls: "border-emerald-300 bg-emerald-50 text-emerald-700" },
+  name_corp:    { text: "ชนชื่อนิติ", cls: "border-emerald-300 bg-emerald-50 text-emerald-700" },
+  name_user:    { text: "ชนชื่อลูกค้า", cls: "border-emerald-300 bg-emerald-50 text-emerald-700" },
+  lead_freight: { text: "จากไฟล์ booking เฟรท", cls: "border-cyan-300 bg-cyan-50 text-cyan-700" },
+  name_fuzzy:   { text: "⚠ ชื่อคล้าย — เช็คก่อนโทร", cls: "border-amber-400 bg-amber-50 text-amber-800" },
 };
 
 const STATUS_CHIP: Record<string, string> = {
@@ -138,6 +150,12 @@ export function CustomsLeadRow({ lead }: { lead: Lead }) {
               {lead.matched_name && <span className="text-muted"> · {lead.matched_name}</span>}
               {lead.matched_userid && <span className="text-muted"> · {lead.matched_userid}</span>}
               {lead.matched_sale && <span className="text-muted"> · เซล {lead.matched_sale}</span>}
+              {lead.match_source && MATCH_LABEL[lead.match_source] && (
+                <span className={`ml-1.5 rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${MATCH_LABEL[lead.match_source].cls}`}>
+                  {MATCH_LABEL[lead.match_source].text}
+                  {lead.matched_lead_source ? ` (${lead.matched_lead_source})` : ""}
+                </span>
+              )}
             </p>
           ) : status !== "our_own" ? (
             <p className="text-[13px] text-amber-700">☎ ยังไม่มีเบอร์ในระบบ — เซลหาต่อ (ค้นเลขนิติที่ DBD / กูเกิลชื่อบริษัท)</p>

@@ -27,7 +27,15 @@ export async function adminCreateCargoDeclarationFromItems(input: {
   forwarderId: number;
   itemIds: number[];
   declarationType?: "import" | "export";
-}): Promise<AdminActionResult<{ id: string; lineCount: number }>> {
+}): Promise<AdminActionResult<{
+  id: string;
+  lineCount: number;
+  /** HS codes on this draft whose อากร is an UNCONFIRMED placeholder/guess —
+   *  their duty_thb/vat_thb were seeded off a number nobody has verified. */
+  unconfirmedDutyCodes: string[];
+  /** HS codes not in the คลัง HS at all — seeded at 0% duty by fallback. */
+  unknownDutyCodes: string[];
+}>> {
   const forwarderId = Number(input?.forwarderId);
   const itemIds = Array.isArray(input?.itemIds) ? input.itemIds.map(Number).filter((n) => Number.isFinite(n) && n > 0) : [];
   const declarationType = input?.declarationType === "export" ? "export" : "import";
@@ -68,13 +76,32 @@ export async function adminCreateCargoDeclarationFromItems(input: {
     if (list.length === 0) return { ok: false, error: "ไม่พบสินค้าที่เลือก" };
 
     // duty rate per hs_code (best-effort).
+    //
+    // 🔴 0258 — read duty_confirmed too. default_duty_pct is NOT NULL DEFAULT 0
+    // and this function PERSISTS duty_thb/vat_thb off it, so an imported code
+    // whose duty we merely do not KNOW would be booked as a confirmed 0% =
+    // "ยกเว้นอากร". After the 2026-07-16 unification the library holds ~1,718
+    // codes, most imported from doc-bot/ใบขน — the unconfirmed ones must be
+    // reported to the Docs role, not silently zeroed. The draft is still
+    // created (this is a seed, editable before issuance); the caller warns.
     const codes = Array.from(new Set(list.map((l) => l.hs_code).filter((c): c is string => !!c)));
     const dutyByCode = new Map<string, number>();
+    const confirmedByCode = new Map<string, boolean>();
     if (codes.length) {
-      const { data: rates, error: ratesErr } = await admin.from("hs_codes").select("code, default_duty_pct").in("code", codes);
+      const { data: rates, error: ratesErr } = await admin
+        .from("hs_codes")
+        .select("code, default_duty_pct, duty_confirmed")
+        .in("code", codes);
       if (ratesErr) console.error("[cargo-decl hs duty] failed (defaults to 0)", { code: ratesErr.code, message: ratesErr.message });
-      for (const r of (rates ?? []) as Array<{ code: string; default_duty_pct: number | null }>) dutyByCode.set(r.code, Number(r.default_duty_pct ?? 0));
+      for (const r of (rates ?? []) as Array<{ code: string; default_duty_pct: number | null; duty_confirmed: boolean | null }>) {
+        dutyByCode.set(r.code, Number(r.default_duty_pct ?? 0));
+        confirmedByCode.set(r.code, r.duty_confirmed === true);
+      }
     }
+    // Codes carrying an unconfirmed duty, and codes absent from the library
+    // entirely (dutyRate silently falls back to 0 for both).
+    const unconfirmedCodes = codes.filter((c) => dutyByCode.has(c) && !confirmedByCode.get(c));
+    const unknownCodes     = codes.filter((c) => !dutyByCode.has(c));
 
     // 4. Build seed lines + header totals.
     let totDeclared = 0, totDuty = 0, totVat = 0;
@@ -126,8 +153,22 @@ export async function adminCreateCargoDeclarationFromItems(input: {
 
     await logAdminAction(adminId, "customs_declaration.create_from_cargo_items", "customs_declaration", hdr.id, {
       forwarder_id: forwarderId, item_count: seed.length, declaration_type: declarationType,
+      unconfirmed_duty_codes: unconfirmedCodes, unknown_duty_codes: unknownCodes,
     });
+    if (unconfirmedCodes.length || unknownCodes.length) {
+      console.warn("[cargo-decl] seeded with unverified duty", {
+        declaration_id: hdr.id, unconfirmed: unconfirmedCodes, unknown: unknownCodes,
+      });
+    }
 
-    return { ok: true, data: { id: hdr.id, lineCount: seed.length } };
+    return {
+      ok: true,
+      data: {
+        id: hdr.id,
+        lineCount: seed.length,
+        unconfirmedDutyCodes: unconfirmedCodes,
+        unknownDutyCodes: unknownCodes,
+      },
+    };
   });
 }

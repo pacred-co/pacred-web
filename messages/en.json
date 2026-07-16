@@ -3455,7 +3455,7 @@
       "declarations": "Customs declarations",
       "costRates": "China freight cost rates",
       "cargoDeclarations": "Consolidated cargo declaration",
-      "hsLibrary": "HS library (duty)",
+      "hsLibrary": "HS Code Library",
       "hsTriage": "HS queue (CS first)",
       "hsConsult": "HS consult (pre-order)"
     },

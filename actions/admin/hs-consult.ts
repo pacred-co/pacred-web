@@ -426,9 +426,17 @@ export async function answerHsConsultTicket(
       // blank-อากร answer resetting a curated 20%→0 would mis-hint a later
       // declaration. Read the existing row + merge: the answer wins ONLY for the
       // fields it actually supplied; blanks keep the curated value.
-      const { data: cur } = await admin
+      // §0c — destructure `error`. This read is the BASELINE for the whole
+      // non-destructive merge below: every "keep the curated value" fallback is
+      // `cur?.x ?? …`, so a silently-failed read (cur === null) does not mean
+      // "the row is new" — it means "we are blind", and enriching from blind
+      // would clobber curated description/duty/note with the answer's blanks,
+      // and (0258) downgrade an already-confirmed duty to unconfirmed. On a read
+      // error, SKIP the library enrichment entirely; the consult answer itself
+      // is already saved above, so nothing is lost.
+      const { data: cur, error: curErr } = await admin
         .from("hs_codes")
-        .select("description, description_en, default_duty_pct, form_e_duty_pct, default_stat_code, hs_note")
+        .select("description, description_en, default_duty_pct, form_e_duty_pct, default_stat_code, hs_note, duty_confirmed")
         .eq("code", d.hs_code)
         .maybeSingle<{
           description: string | null;
@@ -437,9 +445,24 @@ export async function answerHsConsultTicket(
           form_e_duty_pct: number | string | null;
           default_stat_code: string | null;
           hs_note: string | null;
+          duty_confirmed: boolean | null;
         }>();
+      if (curErr) {
+        console.error("[answerHsConsultTicket grow-library baseline read] skipping enrich", {
+          hs_code: d.hs_code, code: curErr.code, message: curErr.message,
+        });
+        revalidatePath("/admin/accounting/hs-consult");
+        revalidatePath("/admin/accounting/hs-library");
+        return { ok: true, data: { grewLibrary: false } };
+      }
       const curDuty = cur?.default_duty_pct == null ? null : Number(cur.default_duty_pct);
       const curFe = cur?.form_e_duty_pct == null ? null : Number(cur.form_e_duty_pct);
+      // 0258 — only ASSERT the duty when this answer actually supplied one.
+      // `default_duty_pct: d.duty_pct ?? curDuty ?? 0` can fall through to 0 for
+      // an answer that never mentioned อากร; stamping that "ยืนยันแล้ว" would
+      // publish ยกเว้นอากร off silence. A supplied duty = a Doc-team assertion
+      // (authoritative); otherwise inherit whatever trust the row already had.
+      const dutyConfirmed = d.duty_pct !== undefined ? true : (cur?.duty_confirmed ?? false);
       const res = await upsertHsCode({
         code: d.hs_code,
         // keep a curated description; only set it when the row is new/blank
@@ -451,6 +474,7 @@ export async function answerHsConsultTicket(
         default_stat_code: stat ?? cur?.default_stat_code ?? undefined,
         // note: fill-blank-only (don't clobber a curated note)
         hs_note: (cur?.hs_note?.trim() ? cur.hs_note : (composeHsNote(d) || undefined)),
+        duty_confirmed: dutyConfirmed,
       });
       grewLibrary = res.ok;
       if (!res.ok) {

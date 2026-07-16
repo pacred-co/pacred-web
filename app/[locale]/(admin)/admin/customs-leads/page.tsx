@@ -37,6 +37,8 @@ type Lead = {
   assigned_sale: string | null;
   call_note: string | null;
   called_at: string | null;
+  match_source: string | null;
+  matched_lead_source: string | null;
 };
 
 type SP = { view?: string; transport?: string; status?: string; sale?: string; q?: string };
@@ -87,6 +89,18 @@ export default async function CustomsLeadsPage({ searchParams }: { searchParams:
     { key: "all", label: "ทั้งหมด", count: all.length },
   ];
 
+  // transport tabs (owner 2026-07-16 "แยก tab ให้ด้วย ทั้งหมด รถ เรือ แอร์") —
+  // counts over the whole table so a tab never reads 0 just because of the view.
+  const { data: modeRows } = await admin.from("customs_importer_lead").select("transports");
+  const modeAll = (modeRows ?? []) as Array<{ transports: string[] | null }>;
+  const modeCount = (m: string) => modeAll.filter((r) => (r.transports ?? []).includes(m)).length;
+  const T_TABS: Array<{ key: string; label: string; count: number }> = [
+    { key: "", label: "ทุกทาง", count: modeAll.length },
+    { key: "road", label: "🚚 ทางรถ", count: modeCount("road") },
+    { key: "sea", label: "🚢 ทางเรือ", count: modeCount("sea") },
+    { key: "air", label: "✈️ ทางแอร์", count: modeCount("air") },
+  ];
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       <PageHeader
@@ -127,18 +141,32 @@ export default async function CustomsLeadsPage({ searchParams }: { searchParams:
         })}
       </div>
 
+      {/* transport tabs — owner: "แยก tab ให้ด้วย ทั้งหมด รถ เรือ แอร์" */}
+      <div className="flex flex-wrap gap-1.5 border-t border-border pt-3">
+        {T_TABS.map((t) => {
+          const active = (sp.transport ?? "") === t.key;
+          const params = new URLSearchParams();
+          params.set("view", view);
+          if (t.key) params.set("transport", t.key);
+          if (sp.status) params.set("status", sp.status);
+          if (sp.sale) params.set("sale", sp.sale);
+          if (sp.q) params.set("q", sp.q);
+          return (
+            <Link
+              key={t.key || "all"}
+              href={`/admin/customs-leads?${params.toString()}`}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium border ${active ? "bg-cyan-600 text-white border-cyan-700" : "bg-white dark:bg-surface border-border hover:bg-surface-alt"}`}
+            >
+              {t.label} <span className={active ? "opacity-90" : "text-muted"}>({t.count})</span>
+            </Link>
+          );
+        })}
+      </div>
+
       {/* filter form */}
-      <form action="/admin/customs-leads" method="get" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm grid gap-2 md:grid-cols-[1fr_1fr_1fr_1.5fr_auto]">
+      <form action="/admin/customs-leads" method="get" className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm grid gap-2 md:grid-cols-[1fr_1fr_1.5fr_auto]">
         <input type="hidden" name="view" value={view} />
-        <label className="space-y-1">
-          <span className="text-[11px] text-muted">ขนส่ง</span>
-          <select name="transport" defaultValue={sp.transport ?? ""} className={FILTER_INPUT}>
-            <option value="">— ทุกทาง —</option>
-            <option value="road">🚚 รถ</option>
-            <option value="sea">🚢 เรือ</option>
-            <option value="air">✈️ แอร์</option>
-          </select>
-        </label>
+        <input type="hidden" name="transport" value={sp.transport ?? ""} />
         <label className="space-y-1">
           <span className="text-[11px] text-muted">สถานะโทร</span>
           <select name="status" defaultValue={sp.status ?? ""} className={FILTER_INPUT}>

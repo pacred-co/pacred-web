@@ -340,7 +340,12 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
                   <Row label={t("rate")} value={`฿${Number(o.yuan_rate_locked).toFixed(4)}/¥`} small />
                 )}
                 {o.domestic_china_cny > 0 && (
-                  <Row label={t("chinaTransport")} value={`฿${Number(o.domestic_china_cny).toFixed(2)}`} />
+                  // 🔴 owner 2026-07-16 — the field IS CNY (domestic_china_cny · the 1688
+                  // 总运费, e.g. ¥53.90) but it rendered with a ฿ symbol → the customer read
+                  // "฿53.90" for a ¥53.90 charge. The ยอดรวม was always right (it converts
+                  // ¥×rate), only this line lied. Symbol must follow the FIELD's currency —
+                  // same as itemsSubtotal above (¥) + the receipt page's "(CNY)" row.
+                  <Row label={t("chinaTransport")} value={`¥${Number(o.domestic_china_cny).toFixed(2)}`} />
                 )}
                 <Row label={t("serviceFee")} value={`฿${Number(o.service_fee).toFixed(2)}`} />
                 <hr className="border-primary-200" />
