@@ -69,6 +69,7 @@ export function YiwuDeliveryClient() {
   const [uploadErr, setUploadErr] = useState<string | null>(null);
   const [ocrNote, setOcrNote] = useState<string | null>(null);
   const [zoomOpen, setZoomOpen] = useState(false);
+  const [imageWide, setImageWide] = useState(false); // true = รูปเต็มกว้าง (ตารางลงล่าง)
 
   // ── date (whole note) ─────────────────────────────────────────────────────
   const [arrivalDate, setArrivalDate] = useState<string>(todayIsoDate);
@@ -270,15 +271,24 @@ export function YiwuDeliveryClient() {
         <span className="text-[11px] text-muted">(ดูรูปซ้าย · คีย์ตารางขวา ตามใบส่งของเป๊ะ)</span>
       </div>
 
-      {/* two-pane: image (sticky) left · table right */}
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(320px,38%)_1fr]">
-        {/* ── LEFT · image + upload + date ─────────────────────────────────── */}
-        <div className="lg:sticky lg:top-4 space-y-3">
+      {/* layout: side-by-side (image sticky left · table right) OR image-wide (image
+          full container width on top · table below) — a toggle so staff can blow the note
+          up as big as the screen to read fine print. */}
+      <div className={imageWide ? "space-y-5" : "grid items-start gap-5 lg:grid-cols-[minmax(420px,48%)_1fr]"}>
+        {/* ── image + upload + date ────────────────────────────────────────── */}
+        <div className={imageWide ? "space-y-3" : "lg:sticky lg:top-4 space-y-3"}>
           <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-teal-300 bg-teal-50 px-3.5 py-2 text-sm font-medium text-teal-800 hover:bg-teal-100">
               <span>📷 เลือกรูปใบส่งของ</span>
               <input type="file" accept="image/*" className="hidden" onChange={(e) => onPickImage(e.target.files?.[0] ?? null)} />
             </label>
+            {imagePreview && (
+              <button type="button" onClick={() => setImageWide((v) => !v)}
+                className="inline-flex items-center gap-1 rounded-lg border border-teal-300 bg-white px-3 py-2 text-sm font-medium text-teal-700 hover:bg-teal-50"
+                title={imageWide ? "กลับไปดูรูปควบคู่ตาราง" : "ขยายรูปเต็มความกว้างจอ (อ่านง่ายสุด)"}>
+                {imageWide ? "◧ ดูควบคู่ตาราง" : "⛶ ขยายรูปเต็มกว้าง"}
+              </button>
+            )}
             {uploading && <span className="text-[11px] text-teal-700">⏳ กำลังอัปโหลด…</span>}
             {imageKey && !uploading && <span className="text-[11px] text-emerald-700">✓ อัปแล้ว</span>}
           </div>
@@ -294,7 +304,7 @@ export function YiwuDeliveryClient() {
                 title="คลิกเพื่อดูเต็มจอ"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imagePreview} alt="ใบส่งของ อี้อู" className="max-h-[70vh] w-full object-contain" />
+                <img src={imagePreview} alt="ใบส่งของ อี้อู" className={`w-full object-contain ${imageWide ? "max-h-none" : "max-h-[80vh]"}`} />
               </button>
               <span className="pointer-events-none absolute right-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white">🔍 คลิกดูเต็มจอ</span>
             </div>
