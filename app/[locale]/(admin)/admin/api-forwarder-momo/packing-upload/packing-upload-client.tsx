@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { useRouter } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import {
   previewMomoPacking,
   applyMomoPacking,
@@ -9,9 +9,6 @@ import {
 } from "@/actions/admin/momo-packing-reconcile";
 import { recordMomoPackingUpload } from "@/actions/admin/momo-packing-history";
 import { PackingHistoryPanel } from "./packing-history-panel";
-import { Warehouse } from "lucide-react";
-
-type WarehouseKey = "guangzhou" | "yiwu";
 
 const n3 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 6 }));
 const n2 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 2 }));
@@ -66,30 +63,17 @@ export function MomoPackingUploadClient() {
   // or breaks the preview/apply money path.
   const recordedB64Ref = useRef<string | null>(null);
   const [historyNonce, setHistoryNonce] = useState(0);
-  // คลังต้นทาง (ภูม 2026-07-16): กวางโจว (MOMO · มี API + reconcile เต็ม) vs อี้อู (Yiwu ·
-  // manual · โหมดพรีวิวเท่านั้น จนกว่าเส้นทาง "ใบส่งของ → แตกกล่อง" จะเปิด · owner-approved plan).
-  const [warehouse, setWarehouse] = useState<WarehouseKey>("guangzhou");
-  const isYiwu = warehouse === "yiwu";
-  const whLabel = isYiwu ? "อี้อู" : "กวางโจว";
-
-  function switchWarehouse(w: WarehouseKey) {
-    if (w === warehouse) return;
-    setWarehouse(w);
-    // เคลียร์ไฟล์/พรีวิวที่ค้าง ไม่ให้ไฟล์คลังหนึ่งหลุดข้ามไปอีกคลัง
-    setPreview(null);
-    setFileName(null);
-    setFileB64(null);
-    setToCreate(new Set());
-    setMsg(null);
-    recordedB64Ref.current = null;
-  }
+  // อี้อู (Yiwu) ย้ายไปหน้าเฉพาะ /admin/api-forwarder-yiwu แล้ว — หน้านี้ = กวางโจว (MOMO) ล้วน.
+  // ถ้าเผลออัปไฟล์อี้อูมา (detected format=yiwu) → ชี้ทางไปหน้าอี้อู แทนที่จะประมวลผลผิดที่.
+  const [yiwuFile, setYiwuFile] = useState(false);
 
   async function handleFile(file: File) {
     setMsg(null);
     setPreview(null);
+    setYiwuFile(false);
     setToCreate(new Set());
     if (!/\.xlsx$/i.test(file.name)) {
-      setMsg({ kind: "err", text: `รองรับเฉพาะไฟล์ .xlsx (packing list ของ${whLabel})` });
+      setMsg({ kind: "err", text: "รองรับเฉพาะไฟล์ .xlsx (packing list ของกวางโจว)" });
       return;
     }
     if (file.size > MAX_FILE_BYTES) {
@@ -111,20 +95,23 @@ export function MomoPackingUploadClient() {
   function runPreview(b64: string, name?: string) {
     setMsg(null);
     setPreview(null);
+    setYiwuFile(false);
     setToCreate(new Set());
     start(async () => {
       const res = await previewMomoPacking({ fileBase64: b64 });
       if (!res.ok || !res.data) { setMsg({ kind: "err", text: res.ok ? "อ่านไม่สำเร็จ" : res.error }); return; }
+      // ไฟล์อี้อู → หน้านี้ไม่ประมวลผล ชี้ไปหน้าอี้อู (money-safe · ไม่เผลอ reconcile ผิดที่)
+      if (res.data.format === "yiwu") {
+        setYiwuFile(true);
+        setFileName(name ?? null);
+        return;
+      }
       setPreview(res.data);
-      // ให้ปุ่มคลังตรงกับไฟล์จริงเสมอ (ตรวจจากไฟล์ชนะปุ่ม) → UI ปลอดภัย ไม่หลอกตา
-      const detectedWh: WarehouseKey = res.data.format === "yiwu" ? "yiwu" : "guangzhou";
-      if (detectedWh !== warehouse) setWarehouse(detectedWh);
       if (res.data.rows.length === 0) {
         setMsg({ kind: "err", text: res.data.warnings[0] ?? "อ่านไม่พบรายการพัสดุในไฟล์" });
         return;
       }
       // record this upload into history once per distinct file (fire-and-forget).
-      // อี้อู = โหมดพรีวิว → ไม่บันทึกลงประวัติ MOMO (reverse-check เทียบ MOMO API ไม่ตรงบริบท)
       if (res.data.format === "momo" && recordedB64Ref.current !== b64) {
         recordedB64Ref.current = b64;
         void recordMomoPackingUpload({ fileBase64: b64, fileName: name }).then((rec) => {
@@ -194,43 +181,19 @@ export function MomoPackingUploadClient() {
     <div className="space-y-5">
       {/* ── UPLOAD ────────────────────────────────────────────────────────────── */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
-        {/* ── เลือกคลังต้นทาง (กวางโจว = MOMO · อี้อู = Yiwu) · pill แบบหน้า ตรวจตู้ ── */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-muted">เลือกคลังต้นทาง:</span>
-          <button type="button" onClick={() => switchWarehouse("guangzhou")}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors ${
-              !isYiwu
-                ? "border-primary-600 bg-primary-600 text-white shadow-sm"
-                : "border-border bg-white text-foreground/70 hover:bg-surface-alt dark:bg-surface"
-            }`}>
-            <Warehouse className="h-3.5 w-3.5" /> กวางโจว
-          </button>
-          <button type="button" onClick={() => switchWarehouse("yiwu")}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors ${
-              isYiwu
-                ? "border-primary-600 bg-primary-600 text-white shadow-sm"
-                : "border-border bg-white text-foreground/70 hover:bg-surface-alt dark:bg-surface"
-            }`}>
-            <Warehouse className="h-3.5 w-3.5" /> อี้อู
-          </button>
-          {isYiwu && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-              โหมดพรีวิว — ยังนำเข้าระบบไม่ได้
-            </span>
-          )}
-        </div>
-
-        <label className="block text-sm font-medium">อัปโหลด packing list ของ{whLabel} (.xlsx)</label>
-        {isYiwu ? (
-          <p className="text-xs text-muted leading-relaxed">
-            ลากไฟล์ packing list ของ<strong>อี้อู</strong> (sheet 收货 · หัวจีน) มาดู — ระบบจะ<strong>แตกข้อมูลต่อ 单号</strong> ให้ตรวจ.
-            ตอนนี้เป็น<strong>โหมดพรีวิว</strong> (ยังกดนำเข้าระบบไม่ได้ · การนำเข้าอี้อูต้องอัพใบส่งของก่อน — กำลังพัฒนา).
-          </p>
-        ) : (
-          <p className="text-xs text-muted leading-relaxed">
-            อัปโหลด packing list ที่ <strong>กวางโจว (MOMO)</strong> ส่งมาตอนปิดตู้ (หนึ่งไฟล์ = หนึ่งตู้) → ระบบรวมกล่องย่อยของแต่ละแทรคกิ้ง แล้วเทียบกับข้อมูลในระบบให้
-            → ติ๊ก &quot;สร้างของที่หาย&quot; เฉพาะที่ต้องการ → กดยืนยัน. ระบบจะแก้เฉพาะรายการที่<strong>ยังไม่วางบิล</strong> แล้วคิดราคาขายใหม่ให้อัตโนมัติ.
-          </p>
+        <label className="block text-sm font-medium">อัปโหลด packing list ของกวางโจว (MOMO) (.xlsx)</label>
+        <p className="text-xs text-muted leading-relaxed">
+          อัปโหลด packing list ที่ <strong>กวางโจว (MOMO)</strong> ส่งมาตอนปิดตู้ (หนึ่งไฟล์ = หนึ่งตู้) → ระบบรวมกล่องย่อยของแต่ละแทรคกิ้ง แล้วเทียบกับข้อมูลในระบบให้
+          → ติ๊ก &quot;สร้างของที่หาย&quot; เฉพาะที่ต้องการ → กดยืนยัน. ระบบจะแก้เฉพาะรายการที่<strong>ยังไม่วางบิล</strong> แล้วคิดราคาขายใหม่ให้อัตโนมัติ.
+          <br />
+          <span className="text-[11px]">อี้อู (Yiwu) แยกหน้าแล้ว → <Link href="/admin/api-forwarder-yiwu" className="font-medium text-primary-600 underline">อี้อู (ใบส่งของ)</Link></span>
+        </p>
+        {yiwuFile && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-800">
+            📦 ไฟล์นี้เป็น <strong>packing list ของอี้อู (Yiwu)</strong> — ไม่ใช่ MOMO/กวางโจว.
+            การจับคู่อี้อูอยู่ที่หน้าเฉพาะ →{" "}
+            <Link href="/admin/api-forwarder-yiwu" className="font-semibold text-amber-900 underline">ไปหน้า อี้อู (ใบส่งของ) · ขั้นตอน 2 จับคู่ packing list</Link>
+          </div>
         )}
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -243,7 +206,7 @@ export function MomoPackingUploadClient() {
         >
           <span className="text-2xl">📦</span>
           <span className="text-sm font-medium">ลากไฟล์ .xlsx มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</span>
-          <span className="text-[11px] text-muted">packing list ปิดตู้ของ{whLabel} · จำกัด 35 MB</span>
+          <span className="text-[11px] text-muted">packing list ปิดตู้ของกวางโจว · จำกัด 35 MB</span>
           {fileName && <span className="mt-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] text-emerald-800">📎 {fileName}</span>}
           <input
             ref={fileInputRef}
@@ -301,14 +264,6 @@ export function MomoPackingUploadClient() {
             {preview.summary.billedDiffer > 0 && <span className="rounded-full bg-gray-200 text-gray-700 px-2 py-0.5">🔒 วางบิลแล้ว {preview.summary.billedDiffer}</span>}
             {preview.summary.willAdvance > 0 && <span className="rounded-full bg-indigo-100 text-indigo-800 px-2 py-0.5 font-medium">→ เลื่อนสถานะมาไทย {preview.summary.willAdvance}</span>}
           </div>
-
-          {preview.format === "yiwu" && (
-            <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800">
-              <strong>โหมดพรีวิว อี้อู (Yiwu):</strong> ตรวจข้อมูล<strong>แตกกล่องต่อ 单号</strong> จากไฟล์ packing list ได้ที่นี่ —
-              แต่<strong>ยังกดนำเข้าระบบจากหน้านี้ไม่ได้</strong>. การนำเข้าอี้อูต้อง<strong>อัพใบส่งของ (รูป) ก่อน</strong>
-              เพื่อสร้างแถวแตกกล่องที่ &quot;ถึงโกดังจีน&quot; แล้วค่อยผูกตู้ (กำลังพัฒนา · money-safe).
-            </div>
-          )}
 
           {hasWork && (
             <button

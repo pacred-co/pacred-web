@@ -336,6 +336,53 @@ body {
   }
 }
 
+/* ── Floating bottom-LEFT action button (owner 2026-07-16 "อยู่มุมซ้ายล่าง · ให้
+   responsive มีผลด้วย ไม่งั้น left sidebar มันอาจจะบังปุ่มได้").
+   The sidebar has THREE desktop widths, so a single hardcoded `left-20` is wrong in
+   two of them: pinned-open = 16rem, collapsed rail = 4rem, rail-on-hover = 16rem.
+   These rules mirror the `.admin-content` margin-left cascade directly above, so the
+   button tracks the sidebar in every state instead of being covered by it.
+   Mobile (<lg): the sidebar is an off-canvas drawer → plain 1rem gutter. */
+.admin-floating-action { left: 1rem; }
+@media (min-width: 1024px) {
+  /* pinned-open sidebar (no rail class) = 16rem */
+  .admin-floating-action { left: 17rem; transition: left 0.18s ease; }
+  /* collapsed icon rail = 4rem */
+  body.admin-sidebar-rail .admin-floating-action { left: 5rem; }
+  /* rail hover-expands back to 16rem → follow it (the sidebar is z-1050 and would
+     otherwise sit on top of the button). */
+  body.admin-sidebar-rail:has(.admin-sidebar:hover) .admin-floating-action { left: 17rem; }
+}
+
+/* ── Orange checkbox with a GUARANTEED-WHITE checkmark (owner 2026-07-16
+   "checkmark สีขาวดิ"). `accent-color` alone leaves the tick color to the browser
+   (Chromium draws it white on an orange fill, but that is not guaranteed elsewhere),
+   so this custom appearance-none control draws the tick itself — an inline white SVG
+   check — for a consistent orange-box/white-tick across every browser. Matches the
+   report-cnt checkbox the owner pointed at. */
+.pcs-check {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  cursor: pointer;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 0.25rem;
+  background: #fff center no-repeat;
+  transition: background-color 0.12s, border-color 0.12s;
+}
+.pcs-check:checked {
+  background-color: #f97316;
+  border-color: #f97316;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2016%2016'%20fill='none'%20stroke='%23fff'%20stroke-width='2.5'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M3.5%208.5l3%203%206-6'/%3E%3C/svg%3E");
+}
+.pcs-check:focus-visible {
+  outline: 2px solid rgba(249, 115, 22, 0.45);
+  outline-offset: 1px;
+}
+.pcs-check:disabled { cursor: not-allowed; opacity: 0.5; }
+
 /* ── MOTION SYSTEM (2026-07-08) — silky interactive transitions · fade-in ·
    nav cross-fade · smooth scroll · reduced-motion. Pure presentation. ── */
 @layer base {

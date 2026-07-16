@@ -44,24 +44,33 @@ export type FStatus = "1" | "2" | "3" | "4" | "5" | "6" | "7";
 // `next` = the "ให้พนักงานทำอะไรต่อ" hint (self-explaining-row standard §0g · owner
 // 2026-06-22) · `act:true` = needs a staff action NOW. Shown under the status pill
 // wherever this SOT renders, so a worker scans the queue + knows the next step.
+const FSTATUS_ICON_BASE = "/legacy/pcs/assets/images/icon/forwarder";
+
+// `icon` = the legacy per-status graphic (function.php statusForwarderBadge · the
+// hand-holding-a-Pacred-banknote for 5 = รอชำระเงิน, etc). Served from the LOCAL
+// static mount on purpose — NOT `legacyMemberUrl()`. That helper resolves against
+// `NEXT_PUBLIC_SUPABASE_URL`, and the mirror ภูม uploaded 2026-05-24 lives on PROD
+// only, so a dev machine gets a 400 → broken image (verified 2026-07-16). These are
+// in-repo static assets (public/legacy/pcs/…), not customer uploads, so the mirror
+// buys nothing here. No brand leak either way (never pcscargo.co.th · §3).
 export const FSTATUS_CFG: Record<
   FStatus,
-  { label: string; chip: string; rowBg: string; next: string; act: boolean }
+  { label: string; chip: string; rowBg: string; next: string; act: boolean; icon: string }
 > = {
   // owner 2026-07-15 — "จี๊ดจ๊าดไม่พอ · แสบตาแบบ PCS · สีสถานะที่ต้องมอง/กด ต้องเด่น" →
   // REVERSES the 2026-06-19 soften: the chip is now a LOUD solid fill (state-encoding ·
   // easy to find/read/click). rowBg bumped -50→-100 for a touch more presence (still
   // readable). Actionable statuses (4/5/6 · act:true) get the strongest fills.
-  "1": { label: "รอเข้าโกดังจีน",  chip: "bg-yellow-400 text-yellow-950 border border-yellow-500 font-bold",  rowBg: "bg-yellow-100",  next: "รอสินค้าเข้าโกดังจีน",  act: false },
-  "2": { label: "ถึงโกดังจีนแล้ว", chip: "bg-cyan-500 text-white border border-cyan-600 font-bold",           rowBg: "bg-cyan-100",    next: "รอส่งมาไทย",          act: false },
-  "3": { label: "กำลังส่งมาไทย",   chip: "bg-pink-500 text-white border border-pink-600 font-bold",           rowBg: "bg-pink-100",    next: "กำลังมา — รอถึงไทย",   act: false },
-  "4": { label: "ถึงไทยแล้ว",       chip: "bg-[#8d6e63] text-white border border-[#5d4037] font-bold",         rowBg: "bg-[#d7ccc8]",   next: "ตรวจ/แจ้งเก็บเงิน",     act: true  },
-  "5": { label: "รอชำระเงิน",       chip: "bg-red-600 text-white border border-red-700 font-bold",             rowBg: "bg-red-100",     next: "รอลูกค้าชำระ/ตรวจสลิป", act: true  },
-  "6": { label: "เตรียมส่ง",        chip: "bg-blue-600 text-white border border-blue-700 font-bold",           rowBg: "bg-blue-100",    next: "มอบงานคนขับ/จัดรถ",     act: true  },
-  "7": { label: "ส่งแล้ว",          chip: "bg-emerald-600 text-white border border-emerald-700 font-bold",     rowBg: "bg-emerald-100", next: "เสร็จสิ้น",            act: false },
+  "1": { label: "รอเข้าโกดังจีน",  chip: "bg-yellow-400 text-yellow-950 border border-yellow-500 font-bold",  rowBg: "bg-yellow-100",  next: "รอสินค้าเข้าโกดังจีน",  act: false, icon: `${FSTATUS_ICON_BASE}/forwarder-1.png` },
+  "2": { label: "ถึงโกดังจีนแล้ว", chip: "bg-cyan-500 text-white border border-cyan-600 font-bold",           rowBg: "bg-cyan-100",    next: "รอส่งมาไทย",          act: false, icon: `${FSTATUS_ICON_BASE}/forwarder-2.png` },
+  "3": { label: "กำลังส่งมาไทย",   chip: "bg-pink-500 text-white border border-pink-600 font-bold",           rowBg: "bg-pink-100",    next: "กำลังมา — รอถึงไทย",   act: false, icon: `${FSTATUS_ICON_BASE}/forwarder-3.png` },
+  "4": { label: "ถึงไทยแล้ว",       chip: "bg-[#8d6e63] text-white border border-[#5d4037] font-bold",         rowBg: "bg-[#d7ccc8]",   next: "ตรวจ/แจ้งเก็บเงิน",     act: true,  icon: `${FSTATUS_ICON_BASE}/forwarder-4.png` },
+  "5": { label: "รอชำระเงิน",       chip: "bg-red-600 text-white border border-red-700 font-bold",             rowBg: "bg-red-100",     next: "รอลูกค้าชำระ/ตรวจสลิป", act: true,  icon: `${FSTATUS_ICON_BASE}/forwarder-5.png` },
+  "6": { label: "เตรียมส่ง",        chip: "bg-blue-600 text-white border border-blue-700 font-bold",           rowBg: "bg-blue-100",    next: "มอบงานคนขับ/จัดรถ",     act: true,  icon: `${FSTATUS_ICON_BASE}/forwarder-6.png` },
+  "7": { label: "ส่งแล้ว",          chip: "bg-emerald-600 text-white border border-emerald-700 font-bold",     rowBg: "bg-emerald-100", next: "เสร็จสิ้น",            act: false, icon: `${FSTATUS_ICON_BASE}/forwarder-7.png` },
 };
 
-export function fstatusBadge(fstatus: string): { label: string; chip: string; rowBg: string; next: string; act: boolean } {
+export function fstatusBadge(fstatus: string): { label: string; chip: string; rowBg: string; next: string; act: boolean; icon?: string } {
   return FSTATUS_CFG[fstatus as FStatus] ?? { label: fstatus, chip: "bg-gray-100 text-gray-600 border border-gray-300", rowBg: "", next: "", act: false };
 }
 

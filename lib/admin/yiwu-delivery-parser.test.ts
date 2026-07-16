@@ -61,4 +61,21 @@ t("junk line with <4 numbers is not a row", () => {
   assert.equal(r.rows.length, 0);
 });
 
+// เลขที่ตู้/Packing ID (SEA…YW) captured separately, NOT as the 单号
+t("captures Packing ID, keeps 单号 distinct", () => {
+  const r = parseYiwuDeliveryOcr("เลขที่ตู้/Packing ID : SEA0625-8211YW\nPR172\nX9002653 5 45 67 51 75 1.2814");
+  assert.equal(r.packingId, "SEA0625-8211YW");
+  assert.equal(r.orderNo, "X9002653");     // 单号 wins, packing-id is NOT it
+  assert.equal(r.memberCode, "PR172");
+});
+t("no Packing ID → null (not a false-positive on the 单号)", () => {
+  const r = parseYiwuDeliveryOcr("X9002653 5 45 67 51 75 1.2814");
+  assert.equal(r.packingId, null);
+  assert.equal(r.orderNo, "X9002653");
+});
+t("real container GZS…-5T is NOT mistaken for a Packing ID", () => {
+  const r = parseYiwuDeliveryOcr("GZS260625-5T other");
+  assert.equal(r.packingId, null);          // single-digit + single-letter tail ≠ Packing-ID shape
+});
+
 console.log(`yiwu-delivery-parser: ${pass} assertions passed`);

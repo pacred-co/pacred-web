@@ -16,6 +16,12 @@ import {
 } from "@/actions/admin/yiwu-packing-reconcile";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 
+const n2 = (v: number | null | undefined) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 2 }));
+const n3 = (v: number | null | undefined) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 6 }));
+// ก×ย×ส (ซม.) ของกล่องแรก — "—" ถ้าไฟล์ไม่มีขนาด
+const dims = (w?: number | null, l?: number | null, h?: number | null) =>
+  w == null && l == null && h == null ? "—" : `${w ?? "?"}×${l ?? "?"}×${h ?? "?"}`;
+
 export function YiwuPackingClient() {
   const { confirm, dialogs } = useConfirmDialogs();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -115,27 +121,38 @@ export function YiwuPackingClient() {
             )}
           </div>
 
+          <p className="mb-1.5 text-[11px] text-muted">
+            กล่อง/น้ำหนัก/ขนาด/คิว = ข้อมูลจากไฟล์ packing (กางให้ตรวจ · ไม่ได้เอาไปคิดเงิน · ขนาด = กล่องแรก) · ผูกตู้/เลื่อนสถานะ = สิ่งที่ระบบจะทำ
+          </p>
           <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-gray-200">
-            <table className="w-full min-w-[560px] text-[13px]">
+            <table className="w-full min-w-[880px] border-collapse text-[13px] [&_td]:border [&_th]:border [&_td]:border-gray-200 [&_th]:border-gray-200">
               <thead>
                 <tr className="bg-gray-50 text-left text-[11px] text-muted">
-                  <th className="px-3 py-1.5 font-medium">เลข 单号</th>
-                  <th className="px-3 py-1.5 font-medium">ลูกค้า</th>
-                  <th className="px-3 py-1.5 font-medium">พบในระบบ</th>
-                  <th className="px-3 py-1.5 font-medium">ผูกตู้</th>
-                  <th className="px-3 py-1.5 font-medium">เลื่อนสถานะ</th>
-                  <th className="px-3 py-1.5 font-medium">หมายเหตุ</th>
+                  <th className="px-2.5 py-1.5 font-medium">เลข 单号</th>
+                  <th className="px-2.5 py-1.5 font-medium">ลูกค้า</th>
+                  <th className="px-2.5 py-1.5 font-medium">กล่อง</th>
+                  <th className="px-2.5 py-1.5 font-medium">น้ำหนัก(กก.)</th>
+                  <th className="px-2.5 py-1.5 font-medium">ขนาด ก×ย×ส(ซม.)</th>
+                  <th className="px-2.5 py-1.5 font-medium">คิว(CBM)</th>
+                  <th className="px-2.5 py-1.5 font-medium">พบในระบบ</th>
+                  <th className="px-2.5 py-1.5 font-medium">ผูกตู้</th>
+                  <th className="px-2.5 py-1.5 font-medium">เลื่อนสถานะ</th>
+                  <th className="px-2.5 py-1.5 font-medium">หมายเหตุ</th>
                 </tr>
               </thead>
               <tbody>
                 {shown.results.map((r, i) => (
-                  <tr key={i} className="border-t border-gray-100 odd:bg-white even:bg-gray-50/60">
-                    <td className="px-3 py-1.5 font-medium">{r.base}</td>
-                    <td className="px-3 py-1.5">{r.userid ?? "—"}</td>
-                    <td className="px-3 py-1.5 text-center tabular-nums">{r.matched ?? "—"}</td>
-                    <td className="px-3 py-1.5 text-center tabular-nums">{r.cabinetAssigned || "—"}</td>
-                    <td className="px-3 py-1.5 text-center tabular-nums">{r.advanced || "—"}</td>
-                    <td className="px-3 py-1.5">
+                  <tr key={i} className="odd:bg-white even:bg-gray-50/60">
+                    <td className="px-2.5 py-1.5 font-medium">{r.base}</td>
+                    <td className="px-2.5 py-1.5">{r.userid ?? "—"}</td>
+                    <td className="px-2.5 py-1.5 text-right tabular-nums">{r.boxes ?? "—"}</td>
+                    <td className="px-2.5 py-1.5 text-right tabular-nums">{n2(r.weight)}</td>
+                    <td className="px-2.5 py-1.5 text-right font-mono text-[12px] tabular-nums">{dims(r.width, r.length, r.height)}</td>
+                    <td className="px-2.5 py-1.5 text-right tabular-nums">{n3(r.cbm)}</td>
+                    <td className="px-2.5 py-1.5 text-center tabular-nums">{r.matched ?? "—"}</td>
+                    <td className="px-2.5 py-1.5 text-center tabular-nums">{r.cabinetAssigned || "—"}</td>
+                    <td className="px-2.5 py-1.5 text-center tabular-nums">{r.advanced || "—"}</td>
+                    <td className="px-2.5 py-1.5">
                       {r.ok
                         ? <span className="text-emerald-700">✓ {result ? "ทำแล้ว" : "พร้อม"}</span>
                         : <span className="text-amber-700">⊘ {r.reason}</span>}

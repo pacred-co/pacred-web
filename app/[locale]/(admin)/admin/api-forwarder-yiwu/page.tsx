@@ -61,14 +61,14 @@ export default async function AdminApiForwarderYiwuPage() {
       {/* How-it-works banner */}
       <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4 text-xs leading-relaxed text-teal-900">
         <strong>ขั้นตอน:</strong>{" "}
-        <span className="font-medium">1)</span> อัปรูปใบส่งของ ·{" "}
-        <span className="font-medium">2)</span> กด “อ่านรูป (OCR)” ให้ระบบเติมให้ก่อน (จะพลาดบ้าง — แก้ได้) ·{" "}
-        <span className="font-medium">3)</span> ตรวจ 单号 / รหัสลูกค้า (PR) / ทุกกล่อง ·{" "}
-        <span className="font-medium">4)</span> กด “เอาเข้าระบบ”. ยังไม่กด = ยังไม่เข้าระบบ.
+        <span className="font-medium">1)</span> อัปรูปใบส่งของ (โชว์ตัวใหญ่ · กด <strong>⛶ ขยายรูปเต็มกว้าง</strong> ให้ใหญ่สุด / คลิกซูมได้) ·{" "}
+        <span className="font-medium">2)</span> คีย์ตารางขวา<strong> ตามใบส่งของเป๊ะ</strong> (单号 · PR · สินค้า · กล่อง · น้ำหนัก · ยาว/กว้าง/สูง · คิว) ·{" "}
+        <span className="font-medium">3)</span> กด “เอาเข้าระบบ”. ยังไม่กด = ยังไม่เข้าระบบ.
         <br />
         <span className="text-teal-700">
+          OCR ช่วยเติมแค่ PR (จะพลาดบ้าง — แก้ได้) · 1 ใบส่งของมีได้หลาย PR (PR เป็นคอลัมน์ในตาราง) ·
           เงินคิดจากขนาด/น้ำหนักที่กรอก (ระบบตั้งราคาให้เองตามเรทอี้อู) — ยังไม่วางบิล.
-          เลขตู้จริง + สถานะ “กำลังส่งมาไทย” จะมาตอนอัปไฟล์ packing list.
+          เลขตู้จริง + สถานะ “กำลังส่งมาไทย” จะมาตอน DOC อัปไฟล์ packing list (ขั้นตอน 2 ด้านล่าง).
         </span>
       </div>
 

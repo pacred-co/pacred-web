@@ -35,7 +35,7 @@ const PRODUCTS_TYPE_LABEL: Record<string, string> = {
 };
 /** nameTransportType2 — ftransporttype code → label (1=รถ · 2=เรือ). */
 const TRANSPORT_TYPE_LABEL: Record<string, string> = {
-  "1": "🚛 ทางรถ", "2": "🚢 ทางเรือ", "3": "✈️ ทางอากาศ",
+  "1": "ทางรถ", "2": "ทางเรือ", "3": "ทางอากาศ",
 };
 
 const num = (v: number | string | null | undefined): number => {
@@ -240,9 +240,11 @@ export type PayUserFwdRow = {
   fdatestatus2: string | null;     // เข้าโกดัง
   fdatestatus3: string | null;     // ออกโกดัง
   fdatestatus4: string | null;     // ถึงไทย
-  // สถานะ / อัปเดต
+  // สถานะ / อัปเดต — WHO (adminidupdate) did the last change and WHEN
+  // (fdateadminstatus · the "ทำรายการล่าสุด" timestamp the forwarders table shows).
   fstatus: string | null;
   adminid_update: string | null;
+  fdateadminstatus: string | null;
   // F5 — เอกสารที่ครอบออเดอร์นี้ (ใบวางบิล / ใบเสร็จ) — pill links (owner PR178).
   bills: PayUserLinkedBill[];
   receipts: PayUserLinkedReceipt[];
@@ -253,7 +255,7 @@ const FWD_VIEW_COLS =
   "ftransportpricechnthb, priceother, fdiscount, fusercompany, ftrackingchn, fstatus, fcredit, " +
   "fdatetothai, ftransporttype, fcover, fdetail, fproductstype, adminidcreator, reforder, " +
   "fnote, fnoteuser, fweight, fvolume, famount, famountcount, adminidkey, fcabinetnumber, " +
-  "fdatecontainerclose, fpallet, ftrackingth, fdatestatus2, fdatestatus3, fdatestatus4, adminidupdate";
+  "fdatecontainerclose, fpallet, ftrackingth, fdatestatus2, fdatestatus3, fdatestatus4, adminidupdate, fdateadminstatus";
 
 type FwdRaw = ForwarderDebitRow & {
   fdate: string | null; ftrackingchn: string | null; fstatus: string | null; fcredit: string | null;
@@ -264,7 +266,7 @@ type FwdRaw = ForwarderDebitRow & {
   famount: number | string | null; famountcount: number | string | null; adminidkey: string | null;
   fcabinetnumber: string | null; fdatecontainerclose: string | null; fpallet: string | null;
   ftrackingth: string | null; fdatestatus2: string | null; fdatestatus3: string | null;
-  fdatestatus4: string | null; adminidupdate: string | null;
+  fdatestatus4: string | null; adminidupdate: string | null; fdateadminstatus: string | null;
 };
 
 export async function getPayUserForwarderView(
@@ -364,6 +366,7 @@ export async function getPayUserForwarderView(
         fdatestatus4: r.fdatestatus4 && r.fdatestatus4 !== "0000-00-00 00:00:00" ? r.fdatestatus4 : null,
         fstatus: r.fstatus,
         adminid_update: (r.adminidupdate ?? "").trim() || null,
+        fdateadminstatus: r.fdateadminstatus && r.fdateadminstatus !== "0000-00-00 00:00:00" ? r.fdateadminstatus : null,
         bills: billsByFid.get(Number(r.id)) ?? [],
         receipts: receiptsByFid.get(Number(r.id)) ?? [],
       };
