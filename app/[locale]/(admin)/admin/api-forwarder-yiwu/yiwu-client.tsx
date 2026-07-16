@@ -5,11 +5,14 @@
  *
  * FLAT Excel-style table (ภูม 2026-07-16: "เอาง่ายๆ เป็นตารางแบบ excel · ในรูปใบส่งของ
  * มันก็มาเป็นตาราง"). One row per box-group — columns mirror the ใบส่งของ (单号 · Pack ·
- * Weight · L/W/H · CBM · สินค้า). Because the อี้อู ใบส่งของ is image-only (OCR-weak), the
- * box detail is pulled from the packing Excel: upload it → click a 单号 chip → its box
- * rows drop straight into the table (no typing). Staff reviews · a single PR (Step 2)
- * covers the whole note · commit groups rows by 单号 into box-split shipments. Money-safe:
- * client pre-fill only; the create action re-validates every field server-side.
+ * Weight · L/W/H · CBM · สินค้า).
+ *
+ * FLOW (ภูม+เดฟ 2026-07-16): CS uploads the ใบส่งของ IMAGE (preview + OCR grabs the PR) →
+ * CS KEYS the box rows off the note straight into this table → submit → orders land at
+ * "ถึงโกดังจีน" (fstatus 2). DOC later uploads the packing list (Step 2) → matches
+ * trackings → advances to "กำลังส่งมาไทย". No packing pre-fill at create time — CS types
+ * from the note. A single PR (Step 2) covers the whole note · commit groups rows by 单号
+ * into box-split shipments. Money-safe: the create action re-validates every field server-side.
  */
 
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -19,8 +22,6 @@ import {
   uploadYiwuDeliveryImage,
   type YiwuCreateSummary,
 } from "@/actions/admin/yiwu-delivery-note";
-import { previewYiwuBoxesFromPacking } from "@/actions/admin/yiwu-packing-reconcile";
-import type { YiwuPackingBox } from "@/lib/admin/yiwu-packing-boxes";
 import { OcrExtract } from "@/components/ocr/ocr-extract";
 import { parseYiwuDeliveryOcr } from "@/lib/admin/yiwu-delivery-parser";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
@@ -64,15 +65,6 @@ export function YiwuDeliveryClient() {
   const [memberCode, setMemberCode] = useState("");
   const [arrivalDate, setArrivalDate] = useState<string>(todayIsoDate);
 
-  // ── packing pre-fill ─────────────────────────────────────────────────────
-  const packingFileRef = useRef<HTMLInputElement>(null);
-  const [packingBoxes, setPackingBoxes] = useState<Record<string, YiwuPackingBox[]> | null>(null);
-  const [packingOrderNos, setPackingOrderNos] = useState<string[]>([]);
-  const [packingContainer, setPackingContainer] = useState<string | null>(null);
-  const [packingLoading, setPackingLoading] = useState(false);
-  const [packingNote, setPackingNote] = useState<string | null>(null);
-  const [chipSearch, setChipSearch] = useState("");
-
   // ── the flat table (Step 3) ──────────────────────────────────────────────
   const [rows, setRows] = useState<FlatRow[]>([emptyRow(1)]);
 
@@ -106,62 +98,15 @@ export function YiwuDeliveryClient() {
     }
   }
 
-  // OCR only helps with the PR (the table is filled from the packing Excel).
+  // OCR only helps with the PR — CS keys the box rows off the note into the table.
   function onOcrText(text: string) {
     const p = parseYiwuDeliveryOcr(text);
     if (p.memberCode && !memberCode) {
       setMemberCode(p.memberCode);
       setOcrNote(`อ่านรหัสลูกค้าได้: ${p.memberCode} — ตรวจให้ตรงกับรูป`);
     } else {
-      setOcrNote("อ่านรูปแล้ว — กรอกรหัสลูกค้า (PR) เอง แล้วดึงกล่องจากไฟล์ packing ด้านล่าง");
+      setOcrNote("อ่านรูปแล้ว — กรอกรหัสลูกค้า (PR) เอง แล้วคีย์กล่องจากใบส่งของลงตารางด้านล่าง");
     }
-  }
-
-  // ── packing upload → chip list ───────────────────────────────────────────
-  const boxToRow = (orderNo: string, b: YiwuPackingBox): FlatRow => ({
-    id: nextId(),
-    orderNo,
-    boxCount: String(b.boxCount),
-    weightKg: b.weightKg ? String(b.weightKg) : "",
-    lengthCm: b.lengthCm ? String(b.lengthCm) : "",
-    widthCm: b.widthCm ? String(b.widthCm) : "",
-    heightCm: b.heightCm ? String(b.heightCm) : "",
-    cbm: b.cbm ? String(b.cbm) : "",
-    productType: b.productType,
-  });
-
-  async function onPackingFile(file: File | null) {
-    setPackingNote(null);
-    if (!file) return;
-    setPackingLoading(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await previewYiwuBoxesFromPacking(fd);
-      if (!res.ok) { setPackingNote(`⚠ ${res.error}`); return; }
-      if (res.data) {
-        setPackingBoxes(res.data.boxesByOrderNo);
-        setPackingOrderNos(res.data.orderNos);
-        setPackingContainer(res.data.container);
-        setPackingNote(`พบ ${res.data.orderNos.length} เลข 单号 ในไฟล์ — คลิกเลขที่เป็นของลูกค้านี้ (จากรูปใบส่งของ) เพื่อเพิ่มลงตาราง`);
-      }
-    } catch {
-      setPackingNote("⚠ อ่านไฟล์ packing ไม่สำเร็จ — ลองใหม่");
-    } finally {
-      setPackingLoading(false);
-    }
-  }
-
-  /** Click a 单号 chip → drop its box rows into the table (dedupe · replace the lone blank row). */
-  function addOrderNo(orderNo: string) {
-    const boxes = packingBoxes?.[orderNo];
-    if (!boxes || boxes.length === 0) return;
-    setRows((prev) => {
-      if (prev.some((r) => r.orderNo.trim() === orderNo)) return prev; // already added
-      const newRows = boxes.map((b) => boxToRow(orderNo, b));
-      const isBlankOnly = prev.length === 1 && !prev[0]!.orderNo.trim() && !prev[0]!.weightKg && !prev[0]!.cbm;
-      return isBlankOnly ? newRows : [...prev, ...newRows];
-    });
   }
 
   // ── flat table mutations ─────────────────────────────────────────────────
@@ -252,10 +197,6 @@ export function YiwuDeliveryClient() {
   const cellCls =
     "w-full rounded-md border border-gray-300 px-1.5 py-1 text-[13px] text-right tabular-nums focus:border-teal-500 focus:ring-1 focus:ring-teal-500";
 
-  const filteredChips = packingOrderNos
-    .filter((o) => !chipSearch.trim() || o.toLowerCase().includes(chipSearch.trim().toLowerCase()))
-    .filter((o) => !rows.some((r) => r.orderNo.trim() === o));
-
   return (
     <div className="space-y-5">
       {/* ── STEP 1 · upload image ──────────────────────────────────────── */}
@@ -316,46 +257,12 @@ export function YiwuDeliveryClient() {
       <section className="rounded-2xl border border-gray-200 bg-surface p-5 shadow-sm">
         <div className="mb-3 flex items-center gap-2">
           <span className="grid h-6 w-6 place-items-center rounded-full bg-teal-600 text-[13px] font-bold text-white">3</span>
-          <h2 className="text-base font-semibold">ตารางกล่อง (เหมือนใบส่งของ · แก้ได้ทุกช่อง)</h2>
+          <h2 className="text-base font-semibold">ตารางกล่อง (คีย์จากใบส่งของ · แก้ได้ทุกช่อง)</h2>
         </div>
-
-        {/* packing pull → 单号 chips */}
-        <div className="mb-3 rounded-xl border border-sky-200 bg-sky-50/70 p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[12px] font-medium text-sky-900">⚡ ดึงกล่องจากไฟล์ packing list (แม่นกว่า OCR):</span>
-            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-[12px] font-medium text-sky-800 hover:bg-sky-100">
-              <span>📦 เลือกไฟล์ packing (.xlsx)</span>
-              <input ref={packingFileRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={(e) => onPackingFile(e.target.files?.[0] ?? null)} />
-            </label>
-            {packingLoading && <span className="text-[11px] text-sky-700">⏳ กำลังอ่าน…</span>}
-            {packingContainer && <span className="text-[11px] text-sky-700">ตู้ {packingContainer}</span>}
-          </div>
-          {packingNote && <p className="mt-1.5 text-[11px] text-sky-900">💡 {packingNote}</p>}
-          {packingBoxes && packingOrderNos.length > 0 && (
-            <div className="mt-2">
-              <input
-                value={chipSearch}
-                onChange={(e) => setChipSearch(e.target.value)}
-                placeholder="🔎 ค้นเลข 单号…"
-                className="mb-2 w-full max-w-xs rounded-lg border border-sky-300 px-2.5 py-1 text-[12px] focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-              />
-              <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
-                {filteredChips.slice(0, 60).map((o) => (
-                  <button
-                    key={o}
-                    type="button"
-                    onClick={() => addOrderNo(o)}
-                    className="rounded-md border border-sky-300 bg-white px-2 py-1 text-[11px] font-medium text-sky-800 hover:bg-sky-100"
-                  >
-                    ＋ {o} <span className="text-sky-500">({packingBoxes[o]?.length ?? 0} กล่อง)</span>
-                  </button>
-                ))}
-                {filteredChips.length === 0 && <span className="text-[11px] text-sky-600">— เพิ่มครบแล้ว หรือไม่พบเลขที่ค้นหา —</span>}
-                {filteredChips.length > 60 && <span className="text-[11px] text-sky-600">…และอีก {filteredChips.length - 60} (พิมพ์ค้นหาเพื่อกรอง)</span>}
-              </div>
-            </div>
-          )}
-        </div>
+        <p className="mb-3 text-[12px] text-muted">
+          คีย์ข้อมูลกล่องจากรูปใบส่งของ (ด้านบน) ลงตารางนี้ทีละแถว — ขนาดต่างกันแยกคนละแถว.
+          เลขตู้จริง + สถานะ “กำลังส่งมาไทย” จะมาตอน DOC อัปไฟล์ packing list (ขั้นตอน 2 ด้านล่าง).
+        </p>
 
         {/* the flat table */}
         <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-gray-200">
