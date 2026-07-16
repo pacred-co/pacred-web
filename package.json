@@ -19,10 +19,11 @@
     "audit:i18n": "node scripts/i18n-audit.mjs",
     "audit:i18n-keys": "node scripts/i18n-key-audit.mjs",
     "audit:images": "node scripts/audit-images.mjs",
-    "audit:all": "pnpm audit:md && pnpm audit:env && pnpm audit:i18n && pnpm audit:i18n-keys",
+    "audit:all": "pnpm audit:md && pnpm audit:env && pnpm audit:i18n && pnpm audit:i18n-keys && pnpm audit:currency",
     "check:connections": "node scripts/check-connections.mjs",
     "typecheck": "node scripts/tsc-check.mjs",
-    "verify": "pnpm lint && pnpm typecheck && pnpm test:unit && pnpm audit:all"
+    "verify": "pnpm lint && pnpm typecheck && pnpm test:unit && pnpm audit:all",
+    "audit:currency": "node scripts/currency-symbol-audit.mjs"
   },
   "dependencies": {
     "@ericblade/quagga2": "^1.12.1",

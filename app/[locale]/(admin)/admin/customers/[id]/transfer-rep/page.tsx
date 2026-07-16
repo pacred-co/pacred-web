@@ -90,7 +90,10 @@ export default async function TransferRepPage({
   const forwarderCount  = (forwarderAgg ?? []).length;
   const forwarderTotal  = sum(forwarderAgg, "total_price");
   const yuanCount       = yuanRows.length;
-  const yuanTotal       = sum(yuanRows, "paythb");
+  // à¸à¸²à¸à¹à¸­à¸à¸«à¸¢à¸§à¸: the ROW is a yuan-transfer job but this sums `paythb` = the BAHT
+  // the customer paid (owner 2026-07-16 currency-display sweep â the old name
+  // "yuanTotal" lied, which is exactly how a à¸¿-on-yuan bug starts).
+  const yuanRowsThbTotal       = sum(yuanRows, "paythb");
   const forwarderLastDate = (forwarderLast as { created_at?: string } | null)?.created_at ?? null;
 
   const customerDisplay = p.account_type === "juristic" && p.company_name
@@ -166,7 +169,7 @@ export default async function TransferRepPage({
       <section className="grid sm:grid-cols-3 gap-3">
         <Stat label="จำนวนรายการฝากสั่ง" sub={`฿${shopTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}     value={String(shopCount)} />
         <Stat label="จำนวนรายการฝากนำเข้า" sub={`฿${forwarderTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`} value={String(forwarderCount)} />
-        <Stat label="จำนวนรายการโอนหยวน" sub={`฿${yuanTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}        value={String(yuanCount)} />
+        <Stat label="จำนวนรายการโอนหยวน" sub={`฿${yuanRowsThbTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`}        value={String(yuanCount)} />
       </section>
 
       {/* Current state */}
