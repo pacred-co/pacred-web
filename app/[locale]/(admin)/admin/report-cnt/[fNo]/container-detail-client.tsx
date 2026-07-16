@@ -443,7 +443,14 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
       <tr
         key={`sum-${gkey}-${g[0].id}`}
         onClick={() => toggleGroup(gkey)}
-        className="pcs-row pcs-row-group cursor-pointer"
+        /* 🔴 owner 2026-07-16 "หัวข้อสีแดงพอเปิดมาข้างในสีขาว คืออะไรนิ้ · ใช้สีอื่นไป
+           เลย · หัวตารางรายการ · เทาๆหน่อยก็ได้" — this row is a GROUP HEADER, not a
+           data row, but it wore the data tint `pcs-row` (legacy alert-danger pink)
+           unconditionally. Its children render white once they're in the check queue
+           → a red header opening onto white rows, which reads as a bug. A header is
+           now neutral GREY: it states what the group IS, never its money/queue state
+           (the children own that). */
+        className="pcs-row-group cursor-pointer"
       >
         {checkColumn && (
           <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
@@ -752,11 +759,22 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                 const r = it.r;
                 // Legacy row colour: base = alert-danger (pink) · ticked =
                 // bg-color-select (green-blue) · already-in-check = bg-color-check.
+                //
+                // 🔴 owner 2026-07-16 "ทำไมยังแดงอยู่เลย · บางงานเก็บตังไปแล้ว ส่งไปแล้ว" —
+                // the tint was decided by the CHECK QUEUE alone, so a row that is already
+                // billed/paid/delivered (fstatus ≥ 6) still screamed pink forever just
+                // because nobody ever added it to a check list. The pink is supposed to
+                // mean "ยังไม่ได้ตรวจ/ยังเก็บเงินไม่ได้" — on a settled row it is a lie, and
+                // a page where everything is red tells staff nothing. Settled rows now go
+                // neutral-done, so red once again means "ต้องทำอะไรสักอย่าง".
+                const settled = isRowSettled(r.fstatus);
                 const rowCls = selected.has(r.id)
                   ? "pcs-row-selected"
                   : r.inCheckQueue
                     ? "pcs-row-check"
-                    : "pcs-row";
+                    : settled
+                      ? "pcs-row-done"
+                      : "pcs-row";
                 return (
                 <tr
                   key={r.id}
@@ -1349,6 +1367,18 @@ function productTypeLabel(t: string | null): string {
 function shipByLabel(s: string | null): string {
   const k = (s ?? "").trim();
   return SHIP_BY_LABEL[k] ?? (k || "-");
+}
+
+/**
+ * A row whose money+dispatch work is DONE — fstatus 6 (เตรียมส่ง · already billed AND
+ * paid) / 7 (ส่งแล้ว) / 8. Owner 2026-07-16: such a row must never wear the "ยังไม่ได้
+ * ตรวจ" pink. 5 (รอชำระเงิน) is NOT settled — that one still needs the money, so it
+ * stays red on purpose. Kept next to legacyStatusClass() so both status→colour maps
+ * live in one place.
+ */
+function isRowSettled(fstatus: string | null): boolean {
+  const s = (fstatus ?? "").trim();
+  return s === "6" || s === "7" || s === "8";
 }
 
 // Legacy report-cnt "สถานะสินค้า" badge colour by fstatus — 1:1 with the legacy

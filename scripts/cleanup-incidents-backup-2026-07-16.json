@@ -1,0 +1,148 @@
+{
+  "snapshot": [
+    {
+      "id": "1580abc0-2d5c-48a1-b7ab-d07ce318e0f9",
+      "status": "open",
+      "source": "server",
+      "kind": "server_error",
+      "title": "Wallet reconciliation: stored tb_wallet.wallettotal is in an impossible/inconsistent state for one or more customers (negative balance and/or pending-debit overdraft). READ-ONLY scan — investigate by ",
+      "route": "/api/cron/wallet-reconcile"
+    },
+    {
+      "id": "19affab5-9bd0-4a38-9513-3e0ba72fd855",
+      "status": "open",
+      "source": "portal",
+      "kind": "js_error",
+      "title": "Failed to load chunk /_next/static/chunks/02_9k0.raghyb.js?dpl=dpl_CV9Ndyyon1VgnKtAdN1TcrNAH28f from module 794878",
+      "route": "/payment-due"
+    },
+    {
+      "id": "1deb6406-18a3-46d0-a38e-7e582f7dbf49",
+      "status": "open",
+      "source": "admin",
+      "kind": "js_error",
+      "title": "Load failed",
+      "route": "/admin/leads"
+    },
+    {
+      "id": "1f1388f8-6712-4c1c-bfbc-a0b04e5cdb87",
+      "status": "open",
+      "source": "server",
+      "kind": "failed_action",
+      "title": "[createBillingRunInvoice] NEXT_HTTP_ERROR_FALLBACK;404",
+      "route": null
+    },
+    {
+      "id": "2ddbc2f2-f730-411c-94e1-016a3a081220",
+      "status": "open",
+      "source": "admin",
+      "kind": "js_error",
+      "title": "Failed to load chunk /_next/static/chunks/0yoyi4i8iqjk7.js?dpl=dpl_7iTjEmY28GmMzLM4zGtv3BBS1zzK from module 794878",
+      "route": "/admin/forwarders/52312"
+    },
+    {
+      "id": "30153ef9-ac14-4fe3-bb59-c49f37965eba",
+      "status": "open",
+      "source": "admin",
+      "kind": "js_error",
+      "title": "An unexpected response was received from the server.",
+      "route": "/admin/drivers/new"
+    },
+    {
+      "id": "362bcd30-1bbd-4397-9ebc-e5da94d26c1c",
+      "status": "open",
+      "source": "admin",
+      "kind": "js_error",
+      "title": "Load failed",
+      "route": "/"
+    },
+    {
+      "id": "43f72df9-418f-4cd8-a399-b8092da4ef19",
+      "status": "open",
+      "source": "server",
+      "kind": "server_error",
+      "title": "Wallet reconciliation: stored tb_wallet.wallettotal is in an impossible/inconsistent state for one or more customers (negative balance and/or pending-debit overdraft). READ-ONLY scan — investigate by ",
+      "route": "/api/cron/wallet-reconcile"
+    },
+    {
+      "id": "4fee273a-d3f5-4807-a0e0-c7af5de0d386",
+      "status": "open",
+      "source": "public",
+      "kind": "js_error",
+      "title": "Failed to load chunk /_next/static/chunks/0c6_kdoprb1q7.js?dpl=dpl_EY8ZagkKK8B8CujMWuCWrdzusKaZ from module 794878",
+      "route": "/login"
+    },
+    {
+      "id": "828c59c5-44d3-4997-8dca-c61aa9863bdc",
+      "status": "open",
+      "source": "server",
+      "kind": "server_error",
+      "title": "Wallet reconciliation: stored tb_wallet.wallettotal is in an impossible/inconsistent state for one or more customers (negative balance and/or pending-debit overdraft). READ-ONLY scan — investigate by ",
+      "route": "/api/cron/wallet-reconcile"
+    },
+    {
+      "id": "86ce34ff-2421-4253-be8b-8caf65ca2924",
+      "status": "open",
+      "source": "server",
+      "kind": "server_error",
+      "title": "Wallet reconciliation: stored tb_wallet.wallettotal is in an impossible/inconsistent state for one or more customers (negative balance and/or pending-debit overdraft). READ-ONLY scan — investigate by ",
+      "route": "/api/cron/wallet-reconcile"
+    },
+    {
+      "id": "885b55b2-db12-44b7-8fa7-21d80ec807eb",
+      "status": "open",
+      "source": "server",
+      "kind": "server_error",
+      "title": "Wallet reconciliation: stored tb_wallet.wallettotal is in an impossible/inconsistent state for one or more customers (negative balance and/or pending-debit overdraft). READ-ONLY scan — investigate by ",
+      "route": "/api/cron/wallet-reconcile"
+    },
+    {
+      "id": "9648dfbe-44cf-43f5-9b64-27e747d09124",
+      "status": "open",
+      "source": "server",
+      "kind": "server_error",
+      "title": "Wallet reconciliation: stored tb_wallet.wallettotal is in an impossible/inconsistent state for one or more customers (negative balance and/or pending-debit overdraft). READ-ONLY scan — investigate by ",
+      "route": "/api/cron/wallet-reconcile"
+    },
+    {
+      "id": "ae221220-87e4-4db1-9e16-56a26765f1a7",
+      "status": "open",
+      "source": "portal",
+      "kind": "js_error",
+      "title": "Failed to load chunk /_next/static/chunks/11o1wossefb3l.js?dpl=dpl_38Fxav1m8ygvkF3TP259NFEznFZC from module 794878",
+      "route": "/"
+    },
+    {
+      "id": "baf623be-9a5b-4b8b-b805-e151f1f3f7cb",
+      "status": "open",
+      "source": "public",
+      "kind": "js_error",
+      "title": "Failed to load chunk /_next/static/chunks/088qo~_15bl5n.js?dpl=dpl_9qgcqkRcfMguPdZSfvuSx1LUzEcG from module 794878",
+      "route": "/customs-clearance-shipping-suvarnabhumi"
+    },
+    {
+      "id": "ce433c3c-de2a-4b51-9999-84ae67f0261b",
+      "status": "open",
+      "source": "portal",
+      "kind": "js_error",
+      "title": "Error in input stream",
+      "route": "/search"
+    },
+    {
+      "id": "ef736217-2847-4c32-8ce8-b7feb326d814",
+      "status": "open",
+      "source": "portal",
+      "kind": "js_error",
+      "title": "Load failed",
+      "route": "/k/PR188-bae87a99a5225d1bcd70ab293a744aba"
+    },
+    {
+      "id": "f0f417f9-5115-4383-bdb7-842afee6485d",
+      "status": "open",
+      "source": "admin",
+      "kind": "js_error",
+      "title": "An unexpected response was received from the server.",
+      "route": "/admin/forwarders/52346"
+    }
+  ]
+}

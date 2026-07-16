@@ -53,6 +53,7 @@ import { exportReportCntAll } from "@/actions/admin/export/report-cnt";
 import { CntListTable, type CntListRow } from "./cnt-list-table";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import { isContainerInBucket } from "@/lib/admin/report-cnt-bucket";
+import { resolvePackingConfirmedCabs } from "@/lib/admin/packing-confirmed-cabs";
 import {
   getContainerCompletenessBatch,
   type ContainerCompleteness,
@@ -395,20 +396,19 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
       ? await resolveMomoContainerInfo(admin, grouped.map((g) => g.fcabinetnumber), tracksByCab)
       : {};
 
-  // G1 combo-flow (2026-07-08) — which of the visible containers have a MOMO packing-list
-  // reconcile stamp (mig 0245). Drives the "📦 packing ✓ / ⏳ ยังไม่อัพ" badge so staff
-  // see which containers are ready to bill. One tiny scoped lookup on container_no.
+  // G1 combo-flow (2026-07-08) — which of the visible containers are packing-confirmed.
+  // Drives the "📦 packing ✓ / ⏳ ยังไม่อัพ" badge so staff see which containers are
+  // ready to bill.
+  //
+  // 🔴 owner 2026-07-16 "อัพแพคกิ้งลิสไปแล้ว GZE260714-1/GZS260710-2/GZS260712-1 แต่หน้า
+  // รายการตู้บอกยังไม่อัพ" — this read ONLY container_packing_reconcile (mig 0245) while
+  // the upload the banner tells staff to use writes momo_packing_upload (mig 0254). The
+  // billing gate was fixed for exactly this on 2026-07-14 but THIS page kept its own copy
+  // of the query → the same class stayed alive on a second surface. Both now go through
+  // the ONE SOT (reconcile OR upload = confirmed) so they can never disagree again.
+  const packingConfirmed = await resolvePackingConfirmedCabs(admin, grouped.map((g) => g.fcabinetnumber));
   const packingByCab: Record<string, boolean> = {};
-  if (grouped.length > 0) {
-    const { data: recRows, error: recErr } = await admin
-      .from("container_packing_reconcile")
-      .select("container_no")
-      .in("container_no", grouped.map((g) => g.fcabinetnumber));
-    if (recErr) {
-      console.error("[report-cnt packingByCab] failed", { code: recErr.code, message: recErr.message });
-    }
-    for (const rr of (recRows ?? []) as { container_no: string }[]) packingByCab[rr.container_no] = true;
-  }
+  for (const cab of packingConfirmed) packingByCab[cab] = true;
 
   // Wave 17 ux-fix: totals computation moved to <CntListTable> client
   // component (alongside rendering) — keeps the server query minimal.

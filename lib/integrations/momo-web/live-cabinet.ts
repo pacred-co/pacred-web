@@ -45,7 +45,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MomoLiveParcel } from "./types";
 import { baseTrackingOf } from "./live-parcel-metrics";
-import { decideCabinetFill, isRealContainerCode, closeDateFromParcel } from "./live-cabinet-plan";
+import { decideCabinetFill, isRealContainerCode, closeDateFromParcel, realContainerByBase } from "./live-cabinet-plan";
 
 /** fstatus codes IN or THROUGH billing — a cabinet fill must NEVER regroup these. */
 const BILLED_FSTATUS = new Set(["5", "6", "7"]);
@@ -89,49 +89,6 @@ type ForwarderCabinetRow = {
   fdatecontainerclose: string | null;
 };
 
-/** The REAL container + its close date resolved for a base tracking. */
-type BaseContainerInfo = {
-  container: string;
-  /** วันปิดตู้ from the parcel's status_date (prepare_export→exported); null if not yet closed on MOMO. */
-  closeDate: string | null;
-};
-
-/**
- * PURE — pick the REAL container + its close date per BASE tracking from a set of
- * Live parcels.
- *
- * A base tracking's boxes all share one container, so we take the FIRST real
- * container seen for that base (the split boxes never disagree on the ตู้). Only
- * REAL containers (GZS/GZE/GZA) are kept; a parcel whose containerName is a
- * routing-batch/sack/empty is ignored. The close date is read from the SAME parcel
- * that supplied the container (its status_date · prepare_export→exported); if that
- * parcel's status_date has no close phase yet, we scan the base's other split
- * siblings for one (they share the container, so any sibling's close phase applies).
- * Returns Map<baseTracking, {container, closeDate}>.
- */
-export function realContainerByBase(
-  parcels: readonly MomoLiveParcel[],
-): Map<string, BaseContainerInfo> {
-  const byBase = new Map<string, BaseContainerInfo>();
-  for (const p of parcels) {
-    const tracking = (p.tracking ?? "").trim();
-    if (!tracking) continue;
-    const container = (p.containerName ?? "").trim();
-    if (!isRealContainerCode(container)) continue;
-    const base = baseTrackingOf(tracking);
-    const closeDate = closeDateFromParcel(p);
-    const prev = byBase.get(base);
-    if (!prev) {
-      byBase.set(base, { container, closeDate });
-    } else if (!prev.closeDate && closeDate) {
-      // keep the first real container, but adopt a close date from a sibling
-      // that has one (they share the container/close event).
-      prev.closeDate = closeDate;
-    }
-  }
-  return byBase;
-}
-
 /**
  * Fill tb_forwarder.fcabinetnumber from the REAL Live container, for the rows
  * matched by an already-collected set of Live parcels (the same boards the STATUS
@@ -146,9 +103,10 @@ export async function fillLiveCabinetForParcels(
   parcels: readonly MomoLiveParcel[],
   result: LiveCabinetFillResult = emptyCabinetFillResult(),
 ): Promise<LiveCabinetFillResult> {
-  const infoByBase = realContainerByBase(parcels);
+  const index = realContainerByBase(parcels);
+  const { byExact: infoByExact, byBase: infoByBase } = index;
   result.baseTrackingsWithContainer = infoByBase.size;
-  if (infoByBase.size === 0) return result;
+  if (infoByExact.size === 0) return result;
 
   // Look up on BOTH the base keys AND every exact tracking we saw (some rows are
   // stored under the suffixed exact form).
@@ -187,9 +145,16 @@ export async function fillLiveCabinetForParcels(
   for (const row of rowsById.values()) {
     const rowTracking = (row.ftrackingchn ?? "").trim();
     if (!rowTracking) continue;
+    // 🔴 owner 2026-07-16 — resolve THIS ROW's own container first. MOMO splits one
+    // base's boxes across containers (1783582423 → 3 ตู้); keying by base stamped one
+    // container onto every sibling → one ตู้ double-counted, the others read empty.
+    // EXACT wins; the base map is only a fallback for a row stored under the bare base,
+    // and an `ambiguous` base (MOMO reported it in >1 ตู้) is SKIPPED — never guessed.
     const base = baseTrackingOf(rowTracking);
-    const info = infoByBase.get(base);
-    if (!info) continue; // matched by exact key but base rolled up elsewhere — skip
+    const exact = infoByExact.get(rowTracking);
+    const fallback = infoByBase.get(base);
+    const info = exact ?? (fallback && !fallback.ambiguous ? fallback : undefined);
+    if (!info) continue; // no container for this box (or an ambiguous base) — skip
 
     // SKIP BILLED (defence #1 · the WHERE guard below is defence #2).
     if (BILLED_FSTATUS.has(row.fstatus ?? "")) {

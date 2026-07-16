@@ -51,6 +51,7 @@ import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
+import { baseTrackingOf } from "@/lib/integrations/momo-web/live-parcel-metrics";
 
 // Worker-app role-set — matches the W10 spec.
 const WAREHOUSE_ROLES = ["super", "warehouse", "ops", "manager"] as const;
@@ -740,6 +741,16 @@ export async function warehouseAdvanceTransit(
 //     (incl. the credit-6 arrive carve-out). NO money mutation · gated + audited.
 // ════════════════════════════════════════════════════════════
 
+/** One tb_forwarder row as the arrive-TH scan sees it (base row or a "-N/M" box sibling). */
+type ArriveRow = {
+  id: number;
+  fstatus: string | null;
+  ftrackingchn: string | null;
+  fidorco: string | null;
+  fcredit: string | null;
+  famount?: number | null;
+};
+
 const arriveThScanSchema = z.object({
   keysearch: z.string().trim().min(1).max(100),
   note:      z.string().trim().max(500).optional(),
@@ -747,70 +758,142 @@ const arriveThScanSchema = z.object({
 
 export async function warehouseArriveThScan(
   rawInput: z.input<typeof arriveThScanSchema>,
-): Promise<AdminActionResult<{ fid: number; from: string }>> {
+): Promise<AdminActionResult<{ fid: number; from: string; arrived: number; boxes: number; alreadyArrived: number; blocked: number; base: string }>> {
   const parsed = arriveThScanSchema.safeParse(rawInput);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
   const d = parsed.data;
 
-  return withAdmin<{ fid: number; from: string }>([...WAREHOUSE_ROLES], async ({ adminId }) => {
+  return withAdmin<{ fid: number; from: string; arrived: number; boxes: number; alreadyArrived: number; blocked: number; base: string }>(
+    [...WAREHOUSE_ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
     const roles = (await getAdminRoles()) ?? [];
 
-    // Lookup by tracking or order id (mirrors warehouseIntakeScan).
-    const { data: rows, error: lookupErr } = await admin
+    // ── ONE SCAN = ONE SHIPMENT (owner 2026-07-16) ────────────────────────────
+    // "ต้องยิงชิปเม้นทีเดียวได้ แล้วขึ้นครบเลยทุกกล่อง เพราะหน้างานเขานับกล่องทีเดียวต่อ
+    //  งานต่อชิปเม้น ไม่มีใครเขามาสแกนทีละกล่อง พลิกไปวนมาหรอก เสียเวลา"
+    //
+    // This used to match ONE row on the EXACT tracking and refuse on >1. A MOMO
+    // box-split shipment is stored as a base row PLUS "-N/M" siblings, so scanning
+    // 519218029029 flipped ONLY the bare row while -1/2 and -2/2 stayed at 3 —
+    // forever. The container then never completed, its rows stayed red, and it sat
+    // in the "รอเข้าไทย" bucket no matter how many boxes the warehouse counted
+    // (the "13/3 แล้วสถานะไม่ไปต่อ · ตู้ยังอยู่ฝั่งรอเข้าไทย" report).
+    //
+    // Now: any member of a shipment resolves the WHOLE family (base + every "-N/M"
+    // sibling) and every eligible member flips together. Guards are unchanged and
+    // applied PER ROW (transition matrix · credit-6 carve-out · idempotent).
+    const key = d.keysearch.trim();
+    const { data: seedRows, error: lookupErr } = await admin
       .from("tb_forwarder")
       .select("id, fstatus, ftrackingchn, fidorco, fcredit")
-      .or(`ftrackingchn.eq.${d.keysearch},fidorco.eq.${d.keysearch}`)
-      .limit(2);
+      .or(`ftrackingchn.eq.${key},fidorco.eq.${key}`)
+      .limit(50);
     if (lookupErr) {
       console.error(`[tb_forwarder arrive-th lookup] failed`, { code: lookupErr.code, message: lookupErr.message });
       return { ok: false, error: `db_error:${lookupErr.code ?? "unknown"}` };
     }
-    const list = (rows ?? []) as Array<{
-      id: number; fstatus: string | null; ftrackingchn: string | null; fidorco: string | null; fcredit: string | null;
-    }>;
-    if (list.length === 0) return { ok: false, error: "ไม่พบรายการจาก tracking/รหัสนี้" };
-    if (list.length > 1)  return { ok: false, error: "พบหลายรายการที่ตรงกัน — กรุณาระบุให้เฉพาะเจาะจง" };
-    const fwd = list[0];
-    const from = (fwd.fstatus ?? "1").trim();
-    const isCredit = (fwd.fcredit ?? "").trim() === "1";
+    let seeds = (seedRows ?? []) as ArriveRow[];
 
-    // Idempotent — already arrived.
-    if (from === "4") return { ok: true, data: { fid: fwd.id, from } };
+    // Scanned a base whose bare row doesn't exist (split-at-commit) → find the family.
+    if (seeds.length === 0) {
+      const { data: kin, error: kinErr } = await admin
+        .from("tb_forwarder")
+        .select("id, fstatus, ftrackingchn, fidorco, fcredit")
+        .like("ftrackingchn", `${key}-%`)
+        .limit(200);
+      if (kinErr) {
+        console.error(`[tb_forwarder arrive-th kin lookup] failed`, { code: kinErr.code, message: kinErr.message });
+        return { ok: false, error: `db_error:${kinErr.code ?? "unknown"}` };
+      }
+      seeds = (kin ?? []) as ArriveRow[];
+    }
+    if (seeds.length === 0) return { ok: false, error: "ไม่พบรายการจาก tracking/รหัสนี้" };
 
-    // Ready only from in-transit (3) OR the credit-6 arrive carve-out (goods land
-    // AFTER credit-grant flipped it to 6 · same rule as warehouseAdvanceTransit).
-    const arriveOnCredit = from === "6" && isCredit;
-    if (from !== "3" && !arriveOnCredit) {
-      return { ok: false, error: `สถานะปัจจุบัน (${from}) ยังไม่พร้อมรับเข้าไทย — ต้อง "กำลังส่งมาไทย" (3) ก่อน` };
+    // A scan must identify exactly ONE shipment. Several DIFFERENT bases matching the
+    // same key is a real ambiguity → refuse (never guess which shipment arrived).
+    const bases = new Set(seeds.map((s) => baseTrackingOf(s.ftrackingchn ?? "")).filter(Boolean));
+    if (bases.size !== 1) {
+      return { ok: false, error: "พบหลายชิปเม้นที่ตรงกัน — กรุณาระบุให้เฉพาะเจาะจง" };
     }
-    if (!canAnyRoleFlipFstatus(roles, from, "4")) {
-      return { ok: false, error: "forbidden_transition (ไม่มีสิทธิ์รับเข้าไทย)" };
+    const base = [...bases][0];
+
+    // The whole family: the bare base row + every "-N" / "-N/M" sibling.
+    const { data: famRows, error: famErr } = await admin
+      .from("tb_forwarder")
+      .select("id, fstatus, ftrackingchn, fidorco, fcredit, famount")
+      .or(`ftrackingchn.eq.${base},ftrackingchn.like.${base}-%`)
+      .limit(500);
+    if (famErr) {
+      console.error(`[tb_forwarder arrive-th family] failed`, { code: famErr.code, message: famErr.message });
+      return { ok: false, error: `db_error:${famErr.code ?? "unknown"}` };
     }
+    // Defence: `like` can over-reach on a base that prefixes another tracking
+    // (1783582 vs 1783582423) — keep only rows whose OWN base equals ours.
+    const family = ((famRows ?? []) as ArriveRow[]).filter(
+      (r) => baseTrackingOf(r.ftrackingchn ?? "") === base,
+    );
+    if (family.length === 0) return { ok: false, error: "ไม่พบรายการจาก tracking/รหัสนี้" };
 
     const nowIso = new Date().toISOString();
-    const { error: updErr } = await admin
-      .from("tb_forwarder")
-      .update({ fstatus: "4", fdatestatus4: nowIso, adminidupdate: legacyAdminId, fdateadminstatus: nowIso })
-      .eq("id", fwd.id);
-    if (updErr) {
-      console.error(`[tb_forwarder arrive-th update] failed`, { code: updErr.code, message: updErr.message });
-      return { ok: false, error: `db_error:${updErr.code ?? "unknown"}` };
+    let arrived = 0, boxes = 0, alreadyArrived = 0, blocked = 0;
+    const blockedWhy: string[] = [];
+
+    for (const row of family) {
+      const from = (row.fstatus ?? "1").trim();
+      if (from === "4") { alreadyArrived += 1; continue; }              // idempotent
+      const isCredit = (row.fcredit ?? "").trim() === "1";
+      // Ready only from in-transit (3) OR the credit-6 arrive carve-out (goods land
+      // AFTER credit-grant flipped it to 6 · same rule as warehouseAdvanceTransit).
+      const arriveOnCredit = from === "6" && isCredit;
+      if ((from !== "3" && !arriveOnCredit) || !canAnyRoleFlipFstatus(roles, from, "4")) {
+        blocked += 1;
+        blockedWhy.push(`${row.ftrackingchn ?? row.id} (สถานะ ${from})`);
+        continue;
+      }
+      // TOCTOU: re-assert the from-status in the WHERE so a row that moved between
+      // read and write is skipped, not clobbered.
+      const { data: upd, error: updErr } = await admin
+        .from("tb_forwarder")
+        .update({ fstatus: "4", fdatestatus4: nowIso, adminidupdate: legacyAdminId, fdateadminstatus: nowIso })
+        .eq("id", row.id)
+        .eq("fstatus", from)
+        .select("id")
+        .maybeSingle<{ id: number }>();
+      if (updErr) {
+        console.error(`[tb_forwarder arrive-th update] failed`, { fid: row.id, code: updErr.code, message: updErr.message });
+        blocked += 1;
+        continue;
+      }
+      if (!upd) { blocked += 1; continue; }                              // raced → skip
+      arrived += 1;
+      boxes += Number(row.famount ?? 0) || 0;
+
+      await logIntakeEvent(admin, {
+        fid: row.id, step: "arrive", fstatusFrom: from, fstatusTo: "4",
+        adminId: legacyAdminId, payload: { keysearch: key, base, viaScan: true, shipmentScan: true }, note: d.note ?? null,
+      });
+      revalidatePath(`/admin/forwarders/${row.id}`);
     }
 
-    await logIntakeEvent(admin, {
-      fid: fwd.id, step: "arrive", fstatusFrom: from, fstatusTo: "4",
-      adminId: legacyAdminId, payload: { keysearch: d.keysearch, viaScan: true }, note: d.note ?? null,
+    await logAdminAction(adminId, "warehouse.arrive_th_scan", "tb_forwarder", base, {
+      base, scanned: key, family: family.length, arrived, alreadyArrived, blocked,
     });
-    await logAdminAction(adminId, "warehouse.arrive_th_scan", "tb_forwarder", String(fwd.id), { from, to: "4" });
 
     revalidatePath("/admin/warehouse/worker/arrive-th");
     revalidatePath("/admin/warehouse/worker/shipping");
-    revalidatePath(`/admin/forwarders/${fwd.id}`);
-    return { ok: true, data: { fid: fwd.id, from } };
+    revalidatePath("/admin/report-cnt");
+
+    if (arrived === 0 && alreadyArrived > 0 && blocked === 0) {
+      // whole shipment already in → success (idempotent re-scan), not an error
+      return { ok: true, data: { fid: family[0].id, from: "4", arrived: 0, boxes: 0, alreadyArrived, blocked: 0, base } };
+    }
+    if (arrived === 0) {
+      return { ok: false, error: `รับเข้าไทยไม่ได้ — ${blockedWhy.slice(0, 3).join(", ") || "ต้องเป็นสถานะ \"กำลังส่งมาไทย\" (3) ก่อน"}` };
+    }
+    return { ok: true, data: { fid: family[0].id, from: "3", arrived, boxes, alreadyArrived, blocked, base } };
   });
 }
 

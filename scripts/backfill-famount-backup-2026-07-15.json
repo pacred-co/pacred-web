@@ -1,0 +1,32 @@
+{
+  "plan": [
+    {
+      "id": "52474",
+      "tracking": "JYM800120650588-1/4",
+      "from": 0,
+      "to": 1,
+      "src": "box_detail"
+    },
+    {
+      "id": "52475",
+      "tracking": "JYM800120650588-4/4",
+      "from": 0,
+      "to": 1,
+      "src": "box_detail"
+    },
+    {
+      "id": "52485",
+      "tracking": "JYM800120650588-3/4",
+      "from": 0,
+      "to": 1,
+      "src": "box_detail"
+    },
+    {
+      "id": "52489",
+      "tracking": "JYM800120650588-2/4",
+      "from": 0,
+      "to": 1,
+      "src": "box_detail"
+    }
+  ]
+}
