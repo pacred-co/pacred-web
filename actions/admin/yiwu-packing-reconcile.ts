@@ -41,6 +41,14 @@ export type YiwuBaseResult = {
   matched?: number;
   cabinetAssigned: number;
   advanced: number;
+  // packing-file measurements per 单号 (DISPLAY ONLY — helps staff verify the match before
+  // ผูกตู้; the reconcile never writes these, the money basis came from the ใบส่งของ).
+  boxes?: number | null;   // 件数 Σ (box count)
+  weight?: number | null;  // 总重量 Σ (kg)
+  cbm?: number | null;     // 材积 Σ
+  width?: number | null;   // 宽 (first box-group)
+  length?: number | null;  // 长
+  height?: number | null;  // 高
 };
 export type YiwuReconcileSummary = {
   container: string | null;
@@ -75,6 +83,12 @@ async function reconcileYiwuImpl(
   for (const agg of parse.aggregated) {
     const base = (agg.baseTracking ?? "").trim();
     if (!base) continue;
+    // packing-file measurements (display only) — attached to every result so the preview
+    // table can show กล่อง/น้ำหนัก/ขนาด/คิว even for rows not yet in the system.
+    const pack = {
+      boxes: agg.parcelCount ?? null, weight: agg.totalWeight ?? null, cbm: agg.totalCbm ?? null,
+      width: agg.width ?? null, length: agg.length ?? null, height: agg.height ?? null,
+    };
 
     const escBase = escapeLike(base);
     const { data, error } = await admin
@@ -84,14 +98,14 @@ async function reconcileYiwuImpl(
       .limit(200);
     if (error) {
       console.error("[yiwu-reconcile read] failed", { base, code: error.code, message: error.message });
-      results.push({ base, ok: false, skipped: true, reason: `อ่านไม่สำเร็จ: ${error.message}`, cabinetAssigned: 0, advanced: 0 });
+      results.push({ base, ok: false, skipped: true, reason: `อ่านไม่สำเร็จ: ${error.message}`, cabinetAssigned: 0, advanced: 0, ...pack });
       skipped++;
       continue;
     }
 
     const plan = planYiwuReconcile(base, container, (data ?? []) as YiwuSibling[]);
     if (!plan.ok) {
-      results.push({ base, ok: false, skipped: true, reason: plan.reason, cabinetAssigned: 0, advanced: 0 });
+      results.push({ base, ok: false, skipped: true, reason: plan.reason, cabinetAssigned: 0, advanced: 0, ...pack });
       skipped++;
       continue;
     }
@@ -121,7 +135,7 @@ async function reconcileYiwuImpl(
     advanced += plan.advanceFids.length;
     results.push({
       base, ok: true, userid: plan.userid, matched: plan.matched,
-      cabinetAssigned: plan.assignCabinetFids.length, advanced: plan.advanceFids.length,
+      cabinetAssigned: plan.assignCabinetFids.length, advanced: plan.advanceFids.length, ...pack,
     });
   }
 
