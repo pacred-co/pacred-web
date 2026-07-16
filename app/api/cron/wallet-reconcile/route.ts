@@ -220,21 +220,19 @@ export async function GET(request: Request) {
       });
 
       // ONE deduped incident summarising the scan (NOT one per wallet). The
-      // message is intentionally STABLE wording (no userids / counts inline)
-      // so computeFingerprint collapses every daily run into a single live
-      // incident whose occurrence_count climbs — the per-wallet detail lives
-      // in surface_meta + the console log. captureIncident never throws.
-      const incidentLines = top.map(
-        (o) => `${o.userid}: stored=฿${o.stored.toFixed(2)} spendable=฿${o.spendable.toFixed(2)} [${o.reasons.join(",")}]`,
-      );
+      // message is intentionally STABLE wording (no userids / counts / per-run
+      // offender lines inline) so computeFingerprint collapses every daily run
+      // into a single live incident whose occurrence_count climbs — embedding
+      // the varying offender set / line count in `message` re-split it into a
+      // fresh incident every run. The per-wallet detail lives in surface_meta
+      // (`top`) + the structured console.error above. captureIncident never throws.
       const incident = await captureIncident({
         source:   "server",
         kind:     "server_error",
         severity: "high",
         route:    "/api/cron/wallet-reconcile",
         message:
-          "Wallet reconciliation: stored tb_wallet.wallettotal is in an impossible/inconsistent state for one or more customers (negative balance and/or pending-debit overdraft). READ-ONLY scan — investigate by hand; do not auto-fix.\n\n" +
-          `Top offenders this run:\n${incidentLines.join("\n")}`,
+          "Wallet reconciliation: stored tb_wallet.wallettotal is in an impossible/inconsistent state for one or more customers (negative balance and/or pending-debit overdraft). READ-ONLY scan — investigate by hand; do not auto-fix.",
         surfaceMeta: {
           checked,
           drifted,

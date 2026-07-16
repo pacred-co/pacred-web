@@ -16,7 +16,7 @@
  * the browser. It imports no server code.
  */
 
-import { isTransientAbortError } from "./is-transient-abort";
+import { isTransientAbortError, isChunkLoadError } from "./is-transient-abort";
 
 const INGEST_URL = "/api/observability/incident";
 
@@ -30,14 +30,17 @@ const INGEST_URL = "/api/observability/incident";
  * signal and an in-flight Server-Action or RSC fetch was cancelled).
  * These are stack-less "Load failed" / "Failed to fetch" / "Connection
  * closed." shapes that otherwise flood /admin/incidents with
- * unactionable rows. The friendly fallback UI still renders (the caller
- * — the error boundary — is unaffected); only the report POST is
- * suppressed. See lib/observability/is-transient-abort.ts for the
- * tightly-scoped allow-list — a real error is never suppressed.
+ * unactionable rows. Chunk-load / dynamic-import failures (deploy churn —
+ * a stale tab referencing a superseded deployment's chunk, often with a
+ * `?dpl=` query) are ALSO skipped here; the error boundaries auto-heal
+ * them with a guarded one-time reload. The friendly fallback UI still
+ * renders (the caller — the error boundary — is unaffected); only the
+ * report POST is suppressed. See lib/observability/is-transient-abort.ts
+ * for the tightly-scoped allow-lists — a real error is never suppressed.
  */
 export async function reportClientIncident(error: Error & { digest?: string }): Promise<void> {
-  // Skip pure transient aborts — they are not incidents.
-  if (isTransientAbortError(error)) return;
+  // Skip pure transient aborts + deploy-churn chunk-load errors — not incidents.
+  if (isTransientAbortError(error) || isChunkLoadError(error)) return;
 
   try {
     // Route — best-effort from the browser location. The server

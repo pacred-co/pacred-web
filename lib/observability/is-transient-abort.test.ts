@@ -12,7 +12,7 @@
  * Run with:  tsx lib/observability/is-transient-abort.test.ts
  */
 
-import { isTransientAbortError } from "./is-transient-abort";
+import { isTransientAbortError, isChunkLoadError } from "./is-transient-abort";
 
 let pass = 0;
 let fail = 0;
@@ -104,6 +104,56 @@ assertEq("whitespace-only message", isTransientAbortError(err("   ")), false);
 section("edge inputs");
 assertEq("null", isTransientAbortError(null), false);
 assertEq("undefined", isTransientAbortError(undefined), false);
+
+// ── isChunkLoadError — deploy-churn (must be true; suppressed + auto-heal) ──
+// The two predicates are INDEPENDENT — chunk-load must be false for
+// isTransientAbortError (asserted above at "chunk-load failure (real …)")
+// and true here; they are OR'd only at the client-report skip.
+section("chunk-load → true (deploy churn — auto-heal + suppress)");
+assertEq(
+  "name ChunkLoadError (any message)",
+  isChunkLoadError(err("anything at all", "ChunkLoadError")),
+  true,
+);
+assertEq(
+  "prod incident shape with ?dpl=",
+  isChunkLoadError(err("Failed to load chunk /_next/static/chunks/794878.js?dpl=dpl_ABC from module 794878")),
+  true,
+);
+assertEq("webpack 'Loading chunk 794878 failed.'", isChunkLoadError(err("Loading chunk 794878 failed.")), true);
+assertEq("'Loading CSS chunk 12 failed.'", isChunkLoadError(err("Loading CSS chunk 12 failed.")), true);
+assertEq(
+  "'error loading dynamically imported module'",
+  isChunkLoadError(err("error loading dynamically imported module: https://x/page.js")),
+  true,
+);
+assertEq(
+  "'Failed to fetch dynamically imported module'",
+  isChunkLoadError(err("Failed to fetch dynamically imported module: https://x/page.js")),
+  true,
+);
+assertEq("case-insensitive 'FAILED TO LOAD CHUNK …'", isChunkLoadError(err("FAILED TO LOAD CHUNK 794878")), true);
+
+section("chunk-load → false (real bugs — must NOT auto-heal/suppress)");
+assertEq("ReferenceError 'fxRateMap is not defined'", isChunkLoadError(err("fxRateMap is not defined")), false);
+assertEq(
+  "TypeError 'Cannot read properties of undefined (reading map)'",
+  isChunkLoadError(err("Cannot read properties of undefined (reading 'map')")),
+  false,
+);
+assertEq(
+  "transient-abort 'Failed to fetch' is NOT a chunk-load (orthogonal)",
+  isChunkLoadError(err("Failed to fetch")),
+  false,
+);
+assertEq(
+  "server response error",
+  isChunkLoadError(err("An unexpected response was received from the server.")),
+  false,
+);
+assertEq("empty message, no name", isChunkLoadError(err("")), false);
+assertEq("null", isChunkLoadError(null), false);
+assertEq("undefined", isChunkLoadError(undefined), false);
 
 // ── Summary ──
 console.log(`\n${pass} passed, ${fail} failed`);
