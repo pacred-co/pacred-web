@@ -486,14 +486,15 @@ export type PayUserHistoryRow = {
 const HISTORY_PAGE_SIZE = 50;
 
 export async function listPayUserHistory(
-  opts: { page?: number; q?: string } = {},
+  opts: { page?: number; q?: string; pageSize?: number } = {},
 ): Promise<AdminActionResult<{ rows: PayUserHistoryRow[]; total: number; page: number; pageSize: number }>> {
   return withAdmin(undefined, async () => {
     const admin = createAdminClient();
     const page = Math.max(1, Math.floor(opts.page ?? 1));
     const q = (opts.q ?? "").trim();
-    const from = (page - 1) * HISTORY_PAGE_SIZE;
-    const to = from + HISTORY_PAGE_SIZE - 1;
+    const pageSize = opts.pageSize && opts.pageSize > 0 ? Math.floor(opts.pageSize) : HISTORY_PAGE_SIZE;
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
 
     let query = admin
       .from("tb_wallet_hs")
@@ -565,6 +566,6 @@ export async function listPayUserHistory(
       };
     });
 
-    return { ok: true, data: { rows, total: count ?? rows.length, page, pageSize: HISTORY_PAGE_SIZE } };
+    return { ok: true, data: { rows, total: count ?? rows.length, page, pageSize } };
   });
 }

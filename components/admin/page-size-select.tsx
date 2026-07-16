@@ -22,11 +22,14 @@ export type PageSizeSelectProps = {
   current: number;
   /** Other query params to preserve across a size change (page is reset). */
   params?: Record<string, string | number | undefined | null>;
+  /** Override the selectable sizes (default = ALLOWED_PAGE_SIZES). Pair the
+   *  server's parsePageSize(sp.size, sizes) with the same array. */
+  sizes?: readonly number[];
 };
 
 const ALL_VALUE = "all";
 
-export function PageSizeSelect({ basePath, current, params = {} }: PageSizeSelectProps) {
+export function PageSizeSelect({ basePath, current, params = {}, sizes = ALLOWED_PAGE_SIZES }: PageSizeSelectProps) {
   const router = useRouter();
 
   // "all" when the current size is the capped ทั้งหมด window; else the number.
@@ -53,7 +56,7 @@ export function PageSizeSelect({ basePath, current, params = {} }: PageSizeSelec
         className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500/50"
         aria-label="จำนวนแถวต่อหน้า"
       >
-        {ALLOWED_PAGE_SIZES.map((n) => (
+        {sizes.map((n) => (
           <option key={n} value={String(n)}>
             {n.toLocaleString("th-TH")}
           </option>
