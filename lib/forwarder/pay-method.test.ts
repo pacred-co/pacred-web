@@ -41,8 +41,8 @@ t("isPayAtOriginCarrier('5') false", () => assert.strictEqual(isPayAtOriginCarri
 t("isPayAtOriginCarrier(null) false", () => assert.strictEqual(isPayAtOriginCarrier(null), false));
 
 // ── Set membership = the 6 legacy origin carriers + PRF (PCSF rebrand) = 7 ───────
-t("PAY_AT_ORIGIN_CARRIERS has exactly 7 entries (incl. PRF)", () =>
-  assert.strictEqual(PAY_AT_ORIGIN_CARRIERS.size, 7));
+t("PAY_AT_ORIGIN_CARRIERS has exactly 8 entries (incl. PRF/PRE)", () =>
+  assert.strictEqual(PAY_AT_ORIGIN_CARRIERS.size, 8));
 
 // ── derivePayMethodForDelivery — DEFAULT ต้นทาง "1" for ALL carriers/zones ───
 // Owner 2026-07-09: the upcountry-external→COD auto-flip is REMOVED. The real Flash

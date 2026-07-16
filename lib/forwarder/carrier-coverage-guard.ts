@@ -41,8 +41,14 @@ import {
   type CarrierCoverage,
 } from "@/lib/forwarder/carrier-province-coverage";
 
-/** Pacred's own delivery family — never a "ขนส่งเอกชน", valid in every province. */
-export const OWN_FLEET_SHIPBY = ["PCS", "PCSF", "PCSE"] as const;
+/** Pacred's own delivery family — never a "ขนส่งเอกชน", valid in every province.
+ *  🔴 owner 2026-07-16 (customer สั่งไม่ได้): the D1 rebrand renamed the own-fleet
+ *  codes PCSF→PRF (เหมาๆ · MAO_CARRIER_CODE) and PCSE→PRE (express), and the cart
+ *  now WRITES "PRF"/"PRE" — but this set only had the legacy PCS* codes, so a
+ *  customer picking เหมาๆ hit "ขนส่ง PRF ไม่อยู่ในรายชื่อ" and could NOT submit.
+ *  Both the legacy (PCSF/PCSE · existing prod rows) AND the new (PRF/PRE · new
+ *  orders) codes are Pacred's own fleet. PCS = รับเองโกดัง (self-pickup). */
+export const OWN_FLEET_SHIPBY = ["PCS", "PCSF", "PCSE", "PRF", "PRE"] as const;
 const OWN_FLEET_SET: ReadonlySet<string> = new Set(OWN_FLEET_SHIPBY);
 
 export function isOwnFleetCarrier(value: string | null | undefined): boolean {
