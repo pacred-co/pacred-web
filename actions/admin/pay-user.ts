@@ -65,6 +65,7 @@ import {
 } from "@/lib/forwarder/forwarder-debit-total";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
+import { assertNoDriverEnRoute, removeOpenDriverStops } from "@/lib/admin/revert-driver-cleanup";
 import { logger } from "@/lib/logger";
 import { BANK } from "@/components/seo/site";
 
@@ -1592,6 +1593,12 @@ export async function adminReverseForwarderPayment(
       if (Number.isFinite(fstatusNum) && fstatusNum >= 7) {
         return { ok: false, error: `ออเดอร์ #${fid} จัดส่ง/สำเร็จแล้ว (สถานะ ${fwd.fstatus}) — ย้อนการชำระไม่ได้` };
       }
+      // B2 — REFUSE while a driver is actively delivering this order ('1'); the
+      // not-yet-dispatched stop is cleaned up after the revert (step 6b).
+      const enRoute = await assertNoDriverEnRoute(admin, [fidNum]);
+      if (!enRoute.ok) {
+        return { ok: false, error: `ออเดอร์ #${fid} กำลังจัดส่ง (คนขับออกรถแล้ว) — เอาออกจากรอบคนขับก่อน แล้วค่อยย้อนการชำระ` };
+      }
 
       // 2. Resolve the SETTLED funding pay row (the row the settle wrote —
       //    typenew∈{5,6} status='2' reforder=fid typeservice='2'; newest first).
@@ -1717,6 +1724,10 @@ export async function adminReverseForwarderPayment(
         if (fUpdErr) console.error(`[adminReverseForwarderPayment forwarder revert · standard] failed`, { code: fUpdErr.code, message: fUpdErr.message, fid });
         else forwarderReverted = (fUpd?.length ?? 0) > 0;
       }
+
+      // 6b (B2) — remove the not-yet-dispatched driver stop so the un-collected
+      // order re-enters the dispatch queue cleanly (en-route was refused above).
+      if (forwarderReverted) await removeOpenDriverStops(admin, [fidNum]);
 
       // 7. VOID the covering ใบเสร็จ (rstatus 1/3 → 2) — owner "ยกเลิกงาน→สถานะถอยเป็น
       //    เส้นตรง". An un-collected order must not keep a valid/printable receipt.

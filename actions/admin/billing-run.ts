@@ -52,6 +52,7 @@ import { getContainerCompletenessBatch } from "@/lib/warehouse/container-complet
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { resolvePackingConfirmedCabs } from "@/lib/admin/packing-confirmed-cabs";
+import { assertNoDriverEnRoute, removeOpenDriverStops } from "@/lib/admin/revert-driver-cleanup";
 import {
   isBillableForwarder,
   isBillingRunEligible,
@@ -2479,17 +2480,23 @@ export async function cancelBillingRunInvoice(
         .map((r) => (r as { forwarder_id: number }).forwarder_id)
         .filter((n): n is number => typeof n === "number");
       if (linkedFids.length > 0) {
-        const { error: revErr } = await admin
+        const { data: rev, error: revErr } = await admin
           .from("tb_forwarder")
           .update({ fstatus: "5", fdatestatus6: null })
           .in("id", linkedFids)
           .eq("fstatus", "6")
-          .neq("paydeposit", "1");
+          .neq("paydeposit", "1")
+          .select("id");
         if (revErr) {
           console.error("[cancelBillingRunInvoice forwarder revert 6→5] failed (best-effort)", {
             code: revErr.code, message: revErr.message, invoiceId: v.invoiceId,
           });
         }
+        // B2 — clean up the not-yet-dispatched driver stops of the rows that
+        // actually reverted 6→5 (this bill is UNPAID, so an en-route stop is
+        // unexpected · we still only touch the '' stops · best-effort).
+        const revertedFids = ((rev ?? []) as Array<{ id: number }>).map((r) => r.id);
+        if (revertedFids.length > 0) await removeOpenDriverStops(admin, revertedFids);
       }
 
       await logAdminAction(adminId, "billing_run.cancel_invoice", "forwarder_invoice", String(v.invoiceId), {
@@ -2603,16 +2610,11 @@ export async function adminReverseBillingRunPaid(
         if (shipped.length > 0) {
           return { ok: false, error: `ออเดอร์ ${shipped.map((s) => `#${s.id}`).join(", ")} จัดส่ง/สำเร็จแล้ว — ย้อนการรับชำระไม่ได้` };
         }
-        const { data: openDrv, error: drvErr } = await admin
-          .from("tb_forwarder_driver_item")
-          .select("fid")
-          .in("fid", fids.map(String))
-          .eq("fdistatus", "1");
-        if (drvErr) {
-          console.error("[adminReverseBillingRunPaid driver check] failed", { code: drvErr.code, message: drvErr.message });
-        } else if ((openDrv ?? []).length > 0) {
-          const drvFids = Array.from(new Set(((openDrv ?? []) as Array<{ fid: string }>).map((d) => `#${d.fid}`)));
-          return { ok: false, error: `ออเดอร์ ${drvFids.join(", ")} อยู่ในรอบมอบหมายคนขับที่ยังไม่จบ — เอาออกจากรอบคนขับก่อน แล้วค่อยย้อนการรับชำระ` };
+        // B2 — REFUSE while a driver is actively delivering ('1'); the not-yet-
+        // dispatched stops ('') are cleaned up AFTER the revert (step 6b).
+        const enRoute = await assertNoDriverEnRoute(admin, fids);
+        if (!enRoute.ok) {
+          return { ok: false, error: `ออเดอร์ ${enRoute.enRouteFids.map((f) => `#${f}`).join(", ")} กำลังจัดส่ง (คนขับออกรถแล้ว) — เอาออกจากรอบคนขับก่อน แล้วค่อยย้อนการรับชำระ` };
         }
       }
 
@@ -2718,6 +2720,10 @@ export async function adminReverseBillingRunPaid(
           .eq("advance_bill_confirmed", "1")
           .eq("paydeposit", "1");
         if (advErr) console.error("[adminReverseBillingRunPaid advance-clear] failed", { code: advErr.code, message: advErr.message });
+
+        // 4b (B2) — remove the not-yet-dispatched driver stops so the reverted
+        // order re-enters the dispatch queue cleanly (en-route was refused above).
+        await removeOpenDriverStops(admin, fids);
       }
 
       // 5. VOID the covering receipt (fully-covered · active only) — the settle's
