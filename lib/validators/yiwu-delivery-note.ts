@@ -29,6 +29,7 @@ export const yiwuDeliveryNoteSchema = z.object({
   memberCode: z.string().trim().regex(/^PR\d+$/i, "รหัสลูกค้าต้องเป็น PR + ตัวเลข"), // Customer ID off the note
   arrivalDate: z.string().trim().max(20).optional(),    // yyyy-mm-dd (else today) → fdatestatus2
   imageUrl: z.string().trim().max(500).optional(),      // stored ใบส่งของ image → shown from ถึงโกดังจีน
+  packingId: z.string().trim().max(60).optional(),      // "เลขที่ตู้/Packing ID" ต้นทาง on the note (SEA…YW) — REFERENCE ONLY, stored to fnote; the real shipping container (fcabinetnumber) comes from the packing list (upload-2)
   rows: z.array(yiwuDeliveryRowSchema).min(1, "ต้องมีอย่างน้อย 1 แถว").max(200),
 });
 export type YiwuDeliveryNoteInput = z.infer<typeof yiwuDeliveryNoteSchema>;

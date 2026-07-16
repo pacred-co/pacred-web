@@ -28,11 +28,21 @@ export type YiwuParsedRow = {
 export type YiwuParseResult = {
   memberCode: string | null;   // PR… off the note
   orderNo: string | null;      // best 单号 candidate
+  packingId: string | null;    // "เลขที่ตู้/Packing ID" ต้นทาง (e.g. SEA0625-8211YW) — reference, NOT the shipping container
   rows: YiwuParsedRow[];        // best-effort data rows (staff corrects)
 };
 
 const HEADER_WORDS =
   /^(tracking|customer|pack|weight|length|width|height|cbm|description|单号|件数|重量|材积|品名|no\.?|item)/i;
+
+// The note's "เลขที่ตู้/Packing ID" is a routing/lot code shaped like SEA0625-8211YW
+// (2-4 letters · digits · dash · digits · a 2-letter warehouse suffix). It is NOT a 单号
+// (which has no dash + no trailing letters) and NOT the shipping container (GZS…/GZE…,
+// whose tail is like `-5T`, a single digit + single letter). Detect it separately so it
+// never gets picked as the 单号.
+function isPackingId(tok: string): boolean {
+  return /^[A-Z]{2,4}\d{2,}-\d{2,}[A-Z]{2}$/i.test(tok);
+}
 
 /**
  * Pull the NUMERIC-CELL values out of a line, in order. Only PURE-number tokens
@@ -74,6 +84,7 @@ export function parseYiwuDeliveryOcr(text: string): YiwuParseResult {
 
   let memberCode: string | null = null;
   let orderNo: string | null = null;
+  let packingId: string | null = null;
   const rows: YiwuParsedRow[] = [];
 
   for (const line of lines) {
@@ -82,12 +93,12 @@ export function parseYiwuDeliveryOcr(text: string): YiwuParseResult {
       const pr = line.match(/\bPR\s?(\d{2,})\b/i);
       if (pr) memberCode = `PR${pr[1]}`;
     }
-    // 单号 candidate — first plausible token wins.
-    if (!orderNo) {
-      for (const tok of line.split(/[\s,|]+/)) {
-        const clean = tok.replace(/^[^\w-]+|[^\w-]+$/g, "");
-        if (isOrderCandidate(clean) && !/^PR\d+$/i.test(clean)) { orderNo = clean; break; }
-      }
+    // เลขที่ตู้/Packing ID (SEA…YW) + 单号 candidate — capture the packing-id token
+    // FIRST so it can't be mistaken for the 单号.
+    for (const tok of line.split(/[\s,|]+/)) {
+      const clean = tok.replace(/^[^\w-]+|[^\w-]+$/g, "");
+      if (!packingId && isPackingId(clean)) packingId = clean.toUpperCase();
+      if (!orderNo && isOrderCandidate(clean) && !/^PR\d+$/i.test(clean) && !isPackingId(clean)) orderNo = clean;
     }
     // data row — ≥4 numbers → map to the standard column order.
     const nums = numbersIn(line);
@@ -110,5 +121,5 @@ export function parseYiwuDeliveryOcr(text: string): YiwuParseResult {
     }
   }
 
-  return { memberCode, orderNo, rows };
+  return { memberCode, orderNo, packingId, rows };
 }

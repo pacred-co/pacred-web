@@ -236,7 +236,9 @@ async function createYiwuShipmentImpl(
         paydeposit:            "0",
         ftrackingth:           "-",
         ffreeshipping:         "0",
-        fnote:                 null,
+        // ใบส่งของ "เลขที่ตู้/Packing ID" ต้นทาง (SEA…YW) เก็บเป็นอ้างอิงใน fnote — ไม่ใช่ตู้จริง
+        // (ตู้จริง fcabinetnumber มาตอน packing upload-2). null ถ้าไม่ได้กรอก (คงพฤติกรรมเดิม).
+        fnote:                 d.packingId?.trim() ? `Packing ID (อี้อู): ${d.packingId.trim().slice(0, 60)}` : null,
         fnoteuser:             "0",
         fnoteuserread:         "0",
         fcover:                fCover,                  // ใบส่งของ image (shown from ถึงโกดังจีน)

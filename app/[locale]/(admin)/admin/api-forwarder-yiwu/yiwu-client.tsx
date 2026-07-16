@@ -71,8 +71,9 @@ export function YiwuDeliveryClient() {
   const [zoomOpen, setZoomOpen] = useState(false);
   const [imageWide, setImageWide] = useState(false); // true = รูปเต็มกว้าง (ตารางลงล่าง)
 
-  // ── date (whole note) ─────────────────────────────────────────────────────
+  // ── date + Packing ID (whole note) ────────────────────────────────────────
   const [arrivalDate, setArrivalDate] = useState<string>(todayIsoDate);
+  const [packingId, setPackingId] = useState(""); // เลขที่ตู้/Packing ID ต้นทาง (SEA…YW) จากใบส่งของ — อ้างอิง ไม่ใช่ตู้จริง
 
   // ── the table ─────────────────────────────────────────────────────────────
   const [rows, setRows] = useState<FlatRow[]>([emptyRow(1)]);
@@ -110,13 +111,15 @@ export function YiwuDeliveryClient() {
   // OCR only helps with the PR — CS keys the box rows off the note into the table.
   function onOcrText(text: string) {
     const p = parseYiwuDeliveryOcr(text);
+    if (p.packingId && !packingId.trim()) setPackingId(p.packingId);
+    const pid = p.packingId ? ` · Packing ID: ${p.packingId}` : "";
     if (p.memberCode) {
       // seed the FIRST row's PR (+ any still-empty PR cell) — staff overrides per row.
       const pr = p.memberCode.toUpperCase();
       setRows((prev) => prev.map((r, i) => (i === 0 || !r.pr.trim() ? { ...r, pr } : r)));
-      setOcrNote(`อ่านรหัสลูกค้าได้: ${pr} — ใส่ให้แถวแล้ว · ตรวจให้ตรงกับรูป (ถ้ามีหลาย PR แก้เป็นรายแถว)`);
+      setOcrNote(`อ่านรหัสลูกค้าได้: ${pr}${pid} — ใส่ให้แล้ว · ตรวจให้ตรงกับรูป (ถ้ามีหลาย PR แก้เป็นรายแถว)`);
     } else {
-      setOcrNote("อ่านรูปแล้ว — กรอกรหัสลูกค้า (PR) ในตารางเอง แล้วคีย์กล่องจากใบส่งของ");
+      setOcrNote(`อ่านรูปแล้ว${pid} — กรอกรหัสลูกค้า (PR) ในตารางเอง แล้วคีย์กล่องจากใบส่งของ`);
     }
   }
 
@@ -222,6 +225,7 @@ export function YiwuDeliveryClient() {
       memberCode: group.pr,
       arrivalDate: arrivalDate || undefined,
       imageUrl: imageKey || undefined,
+      packingId: packingId.trim() || undefined,
       rows: group.rows.map((r) => ({
         boxCount: Number(r.boxCount) || 1,
         weightKg: Number(r.weightKg) || 0,
@@ -324,10 +328,18 @@ export function YiwuDeliveryClient() {
           )}
           {ocrNote && <p className="rounded-lg bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800">💡 {ocrNote}</p>}
 
-          <div>
-            <label className="mb-1 block text-xs font-medium text-muted">วันที่ถึงโกดังจีน (ทั้งใบ)</label>
-            <input type="date" value={arrivalDate} onChange={(e) => setArrivalDate(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500" />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted">วันที่ถึงโกดังจีน (ทั้งใบ)</label>
+              <input type="date" value={arrivalDate} onChange={(e) => setArrivalDate(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted">เลขที่ตู้/Packing ID (จากใบส่งของ)</label>
+              <input value={packingId} onChange={(e) => setPackingId(e.target.value)} placeholder="เช่น SEA0625-8211YW" autoComplete="off"
+                className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm uppercase focus:border-teal-500 focus:ring-1 focus:ring-teal-500" />
+              <p className="mt-0.5 text-[11px] text-muted">อ้างอิงต้นทาง · เลขตู้จริงมาตอนอัป packing (ขั้นตอน 2)</p>
+            </div>
           </div>
         </div>
 
