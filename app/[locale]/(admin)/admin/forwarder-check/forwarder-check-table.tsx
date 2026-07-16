@@ -377,6 +377,10 @@ export function ForwarderCheckTable({
         tracking: (r) => r.tracking_chn,
         weight: (r) => r.weight_kg,
         userid: (r) => r.userid,
+        // total_price=0 → drop an aggregate-weight bare base from the box-count Σ
+        // (owner 2026-07-16 · #52559); a priced anchor stays. amount/amount_fi read
+        // countableRows so the "N/M กล่อง" count no longer includes the หัวบิล.
+        money: (r) => r.total_price,
       }),
     [rows],
   );

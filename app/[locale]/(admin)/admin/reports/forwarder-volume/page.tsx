@@ -93,6 +93,10 @@ export default async function ForwarderVolumeReport({
     tracking: (r) => r.ftrackingchn,
     weight: (r) => r.fweight,
     userid: (r) => r.userid,
+    // ftotalprice=0 → drop an aggregate-weight bare base from the box_count Σ
+    // (owner 2026-07-16 · #52559); a priced anchor stays. revenue sums ftotalprice
+    // over the RAW rows below so a dropped 0-money bare loses no baht.
+    money: (r) => Number(r.ftotalprice ?? 0),
   });
 
   // Aggregate by (warehouse, transport).

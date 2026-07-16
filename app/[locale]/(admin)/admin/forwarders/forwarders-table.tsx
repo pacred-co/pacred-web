@@ -876,9 +876,13 @@ export function ForwardersTable({
                     : true;
                   // Σ over countable members only — drops the MOMO หัวบิล
                   // placeholder so a 6-box parcel reads 6 boxes, not 6+6=12
-                  // (ภูม flag 2026-06-12). The header is weight/price 0 so the
-                  // weight/cbm/outstanding Σ are unchanged; the box count + the
-                  // allPaid flag (header paydeposit='0' would force false) get fixed.
+                  // (ภูม flag 2026-06-12). Since 2026-07-16 this also drops an
+                  // AGGREGATE-WEIGHT bare base (fweight = Σ boxes, ftotalprice=0 ·
+                  // owner #52559) — so box/weight/cbm no longer double-count. The
+                  // allPaid flag also ignores the dropped header (paydeposit='0'
+                  // would force false). outstanding is summed over the FULL group
+                  // BELOW (not aggMembers), so a dropped aggregate's เหมาๆ (which
+                  // rides the suffix-0 anchor with ftotalprice=0) is NEVER lost.
                   const aggMembers = group ? countableGroupMembers(group.members) : [];
                   // 2026-06-12 (พี่ป๊อป) — sequence # over countable members
                   // only, so the breakdown numbers the real boxes 1..N and
@@ -898,7 +902,13 @@ export function ForwardersTable({
                           (s, m) => s + cbmTotal(m.volume_cbm || 0, m.amount_count, m.amount_count_flag),
                           0,
                         ),
-                        outstanding: aggMembers.reduce(
+                        // MONEY-SAFE: sum over the FULL group (not aggMembers) so a
+                        // dropped aggregate header's เหมาๆ/other charge stays counted.
+                        // A dropped header has ftotalprice=0 (the SELL freight lives on
+                        // the box rows), so summing the full group re-adds only its
+                        // non-freight money — NO freight double-count. This preserves
+                        // the exact outstanding the list showed before the box-count fix.
+                        outstanding: (group ? group.members : aggMembers).reduce(
                           (s, m) => s + (m.outstanding_thb || 0),
                           0,
                         ),

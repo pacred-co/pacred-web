@@ -30,6 +30,7 @@ type FwdRow = {
   famount: number | string | null;
   ftrackingchn: string | null;
   userid: string | null;
+  ftotalprice: number | string | null;
 };
 
 export type MomoContainerRow = {
@@ -72,7 +73,7 @@ export async function listMomoContainers(): Promise<AdminActionResult<MomoContai
     // 1. MOMO forwarder rows that carry a cabinet (the committed containers).
     const { data: fwd, error } = await admin
       .from("tb_forwarder")
-      .select("fcabinetnumber, fstatus, fweight, fvolume, famount, ftrackingchn, userid")
+      .select("fcabinetnumber, fstatus, fweight, fvolume, famount, ftrackingchn, userid, ftotalprice")
       .like("session", "admin-momo%")
       .not("fcabinetnumber", "is", null)
       .neq("fcabinetnumber", "")
@@ -121,6 +122,9 @@ export async function listMomoContainers(): Promise<AdminActionResult<MomoContai
         tracking: (r) => r.ftrackingchn,
         weight: (r) => num(r.fweight),
         userid: (r) => r.userid,
+        // ftotalprice=0 → drop an aggregate-weight bare base from the box Σ (owner
+        // 2026-07-16 · #52559); a priced anchor stays. weight/cbm sum the group below.
+        money: (r) => num(r.ftotalprice),
       });
       const boxes = countable.reduce((s, r) => s + (num(r.famount) ?? 0), 0);
       const weight = group.reduce((s, r) => s + (num(r.fweight) ?? 0), 0);
