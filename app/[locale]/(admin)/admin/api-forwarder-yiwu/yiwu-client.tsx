@@ -16,6 +16,8 @@ import {
   uploadYiwuDeliveryImage,
   type YiwuCreateSummary,
 } from "@/actions/admin/yiwu-delivery-note";
+import { previewYiwuBoxesFromPacking } from "@/actions/admin/yiwu-packing-reconcile";
+import type { YiwuPackingBox } from "@/lib/admin/yiwu-packing-boxes";
 import { OcrExtract } from "@/components/ocr/ocr-extract";
 import { parseYiwuDeliveryOcr } from "@/lib/admin/yiwu-delivery-parser";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
@@ -53,6 +55,14 @@ export function YiwuDeliveryClient() {
   const [shipments, setShipments] = useState<ShipmentDraft[]>([
     { id: 1, orderNo: "", rows: [emptyRow()] },
   ]);
+
+  // packing-list pre-fill (the reliable source · the ใบส่งของ image is OCR-unreliable)
+  const packingFileRef = useRef<HTMLInputElement>(null);
+  const [packingBoxes, setPackingBoxes] = useState<Record<string, YiwuPackingBox[]> | null>(null);
+  const [packingOrderNos, setPackingOrderNos] = useState<string[]>([]);
+  const [packingContainer, setPackingContainer] = useState<string | null>(null);
+  const [packingLoading, setPackingLoading] = useState(false);
+  const [packingNote, setPackingNote] = useState<string | null>(null);
 
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<YiwuCreateSummary | null>(null);
@@ -112,6 +122,60 @@ export function YiwuDeliveryClient() {
         ? `เติมจากรูปให้แล้ว ${filled} จุด — กรุณาตรวจทุกช่องกับรูปก่อนเอาเข้าระบบ`
         : "อ่านรูปแล้วแต่จับข้อมูลไม่ได้ชัด — กรอกเองได้เลย",
     );
+  }
+
+  // ── packing-list pre-fill ───────────────────────────────────────────────
+  const boxToDraft = (b: YiwuPackingBox): RowDraft => ({
+    boxCount: String(b.boxCount),
+    weightKg: b.weightKg ? String(b.weightKg) : "",
+    lengthCm: b.lengthCm ? String(b.lengthCm) : "",
+    widthCm: b.widthCm ? String(b.widthCm) : "",
+    heightCm: b.heightCm ? String(b.heightCm) : "",
+    cbm: b.cbm ? String(b.cbm) : "",
+    productType: b.productType,
+  });
+
+  /** Fill every shipment whose 单号 matches a key in the packing map. Returns counts. */
+  function applyPackingToGrid(map: Record<string, YiwuPackingBox[]>) {
+    let filled = 0;
+    const unmatched: string[] = [];
+    setShipments((prev) =>
+      prev.map((s) => {
+        const key = s.orderNo.trim();
+        if (!key) return s;
+        const boxes = map[key];
+        if (boxes && boxes.length > 0) { filled++; return { ...s, rows: boxes.map(boxToDraft) }; }
+        unmatched.push(key);
+        return s;
+      }),
+    );
+    setPackingNote(
+      filled > 0
+        ? `เติมกล่องจาก packing ให้ ${filled} ออเดอร์แล้ว${unmatched.length ? ` · ยังไม่พบในไฟล์: ${unmatched.join(", ")}` : ""}`
+        : "ยังไม่ได้เติม — กรอกเลข 单号 ในตารางให้ตรงกับไฟล์ แล้วกด “ดึงกล่องจาก packing” อีกครั้ง",
+    );
+  }
+
+  async function onPackingFile(file: File | null) {
+    setPackingNote(null);
+    if (!file) return;
+    setPackingLoading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await previewYiwuBoxesFromPacking(fd);
+      if (!res.ok) { setPackingNote(`⚠ ${res.error}`); return; }
+      if (res.data) {
+        setPackingBoxes(res.data.boxesByOrderNo);
+        setPackingOrderNos(res.data.orderNos);
+        setPackingContainer(res.data.container);
+        applyPackingToGrid(res.data.boxesByOrderNo);
+      }
+    } catch {
+      setPackingNote("⚠ อ่านไฟล์ packing ไม่สำเร็จ — ลองใหม่");
+    } finally {
+      setPackingLoading(false);
+    }
   }
 
   // ── grid mutations ──────────────────────────────────────────────────────
@@ -300,6 +364,43 @@ export function YiwuDeliveryClient() {
         <div className="mb-3 flex items-center gap-2">
           <span className="grid h-6 w-6 place-items-center rounded-full bg-teal-600 text-[13px] font-bold text-white">3</span>
           <h2 className="text-base font-semibold">ออเดอร์ &amp; กล่อง (แก้ได้ทุกช่อง)</h2>
+        </div>
+
+        {/* Pre-fill boxes from the packing Excel (reliable · the ใบส่งของ image is OCR-weak). */}
+        <div className="mb-3 rounded-xl border border-sky-200 bg-sky-50/70 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[12px] font-medium text-sky-900">
+              ⚡ เติมกล่องอัตโนมัติจากไฟล์ packing list (แม่นกว่า OCR):
+            </span>
+            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-[12px] font-medium text-sky-800 hover:bg-sky-100">
+              <span>📦 เลือกไฟล์ packing (.xlsx)</span>
+              <input
+                ref={packingFileRef}
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="hidden"
+                onChange={(e) => onPackingFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            {packingBoxes && (
+              <button
+                type="button"
+                onClick={() => applyPackingToGrid(packingBoxes)}
+                className="rounded-lg border border-sky-300 px-3 py-1.5 text-[12px] font-medium text-sky-700 hover:bg-sky-100"
+              >
+                🔄 ดึงกล่องตาม 单号 ที่กรอก
+              </button>
+            )}
+            {packingLoading && <span className="text-[11px] text-sky-700">⏳ กำลังอ่าน…</span>}
+          </div>
+          <p className="mt-1.5 text-[11px] text-sky-700">
+            กรอกเลข 单号 ในตารางด้านล่างให้ตรงกับไฟล์ → ระบบเติม จำนวนกล่อง/น้ำหนัก/ขนาด/คิว ให้เอง (ตรงกับใบส่งของ 100%).
+            {packingContainer ? ` · ไฟล์ตู้ ${packingContainer}` : ""}
+            {packingOrderNos.length ? ` · พบ ${packingOrderNos.length} 单号 ในไฟล์` : ""}
+          </p>
+          {packingNote && (
+            <p className="mt-1.5 rounded-lg bg-white px-3 py-1.5 text-[11px] text-sky-900">💡 {packingNote}</p>
+          )}
         </div>
 
         <div className="space-y-4">

@@ -21,6 +21,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { parseYiwuPackingXlsx } from "@/lib/admin/yiwu-packing-xlsx-parser";
 import { planYiwuReconcile, type YiwuSibling } from "@/lib/admin/yiwu-packing-match";
+import { yiwuPackingBoxesByOrderNo, type YiwuPackingBox } from "@/lib/admin/yiwu-packing-boxes";
 import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 
 const YIWU_ROLES = ["super", "ops", "warehouse", "accounting"] as const;
@@ -159,5 +160,34 @@ export async function applyYiwuPacking(formData: FormData): Promise<AdminActionR
     const chk = await fileBufOf(formData);
     if (!chk.ok) return { ok: false, error: chk.error };
     return reconcileYiwuImpl(chk.buf, true, adminId);
+  });
+}
+
+// ── upload-1 helper: BOX PRE-FILL from the packing Excel ──────────────────────
+// The อี้อู ใบส่งของ arrives only as an image (OCR-unreliable), but the SAME box
+// detail is in the packing Excel. This READ-ONLY action parses the packing file →
+// returns the per-单号 box rows so the create grid can pre-fill exactly (staff still
+// reviews + the create action re-validates server-side). No DB write, no money write.
+export type YiwuPackingBoxesResult = {
+  container: string | null;
+  orderNos: string[];                            // all 单号 in the file (sorted)
+  boxesByOrderNo: Record<string, YiwuPackingBox[]>;
+};
+
+export async function previewYiwuBoxesFromPacking(
+  formData: FormData,
+): Promise<AdminActionResult<YiwuPackingBoxesResult>> {
+  return withAdmin<YiwuPackingBoxesResult>([...YIWU_ROLES], async () => {
+    const chk = await fileBufOf(formData);
+    if (!chk.ok) return { ok: false, error: chk.error };
+    const parse = parseYiwuPackingXlsx(chk.buf);
+    if (!parse.rows.length) {
+      return { ok: false, error: parse.warnings[0] ?? "อ่านไฟล์ packing list (อี้อู) ไม่สำเร็จ" };
+    }
+    const boxesByOrderNo = yiwuPackingBoxesByOrderNo(parse.rows);
+    return {
+      ok: true,
+      data: { container: parse.container, orderNos: Object.keys(boxesByOrderNo).sort(), boxesByOrderNo },
+    };
   });
 }
