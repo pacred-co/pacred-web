@@ -39,6 +39,9 @@ type FwForCompleteness = {
   ftrackingchn: string | null;
   fweight: number | null;
   userid: string | null;
+  /** SELL freight — the money signal for the หัวบิล drop (a เหมาๆ-only/aggregate
+   *  bare base has ftotalprice=0 → dropped; a real priced anchor stays). */
+  ftotalprice: number | string | null;
 };
 
 export type ContainerCompleteness = {
@@ -91,6 +94,10 @@ function summarise(
     tracking: (f) => f.ftrackingchn,
     weight: (f) => f.fweight,
     userid: (f) => f.userid,
+    // ftotalprice = SELL freight: an aggregate-weight bare base (owner #52559) carries 0 →
+    // dropped from the expected box count (else expected double-counts its box siblings); a
+    // real priced anchor carries >0 → kept (a physical parcel the warehouse must scan in).
+    money: (f) => Number(f.ftotalprice ?? 0),
   });
   if (forwarders.length === 0) return EMPTY;
 
@@ -151,7 +158,7 @@ export async function getContainerCompleteness(
 
   const { data: fws, error: fwErr } = await admin
     .from("tb_forwarder")
-    .select("id, famount, ftrackingchn, fweight, userid")
+    .select("id, famount, ftrackingchn, fweight, userid, ftotalprice")
     .eq("fcabinetnumber", fcabinetnumber)
     .limit(50_000);
   if (fwErr) {
@@ -207,7 +214,7 @@ export async function getContainerCompletenessBatch(
 
   const { data: fws, error: fwErr } = await admin
     .from("tb_forwarder")
-    .select("id, fcabinetnumber, famount, ftrackingchn, fweight, userid")
+    .select("id, fcabinetnumber, famount, ftrackingchn, fweight, userid, ftotalprice")
     .in("fcabinetnumber", uniqCabs)
     .limit(100_000);
   if (fwErr) {
@@ -236,6 +243,7 @@ export async function getContainerCompletenessBatch(
       ftrackingchn: f.ftrackingchn,
       fweight: f.fweight,
       userid: f.userid,
+      ftotalprice: f.ftotalprice,
     };
     const arr = byCabinet.get(key);
     if (arr) arr.push(member);

@@ -32,15 +32,24 @@ function it(name: string, fn: () => void) {
 }
 
 // A minimal row shape that stands in for tb_forwarder.
-type R = { tracking: string | null; weight: number | null; userid: string; famount: number };
+type R = { tracking: string | null; weight: number | null; userid: string; famount: number; price?: number };
 const acc: ForwarderCountAccessors<R> = {
   tracking: (r) => r.tracking,
   weight: (r) => r.weight,
   userid: (r) => r.userid,
 };
+// Money-aware accessor (ftotalprice = SELL freight) — the box-count/display surfaces.
+const accMoney: ForwarderCountAccessors<R> = {
+  tracking: (r) => r.tracking,
+  weight: (r) => r.weight,
+  userid: (r) => r.userid,
+  money: (r) => r.price ?? 0,
+};
 
 const sumBoxes = (rows: R[]) =>
   filterCountableForwarderRows(rows, acc).reduce((s, r) => s + r.famount, 0);
+const sumBoxesMoney = (rows: R[]) =>
+  filterCountableForwarderRows(rows, accMoney).reduce((s, r) => s + r.famount, 0);
 
 console.log("MOMO bill-header — trackingSuffix / baseTracking:");
 
@@ -157,6 +166,80 @@ it("Test 8 — weight Σ is unaffected (header weight is already 0)", () => {
   const weightSum = kept.reduce((s, r) => s + (r.weight ?? 0), 0);
   // dropping a 0-weight header doesn't change the weight Σ.
   assert.equal(weightSum, 5.0);
+});
+
+console.log("MOMO bill-header — AGGREGATE-WEIGHT bare base + money-guard (owner #52559 · 2026-07-16):");
+
+it("Test 9 — aggregate-WEIGHT bare base (weight≠0) + siblings + money 0 → DROPPED (money accessor)", () => {
+  // Owner #52559 shape: the bare base carries the aggregate weight (58 = Σ its 4 boxes) with
+  // NO SELL freight (ftotalprice 0). The OLD zero-weight rule wrongly kept it (weight 58 ≠ 0) →
+  // 4 + 4 boxes = 8. The money-guard drops it → 4.
+  const rows: R[] = [
+    { tracking: "1783582989",     weight: 58,   userid: "PR086", famount: 4, price: 0 },     // aggregate bare
+    { tracking: "1783582989-1/4", weight: 17,   userid: "PR086", famount: 1, price: 359.86 },
+    { tracking: "1783582989-2/4", weight: 14,   userid: "PR086", famount: 1, price: 238 },
+    { tracking: "1783582989-3/4", weight: 13.5, userid: "PR086", famount: 1, price: 229.5 },
+    { tracking: "1783582989-4/4", weight: 13.5, userid: "PR086", famount: 1, price: 229.5 },
+  ];
+  assert.equal(sumBoxesMoney(rows), 4); // was 8 under the old zero-weight-only rule
+  assert.equal(filterCountableForwarderRows(rows, accMoney).length, 4);
+});
+
+it("Test 10 — a real PRICED anchor (money>0) with box siblings is NEVER dropped", () => {
+  // A bare row that carries SELL freight is a real order/box → kept, even at weight 0
+  // (a MOMO box-split anchor whose own box is dims-only) and with box siblings present.
+  const rows: R[] = [
+    { tracking: "800206224068",   weight: 0,  userid: "PR079", famount: 1, price: 930 }, // priced anchor
+    { tracking: "800206224068-2", weight: 20, userid: "PR079", famount: 1, price: 400 },
+    { tracking: "800206224068-3", weight: 20, userid: "PR079", famount: 1, price: 400 },
+  ];
+  assert.equal(sumBoxesMoney(rows), 3); // anchor kept (money>0) + 2 siblings
+  assert.equal(filterCountableForwarderRows(rows, accMoney).length, 3);
+});
+
+it("Test 11 — เหมาๆ-only aggregate (ftotalprice 0) is DROPPED by ftotalprice signal", () => {
+  // Owner-verified 52047: bare weight = Σ siblings (redundant aggregate) carrying ONLY the
+  // เหมาๆ delivery fee, ftotalprice 0. The box-count signal (ftotalprice) drops it → 2 boxes.
+  const rows: R[] = [
+    { tracking: "1780629608",     weight: 80, userid: "PR107", famount: 2, price: 0 },   // agg + เหมาๆ (ftp 0)
+    { tracking: "1780629608-1/2", weight: 47, userid: "PR107", famount: 1, price: 1228.53 },
+    { tracking: "1780629608-2/2", weight: 33, userid: "PR107", famount: 1, price: 242 },
+  ];
+  assert.equal(sumBoxesMoney(rows), 2);
+});
+
+it("Test 12 — money-ABSENT fallback: aggregate-weight bare (weight≠0) is KEPT (no catastrophic drop)", () => {
+  // Without a money accessor, the conservative legacy rule holds: only a ZERO-WEIGHT bare is a
+  // header. A weight-carrying bare is KEPT so a count-only caller that forgets money never drops
+  // a real anchor. (Repo count-only callers now DO pass ftotalprice → they get the money rule.)
+  const rows: R[] = [
+    { tracking: "1783582989",     weight: 58, userid: "PR086", famount: 4 },
+    { tracking: "1783582989-1/4", weight: 17, userid: "PR086", famount: 1 },
+    { tracking: "1783582989-2/4", weight: 14, userid: "PR086", famount: 1 },
+  ];
+  // No money accessor → aggregate-weight bare kept (weight 58 ≠ 0) → 4 + 1 + 1 = 6.
+  assert.equal(sumBoxes(rows), 6);
+  // With the money accessor (all bare price 0) → bare dropped → 2.
+  assert.equal(sumBoxesMoney(rows), 2);
+});
+
+it("Test 13 — money accessor + bare with NO box sibling → KEPT (nothing to double-count)", () => {
+  const rows: R[] = [
+    { tracking: "9990009", weight: 12, userid: "PR900", famount: 3, price: 0 }, // lone bare, ftp 0
+  ];
+  // No box sibling in the group → not a header even with money 0 → kept.
+  assert.equal(sumBoxesMoney(rows), 3);
+  assert.equal(filterCountableForwarderRows(rows, accMoney).length, 1);
+});
+
+it("Test 14 — zero-weight classic header still dropped under BOTH accessors", () => {
+  const rows: R[] = [
+    { tracking: "1779955936",   weight: 0,   userid: "PR2503", famount: 5, price: 0 }, // classic หัวบิล
+    { tracking: "1779955936-2", weight: 3.0, userid: "PR2503", famount: 1, price: 90 },
+    { tracking: "1779955936-3", weight: 3.0, userid: "PR2503", famount: 1, price: 90 },
+  ];
+  assert.equal(sumBoxes(rows), 2);      // weight-0 rule drops it
+  assert.equal(sumBoxesMoney(rows), 2); // money rule drops it too (price 0)
 });
 
 console.log(`\nMOMO bill-header: ${passed} assertions passed ✅`);

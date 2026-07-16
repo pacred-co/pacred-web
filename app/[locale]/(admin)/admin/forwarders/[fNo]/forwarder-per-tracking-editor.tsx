@@ -84,12 +84,16 @@ type Row = {
   priceother: number | string | null;
   fshippingservice: number | string | null;
   fshipby: string | null;
+  // SELL freight — the money signal for the หัวบิล drop: an aggregate-weight bare
+  // base (owner #52559 · fweight=Σ boxes but no freight) has ftotalprice=0 → dropped
+  // from the box count REGARDLESS of weight; a real priced anchor stays.
+  ftotalprice: number | string | null;
 };
 
 const SIBLING_SELECT =
   "id, userid, ftrackingchn, reforder, fdetail, fproductstype, famount, famountcount, " +
   "fweight, fvolume, fwidth, flength, fheight, fwarehousechina, fwarehousename, ftransporttype, " +
-  "ftransportprice, fdiscount, ftransportpricechnthb, priceother, fshippingservice, fshipby";
+  "ftransportprice, fdiscount, ftransportpricechnthb, priceother, fshippingservice, fshipby, ftotalprice";
 
 const VALID_PRODUCT = ["1", "2", "3", "4"];
 const VALID_WH_TH = ["1", "2", "3", "4", "5", "6", "7", "8"];
@@ -157,6 +161,9 @@ export async function ForwarderPerTrackingEditor({
     tracking: (row) => row.ftrackingchn,
     weight: (row) => num(row.fweight),
     userid: (row) => row.userid ?? "",
+    // ftotalprice=0 on an aggregate-weight bare base → dropped from the group so the
+    // "พัสดุในกลุ่ม" table + Σ never double-count the หัวหลัก (owner 2026-07-16 · #52559).
+    money: (row) => num(row.ftotalprice),
   });
   const display = (countable.length > 0 ? countable : rows)
     .slice()

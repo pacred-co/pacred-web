@@ -69,12 +69,13 @@
  */
 
 import { notFound } from "next/navigation";
-import { Plus, User as UserIcon } from "lucide-react";
+import { User as UserIcon } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { SlipCompare } from "@/components/admin/slip-compare";
+import { WalletBalanceCard } from "@/components/admin/wallet-balance-card";
 import { EditDateSlipForm, ApproveRejectForm } from "./edit-form";
 import { classifyWalletHsRow } from "@/lib/wallet/classify-approve-row";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
@@ -566,18 +567,20 @@ export default async function AdminWalletDetail({
           gives the pair their distinct separation; our old gap-3 (12px) read as
           one block. mb-5 reserves room for the CTA pill that overhangs each. */}
       <section className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-5">
-        <BalanceCard
+        <WalletBalanceCard
           title="ยอดเงินของสมาชิก"
           subtitle={`กระเป๋าสตางค์ ${userid} (บาท)`}
           amount={walletTotalUser}
           cashback={cbTotalUser}
+          payHref="/admin/wallet/add"
         />
-        <BalanceCard
+        <WalletBalanceCard
           title="ยอดรวมทั้งหมดในระบบ"
           subtitle="กระเป๋าสตางค์ (บาท)"
           amount={walletTotalAll}
           cashback={cbTotalAll}
           titleTone="ink"
+          payHref="/admin/wallet/add"
         />
       </section>
 
@@ -889,106 +892,6 @@ export default async function AdminWalletDetail({
 // ────────────────────────────────────────────────────────────
 // Sub-components
 // ────────────────────────────────────────────────────────────
-
-/**
- * Legacy-faithful balance card (ปอน 2026-07-15 · owner-directed).
- *
- * Type + palette read off the live legacy page's own computed styles:
- *   title      .text-black-1.text-danger → #FF4961 · 21.14px Prompt   (member card)
- *              .text-black-1            → #464855 · 21.14px Prompt   (system card)
- *   figure     .tam-counter.font-3rem   → #FF9149 · 42px Prompt      (ORANGE, not
- *              the frame's red — legacy deliberately splits the two)
- *   cash-back  .text-black-1.font-14    → #464855 · 14px Prompt
- *   frame      → #FF4961
- * (legacy's rem base is 14px, hence `font-3rem` computing to 42px — so the px
- * figures above are what must be reproduced here, not the rem names.)
- *
- * Written as literal arbitrary values, not theme tokens — they're legacy's brand
- * colours, and folding them into --primary/--muted would drag every other Pacred
- * surface with them. (Literals are also required: Tailwind scans for whole class
- * strings, so a `border-[${CONST}]` would never be generated.)
- *
- * Matches `pcs-admin` wallet detail: a thick red frame, the brand mark top-right,
- * the balance as a big red numeral, a full-width orange rule, and the CTA pill
- * straddling the bottom border. Ours is the PR mark, not PCS cargo — the look is
- * ported, the brand is not (D1 rebrand `PCS` → `PR`).
- *
- * `titleTone` mirrors legacy's own asymmetry: the member-balance card titles in
- * danger-red, the system-total card in plain ink.
- *
- * The pill is absolutely positioned and overhangs the frame, so the card
- * reserves bottom padding (`pb-8`) and the grid that hosts it reserves margin.
- */
-function BalanceCard({
-  title,
-  subtitle,
-  amount,
-  cashback,
-  titleTone = "danger",
-}: {
-  title: string;
-  subtitle: string;
-  amount: number;
-  cashback: number;
-  titleTone?: "danger" | "ink";
-}) {
-  return (
-    /* shadow: an even halo, not Tailwind's shadow-lg (which offsets 10px DOWN and
-       reads as a drop under the card). pb-2, NOT pb-8: the CTA pill is absolute,
-       so it needs no in-flow room — pb-8 was 32px of dead space that, with the
-       inner p-4, left 48px under the rule where legacy leaves ~10px. */
-    <div className="relative rounded-3xl border-[3px] border-[#FF4961] bg-white dark:bg-surface shadow-[0_0_18px_rgba(0,0,0,0.18)] pb-2">
-      {/* Legacy puts the PCS-cargo badge here; ours is the Pacred "P" mark (D1
-          rebrand). Same file as the app favicon (app/icon.png) — this is the
-          public/ copy, since app/icon.png is served under a build hash.
-          ABSOLUTE, deliberately: as a flex sibling of the heading the mark SET
-          the row's height, so enlarging it pushed the figure — and everything
-          under it — down and grew the card (measured: an 80px mark turned a 43px
-          heading row into an 80px one). Out of flow it can grow freely and
-          nothing else moves. `pr-24` on the text block is the only coupling (it
-          keeps the heading clear of the mark) — bump the two together. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/images/pdiwaicon.png"
-        alt="Pacred"
-        className="absolute right-4 top-4 h-20 w-20 rounded-xl object-contain"
-      />
-      <div className="p-4">
-        <div className="pr-24 space-y-0.5">
-          {/* ink tone: #464855 is near-black, so dark mode hands off to the
-              theme foreground rather than sinking into the dark canvas. */}
-          <p
-            className={
-              "text-[21.14px] font-light leading-tight " +
-              (titleTone === "danger" ? "text-[#FF4961]" : "text-[#464855] dark:text-foreground")
-            }
-          >
-            {title}
-          </p>
-          <p className="text-xs text-muted">{subtitle}</p>
-        </div>
-        {/* NOT font-mono: the system mono stack ships 400/700 only, so a 300 here
-            gets faux-thinned (or ignored) rather than rendered. Prompt has a real
-            300 — and legacy sets this figure in Prompt too, not a mono face.
-            tabular-nums still keeps the digits from jittering as amounts change. */}
-        <p className="mt-1 text-[42px] font-light tabular-nums leading-none text-[#FF9149]">
-          {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
-        </p>
-        {/* #464855 is near-black → dark mode hands off to the muted token. */}
-        <p className="mt-1 text-[14px] text-[#464855] dark:text-muted">
-          Cash Back : {cashback.toLocaleString("th-TH", { minimumFractionDigits: 2 })} (บาท)
-        </p>
-        <div className="mt-3 h-1.5 rounded-full bg-orange-500" />
-      </div>
-      <Link
-        href="/admin/wallet/add"
-        className="absolute -bottom-3.5 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full bg-primary-700 px-4 py-1.5 text-xs font-bold text-white shadow-md hover:bg-primary-800"
-      >
-        <Plus className="h-3 w-3" /> ชำระเงิน
-      </Link>
-    </div>
-  );
-}
 
 /**
  * A label:value line at legacy's own scale — 18.48px Prompt / #464855, read off

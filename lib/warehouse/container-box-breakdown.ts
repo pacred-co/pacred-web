@@ -36,6 +36,8 @@ export type FwForBreakdown = {
   ftrackingchn: string | null;
   fweight: number | string | null;
   userid: string | null;
+  /** SELL freight — the money signal for the หัวบิล drop (aggregate/เหมาๆ-only bare = 0). */
+  ftotalprice: number | string | null;
 };
 
 export type BoxDimGroup = {
@@ -262,7 +264,7 @@ export function baseOfTracking(tracking: string): string {
 
 /** Column set kept in sync with FwForBreakdown. */
 const BREAKDOWN_SELECT =
-  "id, famount, famountcount, fvolume, fwidth, flength, fheight, ftrackingchn, fweight, userid";
+  "id, famount, famountcount, fvolume, fwidth, flength, fheight, ftrackingchn, fweight, userid, ftotalprice";
 
 /** momo_box_detail columns the grouping needs. */
 const BOX_DETAIL_SELECT =
@@ -338,6 +340,9 @@ export async function getContainerBoxBreakdown(
     tracking: (r) => r.ftrackingchn,
     weight: (r) => Number(r.fweight ?? 0),
     userid: (r) => r.userid ?? "",
+    // ftotalprice drops an aggregate-weight bare base (owner #52559) so the box Σ matches the
+    // list page; a real priced anchor (ftotalprice>0) stays in the breakdown.
+    money: (r) => Number(r.ftotalprice ?? 0),
   });
   const grouping = countable.length > 0 ? countable : rows;
 

@@ -36,6 +36,7 @@ type FwdRow = {
   fproductstype: string | null;
   fcover: string | null;
   userid: string | null;
+  ftotalprice: number | string | null;
 };
 
 /** "MOMO มั่ว" data-quality flag on ONE row — MOMO's per-box numbers contradict the
@@ -101,7 +102,7 @@ export async function getMomoContainerDetail(cabinet: string): Promise<AdminActi
     // 1. every tb_forwarder row in this cabinet (per-parcel)
     const { data: fwd, error } = await admin
       .from("tb_forwarder")
-      .select("id, ftrackingchn, fstatus, fweight, fvolume, famount, fwidth, flength, fheight, fproductstype, fcover, userid")
+      .select("id, ftrackingchn, fstatus, fweight, fvolume, famount, fwidth, flength, fheight, fproductstype, fcover, userid, ftotalprice")
       .eq("fcabinetnumber", cab)
       .limit(3000);
     if (error) {
@@ -129,6 +130,9 @@ export async function getMomoContainerDetail(cabinet: string): Promise<AdminActi
       tracking: (r) => r.ftrackingchn,
       weight: (r) => num(r.fweight),
       userid: (r) => r.userid,
+      // ftotalprice=0 → drop an aggregate-weight bare base from the box Σ (owner
+      // 2026-07-16 · #52559); a priced anchor stays. weight/cbm sum raw rows below.
+      money: (r) => num(r.ftotalprice),
     });
     const boxes = countable.reduce((s, r) => s + (num(r.famount) ?? 0), 0);
     const weight = rows.reduce((s, r) => s + (num(r.fweight) ?? 0), 0);

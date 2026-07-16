@@ -5,27 +5,41 @@
  * WHY THIS EXISTS
  * ───────────────
  * When the MOMO carrier SPLITS one parcel it commits, into tb_forwarder, a
- * BARE tracking with no numeric suffix (e.g. "1780555730") whose:
+ * BARE tracking with no numeric suffix (e.g. "1780555730") that carries the
+ * WHOLE-shipment AGGREGATE:
  *   - `famount` = the DECLARED box count (e.g. 6), and
- *   - `fweight` = 0  (no real weight — it's a bill-OPEN placeholder, not a parcel)
+ *   - `fweight`  = the AGGREGATE weight — often 0 (a bill-OPEN placeholder) BUT
+ *                  SOMETIMES the Σ of every box (an aggregate-weight bare base ·
+ *                  verified prod 1783582989/52559 fweight 58 = Σ its 4 boxes),
  * PLUS the real boxes as `-N/M` siblings ("1780555730-1/6" … "-6/6", famount=1
  * each, with real weight). Summing the bare header WITH its box siblings
- * DOUBLE-COUNTS boxes (6 + 6 = 12 for a 6-box parcel).
+ * DOUBLE-COUNTS boxes (6 + 6 = 12 for a 6-box parcel) — AND double-counts weight
+ * when the bare carries the aggregate weight.
  *
- * THE RULE (mirrors the forwarders-list fix in
- * app/[locale]/(admin)/admin/forwarders/forwarders-table.tsx ·
+ * THE RULE (money-guard-primary · 2026-07-16 · mirrors the forwarders-list
  * `countableGroupMembers` / `trackingSuffix`):
- *   Within a parcel group — rows sharing (baseTracking, userid) — if ANY
- *   member carries a box suffix (`-N` or `-N/M`), DROP any BARE member
- *   (no suffix) whose weight is 0. That bare member is the หัวบิล.
+ *   Within a parcel group — rows sharing (baseTracking, userid) — when ANY
+ *   member carries a box suffix (`-N` or `-N/M`), a BARE member (no suffix) is a
+ *   หัวบิล placeholder to DROP unless it carries billable money:
+ *     • money accessor present → a bare-with-siblings row is a header IFF it
+ *       carries NO money (money ≤ 0), REGARDLESS of weight. A redundant aggregate
+ *       has NO SELL freight (the freight lives on the real box rows), whether its
+ *       weight is 0 or the aggregate Σ. A row that DOES carry money is a real
+ *       priced anchor (or a MOMO box-split anchor whose own box is dims-only) →
+ *       NEVER dropped, so no money-sum ever loses a baht.
+ *     • money accessor ABSENT → the conservative legacy rule: only a ZERO-WEIGHT
+ *       bare-with-siblings row is a header. This backstops a caller that forgets
+ *       to pass money from ever dropping a weight-carrying anchor. Every count +
+ *       money caller in this repo passes a money accessor (ftotalprice / gross /
+ *       composite) so they get the money-aware rule.
  *
- *   A bare row WITH weight is a REAL legacy order (legacy "-1" groups, or a
- *   normal un-split parcel) → KEEP it. No regression.
+ *   A bare row WITH box-suffixed siblings but its own money>0 is a REAL row → KEPT.
  *   A group with no box-suffixed sibling is untouched (no header to drop).
  *
  * SCOPE: COUNT display only. This NEVER changes selling / cost / declared /
- * commission. The หัวบิล's weight + price are 0, so weight/cbm/money Σ are
- * already correct — only the box-count (famount) Σ over-counts.
+ * commission. A dropped หัวบิล carries NO SELL freight (money ≤ 0 · the drop
+ * signal), so a MONEY Σ is unaffected; only the box-count (famount) Σ + the
+ * aggregate-weight double-count get fixed.
  *
  * SAFETY — pure · no DB · no IO · unit-tested. Runs in test:unit.
  *
@@ -65,12 +79,16 @@ export type ForwarderCountAccessors<T> = {
   weight: (row: T) => number | null | undefined;
   userid: (row: T) => string | null | undefined;
   /**
-   * OPTIONAL — the billable money on the row (Σ ftotalprice + otherCharges). A genuine
-   * MOMO หัวบิล placeholder carries ZERO money; a row that DOES carry money is a REAL
-   * order/box and must NEVER be dropped from a MONEY Σ — even at fweight=0. This protects
-   * a MOMO box-SPLIT anchor whose own box is dims-only (fweight=0) from silently vanishing
-   * from ยอดเก็บจริง / ใบวางบิล (owner/ภูม 2026-07-03 · money review). Count-only callers
-   * omit it → the genuine 0-weight-0-money placeholder is still dropped from the box-count.
+   * OPTIONAL — the billable money on the row. When PRESENT it is the SOLE keep-signal:
+   * a bare-with-siblings row is a หัวบิล placeholder IFF money ≤ 0 (weight ignored), so an
+   * aggregate-weight bare base (fweight = Σ boxes but NO freight) is correctly dropped from
+   * the box count while a row that carries money — a real priced anchor, or a MOMO box-SPLIT
+   * anchor whose own box is dims-only (fweight=0 · has ftotalprice) — is NEVER dropped from a
+   * MONEY Σ (owner/ภูม 2026-07-03 · money review). Callers pass what "money" means for THEM:
+   * the box-count/display surfaces pass ftotalprice (the SELL freight · a เหมาๆ-only aggregate
+   * has ftotalprice=0 → dropped from the count); billing/ยอดเก็บจริง pass the full gross /
+   * composite so a เหมาๆ-bearing row stays in the money sum. Count-only callers that OMIT it
+   * fall back to the legacy zero-weight rule.
    */
   money?: (row: T) => number | null | undefined;
 };
@@ -81,8 +99,9 @@ export type ForwarderCountAccessors<T> = {
  *
  * A row is dropped IFF, within its parcel group (same baseTracking + userid):
  *   - it is bare (trackingSuffix === 0), AND
- *   - its weight is 0/null, AND
- *   - at least one OTHER member of the group carries a box suffix (> 0).
+ *   - at least one OTHER member of the group carries a box suffix (> 0), AND
+ *   - it carries no money  (money accessor present → money ≤ 0 · weight ignored),
+ *     OR  its weight is 0/null  (money accessor absent → legacy zero-weight rule).
  *
  * Rows whose tracking doesn't group (empty / "-") are always kept — a null
  * tracking can't be a split-parcel header.
@@ -118,14 +137,21 @@ export function isMomoBillHeader<T>(
   acc: ForwarderCountAccessors<T>,
   groupHasBoxSibling: ReadonlySet<string>,
 ): boolean {
-  // Only a BARE (suffix 0) zero-weight row can be a header.
+  // Only a BARE (suffix 0) row within a group that has a box-suffixed sibling can be a header.
   if (trackingSuffix(acc.tracking(row)) !== 0) return false;
-  // A row that carries billable money is a REAL order/box (e.g. a MOMO box-SPLIT anchor whose
-  // own box is dims-only → fweight=0 but ftotalprice>0) — never a placeholder. Drop-guard so
-  // it can't vanish from a money Σ. Only checked when the caller supplies the `money` accessor.
-  if (acc.money && (acc.money(row) || 0) > 0) return false;
-  if ((acc.weight(row) || 0) !== 0) return false;
   const base = baseTracking(acc.tracking(row));
   if (base == null) return false;
-  return groupHasBoxSibling.has(`${base}::${acc.userid(row) ?? ""}`);
+  if (!groupHasBoxSibling.has(`${base}::${acc.userid(row) ?? ""}`)) return false;
+
+  // Money-guard is the SOLE keep-signal when the caller supplies it. A bare-with-siblings row
+  // that carries NO money is a redundant aggregate/placeholder → header (drop) REGARDLESS of
+  // weight — this is what fixes the aggregate-weight bare base (fweight = Σ boxes, no freight)
+  // that the old zero-weight-only rule wrongly KEPT (owner 2026-07-16 · 1783582989/52559). A
+  // row that carries money is a REAL order/box (priced anchor, or a box-split anchor whose own
+  // box is dims-only → ftotalprice>0) → NEVER a placeholder, so no money Σ loses a baht.
+  if (acc.money) return (acc.money(row) || 0) <= 0;
+
+  // No money accessor → conservative legacy rule: only a ZERO-WEIGHT bare-with-siblings row is
+  // a header. Backstops a caller that forgets money from ever dropping a weight-carrying anchor.
+  return (acc.weight(row) || 0) === 0;
 }

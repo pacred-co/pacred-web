@@ -44,6 +44,7 @@ function fw(p: Partial<FwForBreakdown>): FwForBreakdown {
     fheight: p.fheight ?? 0,
     ftrackingchn: p.ftrackingchn ?? null,
     fweight: p.fweight ?? 0,
+    ftotalprice: p.ftotalprice ?? 0,
     // Keep an explicitly-passed null (so the null-skip case is testable); only
     // default to "PR1" when userid is omitted entirely from the partial.
     userid: "userid" in p ? (p.userid ?? null) : "PR1",
