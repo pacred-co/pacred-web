@@ -107,7 +107,7 @@ export async function propagateMomoLiveStatusNow(): Promise<
       }
       try {
         const admin = createAdminClient();
-        const { status: summary, data, cabinet, boxSplit, staging } = await propagateMomoLiveStatusAndData(admin);
+        const { status: summary, data, cabinet, boxSplit, boxDetailReconcile, staging } = await propagateMomoLiveStatusAndData(admin);
         // Audit the bulk status + data push (best-effort · non-fatal).
         await logAdminAction(adminId, "momo_live_status_propagate", "tb_forwarder", "bulk", {
           matched: summary.matched,
@@ -121,6 +121,8 @@ export async function propagateMomoLiveStatusNow(): Promise<
           closeDateFilled: cabinet.closeDateFilled,
           boxSplitSplit: boxSplit.split,
           boxSplitSiblingsCreated: boxSplit.siblingsCreated,
+          boxHealDetailFixed: boxDetailReconcile.detailFixed,
+          boxHealBaresZeroed: boxDetailReconcile.baresZeroed,
           stagingFilled: staging.filled,
         });
         return { ok: true, data: { summary, data, cabinet, boxSplit, staging } };
