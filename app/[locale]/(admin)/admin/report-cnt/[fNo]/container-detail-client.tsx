@@ -767,12 +767,20 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                 // mean "ยังไม่ได้ตรวจ/ยังเก็บเงินไม่ได้" — on a settled row it is a lie, and
                 // a page where everything is red tells staff nothing. Settled rows now go
                 // neutral-done, so red once again means "ต้องทำอะไรสักอย่าง".
+                // 🔴 owner 2026-07-16 "ตอนยิงของเข้าแล้ว ยังแดงอยู่ · ต้องเปลี่ยนเป็นขาว" —
+                // red (pcs-row = alert-danger pink) is supposed to mean "ยังไม่ถึง/ต้องทำ
+                // อะไรสักอย่าง". Once a parcel is ยิงเข้าโกดังไทยแล้ว (fstatus='4' ถึงไทยแล้ว)
+                // it is no longer a red case — the alarming red must clear to a neutral
+                // near-white (pcs-row-done · #e6f5ec). c6baf98d neutralised the SETTLED band
+                // (6/7/8) but left arrived '4' rows red. '5' (รอชำระ · notCollected · ยัง
+                // เก็บเงินไม่ได้) stays red on purpose; '<4' (in transit) stays red.
                 const settled = isRowSettled(r.fstatus);
+                const arrivedReady = (r.fstatus ?? "").trim() === "4";
                 const rowCls = selected.has(r.id)
                   ? "pcs-row-selected"
                   : r.inCheckQueue
                     ? "pcs-row-check"
-                    : settled
+                    : settled || arrivedReady
                       ? "pcs-row-done"
                       : "pcs-row";
                 return (
