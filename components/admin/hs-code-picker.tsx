@@ -153,8 +153,27 @@ export function HsCodePicker({
                   i === active ? "bg-primary-50 dark:bg-primary-900/20" : "hover:bg-surface-alt/60"
                 }`}
               >
-                <span className="text-xs font-semibold tabular-nums text-primary-700">{r.code}</span>
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs font-semibold tabular-nums text-primary-700">{r.code}</span>
+                  {/* 0258 — an unconfirmed duty is a placeholder/bot guess: its 0
+                      means "ไม่ทราบ", NOT "ยกเว้น". Say so at the moment of
+                      picking, because this code's duty gets snapshotted onto a
+                      ใบขน line downstream. */}
+                  {!r.duty_confirmed && (
+                    <span className="rounded border border-amber-300 bg-amber-100 px-1 py-0.5 text-[11px] font-semibold text-amber-800">
+                      ยังไม่ยืนยันอากร
+                    </span>
+                  )}
+                  {r.decl_count > 0 && (
+                    <span className="rounded border border-sky-300 bg-sky-50 px-1 py-0.5 text-[11px] text-sky-700">
+                      ใช้จริง {r.decl_count} ใบขน
+                    </span>
+                  )}
+                </span>
                 <span className="text-[11px] text-foreground line-clamp-1">{r.description}</span>
+                {r.matched_product && (
+                  <span className="text-[11px] text-muted line-clamp-1">ตรงกับสินค้า “{r.matched_product}”</span>
+                )}
                 <span className="text-[11px] text-muted">
                   อากร {r.default_duty_pct}% · Form-E {r.form_e_duty_pct}% · สถิติ {r.default_stat_code ?? "000"}
                 </span>

@@ -207,19 +207,35 @@ export async function adminCreateDeclaration(
         const rate        = Number(inv.exchange_rate ?? 0);
 
         // Best-effort look-up of duty rate per line's hs_code.
+        //
+        // 🔴 0258 — duty_confirmed is read alongside the rate. default_duty_pct
+        // is NOT NULL DEFAULT 0 and this seeder PERSISTS duty_thb/vat_thb off
+        // it, so a code whose duty is merely UNKNOWN would be booked as a
+        // confirmed 0% = "ยกเว้นอากร". After the 2026-07-16 unification most of
+        // the ~1,718 codes are imported (doc-bot guesses / ใบขน observations);
+        // an unverified one is logged loudly here so the Docs role knows the
+        // draft's duty needs a look before issuance (the draft is editable).
         const codes = Array.from(new Set(list.map((l) => l.hs_code).filter((c): c is string => !!c)));
         const dutyByCode = new Map<string, number>();
+        const confirmedByCode = new Map<string, boolean>();
         if (codes.length > 0) {
           const { data: rates, error: ratesErr } = await admin
             .from("hs_codes")
-            .select("code, default_duty_pct")
+            .select("code, default_duty_pct, duty_confirmed")
             .in("code", codes);
           if (ratesErr) {
             // Soft-fail — duty rates default to 0 (admin can edit later).
             console.error("[customs-declarations create hs_codes lookup] codes=", codes, { code: ratesErr.code, message: ratesErr.message });
           }
-          for (const r of (rates ?? []) as Array<{ code: string; default_duty_pct: number | null }>) {
+          for (const r of (rates ?? []) as Array<{ code: string; default_duty_pct: number | null; duty_confirmed: boolean | null }>) {
             dutyByCode.set(r.code, Number(r.default_duty_pct ?? 0));
+            confirmedByCode.set(r.code, r.duty_confirmed === true);
+          }
+          const unverified = codes.filter((c) => !dutyByCode.has(c) || !confirmedByCode.get(c));
+          if (unverified.length) {
+            console.warn("[customs-declarations create] seeded with unverified duty (0 = unknown, NOT exempt)", {
+              declaration_id: inserted.id, codes: unverified,
+            });
           }
         }
 
