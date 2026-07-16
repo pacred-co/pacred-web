@@ -17,6 +17,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, ShieldCheck, Camera } from "lucide-react";
 import { confirm } from "@/components/ui/confirm";
+import { compressImageFile } from "@/lib/image-compress";
 import {
   flagForwarderException,
   resolveForwarderException,
@@ -195,7 +196,21 @@ export function ForwarderExceptionPanelClient({
             <input
               type="file"
               accept="image/*,application/pdf"
-              onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (!f) { setPhoto(null); return; }
+                // Compress the image path in-browser (a PDF passes through
+                // untouched); a size guard then rejects an oversized SCB PDF
+                // slip before it can trip the Server-Action bodySizeLimit.
+                const compact = await compressImageFile(f, { maxDim: 1600, quality: 0.82 }).catch(() => f);
+                if (compact.size > 5 * 1024 * 1024) {
+                  setError("ไฟล์ใหญ่เกิน 5 MB แม้ย่อแล้ว — กรุณาเลือกไฟล์เล็กลง");
+                  e.target.value = "";
+                  return;
+                }
+                setError(null);
+                setPhoto(compact);
+              }}
               className="block w-full text-xs text-muted file:mr-3 file:rounded-lg file:border-0 file:bg-amber-100 file:px-3 file:py-1.5 file:text-amber-800 file:font-medium hover:file:bg-amber-200"
             />
           </div>

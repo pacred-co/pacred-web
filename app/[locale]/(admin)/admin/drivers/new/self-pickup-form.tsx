@@ -36,6 +36,7 @@ import { Link } from "@/i18n/navigation";
 import { Camera, CheckCircle2, Phone } from "lucide-react";
 import { markForwarderSelfPickupDelivered } from "@/actions/admin/forwarder-self-pickup";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
+import { compressImageFile } from "@/lib/image-compress";
 
 type PickupItem = {
   id:           number;
@@ -445,7 +446,15 @@ function CustomerPickupCard({
               type="file"
               accept="image/*"
               capture="environment"
-              onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (!f) { setPhoto(null); return; }
+                // Compress in-browser (fails soft → original) so a large phone
+                // JPEG can't exceed the Server-Action bodySizeLimit → the
+                // "An unexpected response was received from the server" error.
+                const compact = await compressImageFile(f, { maxDim: 1600, quality: 0.82 }).catch(() => f);
+                setPhoto(compact);
+              }}
               disabled={pending}
               className="sr-only"
             />

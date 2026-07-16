@@ -33,6 +33,7 @@ import {
 } from "@/actions/admin/forwarders-new";
 import { resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 import { getPrivateCarrierOptionsForProvince } from "@/lib/cart/ship-by-eligibility";
+import { compressImageFile } from "@/lib/image-compress";
 
 // Clean member-type categories — same 7 buckets /admin/customers uses in its
 // "ตามประเภท" menu (ภูม flag round 10). Replaces the raw tb_co dropdown which
@@ -481,11 +482,15 @@ export function AdminForwarderNewForm({
       : "";
 
   // ─── cover handlers ─────────────────────────────────────────────
-  function handleCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0] ?? null;
-    // Legacy modal sets data-max-file-size="9M" but the bucket helper caps at 5MB.
-    // Keep the form limit at the helper limit so the user gets a clear error early.
-    if (f && f.size > 5 * 1024 * 1024) {
+  async function handleCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const raw = e.target.files?.[0] ?? null;
+    if (!raw) { setError(null); updateCoverPreview(null); return; }
+    // Compress in-browser (fails soft → original) so a normal 3–8 MB phone
+    // photo isn't bounced outright and can't trip the Server-Action
+    // bodySizeLimit. The >5 MB guard remains as a fallback for genuinely huge
+    // files (the bucket helper caps at 5 MB).
+    const f = await compressImageFile(raw, { maxDim: 1600, quality: 0.82 }).catch(() => raw);
+    if (f.size > 5 * 1024 * 1024) {
       setError("ไฟล์รูปใหญ่เกิน 5 MB");
       e.target.value = "";
       updateCoverPreview(null);

@@ -27,6 +27,7 @@
 
 import "server-only";
 import { captureIncident } from "./incident-store";
+import { isNextControlFlowError } from "./next-control-flow";
 import { logger } from "@/lib/logger";
 
 /**
@@ -46,6 +47,10 @@ export function withObservability<TArgs extends unknown[], TReturn>(
     try {
       return await fn(...args);
     } catch (err) {
+      // notFound()/redirect()/an HTTP-error throw is Next.js CONTROL FLOW,
+      // not a bug — re-throw it untouched so the framework still redirects/
+      // 404s, and never file it as a failed_action incident.
+      if (isNextControlFlowError(err)) throw err;
       // Capture, then re-throw. Capture is best-effort — if it fails we
       // still re-throw the ORIGINAL error so behaviour is unchanged.
       try {

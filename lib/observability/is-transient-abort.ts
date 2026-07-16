@@ -88,3 +88,41 @@ export function isTransientAbortError(
   if (!msg) return false;
   return TRANSIENT_ABORT_MESSAGES.has(msg);
 }
+
+/**
+ * True when the error is a chunk-load / dynamic-import failure — DEPLOY
+ * CHURN, not a bug. After a new Vercel deployment a still-open browser tab
+ * holds references to the PRIOR deployment's hashed chunks (often with a
+ * `?dpl=dpl_…` query); requesting one now 404s → a ChunkLoadError. The right
+ * response is to fetch the fresh chunks (a guarded one-time reload in the
+ * error boundaries), NOT to file an incident.
+ *
+ * Kept SEPARATE from isTransientAbortError on purpose: the transient-abort
+ * classifier deliberately does NOT match chunk-load (a broken chunk from a
+ * bad build IS worth seeing there). This predicate is OR'd into the
+ * client-report skip + drives the boundaries' auto-reload — the two stay
+ * orthogonal.
+ *
+ * CONSERVATIVE: only whole chunk-load shapes (the ChunkLoadError name or the
+ * canonical chunk / dynamic-import messages), case-insensitive because the
+ * message carries volatile paths / module numbers / the ?dpl= query.
+ */
+export function isChunkLoadError(
+  error: (Error & { name?: string }) | null | undefined,
+): boolean {
+  if (!error) return false;
+
+  // The canonical name webpack/Next set on a failed chunk fetch.
+  if (typeof error.name === "string" && error.name === "ChunkLoadError") {
+    return true;
+  }
+
+  const msg = (error.message ?? "").toLowerCase();
+  if (!msg) return false;
+  return (
+    msg.includes("failed to load chunk") ||
+    /loading (css )?chunk \S+ failed/.test(msg) ||
+    msg.includes("error loading dynamically imported module") ||
+    msg.includes("failed to fetch dynamically imported module")
+  );
+}

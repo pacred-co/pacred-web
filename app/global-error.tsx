@@ -26,6 +26,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { reportClientIncident } from "@/lib/observability/client-report";
+import { isChunkLoadError } from "@/lib/observability/is-transient-abort";
 import "./globals.css";
 
 export default function GlobalError({
@@ -37,6 +38,23 @@ export default function GlobalError({
 }) {
   // Auto-capture on mount — the button-less report.
   useEffect(() => {
+    // Chunk-load = deploy churn (a stale tab holding a superseded
+    // deployment's chunk). Self-heal with a GUARDED one-time reload; a
+    // genuinely broken chunk re-errors within 10s → guard trips → falls
+    // through to the (no-op-skipped) report → no loop, no incident.
+    if (isChunkLoadError(error)) {
+      try {
+        const KEY = "__pacred_chunk_reload_at";
+        const last = Number(sessionStorage.getItem(KEY) || 0);
+        if (Date.now() - last > 10_000) {
+          sessionStorage.setItem(KEY, String(Date.now())); // set BEFORE reload
+          window.location.reload();
+          return; // deploy-churn — don't report
+        }
+      } catch {
+        /* sessionStorage blocked (private mode) → fall through to report */
+      }
+    }
     void reportClientIncident(error);
   }, [error]);
 
