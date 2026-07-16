@@ -126,9 +126,20 @@ const agg = (await c.query(`
   SELECT d.*, coalesce(h.hs_codes,'[]'::jsonb) AS hs_codes
     FROM decl d LEFT JOIN hs h USING (tax)`)).rows;
 
+// GLOBAL cross-ref — the re-aggregate covers ALL importers (road+sea+air already
+// in customs_declaration), so match against EVERY importer's tax, not just this
+// run's files. (Bug: a run-scoped map wiped matched_phone/is_existing for other
+// modes' importers on a later run.)
+const allTaxes = [...new Set(agg.map((a) => a.tax).filter(Boolean))];
+const corpAll = (await c.query(`SELECT regexp_replace(corporatenumber,'\\D','','g') AS tax, userid, corporatename FROM tb_corporate WHERE regexp_replace(corporatenumber,'\\D','','g') = ANY($1)`, [allTaxes])).rows;
+const corpAllByTax = new Map(); for (const r of corpAll) if (!corpAllByTax.has(r.tax)) corpAllByTax.set(r.tax, r);
+const uids = [...new Set(corpAll.map((r) => r.userid))];
+const usersAll = uids.length ? (await c.query(`SELECT "userID","userName","userTel","adminIDSale" FROM tb_users WHERE "userID" = ANY($1)`, [uids])).rows : [];
+const userAllById = new Map(usersAll.map((u) => [u.userID, u]));
+
 let lOk = 0;
 for (const a of agg) {
-  const corpM = corpByTax.get(a.tax); const u = corpM ? userById.get(corpM.userid) : null;
+  const corpM = corpAllByTax.get(a.tax); const u = corpM ? userAllById.get(corpM.userid) : null;
   const isExisting = !!corpM;
   const isOurs = a.tax === AXELRA_TAX;
   await c.query(`
