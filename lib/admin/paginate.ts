@@ -40,11 +40,14 @@ export function parsePage(raw: string | string[] | undefined): number {
  * - a value in ALLOWED_PAGE_SIZES → that value
  * - anything else (missing/garbage) → DEFAULT_PAGE_SIZE
  */
-export function parsePageSize(raw: string | string[] | undefined): number {
+export function parsePageSize(
+  raw: string | string[] | undefined,
+  allowed: readonly number[] = ALLOWED_PAGE_SIZES,
+): number {
   const v = Array.isArray(raw) ? raw[0] : raw;
   if (v === "all") return ALL_PAGE_SIZE_CAP;
   const n = Number(v);
-  return (ALLOWED_PAGE_SIZES as readonly number[]).includes(n) ? n : DEFAULT_PAGE_SIZE;
+  return allowed.includes(n) ? n : DEFAULT_PAGE_SIZE;
 }
 
 /** Inclusive `[from, to]` row range for Supabase `.range()` (0-based). */

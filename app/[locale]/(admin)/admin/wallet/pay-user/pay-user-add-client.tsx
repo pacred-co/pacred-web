@@ -24,13 +24,14 @@
  *     adminPayOrdersWithTopUp.
  */
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Image from "next/image";
+import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { PacredDialog, useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
-import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { formatThaiDate, formatThaiDateTime } from "@/lib/utils/thai-datetime";
 import { BANK } from "@/components/seo/site";
 import { getDepositQr } from "@/actions/wallet";
 import {
@@ -48,6 +49,8 @@ import {
   type PayOnBehalfResult,
   type PayWithTopUpResult,
 } from "@/actions/admin/pay-user";
+import { adminSearchCustomers, type CustomerPickerRow } from "@/actions/admin/search-customers";
+import { WalletBalanceCard } from "@/components/admin/wallet-balance-card";
 
 // ── formatting ───────────────────────────────────────────────
 function thb(n: number): string {
@@ -73,6 +76,35 @@ export function PayUserAddClient() {
   const [searching, startSearch] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<PayResultBanner | null>(null);
+
+  // ── customer autocomplete (owner 2026-07-16 · "พิมพ์แล้วขึ้น 7 รายการแนะนำ เหมือน Google") ──
+  const [suggests, setSuggests] = useState<CustomerPickerRow[]>([]);
+  const [showSuggest, setShowSuggest] = useState(false);
+  const suggestBoxRef = useRef<HTMLDivElement>(null);
+
+  // debounced lookup — พิมพ์ ≥2 ตัว → ค้นรหัส/ชื่อ/เบอร์ → แนะนำสูงสุด 7 (setState ใน timeout)
+  useEffect(() => {
+    let alive = true;
+    const active = showSuggest && code.trim().length >= 2;
+    const t = window.setTimeout(async () => {
+      if (!alive) return;
+      if (!active) { setSuggests([]); return; }
+      const res = await adminSearchCustomers({ q: code.trim(), limit: 7 });
+      if (!alive) return;
+      setSuggests(res.ok && res.data ? res.data.rows : []);
+    }, active ? 120 : 0);
+    return () => { alive = false; window.clearTimeout(t); };
+  }, [code, showSuggest]);
+
+  // ปิด dropdown เมื่อคลิกนอกช่อง
+  useEffect(() => {
+    if (!showSuggest) return;
+    const onDown = (e: MouseEvent) => {
+      if (suggestBoxRef.current && !suggestBoxRef.current.contains(e.target as Node)) setShowSuggest(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [showSuggest]);
 
   // ── loaded data ──
   const [panel, setPanel] = useState<PayUserPanel | null>(null);
@@ -105,11 +137,12 @@ export function PayUserAddClient() {
   }
 
   // ── search / (re)load the view for the current service ──
-  function search() {
+  function search(explicitCode?: string) {
     setErr(null);
     setResult(null);
     resetLoaded();
-    const c = code.trim().toUpperCase();
+    setShowSuggest(false);
+    const c = (explicitCode ?? code).trim().toUpperCase();
     if (!c) {
       setErr("กรุณากรอกรหัสลูกค้า (เช่น PR124)");
       return;
@@ -327,8 +360,10 @@ export function PayUserAddClient() {
 
   return (
     <div className="space-y-5 pb-28">
+      {/* กรอบขาวหุ้มทั้ง 3 ส่วน (ควบคุม + การ์ดกระเป๋า + รายการ) ให้เป็นกรอบเดียว บนพื้นเทา (owner 2026-07-16) */}
+      <section className="space-y-5 rounded-2xl border border-border bg-white p-4 shadow-sm lg:p-6 dark:bg-surface">
       {/* ── A. controls row ── */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <div>
         <div className="flex flex-wrap items-end gap-3">
           <div className="w-full sm:w-52">
             <label className="mb-1 block text-[13px] font-medium text-gray-700">ประเภทบริการ</label>
@@ -345,26 +380,49 @@ export function PayUserAddClient() {
           <div className="min-w-[200px] flex-1">
             <label className="mb-1 block text-[13px] font-medium text-gray-700">รหัสลูกค้า</label>
             <div className="flex gap-2">
-              <input
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === "Enter" && search()}
-                placeholder="เช่น PR124"
-                disabled={searching}
-                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-primary-500/40 disabled:opacity-50"
-              />
-              <button
-                onClick={search}
-                disabled={searching}
-                className="rounded-lg bg-primary-600 px-5 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-              >
-                {searching ? "กำลังค้นหา..." : "ค้นหา"}
-              </button>
+              <div ref={suggestBoxRef} className="relative flex-1">
+                <input
+                  value={code}
+                  onChange={(e) => { setCode(e.target.value.toUpperCase()); setShowSuggest(true); }}
+                  onFocus={() => { if (code.trim().length >= 2) setShowSuggest(true); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") search();
+                    else if (e.key === "Escape") setShowSuggest(false);
+                  }}
+                  placeholder="พิมพ์รหัส / ชื่อ / เบอร์ลูกค้า เช่น PR124"
+                  disabled={searching}
+                  autoComplete="off"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-primary-500/40 disabled:opacity-50"
+                />
+                {/* autocomplete — 7 รายการแนะนำ (owner 2026-07-16 · แบบ Google) */}
+                {showSuggest && suggests.length > 0 && (
+                  <div className="absolute z-40 mt-1 max-h-80 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                    {suggests.map((s) => {
+                      const nm = s.company_name || `${s.first_name ?? ""} ${s.last_name ?? ""}`.trim() || "—";
+                      return (
+                        <button
+                          key={s.ID}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => { setCode(s.ID); setShowSuggest(false); search(s.ID); }}
+                          className="flex w-full items-center justify-between gap-3 border-b border-gray-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-primary-50"
+                        >
+                          <span className="min-w-0 truncate">
+                            <span className="font-mono font-semibold text-primary-700">{s.ID}</span>
+                            <span className="text-gray-800"> · {nm}</span>
+                          </span>
+                          {s.phone && <span className="shrink-0 text-[12px] text-gray-400">{s.phone}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <Link
             href="/admin/wallet/pay-user"
-            className="ml-auto rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="ml-auto rounded-lg bg-gradient-to-r from-violet-600 to-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:from-violet-700 hover:to-blue-700"
           >
             ประวัติการทำรายการ
           </Link>
@@ -377,28 +435,22 @@ export function PayUserAddClient() {
       )}
       {result && <ResultBanner result={result} />}
 
-      {/* ── B. wallet card ── */}
+      {/* ── B. wallet card (owner 2026-07-16 · การ์ดแบบเดียวกับหน้า wallet detail) ── */}
       {panel && (
-        <div className="rounded-xl border-2 border-orange-300 bg-orange-50/50 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="font-semibold text-gray-900">{panel.user.name}</p>
-              <p className="text-[13px] text-gray-600">
-                {panel.user.userid}
-                {panel.user.tel ? ` · ${panel.user.tel}` : ""}
-                {panel.is_corporate ? " · นิติบุคคล (ลด 1% เมื่อยอด ≥ ฿1,000)" : ""}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-[13px] text-gray-600">กระเป๋าสตางค์ (บาท)</p>
-              <p className="font-mono text-2xl font-bold text-orange-700">{thb(walletBalance)}</p>
-              {panel.cashback > 0 && (
-                <p className="text-[12px] text-emerald-700">Cash Back {thb(panel.cashback)}</p>
-              )}
-            </div>
+        <div className="space-y-3">
+          {/* การ์ดกึ่งกลาง ยาวพอดี ไม่เต็มความกว้าง (owner 2026-07-16) */}
+          <div className="mx-auto max-w-2xl">
+            <WalletBalanceCard
+              title={panel.user.name}
+              subtitle={`${panel.user.userid}${panel.user.tel ? ` · ${panel.user.tel}` : ""}${panel.is_corporate ? " · นิติบุคคล" : ""}`}
+              amount={walletBalance}
+              cashback={panel.cashback}
+              titleTone="danger"
+              compact
+            />
           </div>
           {panel.is_juristic && keyType === "2" && (
-            <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-[13px] text-amber-800">
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-[13px] text-amber-800">
               <span className="font-semibold">ลูกค้านิติบุคคล:</span> ชำระในหน้านี้ได้ตามปกติ —
               ใช้ <span className="font-semibold">สลิปการโอน</span> (แนบในขั้นตอนชำระเงิน · ระบบไม่ตัดจากกระเป๋า)
               · หัก ณ ที่จ่าย 1% อัตโนมัติเมื่อยอด ≥ ฿1,000 · ชำระแล้วระบบออกใบเสร็จให้เอง
@@ -409,7 +461,7 @@ export function PayUserAddClient() {
 
       {/* ── C. item table ── */}
       {panel && !hasRows && (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 text-sm text-gray-600">
+        <div className="text-sm text-gray-600">
           <p className="text-center font-medium text-gray-700">
             {keyType === "2"
               ? "ไม่มีรายการฝากนำเข้าที่รอชำระเงิน (สถานะ 5) ของลูกค้ารายนี้"
@@ -459,6 +511,7 @@ export function PayUserAddClient() {
           onClearAll={() => setSelShops(new Set())}
         />
       )}
+      </section>
 
       {/* ── D. floating pay bar ── */}
       {panel && selectedCount > 0 && (
@@ -600,8 +653,27 @@ function Thumb({ url, alt }: { url: string | null; alt: string }) {
 }
 
 // ════════════════════════════════════════════════════════════
-// FORWARDER (ฝากนำเข้า) table — keyType=2
+// FORWARDER (ฝากนำเข้า) table — keyType=2 · faithful legacy pay-users
 // ════════════════════════════════════════════════════════════
+const FWD_COLS: {
+  key: string;
+  label: string;
+  get?: (r: PayUserFwdRow) => string | number;
+}[] = [
+  { key: "date", label: "วันที่สร้าง", get: (r) => r.fdate ?? "" },
+  { key: "code", label: "รหัสลูกค้า", get: (r) => Number(r.fid) },
+  { key: "detail", label: "รายละเอียด", get: (r) => Number(r.fid) },
+  { key: "amount", label: "ยอดค้างชำระ", get: (r) => r.price_thb },
+  { key: "chn", label: "เลขพัสดุ (จีน)", get: (r) => r.ftrackingchn ?? "" },
+  { key: "th", label: "เลขพัสดุ (ไทย)", get: (r) => r.ftrackingth ?? "" },
+  { key: "in", label: "เข้าโกดัง", get: (r) => r.fdatestatus2 ?? "" },
+  { key: "out", label: "ออกโกดัง", get: (r) => r.fdatestatus3 ?? "" },
+  { key: "arrived", label: "ถึงไทย", get: (r) => r.fdatestatus4 ?? "" },
+  { key: "status", label: "สถานะ", get: (r) => r.fstatus ?? "" },
+  { key: "update", label: "อัปเดต", get: (r) => r.adminid_update ?? "" },
+  { key: "options", label: "ตัวเลือก" },
+];
+
 function ForwarderTable({
   rows,
   panel,
@@ -617,41 +689,100 @@ function ForwarderTable({
   onSelectAll: () => void;
   onClearAll: () => void;
 }) {
+  const [showN, setShowN] = useState(200);
+  const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" } | null>(null);
+
+  const sorted = useMemo(() => {
+    const col = sort ? FWD_COLS.find((c) => c.key === sort.key) : null;
+    if (!sort || !col?.get) return rows;
+    const getter = col.get;
+    const dir = sort.dir;
+    return [...rows].sort((a, b) => {
+      const av = getter(a);
+      const bv = getter(b);
+      const cmp =
+        typeof av === "number" && typeof bv === "number"
+          ? av - bv
+          : String(av).localeCompare(String(bv), "th", { numeric: true });
+      return dir === "asc" ? cmp : -cmp;
+    });
+  }, [rows, sort]);
+  const shown = sorted.slice(0, showN);
+
+  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.fid));
+  function onSort(key: string) {
+    setSort((prev) =>
+      !prev || prev.key !== key
+        ? { key, dir: "asc" }
+        : prev.dir === "asc"
+          ? { key, dir: "desc" }
+          : null,
+    );
+  }
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-4 py-2.5">
-        <p className="text-sm font-semibold text-gray-800">
-          รายการฝากนำเข้าที่รอชำระ ({rows.length})
-        </p>
-        <div className="flex gap-3 text-[12px]">
-          <button onClick={onSelectAll} className="text-primary-600 hover:underline">
-            เลือกทั้งหมด
-          </button>
-          <button onClick={onClearAll} className="text-gray-500 hover:underline">
-            ล้าง
-          </button>
-        </div>
+        {/* แสดง N รายการ (หัวมุมซ้าย · ตาม legacy) — owner 2026-07-16 */}
+        <label className="flex items-center gap-1.5 text-[12px] text-gray-600">
+          แสดง
+          <select
+            value={showN}
+            onChange={(e) => setShowN(Number(e.target.value))}
+            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-[12px] focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+          >
+            {[10, 25, 50, 100, 200].map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+          รายการ
+        </label>
       </div>
       <div className="overflow-x-auto scrollbar-x-visible">
-        <table className="w-full min-w-[1180px] border-collapse text-[12px] [&_td]:border [&_td]:border-gray-200 [&_th]:border [&_th]:border-gray-200">
+        <table className="w-full min-w-[1320px] border-collapse text-[12px] [&_td]:border [&_td]:border-gray-200 [&_th]:border [&_th]:border-gray-200">
           <thead>
-            <tr className="bg-gray-50 text-left text-[11px] text-gray-600">
-              <th className="px-2 py-2"></th>
-              <th className="px-2 py-2">วันที่สร้าง</th>
-              <th className="px-2 py-2">รหัสลูกค้า</th>
-              <th className="px-2 py-2">รายละเอียด</th>
-              <th className="px-2 py-2">ยอดค้างชำระ</th>
-              <th className="px-2 py-2">เลขพัสดุ(จีน)</th>
-              <th className="px-2 py-2">เลขพัสดุ(ไทย)</th>
-              <th className="px-2 py-2">เข้าโกดัง</th>
-              <th className="px-2 py-2">ออกโกดัง</th>
-              <th className="px-2 py-2">ถึงไทย</th>
-              <th className="px-2 py-2">สถานะ</th>
-              <th className="px-2 py-2">อัปเดต</th>
+            <tr className="bg-gray-100 text-left text-[11px] font-semibold text-gray-600">
+              <th className="px-2 py-2 text-center">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={() => (allSelected ? onClearAll() : onSelectAll())}
+                  className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  title="เลือกทั้งหมด"
+                />
+              </th>
+              {FWD_COLS.map((c) => {
+                const active = sort?.key === c.key;
+                return (
+                  <th key={c.key} className="px-2 py-2">
+                    {c.get ? (
+                      <button
+                        type="button"
+                        onClick={() => onSort(c.key)}
+                        title="กดเพื่อเรียงลำดับ"
+                        className={`inline-flex items-center gap-1 hover:text-primary-600 ${active ? "text-primary-600" : ""}`}
+                      >
+                        {c.label}
+                        {active ? (
+                          sort!.dir === "asc" ? (
+                            <ArrowUp className="h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="h-3 w-3" />
+                          )
+                        ) : (
+                          <ArrowUpDown className="h-3 w-3 text-gray-400" />
+                        )}
+                      </button>
+                    ) : (
+                      c.label
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => {
+            {shown.map((r, i) => {
               const isSel = selected.has(r.fid);
               const b = r.breakdown;
               const st = fstatusBadge(r.fstatus ?? "");
@@ -659,11 +790,7 @@ function ForwarderTable({
                 <tr
                   key={r.fid}
                   className={
-                    isSel
-                      ? "bg-emerald-50"
-                      : i % 2 === 0
-                        ? "bg-white"
-                        : "bg-gray-50/40"
+                    isSel ? "bg-emerald-50" : i % 2 === 0 ? "bg-white" : "bg-[#F2F1EF]"
                   }
                 >
                   <td className="px-2 py-2 align-top">
@@ -678,29 +805,33 @@ function ForwarderTable({
                     {formatThaiDateTime(r.fdate)}
                   </td>
                   <td className="px-2 py-2 align-top">
-                    <div className="font-semibold text-gray-900">{panel.user.userid}</div>
+                    <div className="font-semibold text-sky-600">{panel.user.userid}</div>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {r.is_svip && (
-                        <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[11px] font-medium text-purple-700">
-                          เรทเฉพาะตัว
-                        </span>
+                        <span className="rounded-full bg-indigo-500 px-2 py-0.5 text-[11px] font-medium text-white">SVIP</span>
                       )}
                       {r.is_credit && (
-                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
-                          เครดิต
-                        </span>
+                        <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-medium text-white">เครดิต</span>
                       )}
                       {r.is_juristic && (
-                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-700">
-                          นิติบุคคล
-                        </span>
+                        <span className="rounded-full bg-slate-500 px-2 py-0.5 text-[11px] font-medium text-white">นิติบุคคล</span>
                       )}
                       {r.adminid_sale && (
-                        <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-medium text-blue-700">
-                          Sale: {r.adminid_sale}
-                        </span>
+                        <span className="rounded-full bg-violet-500 px-2 py-0.5 text-[11px] font-medium text-white">Sale : {r.adminid_sale}</span>
                       )}
                     </div>
+                    {r.fdatetothai && (
+                      <div className="mt-1 text-[11px] font-medium text-rose-800">
+                        จะมาถึงไทย : {formatThaiDate(r.fdatetothai)}
+                      </div>
+                    )}
+                    {r.provenance && (
+                      <div className="mt-1">
+                        <span className="inline-block rounded-full bg-orange-500 px-2 py-0.5 text-[11px] font-medium text-white">
+                          {r.provenance}
+                        </span>
+                      </div>
+                    )}
                   </td>
                   <td className="px-2 py-2 align-top">
                     <div className="flex gap-2">
@@ -719,20 +850,20 @@ function ForwarderTable({
                             <Link
                               key={`b${bl.id}`}
                               href={`/admin/billing-run/${bl.id}`}
-                              className="inline-flex items-center rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100"
+                              className="inline-flex items-center rounded-full bg-indigo-500 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-indigo-600"
                               title="ดูใบวางบิล"
                             >
-                              🧾 {bl.docNo}
+                              {bl.docNo}
                             </Link>
                           ))}
                           {r.receipts.map((rc) => (
                             <Link
                               key={`r${rc.id}`}
                               href={`/admin/accounting/forwarder-invoice/${rc.id}`}
-                              className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-medium ${rc.status === "2" ? "border-gray-200 bg-gray-50 text-gray-400 line-through" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}
+                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${rc.status === "2" ? "bg-gray-300 text-gray-500 line-through" : "bg-emerald-500 text-white hover:bg-emerald-600"}`}
                               title={rc.status === "2" ? "ใบเสร็จ(ยกเลิกแล้ว)" : "ดูใบเสร็จ"}
                             >
-                              🧾 {rc.rid}
+                              {rc.rid}
                             </Link>
                           ))}
                         </div>
@@ -740,12 +871,7 @@ function ForwarderTable({
                           <div className="line-clamp-2 text-gray-600">{r.fdetail}</div>
                         )}
                         {r.products_type_label && (
-                          <div className="text-[11px] text-gray-500">ประเภท: {r.products_type_label}</div>
-                        )}
-                        {r.provenance && (
-                          <div className="mt-0.5 inline-block rounded bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-600">
-                            {r.provenance}
-                          </div>
+                          <div className="text-[11px] text-gray-500">ประเภท : {r.products_type_label}</div>
                         )}
                         {r.fnote && (
                           <div className="mt-1 rounded bg-red-50 px-1.5 py-0.5 text-[11px] text-red-700">
@@ -777,16 +903,18 @@ function ForwarderTable({
                       <div className="font-mono text-red-600">{r.ftrackingchn}</div>
                     )}
                     {r.fcabinetnumber && (
-                      <div className="text-[11px] text-gray-600">เลขตู้: {r.fcabinetnumber}</div>
+                      <div className="text-[11px] text-gray-600">เลขตู้ : {r.fcabinetnumber}</div>
                     )}
                     {r.transport_label && (
-                      <div className="text-[11px] text-gray-500">{r.transport_label}</div>
+                      <span className="mt-0.5 inline-block rounded-full bg-teal-500 px-2 py-0.5 text-[11px] font-medium text-white">
+                        {r.transport_label}
+                      </span>
                     )}
                     {r.fdatecontainerclose && (
                       <div className="text-[11px] text-gray-400">ปิดตู้ {r.fdatecontainerclose}</div>
                     )}
                     {r.fpallet && (
-                      <div className="text-[11px] text-gray-400">location: {r.fpallet}</div>
+                      <div className="text-[11px] text-gray-400">location : {r.fpallet}</div>
                     )}
                   </td>
                   <td className="px-2 py-2 align-top">
@@ -805,12 +933,30 @@ function ForwarderTable({
                     {r.fdatestatus4 ?? "—"}
                   </td>
                   <td className="px-2 py-2 align-top">
-                    <span className={`inline-block rounded px-2 py-0.5 text-[11px] font-medium ${st.chip}`}>
+                    <span className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] ${st.chip}`}>
                       {st.label}
                     </span>
                   </td>
                   <td className="px-2 py-2 align-top text-[11px] text-gray-500">
                     {r.adminid_update ?? "—"}
+                  </td>
+                  <td className="px-2 py-2 text-center align-top">
+                    <div className="flex flex-col items-stretch gap-1">
+                      <Link
+                        href={`/admin/forwarders/${r.fid}`}
+                        className="rounded-full bg-emerald-500 px-3 py-1 text-[11px] font-medium text-white hover:bg-emerald-600"
+                        title="ดูข้อมูลออเดอร์"
+                      >
+                        ดูข้อมูล
+                      </Link>
+                      <Link
+                        href={`/admin/forwarders/${r.fid}`}
+                        className="rounded-full bg-orange-500 px-3 py-1 text-[11px] font-medium text-white hover:bg-orange-600"
+                        title="อัปเดตออเดอร์"
+                      >
+                        อัปเดต
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               );

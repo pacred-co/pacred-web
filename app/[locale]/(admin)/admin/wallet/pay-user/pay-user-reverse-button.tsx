@@ -56,7 +56,7 @@ export function PayUserReverseButton({ fid }: { fid: string }) {
         type="button"
         onClick={onClick}
         disabled={pending || done}
-        className="inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
         title="ย้อนการชำระ + ถอยสถานะ"
       >
         <Undo2 className="h-3 w-3" />
