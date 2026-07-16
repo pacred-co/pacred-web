@@ -3,8 +3,16 @@
 โกดัง **อี้อู ไม่มี API** → ทำ manual **2 อัพ** ที่หน้าเดียวกับ packing-upload.
 verify กับโค้ดจริงแล้ว + owner ภูม เคาะครบทุกข้อ (2026-07-15).
 
-> ## 🏁 SAVE-POINT / RESUME (2026-07-15 · ภูม ย้ายไปทำต่อคอมบ้าน)
-> **Branch = `Poom-pacred`** (push แล้ว · worktree branch `claude/adoring-chandrasekhar-0f8ad7` = tip เดียวกัน). resume คอมบ้าน: `git fetch && git pull origin Poom-pacred` + copy `.env.local` จาก main repo + connect browser.
+> ## 🏁 SAVE-POINT / RESUME (2026-07-16 · Phase 3 ✅ DONE — ทั้ง flow ครบ)
+> **Branch = `Poom-pacred`.** resume: `git fetch && git pull origin Poom-pacred` + copy `.env.local` + connect browser.
+>
+> **✅ PHASE 3 เสร็จครบ (2026-07-16 · gate เขียว tsc0/eslint0/build0 · test create-parser 7 + reconcile-planner 8 · DEV INSERT ทดสอบจริง + browser §0c ผ่าน · money self-review ครบ 10 จุด):**
+> - **หน้าเดียวจบ `/admin/api-forwarder-yiwu`** (sidebar `อัปเดตฝากนำเข้า → อี้อู (ใบส่งของ)` + menubar MOMO/อี้อู/CargoCenter). สีเข้ากับระบบ (teal create · sky packing · emerald CTA · red brand).
+> - **upload-1 create (money core)** `actions/admin/yiwu-delivery-note.ts` — clone `createMissingMomoForwarderRow` · box-split `<单号>-i/N` · fstatus='2' ถึงโกดังจีน · **fwarehousechina='2'=อี้อู (ขับ rate card อี้อู · verified DEV มี 8+8 rows sourcewarehouse=2)** · fwarehousename='9'=อี้อู (label) · PR ตรงจาก Customer ID · per-row weight/dims · fcover=รูป · GUARD1 dedup base · GUARD2 validate PR · partial-rollback · best-effort auto-price (ไม่ silent ฿0) · ไม่แตะ wallet/credit/commission/invoice. validator `lib/validators/yiwu-delivery-note.ts` + OCR pre-fill `lib/admin/yiwu-delivery-parser.ts` (best-effort · staff แก้ทุกช่อง = gate).
+> - **UI create** `yiwu-client.tsx` — อัปรูป→auto-upload+OCR-assist→editable box-split grid (หลาย 单号/note · เพิ่ม-ลบ แถว/ออเดอร์ · คำนวณ CBM) → confirm dialog → commit → result. `uploadYiwuDeliveryImage` เก็บรูป bucket `forwarder-covers` prefix `admin/yiwu` → key ลง fcover.
+> - **upload-2 reconcile (money-FREE)** `actions/admin/yiwu-packing-reconcile.ts` + pure planner `lib/admin/yiwu-packing-match.ts` (+test 8) — match base 单号 (exact `baseTrackingOf`===base · กัน prefix false-positive) · **userid-consistency guard** (ชนข้ามลูกค้า→skip+flag) · เขียนแค่ ผูกตู้ (empty-guard `.eq fcabinetnumber ""`) + advance 1/2→3 (`.in fstatus [1,2]` never-demote) · **ไม่เขียน basis · ไม่ reprice · ไม่แตะ billed 5/6/7** → บั๊ก class ที่ revert ตอน Phase 2 = เป็นไปไม่ได้เชิงโครงสร้าง (ไม่มีการคิดเงินจาก sibling set). UI `yiwu-packing-client.tsx` = upload xlsx→preview (ไม่เขียน)→apply. **reconcile ของ MOMO คง pristine (ไม่แตะ).**
+>
+> **⚠️ ยังไม่ได้ทำ (residual · owner-gated):** (1) Yiwu ใน `packing-upload` (Phase 2a) ยังเป็น preview-only — reconcile จริงอยู่ที่หน้า `/admin/api-forwarder-yiwu` (ตั้งใจ · ไม่แตะ MOMO). (2) upload-1/reconcile **ไม่ได้ authed-apply-test บน DEV** (INSERT DEV-tested ตรง · แต่ full create-action + reconcile ผ่าน gate+§0c-render · ยังไม่กดจริง end-to-end ผ่าน UI) → ภูม กดจริง: อัปใบส่งของ→OCR→แก้→เอาเข้าระบบ→เช็ค forwarder ถึงโกดังจีน fwarehousechina=2 · แล้ว upload packing→preview→ผูกตู้→เช็ค status→3. (3) UNIQUE ftrackingchn (Phase 5 · dup-precheck prod).
 >
 > **✅ เสร็จ + push แล้ว = Phase 1 (ปลอดภัย · ไม่แตะเงิน · gate เขียว tsc0/eslint0/build0 · test 11/11 · MOMO 14 regression):**
 > - `lib/admin/yiwu-packing-xlsx-parser.ts` — ตัวแกะไฟล์ packing อี้อู (sheet 收货 · หัวจีน · แตกต่อ 单号 · return `MomoPackingParse` shape เดิม)

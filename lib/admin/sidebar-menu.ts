@@ -530,6 +530,11 @@ const blockApiForwarderUpdate: MenuItem = {
     // ภูม 2026-07-03 — "คิวค้นเจอจาก MOMO Live": แทรคที่ MOMO API ทิ้ง (Live บอก
     // มาไทยแล้ว/มีตู้ แต่ไม่มีในระบบ) → กดสร้างเข้าระบบได้ (ฝากสั่งซื้อหายค้างเอง).
     { labelKey: "apiForwarderUpdate.momoDiscovery", href: "/admin/api-forwarder-momo/discovery", icon: "PackageCheck" },
+    // ภูม 2026-07-16 — อี้อู (Yiwu) has NO API. Staff upload the ใบส่งของ (delivery-note)
+    // IMAGE when goods land at the China warehouse → OCR-assisted review grid → commit
+    // box-split arrival rows (fstatus 2 · fwarehousechina 2 = อี้อู rate card). The
+    // packing-list upload later assigns the container + advances to "กำลังมาไทย".
+    { labelKey: "apiForwarderUpdate.yiwu", href: "/admin/api-forwarder-yiwu", icon: "FileImage" },
     { labelKey: "apiForwarderUpdate.cn",   href: "/admin/api-forwarder-cn",   icon: "Truck" },
     // 2026-06-14 (W6 · carrier-fidelity) — port the 3 remaining legacy
     // carrier API pages: JMF (read-only history viewer over tb_forwarder_jmf_tmp) ·

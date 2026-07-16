@@ -75,7 +75,7 @@ type SP = {
 // Legacy nameWarehouse() — fWarehouseName int → display name
 const WAREHOUSE_LABEL: Record<string, string> = {
   "1": "แสง", "2": "CTT", "3": "MK", "4": "MX",
-  "5": "JMF", "6": "GOGO", "7": "Cargo Center", "8": "MOMO",
+  "5": "JMF", "6": "GOGO", "7": "Cargo Center", "8": "MOMO", "9": "อี้อู",
 };
 
 // Legacy nameTransportType2() — fTransportType

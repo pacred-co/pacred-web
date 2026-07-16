@@ -37,7 +37,7 @@ import {
   Ban, AlertCircle, Database, DatabaseZap, Send, Contact, Gauge, PhoneCall, Megaphone, Handshake,
   ClipboardList, ReceiptText, FileSignature, Ship, BookMarked,
   Rocket, PanelLeft, Users2, Undo2, MessagesSquare, LayoutGrid,
-  MonitorSpeaker,
+  MonitorSpeaker, FileImage,
   ChevronDown, ChevronRight, type LucideIcon,
 } from "lucide-react";
 import type { AdminRole } from "@/lib/auth/require-admin";
@@ -161,6 +161,8 @@ const ICONS: Record<string, LucideIcon> = {
   // 2026-07-06 (พี่ป๊อป spec §3) — จอมอนิเตอร์ "กำลังจัดส่ง" leaf
   // (forwarder.driverMonitor · /admin/drivers/monitor).
   MonitorSpeaker,
+  // 2026-07-16 (ภูม) — อี้อู ใบส่งของ leaf (apiForwarderUpdate.yiwu).
+  FileImage,
 };
 
 function Icon({ name, active }: { name?: string; active: boolean }) {
