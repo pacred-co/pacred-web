@@ -3,6 +3,19 @@
 
 ---
 
+# 🧾 2026-07-16 ค่ำ (เดฟ · resume จาก limit) — 🔴 URGENT ลูกค้าสั่งของไม่ได้ (เหมาๆ PRF own-fleet) + report-cnt สี ยิงเข้าแล้วขาว + เหมาๆ split-box drop (diagnosed · defer) → push dave-pacred + main · read FIRST
+
+> **🏁 CLOSE (owner: "resync main pull dave-pacred · ต่องาน run-ค้าง · แก้งานตามรูป · จบแล้ว push dave-pacred + main").** **dave-pacred = main = `<HEAD>`** (Vercel prod). resync จาก c6baf98d. ⚠️ `.env.local` pw STALE — prod `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ` (`lozntlidlqqzzcaathnm`). NEXT FREE mig = 0257. gate: `rm -f .next/dev/types/validator.ts` ก่อน · build อ่าน exit จริง · tsc 0. ไม่มี admin login เว็บเรา → verify code + prod DB + gate.
+>
+> **✅ งาน resume นี้ (push dave-pacred + main):**
+> - **🔴 URGENT ลูกค้าสั่งของไม่ได้ (`9cf1edc0`)** — เลือก เหมาๆ → cart เขียน carrier="PRF" (D1 rebrand ของ PCSF) แต่ `carrier-coverage-guard.OWN_FLEET_SHIPBY` มีแค่ ["PCS","PCSF","PCSE"] → reject "ขนส่ง PRF ไม่อยู่ในรายชื่อ" → ส่งออเดอร์ไม่ได้. FIX: เพิ่ม PRF/PRE เข้า own-fleet + pay-method (pay-method มี PRF แล้ว · guard ตกหล่น = ต้นตอ). **บทเรียน: D1 rebrand (PCSF→PRF) ต้อง sweep ทุก hardcoded-list · pay-method อัปเดตแต่ guard ลืม** (L-MIG-04). guard 69/0 · pay-method 28/0.
+> - **report-cnt สี (`6dc3210e`)** — owner "ยิงของเข้าโกดังไทยแล้ว ยังแดง · ต้องขาว". fstatus='4' (ถึงไทยแล้ว=ยิงเข้าแล้ว) → `pcs-row-done` (#e6f5ec near-white) ไม่ใช่ red. c6baf98d neutralise settled(6/7/8) แล้ว แต่ลืม arrived(4). '5'(รอชำระ)+'<4'(in transit) ยังแดง (ตั้งใจ).
+> - **🟡 เหมาๆ split-box drop (#52474) — diagnosed · DEFER (money · owner กลัว double-charge)** ([`docs/research/mao-fee-split-box-anchor-2026-07-16.md`](docs/research/mao-fee-split-box-anchor-2026-07-16.md)) — จ่ายแทนลูกค้า ตกเหมาๆ ฿100 เพราะ #52474 = split box `JYM…-1/4` · rule "-N never anchors" → batch ที่มีแต่ -N ไม่มี anchor → maoFee=0. bill ถูก (100 อยู่ delivery_th_thb · mao_fee=0). 6 invoice เก็บเหมาๆ ผิดช่อง. **fix ที่ถูก = per-shipment anchor ข้าม batch** (double-charge-critical = สิ่งที่ owner กลัว) → ไม่รีบ · ต้องทำ resolver + test matrix (prior audit 2.2M tok ค้าง). NOT rushed (ห้ามทำงานบัค).
+>
+> **🔴 CARRYOVER:** (1) **เหมาๆ per-shipment anchor** (build resolver + test + wire pay-user/bill + backfill 6 invoice · owner เคาะ) · (2) carryover เก่ายังอยู่ (credit-withdraw flow · box-split backfill).
+
+---
+
 # 🧾 2026-07-16 (เดฟ · Mac · owner-driven · resume ×2 จากเมลหลักติด limit) — MOMO แตกกล่อง 3-root + reconcile 21 dup + dangler + packing-gate + pay-on-behalf doc-split + ↩ ย้อนการรับชำระ (unwind ครบวงจร) + wire-map flow A1-A6 + B2 driver-stop cleanup + integrate ภูม → ALL 4 BRANCHES · read FIRST
 
 > **🏁 SESSION CLOSE (owner "เอางานน้องมารวม → main พร้อมกัน → สรุปปิด session ตามสูตร" · + resume Windows PR178/PR139 + /admin/incidents + MOMO box-count root).** **main = dave-pacred = Poom-pacred = InwPond007 = `ff1ab622`** (ทั้ง 4 sync · Vercel deploy prod). resume: `git fetch && git pull origin dave-pacred`. **NEXT FREE mig = 0257** (0256 customs_declaration+customs_importer_lead · applied prod+dev). gate ทุก commit: **tsc 0 · build 0** (`NODE_OPTIONS=8192 node node_modules/next/dist/bin/next build` · read BUILD_EXIT · `rm -f .next/dev/types/validator.ts` ก่อน). 🔑 prod pw chat-only `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ` (`lozntlidlqqzzcaathnm`) · pooler aws-1 · direct `db.<ref>.supabase.co:5432` ก็ได้. **ไม่มี migration ใหม่ session นี้ · NEXT FREE = 0256.** ⚠️ money items = dry-run+backup ก่อน --apply · เครื่องข้าม-session หลายเมล (Mac ↔ disk) — resync ก่อนเสมอ (session นี้ FF absorb งาน disk-machine 89+6 commit).
