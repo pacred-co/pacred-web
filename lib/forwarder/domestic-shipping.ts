@@ -340,6 +340,109 @@ export function resolveThShippingAutoPrice(args: {
   return Math.round(cost * (1 + TH_SHIPPING_PROFIT_MARGIN / 100));
 }
 
+// ────────────────────────────────────────────────────────────────────────
+// ค่าส่งไทย BLOCK DIAGNOSIS — "ทำไมแจ้งชำระไม่ได้" (owner 2026-07-17 · ผิดพลาด 8)
+// ────────────────────────────────────────────────────────────────────────
+//
+// owner แคปหน้าจอ "แจ้งชำระเงินสำเร็จ 0 · ผิดพลาด 8" มา — UI โชว์แค่ตัวเลขลอยๆ ไม่บอก
+// ว่าทำไม → พนักงานติดตลอดกาล (บทเรียน [[wrong-error-message-hides-real-block]]).
+//
+// `resolveAutoThShippingFill` คืน null ได้จากหลายสาเหตุที่ต้องแก้คนละที่ (โกดังวัดขนาด vs
+// CS ใส่ที่อยู่ vs เลือกขนส่ง vs กรอกค่าส่งเอง) แต่ null ไม่พกเหตุผลมาด้วย → ทุก caller
+// (forwarder-check / billing-run / report-cnt) เลยได้แต่ "฿0 · ข้าม" ที่บอกอะไรไม่ได้.
+//
+// ตัวนี้ = เหตุผลจริง ที่ mirror ลำดับการตัดสินใจของ `resolveAutoThShippingFill` เป๊ะๆ และ
+// รายงาน **ทุกช่องที่ขาด** (ไม่ใช่แค่ตัวแรกที่ short-circuit) เพราะแถวจริงบน prod ขาดพร้อมกัน
+// หลายอย่าง (เช่น #52163 PR043: ทั้งไม่ได้วัดขนาด ทั้งไม่มีที่อยู่).
+//
+// ⚠️ DIAGNOSIS-ONLY — ไม่แตะเงื่อนไข gate · ไม่แตะสูตรเงิน · ไม่เขียน DB. หน้าที่เดียวคือ
+// "ทำให้เหตุผลที่ block อยู่แล้ว มองเห็นได้".
+
+/** ช่องข้อมูลที่ขาด จนระบบคิดค่าส่งไทยอัตโนมัติไม่ได้. */
+export type ThShippingMissingInput =
+  | "address"        // ไม่มีรหัสไปรษณีย์ → ไม่รู้โซน/เรทปลายทาง (CS)
+  | "dimensions"     // กว้าง×ยาว×สูง = 0 → Flash คิดจาก max(กก., ขนาด) ไม่ได้ (โกดัง)
+  | "weight"         // น้ำหนัก = 0 (โกดัง)
+  | "carrier"        // ยังไม่เลือกขนส่งในไทย (CS)
+  | "over_limit"     // วัดครบแล้ว แต่เกินพิสัย Flash (>50 กก. / >280 ซม.) → ต้องกรอกเอง
+  | "manual_carrier"; // ขนส่งที่ระบบคิดให้ไม่ได้ (PRE Express) → ต้องกรอกเอง
+
+export type ThShippingBlockDiagnosis = {
+  /** ทุกช่องที่ขาด — เรียงตามลำดับที่ควรไปแก้. */
+  missing: ThShippingMissingInput[];
+  /** เหตุผลไทยสั้นๆ อ่านรู้เรื่องในตาแรก (§0g) — รวมทุกช่องที่ขาด. */
+  reason: string;
+  /** ต้องทำอะไรต่อ — ใคร ทำอะไร ที่ไหน. */
+  nextAction: string;
+};
+
+const MISSING_REASON: Record<ThShippingMissingInput, string> = {
+  address:        "ยังไม่มีที่อยู่จัดส่ง (ไม่มีรหัสไปรษณีย์)",
+  dimensions:     "ยังไม่ได้วัดขนาดกล่อง (กว้าง×ยาว×สูง = 0)",
+  weight:         "ยังไม่ได้ชั่งน้ำหนัก",
+  carrier:        "ยังไม่ได้เลือกขนส่งในไทย",
+  over_limit:     "พัสดุเกินพิสัยขนส่งอัตโนมัติ (เกิน 50 กก. หรือ 280 ซม.)",
+  manual_carrier: "ขนส่งนี้ระบบคิดค่าส่งให้อัตโนมัติไม่ได้",
+};
+
+const MISSING_ACTION: Record<ThShippingMissingInput, string> = {
+  address:        "ให้ CS ใส่ที่อยู่จัดส่ง",
+  dimensions:     "ให้โกดังวัดขนาดกล่อง",
+  weight:         "ให้โกดังชั่งน้ำหนัก",
+  carrier:        "ให้ CS เลือกขนส่งในไทย",
+  over_limit:     "เลือกขนส่งเอง + กรอกค่าส่งไทยเอง",
+  manual_carrier: "กรอกค่าส่งไทยเอง",
+};
+
+/**
+ * diagnoseThShippingBlock — "ทำไมระบบเติมค่าส่งไทยให้อัตโนมัติไม่ได้".
+ *
+ * เรียกได้ต่อเมื่อ `isThShippingCostMissing` = true แล้ว (แถวถูก block จริง) — ตัวนี้แค่
+ * อธิบายเหตุผล ไม่ได้ตัดสินว่า block หรือไม่. mirror ลำดับของ `resolveAutoThShippingFill`:
+ *   เหมาๆ/ในเขต → ไม่มีวันตัน (เติม ฿0 + คิด ฿100 ที่ anchor) → ไม่เรียกตัวนี้
+ *   PCSE        → manual_carrier
+ *   นอกเขต      → ต้องมี ขนาด + น้ำหนัก ครบถึงจะ quote Flash ได้ · ไม่งั้น/เกินพิสัย → กรอกเอง
+ * Pure + testable.
+ */
+export function diagnoseThShippingBlock(args: {
+  fshipby: string | null | undefined;
+  zip?: string | null;
+  weightKg?: number | null;
+  sizeCm?: number | null;
+}): ThShippingBlockDiagnosis {
+  const carrier = (args.fshipby ?? "").trim().toUpperCase();
+  const zip = (args.zip ?? "").trim();
+  const kg = Math.max(0, Number(args.weightKg) || 0);
+  const size = Math.max(0, Number(args.sizeCm) || 0);
+
+  const missing: ThShippingMissingInput[] = [];
+
+  // PRE Express = รถบริษัท คิดจาก CBM×เรท → ระบบเดาไม่ได้ (resolveAutoThShippingFill คืน
+  // null ตรงนี้ ก่อนดูที่อยู่/ขนาดด้วยซ้ำ) → เหตุผลเดียวที่จริงคือ "กรอกเอง".
+  if (carrier === "PCSE") {
+    return {
+      missing: ["manual_carrier"],
+      reason: MISSING_REASON.manual_carrier,
+      nextAction: `${MISSING_ACTION.manual_carrier} (PRE Express คิดตามคิว×เรท)`,
+    };
+  }
+
+  // นอกเขตเหมาๆ — รายงานทุกช่องที่ขาด (แถวจริงมักขาดพร้อมกันหลายอย่าง).
+  if (carrier === "") missing.push("carrier");
+  if (zip === "") missing.push("address");
+  if (size <= 0) missing.push("dimensions");
+  if (kg <= 0) missing.push("weight");
+
+  // ข้อมูลครบทุกช่อง แต่ยังเติมไม่ได้ = Flash ไม่รับ (เกิน 50 กก. / 280 ซม.).
+  if (missing.length === 0) missing.push("over_limit");
+
+  return {
+    missing,
+    reason: missing.map((m) => MISSING_REASON[m]).join(" · "),
+    nextAction: `${missing.map((m) => MISSING_ACTION[m]).join(" · ")} แล้วกดแจ้งชำระอีกครั้ง`,
+  };
+}
+
 /**
  * Resolve the auto-fill ค่าส่งไทย for a forwarder row, or null when it can't /
  * shouldn't auto-fill (already set · self-pickup · PCSE express-manual).

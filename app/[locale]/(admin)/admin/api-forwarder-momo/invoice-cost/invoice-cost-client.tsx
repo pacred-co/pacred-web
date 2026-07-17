@@ -70,7 +70,7 @@ export function MomoInvoiceCostClient() {
           >
             {pending ? "กำลังอ่าน…" : "ดูตัวอย่าง (Preview)"}
           </button>
-          {preview && preview.summary.willApply > 0 && (
+          {preview && preview.reconciles && preview.summary.willApply > 0 && (
             <button
               type="button"
               onClick={doApply}
@@ -81,6 +81,20 @@ export function MomoInvoiceCostClient() {
             </button>
           )}
         </div>
+        {preview && !preview.reconciles && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <p className="font-semibold">🔴 ยอดไม่ตรง — บันทึกต้นทุนไม่ได้</p>
+            <p className="mt-1 text-[13px]">
+              แกะได้ {preview.rows.length} บรรทัด รวม ฿{baht(preview.linesTotal)}
+              {preview.subTotal == null
+                ? ' · หายอด "ค่าขนส่งทั้งหมด (Sub-total)" บนใบไม่เจอ — กรุณาวางข้อความให้ครบทั้งใบ รวมส่วนท้าย'
+                : ` vs Sub-total บนใบ ฿${baht(preview.subTotal)} · ต่างกัน ฿${baht(Math.abs(preview.subTotal - preview.linesTotal))}`}
+            </p>
+            <p className="mt-1 text-[13px]">
+              แปลว่ามีบรรทัดตกหล่นหรือรูปแบบใบเปลี่ยน — ระบบปฏิเสธทั้งไฟล์เพื่อกันเขียนต้นทุนผิด แจ้งทีมพัฒนาพร้อมเลขที่ใบ
+            </p>
+          </div>
+        )}
         {msg && (
           <div className={`rounded-lg px-3 py-2 text-sm ${msg.kind === "ok" ? "bg-green-50 text-green-800 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
             {msg.text}
@@ -93,10 +107,14 @@ export function MomoInvoiceCostClient() {
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <span className="font-bold">ใบ {preview.invoiceNo ?? "-"}</span>
             <span className="text-muted">ยอดรวมใบ: ฿{baht(preview.grandTotal)}</span>
+            <span className={`rounded-full px-2 py-0.5 text-xs ${preview.reconciles ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+              {preview.reconciles ? `Σ ตรง Sub-total ฿${baht(preview.subTotal)} ✓` : "Σ ไม่ตรง Sub-total ✗"}
+            </span>
             <span className="rounded-full bg-gray-100 text-gray-700 px-2 py-0.5 text-xs">ทั้งหมด {preview.summary.total}</span>
             <span className="rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-xs">จับคู่ได้ {preview.summary.matched}</span>
             <span className="rounded-full bg-amber-100 text-amber-700 px-2 py-0.5 text-xs">จะอัปเดต {preview.summary.willApply}</span>
             {preview.summary.unmatched > 0 && <span className="rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-xs">ไม่พบในระบบ {preview.summary.unmatched}</span>}
+            {preview.summary.cabinetConflicts > 0 && <span className="rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-xs">ตู้ไม่ตรง {preview.summary.cabinetConflicts}</span>}
             {preview.summary.paidSkipped > 0 && <span className="rounded-full bg-orange-100 text-orange-700 px-2 py-0.5 text-xs">ข้าม (จ่ายแล้ว) {preview.summary.paidSkipped}</span>}
           </div>
           <div className="overflow-x-auto scrollbar-x-visible">
@@ -105,7 +123,7 @@ export function MomoInvoiceCostClient() {
                 <tr>
                   <th className="px-2 py-2 text-left">แทรคกิ้ง</th>
                   <th className="px-2 py-2 text-left">รหัส / ตู้</th>
-                  <th className="px-2 py-2 text-right">CBM × เรท × จำนวน</th>
+                  <th className="px-2 py-2 text-right">คิว × เรท · กล่อง</th>
                   <th className="px-2 py-2 text-right">ต้นทุนปัจจุบัน</th>
                   <th className="px-2 py-2 text-right">ต้นทุนใบแจ้งหนี้</th>
                   <th className="px-2 py-2 text-center">ผล</th>
@@ -114,9 +132,22 @@ export function MomoInvoiceCostClient() {
               <tbody>
                 {preview.rows.map((r) => (
                   <tr key={r.tracking} className="border-t border-border">
-                    <td className="px-2 py-2 font-mono">{r.tracking}{r.totalMismatch && <span className="ml-1 text-orange-600" title="ยอดรวมไม่ตรง เรท×คิว — ตรวจสอบ">⚠</span>}</td>
-                    <td className="px-2 py-2 text-[11px]">{r.matched ? `${r.userid ?? "-"} / ${r.fcabinetnumber ?? "-"}` : <span className="text-red-600">ไม่พบในระบบ</span>}</td>
-                    <td className="px-2 py-2 text-right text-muted">{r.cbm} × {baht(r.unitPrice)} × {r.qty}</td>
+                    <td className="px-2 py-2 font-mono">{r.tracking}{r.totalMismatch && <span className="ml-1 text-orange-600" title="ยอดบนใบไม่ตรงทั้ง เรท×คิว และ เรท×คิว×กล่อง — ตรวจสอบใบ">⚠</span>}</td>
+                    <td className="px-2 py-2 text-[11px]">
+                      {r.matched ? (
+                        <>
+                          <span>{r.userid ?? "-"} / {r.fcabinetnumber ?? "-"}</span>
+                          {r.cabinetConflict && (
+                            <span className="ml-1 text-red-600 font-medium" title={`MOMO ระบุตู้ ${r.invoiceCabinet} · ระบบเรา ${r.fcabinetnumber}`}>
+                              ⚠ ใบว่า {r.invoiceCabinet}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-red-600">ไม่พบในระบบ{r.invoiceCabinet ? ` (ใบว่าตู้ ${r.invoiceCabinet})` : ""}</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-2 text-right text-muted">{r.cbm} × {baht(r.unitPrice)} · {r.qty} กล่อง</td>
                     <td className="px-2 py-2 text-right">{baht(r.currentCost)}</td>
                     <td className="px-2 py-2 text-right font-semibold">{baht(r.invoiceCost)}</td>
                     <td className="px-2 py-2 text-center">

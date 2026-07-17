@@ -59,7 +59,11 @@ import {
   computeForwarderCollectTotal,
   type ForwarderCollectRow,
 } from "@/lib/forwarder/forwarder-collect-total";
-import { isThShippingCostMissing, codBaseTrackings } from "@/lib/forwarder/domestic-shipping";
+import {
+  isThShippingCostMissing,
+  codBaseTrackings,
+  diagnoseThShippingBlock,
+} from "@/lib/forwarder/domestic-shipping";
 import { baseTracking } from "@/lib/admin/momo-bill-header";
 import { logger, redactPhone } from "@/lib/logger";
 import { sendNotification } from "@/lib/notifications";
@@ -124,6 +128,37 @@ type ForwarderRow = {
   ftransportpricechnthb: number | string | null;
   priceother: number | string | null;
   fdiscount: number | string | null;
+  // owner 2026-07-17 ("ผิดพลาด 8") — DIAGNOSIS-ONLY reads. `diagnoseThShippingBlock`
+  // needs the same inputs `resolveAutoThShippingFill` uses (zip + girth + kg) so the
+  // failure can name the EXACT missing field instead of a generic "ค่าส่งไทย ฿0".
+  // Read-only · never written by this action.
+  faddresszipcode: string | null;
+  fweight: number | string | null;
+  fwidth: number | string | null;
+  flength: number | string | null;
+  fheight: number | string | null;
+};
+
+/**
+ * BillFailure — ทำไมแถวนี้แจ้งชำระไม่ได้ (owner 2026-07-17 · [[wrong-error-message-hides-real-block]]).
+ *
+ * เดิม action เก็บเหตุผลไว้ใน `errors: string[]` แต่ client ไม่เคยอ่าน → จอโชว์แค่
+ * "ผิดพลาด 8" ลอยๆ. ตัวนี้คือเหตุผล **รายตัว** แบบมีโครงสร้าง ให้ UI แจงได้ว่า
+ * แถวไหน · ติดอะไร · ต้องทำอะไรต่อ. ตัวตนลูกค้า/ตู้/แทรคกิ้ง ไม่ต้องส่งกลับ — client
+ * join กับ `rows` ที่ถืออยู่แล้ว (ชื่อนิติที่ resolve แล้ว · §0g).
+ */
+export type BillFailure = {
+  fid: number;
+  /** machine code — สำหรับ group/นับ. */
+  code:
+    | "zero_import_price"   // C1 ค่านำเข้า ฿0 (ยังไม่ตั้งราคา/วัด)
+    | "th_shipping_missing" // C2 ยังไม่มีค่าส่งไทย (+ ระบบเติมอัตโนมัติไม่ได้)
+    | "not_status_4"        // แถวไม่ได้อยู่สถานะ 4 → action อ่านไม่เจอ (เดิม = หายเงียบ)
+    | "update_failed";      // UPDATE ไม่ผ่าน (race / DB error)
+  /** เหตุผลไทย อ่านรู้เรื่องในตาแรก. */
+  reason: string;
+  /** ต้องทำอะไรต่อ — ใคร ทำอะไร. */
+  nextAction: string;
 };
 
 type UserRow = {
@@ -146,7 +181,74 @@ type BillResult = {
   email_sent: number;       // email fallback that succeeded
   email_failed: number;     // email attempted but underlying send failed (or no email)
   no_profile: number;       // userid had no profile row (LINE+email skipped)
-  errors: string[];         // human-readable per-row failures (capped)
+  errors: string[];         // human-readable per-row failures (capped) — audit-log shape
+  /** owner 2026-07-17 — เหตุผลรายตัวแบบมีโครงสร้าง ให้ UI แจงได้ (แทน "ผิดพลาด N" ลอยๆ). */
+  failures: BillFailure[];
+};
+
+/** `errors` (audit-log/back-compat) derived from the structured failures — one home for the text. */
+function failureLine(f: BillFailure): string {
+  return `#${f.fid}: ${f.reason} — ${f.nextAction}`;
+}
+
+/**
+ * Diagnose the fids that the fstatus='4' read DIDN'T return. Previously these
+ * vanished from the result entirely (neither processed nor failed) — an operator
+ * who ticked a mixed selection got a count that silently didn't add up. Read-only.
+ */
+async function diagnoseDroppedFids(
+  admin: ReturnType<typeof createAdminClient>,
+  droppedIds: number[],
+): Promise<BillFailure[]> {
+  if (droppedIds.length === 0) return [];
+  const { data, error } = await admin
+    .from("tb_forwarder")
+    .select("id, fstatus")
+    .in("id", droppedIds);
+  if (error) {
+    return droppedIds.map((fid) => ({
+      fid,
+      code: "not_status_4" as const,
+      reason: "อ่านสถานะรายการไม่ได้",
+      nextAction: "ลองใหม่อีกครั้ง · ถ้ายังไม่ได้แจ้งทีมเทคนิค",
+    }));
+  }
+  const statusById = new Map<number, string>(
+    ((data ?? []) as Array<{ id: number; fstatus: string }>).map((r) => [r.id, r.fstatus]),
+  );
+  return droppedIds.map((fid) => {
+    const st = statusById.get(fid);
+    if (st === undefined) {
+      return {
+        fid,
+        code: "not_status_4" as const,
+        reason: "ไม่พบรายการนี้ในระบบแล้ว (อาจถูกลบ)",
+        nextAction: "กด 🗑️ ลบออกจากคิว เพื่อเคลียร์คิวตรวจสอบ",
+      };
+    }
+    const label = STATUS_LABEL_TH[st] ?? `สถานะ ${st}`;
+    return {
+      fid,
+      code: "not_status_4" as const,
+      reason: `สถานะตอนนี้คือ "${label}" — ไม่ใช่ "ตรวจสอบแล้ว (4)" จึงแจ้งชำระไม่ได้`,
+      nextAction:
+        Number(st) >= 5
+          ? "แจ้งชำระไปแล้ว/เลยขั้นตอนนี้ไปแล้ว — กด 🗑️ ลบออกจากคิว เพื่อเคลียร์คิวตรวจสอบ"
+          : "รอตรวจตู้ให้ถึงสถานะ ตรวจสอบแล้ว (4) ก่อน แล้วค่อยแจ้งชำระ",
+    };
+  });
+}
+
+/** สถานะไทย — mirror ของ FSTATUS ที่หน้าตารางใช้ (ให้ error พูดภาษาคน ไม่ใช่ "fstatus=7"). */
+const STATUS_LABEL_TH: Record<string, string> = {
+  "1":  "รอเข้าโกดังจีน",
+  "2":  "ถึงโกดังจีนแล้ว",
+  "3":  "กำลังส่งมาไทย",
+  "4":  "ตรวจสอบแล้ว",
+  "5":  "รอชำระเงิน",
+  "6":  "เตรียมส่ง",
+  "7":  "ส่งแล้ว",
+  "99": "พิเศษ",
 };
 
 // ────────────────────────────────────────────────────────────
@@ -285,18 +387,39 @@ export async function adminCallPriceUser(
         .select(
           "id, userid, fstatus, ftrackingchn, fshipby, paymethod, faddressdistrict, " +
             "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
-            "pricecrate, ftransportpricechnthb, priceother, fdiscount",
+            "pricecrate, ftransportpricechnthb, priceother, fdiscount, " +
+            // diagnosis-only (owner 2026-07-17) — never written here
+            "faddresszipcode, fweight, fwidth, flength, fheight",
         )
         .in("id", fids)
         .eq("fstatus", "4");
       if (readErr) return { ok: false, error: readErr.message };
-      if (!forwarderRows || forwarderRows.length === 0) {
+      const candidates = (forwarderRows ?? []) as unknown as ForwarderRow[];
+
+      // owner 2026-07-17 — every ticked fid the fstatus='4' read didn't return used to
+      // DISAPPEAR from the tally (not processed, not failed). Diagnose them so the
+      // operator sees a reason per row instead of a count that doesn't add up.
+      const foundIds = new Set(candidates.map((r) => r.id));
+      const droppedFailures = await diagnoseDroppedFids(
+        admin,
+        fids.filter((id) => !foundIds.has(id)),
+      );
+
+      // Nothing billable — return the PER-ROW reasons (ok:true) instead of the old
+      // blanket "ไม่พบรายการที่พร้อมแจ้งชำระเงิน" error, which was exactly the
+      // vague message that hid the real block ([[wrong-error-message-hides-real-block]]).
+      if (candidates.length === 0) {
         return {
-          ok: false,
-          error: "ไม่พบรายการที่พร้อมแจ้งชำระเงิน (อาจถูกแจ้งไปแล้ว หรือยังไม่ใช่สถานะ 4)",
+          ok: true,
+          data: {
+            processed: 0, failed: droppedFailures.length,
+            sms_sent: 0, sms_failed: 0, line_sent: 0, line_failed: 0,
+            email_sent: 0, email_failed: 0, no_profile: 0,
+            errors: droppedFailures.map(failureLine),
+            failures: droppedFailures,
+          },
         };
       }
-      const candidates = forwarderRows as unknown as ForwarderRow[];
 
       // 2. Read tb_users for SMS/email channels in one query.
       const uniqueUserIds = Array.from(new Set(candidates.map((r) => r.userid).filter(Boolean)));
@@ -325,7 +448,9 @@ export async function adminCallPriceUser(
       const nowIso = new Date().toISOString();
       const result: BillResult = {
         processed:    0,
-        failed:       0,
+        // seeded with the ticked rows that weren't at fstatus='4' — they used to
+        // vanish from the tally entirely (owner 2026-07-17).
+        failed:       droppedFailures.length,
         sms_sent:     0,
         sms_failed:   0,
         line_sent:    0,
@@ -333,7 +458,8 @@ export async function adminCallPriceUser(
         email_sent:   0,
         email_failed: 0,
         no_profile:   0,
-        errors:       [],
+        errors:       droppedFailures.map(failureLine),
+        failures:     [...droppedFailures],
       };
       const successfulFids: number[] = []; // for the queue-delete step
       let autoFilledThCount = 0;           // #7 ค่าส่งไทย auto-filled this call
@@ -359,8 +485,15 @@ export async function adminCallPriceUser(
         // so any ftotalprice<=0 is a genuine under-charge → skip + surface it (mirrors the
         // createBillingRunInvoice zero-transport gate + report-cnt bill-to-customer guard).
         if ((Number(row.ftotalprice) || 0) <= 0) {
+          const f: BillFailure = {
+            fid: row.id,
+            code: "zero_import_price",
+            reason: "ค่านำเข้า (ค่าขนส่งจีน-ไทย) ยังเป็น ฿0 — ยังไม่ได้วัด/ตั้งราคา ถ้าแจ้งชำระตอนนี้จะเก็บเงินขาด",
+            nextAction: "ให้โกดังวัดขนาด+น้ำหนัก และให้ Pricing ตั้งเรท แล้วกดแจ้งชำระอีกครั้ง",
+          };
           result.failed++;
-          result.errors.push(`#${row.id}: ค่านำเข้า ฿0 (ยังไม่วัด/ตั้งราคา · อาจเก็บเงินขาด) — ข้าม กรุณาตั้งเรท/วัดขนาดที่โกดังก่อน`);
+          result.failures.push(f);
+          result.errors.push(failureLine(f));
           continue;
         }
 
@@ -392,8 +525,26 @@ export async function adminCallPriceUser(
             shipmentIsCod,
           })
         ) {
+          // The gate is UNCHANGED — it blocks correctly (billing a ฿0 domestic leg =
+          // เก็บเงินขาด). What was broken is that "ผิดพลาด" never said WHY. The auto-fill
+          // above returned null for a SPECIFIC reason (no address / not measured / over
+          // Flash's cap / manual carrier) — name it, so the operator knows what to fix.
+          const diag = diagnoseThShippingBlock({
+            fshipby: effFshipby,
+            zip: row.faddresszipcode,
+            weightKg: Number(row.fweight) || 0,
+            sizeCm:
+              (Number(row.fwidth) || 0) + (Number(row.flength) || 0) + (Number(row.fheight) || 0),
+          });
+          const f: BillFailure = {
+            fid: row.id,
+            code: "th_shipping_missing",
+            reason: `ค่าส่งในไทยยังเป็น ฿0 · ระบบคิดให้อัตโนมัติไม่ได้ เพราะ ${diag.reason}`,
+            nextAction: diag.nextAction,
+          };
           result.failed++;
-          result.errors.push(`#${row.id}: ยังไม่กรอกค่าส่งไทย (ค่าขนส่งในไทย ฿0 · ไม่ใช่รับเองที่โกดัง) — ข้าม กรุณาให้โกดัง/CS กรอกค่าส่งไทยก่อน`);
+          result.failures.push(f);
+          result.errors.push(failureLine(f));
           continue;
         }
 
@@ -415,8 +566,15 @@ export async function adminCallPriceUser(
           .eq("id", row.id)
           .eq("fstatus", "4");
         if (updErr) {
+          const f: BillFailure = {
+            fid: row.id,
+            code: "update_failed",
+            reason: `บันทึกสถานะไม่สำเร็จ (${updErr.message})`,
+            nextAction: "รีเฟรชหน้าแล้วลองใหม่ — ถ้ายังไม่ได้ แจ้งทีมเทคนิคพร้อมเลขรายการนี้",
+          };
           result.failed++;
-          result.errors.push(`#${row.id}: ${updErr.message}`);
+          result.failures.push(f);
+          result.errors.push(failureLine(f));
           continue;
         }
 

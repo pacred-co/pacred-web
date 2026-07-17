@@ -13,6 +13,12 @@
  * (never trusts a client-passed cost), writes ONLY fcosttotalprice (+fprofittotal=0
  * so reports re-derive), skips PAID containers (their cost is locked — use the
  * paid-container cost editor), idempotent, and logged.
+ *
+ * 🔴 RECONCILE GATE (2026-07-17): apply REFUSES the whole file unless Σ(lineTotal)
+ * foots the invoice's printed Sub-total. A parse that drops a line (the confirmed
+ * ฿181.42 CBM-wrap bug) must never write cost — better to refuse the file than to
+ * ingest 38 of 39 lines and have nobody know. The preview still SHOWS the mismatch
+ * so the accountant can see why; the refusal is re-asserted server-side on apply.
  */
 
 import { z } from "zod";
@@ -44,13 +50,25 @@ export type MomoIngestPreviewRow = {
   currentCost: number | null;
   cabinetPaid: boolean;
   willApply: boolean;
+  /** ตู้ที่ MOMO ระบุบนใบ (null บนใบรุ่นเก่าที่ไม่พิมพ์ตู้). */
+  invoiceCabinet: string | null;
+  /** รหัสสมาชิกบนใบ (null = "No Code"). */
+  invoiceMemberCode: string | null;
+  /** MOMO ระบุตู้ไม่ตรงกับ fcabinetnumber ของเรา — tracking↔ตู้ = "หัวใจ" ของการตรวจ. */
+  cabinetConflict: boolean;
 };
 
 export type MomoIngestPreview = {
   invoiceNo: string | null;
   grandTotal: number | null;
   rows: MomoIngestPreviewRow[];
-  summary: { total: number; matched: number; willApply: number; unmatched: number; paidSkipped: number };
+  summary: { total: number; matched: number; willApply: number; unmatched: number; paidSkipped: number; cabinetConflicts: number };
+  /** Sub-total ที่พิมพ์บนใบ (null = อ่านไม่เจอ). */
+  subTotal: number | null;
+  /** Σ ต้นทุนทุกบรรทัดที่แกะได้. */
+  linesTotal: number;
+  /** Σ ตรงกับ Sub-total — ถ้า false การบันทึกจะถูกปฏิเสธทั้งไฟล์. */
+  reconciles: boolean;
 };
 
 async function buildPreview(text: string): Promise<MomoIngestPreview> {
@@ -102,6 +120,10 @@ async function buildPreview(text: string): Promise<MomoIngestPreview> {
       currentCost,
       cabinetPaid,
       willApply,
+      invoiceCabinet: l.cabinet,
+      invoiceMemberCode: l.memberCode,
+      // เทียบเฉพาะเมื่อมีทั้ง 2 ฝั่ง (ใบรุ่นเก่าไม่พิมพ์ตู้ → ไม่ถือว่าขัดแย้ง)
+      cabinetConflict: !!l.cabinet && !!f?.fcabinetnumber && l.cabinet !== f.fcabinetnumber,
     };
   });
 
@@ -115,8 +137,23 @@ async function buildPreview(text: string): Promise<MomoIngestPreview> {
       willApply: rows.filter((r) => r.willApply).length,
       unmatched: rows.filter((r) => !r.matched).length,
       paidSkipped: rows.filter((r) => r.matched && r.cabinetPaid).length,
+      cabinetConflicts: rows.filter((r) => r.cabinetConflict).length,
     },
+    subTotal: parsed.subTotal,
+    linesTotal: parsed.linesTotal,
+    reconciles: parsed.reconciles,
   };
+}
+
+/** ข้อความปฏิเสธเมื่อยอดที่แกะได้ไม่ตรง Sub-total บนใบ — บอกส่วนต่างจริง (§0f: อย่ามั่ว). */
+function reconcileRefusal(p: MomoIngestPreview): string | null {
+  if (p.reconciles) return null;
+  const baht = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (p.subTotal == null) {
+    return `อ่านยอด "ค่าขนส่งทั้งหมด (Sub-total)" บนใบไม่เจอ — ปฏิเสธทั้งไฟล์ (กันเขียนต้นทุนผิด) · แกะได้ ${p.rows.length} บรรทัด Σ ฿${baht(p.linesTotal)} · กรุณาวางข้อความจากใบให้ครบทั้งใบ รวมส่วนท้าย`;
+  }
+  const diff = Math.round((p.subTotal - p.linesTotal) * 100) / 100;
+  return `ยอดที่แกะได้ไม่ตรงกับ Sub-total บนใบ — ปฏิเสธทั้งไฟล์ (กันเขียนต้นทุนผิด) · แกะได้ ${p.rows.length} บรรทัด Σ ฿${baht(p.linesTotal)} vs Sub-total ฿${baht(p.subTotal)} · ${diff > 0 ? "ขาด" : "เกิน"} ฿${baht(Math.abs(diff))} (มีบรรทัดตกหล่นหรือรูปแบบใบเปลี่ยน — อย่าเพิ่งบันทึก)`;
 }
 
 /** Read-only preview — parse + match + compute deltas. No writes. */
@@ -140,6 +177,18 @@ export async function applyMomoInvoiceCost(input: unknown): Promise<AdminActionR
     if (denied) return { ok: false, error: denied };
 
     const preview = await buildPreview(parsed.data.text);
+    // 🔴 fail-closed: a parse that doesn't foot the printed Sub-total never writes money.
+    const refusal = reconcileRefusal(preview);
+    if (refusal) {
+      await logAdminAction(adminId, "momo_invoice.ingest_refused", "tb_forwarder", preview.invoiceNo ?? "", {
+        invoiceNo: preview.invoiceNo,
+        reason: "subtotal_mismatch",
+        lines: preview.rows.length,
+        linesTotal: preview.linesTotal,
+        subTotal: preview.subTotal,
+      });
+      return { ok: false, error: refusal };
+    }
     const admin = createAdminClient();
     let applied = 0;
     for (const r of preview.rows) {
@@ -160,6 +209,9 @@ export async function applyMomoInvoiceCost(input: unknown): Promise<AdminActionR
       applied,
       candidates: preview.summary.willApply,
       unmatched: preview.summary.unmatched,
+      cabinetConflicts: preview.summary.cabinetConflicts,
+      linesTotal: preview.linesTotal,
+      subTotal: preview.subTotal,
     });
     return { ok: true, data: { applied, skipped: preview.summary.total - applied, invoiceNo: preview.invoiceNo } };
   });

@@ -58,6 +58,10 @@ import {
   corpRowFromName,
 } from "@/lib/admin/customer-identity";
 import {
+  isRowEligibleForAddCheck,
+  addCheckIneligibleMessage,
+} from "@/lib/admin/report-cnt-add-check-gate";
+import {
   ForwarderCheckTable,
   type ForwarderCheckRow,
 } from "./forwarder-check-table";
@@ -219,10 +223,18 @@ export default async function AdminForwarderCheckPage({
   //   GROUP BY f.ID
   //
   // PostgREST can't replicate that JOIN literally — we load tb_forwarder
-  // by fid IN (queue.fids), then filter post-fetch by `fstatus<'5'`
-  // (defensive — legacy did this to skip rows already billed but still
-  // in the queue due to a race). The Wave 16 action cleans up such rows
-  // before they show up, but legacy left them, so we honor that filter.
+  // by fid IN (queue.fids), then filter post-fetch.
+  //
+  // 2026-07-17 (owner · defence-in-depth) — the post-fetch filter now routes
+  // through the SAME SOT the WRITE gate uses (`isRowEligibleForAddCheck` ·
+  // lib/admin/report-cnt-add-check-gate.ts) instead of a hand-rolled
+  // `fstatus<'5'`. Two things this fixes:
+  //   (a) the old `<5` hid 5/6/7 but SHOWED 1/2/3 (rows queued before the
+  //       2026-06-09 lower-bound gate existed) — now both ends are handled;
+  //   (b) write-gate and read-filter can no longer drift apart.
+  // The root fix is the write gate; this is the belt-and-braces so rows that
+  // ALREADY slipped in (prod 2026-07-17: 159 of 168) can't be acted on — and
+  // are surfaced with a REASON below rather than silently vanishing.
   const { data: forwarderData, error: forwarderErr } = await admin
     .from("tb_forwarder")
     .select(
@@ -240,10 +252,19 @@ export default async function AdminForwarderCheckPage({
       code: forwarderErr.code, message: forwarderErr.message,
     });
   }
-  const forwarders = ((forwarderData ?? []) as unknown as ForwarderRawRow[])
-    // Legacy `fStatus<5` filter — a row that's already billed but still
-    // lingering in the queue shouldn't show up (race-defensive).
-    .filter((r) => parseInt(r.fstatus, 10) < 5);
+  const allQueued = (forwarderData ?? []) as unknown as ForwarderRawRow[];
+  // เฉพาะ "รายการที่จะให้ลูกค้าชำระเงิน" (fstatus='4') — ตรงกับ gate ฝั่งเขียน
+  // และตรงกับ adminCallPriceUser ที่อ่าน `.eq("fstatus","4")`.
+  const forwarders = allQueued.filter((r) => isRowEligibleForAddCheck(r.fstatus));
+  // แถวที่หลุดเข้าคิวมาก่อนหน้า (แจ้งชำระไม่ได้) — ซ่อนจากตาราง แต่ **บอกเหตุผล**
+  // ไม่ปล่อยให้หายเงียบ (§0f "อย่ามั่ว"). จัดกลุ่มตามเหตุผลจริงของแต่ละสถานะ.
+  const stuckByReason = new Map<string, number>();
+  for (const r of allQueued) {
+    const msg = addCheckIneligibleMessage(r.fstatus);
+    if (msg) stuckByReason.set(msg, (stuckByReason.get(msg) ?? 0) + 1);
+  }
+  // orphan = แถวคิวที่ไม่มี tb_forwarder แล้ว (fID ชี้ไปที่ว่าง)
+  const orphanCount = fids.length - allQueued.length;
 
   // ── Step 3: Join tb_users for customer + credit + company flags ─────────
   const uniqueUserIds = Array.from(new Set(forwarders.map((r) => r.userid).filter(Boolean)));
@@ -260,7 +281,8 @@ export default async function AdminForwarderCheckPage({
   const corpNames = await fetchCorporateNameMap(admin, uniqueUserIds);
 
   // ── Step 4: Tab counts ──────────────────────────────────────────────────
-  // ทั้งหมด = `queue.length` (already loaded).
+  // ทุกตัวนับจาก `forwarders` (= แถวที่แจ้งชำระได้จริง) ไม่ใช่คิวดิบ — ทั้ง 3 แท็บ
+  // จึงบวกกันได้ = ทั้งหมด (เครดิต + ปกติ) และตรงกับที่ตารางแสดง.
   // เครดิต = count of distinct queue.fid where corresponding user has
   //           usercredit='1'. Cheaper to compute from the loaded data
   //           than to fire a 4th JOIN-y count query.
@@ -271,10 +293,13 @@ export default async function AdminForwarderCheckPage({
     if (u?.userCredit === "1") creditCount++;
     else normalCount++;
   }
-  // Queue rows whose forwarder row didn't survive the fstatus<5 filter
-  // get counted under "all" (legacy did same: countAll counts ALL queue
-  // entries regardless of join status).
-  const allCount = queue.length;
+  // 2026-07-17 (§0f "badge ต้องเป๊ะ") — "ทั้งหมด" = จำนวนแถวที่ **แจ้งชำระได้จริง**
+  // (= ที่ตารางแสดง = ที่ adminCallPriceUser ทำงานด้วยได้) ไม่ใช่ queue.length ดิบ.
+  // เดิมนับทุกแถวในคิว → prod โชว์ 168 ทั้งที่ทำงานได้จริง 8 = badge โกหก และเป็น
+  // เหตุผลที่ owner เห็นว่าคิว "รับแถวที่ส่งแล้ว" เข้ามา. แถวค้างรายงานแยกใน
+  // แถบเตือนด้านล่าง (พร้อมเหตุผล) — ไม่กลบหาย.
+  const allCount = forwarders.length;
+  const stuckCount = (allQueued.length - forwarders.length) + orphanCount;
 
   // ── Step 5: Optional partial-import amount (legacy LEFT JOIN tb_forwarder_import2) ─
   // The `fi2amount` column shows "received so far / expected" — admin
@@ -448,6 +473,33 @@ export default async function AdminForwarderCheckPage({
 
       <main className="p-6 lg:p-8 space-y-5">
         <PageHeader counts={{ all: allCount, credit: creditCount, normal: normalCount }} activeTab={tab} />
+
+        {/* แถวค้างในคิว (owner 2026-07-17) — แถวที่หลุดเข้าคิวมาก่อนจะมี gate ขอบบน
+            และ "แจ้งชำระไม่ได้" (adminCallPriceUser อ่านเฉพาะ fstatus='4'). ซ่อนจาก
+            ตารางแล้ว แต่ต้อง **บอกเหตุผล** ไม่ใช่หายเงียบ (§0f). ล้างออกจากคิวได้ด้วย
+            scripts/forwarder-check-queue-backfill-2026-07-17.mjs (dry-run → --apply · owner เคาะ). */}
+        {stuckCount > 0 && (
+          <div className="rounded-md border border-slate-300 bg-slate-50 p-2.5 text-xs text-slate-700 flex items-start gap-2">
+            <span aria-hidden>🧹</span>
+            <div className="flex-1 space-y-1">
+              <div>
+                <span className="font-semibold">ซ่อน {stuckCount} รายการที่แจ้งชำระไม่ได้</span>{" "}
+                — คิวนี้รับเฉพาะ &quot;รายการที่จะให้ลูกค้าชำระเงิน&quot; (สถานะ &quot;ถึงไทยแล้ว&quot;) เท่านั้น
+              </div>
+              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-slate-600">
+                {[...stuckByReason.entries()].map(([reason, n]) => (
+                  <li key={reason}>{reason} — <span className="font-medium">{n} รายการ</span></li>
+                ))}
+                {orphanCount > 0 && (
+                  <li>ไม่พบรายการนำเข้าแล้ว (อาจถูกลบ) — <span className="font-medium">{orphanCount} รายการ</span></li>
+                )}
+              </ul>
+              <div className="text-[11px] text-slate-500">
+                รายการเหล่านี้ไม่กระทบยอดเงิน (เก็บเงินไปแล้ว หรือยังเก็บไม่ได้) · รอ backfill ล้างคิว
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Wave 16 status banner — proactive transparency about which
             notification channels actually fire. Per the 2026-05-23

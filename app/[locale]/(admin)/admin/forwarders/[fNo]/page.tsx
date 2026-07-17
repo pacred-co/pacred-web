@@ -1321,18 +1321,29 @@ async function tryRenderTbForwarder(
 
           {/* ── ต้นทุน + มูลค่าสำแดง (Pricing · ใบขน) — per-line COST/DECLARED
              capture (Lane A 2026-06-11 · was built-but-unmounted §0d). Self-gated
-             super/accounting/pricing · writes ONLY the cost columns, never the
-             selling price / status / customer notify (§0e). Placed with the items
-             it annotates, inside ปอน's status-workflow restructure. ── */}
-          {/* owner 2026-07-08: ย่อกรุปข้อมูลเพิ่มเติม (ต้นทุน→WeChat) ซ่อนไว้ก่อน — เกะกะ ยังไม่ใช้. */}
-          <details className="mt-4 rounded-2xl border border-border bg-surface-alt/30 [&_summary]:list-none">
-            <summary className="flex cursor-pointer select-none items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-muted hover:text-foreground">
-              <span className="text-xs">▸</span> ข้อมูลเพิ่มเติม — ต้นทุน · ใบขน · ส่วนลดเอกสาร · WeChat <span className="text-[11px] opacity-70">(คลิกเพื่อเปิด · ย่อไว้)</span>
-            </summary>
-            <div className="px-2 pb-3">
+             ultra/accounting/pricing — <ForwarderCostSection> เรียก canViewCostProfit
+             เองแล้ว return null ถ้าไม่ผ่าน (หน้านี้ไม่ได้ gate ซ้ำ) · writes ONLY the cost
+             columns, never the selling price / status / customer notify (§0e).
+
+             owner 2026-07-17 "กรอบต้นทุน เอาขึ้นมา อยู่ข้างบนต่อรายการไปเลยครับ · เห็นแค่
+             ultra เหมือนเดิมนะครับ" → ยกออกจากกลุ่ม "ข้อมูลเพิ่มเติม" ที่ย่อซ่อนไว้เมื่อ
+             2026-07-08 (ต้นทุนโดนพับรวมกับ ใบขน/ส่วนลดเอกสาร/WeChat = ต้องคลิกหาถึงเจอ)
+             ขึ้นมาเป็น child ตัวแรก: <ForwarderStatusWorkflow> render {children} ต่อจาก
+             บล็อก "รายการสินค้า" พอดี (forwarder-status-workflow.tsx:430 ต่อจาก :389-427)
+             → child ตัวแรก = ใต้ตารางรายการสินค้าทันที ตามที่ owner สั่ง.
+             ย้ายตำแหน่ง render อย่างเดียว — props / gate / สูตรเงิน ไม่แตะ. ── */}
           <div className="mt-4">
             <ForwarderCostSection fId={r.id} reforder={r.reforder} />
           </div>
+
+          {/* owner 2026-07-08: ย่อกรุปข้อมูลเพิ่มเติม (ใบขน→WeChat) ซ่อนไว้ก่อน — เกะกะ ยังไม่ใช้.
+             (ต้นทุน ถูกยกขึ้นไปไว้ใต้รายการสินค้าแล้ว · owner 2026-07-17 — ป้ายหัวข้อตัดคำว่า
+             "ต้นทุน" ออกด้วย ไม่งั้นป้ายโกหกว่ามีต้นทุนอยู่ข้างใน · §0f) */}
+          <details className="mt-4 rounded-2xl border border-border bg-surface-alt/30 [&_summary]:list-none">
+            <summary className="flex cursor-pointer select-none items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-muted hover:text-foreground">
+              <span className="text-xs">▸</span> ข้อมูลเพิ่มเติม — ใบขน · ส่วนลดเอกสาร · WeChat <span className="text-[11px] opacity-70">(คลิกเพื่อเปิด · ย่อไว้)</span>
+            </summary>
+            <div className="px-2 pb-3">
 
           {/* owner 2026-06-28 #1 — เลือกสินค้า → สร้างใบขน/ใบกำกับ (ร่าง) จากรายการนี้. */}
           <div className="mt-3 flex flex-wrap gap-2">
