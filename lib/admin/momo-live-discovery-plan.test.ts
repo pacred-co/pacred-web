@@ -225,16 +225,17 @@ check("pickSuggestedCarrier prefers the saved carrier when eligible, else first,
   assert.equal(pickSuggestedCarrier("", []), "");
 });
 
-// ── (m) delivery: payMethodForCarrier — BKK-origin → ต้นทาง · upcountry → COD ──
-check("payMethodForCarrier derives ต้นทาง('1')/COD('2') from the carrier (money rule)", () => {
-  // Flash (2) / J&T (24) / self-pickup (PCS) = pay-at-origin → '1' ต้นทาง (BKK band)
-  assert.equal(payMethodForCarrier("2"), "1");
-  assert.equal(payMethodForCarrier("24"), "1");
+// ── (m) delivery: payMethodForCarrier — own-fleet → ต้นทาง · ขนส่งเอกชน → ปลายทาง ──
+check("payMethodForCarrier derives ต้นทาง('1')/ปลายทาง('2') from the carrier (owner 2026-07-18)", () => {
+  // Own-fleet (Pacred delivers + prepays) → '1' ต้นทาง.
   assert.equal(payMethodForCarrier("PCS"), "1");
-  // an upcountry private carrier (13 ธนามัย, 45 เอ็มพอร์ท) → '2' ปลายทาง COD
+  assert.equal(payMethodForCarrier("PRF"), "1");
+  // ขนส่งเอกชน (Flash 2 / J&T 24 / ธนามัย 13 / เอ็มพอร์ท 45 / any private) → '2' ปลายทาง COD.
+  assert.equal(payMethodForCarrier("2"), "2");
+  assert.equal(payMethodForCarrier("24"), "2");
   assert.equal(payMethodForCarrier("13"), "2");
   assert.equal(payMethodForCarrier("45"), "2");
-  // empty/unknown → '2' (legacy default fall-through — matches derivePayMethod)
+  // empty/unknown → '2' (not own-fleet · matches derivePayMethod default)
   assert.equal(payMethodForCarrier(""), "2");
   assert.equal(payMethodForCarrier(null), "2");
 });

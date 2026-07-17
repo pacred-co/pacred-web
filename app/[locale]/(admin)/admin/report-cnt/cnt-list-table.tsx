@@ -686,18 +686,23 @@ export function CntListTable({
               const badge = fstatusBadge(r.fstatus);
               const isOn = selected.has(r.fcabinetnumber);
               const selectable = canSelect && !r.isPaid;
-              // Per owner (2026-06-19): keep the LIST table WHITE — drop the
-              // per-fstatus / isPaid solid row tint. The same status is still
-              // legible in the colored สถานะตู้ / สถานะจ่าย pills on each row, so
-              // no info is lost. Only the selection highlight remains (it's
-              // interaction feedback for the checkbox + floating action bar).
-              // Subtle zebra on the un-selected rows (ภูม 2026-06-30 · ไม่ลายตา ·
-              // legacy PCS has this). The selection highlight wins when ticked.
-              // Zebra CLEARER than before (owner 2026-07-16 "ของเราดูขาวหมด · legacy ชัดกว่า"):
-              // a visible light-gray on even rows + a clear hover, like legacy .table-striped.
+              // ยิงครบ? — the SAME rule as the ยิงครบ pill below: no completeness
+              // data (forwardersTotal 0) = vacuously complete; else scanned ≥ expected.
+              const boxesComplete =
+                r.completenessForwardersTotal === 0 ||
+                r.completenessScanned >= r.completenessExpected;
+              // 🔴 Owner 2026-07-18: the LIST head row (หัวรายการ ที่กดดรอปดาวเพื่อแจง
+              // รายละเอียด) shows only TWO colors when NOT selected —
+              //   • RED   = ยังไม่ยิงรับครบทุกกล่อง (ขาด N กล่อง / ยังไม่ยิงรับ)
+              //   • WHITE = กล่องครบ (เหมือนรายการปกติ).
+              // No more zebra/per-fstatus tint. The expanded dropdown below is a
+              // neutral table (แจงรายละเอียด) — never red. The selection highlight
+              // (emerald) still wins — it's checkbox/floating-bar interaction feedback.
               const rowTint = isOn
                 ? "bg-emerald-50 ring-1 ring-inset ring-emerald-300"
-                : "even:bg-[#f1f4f8] hover:bg-[#e6edf6]";
+                : boxesComplete
+                  ? "bg-white dark:bg-surface hover:bg-surface-alt/60"
+                  : "bg-red-50 ring-1 ring-inset ring-red-200 hover:bg-red-100/70";
               const isExpanded = expanded.has(r.fcabinetnumber);
               // report-cnt #4 (C) — for a MOMO "SEA0x" placeholder cabinet, the
               // real container / sack number MOMO carries (resolved server-side).

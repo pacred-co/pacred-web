@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
-import { derivePayMethodForDelivery, isPayAtOriginCarrier } from "@/lib/forwarder/pay-method";
+import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 import { resolveMaomaoCarrier } from "@/lib/forwarder/resolve-maomao";
 import { MAO_CARRIER_CODE } from "@/lib/forwarder/mao-fee";
 import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
@@ -418,15 +418,15 @@ export async function updateLegacyForwarderShipBy(
   });
   if (!coverage.ok) return { ok: false, error: coverage.error };
 
-  // forwarder.php L1590-1592 — only stamp payMethod when the carrier is
-  // pay-at-origin; a destination carrier leaves the stored value alone
-  // (preserve the legacy update-only-on-origin asymmetry). Origin set
-  // shared with the shop-cart path via lib/forwarder/pay-method.ts.
-  const paymethod = isPayAtOriginCarrier(fShipBy) ? "1" : undefined;
+  // 🔴 Owner 2026-07-18: stamp payMethod from the CHOSEN carrier every time —
+  // own-fleet → ต้นทาง "1", ขนส่งเอกชน → ปลายทาง "2" (COD). Supersedes the legacy
+  // update-only-on-origin asymmetry (a private carrier used to leave the stored
+  // value alone) — the owner wants selecting a private carrier to set ปลายทาง.
+  // Shared with the cart + order-entry paths via lib/forwarder/pay-method.ts.
+  const paymethod = derivePayMethodForDelivery(fShipBy, { addressID: null, zip: null });
 
   // forwarder.php L1593 — base UPDATE with ownership.
-  const baseUpdate: Record<string, string> = { fshipby: fShipBy };
-  if (paymethod) baseUpdate.paymethod = paymethod;
+  const baseUpdate: Record<string, string> = { fshipby: fShipBy, paymethod };
 
   const { error: updErr } = await admin
     .from("tb_forwarder")

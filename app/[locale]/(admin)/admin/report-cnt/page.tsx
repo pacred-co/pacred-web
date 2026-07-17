@@ -115,7 +115,8 @@ type Grouped = {
   fdatecontainerclose: string | null;
   fdatestatus4: string | null;
   ftransporttype: string;
-  fstatus: string;
+  fstatus: string;    // MIN(fstatus) — representative display status (least-advanced)
+  maxFstatus: string; // MAX(fstatus) — drives the tab BUCKET (0261 "any arrived")
   trackCount: number;
   volumeSum: number;
   weightSum: number;
@@ -152,6 +153,9 @@ function groupByContainer(rows: Row[], paidContainers: Set<string>): Grouped[] {
       // kept the FIRST row's fstatus → arbitrary/wrong. Ignore empty/null on
       // BOTH sides so a blank first row can't pin the MIN (true SQL MIN).
       if (r.fstatus && (!existing.fstatus || r.fstatus < existing.fstatus)) existing.fstatus = r.fstatus;
+      // 0261: MAX(fstatus) = most-advanced tracking → drives the tab BUCKET
+      // ("any arrived" · owner 2026-07-18). Ignore empty so blanks can't pin it.
+      if (r.fstatus && r.fstatus > existing.maxFstatus) existing.maxFstatus = r.fstatus;
       // Keep the most recent fdatestatus4 / fdatecontainerclose (legacy emits any)
       if (r.fdatestatus4 && (!existing.fdatestatus4 || r.fdatestatus4 > existing.fdatestatus4)) {
         existing.fdatestatus4 = r.fdatestatus4;
@@ -164,6 +168,7 @@ function groupByContainer(rows: Row[], paidContainers: Set<string>): Grouped[] {
         fdatestatus4: r.fdatestatus4,
         ftransporttype: r.ftransporttype,
         fstatus: r.fstatus,
+        maxFstatus: r.fstatus ?? "",
         trackCount: 1,
         volumeSum: Number(r.fvolume ?? 0),
         weightSum: Number(r.fweight ?? 0),
@@ -299,12 +304,12 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
       // Run the JS group AND strip isPaid so the merge step below remains
       // uniform across both paths.
       const tmp = groupByContainer(rows as Row[], new Set<string>());
-      // 0243: container-level bucket by MIN(fstatus). groupByContainer already
-      // folds the container-wide min into g.fstatus (skipping empty/null), so a
+      // 0261: container-level bucket by MAX(fstatus) — "any arrived". groupByContainer
+      // folds the container-wide max into g.maxFstatus (skipping empty/null), so a
       // cabinet is in exactly ONE tab — mixed cabinets no longer double-list.
       // Same predicate as the RPC's HAVING (isContainerInBucket = shared SOT).
       const page = isWaiting ? "waiting" : "succeed";
-      const bucketed = tmp.filter((g) => isContainerInBucket(g.fstatus ?? "", page));
+      const bucketed = tmp.filter((g) => isContainerInBucket(g.maxFstatus ?? "", page));
       groupedNoPaid = bucketed.map(({ isPaid: _isPaid, ...rest }) => rest);
     }
   } else {
@@ -324,6 +329,9 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
       // milestone — waiting → 1 (รอเข้าโกดังจีน), succeed → 4 (ถึงไทยแล้ว) —
       // which ALREADY fixes the headline complaint (never a false "ส่งแล้ว").
       fstatus:             r.min_fstatus ?? (isWaiting ? "1" : "4"),
+      // 0261: MAX drives the bucket; the RPC already bucketed via HAVING MAX, so
+      // this is carried for parity only. Fallback: succeed → '4', waiting → '1'.
+      maxFstatus:          r.max_fstatus ?? (isWaiting ? "1" : "4"),
       trackCount:          Number(r.row_count ?? 0),
       volumeSum:           Number(r.sum_volume ?? 0),
       weightSum:           Number(r.sum_weight ?? 0),
