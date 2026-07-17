@@ -3,6 +3,23 @@
 
 ---
 
+# 🧾 2026-07-18 ดึก (เดฟ · Mac · owner จากรูป container-detail) — report-cnt/[fNo] คิดเงินต่อชิปเม้น + ดรอปดาว=แพคกิ้งลิสต์ + หัวแถวแดง/ขาว + gate วางบิลตามยิงกล่องครบ → ALL 4 BRANCHES · read FIRST
+
+> **🏁 STATE. main = dave-pacred = Poom-pacred = InwPond007 = `eb133d54`** (Vercel prod · integrate ปอน marketing-planner `a324511f` = merge สะอาด · no migration). gate: **tsc 0 · build 0 · 3-agent adversarial review** (จับ FAIL: single-tracking gate หลุด → fix). ⚠️ ไม่มี admin login → verify tsc/build/review · **NOT authed-render** (§0c). prod pw chat-only `DqOzfEZVXfMHIryz`.
+>
+> **⚠️ PAGE IDENTITY (กับดัก):** owner แคปรูปที่มี grouping "N แทรค" + สีแดง/เขียว/น้ำเงิน + ปุ่ม "เพิ่มในรายการตรวจสอบ" ลอย = **`/admin/report-cnt/[fNo]` (`container-detail-client.tsx` · cabinet DETAIL)** — **ไม่ใช่ `/admin/forwarders`** (forwarders-table.tsx row=WHITE listRowTint="" · CLAUDE.md 2026-07-17 carryover เขียนผิดว่าเป็น forwarders). เช็ค "เพิ่มในรายการตรวจสอบ" + pcs-row-st CSS = report-cnt/[fNo] เสมอ.
+>
+> **owner สั่ง (จากรูป · เป็น DISPLAY + gate · ไม่ใช่ re-price):**
+> - **คิดเงินต่อชิปเม้น (คิดทีเดียว · ไม่แยกตามแทรค):** หัวแถว summary โชว์ **เรทต้นทุน** (`aggregateGroup += rate uniq` · เดิม "—") + **ค่านำเข้า** (Σ ftotalprice · มีแล้ว). money = **display-only** (rate×dim linear → Σ per-tracking = ยอดชิปเม้น · **ไม่ re-price · 0 DB write** · verified diff · bill สรุป per-shipment อยู่แล้ว). cost basis (weight/CBM) = per-warehouse uniform ต่อตู้.
+> - **ดรอปดาว = แพคกิ้งลิสต์:** `renderPackingList` — ตารางสลับสี **เทา/ขาว** (.pcs-pack) · แทรคกิ้ง · กว้าง · ยาว · สูง · น้ำหนัก · CBM · กล่อง(รับ/คาด) · ประเภท. load `fwidth/flength/fheight` (page.tsx select + DetailRow). เลิก member-rows เงินซ้ำต่อแทรค.
+> - **สี แดง/ขาว เท่านั้น** (`.pcs-row-scan-ok`/`.pcs-row-scan-wait`): หัวแถว + แถวแทรคเดียว = แดง(ยังยิงกล่องไม่ครบ)/ขาว(ครบ) · **เลิก เขียว/น้ำเงิน/ส้ม/เทา** (pcs-row-st*/group เลิกใช้ · CSS dead ปล่อยไว้) · selected=emerald + in-check=white ยังชนะ. ดรอปดาว=neutral (ไม่ใช่แดง/ขาว).
+> - **🔴 gate วางบิล = ยิงกล่องครบทั้งชิปเม้น** (`isScanComplete(famountfi,famount,fstatus)` · **`g.every` ทุกแทรค · over-received ไม่บัง short** — adversarial-verify จับ). ครบทุก path: summary checkbox + GroupCollectButton + **single-row checkbox + single-row BillToCustomerButton + eligibleFilteredIds (select-all)** — ⚠️ รอบแรกลืม single-tracking (majority) → review FAIL → fixed. ยังไม่ครบ → ⛔ note "วางบิลไม่ได้".
+> - **เรท รถ/เรือ ถูก:** `resolveTransportMode` + `warehouseRateColumn` mode-aware อยู่แล้ว (4700 road/2500 sea) — ถ้าเรทตู้ผิด = tb_cost_container data.
+>
+> **method:** ultracode → understand workflow (5 readers · เล็งผิดหน้า forwarders รอบแรก → หยุด → เล็งใหม่ report-cnt/[fNo]) · implement · **3-agent adversarial review จับ single-tracking gate หลุด (FAIL) + Σ-mask short-tracking → fix** · gate. per-member selection ถูกลบ (owner want whole-shipment bill = intended).
+
+---
+
 # 🧾 2026-07-18 ค่ำ (เดฟ · Mac · owner 4-งาน จากรูปรายงานตู้) — ขนส่งเอกชน→ปลายทาง · ตู้มีของยิงรับ→เข้าโกดังไทยแล้ว · สี แดง/ขาว หัวรายการ · fill ต้นทุน/กำไรติดลบ → ALL 4 BRANCHES · read FIRST
 
 > **🏁 STATE. main = dave-pacred = Poom-pacred = InwPond007 = `<HEAD>`** (Vercel prod · integrate ปอน `70828f49` ใบเสนอราคา default 7600/6600 = merge สะอาด 0 conflict · no migration). gate: **tsc 0 · build 0 · i18n 0 · tests 46** (pay-method 31 · momo-live 15 + carrier-guard 69 + bucket). **mig 0261 applied prod+dev · NEXT FREE = 0262.** 🔑 prod pw chat-only `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ`. ⚠️ ไม่มี admin login → verify ผ่าน tsc/build/tests + prod DB (bucket count + cost re-scan) · NOT authed-render (§0c).
