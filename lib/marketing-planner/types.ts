@@ -142,6 +142,9 @@ export type ContentItem = {
   platformId?: string;
   /** Platforms this content goes to (multi-select). */
   platformIds?: string[];
+  /** ชื่อ/แคปชั่นดราฟต์แยกต่อแพลตฟอร์ม (platformId → ชื่อ · owner ปอน 2026-07-18) —
+   *  เก็บใน JSON blob (mkt_contents.data · ไม่ต้อง migration). ว่าง = ใช้ `title` หลัก. */
+  platformTitles?: Record<string, string>;
   /** Legacy single service — kept for back-compat reads; canonical is serviceIds. */
   serviceId?: string;
   /** Services this content relates to (multi-select). */

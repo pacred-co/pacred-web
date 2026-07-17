@@ -1,19 +1,19 @@
 "use client";
 
 /**
- * แผนการผลิต (Production Plan · ปอน 2026-07-01) — set the monthly quota (long
- * clips per pillar + short total) AND a daily baseline for บทความ/โพสต์, see it
- * spread across the month ("อะไรลงวันไหน"), track progress vs quota, and
- * generate the idea slots into the calendar. Every number is editable in-app.
+ * แผนการผลิต (Production Plan · ปอน 2026-07-01 · per-day pins ปอน 2026-07-18) — set the
+ * monthly quota (long clips per pillar + short total) AND a daily baseline for
+ * บทความ/โพสต์, see it spread across the month ("อะไรลงวันไหน"), track progress vs
+ * quota, and generate the idea slots into the calendar.
  *
- * Distribution has two modes: "auto" spreads the quota over every day of the
- * month; "manual" (เลือกวันเอง) lets the user click the days to place content on
- * and confines the whole plan + generation to just those days.
+ * Distribution: "auto" spreads the quota over every day; "manual" (เลือกวันเอง) lets
+ * you click days to place content on AND กำหนดเองต่อวัน — พิมพ์เลขในช่อง หรือ ลาก chip
+ * ประเภท ลงวัน = pin วันนั้น แล้วระบบเกลี่ยจำนวนที่เหลือของประเภทนั้นไปวันที่เลือกอื่นให้.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { CalendarRange, FileText, Film, PenLine, Sparkles } from "lucide-react";
 import { usePlanner } from "@/lib/marketing-planner/store";
-import { daysInMonth, distributeMonth, targetsTotal } from "@/lib/marketing-planner/production-plan";
+import { daysInMonth, distributeMonth, targetsTotal, type DayOverride, type DaySlot, type PlanOverrides } from "@/lib/marketing-planner/production-plan";
 import { pad2, TH_MONTHS } from "@/lib/marketing-planner/util";
 import { btnPrimary, cx, inputCls, MetricCard, SectionCard, useConfirm } from "./ui";
 
@@ -29,6 +29,15 @@ const numInput = "shrink-0 rounded-lg border border-border bg-white px-2 py-1 te
 
 type DistMode = "auto" | "manual";
 
+// drag chips → drop on a day = +1 that day (pin). mirror content-calendar.tsx pattern.
+const CHIP_MIME = "text/plan-chip";
+const CHIP_TYPES: { type: keyof DayOverride; label: string; cls: string }[] = [
+  { type: "long", label: "คลิปยาว", cls: "border-primary-300 bg-primary-50 text-primary-700 dark:bg-primary-900/20" },
+  { type: "short", label: "คลิปสั้น", cls: "border-sky-300 bg-sky-50 text-sky-700 dark:bg-sky-900/20" },
+  { type: "article", label: "บทความ", cls: "border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20" },
+  { type: "post", label: "โพสต์", cls: "border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-900/20" },
+];
+
 export function ProductionPlan() {
   const { targets, setLongTarget, setShortTarget, setArticlePerDay, setPostPerDay, generateFromPlan, byGroup, contents, labelOf } = usePlanner();
   const confirm = useConfirm();
@@ -41,19 +50,27 @@ export function ProductionPlan() {
   const [genPost, setGenPost] = useState(true);
   const [mode, setMode] = useState<DistMode>("auto");
   const [selectedDays, setSelectedDays] = useState<Set<number>>(() => new Set());
+  // per-day pins (กำหนดเอง) — local/transient like selectedDays. undefined = auto-spread.
+  const [overrides, setOverrides] = useState<PlanOverrides>(() => new Map());
 
   const pillars = byGroup("contentPillar");
   const days = daysInMonth(y, m - 1);
   const isManual = mode === "manual";
-  // A different month has different valid day numbers → start the manual pick fresh.
-  useEffect(() => { setSelectedDays(new Set()); }, [ym]);
+  // เปลี่ยนเดือน → รีเซ็ตวันที่เลือก + ที่กำหนดเอง (render-time reset · React-recommended
+  // แทน setState-in-effect · เหมือน prevRateKey ใน quote-tab).
+  const [prevYm, setPrevYm] = useState(ym);
+  if (ym !== prevYm) {
+    setPrevYm(ym);
+    setSelectedDays(new Set());
+    setOverrides(new Map());
+  }
 
   // Effective day count that the plan actually lands on (all days, or the chosen ones).
   const activeDays = isManual ? selectedDays.size : days;
   const totals = targetsTotal(targets, activeDays);
   const slots = useMemo(
-    () => distributeMonth(y, m - 1, targets, isManual ? selectedDays : null),
-    [y, m, targets, isManual, selectedDays],
+    () => distributeMonth(y, m - 1, targets, isManual ? selectedDays : null, isManual ? overrides : null),
+    [y, m, targets, isManual, selectedDays, overrides],
   );
 
   const monthContents = useMemo(
@@ -66,7 +83,7 @@ export function ProductionPlan() {
   const createdPost = monthContents.filter((c) => c.contentTypeId === POST_TYPE).length;
   const createdLongByPillar = (pid: string) => monthContents.filter((c) => c.contentTypeId === LONG_TYPE && c.contentPillarId === pid).length;
 
-  // Count exactly what will be placed (mode + day-selection aware) by summing the plan.
+  // Count exactly what will be placed (mode + day-selection + pins aware) by summing the plan.
   const slotLong = useMemo(() => slots.reduce((a, s) => a + s.longs.reduce((x, l) => x + l.count, 0), 0), [slots]);
   const slotShort = useMemo(() => slots.reduce((a, s) => a + s.short, 0), [slots]);
   const slotArticle = useMemo(() => slots.reduce((a, s) => a + s.article, 0), [slots]);
@@ -78,15 +95,52 @@ export function ProductionPlan() {
   const genPostN = genPost ? slotPost : 0;
   const genTotal = genLongN + genShortN + genArticleN + genPostN;
 
-  const toggleDay = (day: number) =>
+  // ── per-day pin (กำหนดเอง) ──────────────────────────────────────────────────
+  const slotByDay = useMemo(() => new Map(slots.map((s) => [s.day, s])), [slots]);
+  const dayValue = (day: number, type: keyof DayOverride): number => {
+    const s = slotByDay.get(day);
+    if (!s) return 0;
+    return type === "long" ? s.longs.reduce((a, l) => a + l.count, 0) : type === "short" ? s.short : type === "article" ? s.article : s.post;
+  };
+  const setDayOverride = (day: number, type: keyof DayOverride, value: number | null) =>
+    setOverrides((prev) => {
+      const next = new Map(prev);
+      const cur: DayOverride = { ...(next.get(day) ?? {}) };
+      if (value == null) delete cur[type];
+      else cur[type] = Math.max(0, Math.floor(value));
+      if (Object.keys(cur).length === 0) next.delete(day);
+      else next.set(day, cur);
+      return next;
+    });
+  const clearDayOverride = (day: number) =>
+    setOverrides((prev) => { if (!prev.has(day)) return prev; const next = new Map(prev); next.delete(day); return next; });
+  const dropChip = (day: number, type: keyof DayOverride) => {
+    const cur = dayValue(day, type); // ค่าที่โชว์อยู่ตอนนี้ (0 ถ้ายังไม่เลือกวัน) → pin ที่ +1
+    setSelectedDays((prev) => (prev.has(day) ? prev : new Set(prev).add(day)));
+    setDayOverride(day, type, cur + 1);
+  };
+  // เตือนถ้า pin รวมเกินโควต้าของประเภทนั้น (วันอื่นของประเภทนั้นจะเป็น 0).
+  const overPinned = useMemo(() => {
+    if (!isManual || overrides.size === 0) return false;
+    const sum = (k: keyof DayOverride) => [...overrides.values()].reduce((a, o) => a + (o[k] ?? 0), 0);
+    const longPool = Object.values(targets.longByPillar).reduce((a, n) => a + (n > 0 ? n : 0), 0);
+    return sum("long") > longPool || sum("short") > targets.shortTotal
+      || sum("article") > (targets.articlePerDay ?? 0) * activeDays
+      || sum("post") > (targets.postPerDay ?? 0) * activeDays;
+  }, [isManual, overrides, targets, activeDays]);
+
+  const toggleDay = (day: number) => {
+    const wasSelected = selectedDays.has(day);
     setSelectedDays((prev) => {
       const next = new Set(prev);
       if (next.has(day)) next.delete(day);
       else next.add(day);
       return next;
     });
+    if (wasSelected) clearDayOverride(day); // เอาวันออก → ล้างที่ pin ของวันนั้น
+  };
   const selectAllDays = () => setSelectedDays(new Set(Array.from({ length: days }, (_, i) => i + 1)));
-  const clearDays = () => setSelectedDays(new Set());
+  const clearDays = () => { setSelectedDays(new Set()); setOverrides(new Map()); };
   const selectWeekdays = () => {
     const s = new Set<number>();
     for (let d = 1; d <= days; d += 1) {
@@ -104,7 +158,7 @@ export function ProductionPlan() {
       message: `จะสร้างสล็อตคอนเทนต์ ${genTotal.toLocaleString("th-TH")} ชิ้น (คลิปยาว ${genLongN} · คลิปสั้น ${genShortN} · บทความ ${genArticleN} · โพสต์ ${genPostN}) ลงปฏิทินเดือน ${TH_MONTHS[m - 1]} ${y + 543}${dayNote} เป็นสถานะ Idea — กดสร้างได้เลย แล้วทยอยเปิดเติมรายละเอียดในแต่ละชิ้น`,
       confirmText: "สร้างลงปฏิทิน",
     });
-    if (ok) generateFromPlan(y, m - 1, { long: genLong, short: genShort, article: genArticle, post: genPost }, isManual ? [...selectedDays] : null);
+    if (ok) generateFromPlan(y, m - 1, { long: genLong, short: genShort, article: genArticle, post: genPost }, isManual ? [...selectedDays] : null, isManual ? overrides : null);
   };
 
   // Heatmap intensity from the VARIABLE load (long+short) — บทความ/โพสต์ are a flat daily baseline.
@@ -191,16 +245,35 @@ export function ProductionPlan() {
       {/* Distribution preview + mode */}
       <SectionCard title="เฉลี่ยลงวัน (แผนการลงคอนเทนต์)" actions={modeToggle}>
         {isManual && (
-          <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-primary-200 bg-primary-50/50 px-2.5 py-1.5 dark:border-primary-900/40 dark:bg-primary-900/10">
-            <span className="text-[12px] font-semibold text-primary-700 dark:text-primary-300">
-              คลิกวันบนปฏิทินเพื่อเลือกวันลง · เลือกแล้ว {selectedDays.size.toLocaleString("th-TH")} วัน
-            </span>
-            <div className="ml-auto flex flex-wrap gap-1">
-              <button type="button" onClick={selectAllDays} className="rounded-md border border-border bg-white px-2 py-0.5 text-[11px] text-foreground transition hover:bg-primary-50 dark:bg-surface">เลือกทั้งเดือน</button>
-              <button type="button" onClick={selectWeekdays} className="rounded-md border border-border bg-white px-2 py-0.5 text-[11px] text-foreground transition hover:bg-primary-50 dark:bg-surface">จันทร์–ศุกร์</button>
-              <button type="button" onClick={clearDays} className="rounded-md border border-border bg-white px-2 py-0.5 text-[11px] text-foreground transition hover:bg-primary-50 dark:bg-surface">ล้าง</button>
+          <>
+            <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-primary-200 bg-primary-50/50 px-2.5 py-1.5 dark:border-primary-900/40 dark:bg-primary-900/10">
+              <span className="text-[12px] font-semibold text-primary-700 dark:text-primary-300">
+                เลือกแล้ว {selectedDays.size.toLocaleString("th-TH")} วัน
+                <span className="ml-1 font-normal text-primary-600/60 dark:text-primary-300/60">· พิมพ์/ลากใส่วัน = กำหนดเอง</span>
+              </span>
+              <div className="ml-auto flex flex-wrap gap-1">
+                <button type="button" onClick={selectAllDays} className="rounded-md border border-border bg-white px-2 py-0.5 text-[11px] text-foreground transition hover:bg-primary-50 dark:bg-surface">เลือกทั้งเดือน</button>
+                <button type="button" onClick={selectWeekdays} className="rounded-md border border-border bg-white px-2 py-0.5 text-[11px] text-foreground transition hover:bg-primary-50 dark:bg-surface">จันทร์–ศุกร์</button>
+                {overrides.size > 0 && (
+                  <button type="button" onClick={() => setOverrides(new Map())} className="rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700 transition hover:bg-amber-100 dark:bg-amber-900/20">ล้างที่กำหนดเอง</button>
+                )}
+                <button type="button" onClick={clearDays} className="rounded-md border border-border bg-white px-2 py-0.5 text-[11px] text-foreground transition hover:bg-primary-50 dark:bg-surface">ล้าง</button>
+              </div>
             </div>
-          </div>
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-muted">ลากลงวัน:</span>
+              {CHIP_TYPES.map((c) => (
+                <div key={c.type} draggable onDragStart={(e) => e.dataTransfer.setData(CHIP_MIME, c.type)}
+                  className={cx("cursor-grab select-none rounded-full border px-2 py-0.5 text-[11px] font-medium active:cursor-grabbing", c.cls)}
+                  title={`ลาก "${c.label}" ลงวัน = +1 วันนั้น`}>
+                  ＋ {c.label}
+                </div>
+              ))}
+            </div>
+            {overPinned && (
+              <p className="mb-2 text-[11px] text-amber-600">⚠ กำหนดเองเกินโควต้าบางประเภท — วันอื่นของประเภทนั้นจะเป็น 0</p>
+            )}
+          </>
         )}
         <div className="grid grid-cols-7 gap-1">
           {slots.map((s) => {
@@ -211,34 +284,48 @@ export function ProductionPlan() {
             const dim = isManual && !selected;
             const cls = cx(
               "rounded-lg border p-1.5 text-center transition",
-              isManual && "cursor-pointer hover:border-primary-300",
+              isManual && !selected && "cursor-pointer hover:border-primary-300",
               selected ? "border-primary-400 ring-1 ring-primary-300" : "border-border",
               dim && "opacity-40",
             );
             const style = !dim && load ? { backgroundColor: `rgba(179,0,0,${0.04 + intensity * 0.14})` } : undefined;
             const title = s.longs.map((l) => `${labelOf(l.pillarId)} ×${l.count}`).join("\n") || undefined;
-            const body = (
-              <>
-                <p className="text-[11px] font-bold text-foreground">{s.day}</p>
-                <p className="text-[11px] leading-tight text-primary-700">ยาว {longN}</p>
-                <p className="text-[11px] leading-tight text-sky-600">สั้น {s.short}</p>
-                <p className="hidden text-[11px] leading-tight text-muted sm:block">บท {s.article} · โพ {s.post}</p>
-              </>
-            );
-            return isManual ? (
-              <button key={s.date} type="button" onClick={() => toggleDay(s.day)} className={cls} style={style} title={title} aria-pressed={selected}>
-                {body}
-              </button>
-            ) : (
-              <div key={s.date} className={cls} style={style} title={title}>
-                {body}
+            const onDrop = isManual
+              ? (e: { preventDefault: () => void; dataTransfer: DataTransfer }) => { e.preventDefault(); const t = e.dataTransfer.getData(CHIP_MIME); if (t) dropChip(s.day, t as keyof DayOverride); }
+              : undefined;
+
+            // auto mode → read-only
+            if (!isManual) {
+              return <div key={s.date} className={cls} style={style} title={title}><ReadonlyDay s={s} longN={longN} /></div>;
+            }
+            // manual · unselected → แค่เลขวัน (สะอาด · แตะเพื่อเลือก · เป็น drop target ด้วย)
+            if (!selected) {
+              return (
+                <button key={s.date} type="button" onClick={() => toggleDay(s.day)} className={cx(cls, "flex items-center justify-center")} style={style} title="แตะเพื่อเลือกวันนี้"
+                  onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+                  <span className="text-[13px] font-semibold text-foreground">{s.day}</span>
+                </button>
+              );
+            }
+            // manual · selected → editable (4 pin inputs)
+            const ov = overrides.get(s.day);
+            return (
+              <div key={s.date} className={cx(cls, "space-y-0.5 text-left")} style={style} title={title}
+                onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+                <button type="button" onClick={() => toggleDay(s.day)} className="mb-0.5 flex w-full items-center justify-center gap-1 text-[11px] font-bold leading-none text-foreground hover:text-primary-600" title="เอาวันนี้ออก">
+                  {s.day}<span className="text-[9px] text-muted">✕</span>
+                </button>
+                <PinInput label="ยาว" color="text-primary-700" value={ov?.long} placeholder={longN} onChange={(v) => setDayOverride(s.day, "long", v)} />
+                <PinInput label="สั้น" color="text-sky-600" value={ov?.short} placeholder={s.short} onChange={(v) => setDayOverride(s.day, "short", v)} />
+                <PinInput label="บท" color="text-emerald-600" value={ov?.article} placeholder={s.article} onChange={(v) => setDayOverride(s.day, "article", v)} />
+                <PinInput label="โพ" color="text-amber-600" value={ov?.post} placeholder={s.post} onChange={(v) => setDayOverride(s.day, "post", v)} />
               </div>
             );
           })}
         </div>
         <p className="mt-2 text-[11px] text-muted">
           {isManual
-            ? "โหมดเลือกวันเอง — คลิกวันที่ต้องการลงคอนเทนต์ ระบบจะกระจายโควต้าลงเฉพาะวันที่เลือก · วันที่ไม่ได้เลือก = 0"
+            ? "เลือกวัน แล้วพิมพ์จำนวนในช่อง (หรือลาก chip ลงวัน) = กำหนดเองวันนั้น (pin) · ระบบเกลี่ยจำนวนที่เหลือของประเภทนั้นไปวันที่เลือกอื่นให้ · เว้นว่าง = เกลี่ยอัตโนมัติ"
             : "ตัวเลขแต่ละวัน = จำนวนที่ควรลง (คลิปเฉลี่ยจากโควต้าเดือน · บทความ/โพสต์ ยืนพื้นเท่ากันทุกวัน) · ความเข้มของสี = ปริมาณคลิป · ชี้ค้างเพื่อดูเสาหลัก"}
         </p>
       </SectionCard>
@@ -247,7 +334,7 @@ export function ProductionPlan() {
       <SectionCard title={<span className="inline-flex items-center gap-1.5"><Sparkles className="h-4 w-4 text-primary-600" /> สร้างคอนเทนต์ตามแผน</span>}>
         <p className="mb-2 text-[12px] text-muted">
           กดสร้างเพื่อให้ระบบวางสล็อตคอนเทนต์ (สถานะ Idea) ลงปฏิทินเดือนนี้ตามโควต้า
-          {isManual ? " เฉพาะวันที่เลือก" : " เกลี่ยทุกวัน"} แล้วทีมทยอยเปิดเติมรายละเอียด/แปะลิงก์/วัดผล
+          {isManual ? " เฉพาะวันที่เลือก (ตามที่กำหนดเอง)" : " เกลี่ยทุกวัน"} แล้วทีมทยอยเปิดเติมรายละเอียด/แปะลิงก์/วัดผล
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <label className="inline-flex items-center gap-1.5 text-[13px] text-foreground">
@@ -272,5 +359,40 @@ export function ProductionPlan() {
         <p className="mt-2 text-[11px] text-amber-600">⚠ กดซ้ำจะสร้างเพิ่ม (ไม่เขียนทับของเดิม) — สร้างครั้งเดียวต่อเดือน หรือลบของเก่าก่อน</p>
       </SectionCard>
     </div>
+  );
+}
+
+/** อ่านอย่างเดียว (โหมด auto / วันที่ยังไม่เลือก). */
+function ReadonlyDay({ s, longN }: { s: DaySlot; longN: number }) {
+  return (
+    <>
+      <p className="text-[11px] font-bold text-foreground">{s.day}</p>
+      <p className="text-[11px] leading-tight text-primary-700">ยาว {longN}</p>
+      <p className="text-[11px] leading-tight text-sky-600">สั้น {s.short}</p>
+      <p className="hidden text-[11px] leading-tight text-muted sm:block">บท {s.article} · โพ {s.post}</p>
+    </>
+  );
+}
+
+/** ช่องกำหนดเองต่อวัน — ว่าง = เกลี่ยอัตโนมัติ (placeholder จาง) · พิมพ์ = pin (ไฮไลต์ให้เห็นชัด). */
+function PinInput({ label, color, value, placeholder, onChange }: {
+  label: string; color: string; value: number | undefined; placeholder: number; onChange: (v: number | null) => void;
+}) {
+  const pinned = value != null;
+  return (
+    <label className="flex items-center gap-1 leading-none" onClick={(e) => e.stopPropagation()}>
+      <span className={cx("w-5 shrink-0 text-[10px] font-medium", color)}>{label}</span>
+      <input
+        type="number" min={0} inputMode="numeric"
+        value={pinned ? String(value) : ""}
+        placeholder={String(placeholder)}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => { const v = e.target.value.trim(); onChange(v === "" ? null : Math.max(0, Math.floor(Number(v) || 0))); }}
+        className={cx(
+          "h-5 min-w-0 flex-1 rounded border bg-white px-1 text-right text-[11px] tabular-nums text-foreground outline-none placeholder:text-muted/40 focus:border-primary-400 focus:ring-1 focus:ring-primary-200 dark:bg-surface",
+          pinned ? "border-primary-300 bg-primary-50/50 font-semibold dark:bg-primary-900/15" : "border-border/70",
+        )}
+      />
+    </label>
   );
 }

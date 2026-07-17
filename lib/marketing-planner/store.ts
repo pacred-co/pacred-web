@@ -16,7 +16,7 @@ import type { ContentItem, ContentResult, JobMessageKind, JobOrder, JobStatus, K
 import { PLANNER_SCHEMA_VERSION, platformIdsOf, serviceIdsOf } from "./types";
 import { buildSeed, DEFAULT_KEYWORDS, DEFAULT_TARGETS } from "./seed";
 import { enrichResult } from "./performance";
-import { distributeMonth } from "./production-plan";
+import { distributeMonth, type PlanOverrides } from "./production-plan";
 import { deleteMarketingRow, resetMarketing as resetMarketingAction, saveMarketing } from "@/actions/admin/marketing-planner";
 
 const EMPTY: PlannerData = { version: PLANNER_SCHEMA_VERSION, settings: [], contents: [] };
@@ -88,8 +88,9 @@ export type PlannerContextValue = {
   setArticlePerDay: (n: number) => void;
   setPostPerDay: (n: number) => void;
   /** Generate idea slots for a month from the quota; returns how many were created.
-   *  `selectedDays` (1-based day numbers) confines placement to those days; null = every day. */
-  generateFromPlan: (year: number, month: number, opts: { long: boolean; short: boolean; article: boolean; post: boolean }, selectedDays?: number[] | null) => number;
+   *  `selectedDays` (1-based day numbers) confines placement to those days; null = every day.
+   *  `overrides` (1-based day → per-type pin) makes generation match the manually-pinned plan. */
+  generateFromPlan: (year: number, month: number, opts: { long: boolean; short: boolean; article: boolean; post: boolean }, selectedDays?: number[] | null, overrides?: PlanOverrides | null) => number;
   // ── Job board ──
   currentUserId: string;
   jobs: JobOrder[];
@@ -328,10 +329,10 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
     [apply],
   );
   const generateFromPlan = useCallback<PlannerContextValue["generateFromPlan"]>(
-    (year, month, opts, selectedDays) => {
+    (year, month, opts, selectedDays, overrides) => {
       const t = data.targets ?? DEFAULT_TARGETS;
       const sel = selectedDays == null ? null : new Set(selectedDays);
-      const slots = distributeMonth(year, month, t, sel);
+      const slots = distributeMonth(year, month, t, sel, overrides);
       const ts = new Date().toISOString();
       // The initial pipeline status ("Idea"). Prefer the canonical seeded status,
       // else the lowest-order active status. NOT `.find(first active)` — data.settings
