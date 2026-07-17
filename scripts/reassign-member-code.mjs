@@ -46,8 +46,8 @@ import { createClient } from "@supabase/supabase-js";
 import { writeFileSync } from "node:fs";
 import {
   computeLowestVacantPrCode,
-  reassignSyntheticEmail,
   describeReassignPlan,
+  shouldRealignAuthEmail,
   PR_CODE_RE,
 } from "../lib/admin/reassign-member-code.ts";
 
@@ -97,6 +97,66 @@ async function connect() {
     } catch (e) { console.log(`  ✗ ${label}: ${e.code ?? "err"} ${e.message}`); }
   }
   throw new Error("could not connect to prod via any path");
+}
+
+/**
+ * MONEY-SAFETY invariant. A code move is an IDENTITY move: the ONLY thing that
+ * may change is the code column itself — never an amount / status / price.
+ *
+ * Rather than hand-listing money columns (which drifts as tables are added — the
+ * whole reason this script introspects), fingerprint EVERY row the move touches
+ * with the code column REMOVED (`to_jsonb(row) - '<codecol>'`). Taken before the
+ * UPDATEs at the OLD code and after them at the NEW code, an identical
+ * (rowCount, md5) pair per table proves every other column — wallet balance,
+ * order totals, statuses, rate cards — is byte-identical. Strictly stronger than
+ * "wallet + Σ orders unchanged", and it can never miss a column.
+ *
+ * `- $2::text[]` deletes the keys outright (no string-replace false positives),
+ * and jsonb normalises key order, so the digest is deterministic.
+ *
+ * AUDIT_COLS are excluded because a BEFORE-UPDATE trigger legitimately rewrites
+ * them on ANY update — `profiles` carries `profiles_updated_at_trigger` →
+ * `set_updated_at()`, so `updated_at` MUST move when member_code moves. A
+ * timestamp is not money; every other column still has to match byte-for-byte.
+ */
+const AUDIT_COLS = ["updated_at", "updatedat", "modified_at", "modifiedat"];
+async function fingerprint(c, tables, code) {
+  const out = {};
+  for (const t of tables) {
+    const r = (await c.query(
+      `SELECT count(*)::int AS n,
+              md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS digest
+         FROM (SELECT (to_jsonb(r) - $2::text[])::text AS x
+                 FROM "${t.table}" r WHERE r."${t.column}" = $1) s`,
+      [code, [t.column, ...AUDIT_COLS]])).rows[0];
+    out[`${t.table}.${t.column}`] = { n: r.n, digest: r.digest };
+  }
+  return out;
+}
+
+/**
+ * Human-readable money read-out (what the owner actually wants to eyeball). The
+ * `fingerprint` above is the authoritative assertion; this just names the numbers.
+ * Each probe is skipped if the table/column is absent — no hard-coded schema
+ * assumption can break the move.
+ */
+const MONEY_PROBES = [
+  { table: "tb_wallet",       column: "userid", sum: "wallettotal",     label: "wallet balance" },
+  { table: "tb_cash_back",    column: "userid", sum: "cbtotal",         label: "cash-back" },
+  { table: "tb_header_order", column: "userid", sum: "htotalpriceuser", label: "Σ shop orders" },
+  { table: "tb_forwarder",    column: "userid", sum: "ftotalprice",     label: "Σ forwarder freight" },
+];
+async function moneyReadout(c, code) {
+  const out = {};
+  for (const p of MONEY_PROBES) {
+    try {
+      const r = (await c.query(
+        `SELECT count(*)::int AS n, coalesce(sum("${p.sum}"),0)::text AS total
+           FROM "${p.table}" WHERE "${p.column}" = $1`, [code])).rows[0];
+      out[p.label] = { rows: r.n, total: r.total };
+    } catch { /* table/column absent — the fingerprint still covers it */ }
+  }
+  return out;
 }
 
 async function main() {
@@ -176,21 +236,40 @@ async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const sr = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const supa = url && sr ? createClient(url, sr, { auth: { autoRefreshToken: false, persistSession: false } }) : null;
-  let authId = null, authEmailFrom = null;
+  let authId = null, authEmailFrom = null, migratedFromPcs = null;
   {
-    const prof = (await c.query(`SELECT id, email FROM profiles WHERE member_code=$1`, [FROM])).rows[0];
+    const prof = (await c.query(
+      `SELECT id, email, migrated_from_pcs FROM profiles WHERE member_code=$1`, [FROM])).rows[0];
     authId = prof?.id ?? null;
+    migratedFromPcs = prof?.migrated_from_pcs ?? null;
     if (authId && supa) {
       const { data } = await supa.auth.admin.getUserById(authId);
       authEmailFrom = data?.user?.email ?? null;
     }
   }
+  // Realign the auth email ONLY for a code-keyed (migrated) account — see
+  // shouldRealignAuthEmail. A NATIVE customer's credential is their phone/own
+  // email; stamping a synthetic one on them plants a bogus credential.
+  const realignAuth = shouldRealignAuthEmail({ migratedFromPcs, authUserId: authId });
 
   const plan = describeReassignPlan({ fromCode: FROM, toCode: TO, tables, authEmailFrom });
   console.log(`\nLowest/target code → ${TO}`);
   console.log(`\nPLAN (${plan.tables.length} tables · ${plan.totalRows} rows):`);
   console.log(`  MOVE   ${FROM} → ${TO}   (all userid references)`);
-  console.log(`  AUTH   ${authEmailFrom ?? "(none)"} → ${plan.authEmailTo}   [auth.users id ${authId?.slice(0, 8) ?? "?"}]`);
+  if (realignAuth) {
+    console.log(`  AUTH   ${authEmailFrom ?? "(none)"} → ${plan.authEmailTo}   [auth.users id ${authId?.slice(0, 8) ?? "?"}]`);
+  } else {
+    const why = !authId
+      ? "no auth.users row (never provisioned)"
+      : `NATIVE account (migrated_from_pcs=${migratedFromPcs}) — credential is phone/own email, NOT the PR code`;
+    console.log(`  AUTH   untouched — ${why}`);
+    console.log(`         current auth email: ${authEmailFrom ?? "(none)"}  ·  login keeps working via profiles.member_code → phone`);
+  }
+
+  // Money read-out (the fingerprint inside the txn is the hard assertion).
+  const moneyBefore = await moneyReadout(c, FROM);
+  console.log(`\nMONEY (must be IDENTICAL after — identity move, no amount may change):`);
+  for (const [k, v] of Object.entries(moneyBefore)) console.log(`  ${k.padEnd(22)} ${v.total.padStart(14)}   [${v.rows} rows]`);
 
   if (!APPLY) {
     console.log(`\n— DRY-RUN — owner: confirm ${FROM} → ${TO}, then re-run with --apply.\n`);
@@ -208,6 +287,9 @@ async function main() {
   await c.query("BEGIN");
   let moved = 0;
   try {
+    // Snapshot every touched row (code column excluded) BEFORE the writes.
+    const before = await fingerprint(c, plan.tables, FROM);
+
     for (const t of plan.tables) {
       const r = await c.query(`UPDATE "${t.table}" SET "${t.column}"=$1 WHERE "${t.column}"=$2`, [TO, FROM]);
       if (r.rowCount !== t.rows) {
@@ -220,6 +302,20 @@ async function main() {
       const left = (await c.query(`SELECT count(*)::int c FROM "${t.table}" WHERE "${t.column}"=$1`, [FROM])).rows[0].c;
       if (left) throw new Error(`verify failed: ${left} ${FROM} rows still in ${t.table}.${t.column}`);
     }
+    // MONEY-SAFETY: the same rows must now sit at TO, byte-identical in every
+    // non-code column. Any drift = something other than the code changed → abort.
+    const after = await fingerprint(c, plan.tables, TO);
+    for (const key of Object.keys(before)) {
+      const b = before[key], a = after[key];
+      if (a.n !== b.n) throw new Error(`invariant failed: ${key} had ${b.n} rows at ${FROM}, ${a.n} at ${TO}`);
+      if (a.digest !== b.digest) throw new Error(`invariant failed: ${key} row content changed (only the code column may change)`);
+    }
+    // The human money numbers must match too (redundant with the digest, but it
+    // is the number the owner reads — assert it explicitly rather than trust).
+    const mBefore = moneyBefore, mAfter = await moneyReadout(c, TO);
+    for (const [k, v] of Object.entries(mBefore)) {
+      if (mAfter[k]?.total !== v.total) throw new Error(`invariant failed: ${k} ${v.total} → ${mAfter[k]?.total}`);
+    }
     await c.query("COMMIT");
     console.log(`✓ COMMIT · ${FROM}→${TO}: ${moved} rows across ${plan.tables.length} tables`);
   } catch (e) {
@@ -230,7 +326,7 @@ async function main() {
 
   // 6. AFTER commit — realign the auth email so NATIVE login still resolves.
   //    updateUserById keeps auth.identities consistent (raw SQL would not).
-  if (authId && supa) {
+  if (realignAuth && supa) {
     const { error: aeErr } = await supa.auth.admin.updateUserById(authId, { email: plan.authEmailTo, email_confirm: true });
     if (aeErr) {
       console.error(`\n✗ AUTH EMAIL realign FAILED: ${aeErr.message}`);
@@ -243,16 +339,28 @@ async function main() {
     // Keep profiles.email in sync (display only).
     const { error: peErr } = await c.query(`UPDATE profiles SET email=$1 WHERE id=$2`, [plan.authEmailTo, authId]);
     if (peErr) console.log(`  ⚠ profiles.email sync failed (non-fatal): ${peErr.message}`);
+  } else if (realignAuth && !supa) {
+    console.error(`\n✗ auth realign REQUIRED for this migrated account but NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are missing.`);
+    console.error(`  ⚠ TABLES ARE MOVED to ${TO} — re-run the realign with --env-file=.env.local before the customer logs in.`);
+    process.exit(4);
   } else {
-    console.log(`\n⚠ no auth.users row for ${FROM} (unmigrated?) — skipped auth-email realign.`);
+    console.log(`\n· auth untouched (correct — this account is not code-keyed; see shouldRealignAuthEmail).`);
   }
 
-  // 7. Verify tb_users + a login smoke hint.
-  const v = (await c.query(`SELECT "userID","userName","userLastName" FROM tb_users WHERE "userID"=$1`, [TO])).rows;
+  // 7. Verify tb_users + the money read-out + a login smoke hint.
+  const v = (await c.query(`SELECT "userID","userName","userLastName","userTel" FROM tb_users WHERE "userID"=$1`, [TO])).rows;
   console.log("\nVerify tb_users:");
-  for (const r of v) console.log(`  ${r.userID.padEnd(9)} = ${r.userName} ${r.userLastName}`);
+  for (const r of v) console.log(`  ${r.userID.padEnd(9)} = ${r.userName} ${r.userLastName} (${r.userTel})`);
+  const moneyAfter = await moneyReadout(c, TO);
+  console.log("Verify money (must equal the pre-move read-out):");
+  for (const [k, val] of Object.entries(moneyAfter)) console.log(`  ${k.padEnd(22)} ${val.total.padStart(14)}   [${val.rows} rows]`);
   console.log(`\n✓ DONE. ${cust.userName} ${cust.userLastName} = ${TO} (was ${FROM}) · ${FROM} is now VACANT.`);
-  console.log(`  Login: native email ${plan.authEmailTo} — password unchanged (legacy passTam + Supabase Auth both intact).\n`);
+  console.log(
+    realignAuth
+      ? `  Login: native email ${plan.authEmailTo} — password unchanged (legacy passTam + Supabase Auth both intact).`
+      : `  Login: unchanged — the credential (phone / own email) is not keyed to the PR code; login-by-code now resolves ${TO}.`,
+  );
+  console.log("");
   await c.end();
 }
 main().catch((e) => { console.error("✗ uncaught:", e); process.exit(1); });

@@ -8,6 +8,7 @@ import {
   parsePrIndex,
   reassignSyntheticEmail,
   describeReassignPlan,
+  shouldRealignAuthEmail,
 } from "./reassign-member-code";
 import { legacySyntheticEmail } from "@/lib/auth/pcs-legacy-password";
 
@@ -95,6 +96,33 @@ assertEq(
 for (const code of ["PR001", "PR168", "PR10794", "pr540"]) {
   assertEq(`lock-step with legacySyntheticEmail(${code})`, reassignSyntheticEmail(code), legacySyntheticEmail(code));
 }
+
+section("shouldRealignAuthEmail — realign ONLY a code-keyed (migrated) account");
+// Migrated: actions/auth.ts derives the credential as legacySyntheticEmail(code)
+// → the move MUST realign, else login-by-code misses (the PR168 bug).
+assertEq(
+  "migrated + provisioned → realign",
+  shouldRealignAuthEmail({ migratedFromPcs: true, authUserId: "d29dc406-…" }),
+  true,
+);
+// Native (PR605 เฮง เฮง, 2026-07-17): phone-identity signup, auth.users.email is
+// legitimately NULL. Stamping a synthetic .invalid email would plant a bogus
+// credential in profiles.email + show the customer a fake address.
+assertEq(
+  "NATIVE (migrated_from_pcs=false) → do NOT touch auth",
+  shouldRealignAuthEmail({ migratedFromPcs: false, authUserId: "d29dc406-…" }),
+  false,
+);
+assertEq(
+  "migrated flag null/unknown → do NOT touch auth (fail-closed)",
+  shouldRealignAuthEmail({ migratedFromPcs: null, authUserId: "d29dc406-…" }),
+  false,
+);
+assertEq(
+  "no auth user (never provisioned) → nothing to realign",
+  shouldRealignAuthEmail({ migratedFromPcs: true, authUserId: null }),
+  false,
+);
 
 section("describeReassignPlan — filters 0-row tables + sums");
 {

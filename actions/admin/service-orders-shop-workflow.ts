@@ -845,6 +845,15 @@ type ShopTrackingData = {
  *
  * Allowed at hstatus = '4'. Empty tracking clears the field (legacy
  * accepts that too — used when retyping).
+ *
+ * STATUS: do NOT re-derive here. Writing `ctrackingnumber` fires the DB trigger
+ * `trg_advance_shop_on_order_link` (mig 0259), which applies the ONE rule
+ * (`derive_shop_order_status`) — the same rule the tb_forwarder side uses. This
+ * closes the owner's recurring "มีแทรคกิ้งหมดแล้ว แต่สถานะยังไม่เดิน" (P22332):
+ * when the goods arrive BEFORE the tracking is keyed in, the tb_forwarder
+ * trigger already fired and found no link, and tb_forwarder is never written
+ * again — so this write is the ONLY re-derive chance. The trigger takes it.
+ * The `revalidatePath` below re-renders the page with the new status.
  */
 export async function adminUpdateShopTracking(
   input: AdminUpdateShopTrackingInput,

@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-07-17T07:51:05.815Z",
+  "migration": "0259_shop_status_one_rule_both_sides",
+  "note": "restore: UPDATE tb_header_order SET hstatus=<from> WHERE hno=<hno>;",
+  "rows": [
+    {
+      "hno": "P22332",
+      "userid": "PR032",
+      "from": "4",
+      "to": "40",
+      "shops": 1
+    }
+  ]
+}

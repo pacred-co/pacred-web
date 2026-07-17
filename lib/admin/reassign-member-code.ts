@@ -89,6 +89,39 @@ export function reassignSyntheticEmail(code: string): string {
 }
 
 /**
+ * Does this customer's login resolve their auth email FROM their PR code?
+ *
+ * ONLY a MIGRATED PCS customer does. `actions/auth.ts` (the login-by-code branch)
+ * splits on `profiles.migrated_from_pcs`:
+ *   • migrated  → `resolvedEmail = legacySyntheticEmail(code)` — the credential is
+ *     DERIVED from the code, so a code move MUST realign auth.users.email to the
+ *     new code or login-by-code misses (the PR168 bug that
+ *     scripts/fix-auth-email-pr168-pr540 had to repair).
+ *   • native    → `resolvedPhone = profile.phone; resolvedEmail = profile.email` —
+ *     the credential is their OWN phone/email and is NOT keyed to the code, so the
+ *     move needs no auth work at all.
+ *
+ * Realigning a NATIVE account is not merely useless, it is DESTRUCTIVE: a
+ * phone-only signup legitimately has `auth.users.email = NULL`, and the realign
+ * would (a) fabricate a `pcs-legacy-<code>@users.pacred.invalid` address they
+ * never had and silently `email_confirm` it, and (b) write that fake `.invalid`
+ * string into `profiles.email` — which is a REAL credential source for native
+ * accounts AND is displayed on their profile. That is precisely the "เละๆ มั่วๆ"
+ * symptom the PR050 fire (pcs-legacy-bridge.ts L146-154) warns about.
+ *
+ * So: realign ⟺ the account is code-keyed ⟺ `migrated_from_pcs`. Mirrors the
+ * `actions/auth.ts` branch rather than inventing a rule.
+ */
+export function shouldRealignAuthEmail(args: {
+  /** `profiles.migrated_from_pcs` for the customer being moved. */
+  migratedFromPcs: boolean | null | undefined;
+  /** `profiles.id` (= auth.users.id); null when the customer was never provisioned. */
+  authUserId: string | null | undefined;
+}): boolean {
+  return Boolean(args.authUserId) && args.migratedFromPcs === true;
+}
+
+/**
  * A serializable description of the move plan — what the DRY-RUN prints and the
  * server action returns. `tables` is the introspected list of every userid
  * reference to rewrite; `authEmail` is the new synthetic login email.
