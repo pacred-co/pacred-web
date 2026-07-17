@@ -3,72 +3,74 @@
 
 ---
 
-# 🔴🔴 2026-07-17 ดึก-2 — ต่อ WORK ORDER: เจอบัคเงิน 2 ตัว (parser ตกบรรทัด · น้ำหนักคูณซ้ำ) + เก็บเกินลูกค้า ฿3,920 — READ FIRST
+# 🔴🔴 2026-07-17 ดึก-3 — WORK ORDER: ข้อ 1/4/5 ปิด · ข้อ 2/3/6 พร้อมรัน (รอ owner เคาะ 3 เรื่อง) — READ FIRST
 
-> **สถานะ:** main = dave-pacred = HEAD · **mig 0260 (รถ 4,700 · เรือ 2,500) applied prod แล้ว** · NEXT FREE mig = 0261.
-> **หลักฐานเต็ม (อ่านก่อนทำต่อ):** [`docs/research/momo-invoice-reconcile-ground-truth-2026-07-17.md`](docs/research/momo-invoice-reconcile-ground-truth-2026-07-17.md) — verified prod ทั้งหมด read-only · ยังไม่แตะข้อมูลสักแถว.
+> **main = dave-pacred = HEAD** · **mig 0260 (รถ 4,700 · เรือ 2,500) applied prod** · NEXT FREE mig = 0261
+> gate: **tsc 0 · build EXIT 0 · `pnpm install --frozen-lockfile` ผ่าน · เทส 6 ไฟล์ ✓** (เดฟ รันเอง ไม่เชื่อ agent)
+> **หลักฐานเต็ม:** [`docs/research/momo-invoice-reconcile-ground-truth-2026-07-17.md`](docs/research/momo-invoice-reconcile-ground-truth-2026-07-17.md)
+> + [`docs/research/backfill-inventory-2026-07-17.md`](docs/research/backfill-inventory-2026-07-17.md) (⚠️ อ่านคำเตือน false positive ในนั้นก่อน)
 >
-> **⚠️ WIP ค้างใน worktree (ยังไม่ commit · ยังไม่ gate):** workflow `wf_8ab3cea4-487` แก้ 6 ไฟล์ค้างไว้ —
-> `lib/admin/momo-invoice-parser.ts` · `actions/admin/momo-invoice-ingest.ts` · `invoice-cost-client.tsx` ·
-> `forwarders/[fNo]/page.tsx` · `actions/admin/forwarder-check.ts` · `lib/forwarder/domestic-shipping.ts`.
-> **ต้อง `git diff` อ่านเองก่อน + รัน `node scripts/tsc-check.mjs` + review money เอง แล้วค่อย commit** (อย่าเชื่อรายงาน agent).
+> ## 🔴 owner เคาะ 3 เรื่อง (ทุกอย่างพร้อมรันทันทีที่เคาะ · ข้อมูล prod ยังไม่ถูกแตะเลย)
+> 1. **เก็บเงินเกินลูกค้า — fid 52198 · PR086 · ตู้ GZE260701-1 · เก็บไปแล้ว**
+>    ขาย ฿4,900 (คิว 1.0 เพี้ยน) · ที่ถูก ฿980 (คิว 0.2) = **เกิน ฿3,920**
+>    ✅ ยืนยันซ้อนจากใบแจ้งหนี้ MOMO เอง: `1782544029-2 50.00 KG/0.2000 CBM ... 940.00` (ทุน ฿940 → ขาย 980 = margin 4% สมจริง)
+>    → **คืนเงิน / เครดิต / ปล่อย?** (backfill SKIP แถวนี้ไว้ ไม่แตะเงียบๆ)
+> 2. **ล้างคิวตรวจสอบ 160 แถว** (คิว 168 → เหลือ 8) — `node scripts/forwarder-check-queue-backfill-2026-07-17.mjs --apply`
+>    ลบเฉพาะแถวใน `tb_check_forwarder` (ตารางคิว) · **ไม่แตะ tb_forwarder/เงิน** · dry-run + backup + txn พร้อม
+> 3. **backfill น้ำหนัก/คิว ผี** — `node scripts/momo-weight-qty-backfill-2026-07-17.mjs --apply`
+>    น้ำหนักผี **82,629 kg** · คิวผี **25.76** · เขียนแค่ `fweight`/`fvolume` = money-neutral
+>    invariant: `Σ ftotalprice ฿78,767.52 ต้องไม่ขยับ` · แถวที่ราคาคิดจากฐานเพี้ยน+เก็บเงินแล้ว → SKIP รอ owner
 >
-> ### ✅ ยืนยันแล้วว่าเรทที่พี่เคาะ **ถูกต้อง** (จากใบแจ้งหนี้ MOMO เอง)
-> ใบ `INV-20260708-0002` พิมพ์มาเลย: `GZS…`(เรือ) = **2,500.00** · `GZE…`(รถ) = **4,700.00** → ตรง mig 0260 เป๊ะ
-> และต้นทุนที่ระบบเราคิดไว้ = ยอดที่ MOMO เก็บจริง ระดับสตางค์ → **เรทถูก ยืนยัน 2 ทาง**
+> ## ✅ ปิดแล้ว (verified เอง)
+> **ข้อ 1** กรอบต้นทุนอยู่ใต้ตารางสินค้าแล้ว (premise เดิมคลาด: มันไม่ได้อยู่ล่างสุด แต่**ถูกพับซ่อนใน `<details>`**) · gate ultra ไม่ถูกแตะ
+> **ข้อ 4** คิวรับแถวที่เก็บเงินแล้ว → แก้ที่ **WRITE path**: gate `'4'` เป๊ะ (min==max) = เซ็ตเดียวกับที่ consumer (`adminCallPriceUser` `.eq(fstatus,'4')`) ทำงานได้ · fail-closed เมื่อสถานะว่าง · SOT `lib/admin/report-cnt-add-check-gate.ts`
+> **ข้อ 5** — **"สำเร็จ 0 · ผิดพลาด 8" = 8 แถวติด "ยังไม่ใส่ค่าส่งไทย" ทั้งหมด** (ตัวเลขตรงเป๊ะ 3 ทาง: คิว 168 = 8 + ค้าง 159 + orphan 1)
+>   gate ห้ามลืมค่าส่งไทย **ทำงานถูก** · ปัญหาคือ**จอบอกผิดเรื่อง** ("ยังไม่ถึงโกดังไทย" = โกหก → พนักงานไปรอ MOMO)
+>   ต้นตอ: action เก็บเหตุผลใน `errors: string[]` แต่ **client ไม่เคยอ่าน** → แก้เป็น `BillFailure {fid·reason·nextAction}` รายแถว
+>   🔑 **ลำดับที่ถูก:** ล้างคิว(160) → เหลือ 8 → **ใส่ค่าส่งไทยให้ 8 แถวนั้น** → แจ้งชำระผ่าน (ไม่ใช่บัค = ข้อมูลขาด)
+> **ข้อ 2** parser: ทน "ค่าตกบรรทัด" ทั้ง class + `reconciles` gate (fail-closed · REFUSE ทั้งใบถ้า Σ ≠ Sub-total)
+>   + เก็บ `cabinet`/`memberCode` + matcher `-1/N`→bare(corroborate kg/cbm) + ตู้ไม่ตรง **บล็อกรายแถว**
+>   + **อัพ PDF ได้แล้ว** (dep `unpdf` · server-only · lazy import · re-derive ฝั่ง server เสมอ · paste ยังใช้ได้)
+> **ข้อ 3** helper **dims เป็นตัวชี้ขาด** (SOT `lib/integrations/momo-web/box-detail-basis.ts`) + backfill พร้อม (ข้อ 3 ข้างบน)
+> **ข้อ 6** inventory doc + script read-only (⚠️ มี false positive — อ่านคำเตือนในไฟล์)
 >
-> ### 🔴 บัคเงินที่ 1 — parser ตกบรรทัดเงียบๆ (อยู่บน prod ตอนนี้)
-> MOMO ตัดคำ **"CBM" ขึ้นบรรทัดใหม่** (บรรทัด #34 ของจริง) → `TRACK_RE` บังคับ `CBM$` → **ตกบรรทัด ฿181.42**
-> parse ได้ 38/39 · Σ 21,445.47 vs Sub-total 21,626.89. **ที่แย่กว่า: ไม่มี gate เลย** (`grep -c subTotal` = 0
-> ทั้ง parser + `momo-invoice-ingest.ts` · มีแต่ใน backfill script) → **UI จริงจะ ingest 38/39 แล้วไม่มีใครรู้**
-> → แก้ให้ทน wrap แล้ว = **39 บรรทัด · Σ 21,626.89 = Sub-total ✓**
+> ## 🔴🔴 2 บทเรียนแพงของ session นี้ (อ่านก่อนเชื่ออะไร)
+> **(1) fixture ที่กุขึ้น หลอกได้ทั้ง agent + verifier + เดฟ.** `momo-invoice-parser.test.ts` ที่ HEAD มี fixture
+> ติดป้าย *"Real INV-20260618-0003"* แต่เอาค่าจริง**หารด้วย qty** เพื่อให้สูตร ×qty ผ่าน
+> (จริง `100.00 KG/0.3108` · fixture เขียน `50.00/0.1554`). ผมเลยเขียนคำแก้ผิด ("MOMO เปลี่ยนรูปแบบ") ลง doc + push
+> **verifier ก็ไม่จับ** เพราะเช็คแค่ *"agent กุขึ้นเองไหม"* (ไม่) ไม่ได้เช็คว่า *ตรง source จริงไหม*
+> → **§0b: fixture/HTML/screenshot = ของแปลงแล้ว ไม่ใช่ source** · **เทสที่กุขึ้น = ล็อกพฤติกรรมผิดตลอดกาล**
+> ✅ **ข้อเท็จจริงสุดท้าย (แกะ PDF จริง 5 ใบผ่านโค้ดจริง): `lineTotal = unitPrice × cbm` ทุกใบ · qty = จำนวนกล่อง**
+> โหวต ก.ค. line_total 6:0 · มิ.ย. 9:0 · **ทุกใบ reconcile Σ = Sub-total ✓** · MOMO **ไม่ได้**เปลี่ยนรูปแบบ
 >
-> ### 🔑 กฎ reconcile ที่เป็นหัวใจ (owner: "tracking↔ตู้ ไปตรวจให้ตรง")
-> 1. **ใบแจ้งหนี้มี "ตู้" อยู่ทุกบรรทัดแล้ว** (`ค่าขนส่งสินค้าจากจีน GZS260620-2`) → ไม่ต้องเดา · เอามาชนกับ
->    `fcabinetnumber` เรา = **ตัวจับ "ขัดแย้ง" ตัวจริง**
-> 2. **MOMO `-1/N` = แถว bare base ของเรา** (1781515241-1/3 → 1781515241 fid 52095 · ตรง kg/คิว/ต้นทุน ระดับสตางค์)
->    → ถ้าไม่ normalize = **ขึ้น "ขาด" หลอก 3 ตัว** → บัญชีอาจสร้างแถวซ้ำ = ต้นทุนซ้ำ
-> 3. `lineTotal = unitPrice × CBM` · **qty = จำนวนกล่อง ไม่ใช่ตัวคูณ** (ยืนยัน 39/39) → parser เดิมคูณ qty = noise
-> ผล reconcile ใบนี้ vs prod: **ตรง 36 · ตู้ไม่ตรง 0 · ลูกค้าไม่ตรง 0 · "ไม่มีในระบบ" 3 (= หลอกทั้งหมด)**
-> ตู้ GZS260620-2 เรามี 7 แถว MOMO บิล 3 → 4 แถวยังไม่ถูกบิลรอบนี้ (MOMO ปล่อยเป็นรอบๆ = **info ไม่ใช่ error**)
-> ทั้ง 2 ตู้ยังไม่จ่าย (`tb_cnt_item` = 0) → ตัดจ่ายได้จริง
+> **(2) `momo_box_detail` ถูก cron เขียนตลอด → เทียบตอน sync ค้างกลางคัน = ได้ส่วนต่างหลอก.**
+> inventory doc เคยรายงาน "เก็บเงินเกิน ฿10,604 · 5 base" — **มี false positive** (`910060609755` PR075 ฿229.50
+> เรา 0.089812 vs MOMO 0.089900 = ตรงกัน) · รันซ้ำได้คนละเลข (10,604.32 → 10,374.82 = ลบ 229.50 พอดี)
+> → **ก่อนเทียบ ต้องเช็คว่ากล่องใน box_detail แตกครบก่อน** (ยังไม่ครบ = ข้าม ไม่ใช่ flag)
+> → **ยืนยันเก็บเกินจริงแค่ fid 52198 ตัวเดียว** (เพราะมีใบแจ้งหนี้ MOMO ยืนยันซ้อน)
 >
-> ### 🔴 บัคเงินที่ 2 — ข้อ 3 น้ำหนักมั่ว = **คูณ quantity ซ้ำ** (ไม่ใช่ข้อมูลขยะ)
-> **MOMO ส่งค่ามาไม่คงเส้นคงวา** — บางแถว `cbm` = ต่อกล่อง บางแถว = ยอดรวม.
-> **ตัวชี้ขาดตัวเดียวที่เชื่อได้ = dims** (`w×l×h`): `cbm ≈ dims` → ต่อกล่อง (คูณ qty ได้) ·
-> `cbm ≈ dims × qty` → **ยอดรวม (ห้ามคูณ)**.
-> ⚠️ **กับดัก 2 อันที่เกือบพลาดเอง:** ใช้ความหนาแน่น >1,000 kg/คิว จับ → **flag ผิด** (ของโลหะหนักเกินได้จริง) ·
-> ใช้ `fweight == weight_kg × quantity` จับ → **flag ผิด 122 แถว** (แถวต่อกล่องต้องคูณอยู่แล้ว) → **ใช้ dims เท่านั้น → เหลือ 10 แถวจริง**
-> - **10 แถว · น้ำหนักผี 82,829 kg · 4 แถวคิวผิดด้วย · กระจาย 4 ตู้** (st: 6 แถวเก็บเงินแล้ว · 4 แถวยังไม่เก็บ)
-> - `GZE260627-1`: Σ 69,916kg / 10.28 คิว = **6,802 kg/คิว** (น้ำ=1,000 → เป็นไปไม่ได้) · **ต้นทุน Σ = ฿0**
->   → ซ่อมแล้วเหลือ **~1,834 kg = 178 kg/คิว** (สมเหตุผล) → **ตั้งต้นทุน 4,700/คิว ได้ตามที่พี่สั่ง**
+> ## 🔑 ground truth สำคัญ (ยืนยันแล้ว อย่าเดาใหม่)
+> - **ใบแจ้งหนี้มี "ตู้" อยู่ในบรรทัด** (`ค่าขนส่งสินค้าจากจีน GZS260620-2`) → ชนกับ `fcabinetnumber` = ตัวจับขัดแย้ง
+>   ⚠️ **แต่ไม่ใช่ทุกใบ** — 2/5 ใบเขียน `(Guangzhou - TH)` แทน → "ไม่ระบุตู้" = **ไม่ใช่ขัดแย้ง ห้ามบล็อก**
+> - **MOMO `-1/N` = แถว bare base ของเรา** (1781515241-1/3 → fid 52095 ฯลฯ · ตรงระดับสตางค์) ไม่ normalize = ขึ้น "ขาด" หลอก
+> - **`momo_box_detail` ปน 2 convention ใน "ชิปเม้นเดียวกัน"** (base 1782555393: `-2` ยอดรวม · `-3` ต่อกล่อง)
+>   → **ตัวชี้ขาด = dims เท่านั้น** (`cbm ≈ dims` = ต่อกล่อง คูณ qty ได้ · `cbm ≈ dims × qty` = ยอดรวม ห้ามคูณ)
+>   ⚠️ **กับดัก:** ความหนาแน่น >1,000 kg/คิว จับ = ผิด (โลหะหนักเกินได้จริง) · `fweight == weight_kg × qty` จับ = **ผิด flag 122 แถว**
+> - เรทในใบตรง mig 0260: GZS(เรือ)=2,500 · GZE(รถ)=4,700 · ต้นทุนที่ระบบคิด = ที่ MOMO เก็บจริง ระดับสตางค์
 >
-> ### 🔴🔴 เก็บเงินเกินลูกค้าจริง — รอ owner เคาะ
-> **fid 52198 · `1782544029-2` · PR086 · ตู้ GZE260701-1 · fstatus=6 (เก็บเงินไปแล้ว)**
-> `fvolume` = 1.0 (เพี้ยน · = 0.2×5 ซ้ำ) แทน **0.2** → ขาย **฿4,900** (= 4,900 × 1.0) แทน **฿980** → **เกิน ฿3,920**
-> ✅ ยืนยันซ้อนจาก **ใบแจ้งหนี้ MOMO เอง** บรรทัด 5: `1782544029-2 50.00 KG/0.2000 CBM · PR086 5 4,700.00 · 940.00`
-> → คิวจริง 0.2 · ทุนเรา ฿940 → ขาย 980 vs ทุน 940 = margin ~4% (สมจริง) · ที่เก็บจริง 4,900 บนทุน 940 = **5.2 เท่า ผิดรูป**
-> **→ พี่เคาะ: คืนเงิน / เครดิต / ปล่อย** (อีก 3 แถวคิวเพี้ยน ขายคิดจากน้ำหนักที่ถูก = ปลอดภัย · PR075 ขายคิดจากคิว = ปลอดภัย)
+> ## เหลือทำ
+> **ข้อ 2 ต่อ:** ต่อ reconcile → **ตัดจ่ายค่าตู้** (`/admin/cnt-hs` · `tb_cnt_item` มี partial-UNIQUE mig 0183 กัน double-pay)
+> · ทั้ง GZS260620-2 + GZE260701-1 ยังไม่จ่าย (`tb_cnt_item` = 0) → ตัดจ่ายได้จริง
+> **ข้อ 6:** ของค้างจริง (ยืนยัน prod): **303 แถวไม่มีต้นทุน ✅ ตรงที่ owner จำ · แต่ 24 ตู้ ไม่ใช่ 16** (คนละสูตร)
+> · 207 ชิปเม้นยังไม่แตกกล่อง · 28 ตู้กล่องเพี้ยน · PR043 · P22324
+> **➕ ค้างเดิม:** PR217 ใบเสร็จนิติ ฿27,047.45 + สลิป · แถวรวม=สรุป+ใต้แถวแจงกล่อง · คิดเงินต่อชิปเม้น · สี list+profile
 >
-> ### งานที่เหลือ (6 เรื่องเดิม · ข้อ 1/4/5 = WIP ใน worktree)
-> **1️⃣ กรอบต้นทุนขึ้นบน** — 🔎 **premise เดิมคลาด**: panel ไม่ได้อยู่ล่างสุด แต่ **ถูกพับซ่อนใน `<details>`**
-> (owner สั่งย่อเอง 2026-07-08 "เกะกะ ยังไม่ใช้") → ต้อง **ยกออกจากกลุ่มที่ย่อ** ไม่ใช่แค่สลับลำดับ · gate `canViewCostProfit` ห้ามแตะ.
-> **2️⃣ จ่ายต้นทุนตู้จาก PDF** — parser root-fix = WIP · ยังเหลือ **UI อัพ PDF** (ตอนนี้ paste text · pypdf 6.13.2 มีบนเครื่อง ·
-> `pdftoppm` ไม่มี) + **หน้า reconcile รายงาน ตรง/ขัดแย้ง/ขาด/เกิน** + ต่อเข้า **ตัดจ่ายตู้** (`/admin/cnt-hs` · `tb_cnt_item`
-> มี partial-UNIQUE mig 0183 กัน double-pay). **ต่อยอดของเดิม อย่าสร้างใหม่.**
-> **3️⃣ GZE260627-1** — ต้นตอเจอแล้ว ↑ · ยังต้อง **แก้ที่ WRITE path** (ใส่ตัวชี้ขาด dims · ต่อยอด pass 6 self-heal
-> `lib/admin/box-detail-reconcile-plan.ts`) + **backfill 10 แถว** (dry-run+backup+invariant · เขียนแค่ fweight/fvolume =
-> money-neutral · 6 แถว fstatus=6 ห้าม re-price · zero-basis guard `live-rate.ts` ต้องกันไว้)
-> **4️⃣ คิวตรวจสอบ** (WIP `actions/admin/forwarder-check.ts`) · **5️⃣ ผิดพลาด 8 รายตัว** (WIP `lib/forwarder/domestic-shipping.ts`)
-> **6️⃣ backfill ทั้งระบบ** — ของค้างเดิม: 16 ตู้/303 แถวไม่เคยตั้งต้นทุน (~฿232k) · 207 ชิปเม้นยังไม่แตกกล่อง · 28 ตู้กล่องเพี้ยน · PR043 · P22324
->
-> **➕ ค้างเดิม:** PR217 ใบเสร็จนิติ ฿27,047.45 + แนบสลิป · แถวรวม=สรุป + ใต้แถวแจงกล่อง · คิดเงินต่อชิปเม้น · สี list+profile · `pnpm test:unit` พังบน Windows (รันผ่าน bash)
->
-> **🔑 กติกาเครื่องนี้:** worktree ไม่มี `node_modules`/`.env.local` → `cp ../../../.env.local .` + `corepack pnpm install --frozen-lockfile` ·
-> **`.env.local` DB pw STALE** → prod ใช้ `DqOzfEZVXfMHIryz` (pooler `aws-1-ap-southeast-1`) · script ต้องอยู่ในrepo ถึงจะ resolve `pg` ได้ ·
-> Python stdout ต้อง `PYTHONIOENCODING=utf-8` (cp1252 พังกับภาษาไทย)
+> **🔑 กติกาเครื่องนี้:** worktree ไม่มี `node_modules`/`.env.local` → `cp ../../../.env.local .` + `corepack pnpm install --frozen-lockfile`
+> · **`.env.local` DB pw STALE** → prod ใช้ `DqOzfEZVXfMHIryz` (pooler `aws-1-ap-southeast-1`) · script ต้องอยู่ในrepo ถึง resolve `pg`
+> · Python stdout ต้อง `PYTHONIOENCODING=utf-8` · tsx: top-level await ไม่ได้ (ห่อ async main) · `import "server-only"` = import ตรงไม่ได้
 
 ---
+
 
 # 🔴🔴 2026-07-17 ดึก — WORK ORDER รอบใหม่ (owner สั่ง · ยังไม่ทำ) — READ FIRST
 
