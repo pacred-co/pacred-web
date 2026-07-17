@@ -164,10 +164,30 @@ function isPcsfZero(row: ForwarderDebitRow): boolean {
  */
 export function computeForwarderDebitBatch(
   rows: ForwarderDebitRow[],
-  opts: { userId: string; isCorporate: boolean },
+  opts: {
+    userId: string;
+    isCorporate: boolean;
+    /**
+     * The fids allowed to carry the เหมาๆ ฿100, elected PER SHIPMENT from the DB by
+     * `resolveMaoAnchorIds` (lib/forwarder/mao-anchor.ts) — the bare base row when the
+     * shipment has one, else its lowest-suffix sibling.
+     *
+     * 🔴 owner 2026-07-16 "ไม่แจงค่าเหมาๆ · ระวังไปเก็บซ้ำ · อย่าให้เกิดขึ้นอีก". Without
+     * this, the base-only rule below silently drops the fee on a MOMO split-at-commit
+     * shipment (no bare base row exists → nothing can anchor → ฿0 · prod: 7/60 PCSF
+     * shipments). Electing per-shipment instead of per-batch closes that WITHOUT
+     * re-opening the double-charge: the carrier is one specific row, so two bills can
+     * never both hold it.
+     *
+     * OMIT → unchanged legacy behaviour (base-only, batch-local). Callers that don't
+     * pass it keep working exactly as before.
+     */
+    maoAnchorIds?: ReadonlySet<number>;
+  },
 ): ForwarderDebitBatch {
   const userId = (opts.userId ?? "").trim();
   const exemptPcsf = userId === "PCS999";
+  const anchorAllow = opts.maoAnchorIds;
 
   // ── pass 1: locate the เหมาๆ flat-fee ANCHOR — ONE per BILL / pay-batch ──
   // owner 2026-07-15 (rule ratified · "เก็บเหมาๆ ซ้ำตอนรวมหลายการจ่ายแทนลูกค้า"): the เหมาๆ
@@ -190,7 +210,14 @@ export function computeForwarderDebitBatch(
   });
   const isMaoBase = (r: ForwarderDebitRow, i: number): boolean => {
     if (exemptPcsf || !isPcsfZero(r)) return false;
-    // eligible base = the base tracking (suffix 0); legacy (no tracking) = first in batch.
+    // 🔴 owner 2026-07-16 — when the caller resolved the carrier PER SHIPMENT
+    // (resolveMaoAnchorIds · reads every sibling in the DB), that election IS the
+    // answer: it already prefers the bare base and falls back to the lowest-suffix
+    // sibling for a MOMO split-at-commit shipment that HAS no base row. Batch-local
+    // suffix rules must not second-guess it — doing so is what dropped the fee.
+    if (anchorAllow) return anchorAllow.has(Number(r.id));
+    // legacy path (no election passed): eligible base = the base tracking (suffix 0);
+    // legacy rows with no tracking at all = first in batch.
     return haveTracking ? trackingSuffix(r.ftrackingchn) === 0 : i === firstPcsfIdx;
   };
   // ONE anchor for the whole batch = the FIRST เหมาๆ-eligible base row (per-bill rule).

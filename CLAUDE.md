@@ -3,6 +3,21 @@
 
 ---
 
+# 🧾 2026-07-17 (เดฟ · resync + ตรวจงานค้าง disk/agent) — 🔴 ปิดงานเหมาๆ split-box (per-shipment anchor · ซ้ำไม่ได้โดยโครงสร้าง) + reconcile 4 บิลช่องผิด + integrate ภูม/ปอน → ALL BRANCHES · read FIRST
+
+> **🏁 CLOSE (owner: "resync main pull dave-pacred · ตรวจงานที่ค้างใน disk และ เอเจ่น เมื่อคืนติด limit แล้วสลับเมลทำต่อ · เช็คครบแล้ว รวมงานน้องและเราขึ้น main").** **main = dave-pacred = `<HEAD>`** (Vercel prod). **ตรวจงานค้าง = ครบ:** disk 0 ไฟล์ · `c6baf98d` (งาน Windows) อยู่ใน main ✓ · session สลับเมล (adoring-chandrasekhar) ทำต่อจบ (`9cf1edc0` URGENT PRF own-fleet + `6dc3210e` report-cnt สี) — **เหลือแค่เหมาๆ ที่ defer ไว้ → ปิดใน session นี้**. gate: tsc 0 · build 0 · tests 10. NEXT FREE mig = 0257 (ไม่มี migration ใหม่).
+>
+> **🔴 เหมาๆ split-box — ปิดจบแล้ว (`docs/research/mao-fee-split-box-anchor-2026-07-16.md` = RESOLVED):** owner "จ่ายแทนลูกค้า /admin/forwarders/52474 ไม่แจงค่าเหมาๆ · ระวังไปเก็บซ้ำ · อย่าให้เกิดขึ้นอีก".
+> - **ROOT (1 ต้นตอ → 3 อาการ):** guard `"a -N box sub-row NEVER anchors"` (กันเก็บซ้ำ 2026-06-23) สมมติว่าแถวหลักมีเสมอ — แต่ MOMO แตกกล่องตั้งแต่ commit → `JYM800120650588` มีแค่ `-1/4..-4/4` **ไม่มีแถวหลัก** → ไม่มีใคร anchor → **เหมาๆ ฿0 หายเงียบ** (prod **7/60** ชิปเม้น PCSF). → (a) จ่ายแทนลูกค้าเก็บ 1,085.55 vs บิล 1,184.54 = **ขาด ฿98.99** · (b) พนักงานพิมพ์ ฿100 มือลง **`delivery_th_thb`** (free-text) ทั้งที่เอกสารแจงจาก **`mao_fee_thb`** → **"ไม่แจงค่าเหมาๆ"** · (c) `billing-run.ts:1718` total = `subtotal + maoFeeTotal + … + deliveryThThb` = **2 ช่องบวกได้** → ชนวน **บิล ฿200**.
+> - **FIX = per-SHIPMENT anchor** (`lib/forwarder/mao-anchor.ts` · `resolveMaoAnchorIds` อ่านพี่น้องทุกแถวจาก DB → แถวหลักถ้ามี · ไม่มีก็ **suffix ต่ำสุด** → ส่งเข้า engine เป็น `maoAnchorIds` opt · ไม่ส่ง = เดิมเป๊ะ). batch คิด ฿100 **ก็ต่อเมื่อมีแถวนั้นอยู่** → **2 บิลถือแถวเดียวกันไม่ได้ = ซ้ำไม่ได้โดยโครงสร้าง** (ที่ owner กลัว + ที่ทำให้ defer). wire: pay-user-view · pay-user ×3 (debit จริง) · billing-run (→ ลง `mao_fee_thb` → แจงบรรทัด "ค่าส่งเหมาๆ (PCSF)" = ปิด ask itemisation). **test 10** รวมเคส "จ่ายทีละกล่องทั้ง 4 ใบ = ฿100" + "บิล A/B คนละครึ่ง = ฿100". fail-safe: DB error → set ว่าง → under-charge ไม่มีทางซ้ำ.
+> - **DATA prod (`reconcile-mao-fee-column-2026-07-16.mjs` · dry-run+backup+txn+invariant):** ย้าย `delivery_th_thb → mao_fee_thb` **4 ใบ** (FRI2607-00080/00032 · FRI2606-00022 ฿100 · FRI2606-00006 ฿50) · **total คงเดิมทุกใบ = money-neutral** (script assert foot ก่อน COMMIT) · re-run 0. **ข้ามถูก:** FRI2607-00019 (PCS=รับเองโกดัง) · 00029 (carrier ว่าง) · FRI2606-00008 (Flash · แถวมีค่าส่งจริง ฿165). **prod ตรวจแล้ว 0 ใบที่มีทั้ง 2 ช่อง = ยังไม่เคยเก็บซ้ำจริง.**
+>
+> **🔀 integrate:** ภูม `6c7a862e` (docs + audit script missing-sibling 0001779-2 · dry-run · ไม่มี live-path) + `8e92b6f6` (dashboard รอชำระ โชว์ net หัก WHT 1% ผ่าน `computeBillWht` SOT = display-only ✓) · ปอน 3 (pay-user modal QR/ตีกลับสลิป/mockup · 0 money-write). merge สะอาด 0 conflict.
+>
+> **🔴 CARRYOVER:** (1) **`delivery_th_thb` ยังเป็น free-text ไม่มี cross-check กับ auto เหมาๆ** — drop หายแล้ว (workaround ไม่มีเหตุให้เกิด) แต่ควรมี guard เตือนถ้าพิมพ์ ≈ค่าเหมาๆ บนบิล PCSF ที่มี auto fee อยู่แล้ว. (2) **1783051207** (PR075 · 19 แถว · ไม่มีแถวหลัก + ไม่มี -1 → minSuffix=2 · billed fstatus=6) = ยังตกเหมาๆ · fails-closed · **owner เคาะว่าจะเก็บย้อนไหม**. (3) ภูม flag **#52315** = ตรวจแล้ว **ไม่ใช่บัค** (บิล 84 status=issued · paid_at=null → fstatus=5 ถูกแล้ว · แต่ 52309 บิลเดียวกันอยู่ 6 = ต่างกัน ควรดู). (4) carryover เก่า (credit-withdraw flow · box-split backfill · GZS260628-2 14 แถวรอยิงเข้าโกดัง).
+
+---
+
 # 🧾 2026-07-16 ค่ำ (เดฟ · resume จาก limit) — 🔴 URGENT ลูกค้าสั่งของไม่ได้ (เหมาๆ PRF own-fleet) + report-cnt สี ยิงเข้าแล้วขาว + เหมาๆ split-box drop (diagnosed · defer) → push dave-pacred + main · read FIRST
 
 > **🏁 CLOSE (owner: "resync main pull dave-pacred · ต่องาน run-ค้าง · แก้งานตามรูป · จบแล้ว push dave-pacred + main").** **dave-pacred = main = `<HEAD>`** (Vercel prod). resync จาก c6baf98d. ⚠️ `.env.local` pw STALE — prod `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ` (`lozntlidlqqzzcaathnm`). NEXT FREE mig = 0257. gate: `rm -f .next/dev/types/validator.ts` ก่อน · build อ่าน exit จริง · tsc 0. ไม่มี admin login เว็บเรา → verify code + prod DB + gate.

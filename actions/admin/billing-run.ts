@@ -47,6 +47,7 @@ import {
   type ForwarderPriceFields,
 } from "@/lib/forwarder/outstanding";
 import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-total";
+import { resolveMaoAnchorIds } from "@/lib/forwarder/mao-anchor";
 import { isThShippingCostMissing, codBaseTrackings } from "@/lib/forwarder/domestic-shipping";
 import { getContainerCompletenessBatch } from "@/lib/warehouse/container-completeness";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
@@ -1668,9 +1669,15 @@ async function createBillingRunInvoiceImpl(
       // <฿1000 bills don't shift — the ONLY money delta is the ฿100 เหมาๆ, stored as
       // its OWN summary line (mao_fee_thb · NOT folded into a row) so the customer
       // SEES it and the ใบเสร็จ reconciles to it (ภูม flag: แยกให้เห็น + ใบเสร็จต้องตรง).
+      // 🔴 owner 2026-07-16 — per-SHIPMENT เหมาๆ carrier. Was: base-only → a MOMO
+      // split-at-commit shipment produced autoMaoFee=0, so staff hand-typed ฿100 into
+      // "ค่าขนส่งไทย" (delivery_th_thb) where nothing itemises it as เหมาๆ — the owner's
+      // "เอกสารไม่แจงค่าเหมาๆ". Now it lands in mao_fee_thb and renders on its own line.
+      const maoAnchorIds = await resolveMaoAnchorIds(admin, fwd.map((r) => r.ftrackingchn));
       const maoBatch = computeForwarderDebitBatch(fwd, {
         userId: v.userid,
         isCorporate: isJuristic,
+        maoAnchorIds,
       });
       const maoFeeByID = new Map<number, number>();
       for (const ln of maoBatch.lines) maoFeeByID.set(Number(ln.id), ln.breakdown.maoFee);
