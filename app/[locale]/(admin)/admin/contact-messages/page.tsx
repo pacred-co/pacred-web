@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
@@ -186,7 +187,7 @@ export default async function AdminContactMessagesPage({
                       <div className="font-medium">{r.name}</div>
                       {r.profile && (
                         <div className="mt-0.5 text-muted">
-                          <span className="font-mono">{r.profile.member_code ?? "—"}</span>
+                          <CustomerCodeLink code={r.profile.member_code} />
                           {r.profile.first_name && (
                             <> · {r.profile.first_name} {r.profile.last_name ?? ""}</>
                           )}

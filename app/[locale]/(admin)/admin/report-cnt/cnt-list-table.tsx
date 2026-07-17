@@ -27,6 +27,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, Loader2, Search } from "lucide-react";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { CntPaymentModal, type SelectedSummary } from "./cnt-payment-modal";
 import { Explain } from "@/components/ui/tooltip";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
@@ -1045,7 +1046,7 @@ function BoxBreakdownPanel({
                   {g.userids.length > 0 ? (
                     <span className="flex flex-col leading-tight" title={g.userids.join(", ")}>
                       {g.userids.map((u) => (
-                        <span key={u}>{u}</span>
+                        <span key={u}><CustomerCodeLink code={u} className="text-[11px]" /></span>
                       ))}
                     </span>
                   ) : (

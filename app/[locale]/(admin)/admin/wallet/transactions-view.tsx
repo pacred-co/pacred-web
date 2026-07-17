@@ -16,6 +16,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { TbWalletBulkBar, TbWalletRowCheckbox } from "./tb-bulk-bar";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -510,7 +511,7 @@ function TxRow({
           {formatThaiDateTime(row.date)}
         </td>
         <td className="px-3 py-3 text-xs">
-          <div className="font-mono text-sm font-semibold text-foreground">{row.userid ?? "—"}</div>
+          <div className="text-sm"><CustomerCodeLink code={row.userid} /></div>
           <div className="text-foreground">{customerName}</div>
           {u?.userTel ? <div className="text-[11px] text-muted">{u.userTel}</div> : null}
         </td>

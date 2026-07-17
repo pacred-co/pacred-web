@@ -6,6 +6,7 @@ import CartRowActions, { CartRowRemove } from "./cart-row-actions";
 import CartSubmitButton from "./cart-submit-button";
 import { resolveBillingIdentity, type CorporateIdentityRow } from "@/lib/admin/customer-identity";
 import { CartTaxDocPref, type TaxDocDefaults } from "@/app/[locale]/(protected)/cart/cart-tax-doc-pref";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { formatCartPriceDisplay } from "@/lib/forwarder/cart-price-display";
 import { CoverThumb } from "@/app/[locale]/(protected)/service-import/_shared/cover-thumb";
 import { shopImageUrl } from "@/lib/legacy-image";
@@ -299,7 +300,7 @@ export default async function AdminCartPage({
                 {customerName && (
                   <span className="font-semibold text-foreground">{customerName}</span>
                 )}{" "}
-                <span className="font-mono text-primary-600">({sp.userID})</span>
+                <span className="text-sm">(<CustomerCodeLink code={sp.userID} />)</span>
               </span>
             )}
           </h1>

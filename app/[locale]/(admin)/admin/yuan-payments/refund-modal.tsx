@@ -18,6 +18,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import {
   uploadYuanRefundSlip,
   adminMarkYuanPaymentRefunded,
@@ -128,7 +129,7 @@ export function YuanRefundModal({ open, onClose, yuanPayment }: Props) {
           {/* Customer + amount summary */}
           <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 space-y-1 text-xs">
             <p className="font-medium">{yuanPayment.customer_name}
-              <span className="ml-2 font-mono text-muted">{yuanPayment.member_code ?? "—"}</span>
+              <CustomerCodeLink code={yuanPayment.member_code} className="ml-2" />
               {yuanPayment.phone && <span className="ml-2 text-muted">{yuanPayment.phone}</span>}
             </p>
             <p className="text-lg font-bold font-mono text-amber-900">

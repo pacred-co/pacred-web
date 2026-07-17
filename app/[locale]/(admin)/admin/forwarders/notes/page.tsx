@@ -34,6 +34,7 @@ import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportForwarderNotesAll } from "@/actions/admin/export/forwarder-notes";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import {
   fetchCorporateNameMap,
   resolveBillingIdentity,
@@ -265,7 +266,7 @@ export default async function ForwarderNotesPage({
                       </td>
                       <td className="px-4 py-3 text-xs font-mono font-semibold">{displayFNo}</td>
                       <td className="px-4 py-3 text-xs">
-                        <div className="font-mono font-semibold">{r.userid}</div>
+                        <CustomerCodeLink code={r.userid} />
                         <div className="text-muted">{customerName || "—"}</div>
                         {u?.userTel && <div className="text-[11px] text-muted">{u.userTel}</div>}
                       </td>

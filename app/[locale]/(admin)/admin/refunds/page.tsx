@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
@@ -248,7 +249,7 @@ export default async function AdminRefundsListPage({
                   <td className="px-3 py-2 text-xs">
                     <p>{[r.profile?.first_name, r.profile?.last_name].filter(Boolean).join(" ") || "—"}</p>
                     {r.profile?.member_code && (
-                      <p className="font-mono text-[11px] text-muted">{r.profile.member_code}</p>
+                      <p><CustomerCodeLink code={r.profile.member_code} className="text-[11px]" /></p>
                     )}
                     {r.profile?.phone && (
                       <p className="text-[11px] text-muted">☎ {r.profile.phone}</p>

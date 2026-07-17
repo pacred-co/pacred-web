@@ -21,6 +21,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { History, ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -229,7 +230,7 @@ export default async function JmfHistoryPage({
                     <tr key={r.id} className="border-b align-top hover:bg-gray-50">
                       <td className="px-2 py-1.5 text-muted">{r.id}</td>
                       <td className="px-2 py-1.5 whitespace-nowrap">{r.datecrate?.slice(0, 19).replace("T", " ") ?? "—"}</td>
-                      <td className="px-2 py-1.5 font-mono">{r.userid ?? "—"}</td>
+                      <td className="px-2 py-1.5"><CustomerCodeLink code={r.userid} /></td>
                       <td className="px-2 py-1.5 font-mono">{r.fidorco ?? "—"}</td>
                       <td className="px-2 py-1.5 font-mono break-all">{r.ftrackingchn ?? "—"}</td>
                       <td className="px-2 py-1.5">{r.fdetail ?? "—"}</td>

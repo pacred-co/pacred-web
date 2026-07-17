@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getTranslations } from "next-intl/server";
 import { getServiceConfig } from "@/lib/booking/service-config";
@@ -277,7 +278,7 @@ export default async function AdminBookingDetailPage({
               || "—"}
           </p>
           {row.profile?.member_code && (
-            <p className="text-xs font-mono text-muted">{row.profile.member_code}</p>
+            <p className="text-xs"><CustomerCodeLink code={row.profile.member_code} className="text-xs" /></p>
           )}
           {(row.contact_phone || row.profile?.phone) && (
             <p className="text-xs">{`☎ ${row.contact_phone || row.profile?.phone}`}</p>

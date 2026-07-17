@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import {
@@ -521,7 +522,7 @@ export default async function AdminFreightShipmentDetailPage({
         <h2 className="font-bold text-sm mb-2">ลูกค้า</h2>
         <p className="text-sm">
           {profile?.company_name ?? `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim() ?? "—"}
-          {profile?.member_code && <span className="ml-2 font-mono text-xs text-muted">({profile.member_code})</span>}
+          {profile?.member_code && <span className="ml-2 text-xs">(<CustomerCodeLink code={profile.member_code} className="text-xs" />)</span>}
         </p>
         {profile?.email && <p className="text-xs text-muted">✉️ {profile.email}</p>}
         {profile?.phone && <p className="text-xs text-muted">📞 {profile.phone}</p>}

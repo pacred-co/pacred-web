@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { confirm } from "@/components/ui/confirm";
 import { adminAutoClearForwarderPayment } from "@/actions/admin/reconciliation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 
 const STATUS_LABEL: Record<string, string> = {
   pending_payment:  "รอชำระ",
@@ -77,7 +78,7 @@ export function ReconcileRow({ item, canAutoClear }: { item: Item; canAutoClear:
           )}
           {f?.profile && (
             <span className="ml-2 text-muted">
-              · {f.profile.member_code ?? "—"} {f.profile.first_name} {f.profile.last_name}
+              · <CustomerCodeLink code={f.profile.member_code} /> {f.profile.first_name} {f.profile.last_name}
             </span>
           )}
         </div>

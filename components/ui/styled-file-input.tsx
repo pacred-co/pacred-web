@@ -27,6 +27,8 @@ type Props = {
    */
   selectedLabel?: string;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  /** Extra classes appended to the visible button (e.g. a taller dropzone). */
+  className?: string;
 };
 
 /**
@@ -52,6 +54,7 @@ export const StyledFileInput = forwardRef<HTMLInputElement, Props>(
       hint,
       selectedLabel,
       onChange,
+      className,
     },
     fwdRef,
   ) {
@@ -92,7 +95,7 @@ export const StyledFileInput = forwardRef<HTMLInputElement, Props>(
             isSelected
               ? "border-green-300 bg-green-50/50 text-green-700 dark:border-green-700 dark:bg-green-950/20 dark:text-green-400"
               : "border-gray-300 text-gray-600 hover:border-primary-400 hover:bg-primary-50/30 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-primary-950/20"
-          }`}
+          } ${className ?? ""}`}
         >
           {isSelected ? (
             <CheckCircle2 className="h-5 w-5" />

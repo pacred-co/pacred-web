@@ -30,6 +30,7 @@
  */
 
 import { useMemo, useRef, useState, useTransition } from "react";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { useRouter } from "next/navigation";
 import { Upload, Save, AlertTriangle, CheckCircle2, FileSpreadsheet, Info, Cloud, Lock } from "lucide-react";
 import { confirm } from "@/components/ui/confirm";
@@ -861,7 +862,7 @@ function ManualCostEditor({ fCabinetNumber, warehouseLabel, rows }: { fCabinetNu
                   <tr key={r.id} className={`border-t border-border ${r.changed ? "bg-amber-50/40 dark:bg-amber-900/10" : ""}`}>
                     <td className="px-3 py-2 align-top">
                       <div className="font-mono text-foreground">{r.ftrackingchn ?? "—"}</div>
-                      <div className="text-[11px] text-muted">{r.fidorco ?? ""} · {r.userid}</div>
+                      <div className="text-[11px] text-muted">{r.fidorco ?? ""} · <CustomerCodeLink code={r.userid} className="text-[11px]" /></div>
                     </td>
                     <td className="px-3 py-2 align-top text-right tabular-nums">
                       <div>{r.fvolume?.toLocaleString(undefined, { maximumFractionDigits: 5 }) ?? "0"}</div>

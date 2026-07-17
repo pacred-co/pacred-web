@@ -51,6 +51,7 @@ import {
   legacyForwarderStatusThai,
 } from "@/lib/legacy-status-map";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 
 export const dynamic = "force-dynamic";
 
@@ -941,7 +942,7 @@ export default async function AdminReportsPage({
                 <Link href={`/admin/forwarders/${r.f_no}`} className="text-primary-600 hover:underline">#{r.f_no}</Link>
               </td>
               <td className="px-4 py-3 text-xs">
-                <div className="font-mono">{r.user?.userID ?? "—"}</div>
+                <CustomerCodeLink code={r.user?.userID} className="text-xs" />
                 <div>{userDisplayName(r.user, corpNames)}</div>
                 <div className="text-muted">{r.user?.userTel ?? ""}</div>
               </td>
@@ -975,7 +976,7 @@ export default async function AdminReportsPage({
                 <Link href={`/admin/service-orders/${r.h_no}`} className="text-primary-600 hover:underline">{r.h_no}</Link>
               </td>
               <td className="px-4 py-3 text-xs">
-                <div className="font-mono">{r.user?.userID ?? "—"}</div>
+                <CustomerCodeLink code={r.user?.userID} className="text-xs" />
                 <div>{userDisplayName(r.user, corpNames)}</div>
                 <div className="text-muted">{r.user?.userTel ?? ""}</div>
               </td>
@@ -1003,7 +1004,7 @@ export default async function AdminReportsPage({
           {yuanRows.map((r) => (
             <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30 align-top">
               <td className="px-4 py-3 text-xs">
-                <div className="font-mono">{r.user?.userID ?? "—"}</div>
+                <CustomerCodeLink code={r.user?.userID} className="text-xs" />
                 <div>{userDisplayName(r.user, corpNames)}</div>
                 <div className="text-muted">{r.user?.userTel ?? ""}</div>
               </td>
@@ -1067,7 +1068,7 @@ export default async function AdminReportsPage({
               <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30 align-top">
                 <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleString("th-TH") : "—"}</td>
                 <td className="px-4 py-3 text-xs">
-                  <div className="font-mono">{r.user?.userID ?? "—"}</div>
+                  <CustomerCodeLink code={r.user?.userID} className="text-xs" />
                   <div>{userDisplayName(r.user, corpNames)}</div>
                   <div className="text-muted">{r.user?.userTel ?? ""}</div>
                 </td>

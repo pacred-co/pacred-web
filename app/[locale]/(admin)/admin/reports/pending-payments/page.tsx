@@ -43,6 +43,7 @@ import {
   fetchCorporateNameMap,
   corpRowFromName,
 } from "@/lib/admin/customer-identity";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 
 export const dynamic = "force-dynamic";
 
@@ -351,7 +352,7 @@ export default async function PendingPaymentsReport({
                       <td className="px-3 py-3 text-xs">
                         <div>{r.customer?.name || "—"}</div>
                         {r.customer?.userid && (
-                          <div className="font-mono text-[11px] text-muted">{r.customer.userid}</div>
+                          <CustomerCodeLink code={r.customer.userid} className="text-[11px]" />
                         )}
                         {r.customer?.phone && (
                           <div className="text-[11px] text-muted">☎ {r.customer.phone}</div>

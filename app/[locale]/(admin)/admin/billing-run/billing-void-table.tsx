@@ -24,6 +24,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { voidBillingRunInvoices } from "@/actions/admin/billing-run";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
 
@@ -197,7 +198,7 @@ export function BillingVoidTable({ rows }: { rows: BillingVoidRow[] }) {
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="font-medium">{r.buyer_name || "—"}</div>
-                      <div className="text-xs text-muted">{r.userid}</div>
+                      <div className="text-xs"><CustomerCodeLink code={r.userid} className="text-xs" /></div>
                     </td>
                     <td className="px-3 py-2.5 text-right">{r.item_count}</td>
                     <td className="px-3 py-2.5 text-right font-medium">

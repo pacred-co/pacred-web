@@ -30,6 +30,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -333,7 +334,7 @@ export default async function UserSalesHistoryDrillIn({
             ADMIN · รายงาน · ประวัติการขายต่อลูกค้า
           </p>
           <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold">
-            <span className="font-mono">{u.userID}</span>
+            <CustomerCodeLink code={u.userID} />
             {isJuristic && (
               <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
                 นิติบุคคล

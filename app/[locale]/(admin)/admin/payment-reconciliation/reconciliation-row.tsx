@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { confirm, prompt } from "@/components/ui/confirm";
 import {
   manualMatch,
@@ -85,7 +86,7 @@ export function ReconciliationRow({ item }: { item: PendingReconciliationItem })
           </Link>
           {p && (
             <span className="ml-2 text-muted">
-              · {p.member_code ?? "—"} {p.first_name} {p.last_name}
+              · <CustomerCodeLink code={p.member_code} /> {p.first_name} {p.last_name}
             </span>
           )}
         </div>

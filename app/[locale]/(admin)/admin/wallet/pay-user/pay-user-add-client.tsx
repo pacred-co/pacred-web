@@ -24,10 +24,10 @@
  *     adminPayOrdersWithTopUp.
  */
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Image from "next/image";
-import { ArrowUpDown, ArrowUp, ArrowDown, Banknote } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, Banknote, Printer, Phone, Mail, Globe } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { PacredDialog, useConfirmDialogs } from "@/components/ui/pacred-dialog";
@@ -36,7 +36,8 @@ import { formatThaiDate, formatThaiDateTime, formatThaiTimeWithSeconds } from "@
 import { formatEtaWindowThai } from "@/lib/admin/forwarder-eta";
 import { NO_COVER_IMAGE } from "@/lib/legacy-image";
 import { diffDateTimeNow } from "@/lib/utils/elapsed-thai";
-import { BANK } from "@/components/seo/site";
+import { BANK, SITE_LEGAL_NAME_TH, TAX_ID, CONTACT, ADDRESSES, SITE_URL } from "@/components/seo/site";
+import { readThaiBaht } from "@/lib/utils/thai-number";
 import { getDepositQr } from "@/actions/wallet";
 import {
   getPayUserForwarderView,
@@ -567,6 +568,7 @@ export function PayUserAddClient() {
           open={modalOpen}
           onClose={closeModal}
           keyType={keyType}
+          panel={panel}
           fwdRows={selectedFwdRows}
           shopRows={selectedShopRows}
           total={selectedTotal}
@@ -704,10 +706,13 @@ function Thumb({ url, alt }: { url: string | null; alt: string }) {
   );
 }
 
-// Selected-row highlight — a soft green tint (owner 2026-07-16 reverted the vivid
-// gradient: "ไม่เอาสีๆละ ขอแบบเดิม"). Keeps the row content's own colors legible.
-// Used by BOTH tables so they match.
-const SELECTED_ROW_CLS = "bg-emerald-50";
+// Selected-row highlight (owner 2026-07-17) — everything lives in the
+// `.pcs-row-selected` rule (globals.css): ONE continuous rich-green gradient swept
+// across the WHOLE row (explicit hex so the exact shade is controllable, no Tailwind
+// class-regeneration), every descendant forced white (text · links · lucide icons via
+// currentColor), the status-icon PNG flooded white, and softened inner cell borders
+// so it reads as one unbroken sweep. Used by BOTH tables so they match.
+const SELECTED_ROW_CLS = "pcs-row-selected";
 
 // ════════════════════════════════════════════════════════════
 // FORWARDER (ฝากนำเข้า) table — keyType=2 · faithful legacy pay-users
@@ -1034,7 +1039,7 @@ function ForwarderTable({
                       </span>
                       {st.icon && (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={st.icon} alt="" className="h-10 w-auto" />
+                        <img src={st.icon} alt="" className="pcs-status-icon h-10 w-auto" />
                       )}
                     </div>
                   </td>
@@ -1182,6 +1187,7 @@ function PayModal({
   open,
   onClose,
   keyType,
+  panel,
   fwdRows,
   shopRows,
   total,
@@ -1201,6 +1207,7 @@ function PayModal({
   open: boolean;
   onClose: () => void;
   keyType: KeyType;
+  panel: PayUserPanel;
   fwdRows: PayUserFwdRow[];
   shopRows: PayUserShopRow[];
   total: number;
@@ -1219,206 +1226,388 @@ function PayModal({
 }) {
   const dialogRef = useConfirmDialogRef(open, onClose);
   const title =
-    keyType === "2" ? "ชำระเงินออเดอร์ฝากนำเข้าสินค้า" : "ชำระเงินออเดอร์ฝากสั่งซื้อ";
+    keyType === "2"
+      ? "ใบแจ้งหนี้ / ชำระเงิน · ฝากนำเข้าสินค้า"
+      : "ใบแจ้งหนี้ / ชำระเงิน · ฝากสั่งซื้อ";
   // shortfall the staff still has to top up when the shop wallet is short.
   const shopShortfall = Math.max(0, total - walletBalance);
 
+  // ── invoice totals (PRESENTATION ONLY — these reconcile EXACTLY to `total`;
+  //    the amount actually collected is `total`, unchanged from before) ──
+  const n0 = (v: number) => (Number.isFinite(v) ? v : 0);
+  const goodsSum =
+    keyType === "2"
+      ? fwdRows.reduce((s, r) => s + n0(r.breakdown.freight), 0)
+      : shopRows.reduce((s, r) => s + n0(r.price_thb), 0);
+  const otherSum =
+    keyType === "2"
+      ? fwdRows.reduce((s, r) => s + n0(r.breakdown.otherCharges), 0)
+      : 0;
+  // ค่าส่งเหมาๆ (PCSF flat) — its OWN line, not folded into ค่าบริการอื่นๆ
+  // (owner 2026-07-17 "ยอดเหมาๆ ต้องมาให้ครบ").
+  const maoSum =
+    keyType === "2"
+      ? fwdRows.reduce((s, r) => s + n0(r.breakdown.maoFee), 0)
+      : 0;
+  const discountSum = keyType === "2" ? fwdRows.reduce((s, r) => s + n0(r.breakdown.discount), 0) : 0;
+  const whtSum = keyType === "2" ? fwdRows.reduce((s, r) => s + n0(r.breakdown.wht1pct), 0) : 0;
+  // ภาษีมูลค่าเพิ่ม 7% shown INCLUSIVE (already inside `total` — displayed for the
+  // document, NOT added on top). ⚠️ flag: if this service should NOT show VAT for
+  // ไม่รับเอกสาร customers, gate this line on the doc-mode.
+  const vatIncl = Math.round((total - total / 1.07) * 100) / 100;
+  const fmt2 = (v: number) =>
+    (Number.isFinite(v) ? v : 0).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Provisional document meta (a real เลขที่ is minted only when accounting issues
+  // the ใบเสร็จ/ใบกำกับ at settle — this is a preview). A plain const (NOT a hook) so
+  // PayModal's hook count never changes; the date-based values are stable per day.
+  const dnow = new Date();
+  const p2 = (x: number) => String(x).padStart(2, "0");
+  const dueDate = new Date(dnow);
+  dueDate.setDate(dueDate.getDate() + 7);
+  const fmtD = (d: Date) => `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear() + 543}`;
+  const doc = {
+    no: `IV-${dnow.getFullYear()}${p2(dnow.getMonth() + 1)}${p2(dnow.getDate())} (ตัวอย่าง)`,
+    issue: fmtD(dnow),
+    due: fmtD(dueDate),
+  };
+
+  const customerName = panel.user.name || panel.user.userid;
+  const siteDomain = SITE_URL.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+
   return (
-    <PacredDialog dialogRef={dialogRef} title={title} size="lg" onClose={onClose}>
-      {/* 2-column on desktop (owner 2026-07-16 "ซ้าย=รายการ · ขวา=QR · ในคอม") —
-          collapses to one long column on mobile ("ในมือถือยาวลงมา ไม่แบ่งซ้ายขวา"). */}
-      <div className="text-sm lg:grid lg:grid-cols-2 lg:gap-6 lg:items-start">
-        {/* ══ LEFT — per-order breakdown + PDF + total ══ */}
-        <div className="space-y-4">
-        {/* per-order breakdown */}
-        <div className="space-y-3">
+    <PacredDialog dialogRef={dialogRef} title={title} size="xl" onClose={onClose}>
+      {/* Invoice document (ใบแจ้งหนี้) layout — header · ผู้ขาย/ลูกค้า · items table ·
+          QR/bank/slip + totals · footer (owner 2026-07-17 "ทำหน้าตาเป็นแบบใบแจ้งหนี้"). */}
+      <div className="space-y-5 text-sm text-gray-800">
+        {/* ── HEADER: โลโก้ · หัวเอกสาร · meta ── */}
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-200 pb-4">
+          {/* tight-cropped wordmark (134×36) — fills the frame with NO padding.
+              ⚠️ the source is only 134×36px, so a larger display upscales + blurs;
+              h-14 keeps it crisp (owner 2026-07-17 "ทำให้คมๆ"). For a BIG + sharp
+              logo, replace the file with a hi-res version (≥ ~500px wide). */}
+          <Image
+            src="/images/pacred-logo-tight.png"
+            alt="Pacred"
+            width={268}
+            height={72}
+            className="h-12 w-auto shrink-0 object-contain sm:h-14"
+            unoptimized
+          />
+          {/* mobile: title จั่วหัวเต็มบรรทัดบนสุด (order-first) แล้วโลโก้+meta อยู่แถวถัดไป
+              (owner 2026-07-17 "ในมือถือ ตามในภาพ") · desktop: กลับมากลางเหมือนเดิม */}
+          <div className="order-first w-full text-center sm:order-none sm:w-auto">
+            <h3 className="text-2xl font-extrabold tracking-wide text-primary-600 sm:text-3xl">ใบแจ้งหนี้</h3>
+            <p className="text-[12px] text-gray-500">สรุปรายการที่ต้องชำระ (เงินสด)</p>
+          </div>
+          <div className="min-w-[220px] rounded-lg border border-rose-100 bg-rose-50/60 p-3 text-[12px]">
+            <MetaRow k="เลขที่เอกสาร" v={doc.no} />
+            <MetaRow k="วันที่ออก" v={doc.issue} />
+            <MetaRow k="ครบกำหนด" v={doc.due} valueClass="font-semibold text-rose-600" />
+            <MetaRow k="หน้า" v="1 / 1" />
+          </div>
+        </div>
+
+        {/* ── ผู้ออก / ผู้รับ ใบแจ้งหนี้ — 2 คอลัมน์ side-by-side ตามภาพ (owner 2026-07-17
+            "สัดส่วนต้องแบบนี้ ตามภาพ") · ชื่อ → เลขภาษี → ที่อยู่ → ไอคอนติดต่อ ── */}
+        <div className="grid grid-cols-1 gap-x-8 gap-y-4 border-b border-gray-200 pb-4 text-[12px] sm:grid-cols-2">
+          {/* ผู้ออกใบแจ้งหนี้ (seller) */}
+          <div className="space-y-0.5">
+            <p className="mb-0.5 text-[11px] font-bold uppercase tracking-wide text-primary-600">ผู้ออกใบแจ้งหนี้</p>
+            <p className="font-semibold text-gray-900">{SITE_LEGAL_NAME_TH}</p>
+            <PartyLine k="เลขที่ภาษี" v={`${TAX_ID} (สำนักงานใหญ่)`} />
+            <PartyLine k="ที่อยู่" v={ADDRESSES.office.full} />
+            <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
+              <ContactLine icon={<Phone className="h-3.5 w-3.5" />} v={CONTACT.phoneCompanyDisplay} />
+              <ContactLine icon={<Mail className="h-3.5 w-3.5" />} v={CONTACT.email} />
+              <ContactLine icon={<Globe className="h-3.5 w-3.5" />} v={siteDomain} />
+            </div>
+          </div>
+          {/* ผู้รับใบแจ้งหนี้ (customer) */}
+          <div className="space-y-0.5">
+            <p className="mb-0.5 text-[11px] font-bold uppercase tracking-wide text-primary-600">ผู้รับใบแจ้งหนี้</p>
+            <p className="font-semibold text-gray-900">
+              {customerName}
+              <span className="ml-2 font-normal text-gray-500">
+                {panel.user.userid}
+                {panel.is_juristic ? " · นิติบุคคล" : ""}
+              </span>
+            </p>
+            <PartyLine k="เลขที่ภาษี" v="—" muted />
+            <PartyLine k="ที่อยู่" v="—" muted />
+            <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
+              <ContactLine icon={<Phone className="h-3.5 w-3.5" />} v={panel.user.tel || "-"} />
+              <ContactLine icon={<Mail className="h-3.5 w-3.5" />} v="-" />
+            </div>
+          </div>
+        </div>
+
+        {/* ── รายการ ── หัวข้อ + ตาราง(จอคอม) + การ์ด(มือถือ · owner 2026-07-17
+            "ในมือถือ ตามในภาพ") ── */}
+        <div className="space-y-2">
+        <p className="text-sm font-semibold text-gray-800">
+          รายการออเดอร์ ({keyType === "2" ? fwdRows.length : shopRows.length} รายการ)
+        </p>
+        {/* ตาราง — จอคอม (lg+) */}
+        <div className="hidden overflow-x-auto scrollbar-x-visible lg:block">
+          <table className="w-full min-w-[720px] border-collapse text-[12px] [&_td]:border [&_td]:border-gray-200 [&_th]:border [&_th]:border-gray-200">
+            <thead>
+              <tr className="bg-gray-100 text-[11px] font-semibold text-gray-700">
+                <th className="px-2 py-2">ลำดับ</th>
+                <th className="px-2 py-2">เลขออเดอร์</th>
+                {keyType === "2" ? (
+                  <>
+                    <th className="px-2 py-2">เลขแทรกกิ้ง</th>
+                    <th className="px-2 py-2">ประเภท</th>
+                    <th className="px-2 py-2">จำนวน</th>
+                    <th className="px-2 py-2">น้ำหนัก / CBM</th>
+                    <th className="px-2 py-2 text-right">ค่านำส่ง</th>
+                    <th className="px-2 py-2 text-right">ค่าส่งเหมาๆ</th>
+                    <th className="px-2 py-2 text-right">อื่นๆ</th>
+                  </>
+                ) : (
+                  <th className="px-2 py-2">รายละเอียดสินค้า</th>
+                )}
+                <th className="px-2 py-2 text-right">รวม</th>
+              </tr>
+            </thead>
+            <tbody>
+              {keyType === "2"
+                ? fwdRows.map((r, i) => (
+                    <tr key={r.fid} className={i % 2 ? "bg-gray-50/50" : "bg-white"}>
+                      <td className="px-2 py-1.5 text-center text-gray-500">{i + 1}</td>
+                      <td className="px-2 py-1.5 font-mono font-semibold text-gray-900">{r.fid}</td>
+                      <td className="px-2 py-1.5 font-mono text-[11px] text-gray-600">{r.ftrackingchn ?? "—"}</td>
+                      <td className="px-2 py-1.5 text-center">{r.transport_label || "—"}</td>
+                      <td className="px-2 py-1.5 text-center">{r.boxes > 0 ? r.boxes : "—"}</td>
+                      <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">
+                        {r.weight > 0 ? `${r.weight} กก.` : "—"}
+                        {r.cbm > 0 ? ` / ${r.cbm}` : ""}
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">{fmt2(r.breakdown.freight)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums text-sky-600">{fmt2(r.breakdown.maoFee)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">{fmt2(r.breakdown.otherCharges)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono font-semibold tabular-nums text-gray-900">{fmt2(r.price_thb)}</td>
+                    </tr>
+                  ))
+                : shopRows.map((r, i) => (
+                    <tr key={r.hno} className={i % 2 ? "bg-gray-50/50" : "bg-white"}>
+                      <td className="px-2 py-1.5 text-center text-gray-500">{i + 1}</td>
+                      <td className="px-2 py-1.5 font-mono font-semibold text-gray-900">#{r.hno}</td>
+                      <td className="px-2 py-1.5 text-gray-700">{r.title || "—"}</td>
+                      <td className="px-2 py-1.5 text-right font-mono font-semibold tabular-nums text-gray-900">{fmt2(r.price_thb)}</td>
+                    </tr>
+                  ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* การ์ดรายการ — มือถือ/แท็บเล็ต (< lg) · แต่ละออเดอร์เป็นการ์ด ตามภาพ */}
+        <div className="space-y-3 lg:hidden">
           {keyType === "2"
-            ? fwdRows.map((r) => (
-                <div key={r.fid} className="rounded-lg border border-dashed border-gray-300 p-3">
-                  <div className="mb-1 flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-gray-900">เลขออเดอร์ {r.fid}</span>
-                    {r.ftrackingchn && (
-                      <span className="font-mono text-[12px] text-gray-600">
-                        · เลขแทรคกิ้ง {r.ftrackingchn}
+            ? fwdRows.map((r, i) => (
+                <div key={r.fid} className="overflow-hidden rounded-lg border border-gray-200 border-l-4 border-l-primary-500">
+                  <div className="flex items-start justify-between gap-2 p-3">
+                    <div className="flex min-w-0 items-start gap-2">
+                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-600 text-[11px] font-bold text-white">
+                        {i + 1}
                       </span>
-                    )}
-                    {r.is_credit && (
-                      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-700">
-                        ชำระรายการเครดิต
-                      </span>
-                    )}
+                      <div className="min-w-0">
+                        <div className="font-semibold text-gray-900">เลขออเดอร์ {r.fid}</div>
+                        {r.ftrackingchn && (
+                          <div className="text-[11px] text-gray-500">
+                            Tracking <span className="font-mono">{r.ftrackingchn}</span>
+                          </div>
+                        )}
+                        {r.transport_label && (
+                          <span className="mt-0.5 inline-block rounded bg-teal-500 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                            {r.transport_label}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="text-[10px] text-gray-500">ยอดรวม</div>
+                      <div className="font-mono text-base font-bold text-red-700">{fmt2(r.price_thb)}</div>
+                    </div>
                   </div>
-                  <div className="space-y-0.5 text-[13px] text-gray-700">
-                    {r.breakdown.freight > 0 && (
-                      <Row label="ราคานำเข้าจีน-ไทย" value={thb(r.breakdown.freight)} />
-                    )}
-                    {r.breakdown.otherCharges > 0 && (
-                      <Row label="ค่าบริการอื่นๆ" value={thb(r.breakdown.otherCharges)} />
-                    )}
-                    {r.breakdown.maoFee > 0 && (
-                      <Row label="ค่าส่งเหมาๆ" value={`+ ${thb(r.breakdown.maoFee)}`} className="text-sky-600" />
-                    )}
-                    {r.breakdown.discount > 0 && (
-                      <Row label="ส่วนลด" value={`− ${thb(r.breakdown.discount)}`} className="text-emerald-600" />
-                    )}
-                    {r.breakdown.wht1pct > 0 && (
-                      <Row label="หัก ณ ที่จ่าย 1%" value={`− ${thb(r.breakdown.wht1pct)}`} className="text-orange-600" />
-                    )}
-                    <Row label="ราคารวมสุทธิ" value={thb(r.price_thb)} className="border-t border-gray-100 pt-1 font-semibold text-gray-900" />
+                  <div className="grid grid-cols-3 gap-1 border-t border-gray-100 bg-gray-50/50 px-3 py-2 text-center text-[11px]">
+                    <div>
+                      <div className="text-gray-500">ค่านำส่ง</div>
+                      <div className="font-mono text-gray-800">{fmt2(r.breakdown.freight)}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500">ค่าส่งเหมาๆ</div>
+                      <div className="font-mono text-sky-600">{fmt2(r.breakdown.maoFee)}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500">ค่าบริการอื่นๆ</div>
+                      <div className="font-mono text-gray-800">{fmt2(r.breakdown.otherCharges)}</div>
+                    </div>
                   </div>
                 </div>
               ))
-            : shopRows.map((r) => (
-                <div key={r.hno} className="rounded-lg border border-dashed border-gray-300 p-3">
-                  <div className="mb-1 font-semibold text-gray-900">เลขออเดอร์ #{r.hno}</div>
-                  <div className="space-y-0.5 text-[13px] text-gray-700">
-                    {r.title && <Row label="สินค้า" value={r.title} />}
-                    <Row label="ราคารวมสุทธิ" value={thb(r.price_thb)} className="font-semibold text-gray-900" />
+            : shopRows.map((r, i) => (
+                <div key={r.hno} className="rounded-lg border border-gray-200 border-l-4 border-l-primary-500 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 items-start gap-2">
+                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-600 text-[11px] font-bold text-white">
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-gray-900">#{r.hno}</div>
+                        {r.title && <div className="line-clamp-2 text-[11px] text-gray-600">{r.title}</div>}
+                      </div>
+                    </div>
+                    <div className="shrink-0 font-mono text-base font-bold text-red-700">{fmt2(r.price_thb)}</div>
                   </div>
                 </div>
               ))}
         </div>
-
-        {/* summary PDF (forwarder only) */}
-        {keyType === "2" && (
-          <button
-            type="button"
-            onClick={onOpenSummary}
-            className="rounded-lg bg-red-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-red-700"
-          >
-            ใบสรุปรายการแบบ PDF
-          </button>
-        )}
-
-        {/* total bar */}
-        <div className="rounded-lg bg-red-600 px-4 py-2.5 text-center text-white">
-          <span className="text-[13px]">ยอดเงินที่ต้องชำระจริง: </span>
-          <span key={total} className="price-bounce-fx font-mono text-lg font-bold">{thb(total)}</span>
-        </div>
-        <p className="text-center text-[11px] text-gray-500">
-          ยอดจริงคำนวณบนเซิร์ฟเวอร์ตามรายการที่เลือก (อาจต่างจากตัวอย่าง ≤1% หรือ ฿50)
-        </p>
         </div>
 
-        {/* ══ RIGHT — QR + bank + slip + confirm ══ */}
-        <div className="mt-4 space-y-4 lg:mt-0">
-        {/* wallet-covers note (shop, sufficient) */}
-        {!needsSlip && shopWalletCovers && (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-[13px] text-emerald-800">
-            ยอดในกระเป๋าเพียงพอ ({thb(walletBalance)}) — จะตัดจากกระเป๋าเงินของลูกค้าทันที ไม่ต้องแนบสลิป
-          </div>
-        )}
-
-        {/* QR + bank + slip (needs slip) */}
-        {needsSlip && (
-          <div className="space-y-4">
-            <div className="flex flex-col items-center gap-2">
-              {qrPending ? (
-                <div className="flex h-[240px] w-[240px] items-center justify-center rounded-lg border border-dashed border-gray-300 text-[13px] text-gray-500">
-                  กำลังสร้าง QR…
-                </div>
-              ) : qrDataUrl ? (
-                // The QR PNG is the static K-Shop merchant card — crop (via
-                // background-size/position, not a swap) to just the QR matrix so
-                // it scans easily. Same account, chrome trimmed off.
-                <div
-                  role="img"
-                  aria-label="PromptPay QR"
-                  className="h-[240px] w-[240px] rounded-lg border border-gray-200 bg-white shadow-sm"
-                  style={{
-                    backgroundImage: `url(${qrDataUrl})`,
-                    backgroundRepeat: "no-repeat",
-                    backgroundSize: "148% auto",
-                    backgroundPosition: "50% 40%",
-                  }}
-                />
-              ) : (
-                <div className="flex h-[240px] w-[240px] items-center justify-center rounded-lg border border-dashed border-gray-300 text-center text-[12px] text-gray-400">
-                  ไม่มี QR — โอนตามเลขบัญชีด้านล่าง
-                </div>
-              )}
-              <p className="text-center text-[11px] text-gray-500">
-                สแกน QR เพื่อโอน แล้วกรอกยอดเงินตามด้านบน
-              </p>
+        {/* ── BOTTOM — บรรทัดเดียว 4 คอลัมน์: QR · โอนเข้าบัญชี · อัปโหลดสลิป · สรุปยอด
+            (owner 2026-07-17 "เรียงบรรทัดเดียว"). ยุบเป็น 2 คอลัมน์บนแท็บเล็ต · 1 บนมือถือ. ── */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:items-start">
+          {!needsSlip && shopWalletCovers ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-[13px] text-emerald-800 sm:col-span-2 lg:col-span-3">
+              ยอดในกระเป๋าเพียงพอ ({thb(walletBalance)}) — จะตัดจากกระเป๋าเงินของลูกค้าทันที ไม่ต้องแนบสลิป
             </div>
-
-            <div className="rounded-lg border border-green-300 bg-green-50 p-3 text-[13px]">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-semibold text-green-900">{BANK.name}</div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="text-green-800">เลขที่บัญชี</span>
-                    <span className="font-mono text-[15px] font-semibold tracking-wide text-green-900">
-                      {BANK.accountNumber}
-                    </span>
-                    <CopyButton text={BANK.accountNumber.replace(/\D/g, "")} />
+          ) : (
+            <>
+              {/* QR + ธนาคาร — เชื่อมเป็นกล่องเดียว ไม่มีกรอบเขียว (owner 2026-07-17
+                  "เอาขอบเขียวออก · qr กับ ธนาคารเชื่อมกัน") · กินพื้นที่ 2 คอลัมน์ */}
+              <div className="overflow-hidden rounded-lg border border-gray-200 bg-white sm:col-span-2 lg:col-span-2">
+                <div className="grid grid-cols-1 divide-y divide-gray-200 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                  {/* QR */}
+                  <div className="p-3">
+                    <p className="mb-1.5 text-[12px] font-semibold text-primary-600">ชำระเงินผ่าน QR Code</p>
+                    <div className="flex flex-col items-center gap-1.5">
+                      {qrPending ? (
+                        <div className="flex h-[160px] w-[160px] items-center justify-center rounded-lg border border-dashed border-gray-300 text-[12px] text-gray-500">กำลังสร้าง QR…</div>
+                      ) : qrDataUrl ? (
+                        <div
+                          role="img"
+                          aria-label="PromptPay QR"
+                          className="h-[160px] w-[160px] rounded-lg border border-gray-200 bg-white"
+                          style={{
+                            backgroundImage: `url(${qrDataUrl})`,
+                            backgroundRepeat: "no-repeat",
+                            backgroundSize: "148% auto",
+                            backgroundPosition: "50% 40%",
+                          }}
+                        />
+                      ) : (
+                        <div className="flex h-[160px] w-[160px] items-center justify-center rounded-lg border border-dashed border-gray-300 text-center text-[11px] text-gray-400">ไม่มี QR — โอนตามเลขบัญชี</div>
+                      )}
+                      <p className="text-center text-[11px] text-gray-500">สแกน QR เพื่อโอน แล้วแนบหลักฐาน</p>
+                    </div>
                   </div>
-                  <div className="mt-1 text-green-800">{BANK.accountName}</div>
-                  <div className="text-[11px] text-green-700/80">{BANK.accountType}</div>
+                  {/* ธนาคาร (พื้นขาว · ไม่มีสีเขียว) */}
+                  <div className="p-3 text-[13px]">
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <p className="text-[12px] font-semibold text-primary-600">หรือโอนเงินเข้าบัญชี</p>
+                      <Image src="/images/bank/kbanklogo.png" alt={BANK.name} width={30} height={30} className="h-[30px] w-[30px] shrink-0 rounded object-contain" />
+                    </div>
+                    <div className="font-semibold text-gray-900">{BANK.name}</div>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="font-mono text-[15px] font-semibold tracking-wide text-gray-900">{BANK.accountNumber}</span>
+                      <CopyButton text={BANK.accountNumber.replace(/\D/g, "")} />
+                    </div>
+                    <div className="mt-1 text-gray-700">{BANK.accountName}</div>
+                    <div className="text-[11px] text-gray-500">{BANK.accountType}</div>
+                  </div>
                 </div>
-                <Image
-                  src="/images/bank/kbanklogo.png"
-                  alt={BANK.name}
-                  width={44}
-                  height={44}
-                  className="h-11 w-11 shrink-0 rounded-md object-contain"
+              </div>
+
+              {/* Col 3 — upload (+ shop top-up when short) */}
+              <div className="space-y-2">
+                <p className="text-[12px] font-semibold text-primary-600">อัปโหลดหลักฐานการชำระเงิน</p>
+                {keyType === "1" && !shopWalletCovers && (
+                  <div>
+                    <label className="mb-1 block text-[11px] text-gray-600">ยอดเงินที่โอน (บาท)</label>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      value={topUpAmount}
+                      onChange={(e) => onTopUpAmount(e.target.value)}
+                      placeholder={shopShortfall.toFixed(2)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                    />
+                    <p className="mt-1 text-[11px] text-gray-500">
+                      ต้องเติมอย่างน้อย {thb(shopShortfall)}
+                      {walletBalance > 0 && ` (ใช้ยอดเดิม ${thb(walletBalance)} ร่วม)`}
+                    </p>
+                  </div>
+                )}
+                <StyledFileInput
+                  accept="image/*,application/pdf"
+                  label="แนบสลิปการโอน (คลิกเพื่อเลือกรูป/PDF)"
+                  hint="รองรับรูปภาพหรือไฟล์ PDF"
+                  selectedLabel={slip ? `แนบแล้ว: ${slip.name}` : undefined}
+                  onChange={(e) => onSlip(e.target.files?.[0] ?? null)}
+                  className="min-h-[184px] flex-col"
                 />
               </div>
-            </div>
+            </>
+          )}
 
-            {/* shop top-up amount (only when shop wallet is short) */}
-            {keyType === "1" && !shopWalletCovers && (
-              <div>
-                <label className="mb-1 block text-[12px] text-gray-600">ยอดเงินที่โอน (บาท)</label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  value={topUpAmount}
-                  onChange={(e) => onTopUpAmount(e.target.value)}
-                  placeholder={shopShortfall.toFixed(2)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40"
-                />
-                <p className="mt-1 text-[11px] text-gray-500">
-                  ต้องเติมอย่างน้อย {thb(shopShortfall)}
-                  {walletBalance > 0 && ` (จะใช้ยอดในกระเป๋าเดิม ${thb(walletBalance)} ร่วมด้วย)`}
-                </p>
+          {/* Col 4 — totals */}
+          <div className="space-y-2">
+            <div className="space-y-1 rounded-lg border border-gray-200 bg-gray-50/40 p-3 text-[12px]">
+              <Row label="รวมค่าสินค้าและบริการ" value={fmt2(goodsSum)} />
+              <Row label="ค่าจัดส่ง (Delivery Charge)" value={fmt2(0)} />
+              {maoSum > 0 && <Row label="ค่าส่งเหมาๆ (PCSF)" value={fmt2(maoSum)} className="text-sky-600" />}
+              {otherSum > 0 && <Row label="ค่าบริการอื่นๆ" value={fmt2(otherSum)} />}
+              {discountSum > 0 && <Row label="ส่วนลด" value={`− ${fmt2(discountSum)}`} className="text-emerald-600" />}
+              {whtSum > 0 && <Row label="หัก ณ ที่จ่าย 1%" value={`− ${fmt2(whtSum)}`} className="text-orange-600" />}
+              <Row label="ภาษีมูลค่าเพิ่ม 7% (รวมแล้ว)" value={fmt2(vatIncl)} className="text-gray-500" />
+              <div className="mt-2 rounded-md bg-red-50 px-3 py-2 text-center">
+                <div className="text-[11px] font-semibold text-red-700">ยอดรวมที่ต้องชำระ</div>
+                <div key={total} className="price-bounce-fx font-mono text-xl font-bold text-red-700">{thb(total)}</div>
               </div>
-            )}
-
-            <div>
-              <label className="mb-1 block text-[12px] text-gray-600">หลักฐานการโอน (รูปภาพ/PDF)</label>
-              <StyledFileInput
-                accept="image/*,application/pdf"
-                label="แนบสลิปการโอน (คลิกเพื่อเลือกรูป/PDF)"
-                hint="รองรับรูปภาพหรือไฟล์ PDF"
-                selectedLabel={slip ? `แนบแล้ว: ${slip.name}` : undefined}
-                onChange={(e) => onSlip(e.target.files?.[0] ?? null)}
-              />
+              <p className="pt-0.5 text-center text-[11px] text-gray-500">({readThaiBaht(total)})</p>
             </div>
+            <p className="text-[11px] text-gray-500">
+              ยอดจริงคำนวณบนเซิร์ฟเวอร์ตามรายการที่เลือก (อาจต่าง ≤1% หรือ ฿50)
+            </p>
           </div>
-        )}
-
-        {/* footer */}
-        <div className="flex justify-end gap-2 border-t border-gray-200 pt-4">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={paying}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          >
-            ยกเลิก
-          </button>
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={paying || (needsSlip && !slip)}
-            className="rounded-md bg-red-600 px-5 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-          >
-            {paying ? "กำลังทำรายการ..." : "ยืนยัน"}
-          </button>
         </div>
+
+        {/* ── FOOTER ── */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-200 pt-4">
+          <p className="text-[11px] text-gray-500">
+            🛈 เอกสารฉบับนี้ใช้แจ้งยอด/รับชำระ — ระบบออกใบเสร็จให้หลังตรวจสอบหลักฐานเรียบร้อยแล้ว
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {keyType === "2" && (
+              <button
+                type="button"
+                onClick={onOpenSummary}
+                className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <Printer className="h-4 w-4" /> พิมพ์ / บันทึก PDF
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={paying}
+              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="button"
+              onClick={onSubmit}
+              disabled={paying || (needsSlip && !slip)}
+              className="rounded-md bg-red-600 px-5 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              {paying ? "กำลังทำรายการ..." : "ยืนยันการชำระเงิน"}
+            </button>
+          </div>
         </div>
       </div>
     </PacredDialog>
@@ -1443,6 +1632,37 @@ function Row({
   );
 }
 
+// Doc-meta key/value line (เลขที่เอกสาร · วันที่ออก · ครบกำหนด · หน้า) for the
+// invoice header's right-hand meta box.
+function MetaRow({ k, v, valueClass = "" }: { k: string; v: string; valueClass?: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 py-0.5">
+      <span className="text-gray-500">{k}</span>
+      <span className={`font-mono tabular-nums text-gray-800 ${valueClass}`}>{v}</span>
+    </div>
+  );
+}
+
+// Peak-style party row: a fixed-width muted label (ที่อยู่ : / เลขที่ภาษี :) + value.
+function PartyLine({ k, v, muted = false }: { k: string; v: string; muted?: boolean }) {
+  return (
+    <div className="flex gap-2">
+      <span className="w-[62px] shrink-0 text-gray-400">{k} :</span>
+      <span className={`min-w-0 ${muted ? "italic text-gray-400" : "text-gray-700"}`}>{v}</span>
+    </div>
+  );
+}
+
+// Peak-style contact line: an icon + value (📞 phone · ✉ email · 🌐 website).
+function ContactLine({ icon, v }: { icon: ReactNode; v: string }) {
+  return (
+    <div className="flex items-center gap-1.5 whitespace-nowrap text-gray-600">
+      <span className="text-gray-400">{icon}</span>
+      <span>{v}</span>
+    </div>
+  );
+}
+
 // Copy-to-clipboard chip (bank account number · "คัดลอก" → "คัดลอกแล้ว ✓").
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -1461,7 +1681,7 @@ function CopyButton({ text }: { text: string }) {
       className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors ${
         copied
           ? "border-emerald-500 bg-emerald-500 text-white"
-          : "border-green-400 bg-white text-green-700 hover:bg-green-100"
+          : "border-gray-300 bg-white text-gray-600 hover:bg-gray-100"
       }`}
     >
       {copied ? "คัดลอกแล้ว ✓" : "คัดลอก"}

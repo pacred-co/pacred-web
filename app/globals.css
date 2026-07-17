@@ -383,6 +383,32 @@ body {
 }
 .pcs-check:disabled { cursor: not-allowed; opacity: 0.5; }
 
+/* ── Selected pay-on-behalf row (owner 2026-07-17) ──────────────────────────
+   The whole highlight lives here (SELECTED_ROW_CLS = just `pcs-row-selected`).
+   (1) ONE continuous rich-green gradient swept across the WHOLE <tr> — explicit
+   hex, a darker grass-green matching the receipts list (owner "เขียวเข้มขึ้น ·
+   ของเดิมสว่างเกินไป"). It sits on the <tr>, so it spans the whole row as one
+   sweep, not a per-cell gradient. (2) Inner cell borders softened to translucent
+   white so gray gridlines don't chop the gradient into cells. (3) Every descendant
+   (text · links · lucide icons via currentColor) forced white so the row reads
+   clearly. Solid badges (red/orange/teal pills) keep their own backgrounds. */
+tr.pcs-row-selected {
+  background-image: linear-gradient(to right, #22c55e 0%, #16a34a 52%, #15803d 100%) !important;
+}
+tr.pcs-row-selected > td {
+  border-color: rgba(255, 255, 255, 0.28) !important;
+}
+tr.pcs-row-selected > td,
+tr.pcs-row-selected > td * {
+  color: #fff !important;
+}
+/* The fstatus badge is a raster PNG (currentColor can't touch it) — flood it
+   solid white with a filter so it matches the white text. Scoped to
+   .pcs-status-icon only, so the product cover photo (a real image) is untouched. */
+tr.pcs-row-selected .pcs-status-icon {
+  filter: brightness(0) invert(1) !important;
+}
+
 /* ── MOTION SYSTEM (2026-07-08) — silky interactive transitions · fade-in ·
    nav cross-fade · smooth scroll · reduced-motion. Pure presentation. ── */
 @layer base {

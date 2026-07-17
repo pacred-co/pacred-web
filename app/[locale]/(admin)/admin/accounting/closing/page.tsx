@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { fetchCorporateNameMap } from "@/lib/admin/customer-identity";
@@ -324,7 +325,7 @@ export default async function ClosingReportPage({
                         <div className="text-[11px] text-muted">บริษัท</div>
                       )}
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-xs">{r.userid}</td>
+                    <td className="px-3 py-2.5 text-xs"><CustomerCodeLink code={r.userid} className="text-xs" /></td>
                     <td className="px-3 py-2.5 font-mono text-xs">{r.recompnumber || "—"}</td>
                     <td className="px-3 py-2.5 text-right font-mono">
                       {thb(Number(r.totalbeforewithholding ?? 0))}

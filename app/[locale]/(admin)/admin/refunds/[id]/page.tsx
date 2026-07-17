@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import {
   REFUND_STATUS_LABEL,
@@ -263,7 +264,7 @@ export default async function AdminRefundDetailPage({
             {[row.profile?.first_name, row.profile?.last_name].filter(Boolean).join(" ") || "—"}
           </p>
           {row.profile?.member_code && (
-            <p className="text-xs font-mono text-muted">{row.profile.member_code}</p>
+            <p className="text-xs"><CustomerCodeLink code={row.profile.member_code} className="text-xs" /></p>
           )}
           {row.profile?.phone && <p className="text-xs">☎ {row.profile.phone}</p>}
           {row.profile?.email && <p className="text-xs">✉ {row.profile.email}</p>}

@@ -18,6 +18,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
@@ -215,7 +216,7 @@ export default async function AdminJuristicCheckPage({
                   return (
                     <tr key={c.id} className="border-t border-border align-top">
                       <td className="px-4 py-3 text-xs">
-                        <div className="font-mono">{c.userid}</div>
+                        <div><CustomerCodeLink code={c.userid} /></div>
                         <div>{u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "—"}</div>
                         <div className="text-muted">{u?.userTel ?? ""}</div>
                         <Link href={`/admin/customers/${c.userid}`} className="text-primary-500 hover:underline text-[11px]">→ ดูโปรไฟล์</Link>

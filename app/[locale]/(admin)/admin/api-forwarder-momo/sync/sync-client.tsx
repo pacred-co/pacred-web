@@ -12,6 +12,7 @@
  */
 
 import { Fragment, useState, useEffect } from "react";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { confirm } from "@/components/ui/confirm";
 // IMPORTANT: import from "./types" directly — the barrel index.ts re-exports
 // client.ts which is `"server-only"`. Client Components can pull types +
@@ -550,7 +551,7 @@ const PREVIEW_COL_COUNT = 15;
 function MomoDetail({ d, raw }: { d: MomoRawDisplay; raw: unknown }) {
   const [rawOpen, setRawOpen] = useState(false);
   const kv: Array<[string, React.ReactNode]> = [
-    ["ลูกค้า (MOMO)", d.memberCode || "—"],
+    ["ลูกค้า (MOMO)", <CustomerCodeLink code={d.memberCode} />],
     ["สถานะ MOMO (เลข)", d.statusCode ?? "—"],
     ["เลขพัสดุจีน", d.tracking || "—"],
     ["ขนส่ง", d.shipBy && d.shipByLabel !== d.shipBy ? `${d.shipByLabel} (${d.shipBy})` : d.shipByLabel],

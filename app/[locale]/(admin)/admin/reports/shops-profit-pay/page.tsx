@@ -66,6 +66,7 @@ import { Link } from "@/i18n/navigation";
 import { CsvButton } from "@/components/admin/csv-button";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { parsePage } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 
@@ -606,7 +607,7 @@ export default async function AdminReportShopsProfitPayPage({
                       ) : (
                         <span>—</span>
                       )}
-                      {r.userid && <div className="font-mono text-[11px] text-muted">{r.userid}</div>}
+                      {r.userid && <CustomerCodeLink code={r.userid} className="text-[11px]" />}
                     </td>
                     {showMoney && (
                       <td className="px-4 py-3 text-right font-mono text-xs">

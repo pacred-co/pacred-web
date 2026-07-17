@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { getNearChurnReport } from "@/actions/admin/near-churn";
 import { AlertCircle, Phone, MessageCircle, Mail } from "lucide-react";
 
@@ -219,7 +220,7 @@ export default async function AdminNearChurnPage({
                         >
                           {r.fullName}
                         </Link>
-                        <div className="text-[11px] text-muted font-mono">{r.userid}</div>
+                        <CustomerCodeLink code={r.userid} className="text-[11px]" />
                       </td>
                       <td className="px-3 py-2 text-center">
                         <div className="flex items-center justify-center gap-1.5">

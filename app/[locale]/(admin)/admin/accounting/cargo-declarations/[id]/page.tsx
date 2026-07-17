@@ -16,6 +16,7 @@ import { DeclarationFeePanel } from "@/components/admin/declaration-fee-panel";
 import { computeDeclarationFee } from "@/lib/customs/declaration-fees";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 
 /**
  * /admin/accounting/cargo-declarations/[id] — CARGO ใบขนรวม detail (P3).
@@ -375,7 +376,11 @@ export default async function CargoDeclarationDetailPage({
         <h2 className="font-bold text-sm mb-2">ออเดอร์ + ตู้</h2>
         <p>
           ออเดอร์: <span className="font-mono">#{header.cargo_forwarder_id}</span>
-          {fwd?.userid && <span className="ml-2">· ลูกค้า {fwd.userid}</span>}
+          {fwd?.userid && (
+            <span className="ml-2">
+              · ลูกค้า <CustomerCodeLink code={fwd.userid} />
+            </span>
+          )}
         </p>
         <p>
           ตู้ (cabinet): <span className="font-mono">{header.cargo_cabinet_no ?? fwd?.fcabinetnumber?.trim() ?? "—"}</span>

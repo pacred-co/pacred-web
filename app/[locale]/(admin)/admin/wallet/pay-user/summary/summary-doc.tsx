@@ -116,7 +116,7 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
         .summary-body { position: relative; z-index: 1; }
         .summary-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
         .summary-table th, .summary-table td { border: 1px solid #9ca3af; padding: 3px 4px; font-size: 9px; word-break: break-word; }
-        .summary-table thead th { background: #cbcbcb; text-align: center; font-weight: bold; }
+        .summary-table thead th { background: #FFF0CC; text-align: center; font-weight: bold; }
       `}</style>
 
       <div
@@ -143,12 +143,12 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
               <div style={{ fontSize: "12px", fontWeight: "bold", color: "#111827" }}>{SITE_LEGAL_NAME_TH}</div>
               <div style={{ fontSize: "10px", color: "#6b7280" }}>{SITE_LEGAL_NAME}</div>
             </div>
-            <div style={{ background: "rgb(255,223,223)", borderRadius: "3px", padding: "4px 12px", textAlign: "right", minWidth: "70mm", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <div style={{ background: "#FFF0CC", borderRadius: "3px", padding: "4px 12px", textAlign: "right", minWidth: "70mm", display: "flex", flexDirection: "column", justifyContent: "center" }}>
               <div style={{ fontSize: "10px", color: "#b45309", fontWeight: "bold" }}>ตัวอย่าง</div>
-              <h2 style={{ margin: 0, fontSize: "22px", fontWeight: "bold", color: "#8B0000", lineHeight: 1.15 }}>
-                ใบสรุปรายการที่ต้องชำระเงิน
+              <h2 style={{ margin: 0, fontSize: "26px", fontWeight: "bold", color: "#FFA30A", lineHeight: 1.15 }}>
+                ใบแจ้งหนี้
               </h2>
-              <div style={{ fontSize: "11px", color: "#b91c1c" }}>(ใช้เพื่อตรวจสอบรายการชำระเงิน)</div>
+              <div style={{ fontSize: "11px", color: "#b45309" }}>(ใช้เพื่อตรวจสอบรายการชำระเงิน)</div>
               <div style={{ fontSize: "11px", color: "#374151", marginTop: "2px" }}>เลขที่ : {p.docNo}</div>
             </div>
           </div>
@@ -242,9 +242,9 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
               {showWht && (
                 <TotalLine k="LESS WITHHOLDING TAX 1%" v={`−${fmtMoney(p.whtAmount)} บาท`} red />
               )}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 10px", borderTop: "1px solid #9ca3af", background: "rgb(255,223,223)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 10px", borderTop: "1px solid #9ca3af", background: "#FFF0CC" }}>
                 <span style={{ fontSize: "12px", fontWeight: "bold", color: "#111827" }}>Total Amount</span>
-                <span style={{ fontSize: "16px", fontWeight: "bold", color: "#8B0000" }}>{fmtMoney(p.totalAmount)} บาท</span>
+                <span style={{ fontSize: "16px", fontWeight: "bold", color: "#b45309" }}>{fmtMoney(p.totalAmount)} บาท</span>
               </div>
             </div>
           </div>

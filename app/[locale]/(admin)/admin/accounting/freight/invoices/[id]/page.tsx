@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import {
   freightInvoiceTotalThb,
   FREIGHT_INVOICE_PAYMENT_STATUS_LABEL,
@@ -186,7 +187,14 @@ export default async function AdminFreightInvoiceDetailPage({
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · FREIGHT</p>
           <h1 className="mt-1 text-2xl font-bold font-mono">{invoice.invoice_no ?? "(ใบแจ้งหนี้ร่าง)"}</h1>
           <p className="text-xs text-muted mt-1">
-            ลูกค้า {customer}{profile?.member_code ? ` · ${profile.member_code}` : ""} ·{" "}
+            ลูกค้า {customer}
+            {profile?.member_code && (
+              <>
+                {" · "}
+                <CustomerCodeLink code={profile.member_code} className="text-xs" />
+              </>
+            )}
+            {" · "}
             งานขนส่ง{" "}
             <Link href={`/admin/freight/shipments/${invoice.freight_shipment_id}`} className="text-primary-600 hover:underline">
               {shipment?.job_no ?? "—"}

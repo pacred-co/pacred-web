@@ -1,6 +1,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { getFreightLedger } from "./ledger-data";
 
 /**
@@ -249,7 +250,10 @@ export default async function AdminFreightLedgerPage({
                         <td className="px-3 py-2 text-xs whitespace-nowrap">{fmtDate(r.paid_at)}</td>
                         <td className="px-3 py-2 font-mono text-[11px] text-muted">{r.job_no ?? "—"}</td>
                         <td className="px-3 py-2 font-mono text-[11px]">{r.invoice_no ?? "—"}</td>
-                        <td className="px-3 py-2 text-xs">{r.customer}</td>
+                        <td className="px-3 py-2 text-xs">
+                          <CustomerCodeLink code={r.member_code} className="text-xs" />
+                          {r.customer_name && <span className="ml-1 text-muted">{r.customer_name}</span>}
+                        </td>
                         <td className="px-3 py-2 text-xs whitespace-nowrap">{METHOD_LABEL[r.method] ?? r.method}</td>
                         <td className="px-3 py-2 font-mono text-[11px] text-muted">{r.bank_ref ?? "—"}</td>
                         <td className="px-3 py-2 text-right font-mono text-xs font-semibold text-emerald-700 dark:text-emerald-400">
@@ -311,7 +315,10 @@ export default async function AdminFreightLedgerPage({
                           </Link>
                         </td>
                         <td className="px-3 py-2 text-xs whitespace-nowrap">{STATUS_LABEL[r.status] ?? r.status}</td>
-                        <td className="px-3 py-2 text-xs">{r.customer}</td>
+                        <td className="px-3 py-2 text-xs">
+                          <CustomerCodeLink code={r.member_code} className="text-xs" />
+                          {r.customer_name && <span className="ml-1 text-muted">{r.customer_name}</span>}
+                        </td>
                         <td className="px-3 py-2 text-right font-mono text-[11px] text-muted">฿{thb(r.cost_china_thb)}</td>
                         <td className="px-3 py-2 text-right font-mono text-[11px] text-muted">฿{thb(r.cost_local_thb)}</td>
                         <td className="px-3 py-2 text-right font-mono text-xs font-semibold text-rose-700 dark:text-rose-400">

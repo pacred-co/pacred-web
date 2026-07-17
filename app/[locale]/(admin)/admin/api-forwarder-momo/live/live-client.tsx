@@ -19,6 +19,7 @@
  */
 
 import { useMemo, useState, useTransition } from "react";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { loadMomoLiveBoard, propagateMomoLiveStatusNow } from "@/actions/admin/momo-web-live";
 import { MOMO_LIVE_STATUSES, type MomoLiveParcel, type MomoLiveStatus } from "@/lib/integrations/momo-web/types";
 import { parcelTotals } from "@/lib/integrations/momo-web/live-parcel-metrics";
@@ -347,9 +348,7 @@ export function MomoLiveClient({ status: initialStatus }: { status: MomoLiveStat
                           {/* รหัสลูกค้า — chip */}
                           <td className="px-2 py-2">
                             {p.memberCode ? (
-                              <span className="inline-flex items-center rounded bg-emerald-100 px-2 py-1 text-[12px] font-bold text-emerald-700">
-                                {p.memberCode}
-                              </span>
+                              <CustomerCodeLink code={p.memberCode} className="inline-flex items-center rounded bg-emerald-100 px-2 py-1 text-[12px] font-bold text-emerald-700" />
                             ) : (
                               <span className="text-muted">—</span>
                             )}

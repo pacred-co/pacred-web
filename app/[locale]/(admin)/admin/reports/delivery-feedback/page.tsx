@@ -28,6 +28,7 @@ import { Suspense } from "react";
 import { AdminDateFilter } from "@/components/admin/date-filter";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { Star, Camera } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -353,7 +354,7 @@ export default async function AdminDeliveryFeedbackPage({
               return (
                 <tr key={r.id} className="border-t border-border hover:bg-surface-alt/40 align-top">
                   <td className="px-3 py-3 text-xs">
-                    <div className="font-mono">{r.userid}</div>
+                    <CustomerCodeLink code={r.userid} className="text-xs" />
                     <div>{userDisplayName(u, corpNames)}</div>
                     {u?.userTel && <div className="text-muted">{u.userTel}</div>}
                   </td>

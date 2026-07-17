@@ -1,5 +1,5 @@
 /**
- * /admin/wallet/pay-user/summary — printable "ใบสรุปรายการที่ต้องชำระเงิน"
+ * /admin/wallet/pay-user/summary — printable "ใบแจ้งหนี้"
  * (payment-summary sheet). Faithful port of the legacy `exampleSummaryF.php`.
  *
  * READ-ONLY: this route only reads tb_forwarder / tb_users / tb_corporate /
@@ -105,7 +105,7 @@ export default async function PaymentSummaryPage({
   if (fids.length === 0) {
     return (
       <>
-        <title>ใบสรุปรายการที่ต้องชำระเงิน | PR Admin</title>
+        <title>ใบแจ้งหนี้ | PR Admin</title>
         <div className="no-print bg-gray-100 p-4 text-center print:hidden">
           <PrintButton />
         </div>
@@ -155,7 +155,7 @@ export default async function PaymentSummaryPage({
   if (rowsFw.length === 0) {
     return (
       <>
-        <title>ใบสรุปรายการที่ต้องชำระเงิน | PR Admin</title>
+        <title>ใบแจ้งหนี้ | PR Admin</title>
         <div className="no-print bg-gray-100 p-4 text-center print:hidden">
           <PrintButton />
         </div>
@@ -333,7 +333,7 @@ export default async function PaymentSummaryPage({
 
   return (
     <>
-      <title>{`ใบสรุปรายการที่ต้องชำระเงิน ${docNo} | PR Admin`}</title>
+      <title>{`ใบแจ้งหนี้ ${docNo} | PR Admin`}</title>
 
       <div className="no-print bg-gray-100 p-4 text-center print:hidden">
         <PrintButton />

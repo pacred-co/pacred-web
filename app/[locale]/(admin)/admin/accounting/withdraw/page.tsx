@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportAccWithdrawAll } from "@/actions/admin/export/acc-withdraw";
 import {
@@ -709,12 +710,7 @@ export default async function AdminAccountingWithdrawPage({
                                           users/profile/<userID>/
                                           acc-withdraw.php L210 */}
                                       <td>
-                                        <Link
-                                          href={`/admin/users/${row.userid}`}
-                                          className="text-info"
-                                        >
-                                          {row.userid}
-                                        </Link>
+                                        <CustomerCodeLink code={row.userid} />
                                       </td>
                                       {/* 9 — ชื่อ-นามสกุล/ชื่อบริษัท
                                           (juristic → company name)

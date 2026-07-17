@@ -39,6 +39,7 @@ import {
   legacyForwarderStatusThai,
 } from "@/lib/legacy-status-map";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 
 export const dynamic = "force-dynamic";
 
@@ -427,7 +428,7 @@ export default async function MonthlyOrdersReport({
                     </td>
                     <td className="px-3 py-2 text-xs">
                       {userDisplayName(r.user, corpNames)}
-                      <p className="font-mono text-[11px] text-muted">{r.userid}</p>
+                      <CustomerCodeLink code={r.userid} className="text-[11px]" />
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-xs">{thb(r.total_price)}</td>
                     <td className="px-3 py-2 text-[11px]">{legacyForwarderStatusThai(r.status) || r.status}</td>
@@ -462,7 +463,7 @@ export default async function MonthlyOrdersReport({
                     </td>
                     <td className="px-3 py-2 text-xs">
                       {userDisplayName(r.user, corpNames)}
-                      <p className="font-mono text-[11px] text-muted">{r.userid}</p>
+                      <CustomerCodeLink code={r.userid} className="text-[11px]" />
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-xs">{thb(r.total_thb)}</td>
                     <td className="px-3 py-2 text-[11px]">{legacyOrderStatusThai(r.status) || r.status}</td>
@@ -494,7 +495,7 @@ export default async function MonthlyOrdersReport({
                   <tr key={r.id} className="border-t border-border">
                     <td className="px-3 py-2 text-xs">
                       {userDisplayName(r.user, corpNames)}
-                      <p className="font-mono text-[11px] text-muted">{r.userid}</p>
+                      <CustomerCodeLink code={r.userid} className="text-[11px]" />
                     </td>
                     <td className="px-3 py-2 text-[11px]">{PAYTYPE_LABEL[r.paytype ?? ""] ?? "—"}</td>
                     <td className="px-3 py-2 text-right font-mono text-xs">¥{r.yuan_amount.toFixed(2)}</td>

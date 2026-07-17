@@ -6,6 +6,7 @@ import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { PageHeader } from "@/components/admin/page-header";
 import { exportWhtAll } from "@/actions/admin/export/wht";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 
 /**
  * /admin/wht — Withholding-tax certificate chase queue.
@@ -268,7 +269,7 @@ export default async function AdminWhtChasePage({
                       <td className="px-4 py-2">
                         <div className="text-xs">{customerLabel}</div>
                         {r.profile?.member_code && (
-                          <div className="text-xs text-muted font-mono">{r.profile.member_code}</div>
+                          <CustomerCodeLink code={r.profile.member_code} className="text-xs" />
                         )}
                       </td>
                       <td className="px-4 py-2 text-xs">

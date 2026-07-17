@@ -21,6 +21,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { canViewCost } from "@/lib/admin/money-visibility";
 import { baseTracking } from "@/lib/admin/momo-bill-header";
 import {
@@ -191,7 +192,7 @@ export default async function ItamDriftPage() {
                   <tr key={`${r.container_no}-${r.base_tracking}`} className="hover:bg-rose-100/40">
                     <td className="px-3 py-2 font-medium text-foreground">{r.container_no}</td>
                     <td className="px-3 py-2 font-mono">{r.base_tracking}</td>
-                    <td className="px-3 py-2 font-semibold">{r.member_code ?? "—"}</td>
+                    <td className="px-3 py-2"><CustomerCodeLink code={r.member_code} /></td>
                     <td className="px-3 py-2 text-right">{r.total_parcel ?? "—"}</td>
                     <td className="px-3 py-2 text-right">{kg(r.total_wt_kg)}</td>
                     <td className="px-3 py-2 text-right">{cbm(r.total_vol_cbm)}</td>
@@ -262,7 +263,7 @@ export default async function ItamDriftPage() {
                 {g.rows.map((r) => (
                   <tr key={`${r.container_no}-${r.base_tracking}`} className="hover:bg-gray-50/70 align-top">
                     <td className="px-3 py-2 font-mono">{r.base_tracking}</td>
-                    <td className="px-3 py-2 font-semibold">{r.member_code ?? "—"}</td>
+                    <td className="px-3 py-2"><CustomerCodeLink code={r.member_code} /></td>
                     <td className="px-3 py-2">{classBadge(r.cls)}</td>
                     <td className="px-3 py-2 text-right">{r.total_parcel ?? "—"}</td>
                     <td className="px-3 py-2 text-right">{kg(r.total_wt_kg)}</td>

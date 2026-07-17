@@ -21,6 +21,7 @@ import { Link } from "@/i18n/navigation";
 import { nowMs, cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { exportQaTransitOverdueAll } from "@/actions/admin/export/qa-transit-overdue";
@@ -285,7 +286,7 @@ export default async function TransitOverduePage({
                         </span>
                       </td>
                       <td className="px-2 py-2">
-                        <div className="font-mono text-[11px]">{r.userid ?? "—"}</div>
+                        <CustomerCodeLink code={r.userid} className="text-[11px]" />
                         <div>{customerName}</div>
                         {u?.userTel ? <div className="text-muted text-[11px]">{u.userTel}</div> : null}
                       </td>

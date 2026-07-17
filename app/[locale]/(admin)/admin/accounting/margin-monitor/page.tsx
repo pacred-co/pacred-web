@@ -4,6 +4,7 @@ import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import {
   getMarginReport,
   type MarginBucket,
@@ -223,7 +224,7 @@ export default async function AdminMarginMonitorPage({
                         </Link>
                       </td>
                       <td className="px-3 py-2 text-xs whitespace-nowrap">{fmtDate(r.fdate)}</td>
-                      <td className="px-3 py-2 font-mono text-xs">{r.userid}</td>
+                      <td className="px-3 py-2 text-xs"><CustomerCodeLink code={r.userid} className="text-xs" /></td>
                       <td className="px-3 py-2 font-mono text-[11px] text-muted">{r.fTrackingChn}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs">฿{thb(r.ftotalprice)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs text-muted">฿{thb(r.fcosttotalprice)}</td>
@@ -267,7 +268,7 @@ export default async function AdminMarginMonitorPage({
                         </Link>
                       </td>
                       <td className="px-3 py-2 text-xs whitespace-nowrap">{fmtDate(r.fdate)}</td>
-                      <td className="px-3 py-2 font-mono text-xs">{r.userid}</td>
+                      <td className="px-3 py-2 text-xs"><CustomerCodeLink code={r.userid} className="text-xs" /></td>
                       <td className="px-3 py-2 text-right font-mono text-xs">฿{thb(r.ftotalprice)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs text-muted">฿{thb(r.fcosttotalprice)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs font-bold text-red-700">฿{thb(r.margin)}</td>

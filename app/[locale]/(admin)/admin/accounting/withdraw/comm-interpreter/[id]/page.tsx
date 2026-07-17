@@ -6,6 +6,7 @@ import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { CommBatchPayForm } from "@/components/admin/comm-batch/comm-batch-pay-form";
 import { getBatchDetail } from "@/actions/admin/withdraw-comm-batch";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 
 /**
  * /admin/accounting/withdraw/comm-interpreter/[id] — Interpreter batch detail.
@@ -153,7 +154,7 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
                         </Link>
                       </td>
                       <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{fmtDate(it.order?.hdate ?? null)}</td>
-                      <td className="px-3 py-2 font-mono text-xs">{it.order?.userid ?? "—"}</td>
+                      <td className="px-3 py-2 text-xs"><CustomerCodeLink code={it.order?.userid} className="text-xs" /></td>
                       {showMoney && (
                         <td className="px-3 py-2 text-right font-mono text-xs font-bold">
                           ¥{it.diffyaun.toLocaleString("th-TH", { minimumFractionDigits: 2 })}

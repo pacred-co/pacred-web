@@ -25,6 +25,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportQaCreditOverdueAll } from "@/actions/admin/export/qa-credit-overdue";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
@@ -254,7 +255,7 @@ export default async function AdminQaCreditOverduePage({
                         </Link>
                       </td>
                       <td className="px-3 py-3 text-xs">
-                        <div className="font-mono">{r.userid ?? "—"}</div>
+                        <CustomerCodeLink code={r.userid} />
                         <div>{customerName}</div>
                         {u?.userTel ? <div className="text-muted">{u.userTel}</div> : null}
                       </td>

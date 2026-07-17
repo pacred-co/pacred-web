@@ -49,6 +49,7 @@ import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 import { PageHeader } from "@/components/admin/page-header";
 import { AccountingSegmentPills } from "@/components/admin/accounting-segment-pills";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { ACCOUNTING_HUB_CARDS } from "@/lib/admin/accounting-menubar";
 import {
   legacyOrderStatusThai,
@@ -875,7 +876,7 @@ export default async function AdminAccountingPage({
                   <Link href={`/admin/forwarders/${r.f_no}`} className="text-primary-600 hover:underline">#{r.f_no}</Link>
                 </td>
                 <td className="px-4 py-3 text-xs">
-                  <div className="font-mono">{r.user?.userID ?? "—"}</div>
+                  <CustomerCodeLink code={r.user?.userID} />
                   <div>{userDisplayName(r.user)}</div>
                   <div className="text-muted">{r.user?.userTel ?? ""}</div>
                 </td>
@@ -915,7 +916,7 @@ export default async function AdminAccountingPage({
             {yuanRows.map((r) => (
               <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
                 <td className="px-4 py-3 text-xs">
-                  <div className="font-mono">{r.user?.userID ?? "—"}</div>
+                  <CustomerCodeLink code={r.user?.userID} />
                   <div>{userDisplayName(r.user)}</div>
                   <div className="text-muted">{r.user?.userTel ?? ""}</div>
                 </td>
@@ -956,7 +957,7 @@ export default async function AdminAccountingPage({
                   <Link href={`/admin/service-orders/${r.h_no}`} className="text-primary-600 hover:underline">{r.h_no}</Link>
                 </td>
                 <td className="px-4 py-3 text-xs">
-                  <div className="font-mono">{r.user?.userID ?? "—"}</div>
+                  <CustomerCodeLink code={r.user?.userID} />
                   <div>{userDisplayName(r.user)}</div>
                   <div className="text-muted">{r.user?.userTel ?? ""}</div>
                 </td>
@@ -1003,7 +1004,7 @@ export default async function AdminAccountingPage({
               return (
                 <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
                   <td className="px-4 py-3 text-xs">
-                    <div className="font-mono">{r.user?.userID ?? "—"}</div>
+                    <CustomerCodeLink code={r.user?.userID} />
                     <div>{userDisplayName(r.user)}</div>
                     <div className="text-muted">{r.user?.userTel ?? ""}</div>
                   </td>

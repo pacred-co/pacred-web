@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, getAdminRoles, hasRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import {
   QUOTE_STATUS_LABEL,
   TRANSPORT_MODE_LABEL,
@@ -205,7 +206,14 @@ export default async function FreightQuoteDetailPage({
           <h2 className="text-sm font-bold text-muted uppercase tracking-wide">ลูกค้า</h2>
           <dl className="space-y-1.5 text-sm">
             <Row label="ชื่อ" value={header.buyer_name_snapshot} />
-            <Row label="รหัสสมาชิก" value={memberCode ?? (header.profile_id ? "—" : "(ลูกค้าใหม่ / cold)")} mono={!!memberCode} />
+            <Row
+              label="รหัสสมาชิก"
+              value={
+                memberCode
+                  ? <CustomerCodeLink code={memberCode} className="text-[13px]" />
+                  : header.profile_id ? "—" : "(ลูกค้าใหม่ / cold)"
+              }
+            />
             <Row label="เลขผู้เสียภาษี" value={header.buyer_tax_id_snapshot ?? "—"} mono={!!header.buyer_tax_id_snapshot} />
             {header.buyer_contact_snapshot && (
               <div>
@@ -322,7 +330,7 @@ export default async function FreightQuoteDetailPage({
   );
 }
 
-function Row({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+function Row({ label, value, mono = false }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <dt className="text-xs text-muted shrink-0">{label}</dt>

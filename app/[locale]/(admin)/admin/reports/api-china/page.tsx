@@ -26,6 +26,7 @@ import {
   type ReportData,
 } from "@/lib/admin/reports/types";
 import { getApiChinaReport } from "./data";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 
 export const dynamic = "force-dynamic";
 
@@ -179,7 +180,7 @@ export default async function ApiChinaReportPage({
                       key={r.id}
                       className="border-t border-border hover:bg-surface-alt/30 align-top"
                     >
-                      <td className="px-4 py-3 text-xs font-mono">{r.member_code}</td>
+                      <td className="px-4 py-3"><CustomerCodeLink code={r.member_code} className="text-xs" /></td>
                       <td className="px-4 py-3 text-xs">{r.customer_name}</td>
                       <td className="px-4 py-3 text-xs text-right font-mono">{intTh(r.calls)}</td>
                       <td className="px-4 py-3 text-xs text-right font-mono">{intTh(r.errors)}</td>

@@ -28,6 +28,7 @@ import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { ChevronDown, ChevronRight, ChevronsUpDown, ArrowUp, ArrowDown, Building2 } from "lucide-react";
 import { CustomerRowActions } from "@/components/admin/customer-row-actions";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { CustomerTypeTag } from "@/components/admin/customer-type-tag";
 import { Explain } from "@/components/ui/tooltip";
 import { ResetPwdButton } from "./reset-pwd-button";
@@ -357,7 +358,7 @@ function CustomerExpandPanel({ row: r }: { row: CustomerTableRow }) {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <CustomerAvatar src={r.avatarUrl} name={r.fullName} code={r.userID} />
-            <span className="font-mono text-sm font-semibold text-primary-700">{r.userID}</span>
+            <CustomerCodeLink code={r.userID} className="text-sm" />
             <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${cfg.className}`}>{cfg.label}</span>
             {r.vip && <span className="rounded-full border bg-amber-50 text-amber-700 border-amber-200 px-2 py-0.5 text-[11px] font-medium uppercase">VIP</span>}
           </div>
@@ -365,7 +366,7 @@ function CustomerExpandPanel({ row: r }: { row: CustomerTableRow }) {
         </div>
 
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
-          <Field label="รหัสสมาชิก"><span className="font-mono">{r.userID}</span></Field>
+          <Field label="รหัสสมาชิก"><CustomerCodeLink code={r.userID} /></Field>
           <Field label="ชื่อ">{r.fullName || "—"}</Field>
           {r.contactName && <Field label="ผู้ติดต่อ">{r.contactName}</Field>}
           <Field label="ประเภท">{r.isJuristic ? "นิติบุคคล" : "บุคคล"}</Field>

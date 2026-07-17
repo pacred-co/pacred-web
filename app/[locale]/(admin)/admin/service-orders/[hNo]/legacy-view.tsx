@@ -34,6 +34,7 @@
 import type React from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import {
@@ -506,7 +507,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
               {headerContactName && (
                 <p className="truncate text-[11px] text-muted">ผู้ติดต่อ: {headerContactName}</p>
               )}
-              <p className="text-xs text-muted">รหัสสมาชิก: {r.userid}</p>
+              <p className="text-xs text-muted">รหัสสมาชิก: <CustomerCodeLink code={r.userid} className="text-xs" /></p>
             </div>
           </div>
           <div className="space-y-1 text-sm">
