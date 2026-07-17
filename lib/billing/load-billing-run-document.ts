@@ -114,6 +114,12 @@ export type BillingRunInvoiceDetail = {
        *  row's Amount reconciles with Rate × Kg (owner 2026-07-07). The stored
        *  amount_thb (GROSS incl ค่าขนส่งในไทย etc.) is unchanged; this is display. */
       freight: number;
+      /** ประเภทสินค้า = รหัสภายใน g/m/a/s (owner 2026-07-18 · ลูกค้าเห็นแค่รหัสใต้ "Type"). */
+      product_type: string;
+      /** มิติกล่อง ก×ส×ย (ซม.) — 0 เมื่อยังไม่วัด (owner 2026-07-18 · ใบวางบิล cols). */
+      fwidth: number;
+      fheight: number;
+      flength: number;
     } | null;
   }>;
 };
@@ -126,6 +132,22 @@ function isoToday(): string {
 export function isBillOverdue(dateDue: string, status: string): boolean {
   if (status !== "issued") return false;
   return dateDue < isoToday();
+}
+
+/**
+ * ประเภทสินค้า → รหัสภายในตัวเดียว (owner 2026-07-18 · ใบวางบิล col "Type"):
+ *   g = ทั่วไป · m = มอก. · a = อย. · s = พิเศษ
+ * ลูกค้าเห็นแค่รหัส (ไม่บอกความหมาย) → ใช้เป็น "Type" แทนป้ายไทยเต็ม.
+ * (fproductstype legacy: 1=ทั่วไป 2=มอก. 3=อย. 4=พิเศษ · function.php L640-650.)
+ */
+function productTypeCode(t: string | null): string {
+  switch ((t ?? "").trim()) {
+    case "1": return "g"; // ทั่วไป
+    case "2": return "m"; // มอก.
+    case "3": return "a"; // อย.
+    case "4": return "s"; // พิเศษ
+    default:  return "";
+  }
 }
 
 // ── Raw DB row shapes ────────────────────────────────────────
@@ -185,6 +207,11 @@ type FwdHydRow = {
   ftransporttype: string | null;
   frefprice: string | null;
   frefrate: number | string | null;
+  // ประเภทสินค้า + มิติกล่อง (owner 2026-07-18 · ใบวางบิล cols)
+  fproductstype: string | null;
+  fwidth: number | string | null;
+  flength: number | string | null;
+  fheight: number | string | null;
   // Price columns — for the named-fee split (owner 2026-07-07). calcForwarderGross
   // reads exactly these; the paper re-presents the SAME gross with correct labels.
   ftotalprice: number | string | null;
@@ -245,7 +272,7 @@ export async function loadBillingRunDocument(
       .from("tb_forwarder")
       .select(
         "id, ftrackingchn, famount, fweight, fvolume, fdate, fstatus, fcabinetnumber, " +
-          "ftransporttype, frefprice, frefrate, " +
+          "ftransporttype, frefprice, frefrate, fproductstype, fwidth, flength, fheight, " +
           // price columns for the named-fee split (owner 2026-07-07)
           "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
           "pricecrate, ftransportpricechnthb, priceother, fdiscount",
@@ -343,6 +370,11 @@ export async function loadBillingRunDocument(
               rate:         f.frefrate != null ? Number(f.frefrate) : 0,
               // ค่าขนส่งสินค้า (freight-only) — the row Amount so Rate × Kg reconciles.
               freight:      f.ftotalprice != null ? Number(f.ftotalprice) : 0,
+              // ประเภท (รหัส g/m/a/s) + มิติกล่อง ก×ส×ย (ซม.) — owner 2026-07-18 ใบวางบิล cols.
+              product_type: productTypeCode(f.fproductstype),
+              fwidth:       f.fwidth  != null ? Number(f.fwidth)  : 0,
+              fheight:      f.fheight != null ? Number(f.fheight) : 0,
+              flength:      f.flength != null ? Number(f.flength) : 0,
             }
           : null,
       };

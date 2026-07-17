@@ -82,18 +82,22 @@ export default async function PublicBillPage({
 
   // Build the SAME rows the admin print page builds.
   const rows: BillingRunPaperRow[] = items.map((it, idx) => ({
-    no:        idx + 1,
-    fid:       String(it.forwarder_id),
-    tracking:  it.forwarder?.ftrackingchn ?? "",
-    cabinet:   it.forwarder?.cabinet ?? "",
-    transport: it.forwarder?.transport ?? "",
-    rateBasis: it.forwarder?.rate_basis ?? "",
-    rate:      it.forwarder?.rate ?? 0,
-    famount:   it.forwarder?.famount ?? 0,
-    fweight:   it.forwarder?.fweight ?? 0,
-    fvolume:   it.forwarder?.fvolume ?? 0,
-    freight:   it.forwarder?.freight ?? 0,
-    amount:    it.amount_thb,
+    no:          idx + 1,
+    fid:         String(it.forwarder_id),
+    tracking:    it.forwarder?.ftrackingchn ?? "",
+    productType: it.forwarder?.product_type ?? "",
+    cabinet:     it.forwarder?.cabinet ?? "",
+    transport:   it.forwarder?.transport ?? "",
+    rateBasis:   it.forwarder?.rate_basis ?? "",
+    rate:        it.forwarder?.rate ?? 0,
+    famount:     it.forwarder?.famount ?? 0,
+    fweight:     it.forwarder?.fweight ?? 0,
+    fwidth:      it.forwarder?.fwidth ?? 0,
+    fheight:     it.forwarder?.fheight ?? 0,
+    flength:     it.forwarder?.flength ?? 0,
+    fvolume:     it.forwarder?.fvolume ?? 0,
+    freight:     it.forwarder?.freight ?? 0,
+    amount:      it.amount_thb,
   }));
 
   const pageCount = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
@@ -101,6 +105,14 @@ export default async function PublicBillPage({
     pageNumber: p + 1,
     rows: rows.slice(p * ROWS_PER_PAGE, (p + 1) * ROWS_PER_PAGE),
   }));
+
+  // อ้างอิง — เลขออเดอร์ฝากนำเข้าที่บิลนี้ครอบ (owner 2026-07-18 · mirror ใบเสร็จ ·
+  // ต้องตรงกับหน้าพิมพ์แอดมิน). ย่อเมื่อมีหลายรายการ.
+  const orderNos = Array.from(new Set(items.map((it) => it.forwarder_id)));
+  const referenceOrder =
+    orderNos.length <= 6
+      ? orderNos.map((n) => `#${n}`).join(", ")
+      : `${orderNos.slice(0, 5).map((n) => `#${n}`).join(", ")} …(+${orderNos.length - 5})`;
 
   // Self-url QR (the printed paper re-encodes this same public page).
   const qrDataUrl = await QRCode.toDataURL(`${SITE_URL}/b/${token}`, {
@@ -115,6 +127,7 @@ export default async function PublicBillPage({
       <div id="publicBillDoc" className="receipt-fit mx-auto max-w-5xl px-2 py-4 sm:px-4">
         <BillingRunPaper
           docNo={header.doc_no}
+          referenceOrder={referenceOrder}
           issuerAddress={ADDRESSES.office.full}
           dateIssued={header.date_issued}
           dateDue={header.date_due}
