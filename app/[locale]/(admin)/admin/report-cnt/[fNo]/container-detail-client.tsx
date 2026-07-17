@@ -527,13 +527,23 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
           </div>
         </td>
         {/* ลัง (รับ/คาด) */}
-        <td className="px-2 py-2 text-right">{fmtN(a.boxGot)}/{fmtN(a.boxExp)}</td>
+        <td className="px-2 py-2 text-right">{fmtBox(a.boxGot, a.boxExp)}</td>
         {/* ปริมาตร */}
         <td className="px-2 py-2 text-right">{fmt(a.volume, 6)}</td>
         {/* หนัก */}
         <td className="px-2 py-2 text-right">{fmt(a.weight, 2)}</td>
-        {/* ประเภท */}
-        <td className="px-2 py-2">{a.productType != null ? productTypeLabel(a.productType) : "หลายประเภท"}</td>
+        {/* ประเภท — + เรทขาย pill (owner 2026-07-18 รอบ2: หัวแถวต้องมี tag เหมือนแถวเดี่ยว) */}
+        <td className="px-2 py-2">
+          {a.productType != null ? productTypeLabel(a.productType) : "หลายประเภท"}
+          {a.frefrate != null && Number.isFinite(a.frefrate) && a.frefrate > 0 && (
+            <>
+              <br />
+              <span className="badge badge-danger badge-pill font-10" title="เรทขาย (SELL) ต่อคิว/กิโล — ทั้งชิปเม้น">
+                {a.frefrate.toLocaleString("en-US")}
+              </span>
+            </>
+          )}
+        </td>
         {/* เรทต้นทุน — owner 2026-07-18: คิดทีเดียวทั้งชิปเม้น. The cost rate is per-CBM/
             mode (uniform across a shipment's trackings) → show it ONCE on the header. */}
         {showMoney && (
@@ -545,8 +555,18 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                 : <span className="text-muted">—</span>}
           </td>
         )}
-        {/* ค่านำเข้า (รวมทั้งชิปเม้น) */}
-        <td className="px-2 py-2 text-right font-semibold">{fmt(a.ftotalprice, 2)}</td>
+        {/* ค่านำเข้า (รวมทั้งชิปเม้น) — + basis pill ปริมาตร/น้ำหนัก เหมือนแถวเดี่ยว */}
+        <td className="px-2 py-2 text-right font-semibold">
+          {fmt(a.ftotalprice, 2)}
+          {a.frefprice != null && (
+            <>
+              <br />
+              <span className={`badge badge-pill font-10 ${a.frefprice === "1" ? "badge-info" : "badge-primary"}`}>
+                {a.frefprice === "1" ? "น้ำหนัก" : "ปริมาตร"}
+              </span>
+            </>
+          )}
+        </td>
         {/* ค่าอัปเดต */}
         <td className="px-2 py-2 text-right">{fmt(a.fpriceupdate, 2)}</td>
         {/* ค่าตีลัง */}
@@ -655,21 +675,22 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
       <tr key={`pack-${gkey}`} className="pcs-row-packwrap">
         <td colSpan={totalCols} className="p-0">
           <div className="pcs-pack-wrap">
-            {/* owner 2026-07-18 — column order MATCHES the main table (ตารางใหญ่):
-                กล่อง(ลัง) · [ก·ย·ส] · CBM(ปริมาตร) · น้ำหนัก(หนัก) · ประเภท · + รูป per tracking. */}
+            {/* owner 2026-07-18 รอบ2 — columns SHARED with the main table keep the main
+                table's ORDER (ลัง · ปริมาตร CBM · หนัก · ประเภท); the extra ก·ย·ส go LAST
+                ("ที่มีอะเอามาเรียงให้ตรงก่อน แล้วค่อย กว้าง ยาว สูง ไว้หลังสุด"). */}
             <table className="pcs-pack">
               <thead>
                 <tr>
                   <th className="text-right">#</th>
                   <th className="text-left">แทรคกิ้ง</th>
                   <th className="text-center">รูป</th>
-                  <th className="text-right">กล่อง (รับ/คาด)</th>
+                  <th className="text-right">ลัง (รับ/คาด)</th>
+                  <th className="text-right">ปริมาตร (CBM)</th>
+                  <th className="text-right">หนัก (Kg)</th>
+                  <th className="text-left">ประเภท</th>
                   <th className="text-right">กว้าง (ซม.)</th>
                   <th className="text-right">ยาว</th>
                   <th className="text-right">สูง</th>
-                  <th className="text-right">CBM</th>
-                  <th className="text-right">น้ำหนัก (กก.)</th>
-                  <th className="text-left">ประเภท</th>
                 </tr>
               </thead>
               <tbody>
@@ -701,14 +722,14 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                         className={`text-right ${rowScanned ? "" : "font-semibold"}`}
                         title={rowScanned ? "ยิงรับกล่องครบแล้ว" : "ยังยิงรับกล่องไม่ครบ"}
                       >
-                        {fmtN(r.famountfi)}/{fmtN(r.famount)}
+                        {fmtBox(r.famountfi, r.famount)}
                       </td>
-                      <td className="text-right">{r.fwidth != null && r.fwidth > 0 ? fmt(r.fwidth, 0) : "—"}</td>
-                      <td className="text-right">{r.flength != null && r.flength > 0 ? fmt(r.flength, 0) : "—"}</td>
-                      <td className="text-right">{r.fheight != null && r.fheight > 0 ? fmt(r.fheight, 0) : "—"}</td>
                       <td className="text-right">{fmt(r.fvolume, 6)}</td>
                       <td className="text-right">{fmt(r.fweight, 2)}</td>
                       <td className="text-left">{productTypeLabel(r.fproductstype)}</td>
+                      <td className="text-right">{r.fwidth != null && r.fwidth > 0 ? fmt(r.fwidth, 0) : "—"}</td>
+                      <td className="text-right">{r.flength != null && r.flength > 0 ? fmt(r.flength, 0) : "—"}</td>
+                      <td className="text-right">{r.fheight != null && r.fheight > 0 ? fmt(r.fheight, 0) : "—"}</td>
                     </tr>
                   );
                 })}
@@ -997,7 +1018,7 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                           className={isShort ? "text-amber-600 font-semibold" : ""}
                           title={isShort ? `รับเข้าไม่ครบ: ${got}/${exp} ลัง (ขาด ${exp - got})` : "จำนวนลังที่รับเข้าโกดังไทย / จำนวนที่คาดไว้"}
                         >
-                          {fmtN(r.famountfi)}/{fmtN(r.famount)}
+                          {fmtBox(r.famountfi, r.famount)}
                         </span>
                       );
                     })()}
@@ -1223,7 +1244,7 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
               {bulkMsg}
             </div>
           )}
-          <div className="pcs-fixed-actions pcs-safe-area-bottom">
+          <div className="pcs-fixed-actions admin-floating-action pcs-safe-area-bottom">
             {checkInteractive ? (
               <>
                 <button
@@ -1453,6 +1474,10 @@ function aggregateGroup(g: DetailRow[]) {
     // shipment (one container/mode) → show it ONCE on the header (was blank "—").
     // uniq keeps it null on the rare mixed-rate group (falls back to "หลายเรท").
     rate:                  uniq((r) => r.rate),
+    // owner 2026-07-18 รอบ2 — the header wears the same ค่านำเข้า tags a single row
+    // does: basis pill (ปริมาตร/น้ำหนัก · frefprice) + SELL-rate pill (frefrate).
+    frefprice:             uniq((r) => (r.frefprice ?? "").trim()),
+    frefrate:              uniq((r) => r.frefrate),
     fpriceupdate:          sum((r) => r.fpriceupdate),
     pricecrate:            sum((r) => r.pricecrate),
     ftransportpricechnthb: sum((r) => r.ftransportpricechnthb),
@@ -1499,6 +1524,12 @@ function fmt(n: number | null | undefined, digits: number): string {
 function fmtN(n: number | null | undefined): string {
   if (n === null || n === undefined) return "-";
   return String(n);
+}
+
+/** owner 2026-07-18 รอบ2 — กล่อง/ลัง display: "เดี๋ยว -/1 เดี๋ยว 0/1 ให้ใช้ 0/1 เหมือนกันหมด".
+ *  A not-yet-scanned side renders 0, never "-". */
+function fmtBox(got: number | null | undefined, exp: number | null | undefined): string {
+  return `${got ?? 0}/${exp ?? 0}`;
 }
 
 function productTypeLabel(t: string | null): string {

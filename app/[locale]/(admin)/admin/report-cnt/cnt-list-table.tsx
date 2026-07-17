@@ -798,17 +798,21 @@ export function CntListTable({
                     {/* G1 combo-flow (2026-07-08) — packing-list reconcile status (mig 0245).
                         ✓ = อัพ packing แล้ว (ยอดกล่อง/น้ำหนักยืนยันแล้ว · พร้อมออกบิล) ·
                         ⏳ = ยังไม่อัพ (ลิงก์ไปเครื่องมืออัพ). Keyed on the REAL fcabinetnumber. */}
+                    {/* owner 2026-07-18 — ย่อ tag เหลืออีโมจิเล็กๆ · ชี้ค่อยขึ้นคำอธิบาย (tooltip). */}
                     {packingByCab?.[r.fcabinetnumber] ? (
-                      <span className="mt-0.5 inline-block rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] px-1.5 py-0.5">
-                        📦 packing ✓
+                      <span
+                        className="mt-0.5 inline-block text-[13px] cursor-default"
+                        title="อัพ packing list แล้ว — ยอดกล่อง/น้ำหนักยืนยันแล้ว"
+                      >
+                        📦
                       </span>
                     ) : (
                       <Link
                         href="/admin/api-forwarder-momo/packing-upload"
-                        className="mt-0.5 inline-block rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[11px] px-1.5 py-0.5 hover:bg-amber-100"
-                        title="ตู้นี้ยังไม่อัพ packing list — คลิกเพื่ออัพ"
+                        className="mt-0.5 inline-block text-[13px]"
+                        title="ตู้นี้ยังไม่อัพ packing list — คลิกเพื่อไปอัพ (ไม่บล็อคการวางบิล)"
                       >
-                        ⏳ ยังไม่อัพ packing
+                        ⏳
                       </Link>
                     )}
                   </td>
@@ -942,10 +946,12 @@ export function CntListTable({
       {/* Floating action bar — PORTALLED to <body> so `position: fixed` anchors to the
           VIEWPORT and stays put on scroll (owner 2026-07-16 "ต้องคาอยู่ที่เดิม ไม่ใช่เลื่อน
           ลงล่างสุดถึงเจอ"). Without the portal a transformed admin-shell ancestor becomes
-          the containing block → the bar scrolls to the page bottom. Bottom-LEFT like legacy
-          .pcs-fixed-actions (left-20 on lg clears the 64px sidebar rail). */}
+          the containing block → the bar scrolls to the page bottom. Bottom-LEFT · left =
+          .admin-floating-action (globals.css · 2026-07-18) so it tracks EVERY sidebar state
+          (pinned-open 16rem / rail 4rem / rail-hover) — a hardcoded left-20 was covered by
+          a pinned-open sidebar (เคส admin_aom "sidebar กางบัง"). */}
       {canSelect && mounted && createPortal(
-        <div className="pcs-safe-area-bottom fixed bottom-5 left-4 lg:left-20 flex flex-wrap items-center justify-start gap-2 z-[60] max-w-[calc(100vw-32px)]">
+        <div className="pcs-safe-area-bottom admin-floating-action fixed bottom-5 flex flex-wrap items-center justify-start gap-2 z-[60] max-w-[calc(100vw-32px)]">
           <button
             type="button"
             onClick={() => setModalOpen(true)}

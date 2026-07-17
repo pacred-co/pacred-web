@@ -372,16 +372,16 @@
 
 /* ── fixed bottom action bar ── */
 .pcs-rc .pcs-fixed-actions {
-  position: fixed; bottom: 20px; left: 20px; z-index: 40;   /* มุมซ้ายล่าง · ปอน 2026-07-15 (was bottom-center) */
+  /* left มาจาก .admin-floating-action (globals.css) — track ทุกสถานะ sidebar
+     (pinned-open 17rem / rail 5rem / rail-hover 17rem · owner 2026-07-18 "sidebar
+     กางบังปุ่ม"). ห้าม hardcode left ที่นี่อีก. */
+  position: fixed; bottom: 20px; z-index: 40;   /* มุมซ้ายล่าง · ปอน 2026-07-15 (was bottom-center) */
   display: inline-flex; align-items: center; gap: 0; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
   border-radius: 10rem;
 }
-/* Desktop (lg+) shows the 64px admin sidebar rail on the left — clear it so the
-   avatar / nav icons don't cover the bar's first button (ปอน 2026-07-15 "โดนบัง").
-   Mobile has no rail, so it stays at 20px. */
-@media (min-width: 1024px) {
-  .pcs-rc .pcs-fixed-actions { left: 80px; }
-}
+/* left ทุก breakpoint = .admin-floating-action (globals.css · 2026-07-18) —
+   track ทุกสถานะ sidebar (pinned-open/rail/rail-hover) · เลิก hardcode 80px
+   (มันถูก sidebar กางเต็ม 16rem บังในโหมด pinned-open · เคส admin_aom). */
 .pcs-rc .pcs-fixed-actions .btn { border-radius: 0; }
 .pcs-rc .pcs-fixed-actions .btn:first-child { border-top-left-radius: 10rem; border-bottom-left-radius: 10rem; }
 .pcs-rc .pcs-fixed-actions .btn:last-child { border-top-right-radius: 10rem; border-bottom-right-radius: 10rem; }

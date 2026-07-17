@@ -1479,7 +1479,11 @@ async function createBillingRunInvoiceImpl(
             .filter((c) => c !== "" && c !== "0"),
         ),
       );
-      if (cabsToCheck.length > 0 && !v.allowUnreconciledPacking) {
+      // 🔓 owner 2026-07-18: "อัพแพคกิ้งลิสก่อนวางบิล — ปลดล็อคไปก่อน เดี๋ยวบัคเยอะ" — the
+      // packing-upload gate is ADVISORY now (the 📦/⏳ badge still shows; billing is NOT
+      // blocked). Flip PACKING_GATE_ENFORCED back to true to re-lock in one place.
+      const PACKING_GATE_ENFORCED = false;
+      if (PACKING_GATE_ENFORCED && cabsToCheck.length > 0 && !v.allowUnreconciledPacking) {
         // packing-confirmed = reconcile stamp (mig 0245) OR packing-list upload (mig 0254).
         // Accept either so a container the staff DID upload never false-blocks (owner
         // 2026-07-14 "อัพแล้วยังบอกไม่อัพ"). See lib/admin/packing-confirmed-cabs.ts.

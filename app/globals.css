@@ -328,11 +328,18 @@ body {
     overflow-x: visible;
     box-shadow: 6px 0 28px rgba(0, 0, 0, 0.18);
     z-index: 1050;
+    /* 🔴 HOVER-INTENT (owner 2026-07-18 "sidebar กางออกมาบัง ไม่ยอมพับ ตอนจะติ๊ก
+       รายการ") — the rail used to expand the INSTANT the mouse clipped it on the
+       way to the left-edge checkboxes / floating bar, covering them (z-1050).
+       Expanding now needs 0.28s of sustained hover (a brush-past never opens it);
+       folding back stays instant (the base rule has no delay). */
+    transition-delay: 0.28s;
   }
   /* …and the whole page content follows it (push, not overlay) so it "ขยับตาม"
      the expanding sidebar — owner 2026-06-11. :has() = while the rail is hovered. */
   body.admin-sidebar-rail:has(.admin-sidebar:hover) .admin-content {
     margin-left: 16rem !important;
+    transition-delay: 0.28s; /* follow the sidebar's hover-intent delay (2026-07-18) */
   }
 }
 
@@ -351,7 +358,7 @@ body {
   body.admin-sidebar-rail .admin-floating-action { left: 5rem; }
   /* rail hover-expands back to 16rem → follow it (the sidebar is z-1050 and would
      otherwise sit on top of the button). */
-  body.admin-sidebar-rail:has(.admin-sidebar:hover) .admin-floating-action { left: 17rem; }
+  body.admin-sidebar-rail:has(.admin-sidebar:hover) .admin-floating-action { left: 17rem; transition-delay: 0.28s; }
 }
 
 /* ── Orange checkbox with a GUARANTEED-WHITE checkmark (owner 2026-07-16
@@ -439,15 +446,20 @@ tr.pcs-row-selected .pcs-status-icon {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
 }
 
-/* Content / panel appear fade (dropdowns · dialogs · route-switched content). */
+/* Content / panel appear fade (dropdowns · dialogs · route-switched content).
+   🔴 OPACITY-ONLY — NO transform (owner 2026-07-18 "popup ต้องเลื่อนจอหา"): the old
+   translateY(4px) keyframe + fill-mode:both kept the ROUTE-WIDE wrapper (RouteFade
+   wraps every admin page) a CONTAINING BLOCK for position:fixed descendants — so every
+   hand-rolled `fixed inset-0` modal centered against the WHOLE PAGE HEIGHT instead of
+   the viewport (user had to scroll to find the popup · same trap as the 2026-07-16
+   floating bar). Animating opacity only = no containing block = every fixed overlay
+   anchors to the viewport again, platform-wide. NEVER re-add transform here. */
 @keyframes app-fade-in {
   from {
     opacity: 0;
-    transform: translateY(4px);
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 .animate-fade-in {
