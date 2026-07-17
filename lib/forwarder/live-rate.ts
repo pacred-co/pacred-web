@@ -371,6 +371,27 @@ export async function computeAndFillForwarderImportRate(
     return { ok: false, wrote: false, reason: "not_found" };
   }
 
+  // ── 1b. ZERO-BASIS GUARD (owner 2026-07-17 · MONEY) ────────────────────────
+  // A row with no weight AND no volume has NOTHING to price against — every rate is
+  // ฿/kg or ฿/CBM, so pricing it can only ever produce ฿0. Refuse instead.
+  //
+  // WHY THIS EXISTS: a MOMO split shipment keeps its SELL freight on the bare header
+  // row while the real boxes live in its "-N/M" siblings. Reconciling the box basis onto
+  // the siblings means zeroing the header's basis — and without this guard, ANY later
+  // re-price (a sync, a dimension save, a cron pass) would recompute that header at
+  // ฿0 × rate = ฿0 and silently erase the shipment's freight (519218029029 = ฿730).
+  // That exact risk is why the self-heal refused to touch a priced bare at all
+  // (box-detail-reconcile-plan.ts `priced_anchor_bare`), which left the box counts wrong
+  // forever (owner: "13/3 บัคไหมหละครับ · ทำไมยังแก้ไม่หายสักที").
+  //
+  // With the money pinned here, the header can safely become a pure summary row.
+  // Fails CLOSED: keeps the stored price, writes nothing.
+  const basisWeight = Number(row.fweight ?? 0);
+  const basisVolume = Number(row.fvolume ?? 0);
+  if (!(basisWeight > 0) && !(basisVolume > 0)) {
+    return { ok: true, wrote: false, reason: "zero_basis_price_locked" };
+  }
+
   // ── 2. Build the PricingRowContext (exactly like adminUpdateForwarderDimensions) ──
   // MOMO has no manual rate override → customRateSwitch=false.
   // CBMProduct: legacy L1935-1941 — famountcount==1 ? fvolume : fvolume*famount.
