@@ -1,10 +1,11 @@
 /**
  * /admin/api-forwarder-momo/invoice-cost — MOMO supplier-invoice → cost ingestion.
  *
- * Paste a MOMO (ฮุย ไท่ต๋า) invoice → set tb_forwarder.fcosttotalprice from the
- * actual bill (the per-tracking "รวม (Total)" is the real cost). Gated to the
- * cost-visibility roles (ultra/accounting/pricing — NOT super) since it edits
- * money internals. Preview-before-apply; the action re-derives + writes cost only.
+ * Upload a MOMO (ฮุย ไท่ต๋า) invoice PDF — or paste its text — → set
+ * tb_forwarder.fcosttotalprice from the actual bill (the per-tracking "รวม (Total)" is
+ * the real cost). Gated to the cost-visibility roles (ultra/accounting/pricing — NOT
+ * super) since it edits money internals. Preview-before-apply; the action re-derives
+ * from the uploaded bytes / pasted text server-side and writes cost only.
  */
 
 import { notFound } from "next/navigation";
@@ -34,8 +35,8 @@ export default async function MomoInvoiceCostPage() {
         <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · MOMO · INVOICE COST</p>
         <h1 className="mt-1 text-2xl font-bold">ลงต้นทุนจากใบแจ้งหนี้ MOMO</h1>
         <p className="mt-1.5 text-sm text-muted">
-          นำใบแจ้งหนี้ที่ MOMO (ฮุย ไท่ต๋า) เรียกเก็บ Pacred มาลงเป็น <strong>ต้นทุนจริง</strong> ต่อแทรคกิ้ง
-          ในระบบ — ตรงตามบิลผู้ขาย (แม่นกว่าเรทตั้งต้น 2,500/คิว ที่บางบรรทัดต่างออกไป).
+          <strong>อัปไฟล์ PDF ใบแจ้งหนี้ที่ MOMO (ฮุย ไท่ต๋า) ส่งมาได้เลย</strong> — ระบบจะลงเป็น{" "}
+          <strong>ต้นทุนจริง</strong> ต่อแทรคกิ้ง ตรงตามบิลผู้ขาย (แม่นกว่าเรทตั้งต้น 2,500/คิว ที่บางบรรทัดต่างออกไป).
           ตรวจตัวอย่างก่อนบันทึกเสมอ · เฉพาะสิทธิ์ ultra / accounting / pricing.
         </p>
       </header>

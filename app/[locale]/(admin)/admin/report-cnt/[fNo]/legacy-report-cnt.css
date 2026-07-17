@@ -390,11 +390,21 @@
    say the same thing, softened to fit the dense legacy grid. RED now means exactly one
    thing: รอชำระเงิน — money action needed. */
 .pcs-rc .pcs-table tr[class*="pcs-row-st"] a { color: #1e5f8c; }
-.pcs-rc .pcs-table tr.pcs-row-st1 td { background: #fdf3d3; color: #5c4a00; } /* รอเข้าโกดังจีน */
-.pcs-rc .pcs-table tr.pcs-row-st2 td { background: #d9f2fa; color: #10495c; } /* ถึงโกดังจีนแล้ว */
-.pcs-rc .pcs-table tr.pcs-row-st3 td { background: #fce4ec; color: #7a2846; } /* กำลังส่งมาไทย */
-.pcs-rc .pcs-table tr.pcs-row-st4 td { background: #e6f5ec; color: #245c3d; } /* ถึงไทยแล้ว = ยิงเข้าแล้ว */
-.pcs-rc .pcs-table tr.pcs-row-st5 td { background: #f5aab0; color: #960014; } /* 🔴 รอชำระเงิน — the ONLY red */
+/* 🔴 owner 2026-07-17 (ถามตรงๆ แล้วตอบว่า): "แดงคือยังไม่ได้สแกนเข้าโกดังครับ"
+   — พี่ทัก 2 รอบว่า "กล่อง 1/1 6/6 7/7 แต่ยังเป็นสีแดงอยู่เต็มไปหมด · ยังไม่เห็นหายเลย"
+   ของเดิมทาแดงที่ '5' (รอชำระเงิน) ซึ่ง **สแกนเข้าโกดังไปแล้ว** → แดงบนแถวนั้น = โกหก
+   และทำให้ทั้งหน้าแดงเพราะตู้ที่ถึงไทยแล้วส่วนใหญ่นั่งอยู่ที่ '5'.
+
+   กฎใหม่ (ตามที่ owner เคาะ) — เส้นแบ่งเดียว = **สแกนเข้าโกดังไทยแล้วหรือยัง**:
+     ยังไม่สแกน (1 · 2 · 3) → ตระกูลแดง (อ่อน→เข้ม ตามความใกล้ถึง = ยิ่งใกล้ยิ่งต้องจับตา)
+     สแกนแล้ว  (4 ขึ้นไป)   → สีสงบ ห้ามแดง
+   ป้ายสถานะ (chip · FSTATUS_CFG) ของ '5' ยังแดงเหมือนเดิม — นั่นคือ "ป้ายบอกสถานะ" ไม่ใช่ "สัญญาณเตือนของขาด"
+   → แดงบนพื้นแถวจึงเหลือความหมายเดียว: ของยังไม่เข้าโกดัง = ต้องตามหา */
+.pcs-rc .pcs-table tr.pcs-row-st1 td { background: #fde0e3; color: #8a1220; } /* รอเข้าโกดังจีน — ยังไม่สแกน */
+.pcs-rc .pcs-table tr.pcs-row-st2 td { background: #fac6cc; color: #8f0f1e; } /* ถึงโกดังจีนแล้ว — ยังไม่สแกน */
+.pcs-rc .pcs-table tr.pcs-row-st3 td { background: #f5aab0; color: #960014; } /* กำลังส่งมาไทย — ยังไม่สแกน (ใกล้สุด = แดงเต็ม) */
+.pcs-rc .pcs-table tr.pcs-row-st4 td { background: #e6f5ec; color: #245c3d; } /* ถึงไทยแล้ว = สแกนเข้าโกดังแล้ว ✓ */
+.pcs-rc .pcs-table tr.pcs-row-st5 td { background: #ffe8cc; color: #7a4a00; } /* รอชำระเงิน — สแกนแล้ว → ไม่แดง (ส้ม = รอเก็บเงิน) */
 .pcs-rc .pcs-table tr.pcs-row-st6 td { background: #dfe6fb; color: #1f2f6b; } /* เตรียมส่ง */
 .pcs-rc .pcs-table tr.pcs-row-st7 td,
 .pcs-rc .pcs-table tr.pcs-row-st8 td { background: #d8f3e3; color: #14512f; } /* ส่งแล้ว */

@@ -782,8 +782,14 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                 // rows sitting at '3' a freshly-closed container reads as a wall of red. Red
                 // that means "everything" means nothing, so staff stopped trusting it.
                 // Now the row wears its STATUS, from the same SOT the /admin/forwarders list
-                // uses (FSTATUS_CFG): each stage is its own colour, and RED is reserved for
-                // the one row-state that actually needs money action (5 · รอชำระเงิน).
+                // uses (FSTATUS_CFG): each stage is its own colour.
+                // 🔴 owner 2026-07-17 (เคาะแล้ว · ถามตรงๆ): "แดงคือยังไม่ได้สแกนเข้าโกดังครับ"
+                // — พี่ทัก 2 รอบ "กล่อง 1/1 6/6 7/7 แต่ยังแดงเต็มไปหมด · ยังไม่เห็นหายเลย".
+                // เดิมแดงจองไว้ให้ '5' (รอชำระเงิน) — แต่แถวนั้น**สแกนเข้าโกดังไปแล้ว** → แดง = โกหก
+                // (และตู้ที่ถึงไทยส่วนใหญ่นั่งที่ '5' → ทั้งหน้าแดงอีกรอบ).
+                // เส้นแบ่งเดียวตอนนี้ = สแกนเข้าโกดังไทยแล้วหรือยัง: ยังไม่สแกน (1/2/3) = ตระกูลแดง ·
+                // สแกนแล้ว (4+) = สีสงบ. สีอยู่ใน legacy-report-cnt.css (.pcs-row-st*) — แก้ที่นั่นที่เดียว.
+                // ป้ายสถานะ (chip) ของ '5' ยังแดงตาม FSTATUS_CFG = ป้ายบอกสถานะ ไม่ใช่สัญญาณของขาด.
                 const rowCls = selected.has(r.id)
                   ? "pcs-row-selected"
                   : r.inCheckQueue
