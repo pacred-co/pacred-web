@@ -20,6 +20,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeBillWht } from "@/lib/billing/wht";
+import { isCreditRow } from "@/lib/forwarder/credit-advance-guard";
 import { sumNamedFees, type ForwarderFeeFields } from "@/lib/forwarder/fee-breakdown";
 
 // ── Public document shape (moved here from actions/admin/billing-run.ts so the
@@ -39,6 +40,13 @@ export type BillingRunInvoiceDetail = {
     is_juristic: boolean;
     date_issued: string;
     date_due: string;
+    /**
+     * ลูกค้ารายนี้ซื้อแบบ **เครดิต** ไหม (มีแถวไหนในบิลที่ `fcredit` ถูกตั้ง · SOT `isCreditRow`).
+     * 🔴 owner 2026-07-17 (ด่วน · บิล 122/PR134): "ลูกค้าเป็นเงินสดหรือเครดิต **ลิงค์กันด้วยสิ**
+     * ลูกค้าเครดิตเรามีนิดเดียวเอง" → ใช้ตัดสินว่าโชว์ "ครบกำหนดชำระ" บนบิลไหม
+     * (เงินสด = **ไม่โชว์เลย**). `date_due` ยังอยู่ใน DB เหมือนเดิม = display gate ล้วน ไม่แตะเงิน
+     */
+    is_credit: boolean;
     subtotal_thb: number;
     delivery_chn_thb: number;
     delivery_th_thb: number;
@@ -142,6 +150,13 @@ type HeaderRaw = {
   is_juristic: boolean;
   date_issued: string;
   date_due: string;
+  /**
+   * ลูกค้ารายนี้ซื้อแบบ **เครดิต** ไหม (= มีแถวไหนในบิลที่ `fcredit` ถูกตั้ง · SOT `isCreditRow`).
+   * 🔴 owner 2026-07-17 (ด่วน): "ลูกค้าเป็นเงินสดหรือเครดิต **ลิงค์กันด้วยสิ** · เครดิตเรามีนิดเดียวเอง"
+   * ใช้ตัดสินว่าจะโชว์ "ครบกำหนดชำระ" บนบิลไหม — **เงินสด = ไม่โชว์เลย** (ดู billing-run-paper.tsx)
+   * `date_due` ยังเก็บใน DB เหมือนเดิม (ไม่ลบข้อมูล · ไม่แตะเงิน) — นี่คือ **display gate** ล้วน
+   */
+  is_credit: boolean;
   subtotal_thb: number | string;
   delivery_chn_thb: number | string;
   delivery_th_thb: number | string;
@@ -185,6 +200,8 @@ type FwdHydRow = {
   ftransporttype: string | null;
   frefprice: string | null;
   frefrate: number | string | null;
+  /** '1' = ติดเครดิต (ยังไม่จ่าย · มีเทอม) · '0'/'' = เงินสด — SOT `isCreditRow` */
+  fcredit: string | null;
   // Price columns — for the named-fee split (owner 2026-07-07). calcForwarderGross
   // reads exactly these; the paper re-presents the SAME gross with correct labels.
   ftotalprice: number | string | null;
@@ -245,7 +262,7 @@ export async function loadBillingRunDocument(
       .from("tb_forwarder")
       .select(
         "id, ftrackingchn, famount, fweight, fvolume, fdate, fstatus, fcabinetnumber, " +
-          "ftransporttype, frefprice, frefrate, " +
+          "ftransporttype, frefprice, frefrate, fcredit, " +
           // price columns for the named-fee split (owner 2026-07-07)
           "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
           "pricecrate, ftransportpricechnthb, priceother, fdiscount",
@@ -284,6 +301,12 @@ export async function loadBillingRunDocument(
       is_juristic:        hdrRaw.is_juristic,
       date_issued:        hdrRaw.date_issued,
       date_due:           hdrRaw.date_due,
+      // 🔴 owner 2026-07-17 (ด่วน · บิล 122/PR134): "ลูกค้าเป็นเงินสดหรือเครดิต ลิงค์กันด้วยสิ".
+      // เครดิต = มีแถวไหนในบิลที่ fcredit ถูกตั้ง (SOT isCreditRow · ไม่ใช่แค่ === '1' —
+      // legacy เก็บ '0'/''/null ปนกัน). ไม่มีแถว hydrate มา → ถือว่า **เงินสด** (fail-safe:
+      // เงินสดคือค่าปกติ · prod 2026-07-17 มีลูกค้าเครดิต 0 ราย · เดาว่าเครดิตแล้วโชว์วันครบกำหนด
+      // = บอกลูกค้าว่า "ค่อยจ่ายก็ได้" = ชะลอเก็บเงินเอง อันตรายกว่า)
+      is_credit:          [...fwdByID.values()].some((f) => isCreditRow(f.fcredit)),
       subtotal_thb:       Number(hdrRaw.subtotal_thb),
       delivery_chn_thb:   Number(hdrRaw.delivery_chn_thb),
       delivery_th_thb:    Number(hdrRaw.delivery_th_thb),

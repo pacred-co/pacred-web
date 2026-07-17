@@ -275,7 +275,7 @@ async function main() {
   hr("4) P22324 (PR075) — สถานะ '5' แต่กฎ 3 ขั้นว่าอะไร? มีแทรคผูกไหม?");
 
   const { rows: p22324 } = await client.query(`
-    SELECT hno, userid, hstatus, htotalpriceuser, hdatecreate
+    SELECT hno, userid, hstatus, htotalpriceuser, hdateupdate
     FROM tb_header_order WHERE hno = 'P22324'
   `);
   if (!p22324.length) {
@@ -283,7 +283,7 @@ async function main() {
   } else {
     const h = p22324[0];
     console.log(
-      `P22324 · ${h.userid} · hstatus='${h.hstatus}' · ยอด ฿${baht(h.htotalpriceuser)} · สร้าง ${h.hdatecreate}`,
+      `P22324 · ${h.userid} · hstatus='${h.hstatus}' · ยอด ฿${baht(h.htotalpriceuser)} · อัพเดต ${h.hdateupdate}`,
     );
 
     // ทาง 1: reforder
@@ -408,25 +408,121 @@ async function main() {
 
   // 5.4 บิล/ใบเสร็จ ไม่ sync สถานะ
   sub("5.4 ใบวางบิล paid แล้ว แต่ forwarder ยังไม่ถึง '6'");
-  const { rows: billDrift } = await client.query(`
-    SELECT i.id AS invoice_id, i.invoice_no, i.status, i.paid_at,
-           f.id AS fwd_id, f.fstatus, f.ftrackingchn, f.userid, f.ftotalprice
-    FROM tb_forwarder_invoice i
-    JOIN tb_forwarder_invoice_item it ON it.invoice_id = i.id
-    JOIN tb_forwarder f ON f.id = it.forwarder_id
-    WHERE i.status = 'paid' AND f.fstatus IN ('4','5')
-    ORDER BY i.id
-  `).catch((e) => {
-    console.log(`  ⚠️ query ไม่ผ่าน (คอลัมน์ไม่ตรง): ${e.message}`);
-    return { rows: [] };
-  });
+  const { rows: billDrift } = await client
+    .query(`
+      SELECT i.id AS invoice_id, i.doc_no, i.status, i.paid_at,
+             f.id AS fwd_id, f.fstatus, f.ftrackingchn, f.userid, f.ftotalprice
+      FROM tb_forwarder_invoice i
+      JOIN tb_forwarder_invoice_item it ON it.invoice_id = i.id
+      JOIN tb_forwarder f ON f.id = it.forwarder_id
+      WHERE i.status = 'paid' AND f.fstatus IN ('4','5')
+      ORDER BY i.id
+    `)
+    .catch((e) => {
+      console.log(`  ⚠️ query ไม่ผ่าน: ${e.message}`);
+      return { rows: [] };
+    });
   console.log(`พบ ${billDrift.length} แถว (บิลจ่ายแล้ว แต่แถวยังค้าง 4/5)`);
   for (const b of billDrift.slice(0, 15)) {
     console.log(
-      `  บิล ${b.invoice_no} (paid ${b.paid_at}) → fid ${b.fwd_id} st=${b.fstatus} · ` +
+      `  บิล ${b.doc_no} (paid ${b.paid_at}) → fid ${b.fwd_id} st=${b.fstatus} · ` +
         `${b.ftrackingchn} · ${b.userid} · ฿${baht(b.ftotalprice)}`,
     );
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // 5.7 🔴 ของใหม่ที่เจอ session นี้ — ฝากสั่งซื้อ "จุดบอดกล่องแตก"
+  // ═══════════════════════════════════════════════════════════════════════
+  sub("5.7 🔴 ฝากสั่งซื้อ · จุดบอด MOMO แตกกล่อง (ตัวเชื่อมขาด)");
+  console.log(
+    `ต้นตอ: tb_order เก็บแทรค **เปล่า** ("999061141707") · MOMO แตกกล่องแล้ว tb_forwarder\n` +
+      `เก็บเป็น **-N/M** ("999061141707-1/3") → ตัวจับคู่ทั้ง 2 ฝั่งใช้ **exact match**:\n` +
+      `  · TS : lib/admin/shop-order-arrivals.ts:92  .in("ftrackingchn", trackings)\n` +
+      `  · SQL: 0259_shop_status_one_rule_both_sides.sql L81/89/185  btrim(f.ftrackingchn) = rs.trk\n` +
+      `→ หากันไม่เจอ → กฎเห็น "ยังไม่มีของถึง" → ค้าง '4' ตลอด\n` +
+      `(= carryover ที่ CLAUDE.md เขียนไว้ "box-split arrival-scan miss" · ยืนยัน file:line + วงกระทบแล้ว)`,
+  );
+
+  const { rows: shopOrd } = await client.query(`
+    SELECT DISTINCT o.hno, h.hstatus, h.userid, h.htotalpriceuser,
+           o.id AS row_id, o.cnameshop, o.ctitle, TRIM(o.ctrackingnumber) AS tr
+    FROM tb_order o JOIN tb_header_order h ON h.hno = o.hno
+  `);
+  const realRows = shopOrd.filter(
+    (r) => (r.cnameshop ?? "").trim() || (r.ctitle ?? "").trim() || (r.tr ?? "").trim(),
+  );
+  const allTracks = [...new Set(realRows.map((r) => r.tr).filter(Boolean))];
+  const { rows: fwMatch } = allTracks.length
+    ? await client.query(
+        `SELECT id, TRIM(ftrackingchn) AS t, fstatus, fcabinetnumber
+         FROM tb_forwarder
+         WHERE TRIM(ftrackingchn) = ANY($1::text[])
+            OR regexp_replace(TRIM(ftrackingchn),'-[0-9]+(/[0-9]+)?$','') = ANY($1::text[])`,
+        [allTracks],
+      )
+    : { rows: [] };
+
+  const ARRIVED = new Set(["2", "3", "4", "5", "6", "7"]);
+  const DONE = new Set(["4", "5", "6", "7"]);
+  const matchFor = (tr, exactOnly) =>
+    fwMatch.filter((x) =>
+      exactOnly ? x.t === tr : x.t === tr || x.t.replace(/-\d+(?:\/\d+)?$/, "") === tr,
+    );
+  const derive = (rows, exactOnly) => {
+    if (!rows.length) return "4";
+    const per = rows.map((r) => {
+      const m = matchFor(r.tr, exactOnly);
+      if (!r.tr || !m.length) return { arrived: false, done: false };
+      return {
+        arrived: m.every((x) => ARRIVED.has(String(x.fstatus ?? "").trim())),
+        done: m.every(
+          (x) => (x.fcabinetnumber ?? "").trim() !== "" || DONE.has(String(x.fstatus ?? "").trim()),
+        ),
+      };
+    });
+    if (per.every((p) => p.done)) return "5";
+    if (per.every((p) => p.arrived)) return "40";
+    return "4";
+  };
+
+  const byHno = new Map();
+  for (const r of realRows) {
+    if (!byHno.has(r.hno)) byHno.set(r.hno, []);
+    byHno.get(r.hno).push(r);
+  }
+  const stuck = [];
+  const blindOnly = [];
+  for (const [hno, rows] of byHno) {
+    const h = rows[0];
+    const blind = derive(rows, true);
+    const aware = derive(rows, false);
+    if (blind === aware) continue; // ตัวจับคู่ไม่ได้ทำให้ต่าง → ไม่เกี่ยว
+    const cur = String(h.hstatus ?? "").trim();
+    const governed = ["3", "4", "40"].includes(cur);
+    const rec = { hno, userid: h.userid, cur, blind, aware, governed, thb: num(h.htotalpriceuser) };
+    if (aware !== cur && governed) stuck.push(rec);
+    else blindOnly.push(rec);
+  }
+  console.log(`\nออเดอร์ที่ตัวจับคู่ exact ให้ผลต่างจาก sibling-aware = ${stuck.length + blindOnly.length}`);
+  for (const r of [...stuck, ...blindOnly]) {
+    const verdict =
+      r.aware === r.cur
+        ? r.governed
+          ? "🟢 ตรง"
+          : "🟢 ตรง (guard กันไว้ · trigger ไม่แตะ '5'/'6')"
+        : `🔴 ค้าง → ควรเป็น '${r.aware}'`;
+    console.log(
+      `  ${r.hno} · ${r.userid} · เก็บ '${r.cur}' · blind='${r.blind}' · aware='${r.aware}' · ` +
+        `฿${baht(r.thb)} ${verdict}`,
+    );
+  }
+  console.log(
+    `\n👉 ค้างจริง (ต้องแก้) = ${stuck.length} ออเดอร์ · ฿${baht(stuck.reduce((s, r) => s + r.thb, 0))}`,
+  );
+  console.log(
+    `   ที่เหลือ = กฎให้ผลเท่าเดิมอยู่ดี (มีร้านอื่นยังไม่ส่ง) หรือ guard กันไว้ → **ยังไม่ต้องแตะ**\n` +
+      `   ⚠️ แต่จุดบอดยังอยู่ → พอร้านที่เหลือส่งของ จะโผล่เพิ่มเรื่อยๆ`,
+  );
 
   // 5.5 ตู้ที่ยังไม่มีต้นทุนเลย (re-measure A1)
   sub("5.5 ตู้ที่ยังไม่ตั้งต้นทุน (re-measure ยอด A1 วันนี้)");

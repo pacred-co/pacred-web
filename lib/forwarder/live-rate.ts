@@ -37,6 +37,8 @@ import {
 import { GENERAL_COID } from "@/lib/forwarder/coid";
 import { isDocTierEligible, getDocTierDiscountCbm } from "@/lib/forwarder/doc-tier-discount";
 import { transportModeFromCabinetName, resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
+import { evaluateBasisDrift, type MomoBoxRow } from "@/lib/forwarder/basis-drift-guard";
+import { baseOf } from "@/lib/integrations/momo-web/box-detail-reconcile-plan";
 
 // ────────────────────────────────────────────────────────────
 // numeric coercion (legacy stores some price/measure cols as varchar).
@@ -390,6 +392,64 @@ export async function computeAndFillForwarderImportRate(
   const basisVolume = Number(row.fvolume ?? 0);
   if (!(basisWeight > 0) && !(basisVolume > 0)) {
     return { ok: true, wrote: false, reason: "zero_basis_price_locked" };
+  }
+
+  // ── 1c. BASIS-DRIFT GUARD (owner 2026-07-17 · MONEY) ───────────────────────
+  // The zero-basis guard above only catches a basis of ZERO. Prod also carries rows whose
+  // stored basis is a MULTIPLE of the momo_box_detail truth (usually ×2 — verified prod
+  // GZS260618-1/PR002 · 15 แถว) while ftotalprice was computed on the TRUE basis. Those
+  // price correctly today, so a re-price here would silently DOUBLE them
+  // (#52082 · 1781309805 · ฿3,350 → ฿6,700). ×2 is not 0 → it sails through 1b.
+  //
+  // Refuse to price a basis that provably disagrees with MOMO. FAIL-SAFE: no momo box /
+  // undecidable / under the noise floor → PASS (blocking those would freeze the 102 prod
+  // rows that carry no momo_box_detail at all). The DECISION is pure + unit-tested in
+  // lib/forwarder/basis-drift-guard.ts; this block only fetches the evidence.
+  const trackingForBox = String(row.ftrackingchn ?? "").trim();
+  const baseForBox = baseOf(trackingForBox);
+  if (baseForBox) {
+    // ONE query by base_tracking serves BOTH legitimate readings the guard accepts:
+    // the row's own box (split model) AND the Σ of the base (rollup model — what the staff
+    // box editor writes right before it calls this function). Reading only the exact box
+    // would make this guard block that repair.
+    const { data: boxRows, error: boxErr } = await admin
+      .from("momo_box_detail")
+      .select("box_tracking, width, length, height, weight_kg, cbm, quantity")
+      .eq("base_tracking", baseForBox);
+    if (boxErr) {
+      // A transient read must NOT freeze pricing platform-wide (the guard's whole point is
+      // that over-blocking is worse than no guard) → log loudly and let it through, exactly
+      // like the tb_users comparison read below. The exposure is bounded: the drifted set is
+      // 30 known already-billed rows, none of which the routine flow re-prices.
+      console.error(`[computeAndFillForwarderImportRate: momo_box_detail read] failed`, {
+        code: boxErr.code, message: boxErr.message, fid, base: baseForBox,
+      });
+    } else if (boxRows && boxRows.length > 0) {
+      const baseBoxes: MomoBoxRow[] = boxRows.map((b) => ({
+        boxTracking: String(b.box_tracking ?? ""),
+        width: b.width, length: b.length, height: b.height,
+        weightKg: b.weight_kg, cbm: b.cbm, quantity: b.quantity,
+      }));
+      // Compare the RAW stored fvolume — the famountcount/cbmProduct derivation below is a
+      // PRICING step, not part of "does our basis match MOMO".
+      const drift = evaluateBasisDrift({
+        storedWeightKg: basisWeight,
+        storedCbm: basisVolume,
+        ownBoxTracking: trackingForBox,
+        baseBoxes,
+      });
+      if (drift.blocked) {
+        console.error(`[computeAndFillForwarderImportRate] REFUSED — basis drifted from momo_box_detail`, {
+          fid, tracking: trackingForBox, detail: drift.detail,
+        });
+        // Fails CLOSED on a PROVEN drift: keeps the stored price, writes nothing.
+        return {
+          ok: true,
+          wrote: false,
+          reason: drift.message ?? "basis_drift_price_locked",
+        };
+      }
+    }
   }
 
   // ── 2. Build the PricingRowContext (exactly like adminUpdateForwarderDimensions) ──

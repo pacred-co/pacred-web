@@ -68,7 +68,18 @@ export type BillingRunCommonProps = {
   docNo:         string;
   issuerAddress: string;
   dateIssued:    string;
-  dateDue:       string;
+  /**
+   * ครบกำหนดชำระ = **เทอมเครดิตเท่านั้น**.
+   * 🔴 owner 2026-07-17 (ด่วน · ลูกค้ารอจ่ายเงิน · บิล 122 PR134): "งานนี้ลูกค้าเป็นเงินสด
+   * ไม่ต้องใส่ครบกำหนดชำระ **เอาหัวข้อออกไปเลย** · ลูกค้าเป็นเงินสดหรือเครดิต **ลิงค์กันด้วยสิ**
+   * ลูกค้าเครดิตเรามีนิดเดียวเอง"
+   * ลูกค้าเงินสด = จ่ายก่อนรับของ → "ครบกำหนดชำระ" ไม่มีความหมาย และทำให้ลูกค้าเข้าใจว่า
+   * "ค่อยจ่ายวันนั้นก็ได้" = ชะลอการเก็บเงินเอง.
+   * prod 2026-07-17: `tb_credit` = **0 แถวทั้งระบบ** แต่ใบวางบิล **122/122 ใบใส่วันครบกำหนดไว้หมด**
+   * → เดิมใส่มาโดยไม่เคยเช็คว่าลูกค้าเป็นเครดิตไหม.
+   * **null / "" = ลูกค้าเงินสด → ซ่อนทั้ง "ครบกำหนดชำระ" (meta) และ "กรุณาชำระภายใน" (ท้ายบิล)**
+   */
+  dateDue:       string | null;
   buyerName:     string;
   buyerTaxId:    string;
   buyerAddress:  string;
@@ -125,6 +136,8 @@ function BillingRunPage({
   const tintBg     = isOriginal ? "rgba(255,163,10,0.165)" : "rgba(95,93,90,0.165)";
   const showWht    = p.whtAmount > 0;
   const isLast     = pageNumber === pageCount;
+  /** เครดิตเท่านั้นถึงมีวันครบกำหนด — เงินสดส่ง null/"" มา → ซ่อนทุกที่ที่พูดถึงวันครบกำหนด */
+  const hasDueDate = String(p.dateDue ?? "").trim() !== "";
 
   // ── Named fee lines (owner 2026-07-07 · money-accounting rule) ──
   // Each per-row Σ is merged with the matching admin-typed header adjustment and
@@ -208,7 +221,8 @@ function BillingRunPage({
             <div style={{ background: tintBg, borderRadius: "2px", minWidth: "55mm" }}>
               <MetaLine k="เลขที่เอกสาร :" v={p.docNo} />
               <MetaLine k="วันที่ออก :" v={p.dateIssued} />
-              <MetaLine k="ครบกำหนดชำระ :" v={p.dateDue} strong />
+              {/* เครดิตเท่านั้น — เงินสด (dateDue ว่าง) เอาหัวข้อออกทั้งบรรทัด (owner 2026-07-17) */}
+              {hasDueDate && <MetaLine k="ครบกำหนดชำระ :" v={p.dateDue as string} strong />}
               {/* หน้า X/N — only when the bill spans >1 page (mirrors the ใบเสร็จ
                   meta-box). Lives here so it appears on EVERY page. */}
               {pageCount > 1 && <MetaLine k="หน้า :" v={`${pageNumber}/${pageCount}`} />}
@@ -351,10 +365,13 @@ function BillingRunPage({
                       column (big gap). Cap the width + push right so each row reads
                       as a tight "label : value" pair aligned under the สรุป amounts. */}
                   <div style={{ width: "62mm", marginLeft: "auto" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "4mm", marginBottom: "1px" }}>
-                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>กรุณาชำระภายใน :</p>
-                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#b45309" }}>{p.dateDue}</p>
-                    </div>
+                    {/* เครดิตเท่านั้น — เงินสดไม่มี "กรุณาชำระภายใน" (owner 2026-07-17 · ด่วน) */}
+                    {hasDueDate && (
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: "4mm", marginBottom: "1px" }}>
+                        <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>กรุณาชำระภายใน :</p>
+                        <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#b45309" }}>{p.dateDue}</p>
+                      </div>
+                    )}
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "4mm" }}>
                       <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>ยอดที่ต้องชำระ :</p>
                       <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#111827" }}>{fmt2(p.netPayable)} บาท</p>

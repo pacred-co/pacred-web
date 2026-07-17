@@ -89,6 +89,15 @@ type Props = {
    * Drives the "📦 packing" badge so staff see which containers are ready to bill.
    */
   packingByCab?: Record<string, boolean>;
+  /**
+   * เลขตู้ที่ให้ติ๊กไว้ตั้งแต่เปิดหน้า — ส่งมาจาก `?cabinet=A,B` ของหน้า "ลงต้นทุนจากใบแจ้งหนี้
+   * MOMO" (owner 2026-07-17: อัพ PDF → ตรวจให้ตรง → ตัดจ่ายได้เลย). เดิมลิงก์พามาเฉยๆ แล้ว
+   * บัญชีต้องไล่หาตู้เองใน 44 ตู้. ติ๊กเท่านั้น — ไม่กรองรายการ ไม่แตะเงิน · ตู้ที่จ่ายแล้ว
+   * ติ๊กไม่ติดอยู่แล้ว (selectableRows = !isPaid).
+   */
+  preselectCabinets?: string[];
+  /** เลขที่ใบแจ้งหนี้ MOMO ที่พามา — โชว์ให้รู้ว่ากำลังจ่ายรอบไหน (§0g). */
+  fromInvoice?: string | null;
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -290,6 +299,8 @@ export function CntListTable({
   momoInfoByCab,
   tracksByCab,
   packingByCab,
+  preselectCabinets,
+  fromInvoice,
 }: Props) {
   // Checkboxes available on BOTH tabs (waiting + succeed) for money-tier
   // roles, hidden per-row for already-paid containers. Matches legacy
@@ -301,7 +312,9 @@ export function CntListTable({
   // (showMoney) + 2 status cols.
   const colCount = (canSelect ? 1 : 0) + 14 + (showMoney ? 3 : 0) + 2;
 
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  // ติ๊กตู้ที่ส่งมาจากใบแจ้งหนี้ MOMO ไว้ให้ตั้งแต่เปิดหน้า (ถ้าไม่มี = เซ็ตว่างเหมือนเดิม).
+  // seed ตอน mount เท่านั้น — หลังจากนั้นเป็นของผู้ใช้ (ติ๊ก/เอาออกได้ตามปกติ).
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(preselectCabinets ?? []));
   const [modalOpen, setModalOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("fdatecontainerclose");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -491,6 +504,28 @@ export function CntListTable({
     }
   }
 
+  /**
+   * ผลของการติ๊กให้ล่วงหน้าจากใบแจ้งหนี้ MOMO — ต้องรายงานตามจริง (§0f "อย่ามั่ว"):
+   * ตู้ที่ส่งมาอาจ (ก) อยู่คนละแท็บ/นอกช่วงวันที่ (ข) จ่ายไปแล้ว → ติ๊กไม่ติด. ถ้าไม่บอก
+   * บัญชีจะนึกว่าติ๊กครบแล้วกด แล้วจ่ายขาดตู้. เทียบกับ `rows` (ทั้งแท็บ) ไม่ใช่ filteredRows
+   * เพื่อไม่ให้กล่องค้นหาทำให้ตัวเลขเพี้ยน.
+   */
+  const preselectInfo = useMemo(() => {
+    const want = preselectCabinets ?? [];
+    if (want.length === 0) return null;
+    const byCab = new Map(rows.map((r) => [r.fcabinetnumber, r]));
+    const ticked: string[] = [];
+    const paid: string[] = [];
+    const missing: string[] = [];
+    for (const cab of want) {
+      const r = byCab.get(cab);
+      if (!r) missing.push(cab);
+      else if (r.isPaid) paid.push(cab);
+      else ticked.push(cab);
+    }
+    return { want, ticked, paid, missing };
+  }, [preselectCabinets, rows]);
+
   const selectedSummaries: SelectedSummary[] = useMemo(
     () =>
       selectableRows
@@ -506,6 +541,35 @@ export function CntListTable({
 
   return (
     <>
+      {/* มาจากหน้า "ลงต้นทุนจากใบแจ้งหนี้ MOMO" → บอกว่าติ๊กอะไรให้ไปแล้ว + อะไรที่ติ๊กไม่ได้ */}
+      {preselectInfo && (
+        <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] text-emerald-900">
+          <p className="font-semibold">
+            📄 มาจากใบแจ้งหนี้ MOMO{fromInvoice ? ` ${fromInvoice}` : ""} — ติ๊กให้แล้ว {preselectInfo.ticked.length} ตู้
+          </p>
+          {preselectInfo.ticked.length > 0 && (
+            <p className="mt-0.5 font-mono text-[12px]">{preselectInfo.ticked.join(" · ")}</p>
+          )}
+          <p className="mt-1 text-[12px]">
+            ตรวจยอดให้ตรงกับใบก่อนกด <strong>“ทำรายการจ่ายเงินตู้”</strong> — ระบบเติมยอดให้จาก
+            <strong>ต้นทุนที่ลงไว้ในระบบ</strong> ซึ่งอาจไม่เท่ากับที่ใบเรียกเก็บรอบนี้ ถ้า MOMO ยังบิลตู้นี้ไม่ครบ
+          </p>
+          {preselectInfo.paid.length > 0 && (
+            <p className="mt-1 text-[12px] text-orange-800">
+              ⏸ ติ๊กไม่ได้ {preselectInfo.paid.length} ตู้ (จ่ายค่าตู้ไปแล้ว):{" "}
+              <span className="font-mono">{preselectInfo.paid.join(" · ")}</span>
+            </p>
+          )}
+          {preselectInfo.missing.length > 0 && (
+            <p className="mt-1 text-[12px] text-red-800">
+              🔴 ไม่พบในหน้านี้ {preselectInfo.missing.length} ตู้:{" "}
+              <span className="font-mono">{preselectInfo.missing.join(" · ")}</span> — อาจอยู่คนละแท็บ
+              (รอเข้าโกดังไทย / เข้าโกดังไทยแล้ว) หรือนอกช่วงวันที่ที่เลือกอยู่ · ลองสลับแท็บหรือขยายช่วงวันที่
+            </p>
+          )}
+        </div>
+      )}
+
       {/* ค้นหา เลขตู้ / แทรคกิง (ภูม 2026-06-23) — instant filter, ไม่ต้องเลื่อนหา */}
       <div className="mb-3 flex items-center gap-2">
         <div className="relative w-full max-w-md">

@@ -71,6 +71,12 @@ type SP = {
   actionPay?: string;     // 'all' (default) | '1' (ยังไม่จ่าย) | '2' (จ่ายแล้ว)
   date?: string;          // 'YYYY-MM-DD-YYYY-MM-DD' (for succeed page)
   historyTable?: string;  // present when user submits date range form
+  /** CSV ของเลขตู้ที่จะติ๊กให้ล่วงหน้า — มาจากหน้า "ลงต้นทุนจากใบแจ้งหนี้ MOMO"
+   *  (แพทเทิร์นเดียวกับ billing-run/add?cabinet= · customs-doc?cabinet=).
+   *  prod verified 2026-07-17: ไม่มีเลขตู้ไหนมี comma/space → CSV ปลอดภัย. */
+  cabinet?: string;
+  /** เลขที่ใบแจ้งหนี้ MOMO ที่พามา — โชว์เป็น context ว่ากำลังจ่ายรอบไหน. */
+  invoice?: string;
 };
 
 // Legacy nameWarehouse() — fWarehouseName int → display name
@@ -185,6 +191,13 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
   const isWaiting = !sp.page || sp.page === "waiting";
   const transportType = sp.transportType ?? "all";
   const actionPay = sp.actionPay ?? "all";
+  // ?cabinet=A,B → ติ๊กตู้ให้ล่วงหน้า (มาจากหน้าลงต้นทุนใบแจ้งหนี้ MOMO). display-only:
+  // แค่ seed การติ๊ก — ไม่กรองรายการ ไม่แตะเงิน · ตู้ที่จ่ายแล้วจะถูก <CntListTable> ตัดออกเอง
+  // (selectableRows filter !isPaid) → พาไปติ๊กตู้ที่จ่ายแล้วไม่ได้.
+  const preselectCabinets = (sp.cabinet ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   // Money-column visibility (owner · mig 0189: super loses money internals).
   // Cost/price/profit are visible ONLY to ultra/accounting/pricing — super, ops
@@ -590,6 +603,8 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
             momoInfoByCab={momoInfoByCab}
             tracksByCab={tracksByCab}
             packingByCab={packingByCab}
+            preselectCabinets={preselectCabinets}
+            fromInvoice={sp.invoice ?? null}
           />
         )}
         {/* The fixed-bottom action bar ("ทำรายการจ่ายเงินตู้" + billing entries) is

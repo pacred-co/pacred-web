@@ -1,12 +1,13 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { useRouter } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import {
   previewMomoInvoiceCost,
   applyMomoInvoiceCost,
   type MomoIngestPreview,
   type MomoIngestPreviewRow,
+  type MomoInvoiceCabinetRollup,
 } from "@/actions/admin/momo-invoice-ingest";
 
 const baht = (n: number | null) =>
@@ -38,6 +39,149 @@ const CBM_BASIS_LABEL: Record<string, string> = {
   line_total: "คิว = ยอดรวมทั้งบรรทัด (ต้นทุน = คิว × เรท · จำนวนกล่องไม่ใช่ตัวคูณ)",
   per_box: "คิว = ต่อกล่อง (ต้นทุน = คิว × เรท × จำนวนกล่อง)",
 };
+
+/**
+ * สรุป "ต่อตู้" + สะพานไปตัดจ่ายค่าตู้ — owner: "MOMO วางบิลเรามาเป็น Tracking ครับ แต่เรา
+ * คิดเป็นตู้ ไปตรวจให้ตรงกันนะครับ" แล้ว "ทำตัดจ่ายต้นทุนตู้ในระบบเราได้เลย".
+ *
+ * ตารางข้างล่างเป็นราย-แทรคกิ้ง (grain ของใบ) แต่การจ่ายเกิดที่ **ตู้** — ก่อนหน้านี้บัญชี
+ * ต้องบวกเองว่าตู้นี้ใบเรียกเก็บเท่าไร แล้วไปไล่หาตู้เองใน 44 ตู้ที่หน้าจ่าย.
+ */
+/**
+ * ลิงก์ไปหน้าตัดจ่าย พร้อมติ๊กตู้ให้.
+ * 🔴 ต้องส่ง `page` ให้ถูกแท็บ — หน้ารายงานตู้แยก waiting (ยังไม่ถึงไทย) / succeed (ถึงไทยแล้ว)
+ *    และ default = waiting. ตู้ที่ MOMO วางบิลมาส่วนใหญ่ถึงไทยแล้ว (อยู่ succeed) → ลิงก์ที่ไม่ส่ง
+ *    page จะเด้งไปแท็บที่ "ไม่มีตู้นั้น" = ติ๊กไม่ติด แล้วบัญชีก็หาไม่เจอเหมือนเดิม.
+ */
+function payHref(cabinets: string[], page: string | null, invoiceNo: string | null): string {
+  const qs = new URLSearchParams({ actionPay: "1", cabinet: cabinets.join(",") });
+  if (page) qs.set("page", page);
+  if (invoiceNo) qs.set("invoice", invoiceNo);
+  return `/admin/report-cnt?${qs.toString()}`;
+}
+
+function CabinetRollupCard({ rollup, invoiceNo }: { rollup: MomoInvoiceCabinetRollup[]; invoiceNo: string | null }) {
+  if (rollup.length === 0) return null;
+  // ติ๊กให้เฉพาะตู้ที่ "ตรวจผ่านแล้ว" — ตู้ที่ยังขัดแย้งต้องไม่ถูกพาไปจ่าย (owner: ตรวจให้ตรงก่อน)
+  const payable = rollup.filter((c) => c.canPay && c.cabinet);
+  // ปุ่มรวมได้ก็ต่อเมื่อทุกตู้อยู่แท็บเดียวกัน — ข้ามแท็บติ๊กพร้อมกันไม่ได้ (หน้าเดียว = แท็บเดียว)
+  const pages = new Set(payable.map((c) => c.payPage));
+  const payAllHref =
+    payable.length > 1 && pages.size === 1
+      ? payHref(payable.map((c) => c.cabinet as string), payable[0].payPage, invoiceNo)
+      : null;
+
+  return (
+    <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold">ตรวจต่อ “ตู้” — ใบนี้เรียกเก็บตู้ไหนบ้าง</h2>
+          <p className="mt-0.5 text-[12px] text-muted">
+            MOMO วางบิลเป็น <strong>แทรคกิ้ง</strong> แต่เราจ่ายเป็น <strong>ตู้</strong> — นี่คือยอดของใบรอบนี้ที่รวมเป็นรายตู้แล้ว
+          </p>
+        </div>
+        {payAllHref && (
+          <Link
+            href={payAllHref}
+            className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+          >
+            → ตัดจ่ายค่าตู้ ({payable.length} ตู้ที่ตรวจผ่าน · ติ๊กให้แล้ว)
+          </Link>
+        )}
+      </div>
+
+      <div className="overflow-x-auto scrollbar-x-visible">
+        <table className="w-full text-xs">
+          <thead className="bg-surface-alt/50 text-[11px] uppercase tracking-wide text-muted">
+            <tr>
+              <th className="px-2 py-2 text-left">ตู้</th>
+              <th className="px-2 py-2 text-right">ใบรอบนี้เรียกเก็บ</th>
+              <th className="px-2 py-2 text-right">ต้นทุนทั้งตู้ในระบบเรา</th>
+              <th className="px-2 py-2 text-left">ผล / ต้องทำอะไร</th>
+              <th className="px-2 py-2 text-right">ตัดจ่าย</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rollup.map((c) => (
+              <tr
+                key={c.cabinet ?? "none"}
+                className={`border-t border-border align-top ${
+                  !c.canPay ? "bg-red-50/60" : c.partialRound ? "bg-orange-50/50" : ""
+                }`}
+              >
+                <td className="px-2 py-2">
+                  <span className="font-mono font-medium">{c.cabinet ?? "(ใบไม่ระบุตู้)"}</span>
+                  {c.transportLabel && <span className="ml-1 text-muted">· {c.transportLabel}</span>}
+                  {c.paid && <span className="ml-1 rounded bg-gray-200 px-1 text-[11px] text-gray-700">จ่ายแล้ว</span>}
+                </td>
+                <td className="px-2 py-2 text-right whitespace-nowrap">
+                  <span className="font-semibold">฿{baht(c.invoiceTotal)}</span>
+                  <div className="text-[11px] text-muted">{c.invoiceLines} แทรคกิ้ง</div>
+                </td>
+                <td className="px-2 py-2 text-right whitespace-nowrap">
+                  {c.ourCostSum == null ? (
+                    <span className="text-red-700">ไม่มีตู้นี้ในระบบ</span>
+                  ) : (
+                    <>
+                      <span>฿{baht(c.ourCostSum)}</span>
+                      <div className="text-[11px] text-muted">{c.ourRows} แถว</div>
+                    </>
+                  )}
+                </td>
+                <td className="px-2 py-2 text-[11px]">
+                  {c.payBlockReason ? (
+                    <span className="font-medium text-red-700">🔴 {c.payBlockReason}</span>
+                  ) : c.partialRound ? (
+                    <>
+                      <span className="font-medium text-orange-700">
+                        🔴 MOMO ยังบิลตู้นี้ไม่ครบ — บิลแค่ {c.invoiceLines} จาก {c.ourRows} แถว
+                      </span>
+                      <div className="mt-0.5 text-muted">
+                        ส่วนต่าง ฿{baht(c.roundDiff)} คือของที่ MOMO <strong>ยังไม่ได้เรียกเก็บ</strong> (ระบบตั้งเป็น
+                        ต้นทุนประเมินไว้ก่อน) · <strong>จ่ายรอบนี้ ฿{baht(c.invoiceTotal)} เท่านั้น</strong> อย่าจ่ายยอดทั้งตู้
+                        <br />
+                        ⚠️ ระบบให้ตัดจ่าย <strong>ตู้ละครั้งเดียว</strong> — จ่ายตู้นี้ตอนนี้แล้ว รอบหน้าที่ MOMO บิลส่วนที่เหลือ
+                        จะบันทึกเข้าตู้นี้ไม่ได้ · ให้บัญชีเคาะก่อนว่าจะจ่ายเลย หรือรอ MOMO บิลครบ
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-medium text-green-700">✓ ตรวจผ่าน — ตัดจ่ายได้</span>
+                      <div className="mt-0.5 text-muted">
+                        ยอดที่ต้องจ่าย MOMO รอบนี้ = <strong>฿{baht(c.invoiceTotal)}</strong>
+                        {c.roundDiff != null && Math.abs(c.roundDiff) > 0.02 && (
+                          <>
+                            {" · "}ต้นทุนในระบบยังต่างอยู่ ฿{baht(Math.abs(c.roundDiff))} —{" "}
+                            {c.willApplyLines > 0
+                              ? "กด “ยืนยันบันทึกต้นทุน” ก่อน แล้วยอดจะตรงกัน"
+                              : "ตรวจกับทีมพัฒนา"}
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </td>
+                <td className="px-2 py-2 text-right">
+                  {c.canPay && c.cabinet ? (
+                    <Link
+                      href={payHref([c.cabinet], c.payPage, invoiceNo)}
+                      className="inline-block whitespace-nowrap rounded-full bg-emerald-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-emerald-700"
+                      title={`เปิดหน้ารายงานตู้ + ติ๊กตู้ ${c.cabinet} ให้อัตโนมัติ`}
+                    >
+                      → ตัดจ่ายตู้นี้
+                    </Link>
+                  ) : (
+                    <span className="text-[11px] text-muted">—</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
 
 /** ผลของแถว — บอกสถานะ + สิ่งที่ต้องทำต่อ ในตาแรก (§0g). */
 function RowOutcome({ r }: { r: MomoIngestPreviewRow }) {
@@ -251,11 +395,21 @@ export function MomoInvoiceCostClient() {
         )}
       </section>
 
+      {/* สรุปต่อตู้ + สะพานไปตัดจ่าย — วางไว้ "บน" ตารางราย-แทรคกิ้ง เพราะการจ่ายเกิดที่ระดับตู้ */}
+      {preview && preview.rows.length > 0 && (
+        <CabinetRollupCard rollup={preview.byCabinet} invoiceNo={preview.invoiceNo} />
+      )}
+
       {preview && preview.rows.length > 0 && (
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <span className="font-bold">ใบ {preview.invoiceNo ?? "-"}</span>
             <span className="text-muted">ยอดสุทธิบนใบ: ฿{baht(preview.grandTotal)}</span>
+            {preview.whtThb != null && preview.whtThb > 0 && (
+              <span className="text-muted" title="MOMO หักภาษี ณ ที่จ่าย 1% ไว้บนใบแล้ว — ยอดสุทธิคือยอดหลังหัก">
+                หัก ณ ที่จ่าย 1%: ฿{baht(preview.whtThb)}
+              </span>
+            )}
             <span className={`rounded-full px-2 py-0.5 text-[11px] ${preview.reconciles ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
               {preview.reconciles ? `Σ ตรง Sub-total ฿${baht(preview.subTotal)} ✓` : "Σ ไม่ตรง Sub-total ✗"}
             </span>

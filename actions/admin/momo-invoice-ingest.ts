@@ -53,6 +53,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canViewCostProfit, COST_PROFIT_ROLES } from "@/lib/admin/money-visibility";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
+import { isContainerInBucket, type ReportCntPage } from "@/lib/admin/report-cnt-bucket";
 import { parseMomoInvoiceText, type MomoCbmBasis } from "@/lib/admin/momo-invoice-parser";
 import { extractMomoInvoicePdfText } from "@/lib/admin/momo-invoice-pdf";
 import { MOMO_INVOICE_PDF_MAX_BYTES } from "@/lib/admin/momo-invoice-pdf-text";
@@ -166,10 +168,54 @@ export type MomoIngestPreviewRow = {
   blockReason: string | null;
 };
 
+/**
+ * ยอดรวม "ต่อตู้" ของใบรอบนี้ — owner: "MOMO วางบิลเรามาเป็น Tracking ครับ แต่เราคิดเป็นตู้
+ * ไปตรวจให้ตรงกันนะครับ". ทุกอย่างข้างบนเป็นราย-แทรคกิ้ง (= grain ของใบ) แต่ "ตัดจ่ายค่าตู้"
+ * เกิดที่ grain ของ **ตู้** (`tb_cnt_item.fCabinetNumber`) → ต้องมีชั้นนี้ ไม่งั้นบัญชีต้องเอา
+ * เครื่องคิดเลขบวกเอง แล้วเดาว่าจะไปติ๊กตู้ไหนใน 44 ตู้.
+ */
+export type MomoInvoiceCabinetRollup = {
+  /** เลขตู้ที่ใช้จ่ายจริง — ของเรา (`fcabinetnumber`) ถ้าจับคู่ได้ · ไม่งั้นตามที่ใบอ้าง. */
+  cabinet: string | null;
+  /** ผูกกับ tb_forwarder ของเราแล้ว (จ่ายได้) · false = ใบอ้างตู้นี้ แต่เราไม่มี. */
+  linked: boolean;
+  /** เรือ/รถ/อากาศ — ถอดจากชื่อตู้ (SOT: lib/forwarder/cabinet-transport.ts). */
+  transportLabel: string | null;
+  invoiceLines: number;
+  /** Σ ต้นทุนของบรรทัดในใบ**รอบนี้** ที่ตกอยู่ในตู้นี้ = ยอดที่ MOMO เรียกเก็บรอบนี้. */
+  invoiceTotal: number;
+  blockedLines: number;
+  willApplyLines: number;
+  paid: boolean;
+  /** จำนวนแถวทั้งหมดของตู้นี้ในระบบเรา (null = ไม่มีตู้นี้ในระบบ). */
+  ourRows: number | null;
+  /** Σ fcosttotalprice ทั้งตู้ในระบบเรา — **ไม่ใช่ยอดใบรอบนี้** (ดู partialRound). */
+  ourCostSum: number | null;
+  /** 🔴 ใบรอบนี้บิลไม่ครบทุกแถวของตู้ → Σ ตู้ ≠ Σ ใบ · แถวที่ MOMO ยังไม่บิลถือ
+   *  "ต้นทุนประเมิน" (คิว × เรทตั้งต้น) อยู่ → จ่ายทั้งตู้ตอนนี้ = จ่ายเกิน. */
+  partialRound: boolean;
+  /** ส่วนต่าง Σ ตู้ − Σ ใบรอบนี้ (บวก = ในระบบมากกว่าที่ใบเรียกเก็บ). */
+  roundDiff: number | null;
+  canPay: boolean;
+  /** เหตุผลไทยว่าทำไมตู้นี้ยังตัดจ่ายไม่ได้ (null = จ่ายได้). */
+  payBlockReason: string | null;
+  /**
+   * แท็บของหน้า "รายงานตู้" ที่ตู้นี้อยู่ (SOT: lib/admin/report-cnt-bucket.ts —
+   * waiting = MIN(fstatus) < '4' · succeed = ≥ '4'). ลิงก์ตัดจ่ายต้องพาไปแท็บที่ถูก
+   * ไม่งั้นเปิดมาแล้วไม่เจอตู้ (ตู้ที่ MOMO วางบิลมักถึงไทยแล้ว = อยู่แท็บ succeed
+   * แต่ลิงก์เดิม `?actionPay=1` เด้งไปแท็บ waiting = ไม่เจอ). null = ตัดสินไม่ได้.
+   */
+  payPage: ReportCntPage | null;
+};
+
 export type MomoIngestPreview = {
   invoiceNo: string | null;
   grandTotal: number | null;
   rows: MomoIngestPreviewRow[];
+  /** ยอดสรุป "ต่อตู้" ของใบรอบนี้ — สะพานไปหน้าตัดจ่ายค่าตู้. */
+  byCabinet: MomoInvoiceCabinetRollup[];
+  /** "หักภาษีค่าขนส่ง ณ ที่จ่าย (WHT 1%)" ที่พิมพ์บนใบ (null = อ่านไม่เจอ). */
+  whtThb: number | null;
   summary: {
     total: number;
     matched: number;
@@ -197,6 +243,137 @@ export type MomoIngestPreview = {
   /** พร้อมกดบันทึกไหม (ผ่านทั้ง 2 ประตูระดับไฟล์). */
   canApply: boolean;
 };
+
+const TRANSPORT_LABEL: Record<string, string> = { "1": "รถ", "2": "เรือ", "3": "อากาศ" };
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/**
+ * Roll the per-tracking invoice lines up to the ตู้ grain that ตัดจ่ายค่าตู้ actually
+ * happens at, and reconcile that against what the container really holds.
+ *
+ * 🔴 The number this exists to expose (verified prod 2026-07-17 · INV-20260708-0002):
+ *    ตู้ GZS260620-2 — the invoice bills **3 of our 7 rows** for ฿10,858.25, but the
+ *    container's Σ fcosttotalprice is ฿19,470.33. The ฿8,612.08 gap is the OTHER 4 rows
+ *    carrying an ESTIMATED cost (คิว × 2,500 default), which MOMO has simply not billed
+ *    yet — they release files เป็นรอบๆ. Paying "the container total" here would over-pay
+ *    MOMO by ฿8,612.08 for goods they never invoiced. `partialRound` + `roundDiff` put
+ *    that on screen instead of leaving it for a calculator to miss.
+ */
+async function buildCabinetRollup(
+  admin: ReturnType<typeof createAdminClient>,
+  rows: MomoIngestPreviewRow[],
+  paidCabs: Set<string>,
+): Promise<MomoInvoiceCabinetRollup[]> {
+  // Attribute each line to the ตู้ we would PAY: our link wins; fall back to the ตู้ the
+  // invoice asserts so an unmatched line still surfaces under the ตู้ it claims (rather
+  // than vanishing from the ตู้ view — the accountant must see it before paying).
+  type Acc = {
+    cabinet: string | null;
+    linked: boolean;
+    invoiceLines: number;
+    invoiceTotal: number;
+    blockedLines: number;
+    willApplyLines: number;
+  };
+  const acc = new Map<string, Acc>();
+  for (const r of rows) {
+    const linked = !!r.fcabinetnumber;
+    const cabinet = r.fcabinetnumber ?? r.invoiceCabinet ?? null;
+    const key = cabinet ?? " ไม่ระบุตู้";
+    const cur =
+      acc.get(key) ??
+      { cabinet, linked, invoiceLines: 0, invoiceTotal: 0, blockedLines: 0, willApplyLines: 0 };
+    cur.linked = cur.linked || linked;
+    cur.invoiceLines += 1;
+    cur.invoiceTotal += r.invoiceCost;
+    if (!r.matched || r.cabinetConflict || r.duplicateFid) cur.blockedLines += 1;
+    if (r.willApply) cur.willApplyLines += 1;
+    acc.set(key, cur);
+  }
+
+  // What each container really holds — the OTHER half of the reconcile. Without this we
+  // could only ever report the invoice back to itself.
+  const cabs = Array.from(acc.values())
+    .map((a) => a.cabinet)
+    .filter((c): c is string => !!c);
+  const ours = new Map<string, { rows: number; costSum: number; minFstatus: string | null }>();
+  if (cabs.length > 0) {
+    const { data, error } = await admin
+      .from("tb_forwarder")
+      .select("fcabinetnumber, fcosttotalprice, fstatus")
+      .in("fcabinetnumber", cabs);
+    if (error) {
+      console.error(`[momo-ingest rollup] failed`, { code: error.code, message: error.message });
+    }
+    for (const r of (data ?? []) as Array<{
+      fcabinetnumber: string | null;
+      fcosttotalprice: number | null;
+      fstatus: string | null;
+    }>) {
+      const c = r.fcabinetnumber;
+      if (!c) continue;
+      const cur = ours.get(c) ?? { rows: 0, costSum: 0, minFstatus: null };
+      cur.rows += 1;
+      cur.costSum += Number(r.fcosttotalprice ?? 0);
+      // mirror the page's MIN(fstatus) (SQL MIN skips NULL) — drives which tab the ตู้ is on.
+      if (r.fstatus != null) {
+        cur.minFstatus = cur.minFstatus == null || r.fstatus < cur.minFstatus ? r.fstatus : cur.minFstatus;
+      }
+      ours.set(c, cur);
+    }
+  }
+
+  return Array.from(acc.values())
+    .map((a): MomoInvoiceCabinetRollup => {
+      const mine = a.cabinet ? ours.get(a.cabinet) : undefined;
+      const paid = a.cabinet ? paidCabs.has(a.cabinet) : false;
+      const ourRows = mine?.rows ?? null;
+      const ourCostSum = mine ? round2(mine.costSum) : null;
+      const invoiceTotal = round2(a.invoiceTotal);
+      // "MOMO ยังบิลไม่ครบตู้นี้" — the invoice covers fewer rows than the container holds.
+      const partialRound = ourRows != null && a.invoiceLines < ourRows;
+      const roundDiff = ourCostSum != null ? round2(ourCostSum - invoiceTotal) : null;
+
+      // Owner's rule: "ตรวจให้ตรงกันก่อน แล้วค่อยตัดจ่าย" → a ตู้ with any unresolved line
+      // must not be payable from here. Fail-closed, and always name the REAL blocker.
+      let payBlockReason: string | null = null;
+      if (!a.cabinet) {
+        payBlockReason = "ใบไม่ได้ระบุตู้ และจับคู่แทรคกิ้งกับระบบไม่ได้ — ตัดจ่ายไม่ได้ (ไม่รู้ว่าเป็นตู้ไหน)";
+      } else if (!a.linked) {
+        payBlockReason = `ใบอ้างตู้ "${a.cabinet}" แต่ไม่มีตู้นี้ผูกกับรายการนำเข้าในระบบเรา — ตรวจกับโกดังก่อน`;
+      } else if (paid) {
+        payBlockReason = `ตู้นี้ตัดจ่ายค่าตู้ไปแล้ว — จ่ายซ้ำไม่ได้ (ดูประวัติที่ รายการจ่ายเงินตู้)`;
+      } else if (a.blockedLines > 0) {
+        payBlockReason = `มี ${a.blockedLines} บรรทัดของตู้นี้ที่ยังตรวจไม่ผ่าน (ตู้ไม่ตรง / ไม่พบในระบบ / ชี้ซ้ำ) — ต้องตรวจให้ตรงกันก่อน จึงจะตัดจ่ายตู้นี้ได้`;
+      }
+
+      return {
+        cabinet: a.cabinet,
+        linked: a.linked,
+        transportLabel: a.cabinet
+          ? (TRANSPORT_LABEL[transportModeFromCabinetName(a.cabinet) ?? ""] ?? null)
+          : null,
+        invoiceLines: a.invoiceLines,
+        invoiceTotal,
+        blockedLines: a.blockedLines,
+        willApplyLines: a.willApplyLines,
+        paid,
+        ourRows,
+        ourCostSum,
+        partialRound,
+        roundDiff,
+        canPay: payBlockReason == null,
+        payBlockReason,
+        payPage:
+          mine?.minFstatus == null
+            ? null
+            : isContainerInBucket(mine.minFstatus, "succeed")
+              ? "succeed"
+              : "waiting",
+      };
+    })
+    .sort((a, b) => b.invoiceTotal - a.invoiceTotal);
+}
 
 async function buildPreview(text: string): Promise<MomoIngestPreview> {
   const parsed = parseMomoInvoiceText(text);
@@ -320,10 +497,14 @@ async function buildPreview(text: string): Promise<MomoIngestPreview> {
     };
   });
 
+  const byCabinet = await buildCabinetRollup(admin, rows, paidCabs);
+
   return {
     invoiceNo: parsed.invoiceNo,
     grandTotal: parsed.grandTotal,
     rows,
+    byCabinet,
+    whtThb: parsed.whtThb,
     summary: {
       total: rows.length,
       matched: rows.filter((r) => r.matched).length,

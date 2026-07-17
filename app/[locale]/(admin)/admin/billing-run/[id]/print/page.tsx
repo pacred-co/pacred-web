@@ -99,7 +99,7 @@ export default async function BillingRunPrintPage({
         docNo={header.doc_no}
         issuerAddress={ADDRESSES.office.full}
         dateIssued={header.date_issued}
-        dateDue={header.date_due}
+        dateDue={header.is_credit ? header.date_due : null}
         buyerName={header.buyer_name || header.userid}
         buyerTaxId={header.buyer_tax_id}
         buyerAddress={header.buyer_address}

@@ -242,9 +242,23 @@ export default async function CntHsDetailPage({
   const slipResolved = cnt.cntImagesSlip ? await slipUrl(cnt.cntImagesSlip) : null;
   const fileResolved = cnt.cntFile ? await slipUrl(cnt.cntFile) : null;
 
-  // Sum across linked forwarders (sanity vs cnt.amount)
-  const linkedTotal = forwarders.reduce((s, f) => s + Number(f.ftotalprice ?? 0), 0);
+  // Sums across the linked forwarders.
+  //
+  // 🔴 2026-07-17 — these are TWO DIFFERENT MONIES and must never be presented as if
+  // they should agree:
+  //   · ยอดเบิก (cnt.cntAmount)      = what WE PAY MOMO for the container  → COST side
+  //   · Σ fcosttotalprice            = the cost we recorded per tracking   → COST side
+  //                                     ⇒ THIS is the one that should ≈ ยอดเบิก
+  //   · Σ ftotalprice                = what we BILL THE CUSTOMER           → SELL side
+  //                                     ⇒ never equal to ยอดเบิก (that difference is margin)
+  // Previously the page put ยอดเบิก directly above Σ ftotalprice labelled only
+  // "ยอดรวมจากตู้ที่อยู่ในรายการ", which invites accounting to "reconcile" a cost against a
+  // sell price and conclude the payment is wrong. Display-only fix — no money is written.
+  const linkedCostTotal = forwarders.reduce((s, f) => s + Number(f.fcosttotalprice ?? 0), 0);
+  const linkedSellTotal = forwarders.reduce((s, f) => s + Number(f.ftotalprice ?? 0), 0);
   const linkedCount = forwarders.length;
+  const cntAmountNum = Number(cnt.cntAmount ?? 0);
+  const costVsPaid = Math.round((linkedCostTotal - cntAmountNum) * 100) / 100;
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -276,13 +290,24 @@ export default async function CntHsDetailPage({
       {/* Main detail card */}
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-3 text-sm">
         <KV
-          label="ยอดเบิก (THB)"
-          value={`฿${Number(cnt.cntAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+          label="ยอดเบิก — เงินที่จ่าย MOMO (THB)"
+          value={`฿${cntAmountNum.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+          mono
+        />
+        {/* คู่เทียบที่ถูกต้องของ "ยอดเบิก" = ต้นทุนรวม (ไม่ใช่ยอดขาย) */}
+        <KV
+          label="Σ ต้นทุนของตู้ในรายการ (ควรตรงกับยอดเบิก)"
+          value={
+            `฿${linkedCostTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}` +
+            (Math.abs(costVsPaid) < 0.02
+              ? " ✓ ตรงกับยอดเบิก"
+              : ` · ต่างจากยอดเบิก ฿${Math.abs(costVsPaid).toLocaleString(undefined, { minimumFractionDigits: 2 })} (${costVsPaid > 0 ? "ต้นทุนมากกว่า" : "ต้นทุนน้อยกว่า"})`)
+          }
           mono
         />
         <KV
-          label="ยอดรวมจากตู้ที่อยู่ในรายการ"
-          value={`฿${linkedTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} (${linkedCount} รายการ ฝากนำเข้า)`}
+          label="ยอดที่เรียกเก็บลูกค้า (คนละยอด — ไม่ต้องตรงกับยอดเบิก)"
+          value={`฿${linkedSellTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} (${linkedCount} รายการ ฝากนำเข้า)`}
           mono
         />
         <KV label="วันที่สร้าง" value={cnt.date ? new Date(cnt.date).toLocaleString("th-TH") : "—"} />
