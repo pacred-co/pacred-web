@@ -3,7 +3,15 @@
 
 ---
 
-# 🧾 2026-07-18 (เดฟ · Mac · resync run-long · integrate ปอน + MOMO audit P1/P2 + dangler cleanup) — ประวัติการคีย์ WHO + packing ผู้อัพ/ใช้แล้ว → ALL 4 BRANCHES · read FIRST
+# 🧾 2026-07-18 (เดฟ · Mac · resync run-long ×2 · integrate ปอน + MOMO audit P1/P2 + dangler + bug-hunt 7 บัค) — ประวัติการคีย์ WHO + cash-nag/yuan-dup/credit-COD/reverse/mao/driver fixes → ALL 4 BRANCHES · read FIRST
+
+> **🔴 bug-hunt เต็มระบบ (2026-07-18 · owner "เคลียบัค เคลียงานค้าง" · `480071ed` · workflow 6-finder + adversarial-verify · reachability สะอาด → fix 7 · tsc0/build0):**
+> - **P1 overdue cron nag ลูกค้าเงินสด:** billing-run-overdue cron ไม่มี credit gate · cbddd1d2 ซ่อน "ครบกำหนด" บนบิลเงินสด แต่ cron ยังส่ง LINE/email "เลยกำหนดชำระ" ทุกเช้า (prod tb_credit=0 = ลูกค้าทุกคนเงินสด → นากทุกใบ). FIX cron + detail page + manual-send gate บน fcredit (isCreditRow SOT · 2-query · fail-CLOSED) → tb_credit=0 ส่ง 0.
+> - **P1 yuan BULK approve ข้าม เวียนเทียน dup-slip:** adminBulkApproveYuanPaymentsTb ไม่มี findDuplicateYuanSlips (single-row มี · yuan อยู่ tb_payment · wallet dup ไม่คลุม) → สลิปซ้ำผ่าน bulk = double-pay. FIX dup-check ต่อแถว.
+> - **P2 credit-settle omit paymethod** (over-decrement COD leg) · **P2 credit reverse over-restore** (settle clamp 0 · reverse re-add เต็ม → log actual-removed) · **P2 auto-issue-receipt ตกเหมาๆ ฿100** (recompute ไม่ส่ง maoAnchorIds · split shipment).
+> - **P2 dispatch:** expired batch strand '1' stop (loadAssignedFids → batch-aware 2-query · นับเฉพาะ stop ใน open batch) · reopenDriverBatch resurrect dup (skip fid ที่มี open stop ที่อื่น). ⚠️ 2 embed invoice_item→forwarder/item→batch ไม่มี FK → 2-query กัน runtime fail.
+> - **note:** billing-run list badge is_overdue (admin-only display) ยังไม่ gate credit (customer-facing paths ครบแล้ว).
+
 
 > **🏁 SESSION CLOSE (owner "resync main pull dave-pacred · เอางานน้องมารวม · ทำงานที่เหลือให้ครบ run-long · push all ทีเดียวตอนจบ").** **main = dave-pacred = Poom-pacred = InwPond007 = `<HEAD>`** (ทั้ง 4 sync · Vercel prod). resync: `git fetch && git pull origin dave-pacred`. ⚠️ ข้ามเครื่องหลายเมล — session นี้ FF absorb งาน disk-machine 2026-07-17 (10 commit · mig 0259/0260) + integrate ปอน 6 commit. **NEXT FREE mig = 0261** (0259 shop_status_one_rule · 0260 momo_cost_road_vs_sea · applied prod โดย disk). gate: **tsc 0 · build 0** (`rm -f .next/dev/types/validator.ts` ก่อน · `unpdf` ต้อง `pnpm install` ใน worktree ใหม่). 🔑 prod pw chat-only `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ`.
 >
