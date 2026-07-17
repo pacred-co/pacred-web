@@ -13,10 +13,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, Link2 } from "lucide-react";
 import type { ContentItem, ContentLink } from "@/lib/marketing-planner/types";
 import { platformIdsOf, serviceIdsOf } from "@/lib/marketing-planner/types";
+import { titleLimitFor } from "@/lib/marketing-planner/platform-title-limits";
 import { usePlanner, uid } from "@/lib/marketing-planner/store";
 import { fmtNum } from "@/lib/marketing-planner/util";
 import { btnGhost, btnPrimary, cx, Field, GroupMultiSelect, GroupSelect, inputCls, Modal, UserSelect } from "./ui";
 import { LinkPreview } from "./link-preview";
+
+// Content ใหม่ default แพลตฟอร์ม = YouTube/Facebook/TikTok/IG (owner ปอน 2026-07-18).
+// platform id = "platform-<key>" (SettingItem ไม่มี field key) → แยก key จาก id.
+const DEFAULT_PLATFORM_KEYS = new Set(["youtube", "facebook", "tiktok", "instagram"]);
+const platformKeyOf = (id: string) => id.replace(/^platform-/, "").toLowerCase();
 
 type FormState = {
   title: string;
@@ -28,6 +34,7 @@ type FormState = {
   funnelStageId?: string;
   customerStageId?: string;
   platformIds: string[];
+  platformTitles: Record<string, string>; // platformId → ชื่อดราฟต์ต่อแพลตฟอร์ม
   serviceIds: string[];
   campaignId?: string;
   formatId?: string;
@@ -65,7 +72,7 @@ function blank(defaults?: Partial<FormState>): FormState {
     title: "", topic: "", brief: "",
     targetAudience: "", keyword: "", hashtag: "", cta: "",
     hook: "", painPoint: "", context: "", storyTelling: "", proof: "", authority: "",
-    visual: "", organicSelling: "", branding: "", esg: "", contact: "", channelIds: [], platformIds: [], serviceIds: [],
+    visual: "", organicSelling: "", branding: "", esg: "", contact: "", channelIds: [], platformIds: [], platformTitles: {}, serviceIds: [],
     coOwnerIds: [], startDate: "", deadline: "", publishDate: "", publishTime: "", note: "",
     links: [],
     ...defaults,
@@ -76,7 +83,7 @@ function fromContent(c: ContentItem): FormState {
   return {
     title: c.title, topic: c.topic ?? "", brief: c.brief ?? "",
     marketingGoalId: c.marketingGoalId, contentTypeId: c.contentTypeId, contentPillarId: c.contentPillarId,
-    funnelStageId: c.funnelStageId, customerStageId: c.customerStageId, platformIds: platformIdsOf(c),
+    funnelStageId: c.funnelStageId, customerStageId: c.customerStageId, platformIds: platformIdsOf(c), platformTitles: c.platformTitles ?? {},
     serviceIds: serviceIdsOf(c), campaignId: c.campaignId, formatId: c.formatId, toneId: c.toneId,
     targetAudience: c.targetAudience ?? "", keyword: c.keyword ?? "", hashtag: c.hashtag ?? "", cta: c.cta ?? "",
     hook: c.hook ?? "", painPoint: c.painPoint ?? "", context: c.context ?? "", storyTelling: c.storyTelling ?? "",
@@ -185,18 +192,73 @@ export function ContentForm({ open, onClose, editId, defaultDate }: { open: bool
   return <ContentFormBody key={`${editId ?? "new"}:${defaultDate ?? ""}`} onClose={onClose} editId={editId} defaultDate={defaultDate} />;
 }
 
+/** ชื่อคอนเทนต์แยกต่อแพลตฟอร์ม (owner ปอน 2026-07-18) — 1 แถวต่อแพลตฟอร์มที่เลือก +
+ *  ตัวนับตัวอักษรตามลิมิตจริงของแต่ละที่ (soft · แดงเมื่อเกิน · เว้นว่าง = ใช้ชื่อหลัก). */
+function PlatformTitles({ platformIds, platformTitles, platformItems, mainTitle, onChange }: {
+  platformIds: string[];
+  platformTitles: Record<string, string>;
+  platformItems: { id: string; name: string; color?: string }[];
+  mainTitle: string;
+  onChange: (pid: string, v: string) => void;
+}) {
+  const selected = platformItems.filter((p) => platformIds.includes(p.id));
+  return (
+    <div className="rounded-lg border border-dashed border-border p-2.5">
+      <p className="mb-1.5 text-[12px] font-medium text-foreground">
+        ชื่อต่อแพลตฟอร์ม <span className="font-normal text-muted">(ดราฟต์ให้พอดีลิมิตแต่ละที่ · เว้นว่าง = ใช้ชื่อหลัก)</span>
+      </p>
+      {selected.length === 0 ? (
+        <p className="text-[12px] text-muted">เลือกแพลตฟอร์มในหัวข้อ “การจัดประเภท” ก่อน แล้วช่องชื่อจะขึ้นตามที่เลือก</p>
+      ) : (
+        <div className="space-y-1.5">
+          {selected.map((p) => {
+            const val = platformTitles[p.id] ?? "";
+            const limit = titleLimitFor({ key: p.id.replace(/^platform-/, ""), name: p.name });
+            const over = limit != null && val.length > limit;
+            return (
+              <div key={p.id} className="flex items-center gap-2">
+                <span className="flex w-24 shrink-0 items-center gap-1.5 text-[12px] text-foreground">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: p.color ?? "#9ca3af" }} />
+                  <span className="truncate" title={p.name}>{p.name}</span>
+                </span>
+                <input
+                  className={cx(inputCls, "min-w-0 flex-1", over && "border-red-400 focus:border-red-400 focus:ring-red-100")}
+                  value={val}
+                  onChange={(e) => onChange(p.id, e.target.value)}
+                  placeholder={mainTitle || `ชื่อสำหรับ ${p.name}`}
+                />
+                {limit != null && (
+                  <span className={cx("w-14 shrink-0 text-right text-[11px] tabular-nums", over ? "font-semibold text-red-600" : "text-muted")}>
+                    {val.length}/{limit}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ContentFormBody({ onClose, editId, defaultDate }: { onClose: () => void; editId?: string; defaultDate?: string }) {
   const { contents, byGroup, byId, keywords, addContent, updateContent } = usePlanner();
   const linkTypes = byGroup("linkType");
   const defaultStatus = byGroup("status")[0]?.id;
+  // Content ใหม่ = default แพลตฟอร์ม YouTube/Facebook/TikTok/IG (resolve id จาก settings).
+  const defaultPlatformIds = useMemo(
+    () => byGroup("platform").filter((p) => DEFAULT_PLATFORM_KEYS.has(platformKeyOf(p.id))).map((p) => p.id),
+    [byGroup],
+  );
 
   const [form, setForm] = useState<FormState>(() => {
     const existing = editId ? contents.find((c) => c.id === editId) : undefined;
-    return existing ? fromContent(existing) : blank({ publishDate: defaultDate ?? "", statusId: defaultStatus });
+    return existing ? fromContent(existing) : blank({ publishDate: defaultDate ?? "", statusId: defaultStatus, platformIds: defaultPlatformIds });
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [craftOpen, setCraftOpen] = useState(false);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const setPlatformTitle = (pid: string, v: string) => setForm((f) => ({ ...f, platformTitles: { ...f.platformTitles, [pid]: v } }));
 
   // Keyword suggestions from the Keyword Planner; keywords for any of the picked
   // services bubble to the top (matched by 3-gram — Thai has no word spaces).
@@ -232,12 +294,17 @@ function ContentFormBody({ onClose, editId, defaultDate }: { onClose: () => void
   const submit = () => {
     if (!validate()) return;
     const links = form.links.filter((l) => l.url.trim());
+    // เก็บชื่อต่อแพลตฟอร์ม เฉพาะที่เลือกอยู่ + ไม่ว่าง
+    const platformTitles = Object.fromEntries(
+      form.platformIds.map((pid) => [pid, (form.platformTitles[pid] ?? "").trim()] as const).filter(([, v]) => v),
+    );
     const payload = {
       title: form.title.trim(),
       topic: form.topic.trim() || undefined,
       brief: form.brief.trim() || undefined,
       marketingGoalId: form.marketingGoalId, contentTypeId: form.contentTypeId, contentPillarId: form.contentPillarId,
       funnelStageId: form.funnelStageId, customerStageId: form.customerStageId, platformIds: form.platformIds, platformId: form.platformIds[0],
+      platformTitles: Object.keys(platformTitles).length ? platformTitles : undefined,
       serviceIds: form.serviceIds, serviceId: form.serviceIds[0], campaignId: form.campaignId, formatId: form.formatId, toneId: form.toneId,
       targetAudience: form.targetAudience.trim() || undefined, keyword: form.keyword.trim() || undefined,
       hashtag: form.hashtag.trim() || undefined, cta: form.cta.trim() || undefined,
@@ -280,6 +347,7 @@ function ContentFormBody({ onClose, editId, defaultDate }: { onClose: () => void
           <Field label="ชื่อคอนเทนต์" required hint={errors.title}>
             <input className={cx(inputCls, errCls("title"))} value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="เช่น นำเข้าจากจีนแบบ LCL ต้องรู้อะไรบ้าง" />
           </Field>
+          <PlatformTitles platformIds={form.platformIds} platformTitles={form.platformTitles} platformItems={byGroup("platform")} mainTitle={form.title} onChange={setPlatformTitle} />
           <Field label="หัวข้อคอนเทนต์">
             <input className={inputCls} value={form.topic} onChange={(e) => set("topic", e.target.value)} />
           </Field>
