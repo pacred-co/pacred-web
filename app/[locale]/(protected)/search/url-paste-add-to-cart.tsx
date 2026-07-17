@@ -35,6 +35,7 @@ import { ShoppingCart, Plus, Minus, CheckCircle2, AlertTriangle } from "lucide-r
 import { Link } from "@/i18n/navigation";
 import { addCartItem, addCartItemsBulk } from "@/actions/cart";
 import { toYuanEquivalent } from "@/lib/forwarder/currency-convert";
+import { TranslateProvider, AutoTranslateText } from "@/components/translate/auto-translate";
 
 // Mirrors PROVIDERS in lib/validators/cart.ts L7 (only these 5 are
 // accepted by the cart Zod schema).
@@ -110,6 +111,17 @@ export function UrlPasteAddToCart({
   const t = useTranslations("searchPage");
   const minClamp = Math.max(1, minQty);
   const maxClamp = Math.max(minClamp, maxQty || 999);
+  /**
+   * The per-option ceiling in the multi-pick grid — ONE source for the input's `max`
+   * AND for the submit check.
+   *
+   * 🔴 owner 2026-07-17 "ลูกค้าหลายเจ้าสั่งของไม่ได้" (PR619 · 1688 stickers ¥0.17 ×
+   * 90,000): the qty input allowed the SKU's full stock while onSubmit validated against
+   * `maxClamp` — which falls back to **999** when the listing gives no maxQty. So a
+   * wholesale pick typed fine, the button enabled, and the click died. Two ceilings that
+   * disagreed = a wall the customer could never see. They are the same number now.
+   */
+  const skuMaxQty = (stock: number) => Math.max(maxClamp, stock, 0);
 
   // priceThb is computed locally from priceCny × rsDefault inside this
   // island (so the qty stepper recomputes the total live).  Kept as a
@@ -297,8 +309,17 @@ export function UrlPasteAddToCart({
       for (let i = 0; i < skuMap.length; i++) {
         const q = qtyBySku[i] ?? 0;
         if (q <= 0) continue;
-        if (q < minClamp || q > maxClamp) {
-          setError(t("priceNotEnteredError"));
+        // 🔴 owner 2026-07-17 — was `q > maxClamp` (999 by default) + the message
+        // t("priceNotEnteredError") = "ยังไม่ใส่ราคา CNY". BOTH were wrong: the ceiling
+        // contradicted the input the customer had just typed into, and the message
+        // blamed the PRICE for a QUANTITY problem — so PR619 saw "ยังไม่ใส่ราคา CNY"
+        // with ¥0.17 sitting right there, entered it again, and stayed stuck. Now the
+        // bound is the same one the input enforces, and the error names the real
+        // option + the real limit.
+        const cap = skuMaxQty(skuMap[i].stock);
+        if (q < minClamp || q > cap) {
+          const label = Object.values(skuMap[i].prop_path).join(" / ") || `ตัวเลือกที่ ${i + 1}`;
+          setError(t("qtyOutOfRangeError", { option: label, min: minClamp, max: cap.toLocaleString() }));
           return;
         }
         const sku = skuMap[i];
@@ -424,7 +445,13 @@ export function UrlPasteAddToCart({
 
   const lineTotalThb = effectivePriceThb * qty;
 
+  // ONE batch ZH→TH round-trip for everything Chinese on this card (the title + every
+  // option label). Cached server-side (translation_cache · mig 0246), so a second view of
+  // the listing — by anyone — is instant.
+  const zhTexts = [title, ...(skuMap ?? []).map((sk) => Object.values(sk.prop_path).join(" · "))];
+
   return (
+    <TranslateProvider texts={zhTexts}>
     <div className="space-y-3">
       {/* ── SKU PICKER — clickable axes (color · size · style · ...) ─
           Mirrors admin pattern at
@@ -492,11 +519,13 @@ export function UrlPasteAddToCart({
                           <input
                             type="number"
                             min={0}
-                            max={Math.max(maxClamp, sku.stock)}
+                            max={skuMaxQty(sku.stock)}
                             value={q}
                             onChange={(e) => {
                               const n = Number(e.target.value) || 0;
-                              setQtyBySku((prev) => ({ ...prev, [idx]: Math.max(0, Math.min(99999, Math.floor(n))) }));
+                              // clamp to the SAME ceiling onSubmit checks — a number the
+                              // submit would reject must never be typeable (owner 2026-07-17).
+                              setQtyBySku((prev) => ({ ...prev, [idx]: Math.max(0, Math.min(skuMaxQty(sku.stock), Math.floor(n))) }));
                               setError(null);
                             }}
                             disabled={pending || outOfStock}
@@ -803,5 +832,6 @@ export function UrlPasteAddToCart({
                   : t("addToCart")}
       </button>
     </div>
+    </TranslateProvider>
   );
 }
