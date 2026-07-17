@@ -1547,7 +1547,7 @@ export function ForwardersTable({
                             <div className="mb-1.5 text-[11px] font-medium text-slate-600">
                               พัสดุในกลุ่ม <span className="font-mono">{groupBase}</span> ·{" "}
                               {aggMembers.length} เลข · ลูกค้า{" "}
-                              <span className="font-mono">{r.customer?.userid ?? "—"}</span>
+                              <CustomerCodeLink code={r.customer?.userid} className="text-[11px]" />
                             </div>
                             <table className="w-full max-w-4xl text-[11px]">
                               <thead>
