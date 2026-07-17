@@ -37,6 +37,7 @@ import { Link } from "@/i18n/navigation";
 import { getAdminRoles, isGodRole } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { getCustomerRateMatrix } from "@/actions/admin/customer-rate";
+import { getQuoteDefaultRates } from "@/lib/admin/quote-default-rates";
 import { getSellFloorCbm, getSellFloorKg } from "@/lib/admin/sell-floor-config";
 import { getCustomerStatCounts, listSalesAdmins, listCsAdmins, listActiveAdmins } from "@/actions/admin/customer-profile";
 import { getCustomerMarginSummary } from "@/actions/admin/customer-margin";
@@ -494,8 +495,11 @@ export async function renderLegacyCustomerView(
   // is fetched here in parallel with the other profile sub-readers. Best-
   // effort — never throws (the loader degrades to "0 delivered ตู้" empty
   // state if tb_forwarder query fails).
-  const [rateMatrix, statCounts, salesAdminsRes, csAdminsRes, activeAdminsRes, marginSummary, tagsRes, activityRes] = await Promise.all([
+  const [rateMatrix, quoteDefaults, statCounts, salesAdminsRes, csAdminsRes, activeAdminsRes, marginSummary, tagsRes, activityRes] = await Promise.all([
     getCustomerRateMatrix(u.userID),
+    // เรท default ใบเสนอราคา = เรททั่วไป tb_rate_g_* (owner ปอน 2026-07-17) — global,
+    // ส่งให้ QuoteTab ใช้เป็นชั้น default (SVIP ▸ general ▸ promo/FDA).
+    getQuoteDefaultRates(),
     getCustomerStatCounts(u.userID),
     listSalesAdmins(),
     listCsAdmins(),
@@ -702,6 +706,7 @@ export async function renderLegacyCustomerView(
               buyerIsJuristic={isJuristic}
               buyerPhone={u.userTel ?? ""}
               matrix={rateMatrix}
+              generalDefaults={quoteDefaults}
               comparisonEnabled={comparisonEnabled}
               comparisonValue={comparisonValue}
               sellFloorCbm={sellFloorCbm}

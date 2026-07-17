@@ -22,7 +22,7 @@ import {
 } from "../quotation-data";
 import type { CatalogTemplate } from "@/lib/booking/catalog";
 import { lookupMemberByCode } from "@/actions/admin/booking-member-lookup";
-import { CARGO_PROMO_PACKAGES, rateFor, MIN_CHARGE, DEFAULT_COMPARISON, type QuoteMode, type WarehouseKey, type CargoPromoPackage } from "@/lib/quote/cargo-promo-packages";
+import { CARGO_PROMO_PACKAGES, rateFor, rateForVariant, quoteRateVariantOf, MIN_CHARGE, DEFAULT_COMPARISON, type QuoteMode, type QuoteRateVariant, type WarehouseKey, type CargoPromoPackage } from "@/lib/quote/cargo-promo-packages";
 import { BookingDraftPreview } from "./booking-draft";
 import { SubProcessTimeline } from "@/components/workspace/booking-journey";
 import { FieldHint, TRANSPORT_HINT, LOADTYPE_HINT, TERM_HINT, ENTER_HINT, TRANSIT_HINT, PRODUCT_HINT, SPECIAL_HINT, DOCMODE_HINT, POL_HINT, POD_HINT, COMMODITY_HINT, CARRIER_HINT, WEIGHT_HINT, CBM_HINT, AGENT_HINT } from "./booking-hints";
@@ -132,7 +132,7 @@ export function QuotationFormClient({
     const pkgs = CARGO_PROMO_PACKAGES.filter((p) => compare.includes(p.id));
     const mode: QuoteMode | null = cond.service === "TRUCK" ? "truck" : cond.service === "SEA" ? "ship" : null;
     if (pkgs.length === 0 || !mode) return;
-    const licensed = cond.productType === "ลิขสิทธิ์";
+    const variant = quoteRateVariantOf(cond.productType);
     const warehouse: WarehouseKey = /อี้อู|yiwu/i.test(cond.pol.port) ? "yiwu" : "guangzhou";
     const weight = Number(cond.weight) || 0;
     const now = new Date();
@@ -140,7 +140,7 @@ export function QuotationFormClient({
     const dateStr = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
     const svc = cond.service;
     const drafts: Booking[] = pkgs.map((pkg, i) => {
-      const rate = rateFor(pkg, licensed, warehouse, mode);
+      const rate = rateForVariant(pkg, variant, warehouse, mode);
       const est = weight > 0 ? Math.max(rate.kg * weight, rate.cbm * (weight / DEFAULT_COMPARISON), MIN_CHARGE) : 0;
       const priceLabel = weight > 0 ? `≈ ${bahtFmt(Math.round(est))}` : `฿${rate.cbm.toLocaleString()}/CBM`;
       return {
@@ -1225,11 +1225,11 @@ const PKG_HIGHLIGHT: Record<number, { label: string; cls: string }> = {
 // แถบขวา (แบบ Trip): แบนเนอร์จริง + สรุปราคาที่ตรง Booking (draft · owner ปอน 2026-07-10).
 // แบนเนอร์ = placeholder รูปโปรจริงที่เรามี · เปลี่ยนได้ทีหลัง.
 function BookingSummaryAside({
-  cond, mode, warehouse, licensed, weight, modeLabel,
+  cond, mode, warehouse, variant, weight, modeLabel,
 }: {
-  cond: QuoteConditions; mode: QuoteMode; warehouse: WarehouseKey; licensed: boolean; weight: number; modeLabel: string;
+  cond: QuoteConditions; mode: QuoteMode; warehouse: WarehouseKey; variant: QuoteRateVariant; weight: number; modeLabel: string;
 }) {
-  const rates = CARGO_PROMO_PACKAGES.map((p) => rateFor(p, licensed, warehouse, mode));
+  const rates = CARGO_PROMO_PACKAGES.map((p) => rateForVariant(p, variant, warehouse, mode));
   const cbm = rates.map((r) => r.cbm), kg = rates.map((r) => r.kg);
   const minCbm = Math.min(...cbm), maxCbm = Math.max(...cbm);
   const minKg = Math.min(...kg), maxKg = Math.max(...kg);
@@ -1250,7 +1250,7 @@ function BookingSummaryAside({
         <dl className="mt-3 space-y-1.5 text-[13px]">
           <div className="flex items-start justify-between gap-2"><dt className="shrink-0 text-muted">เส้นทาง</dt><dd className="text-right font-medium text-foreground">{cond.pol.port} → {cond.pod.port}</dd></div>
           <div className="flex items-start justify-between gap-2"><dt className="shrink-0 text-muted">ขนส่ง</dt><dd className="text-right font-medium text-foreground">{modeLabel} · DDP · {cond.loadType}</dd></div>
-          <div className="flex items-start justify-between gap-2"><dt className="shrink-0 text-muted">ประเภทสินค้า</dt><dd className="text-right font-medium text-foreground">{cond.productType}{licensed ? " 🔖" : ""}</dd></div>
+          <div className="flex items-start justify-between gap-2"><dt className="shrink-0 text-muted">ประเภทสินค้า</dt><dd className="text-right font-medium text-foreground">{cond.productType}{variant === "licensed" ? " 🔖" : ""}</dd></div>
           <div className="flex items-start justify-between gap-2"><dt className="shrink-0 text-muted">น้ำหนัก</dt><dd className="text-right font-medium text-foreground">{weight > 0 ? `${weight.toLocaleString()} กก.` : "—"}</dd></div>
         </dl>
         <div className="mt-3 border-t border-border pt-3">
@@ -1289,13 +1289,13 @@ function Tcell({ children, best }: { children: ReactNode; best?: boolean }) {
  * ดูราคา/CBM · /กก. · ระยะเวลา · ประมาณการ เทียบกันเป็นคอลัมน์ + ไฮไลต์ถูกสุด → เลือก/สร้างแยก.
  */
 function CompareModal({
-  pkgs, mode, warehouse, licensed, weight, onClose, onCreate, onSelectOne, onRemove,
+  pkgs, mode, warehouse, variant, weight, onClose, onCreate, onSelectOne, onRemove,
 }: {
-  pkgs: CargoPromoPackage[]; mode: QuoteMode; warehouse: WarehouseKey; licensed: boolean; weight: number;
+  pkgs: CargoPromoPackage[]; mode: QuoteMode; warehouse: WarehouseKey; variant: QuoteRateVariant; weight: number;
   onClose: () => void; onCreate: () => void; onSelectOne: (pkg: CargoPromoPackage) => void; onRemove: (pkg: CargoPromoPackage) => void;
 }) {
   const rows = pkgs.map((pkg) => {
-    const rate = rateFor(pkg, licensed, warehouse, mode);
+    const rate = rateForVariant(pkg, variant, warehouse, mode);
     const est = weight > 0 ? Math.max(rate.kg * weight, rate.cbm * (weight / DEFAULT_COMPARISON), MIN_CHARGE) : 0;
     return { pkg, rate, est };
   });
@@ -1356,6 +1356,7 @@ function RecommendPackages({
 }) {
   const isDdp = cond.term === "DDP"; // โปร cargo (LCL) = TERM DDP เท่านั้น (owner ปอน 2026-07-10)
   const licensed = cond.productType === "ลิขสิทธิ์"; // ประเภทสินค้า ลิขสิทธิ์ → ใช้เรท licensed ในโปร
+  const variant = quoteRateVariantOf(cond.productType); // อย. → เรทเหมา FDA · ลิขสิทธิ์ → licensed · อื่นๆ → ฐาน
   const mode: QuoteMode | null = cond.service === "TRUCK" ? "truck" : cond.service === "SEA" ? "ship" : null;
   const warehouse: WarehouseKey = /อี้อู|yiwu/i.test(cond.pol.port) ? "yiwu" : "guangzhou";
   const weight = Number(cond.weight) || 0;
@@ -1369,7 +1370,7 @@ function RecommendPackages({
       {showCompare && mode && compare.length > 0 && (
         <CompareModal
           pkgs={CARGO_PROMO_PACKAGES.filter((p) => compare.includes(p.id))}
-          mode={mode} warehouse={warehouse} licensed={licensed} weight={weight}
+          mode={mode} warehouse={warehouse} variant={variant} weight={weight}
           onClose={() => setShowCompare(false)}
           onCreate={() => { setShowCompare(false); onCreateCompare(); }}
           onSelectOne={(pkg) => { setShowCompare(false); onSelect(pkg); }}
@@ -1419,7 +1420,7 @@ function RecommendPackages({
           )}
           <div className="space-y-3">
             {CARGO_PROMO_PACKAGES.map((pkg) => {
-              const rate = rateFor(pkg, licensed, warehouse, mode);
+              const rate = rateForVariant(pkg, variant, warehouse, mode);
               const est = weight > 0 ? Math.max(rate.kg * weight, rate.cbm * (weight / DEFAULT_COMPARISON), MIN_CHARGE) : 0;
               const hl = PKG_HIGHLIGHT[pkg.no];
               return (
@@ -1485,7 +1486,7 @@ function RecommendPackages({
           </p>
           </div>
           {/* แถบขวา: สรุปราคาที่ตรง Booking + แบนเนอร์จริง (draft · owner ปอน 2026-07-10) */}
-          <BookingSummaryAside cond={cond} mode={mode} warehouse={warehouse} licensed={licensed} weight={weight} modeLabel={modeLabel} />
+          <BookingSummaryAside cond={cond} mode={mode} warehouse={warehouse} variant={variant} weight={weight} modeLabel={modeLabel} />
         </div>
       )}
     </div>
