@@ -461,41 +461,50 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
       <tr
         key={`sum-${gkey}-${g[0].id}`}
         onClick={() => toggleGroup(gkey)}
-        /* 🔴 owner 2026-07-18 "หัวแถว ต้องไม่ใช่สีเทา ต้องสีแดง และขาว · บอกสถานะ การเก็บเงิน
-           การสแกน · สแกนแล้ว→ขาว · เขียวน้ำเงินไม่เอา · แดง/ขาวเท่านั้น" — the shipment
-           HEADER row now reads its SCAN state: RED = ยังยิงกล่องไม่ครบทั้งชิปเม้น (can't
-           bill yet) · WHITE = ยิงครบแล้ว (ready). The old 2026-07-16 neutral-grey is
-           superseded — its "red header → white children" confusion is gone because the
-           dropdown is now a NEUTRAL packing-list (below), not coloured data rows. */
-        className={`${scanned ? "pcs-row-scan-ok" : "pcs-row-scan-wait"} cursor-pointer`}
+        /* 🔴 owner 2026-07-18 — a multi-แทรค header is JUST a shipment, no different from a
+           single-แทรค row → it behaves IDENTICALLY: RED (ยังยิงกล่องไม่ครบ) / WHITE (ครบ) by
+           scan, and EMERALD when ticked (pcs-row-selected · same as a single row · "พอติ๊ก
+           สีต้องเปลี่ยนเหมือนรายการเพื่อนๆ"). Only extra = the chevron dropdown for its แทรค. */
+        className={`${groupSel ? "pcs-row-selected" : scanned ? "pcs-row-scan-ok" : "pcs-row-scan-wait"} cursor-pointer`}
       >
         {checkColumn && (
           <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
-            {eligibleIds.length > 0 && (
-              <input
-                type="checkbox"
-                checked={groupSel}
-                onChange={() => toggleGroupSelect(eligibleIds)}
-                disabled={!checkInteractive || !scanned}
-                title={
-                  !checkInteractive
-                    ? "ตู้นี้จ่ายค่าตู้แล้ว · แก้ผ่านบิลจ่ายเงินตู้"
+            {/* owner 2026-07-18 — ALWAYS show the tick (like a single row · "ยังไม่มี action
+                ให้ติ๊ก"), disabled-with-reason when not arrived / not fully scanned / cnt-paid. */}
+            <input
+              type="checkbox"
+              checked={groupSel}
+              onChange={() => toggleGroupSelect(eligibleIds)}
+              disabled={!checkInteractive || eligibleIds.length === 0 || !scanned}
+              title={
+                !checkInteractive
+                  ? "ตู้นี้จ่ายค่าตู้แล้ว · แก้ผ่านบิลจ่ายเงินตู้"
+                  : eligibleIds.length === 0
+                    ? "รอของถึงโกดังก่อน (ยังไม่ถึงไทย)"
                     : !scanned
                       ? `ยิงกล่องไม่ครบ (${fmtN(a.boxGot)}/${fmtN(a.boxExp)}) · เลือกวางบิลไม่ได้จนกว่าจะยิงครบทั้งชิปเม้น`
-                      : `เลือกทั้งออเดอร์ (${eligibleIds.length} แทรคที่ถึงไทยแล้ว)`
-                }
-                aria-label={`เลือกออเดอร์ ${base}`}
-              />
-            )}
+                      : `เลือกทั้งชิปเม้น (${eligibleIds.length} แทรคที่ถึงไทยแล้ว)`
+              }
+              aria-label={`เลือกชิปเม้น ${base}`}
+            />
           </td>
         )}
         {/* ID/CO */}
         <td className="px-2 py-2 font-mono text-[11px]">{a.fidorco || "—"}</td>
-        {/* เลขแทรคกิ้ง — chevron toggle + base + count */}
+        {/* เลขแทรคกิ้ง — chevron TOGGLES the dropdown · the base tracking# is a LINK to the
+            shipment detail (owner 2026-07-18 "กดเลขแทรคหัวแถวแล้วต้องเข้าไปดูชิปเม้นได้ · เห็น
+            แทรคกิ้งทั้งหมด") → the main forwarder detail shows its sibling trackings. */}
         <td className="px-2 py-2 text-[11px]">
           <span className="inline-flex items-center gap-1 font-semibold text-primary-700 dark:text-primary-300">
             {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            {base}
+            <Link
+              href={`/admin/forwarders/${g[0].id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="hover:underline"
+              title="เปิดดูรายละเอียดชิปเม้น (ทุกแทรคกิ้ง)"
+            >
+              {base}
+            </Link>
           </span>
           <span className="badge badge-secondary badge-pill" style={{ marginLeft: ".35rem" }}>
             {g.length} แทรค
@@ -646,17 +655,20 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
       <tr key={`pack-${gkey}`} className="pcs-row-packwrap">
         <td colSpan={totalCols} className="p-0">
           <div className="pcs-pack-wrap">
+            {/* owner 2026-07-18 — column order MATCHES the main table (ตารางใหญ่):
+                กล่อง(ลัง) · [ก·ย·ส] · CBM(ปริมาตร) · น้ำหนัก(หนัก) · ประเภท · + รูป per tracking. */}
             <table className="pcs-pack">
               <thead>
                 <tr>
                   <th className="text-right">#</th>
                   <th className="text-left">แทรคกิ้ง</th>
+                  <th className="text-center">รูป</th>
+                  <th className="text-right">กล่อง (รับ/คาด)</th>
                   <th className="text-right">กว้าง (ซม.)</th>
                   <th className="text-right">ยาว</th>
                   <th className="text-right">สูง</th>
-                  <th className="text-right">น้ำหนัก (กก.)</th>
                   <th className="text-right">CBM</th>
-                  <th className="text-right">กล่อง (รับ/คาด)</th>
+                  <th className="text-right">น้ำหนัก (กก.)</th>
                   <th className="text-left">ประเภท</th>
                 </tr>
               </thead>
@@ -672,11 +684,17 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                         </Link>
                         <span className="text-muted"> · #{r.id}</span>
                       </td>
-                      <td className="text-right">{r.fwidth != null && r.fwidth > 0 ? fmt(r.fwidth, 0) : "—"}</td>
-                      <td className="text-right">{r.flength != null && r.flength > 0 ? fmt(r.flength, 0) : "—"}</td>
-                      <td className="text-right">{r.fheight != null && r.fheight > 0 ? fmt(r.fheight, 0) : "—"}</td>
-                      <td className="text-right">{fmt(r.fweight, 2)}</td>
-                      <td className="text-right">{fmt(r.fvolume, 6)}</td>
+                      {/* รูปแต่ละแทรค — ย่อไว้ · hover=ขยาย (CSS) · คลิก=เปิดแท็บใหม่. */}
+                      <td className="text-center">
+                        {r.coverUrl ? (
+                          <a href={r.coverUrl} target="_blank" rel="noopener noreferrer" title="คลิกเพื่อเปิดรูปในแท็บใหม่">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={r.coverUrl} alt={`#${r.id}`} loading="lazy" className="pcs-pack-img" />
+                          </a>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
                       <td
                         /* neutral packing-list (owner: gray/white) — a bold weight is the
                            only cue for a short tracking; no red row/cell colour here. */
@@ -685,6 +703,11 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                       >
                         {fmtN(r.famountfi)}/{fmtN(r.famount)}
                       </td>
+                      <td className="text-right">{r.fwidth != null && r.fwidth > 0 ? fmt(r.fwidth, 0) : "—"}</td>
+                      <td className="text-right">{r.flength != null && r.flength > 0 ? fmt(r.flength, 0) : "—"}</td>
+                      <td className="text-right">{r.fheight != null && r.fheight > 0 ? fmt(r.fheight, 0) : "—"}</td>
+                      <td className="text-right">{fmt(r.fvolume, 6)}</td>
+                      <td className="text-right">{fmt(r.fweight, 2)}</td>
                       <td className="text-left">{productTypeLabel(r.fproductstype)}</td>
                     </tr>
                   );

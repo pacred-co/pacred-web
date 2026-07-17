@@ -318,7 +318,9 @@
 
 /* ── ดรอปดาว = แพคกิ้งลิสต์ (ตารางสลับสี เทา/ขาว · ไม่ใช่แดง/ขาว) ── */
 .pcs-rc .pcs-table tr.pcs-row-packwrap > td { background: #eef1f4; padding: 0; }
-.pcs-rc .pcs-pack-wrap { padding: 6px 10px 10px 34px; overflow-x: auto; }
+/* overflow: visible so the hover-zoom image can escape the cell (the outer .pcs-table-wrap
+   already owns the horizontal scroll · the packing-list is narrower than the main table). */
+.pcs-rc .pcs-pack-wrap { padding: 6px 10px 10px 34px; overflow: visible; }
 .pcs-rc table.pcs-pack { width: 100%; border-collapse: collapse; font-size: 12px; background: #fff; border: 1px solid #d5dbe1; }
 .pcs-rc table.pcs-pack thead th { background: #dfe4ea; color: #37404a; font-weight: 600; padding: 5px 8px; border: 1px solid #cfd6dd; white-space: nowrap; }
 .pcs-rc table.pcs-pack tbody td { padding: 4px 8px; border: 1px solid #e3e7ec; color: #37404a; white-space: nowrap; }
@@ -326,6 +328,9 @@
 .pcs-rc table.pcs-pack tbody tr:nth-child(even) td { background: #f2f5f8; }
 .pcs-rc table.pcs-pack tbody tr:hover td { background: #e7edf3; }
 .pcs-rc table.pcs-pack a { color: #1e5f8c; }
+/* per-tracking thumbnail — ย่อไว้ก่อน · hover=ขยายในที่ · คลิก(a)=เปิดแท็บใหม่ (owner 2026-07-18). */
+.pcs-rc .pcs-pack-img { width: 44px; height: 44px; object-fit: cover; border: 1px solid #ccd3da; border-radius: 3px; background: #fff; cursor: zoom-in; transition: transform .15s ease, box-shadow .15s ease; }
+.pcs-rc .pcs-pack-img:hover { transform: scale(4.5); transform-origin: center; position: relative; z-index: 50; box-shadow: 0 6px 20px rgba(0,0,0,.35); border-color: #9aa5b1; }
 
 .pcs-rc .prod-img {
   width: 40px; height: 40px; object-fit: cover; border: 1px solid rgba(0, 0, 0, 0.12);
