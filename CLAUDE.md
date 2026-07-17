@@ -3,6 +3,20 @@
 
 ---
 
+# 🧾 2026-07-18 ค่ำ (เดฟ · Mac · owner 4-งาน จากรูปรายงานตู้) — ขนส่งเอกชน→ปลายทาง · ตู้มีของยิงรับ→เข้าโกดังไทยแล้ว · สี แดง/ขาว หัวรายการ · fill ต้นทุน/กำไรติดลบ → ALL 4 BRANCHES · read FIRST
+
+> **🏁 STATE. main = dave-pacred = Poom-pacred = InwPond007 = `<HEAD>`** (Vercel prod · integrate ปอน `70828f49` ใบเสนอราคา default 7600/6600 = merge สะอาด 0 conflict · no migration). gate: **tsc 0 · build 0 · i18n 0 · tests 46** (pay-method 31 · momo-live 15 + carrier-guard 69 + bucket). **mig 0261 applied prod+dev · NEXT FREE = 0262.** 🔑 prod pw chat-only `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ`. ⚠️ ไม่มี admin login → verify ผ่าน tsc/build/tests + prod DB (bucket count + cost re-scan) · NOT authed-render (§0c).
+>
+> **owner สั่ง 4 งาน (จากรูป `/admin/report-cnt`):**
+> - **A) ขนส่งเอกชน → ปลายทาง (COD) auto (`lib/forwarder/pay-method.ts`):** own-fleet (PCS/PCSF/PRF/PCSE/PRE) → ต้นทาง '1' (Pacred จ่ายเอง) · **ANY ขนส่งเอกชน** (Flash 2 / J&T 24 / Kerry / ไปรษณีย์ 11 / free-text ชื่อ / private code) → **ปลายทาง '2' (COD)**. ยึด `isOwnFleetCarrier` (carrier-coverage-guard) เป็น SOT ตัวเดียว. **⚠️ supersedes 2026-07-09 "default ต้นทาง prepaid ทุก carrier"** (owner reclassify เอกชน = ปลายทาง; admin override รายแถวได้ผ่าน EditPayMethodField). money-note: COD gate ตัดค่าส่งในไทยออกจากบิล Pacred (courier เก็บปลายทาง) = ถูกต้องตาม COD · ไม่ retroactive (stored paymethod เดิมคง). edit-path (forwarder-legacy) เลิก leave-alone → stamp ปลายทางเมื่อเลือกเอกชน. tests pay-method 31 + momo-live 15.
+> - **B) รายงานตู้ bucket = "any arrived" (mig 0261 · MIN→MAX):** ตู้ที่มีของยิงรับเข้าไทย**แม้ชิ้นเดียว** (MAX(fstatus)>=4) → "เข้าโกดังไทยแล้ว" (เดิม MIN = ต้องครบทุกแทรค). RPC `get_container_summary`+`count_distinct_cabinets` HAVING MIN→MAX · JS fallback + `isContainerInBucket` SOT ยึด maxFstatus (display status ยัง = min = ตัวแทน "รออะไรอยู่"). **prod 16→13 waiting / 29→32 succeed** (3 ตู้ mixed ย้าย).
+> - **C) รายงานตู้ สีแดง/ขาว บนหัวรายการ (`cnt-list-table.tsx`):** แถวหัว (ที่กดดรอปดาว) ที่ยังไม่กดเลือก → **RED เมื่อยังไม่ยิงรับครบทุกกล่อง (ขาด N)** · **WHITE เมื่อกล่องครบ** (เหมือนแถวปกติ) · เลิก zebra/per-fstatus tint. selected=emerald (interaction feedback) · dropdown = ตารางแจงรายละเอียด (neutral · ไม่แดง).
+> - **D) fill ต้นทุน/กำไรติดลบ (`scripts/fix-garbage-momo-cost-2026-07-18.mjs` · applied prod · dry-run+backup):** report-cnt กำไรตู้ติดลบ = **7 แถว fcosttotalprice garbage** (weight×rate หรือ ×famount leak · cost/CBM >> 2500 sea/4700 road — task #23 class residue). recompute = round2(fvolume × rate). **หลักฐาน: cost = CBM×rate เสมอ** (แม้แถว 375kg/CBM ก็ 2500/CBM · density = SELL ไม่ใช่ cost · mig 0260 · verified sibling). **money-NEUTRAL ต่อลูกค้า** (cost internal · gated accounting/ultra · บิลใช้ ftotalprice/sell). box-split `/M` children excluded (box-basis reconcile แยก). **3 ตู้ false-negative → กำไรบวก** (SEA0625-8211 · GZS260626-1 · GZS260629-1) · Σ ลบ garbage ฿267,670 · re-scan garbage=0.
+>
+> **🟡 CARRYOVER (owner/pricing เคาะ · ไม่ใช่บัค):** (1) **GZE260624-1 (−183)** = underpriced จริง (sell 3300/CBM < cost 4700/CBM · billed แล้ว → แก้ = ต้องขึ้นราคาลูกค้าที่จ่ายแล้ว) = pricing เคาะ. (2) **5 ตู้ arrived Σcost=0** = รอ MOMO invoice (accounting ingest · ห้ามกุเลข). (3) **519218029029 box double-count** (base+/M · 1 unbilled) = ให้ box-detail-reconcile self-heal (money-loss risk ถ้า hand-hack). (4) tb_check_forwarder 11 แถว = fstatus=4 ทั้งหมด = อยู่คิวถูกต้อง (ไม่ stale). carryover เดิมทั้งหมดยังอยู่ (arrival-scan design · A7 live-test · billed-lump).
+
+---
+
 # 🧾 2026-07-18 (เดฟ · Mac · resync run-long ×2 · integrate ปอน + MOMO audit P1/P2 + dangler + bug-hunt 7 บัค) — ประวัติการคีย์ WHO + cash-nag/yuan-dup/credit-COD/reverse/mao/driver fixes → ALL 4 BRANCHES · read FIRST
 
 > **🔴 bug-hunt เต็มระบบ (2026-07-18 · owner "เคลียบัค เคลียงานค้าง" · `480071ed` · workflow 6-finder + adversarial-verify · reachability สะอาด → fix 7 · tsc0/build0):**
