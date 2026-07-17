@@ -72,16 +72,31 @@ check("baseOf / suffixOf strip and read the split suffix", () => {
   assert.equal(suffixOf("1783582989"), 0);
 });
 
-check("trueBoxTotals — Σ over real boxes (suffix>0), per-piece × qty, bare header dropped", () => {
+check("trueBoxTotals — Σ over real boxes (suffix>0), bare header dropped", () => {
   const boxes: ReconcileBox[] = [
     box({ boxTracking: "T", weightKg: 999 }),                    // bare header → dropped
     box({ boxTracking: "T-1/2", weightKg: 17, width: 51, length: 30, height: 48, quantity: 1 }),
     box({ boxTracking: "T-2/2", weightKg: 5, width: 50, length: 40, height: 30, quantity: 2 }),
   ];
   const t = trueBoxTotals(boxes);
-  assert.equal(t.fweight, 27);   // 17 + 5×2
+  assert.equal(t.fweight, 27);   // 17 (single piece) + 5×2 (legacy fallback — see below)
   assert.equal(t.count, 2);
   assert.equal(t.famount, 3);    // 1 + 2
+  // T-2/2 has qty 2 but NO cbm → the dims can't prove per-piece vs line-total, so its
+  // contribution used the LEGACY ×qty reading and the box is counted as `undecided`.
+  // A non-zero `undecided` makes this Σ untrustworthy as a money corroboration → the
+  // plan refuses to zero a bare on it (fail-safe · prod 2026-07-17: 0 across 80 bases).
+  assert.equal(t.undecided, 1);
+});
+
+check("trueBoxTotals — a fully-decided group reports undecided = 0", () => {
+  const boxes: ReconcileBox[] = [
+    box({ boxTracking: "T-1/2", weightKg: 17, cbm: 0.07344, width: 51, length: 30, height: 48, quantity: 1 }),
+    box({ boxTracking: "T-2/2", weightKg: 5, cbm: 0.06, width: 50, length: 40, height: 30, quantity: 2 }),
+  ];
+  const t = trueBoxTotals(boxes);
+  assert.equal(t.undecided, 0);
+  assert.equal(t.fweight, 27);   // 17 + 5×2 (cbm 0.06 == dims → per-piece → ×qty)
 });
 
 // ── 1a. LEFTOVER aggregate BARE — zero it (the 1783582989/52559 stranded case) ──
@@ -144,21 +159,64 @@ check("fixes a '-N/M' detail row that copied the bare aggregate (price re-derive
   assert.ok(plan.reviews.some((r) => r.kind === "aggregate_bare_siblings_dont_cover" && r.id === 52559));
 });
 
-// ── 2. MOMO-มั่ว weight — weight_kg×qty is a ×N tonnage vs the stored fweight → REVIEW ──
-check("REFUSES the MOMO-มั่ว weight case (weight_kg×qty ≫ stored · famount correct) → review, no fix", () => {
-  // 1782555393-4 (PR067): stored fweight 800 (10 pieces), momo weight_kg 800 → ×10 = 8000 (impossible).
+// ── 2. LINE-TOTAL box — the dims decide · the old "MOMO มั่ว" verdict was a FALSE alarm ──
+//
+// 🔎 CORRECTED 2026-07-17 (owner "GZE260627-1 น้ำหนักมั่ว"). This case used to assert
+// `weight_vol_only_momo_suspect` — but its fixture OMITTED `cbm`, the one field that
+// decides the row. The REAL prod box (read-only probe) carries cbm 1.67321, and
+// 371×22×20.5 = 0.167321/กล่อง × 10 = 1.67321 → the values are the LINE TOTAL, so the
+// truth is 800 kg — NOT 800×10. MOMO was never "มั่ว" here; our blind ×qty was.
+// (Verified: MOMO mixes BOTH conventions inside ONE shipment — base 1782555393 has
+// per-piece boxes [bare, -5] and line-total boxes [-2, -4] side by side.)
+check("LINE-TOTAL box (prod 1782555393-4): truth = 800 kg (NOT 800×10) → a correct row is left alone", () => {
   const boxes: ReconcileBox[] = [
-    box({ boxTracking: "1782555393-4", weightKg: 800, width: 371, length: 22, height: 20.5, quantity: 10 }),
+    box({ boxTracking: "1782555393-4", weightKg: 800, cbm: 1.67321, width: 371, length: 22, height: 20.5, quantity: 10 }),
   ];
+  // a row already carrying the TRUE line total → nothing to heal, nothing to flag.
   const group: ReconcileForwarderRow[] = [
     fwd({ id: 52196, ftrackingchn: "1782555393-4", famount: 10, fweight: 800, fvolume: 1.67321, ftotalprice: 6400, frefprice: "1", frefrate: 8, fwidth: 371, flength: 22, fheight: 20.5 }),
   ];
   const plan = planBoxDetailReconcile(group, boxes);
-  assert.equal(plan.detailFixes.length, 0);   // NEVER apply the ×10 over-charge
+  assert.equal(plan.detailFixes.length, 0);
   assert.equal(plan.bareZeroes.length, 0);
+  assert.equal(plan.reviews.length, 0);   // ← was a false "weight_vol_only_momo_suspect"
+});
+
+// ── 2b. The CORRUPTED shape the ×qty bug actually left on prod → still REFUSED here ──
+check("the ×qty-corrupted row (fweight 8000 · famount right) is NOT auto-healed → review (backfill's job)", () => {
+  // prod fid 52196 TODAY: fweight 8000 = 800×10 · fvolume 16.7321 = 1.67321×10.
+  // The decider proves the truth is 800/1.67321, but the corruption shape is
+  // "famount correct · weight wrong" — which this plan deliberately never auto-writes
+  // (an unattended cron must not move a money basis on that signature). It stays a
+  // REVIEW; scripts/momo-weight-qty-backfill-2026-07-17.mjs fixes it under owner sign-off.
+  const boxes: ReconcileBox[] = [
+    box({ boxTracking: "1782555393-4", weightKg: 800, cbm: 1.67321, width: 371, length: 22, height: 20.5, quantity: 10 }),
+  ];
+  const group: ReconcileForwarderRow[] = [
+    fwd({ id: 52196, ftrackingchn: "1782555393-4", famount: 10, fweight: 8000, fvolume: 16.7321, ftotalprice: 6400, frefprice: "1", frefrate: 8, fwidth: 371, flength: 22, fheight: 20.5 }),
+  ];
+  const plan = planBoxDetailReconcile(group, boxes);
+  assert.equal(plan.detailFixes.length, 0);
   assert.equal(plan.reviews.length, 1);
   assert.equal(plan.reviews[0].kind, "weight_vol_only_momo_suspect");
   assert.equal(plan.reviews[0].id, 52196);
+});
+
+// ── 2c. FAIL-SAFE — an unprovable convention is never guessed into a money basis ──
+check("a box whose dims can't prove per-piece-vs-line-total → box_basis_undecidable review, no fix", () => {
+  // no dims → resolveMomoBoxBasis returns decided:false → refuse (never write a guess).
+  const boxes: ReconcileBox[] = [
+    box({ boxTracking: "AGG-1/2", weightKg: 10, cbm: 0.35, quantity: 4 }),
+    box({ boxTracking: "AGG-2/2", weightKg: 10, cbm: 0.35, quantity: 4 }),
+  ];
+  const group: ReconcileForwarderRow[] = [
+    fwd({ id: 1, ftrackingchn: "AGG", famount: 8, fweight: 80, fvolume: 2.8, ftotalprice: 0 }),
+    fwd({ id: 2, ftrackingchn: "AGG-1/2", famount: 8, fweight: 80, fvolume: 2.8, ftotalprice: 0 }),
+  ];
+  const plan = planBoxDetailReconcile(group, boxes);
+  assert.equal(plan.detailFixes.length, 0);
+  assert.equal(plan.bareZeroes.length, 0);   // Σ is a guess → never zero a basis on it
+  assert.ok(plan.reviews.some((r) => r.kind === "box_basis_undecidable" && r.id === 2));
 });
 
 // ── 3. PRICED-ANCHOR model — the bare carries money → never touch (519218029029/PR050) ──

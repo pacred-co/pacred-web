@@ -18,8 +18,10 @@
  *     → EXCLUDED from both the box list and the Σ (else the total double-counts).
  *   - Each box's คิว = (ก×ย×ส)/1,000,000 (the legacy CBM formula); when all dims
  *     are 0 we fall back to the box's sent คิว (so a weight-only box still counts).
- *   - The TOTAL คิว/น้ำหนัก a box contributes = per-piece × จำนวนชิ้น (a box row can
- *     hold several identical pieces · momo_box_detail stores PER-PIECE values).
+ *   - The TOTAL คิว/น้ำหนัก a box contributes is resolved by the ONE decider
+ *     `resolveMomoBoxBasis` (box-detail-basis.ts) — MOMO's weight_kg/cbm are
+ *     per-piece on some rows and the LINE TOTAL on others, so a blind × จำนวนชิ้น
+ *     double-multiplies the line-total ones (owner 2026-07-17 · GZE260627-1).
  *   - fweight rounded to 2dp · fvolume rounded to 6dp (tb_forwarder.fvolume is
  *     numeric(14,6) since mig 0192).
  *
@@ -28,8 +30,12 @@
  * status. Pure · no DB · no IO · unit-tested (runs in test:unit).
  *
  * RUN:  pnpm tsx lib/integrations/momo-web/box-detail-recompute.ts
+ *
+ * @see lib/integrations/momo-web/box-detail-basis.ts — resolveMomoBoxBasis (THE decider)
  * ════════════════════════════════════════════════════════════════════════
  */
+
+import { resolveMomoBoxBasis, legacyBoxCbmPerPiece } from "./box-detail-basis";
 
 /** One box's editable dimensions (as staff typed them · cm / kg / คิว / ชิ้น). */
 export type BoxDims = {
@@ -80,16 +86,12 @@ export function boxTrackingSuffix(tracking: string): number {
  * PER-BOX คิว (per piece) from that box's dims — (ก×ย×ส)/1,000,000, 6dp. Falls
  * back to the box's own sent คิว when all dims are 0 (a weight-only box), so a box
  * with no measured size still contributes its known คิว.
+ *
+ * Re-exported from the SOT (box-detail-basis.ts) — kept as a named export because
+ * this module's inline tests assert it; there is exactly ONE implementation.
  */
-export function boxCbmFromDims(b: Pick<BoxDims, "width" | "length" | "height" | "cbm">): number {
-  const w = nn(b.width);
-  const l = nn(b.length);
-  const h = nn(b.height);
-  if (w > 0 || l > 0 || h > 0) {
-    return r6((w * l * h) / 1_000_000);
-  }
-  return r6(nn(b.cbm));
-}
+export const boxCbmFromDims: (b: Pick<BoxDims, "width" | "length" | "height" | "cbm">) => number =
+  legacyBoxCbmPerPiece;
 
 /**
  * Is this box a MOMO หัวบิล (bill-header) placeholder — NOT a real box?
@@ -112,34 +114,52 @@ export function countableBoxes(boxes: readonly BoxDims[]): BoxDims[] {
 }
 
 export type BoxRollup = {
-  /** Σ box weight (per-piece × ชิ้น) over COUNTABLE boxes — r2 → fweight. */
+  /** Σ box TOTAL weight over COUNTABLE boxes — r2 → fweight. */
   fweight: number;
-  /** Σ box คิว (per-piece × ชิ้น) over COUNTABLE boxes — r6 → fvolume. */
+  /** Σ box TOTAL คิว over COUNTABLE boxes — r6 → fvolume. */
   fvolume: number;
   /** How many boxes fed the Σ (excludes any หัวบิล). */
   countableCount: number;
+  /**
+   * Boxes whose per-piece-vs-line-total convention the dims could NOT prove
+   * (`resolveMomoBoxBasis` → decided:false). Their Σ contribution used the LEGACY
+   * (× ชิ้น) reading — correct for the staff-edit caller (it re-derives cbm from the
+   * typed dims, so its boxes are per-piece by construction), but a caller that
+   * reconciles RAW MOMO rows should surface these for review rather than trust them.
+   */
+  undecidedBoxes: string[];
 };
 
 /**
  * Recompute the SINGLE tb_forwarder row's price basis from the edited boxes.
  *
- * fweight = Σ (box per-piece weight × จำนวนชิ้น) · fvolume = Σ (box per-piece คิว ×
- * จำนวนชิ้น) — both over the COUNTABLE boxes (หัวบิล excluded). This is the exact
- * total the ONE billing row must carry so the price is the sum of the real boxes.
+ * fweight = Σ box TOTAL weight · fvolume = Σ box TOTAL คิว — both over the COUNTABLE
+ * boxes (หัวบิล excluded). Each box's TOTAL comes from the ONE decider
+ * (`resolveMomoBoxBasis`), which uses the box's dims to tell a per-piece value from a
+ * line-total one instead of blindly multiplying by จำนวนชิ้น. This is the exact total
+ * the ONE billing row must carry so the price is the sum of the real boxes.
+ *
+ * NOTE for the staff-edit caller (actions/admin/forwarder-box-detail.ts): its boxes
+ * are per-piece BY CONSTRUCTION — upsertEditedBoxDetails recomputes each box's cbm
+ * from the typed dims — so the decider returns `per_piece`/`single_piece` and the Σ is
+ * byte-identical to the pre-decider math. The decider matters for the RAW-MOMO callers.
  */
 export function rollupBoxes(boxes: readonly BoxDims[]): BoxRollup {
   const countable = countableBoxes(boxes);
   let weight = 0;
   let volume = 0;
+  const undecidedBoxes: string[] = [];
   for (const b of countable) {
-    const pieces = piecesOf(b.quantity);
-    weight += nn(b.weightKg) * pieces;
-    volume += boxCbmFromDims(b) * pieces;
+    const basis = resolveMomoBoxBasis(b);
+    weight += basis.totalWeightKg;
+    volume += basis.totalCbm;
+    if (!basis.decided) undecidedBoxes.push(b.boxTracking);
   }
   return {
     fweight: r2(weight),
     fvolume: r6(volume),
     countableCount: countable.length,
+    undecidedBoxes,
   };
 }
 
@@ -236,6 +256,30 @@ if (process.argv[1] && process.argv[1].endsWith("box-detail-recompute.ts")) {
     })),
   );
   eq("sibling -6 → total 1.18048 (NOT 16.5267)", sib6.fvolume, 1.18048);
+
+  // ── LINE-TOTAL regression (owner 2026-07-17 · "GZE260627-1 น้ำหนักมั่ว") ──
+  // MOMO stores weight_kg/cbm PER-PIECE on some boxes and as the LINE TOTAL on
+  // others; rollupBoxes now routes through resolveMomoBoxBasis (box-detail-basis.ts),
+  // which uses the dims to tell them apart instead of blindly × ชิ้น.
+  // prod fid 52206 · KY4001041630124-6 · 40×62×34 · qty 14 · momo weight_kg=189
+  // cbm=1.18048 (= 0.08432 × 14 → LINE TOTAL) → the box total is 189 kg, NOT 2,646.
+  const lineTotalBox = rollupBoxes([
+    { boxTracking: "KY4001041630124-6", width: 40, length: 62, height: 34, weightKg: 189, cbm: 1.18048, quantity: 14 },
+  ]);
+  eq("line-total box → fweight 189 (NOT 189×14=2,646)", lineTotalBox.fweight, 189);
+  eq("line-total box → fvolume 1.18048 (NOT ×14 again)", lineTotalBox.fvolume, 1.18048);
+  // prod 983824005 · 50×30×27 · cbm 0.0405 == dims → PER-PIECE → still multiplies.
+  const perPieceBox = rollupBoxes([
+    { boxTracking: "983824005-1/2", width: 50, length: 30, height: 27, weightKg: 12, cbm: 0.0405, quantity: 40 },
+  ]);
+  eq("per-piece box → fweight 12×40=480 (unchanged)", perPieceBox.fweight, 480);
+  eq("per-piece box → fvolume 0.0405×40=1.62 (unchanged)", perPieceBox.fvolume, 1.62);
+  // The staff-edit caller passes typed dims with cbm=0 → the weight convention is
+  // unprovable → LEGACY × ชิ้น preserved (no regression) but reported as undecided.
+  is("staff-edit shape (dims, cbm=0) keeps legacy ×ชิ้น", oneRowQty70.fweight === 70, true);
+  eq("undecided boxes are reported, not silently trusted", rollupBoxes([
+    { boxTracking: "X", width: 0, length: 0, height: 0, weightKg: 10, cbm: 0.35, quantity: 4 },
+  ]).undecidedBoxes.length, 1);
 
   console.log(`\nbox-detail-recompute: ${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);

@@ -14,10 +14,11 @@
  * which container/row was in this state; this powers the 🚩 flag on "MOMO ตรวจตู้"
  * so ภูม spots "ตู้ไหน/แถวไหนต้องอัพแต้ม" at a glance.
  *
- * THE INVARIANT (mirrors planBoxRowSplit guard #7 EXACTLY — the same box-total math,
- * the same 2% tolerance, the same dims-volume fallback)
+ * THE INVARIANT (2% tolerance · dims-volume fallback — as planBoxRowSplit guard #7)
  * ─────────────────────────────────────────────────────────────────────────
- *   box TOTAL weight = weight_kg(per-piece) × quantity  →  Σ over boxes.
+ *   The box TOTAL weight/คิว come from the ONE decider `resolveMomoBoxBasis`
+ *   (box-detail-basis.ts): MOMO's weight_kg/cbm are ต่อกล่อง on some rows and the LINE
+ *   TOTAL on others, so the box's own dims arbitrate whether × quantity applies.
  *   The data is CONSISTENT when Σ box weight ≈ aggregate fweight AND Σ box cbm ≈
  *   aggregate fvolume (within 2%). When the STORED weight/คิว disagree, MOMO's own
  *   per-box DIMENSIONS (ก×ย×ส) are still trustworthy on many folded rows: if
@@ -28,25 +29,45 @@
  *   ⇒ "garbage" (🚩 · needs แต้ม) IFF the stored metrics fail AND the dims fallback
  *      ALSO fails — i.e. even the human button would return weight/cbm_mismatch.
  *
+ * 🔎 2026-07-17 (owner "GZE260627-1 น้ำหนักมั่ว") — routing the Σ through the decider
+ *    REMOVES a class of FALSE 🚩: a line-total box (e.g. prod 1782555393-4 · weight_kg
+ *    800 · cbm 1.67321 == dims × 10) used to be read as 800×10 = 8,000 kg → "มั่ว".
+ *    It is not มั่ว; our × quantity was. MOMO even mixes both conventions inside ONE
+ *    shipment (base 1782555393: bare/-5 per-piece · -2/-4 line-total).
+ *    ⚠️ `lib/integrations/momo-web/split-box-rows-plan.ts` (planBoxRowSplit) still
+ *    carries the legacy × quantity math, so the two can now disagree on a line-total
+ *    box: this says "fine", the UNATTENDED cron split may still say weight_mismatch.
+ *    The HUMAN button agrees (its dims fallback already covers exactly this shape).
+ *    Wiring the decider into planBoxRowSplit is the remaining step — money-neutral
+ *    guard · owner-gated · see the ground-truth doc.
+ *
  * SCOPE: DISPLAY-ONLY diagnostic. This module writes nothing, feeds no price/status,
  * and never changes a bill — it only tells staff which MOMO numbers to distrust.
  *
- * SAFETY — pure · no DB · no IO · unit-tested (agrees with planBoxRowSplit).
+ * SAFETY — pure · no DB · no IO · unit-tested.
  * RUN:  pnpm tsx lib/admin/momo-box-consistency.test.ts
- * @see lib/integrations/momo-web/split-box-rows-plan.ts — the money guard this mirrors
+ * @see lib/integrations/momo-web/box-detail-basis.ts    — resolveMomoBoxBasis (THE decider)
+ * @see lib/integrations/momo-web/split-box-rows-plan.ts — the money guard (legacy math · see ⚠️)
  * @see supabase/migrations/0240_momo_box_detail.sql      — the per-box store
+ * @see docs/research/momo-invoice-reconcile-ground-truth-2026-07-17.md — the prod evidence
  * ════════════════════════════════════════════════════════════════════════
  */
+
+import { resolveMomoBoxBasis } from "@/lib/integrations/momo-web/box-detail-basis";
 
 /** Tolerance for the money-basis match — MUST equal planBoxRowSplit's default (2%). */
 const REL_TOLERANCE = 0.02;
 
-/** One momo_box_detail row (per-PIECE metrics + pieces count) — the box TOTAL = per-piece × qty. */
+/** One momo_box_detail row + its pieces count.
+ *
+ *  ⚠️ The two metric fields are named `…PerPiece` for historical reasons ONLY — MOMO
+ *  sends them per-piece on some rows and as the LINE TOTAL on others. Never multiply
+ *  them by `quantity` directly; `resolveMomoBoxBasis` decides (via the dims). */
 export type BoxConsistencyInput = {
   boxTracking: string;
-  /** weight_kg — per PIECE. */
+  /** momo_box_detail.weight_kg — per-piece OR line-total (the decider resolves it). */
   weightKgPerPiece: number;
-  /** cbm — per PIECE. */
+  /** momo_box_detail.cbm — per-piece OR line-total (the decider resolves it). */
   cbmPerPiece: number;
   width: number;
   length: number;
@@ -130,15 +151,20 @@ export function deriveMomoBoxConsistency(
   };
   if (uniq.length <= 1) return base;
 
-  // box TOTALs (per-piece × qty) + Σ, and each box's dims-volume total.
+  // box TOTALs (via the decider — per-piece rows × qty · line-total rows as-is) + Σ,
+  // and each box's dims-volume total (the fallback signal, always per-piece × qty).
   let sumWeight = 0;
   let sumCbm = 0;
   let allDims = true;
   const dimVols: number[] = [];
   for (const b of uniq) {
     const q = pieces(b.quantity);
-    sumWeight += r2((Number(b.weightKgPerPiece) || 0) * q);
-    sumCbm += r6((Number(b.cbmPerPiece) || 0) * q);
+    const basis = resolveMomoBoxBasis({
+      width: b.width, length: b.length, height: b.height,
+      weightKg: b.weightKgPerPiece, cbm: b.cbmPerPiece, quantity: b.quantity,
+    });
+    sumWeight += basis.totalWeightKg;
+    sumCbm += basis.totalCbm;
     const w = Number(b.width), l = Number(b.length), h = Number(b.height);
     if (!(w > 0 && l > 0 && h > 0)) allDims = false;
     dimVols.push(((w * l * h) / 1_000_000) * q);

@@ -55,12 +55,15 @@
  * `tsx`. The SQL writer (box-detail-reconcile.ts) applies the plan this returns.
  *
  * @see lib/integrations/momo-web/box-detail-reconcile.ts  — the SQL writer (applies the plan)
+ * @see lib/integrations/momo-web/box-detail-basis.ts       — resolveMomoBoxBasis (THE per-box total decider)
  * @see lib/admin/momo-bill-header.ts                       — the count-display SOT (drops a money-0 bare)
  * @see lib/integrations/momo-web/box-detail-recompute.ts   — the per-box คิว/kg math (shared idioms)
  * @see scripts/fix-momo-boxcount-corrupt-2026-07-16.mjs    — the one-off data-fix these guards are ported from
  * @see scripts/audit-momo-self-heal-plan-2026-07-16.mjs    — the read-only blast-radius audit (mirrors this plan)
  * ════════════════════════════════════════════════════════════════════════════
  */
+
+import { resolveMomoBoxBasis } from "./box-detail-basis";
 
 /** One tb_forwarder row in a base+userid group (the money-relevant columns). */
 export type ReconcileForwarderRow = {
@@ -83,16 +86,21 @@ export type ReconcileForwarderRow = {
   frefprice: number | string | null;
 };
 
-/** One momo_box_detail box (the per-box TRUTH · per-piece metrics + pieces). */
+/** One momo_box_detail box (the per-box TRUTH).
+ *
+ *  ⚠️ weightKg/cbm carry NO fixed meaning — MOMO sends them per-piece on some rows and
+ *  as the LINE TOTAL (already × quantity) on others. NEVER read them directly: route
+ *  every box through `resolveMomoBoxBasis` (box-detail-basis.ts), which uses the dims
+ *  to decide, and refuse the row when it cannot. */
 export type ReconcileBox = {
   /** The exact split tracking as MOMO returns it ("<base>-3" / "<base>-3/6"). */
   boxTracking: string;
   width: number | string | null;
   length: number | string | null;
   height: number | string | null;
-  /** per-piece weight (kg) — the box TOTAL = weight_kg × quantity. */
+  /** weight (kg) — per-piece OR line-total · resolveMomoBoxBasis decides which. */
   weightKg: number | string | null;
-  /** per-piece คิว — used only when all dims are 0 (weight-only box). */
+  /** คิว — per-piece OR line-total · resolveMomoBoxBasis decides which. */
   cbm: number | string | null;
   quantity: number | string | null;
 };
@@ -130,6 +138,13 @@ export type TrueBoxTotals = {
   famount: number;
   /** How many real boxes (suffix>0) fed the Σ. */
   count: number;
+  /**
+   * How many of those boxes had an UNPROVABLE per-piece-vs-line-total convention
+   * (resolveMomoBoxBasis → decided:false · their Σ contribution fell back to the
+   * legacy × qty reading). >0 ⇒ this Σ is NOT trustworthy as a money corroboration →
+   * the plan refuses to zero a bare on it. (prod 2026-07-17: 0 across all 80 bases.)
+   */
+  undecided: number;
 };
 
 /** A redundant aggregate BARE base to ZERO (famount/fweight/fvolume → 0). */
@@ -148,6 +163,7 @@ export type ReconcileReview = {
 };
 
 export type ReconcileReviewKind =
+  | "box_basis_undecidable"              // dims can't prove per-piece vs line-total → never guess a money basis
   | "weight_vol_only_momo_suspect"       // detail weight/คิว ≠ momo but famount NOT inflated → MOMO มั่ว → refuse
   | "aggregate_on_detail_no_bare"        // detail carries the aggregate but there is no bare base
   | "priced_anchor_bare"                 // the bare carries money (priced anchor) → detail needs a money decision
@@ -184,11 +200,6 @@ function r6(n: number): number {
   const v = Number(n);
   return Number.isFinite(v) ? Number(v.toFixed(6)) : 0;
 }
-/** จำนวนชิ้น — floored at 1 (a box is at least one piece). */
-function piecesOf(q: number | string | null | undefined): number {
-  const n = Math.round(num(q));
-  return Number.isFinite(n) && n > 0 ? n : 1;
-}
 /** Numeric "-i/n" (or "-i") split-suffix; 0 = bare base. */
 export function suffixOf(tracking: string | null | undefined): number {
   const m = /-(\d+)(?:\/\d+)?$/.exec((tracking ?? "").trim());
@@ -197,14 +208,6 @@ export function suffixOf(tracking: string | null | undefined): number {
 /** Strip a numeric "-i/n" split-suffix → the base tracking. */
 export function baseOf(tracking: string | null | undefined): string {
   return (tracking ?? "").trim().replace(/-\d+(?:\/\d+)?$/, "");
-}
-/** PER-BOX คิว (per piece) — (ก×ย×ส)/1e6, 6dp; fallback to sent คิว when dims all 0. */
-function boxCbmFromDims(b: Pick<ReconcileBox, "width" | "length" | "height" | "cbm">): number {
-  const w = num(b.width);
-  const l = num(b.length);
-  const h = num(b.height);
-  if (w > 0 || l > 0 || h > 0) return r6((w * l * h) / 1_000_000);
-  return r6(num(b.cbm));
 }
 /** Relative difference |a-b| / max(|a|,|b|); 0 when both ~0. */
 function relDiff(a: number, b: number): number {
@@ -220,23 +223,31 @@ function isBilled(fstatus: string | null | undefined): boolean {
 
 /**
  * Σ over the group's REAL momo boxes (suffix>0) — the shipment truth used to
- * corroborate an aggregate bare and to size a detail fix. Per-box TOTAL =
- * per-piece × quantity (momo_box_detail stores per-piece values).
+ * corroborate an aggregate bare and to size a detail fix.
+ *
+ * Each box's TOTAL comes from the ONE decider (`resolveMomoBoxBasis`): MOMO's
+ * weight_kg/cbm are per-piece on some rows and the LINE TOTAL on others, so the old
+ * blind `× quantity` inflated the line-total ones (prod: Σ 82,829 ghost kg · owner
+ * 2026-07-17 "GZE260627-1 น้ำหนักมั่ว"). A box whose convention the dims can't prove
+ * still contributes its LEGACY value but is COUNTED in `undecided` so the caller can
+ * refuse to spend this Σ as a money corroboration.
  */
 export function trueBoxTotals(boxes: readonly ReconcileBox[]): TrueBoxTotals {
   let fweight = 0;
   let fvolume = 0;
   let famount = 0;
   let count = 0;
+  let undecided = 0;
   for (const b of boxes) {
     if (suffixOf(b.boxTracking) <= 0) continue; // real boxes only (drop a bare header box)
-    const qty = piecesOf(b.quantity);
-    fweight += r2(num(b.weightKg) * qty);
-    fvolume += r6(boxCbmFromDims(b) * qty);
-    famount += qty;
+    const basis = resolveMomoBoxBasis(b);
+    fweight += basis.totalWeightKg;
+    fvolume += basis.totalCbm;
+    famount += basis.pieces;
     count += 1;
+    if (!basis.decided) undecided += 1;
   }
-  return { fweight: r2(fweight), fvolume: r6(fvolume), famount, count };
+  return { fweight: r2(fweight), fvolume: r6(fvolume), famount, count, undecided };
 }
 
 /**
@@ -277,11 +288,18 @@ export function planBoxDetailReconcile(
     const box = byBox.get((row.ftrackingchn ?? "").trim());
     if (!box) continue;                              // no momo truth to compare
 
-    const qty = piecesOf(box.quantity);
+    // THE decider — is this box's weight_kg/cbm per-piece or the line total? When the
+    // dims can't prove it we must NOT write a money basis on a guess (fail-safe).
+    const basis = resolveMomoBoxBasis(box);
+    if (!basis.decided) {
+      reviews.push({ kind: "box_basis_undecidable", id: row.id, tracking: row.ftrackingchn });
+      continue;
+    }
+    const qty = basis.pieces;
     const truth: DetailTruth = {
       famount: qty,
-      fweight: r2(num(box.weightKg) * qty),
-      fvolume: r6(boxCbmFromDims(box) * qty),
+      fweight: basis.totalWeightKg,
+      fvolume: basis.totalCbm,
       fwidth: r2(num(box.width)),
       flength: r2(num(box.length)),
       fheight: r2(num(box.height)),
@@ -324,8 +342,10 @@ export function planBoxDetailReconcile(
       continue;
     }
     // corroboration 2: momo RECONCILES the aggregate (bare.fweight ≈ Σ momo per-box).
-    // REFUSES the MOMO-มั่ว case (Σ weight_kg×qty is a ×N tonnage vs the real bare).
-    const momoReconciles = totals.count > 1 && relDiff(num(bare.fweight), totals.fweight) <= TOL;
+    // REFUSES the MOMO-มั่ว case (Σ is a ×N tonnage vs the real bare). `undecided>0`
+    // means some box's convention was unprovable, so the Σ is a guess → never spend it.
+    const momoReconciles =
+      totals.count > 1 && totals.undecided === 0 && relDiff(num(bare.fweight), totals.fweight) <= TOL;
     if (!momoReconciles) {
       reviews.push({ kind: "momo_does_not_reconcile_aggregate", id: row.id, tracking: row.ftrackingchn });
       continue;
@@ -333,8 +353,8 @@ export function planBoxDetailReconcile(
 
     const priced = num(row.ftotalprice) > 0;
     // re-price a priced row on its OWN truth basis (คิว→fvolume · else kg→fweight) × frefrate.
-    const basis = String(row.frefprice ?? "").trim() === "2" ? truth.fvolume : truth.fweight;
-    const newPrice = priced ? r2(basis * num(row.frefrate)) : 0;
+    const priceBasis = String(row.frefprice ?? "").trim() === "2" ? truth.fvolume : truth.fweight;
+    const newPrice = priced ? r2(priceBasis * num(row.frefrate)) : 0;
     // extra corroboration for a PRICED fix: an identical-dims twin whose price matches
     // the re-price (money is not guessed on an unattended cron — no twin → review).
     const twin = group.find(
@@ -369,8 +389,10 @@ export function planBoxDetailReconcile(
     const alreadyZero =
       num(bare.fweight) === 0 && num(bare.fvolume) === 0 && Math.round(num(bare.famount)) === 0;
     if (hasBoxSibling && !alreadyZero) {
-      // corroboration A: the bare looks like the whole-shipment aggregate.
-      const isTrueAggregate = totals.count > 1 && relDiff(num(bare.fweight), totals.fweight) <= TOL;
+      // corroboration A: the bare looks like the whole-shipment aggregate. An
+      // `undecided` box makes Σ a guess → never zero a basis on it (fail-safe).
+      const isTrueAggregate =
+        totals.count > 1 && totals.undecided === 0 && relDiff(num(bare.fweight), totals.fweight) <= TOL;
       // corroboration B: the SIBLING rows ALONE already cover the shipment weight, so
       // zeroing the redundant bare provably loses NO weight. A properly-split base
       // (bare = box-1 · siblings = boxes 2..N) fails this (Σ sib = Σ − box1 ≠ Σ).

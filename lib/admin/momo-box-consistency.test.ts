@@ -14,9 +14,18 @@ function t(name: string, fn: () => void) {
   catch (e) { console.error(`  ✗ ${name}\n    ${e instanceof Error ? e.message : e}`); process.exitCode = 1; }
 }
 
-// ── REAL prod fixture: fwd 52137 (1782555393, PR067) — MOMO มั่ว, dims don't reconcile ──
-// aggregate fweight=150 / fvolume=0.33696, but box_detail sums to ~20,141kg / ~40 คิว
-// (box -2 claims 3,580kg/piece for a 1.75-คิว box). The auto-split refused it (weight_mismatch).
+// ── REAL prod fixture: fwd 52137 (1782555393, PR067) — dims don't reconcile the agg ──
+// aggregate fweight=150 / fvolume=0.33696 while box_detail describes the WHOLE shipment
+// → the auto-split refuses it (weight_mismatch) and the 🚩 fires.
+//
+// 🔎 CORRECTED 2026-07-17 — the Σ here used to be asserted as ~20,141 kg, which was the
+// BUG (blind weight_kg × quantity) frozen into a test. MOMO mixes conventions inside this
+// ONE shipment: bare/-5 are per-piece, -2/-4 are the LINE TOTAL (cbm == dims × qty).
+// The decider (resolveMomoBoxBasis) reads it as 150 + 3,580.5 + 350 + 800 + 900 = 5,780.5 kg.
+// ✅ CORROBORATED INDEPENDENTLY by the แต้ม/iTAM packing list — the physical ground truth —
+//    whose 2026-07-14 ingest fixed this very row "PR067 1782555393 20,141→5,780kg garbage"
+//    (CLAUDE.md 2026-07-13/14). Two independent sources land on 5,780(.5): แต้ม's real
+//    packing list, and MOMO's own dims. The old ×qty reading (20,141) was neither.
 const F52137: { agg: { fweight: number; fvolume: number }; boxes: BoxConsistencyInput[] } = {
   agg: { fweight: 150, fvolume: 0.33696 },
   boxes: [
@@ -34,8 +43,23 @@ t("52137 (real): garbage · weight · dims can't reconcile", () => {
   assert.equal(v.reason, "weight");
   assert.equal(v.dimsReconcilable, false);
   assert.equal(v.boxCount, 5);
-  assert.ok(v.boxWeightSum > 20000, `boxWeightSum ${v.boxWeightSum}`);
+  // the DECIDED Σ — matches แต้ม's packing list (5,780), NOT the old ×qty 20,141.5.
+  assert.ok(
+    Math.abs(v.boxWeightSum - 5780.5) < 0.01,
+    `boxWeightSum ${v.boxWeightSum} — expected 5780.5 (แต้ม packing list says 5,780)`,
+  );
   assert.equal(v.aggWeight, 150);
+});
+
+t("52137: the per-box conventions MOMO mixed inside one shipment are each read right", () => {
+  // Proves the Σ above is right box-by-box, not right by luck.
+  const v = deriveMomoBoxConsistency(F52137.agg, F52137.boxes);
+  // bare 320×27×13 = 0.11232/กล่อง == cbm 0.1123 → PER-PIECE → 50 × 3 = 150
+  // -2   190×77×120 = 1.7556/กล่อง · cbm 5.2668 == ×3 → LINE TOTAL → 3,580.5 (not ×3)
+  // -3   qty 1 → 350
+  // -4   371×22×20.5 = 0.167321/กล่อง · cbm 1.67321 == ×10 → LINE TOTAL → 800 (not ×10)
+  // -5   126×48×52 = 0.314496/กล่อง == cbm 0.3145 → PER-PIECE → 60 × 15 = 900
+  assert.ok(Math.abs(v.boxWeightSum - (150 + 3580.5 + 350 + 800 + 900)) < 0.01);
 });
 
 t("52137: verdict AGREES with planBoxRowSplit (weight_mismatch)", () => {
