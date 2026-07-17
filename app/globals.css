@@ -428,6 +428,23 @@ body {
   animation: app-fade-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Playful "เด้ง" pop for a changing money total (admin pay modal · keyed on the
+   amount so it replays on open + whenever the selected total changes). */
+@keyframes price-bounce {
+  0%   { transform: translateY(0)    scale(1); }
+  25%  { transform: translateY(-9px) scale(1.09); }
+  45%  { transform: translateY(0)    scale(1); }
+  62%  { transform: translateY(-5px) scale(1.05); }
+  78%  { transform: translateY(0)    scale(1); }
+  89%  { transform: translateY(-2px) scale(1.02); }
+  100% { transform: translateY(0)    scale(1); }
+}
+.price-bounce-fx {
+  display: inline-block;
+  transform-origin: center bottom;
+  animation: price-bounce 0.9s cubic-bezier(0.28, 0.84, 0.42, 1) both;
+}
+
 /* Cross-document navigation cross-fade (hard nav / full reload · CSS-only,
    harmless where unsupported · SPA nav handled by the route-keyed wrapper). */
 @view-transition {

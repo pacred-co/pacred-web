@@ -76,7 +76,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { SlipCompare } from "@/components/admin/slip-compare";
 import { WalletBalanceCard } from "@/components/admin/wallet-balance-card";
-import { EditDateSlipForm, ApproveRejectForm } from "./edit-form";
+import { EditDateSlipForm, ApproveRejectForm, RejectSlipInline } from "./edit-form";
 import { classifyWalletHsRow } from "@/lib/wallet/classify-approve-row";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { calcForwarderOutstanding, type ForwarderPriceFields } from "@/lib/forwarder/outstanding";
@@ -831,6 +831,10 @@ export default async function AdminWalletDetail({
                   needsRound1={needsRound1}
                   reviewedAt={reviewedAt}
                 />
+                {/* ตีกลับสลิป (owner 2026-07-16) — สลิปปลอม/ซ้ำ/ไม่ตรง → ปฏิเสธ
+                    ตั้งแต่หน้า 1 (ถอยสถานะให้ลูกค้าจ่ายใหม่) โดยไม่ต้องผ่านรอบ 1 ก่อน.
+                    reuse ตัวปฏิเสธเดิม (adminRejectWalletDeposit) — ไม่มี money logic ใหม่. */}
+                <RejectSlipInline id={row.id} />
               </div>
             )}
 

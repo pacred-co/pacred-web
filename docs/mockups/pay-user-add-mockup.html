@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body>
+<title>Mockup · จ่ายเงินแทนลูกค้า (ทำรายการแทน)</title>
+
+<style>
+  :root {
+    --ground: #f1f1f3;
+    --card: #ffffff;
+    --card-alt: #fafafb;
+    --ink: #2b2c33;
+    --head: #464855;
+    --muted: #8a8d99;
+    --muted-soft: #b4b6c0;
+    --border: #e7e7ec;
+    --border-soft: #f0f0f3;
+    --pr-red: #b30000;
+    --pr-red-2: #d61111;
+    --btn-red: #dc2626;
+    --btn-red-h: #b91c1c;
+    --ok: #28d094;
+    --ok-ink: #0f7a54;
+    --warn: #ff9149;
+    --warn-ink: #9a4d12;
+    --danger: #ff4961;
+    --sky: #0b74c4;
+    --violet: #6d28d9;
+    --amber-bg: #fff8e6;
+    --amber-bd: #f2d489;
+    --amber-ink: #92710f;
+    --green-bg: #edf9f1;
+    --green-bd: #a9dcbc;
+    --green-ink: #14663f;
+    --shadow: 0 1px 2px rgba(20,20,40,.05), 0 6px 20px rgba(20,20,40,.05);
+    --mono: 'JetBrains Mono','SFMono-Regular',Consolas,'Liberation Mono',ui-monospace,monospace;
+    --thai: 'Prompt','Noto Sans Thai','Leelawadee UI','Segoe UI',system-ui,-apple-system,sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:#0c0c0f; --card:#17171b; --card-alt:#1c1c21; --ink:#e7e7ec; --head:#dcdce4;
+      --muted:#9a9aa6; --muted-soft:#6f6f7a; --border:#2a2a31; --border-soft:#242429;
+      --pr-red:#e11d1d; --pr-red-2:#f43b3b; --btn-red:#ef4444; --btn-red-h:#dc2626;
+      --amber-bg:#3a2f13; --amber-bd:#6b5417; --amber-ink:#f4cf7a;
+      --green-bg:#12281d; --green-bd:#245a3c; --green-ink:#7fe0ad;
+      --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0c0c0f; --card:#17171b; --card-alt:#1c1c21; --ink:#e7e7ec; --head:#dcdce4;
+    --muted:#9a9aa6; --muted-soft:#6f6f7a; --border:#2a2a31; --border-soft:#242429;
+    --pr-red:#e11d1d; --pr-red-2:#f43b3b; --btn-red:#ef4444; --btn-red-h:#dc2626;
+    --amber-bg:#3a2f13; --amber-bd:#6b5417; --amber-ink:#f4cf7a;
+    --green-bg:#12281d; --green-bd:#245a3c; --green-ink:#7fe0ad;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+  }
+  :root[data-theme="light"] {
+    --ground:#f1f1f3; --card:#ffffff; --card-alt:#fafafb; --ink:#2b2c33; --head:#464855;
+    --muted:#8a8d99; --muted-soft:#b4b6c0; --border:#e7e7ec; --border-soft:#f0f0f3;
+    --pr-red:#b30000; --pr-red-2:#d61111; --btn-red:#dc2626; --btn-red-h:#b91c1c;
+    --amber-bg:#fff8e6; --amber-bd:#f2d489; --amber-ink:#92710f;
+    --green-bg:#edf9f1; --green-bd:#a9dcbc; --green-ink:#14663f;
+    --shadow:0 1px 2px rgba(20,20,40,.05),0 6px 20px rgba(20,20,40,.05);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--thai); font-size: 14px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased; padding-bottom: 96px;
+  }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ── chrome ── */
+  .shell { display: flex; min-height: 100vh; }
+  .rail {
+    width: 54px; flex: 0 0 54px; background: var(--card);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+    align-items: center; gap: 4px; padding: 10px 0; position: sticky; top: 0; height: 100vh;
+  }
+  .rail .brand {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: linear-gradient(135deg,var(--pr-red),var(--pr-red-2));
+    color: #fff; font-weight: 800; font-size: 13px; letter-spacing: -.5px;
+    display: grid; place-items: center; margin-bottom: 8px; box-shadow: 0 2px 6px rgba(179,0,0,.35);
+  }
+  .rail .ico {
+    width: 34px; height: 30px; border-radius: 8px; color: var(--muted-soft);
+    display: grid; place-items: center; cursor: pointer;
+  }
+  .rail .ico:hover { background: var(--border-soft); color: var(--pr-red); }
+  .rail .ico.on { background: rgba(179,0,0,.08); color: var(--pr-red); }
+  .rail .ico svg { width: 19px; height: 19px; }
+  .rail .badge { position: relative; }
+  .rail .badge::after {
+    content: attr(data-n); position: absolute; top: -2px; right: -1px;
+    background: var(--danger); color: #fff; font-size: 9px; font-weight: 700;
+    min-width: 15px; height: 15px; border-radius: 8px; display: grid; place-items: center;
+    padding: 0 3px; font-family: var(--mono);
+  }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .topbar {
+    height: 48px; background: linear-gradient(90deg,var(--pr-red),var(--pr-red-2));
+    display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+    padding: 0 14px; color: #fff; position: sticky; top: 0; z-index: 20;
+  }
+  .topbar .chip {
+    display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 11px;
+    border-radius: 8px; background: rgba(255,255,255,.14); color: #fff; font-size: 12px;
+    font-weight: 600; cursor: pointer; border: 0;
+  }
+  .topbar .chip:hover { background: rgba(255,255,255,.24); }
+  .topbar .chip svg { width: 15px; height: 15px; }
+
+  .content { padding: 18px 22px 40px; max-width: 1180px; width: 100%; margin: 0 auto; }
+
+  .crumb { display: flex; gap: 7px; align-items: center; font-size: 12px; color: var(--muted); flex-wrap: wrap; margin-bottom: 14px; }
+  .crumb a { color: var(--muted); text-decoration: none; }
+  .crumb a:hover { color: var(--pr-red); }
+  .crumb .cur { color: var(--head); font-family: var(--mono); }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); }
+
+  /* ── control bar ── */
+  .ctrl { padding: 14px 16px; display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px; }
+  .fld { display: flex; flex-direction: column; gap: 5px; }
+  .fld .lbl { font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: .2px; }
+  .select, .inp {
+    height: 42px; border: 1px solid var(--border); border-radius: 11px; background: var(--card);
+    color: var(--ink); font-family: inherit; font-size: 14px; padding: 0 13px; min-width: 180px;
+  }
+  .inp.wide { min-width: 420px; }
+  .inp:focus, .select:focus { outline: 2px solid rgba(179,0,0,.25); border-color: var(--pr-red); }
+  .inp.filled { font-weight: 700; }
+  .btn-hist {
+    height: 42px; padding: 0 16px; border-radius: 11px; border: 0; cursor: pointer;
+    background: linear-gradient(135deg,var(--violet),#7c3aed); color: #fff; font-weight: 700; font-size: 13px;
+    box-shadow: 0 2px 8px rgba(109,40,217,.3);
+  }
+
+  /* ── wallet card ── */
+  .wallet {
+    border: 2px solid var(--danger); border-radius: 16px; background: var(--card);
+    padding: 16px 18px; display: flex; align-items: center; gap: 16px; margin-bottom: 14px; position: relative; overflow: hidden;
+  }
+  .wallet .who { flex: 1; min-width: 0; }
+  .wallet .nm { font-size: 18px; font-weight: 700; color: var(--head); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .tag { font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 6px; letter-spacing: .2px; }
+  .tag.vip { background: #f3e8ff; color: #6d28d9; }
+  .tag.niti { background: #dbeafe; color: #1d4ed8; }
+  .tag.sale { background: var(--border-soft); color: var(--muted); font-weight: 600; }
+  .wallet .sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; font-family: var(--mono); }
+  .wallet .amt { font-size: 34px; font-weight: 300; color: var(--warn-ink); line-height: 1.1; margin-top: 6px; letter-spacing: -1px; }
+  .wallet .cb { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .wallet .cb b { color: var(--ink); }
+  .wallet .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: linear-gradient(90deg,var(--warn),#ffc078,var(--warn)); }
+  .wallet .logo {
+    width: 66px; height: 66px; flex: 0 0 66px; border-radius: 50%;
+    background: radial-gradient(circle at 32% 30%, #ff5a5a, var(--pr-red) 72%);
+    display: grid; place-items: center; color: #fff; box-shadow: 0 3px 10px rgba(179,0,0,.35);
+  }
+  .wallet .logo b { font-size: 21px; font-weight: 800; letter-spacing: -1px; }
+  .wallet .logo small { font-size: 9px; opacity: .9; margin-top: -3px; }
+
+  .notice {
+    border: 1px solid var(--amber-bd); background: var(--amber-bg); color: var(--amber-ink);
+    border-radius: 12px; padding: 10px 14px; font-size: 12.5px; margin-bottom: 16px; line-height: 1.55;
+  }
+  .notice b { color: var(--amber-ink); }
+
+  /* ── table ── */
+  .tbl-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 8px; gap: 12px; flex-wrap: wrap; }
+  .tbl-head .h { font-size: 13px; color: var(--muted); }
+  .tbl-head .h b { color: var(--head); font-weight: 700; font-size: 15px; }
+  .tbl-scroll { overflow-x: auto; border-top: 1px solid var(--border); }
+  table { border-collapse: collapse; width: 100%; min-width: 940px; font-size: 12.5px; }
+  thead th {
+    background: var(--card-alt); color: var(--muted); font-weight: 600; text-align: left;
+    padding: 9px 11px; border-bottom: 1px solid var(--border); white-space: nowrap; font-size: 11.5px;
+    position: sticky; top: 0;
+  }
+  tbody td { padding: 11px; border-bottom: 1px solid var(--border-soft); vertical-align: top; }
+  tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--card-alt) 55%, transparent); }
+  tbody tr.sel td { background: rgba(40,208,148,.09); }
+  tbody tr:hover td { background: rgba(179,0,0,.04); }
+  .ck { width: 18px; height: 18px; accent-color: var(--btn-red); cursor: pointer; margin-top: 2px; }
+  .cust a { color: var(--sky); text-decoration: none; font-weight: 700; font-family: var(--mono); }
+  .cust .mini { display: block; margin-top: 4px; }
+  .oline { display: flex; align-items: flex-start; gap: 8px; }
+  .obox { width: 30px; height: 30px; border-radius: 7px; background: var(--border-soft); display: grid; place-items: center; flex: 0 0 30px; color: var(--muted); }
+  .oline .ot b { color: var(--sky); font-weight: 700; }
+  .oline .ot small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .due { font-family: var(--mono); font-weight: 800; color: #b91c1c; font-size: 14px; }
+  .due-sub { color: var(--muted); font-size: 11px; margin-top: 4px; line-height: 1.6; }
+  .due-sub .g { color: var(--ok-ink); }
+  .due-sub .r { color: var(--danger); }
+  .track { font-family: var(--mono); color: #fff; background: var(--danger); border-radius: 5px; padding: 2px 6px; font-size: 11px; display: inline-block; }
+  .cab { font-family: var(--mono); color: var(--sky); font-weight: 700; }
+  .ship { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .st { font-size: 11px; font-weight: 700; color: #fff; padding: 3px 9px; border-radius: 999px; white-space: nowrap; display: inline-block; }
+  .st.wait { background: var(--warn); }
+  .st.paid { background: var(--ok); }
+  .st.ready { background: #8d6e63; }
+  .hint { margin-top: 6px; font-size: 10.5px; color: var(--danger); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+
+  /* ── floating pay bar ── */
+  .paybar {
+    position: fixed; left: 54px; right: 0; bottom: 0; z-index: 30;
+    display: flex; justify-content: center; padding: 14px; pointer-events: none;
+    background: linear-gradient(0deg, var(--ground) 30%, transparent);
+  }
+  .paybar button {
+    pointer-events: auto; border: 0; cursor: pointer; font-family: inherit;
+    display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 26px;
+    border-radius: 999px; background: linear-gradient(135deg,#ff7a3d,var(--danger));
+    color: #fff; font-weight: 800; font-size: 15px; box-shadow: 0 8px 26px rgba(255,73,97,.4);
+    transition: transform .12s, box-shadow .12s;
+  }
+  .paybar button:hover { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(255,73,97,.5); }
+  .paybar button:disabled { background: #c9c9d0; box-shadow: none; cursor: not-allowed; }
+  .paybar .n { background: rgba(255,255,255,.28); min-width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center; font-family: var(--mono); }
+
+  /* ── modal (PayModal) ── */
+  .overlay {
+    position: fixed; inset: 0; z-index: 60; background: rgba(10,10,20,.5);
+    display: none; align-items: flex-start; justify-content: center; padding: 28px 16px; overflow-y: auto;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    width: min(960px,100%); background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; box-shadow: 0 24px 60px rgba(0,0,0,.35); overflow: hidden; animation: pop .18s cubic-bezier(.22,1,.36,1) both;
+  }
+  @keyframes pop { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+  .modal .mhead { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+  .modal .mhead h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--head); }
+  .modal .x { border: 0; background: none; cursor: pointer; color: var(--muted); width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; }
+  .modal .x:hover { background: var(--border-soft); color: var(--ink); }
+  .mbody { padding: 18px 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+
+  .ocard { border: 1px dashed var(--border); border-radius: 12px; padding: 12px; }
+  .ocard .ohd { font-weight: 700; color: var(--head); font-size: 13px; }
+  .ocard .ohd .tr { font-family: var(--mono); color: var(--muted); font-weight: 500; font-size: 12px; }
+  .row { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--ink); margin-top: 6px; }
+  .row .l { flex: 0 0 auto; color: var(--head); }
+  .row .lead { flex: 1; border-bottom: 1px dotted var(--muted-soft); transform: translateY(-3px); }
+  .row .v { flex: 0 0 auto; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .row.plus .v { color: var(--sky); } .row.minus .v { color: #e07000; }
+  .row.total { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 7px; font-weight: 700; color: var(--head); }
+  .pdf-btn { margin-top: 12px; border: 0; cursor: pointer; background: var(--btn-red); color: #fff; font-weight: 700; font-size: 13px; padding: 9px 15px; border-radius: 10px; font-family: inherit; }
+  .totbar { margin-top: 12px; background: var(--btn-red); color: #fff; border-radius: 11px; padding: 11px 16px; text-align: center; }
+  .totbar .t { font-size: 13px; } .totbar .b { font-family: var(--mono); font-size: 20px; font-weight: 800; display: inline-block; }
+  .cap { text-align: center; font-size: 11px; color: var(--muted); margin-top: 8px; }
+
+  .qrwrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .qr { width: 240px; height: 240px; border: 1px solid var(--border); border-radius: 12px; background: #fff; box-shadow: var(--shadow); }
+  .qrcap { font-size: 11px; color: var(--muted); text-align: center; }
+  .bank { border: 1px solid var(--green-bd); background: var(--green-bg); border-radius: 12px; padding: 12px; margin-top: 14px; }
+  .bank .brow { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .bank .bname { font-weight: 700; color: var(--green-ink); font-size: 13px; }
+  .bank .anum { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+  .bank .anum .lb { color: var(--green-ink); font-size: 13px; }
+  .bank .anum .no { font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--green-ink); letter-spacing: .5px; }
+  .copy { border: 1px solid var(--green-bd); background: var(--card); color: var(--green-ink); font-family: inherit; font-weight: 600; font-size: 11px; padding: 3px 10px; border-radius: 8px; cursor: pointer; }
+  .copy.done { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .bank .aname { color: var(--green-ink); font-size: 13px; margin-top: 6px; }
+  .bank .atype { color: var(--green-ink); opacity: .8; font-size: 11px; }
+  .kbank { width: 44px; height: 44px; flex: 0 0 44px; }
+  .slip { margin-top: 14px; }
+  .slip .sl { font-size: 12px; color: var(--muted); margin-bottom: 5px; display: block; }
+  .drop { border: 1.5px dashed var(--border); border-radius: 11px; padding: 16px; text-align: center; color: var(--muted); font-size: 12.5px; cursor: pointer; }
+  .drop:hover { border-color: var(--btn-red); color: var(--ink); }
+  .mfoot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+  .mfoot .cancel { border: 1px solid var(--border); background: var(--card); color: var(--muted); border-radius: 9px; padding: 9px 16px; font-family: inherit; font-weight: 600; cursor: pointer; }
+  .mfoot .go { border: 0; background: var(--btn-red); color: #fff; border-radius: 9px; padding: 9px 22px; font-family: inherit; font-weight: 700; cursor: pointer; }
+
+  .price-bounce { display: inline-block; animation: pb .9s cubic-bezier(.28,.84,.42,1) both; }
+  @keyframes pb { 0%{transform:translateY(0) scale(1)} 25%{transform:translateY(-9px) scale(1.09)} 45%{transform:translateY(0) scale(1)} 62%{transform:translateY(-5px) scale(1.05)} 78%{transform:translateY(0) scale(1)} 100%{transform:translateY(0) scale(1)} }
+  @media (prefers-reduced-motion: reduce) { .price-bounce, .modal { animation: none; } }
+
+  @media (max-width: 720px) {
+    .rail { display: none; }
+    .paybar { left: 0; }
+    .mbody { grid-template-columns: 1fr; }
+    .inp.wide { min-width: 0; width: 100%; }
+    .ctrl .fld { flex: 1 1 100%; }
+  }
+</style>
+
+<div class="shell">
+  <!-- left rail -->
+  <nav class="rail" aria-label="เมนูหลัก">
+    <div class="brand">PR</div>
+    <div class="ico" title="แดชบอร์ด"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg></div>
+    <div class="ico" title="บัญชี"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h12"/></svg></div>
+    <div class="ico badge on" data-n="6" title="กระเป๋าสตางค์ · จ่ายเงินแทนลูกค้า"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M16 12h.01"/></svg></div>
+    <div class="ico badge" data-n="42" title="ฝากนำเข้า"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8"/></svg></div>
+    <div class="ico" title="รายงานตู้"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg></div>
+    <div class="ico" title="ลูกค้า"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>
+  </nav>
+
+  <div class="main">
+    <!-- top red bar -->
+    <div class="topbar">
+      <button class="chip" onclick="void 0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16M4 12h16M4 19h10"/></svg> EN</button>
+      <button class="chip" id="themeBtn" title="สลับธีม"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg></button>
+    </div>
+
+    <div class="content">
+      <nav class="crumb">
+        <a href="#">แอดมิน</a> <span>›</span>
+        <a href="#">จ่ายเงินแทนลูกค้า</a> <span>›</span>
+        <span class="cur">ทำรายการแทน</span>
+      </nav>
+
+      <!-- control bar -->
+      <div class="card ctrl">
+        <div class="fld">
+          <span class="lbl">ประเภทบริการ</span>
+          <select class="select">
+            <option>รายการนำเข้า (ฝากนำเข้า)</option>
+            <option>รายการฝากสั่งซื้อ</option>
+          </select>
+        </div>
+        <div class="fld" style="flex:1;">
+          <span class="lbl">รหัสลูกค้า</span>
+          <input class="inp wide filled" value="PR10012 · วี อาร์ ออเท็นติก" />
+        </div>
+        <button class="btn-hist">ประวัติการทำรายการ</button>
+      </div>
+
+      <!-- wallet card -->
+      <div class="wallet">
+        <div class="who">
+          <div class="nm">
+            วี อาร์ ออเท็นติก
+            <span class="tag vip">SVIP</span>
+            <span class="tag niti">นิติบุคคล</span>
+            <span class="tag sale">Sale : admin_toey</span>
+          </div>
+          <div class="sub">PR10012 · 098-685-1594</div>
+          <div class="amt num">0.00</div>
+          <div class="cb">Cash Back : <b class="num">0.00</b> (บาท)</div>
+        </div>
+        <div class="logo"><div style="text-align:center"><b>PR</b><br><small>ตัวะ</small></div></div>
+        <div class="bar"></div>
+      </div>
+
+      <!-- juristic notice -->
+      <div class="notice">
+        <b>ลูกค้านิติบุคคล</b> — ชำระในหน้านี้ได้ตามปกติ · ใช้ <b>สลิปการโอน</b> (แนบในขั้นตอนชำระ · ระบบไม่ตัดจากกระเป๋า) · หัก ณ ที่จ่าย 1% อัตโนมัติเมื่อยอด ≥ ฿1,000 · ชำระแล้วระบบออกใบเสร็จให้เอง
+      </div>
+
+      <!-- items table -->
+      <div class="card">
+        <div class="tbl-head">
+          <div class="h">แสดง <b>200</b> รายการ</div>
+          <div class="h">เลือกไว้ <b id="selN">1</b> รายการ · รวม <b id="selSum">฿7,840.25</b></div>
+        </div>
+        <div class="tbl-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th><input type="checkbox" class="ck" id="ckAll"></th>
+                <th>วันที่สร้าง</th><th>รหัสลูกค้า</th><th>รายละเอียด</th>
+                <th>ยอดค้างชำระ</th><th>เลขพัสดุ (จีน)</th><th>ตู้ / ขนส่งไทย</th>
+                <th>เข้าโกดัง</th><th>ถึงไทย</th><th>สถานะ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="sel" data-amt="7840.25">
+                <td><input type="checkbox" class="ck row-ck" checked></td>
+                <td>06/07/69<br><small style="color:var(--muted)">04:16 · ผ่านมา 10 วัน</small></td>
+                <td class="cust"><a href="#">PR10012</a><span class="mini"><span class="tag vip" style="font-size:9px">SVIP</span> <span class="tag niti" style="font-size:9px">นิติ</span></span></td>
+                <td><div class="oline"><div class="obox">📦</div><div class="ot"><b>ออเดอร์ #52329</b><small>ประเภท : ทั่วไป</small><small>ฝากนำเข้า : admin_poom</small></div></div></td>
+                <td>
+                  <div class="due num">฿7,840.25</div>
+                  <div class="due-sub">255 กก. · 14.896 คิว · 10 กล่อง<br>ยอดเต็ม ฿7,299.04<br><span class="g">ตีลัง +฿620.40</span><br><span class="r">หัก 1% −฿79.19</span></div>
+                </td>
+                <td><span class="track">1782895081</span></td>
+                <td><span class="cab">GZE260704-1</span><div class="ship">🚛 Pacred เหมาๆ (PRF)</div></td>
+                <td>01/07/69<br><small style="color:var(--muted)">A1</small></td>
+                <td>11/07/69<br><small style="color:var(--muted)">04:22 น.</small></td>
+                <td><span class="st wait">รอชำระเงิน</span><div class="hint">🔔 ตรวจ + เก็บเงิน</div></td>
+              </tr>
+              <tr data-amt="1526.80">
+                <td><input type="checkbox" class="ck row-ck"></td>
+                <td>04/07/69<br><small style="color:var(--muted)">10:02 · ผ่านมา 12 วัน</small></td>
+                <td class="cust"><a href="#">PR10012</a><span class="mini"><span class="tag vip" style="font-size:9px">SVIP</span> <span class="tag niti" style="font-size:9px">นิติ</span></span></td>
+                <td><div class="oline"><div class="obox">📦</div><div class="ot"><b>ออเดอร์ #52301</b><small>ประเภท : ทั่วไป</small><small>ฝากนำเข้า : admin_poom</small></div></div></td>
+                <td>
+                  <div class="due num">฿1,526.80</div>
+                  <div class="due-sub">48 กก. · 2.640 คิว · 3 กล่อง<br>ยอดเต็ม ฿1,542.22<br><span class="r">หัก 1% −฿15.42</span></div>
+                </td>
+                <td><span class="track">1782774510</span></td>
+                <td><span class="cab">GZS260701-2</span><div class="ship">🚢 Flash (ปลายทาง COD)</div></td>
+                <td>28/06/69<br><small style="color:var(--muted)">B3</small></td>
+                <td>10/07/69<br><small style="color:var(--muted)">18:40 น.</small></td>
+                <td><span class="st wait">รอชำระเงิน</span><div class="hint">🔔 ตรวจ + เก็บเงิน</div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- floating pay bar -->
+<div class="paybar">
+  <button id="payBtn"><span>💳 ชำระเงินแทนลูกค้า</span><span class="n" id="barN">1</span></button>
+</div>
+
+<!-- ── PAY MODAL ── -->
+<div class="overlay" id="overlay">
+  <div class="modal" role="dialog" aria-label="ชำระเงินออเดอร์ฝากนำเข้า">
+    <div class="mhead">
+      <h3>ชำระเงินออเดอร์ฝากนำเข้าสินค้า</h3>
+      <button class="x" id="mClose" aria-label="ปิด">✕</button>
+    </div>
+    <div class="mbody">
+      <!-- LEFT: breakdown -->
+      <div>
+        <div class="ocard">
+          <div class="ohd">เลขออเดอร์ 52329 <span class="tr">· เลขแทรคกิ้ง 1782895081</span></div>
+          <div class="row"><span class="l">ราคานำเข้าจีน-ไทย</span><span class="lead"></span><span class="v">฿7,299.04</span></div>
+          <div class="row plus"><span class="l">ค่าตีลังไม้</span><span class="lead"></span><span class="v">+ ฿620.40</span></div>
+          <div class="row minus"><span class="l">หัก ณ ที่จ่าย 1%</span><span class="lead"></span><span class="v">− ฿79.19</span></div>
+          <div class="row total"><span class="l">ราคารวมสุทธิ</span><span class="lead"></span><span class="v">฿7,840.25</span></div>
+        </div>
+        <button class="pdf-btn">ใบสรุปรายการแบบ PDF</button>
+        <div class="totbar">
+          <span class="t">ยอดเงินที่ต้องชำระจริง: </span>
+          <span class="b price-bounce" id="totNum">฿7,840.25</span>
+        </div>
+        <p class="cap">ยอดจริงคำนวณบนเซิร์ฟเวอร์ตามรายการที่เลือก (อาจต่างจากตัวอย่าง ≤1% หรือ ฿50)</p>
+      </div>
+
+      <!-- RIGHT: QR + bank + slip -->
+      <div>
+        <div class="qrwrap">
+          <canvas class="qr" id="qr" width="240" height="240"></canvas>
+          <p class="qrcap">สแกน QR เพื่อโอน แล้วกรอกยอดเงินตามด้านบน</p>
+        </div>
+        <div class="bank">
+          <div class="brow">
+            <div>
+              <div class="bname">ธนาคารกสิกรไทย</div>
+              <div class="anum">
+                <span class="lb">เลขที่บัญชี</span>
+                <span class="no">225-2-91144-0</span>
+                <button class="copy" id="copyBtn">คัดลอก</button>
+              </div>
+              <div class="aname">บจก. แพคเรด (ประเทศไทย)</div>
+              <div class="atype">กระแสรายวัน</div>
+            </div>
+            <svg class="kbank" viewBox="0 0 44 44"><circle cx="22" cy="22" r="22" fill="#01a950"/><path d="M22 9c-5 4-8 8-8 13 0 5 4 9 8 9s8-4 8-9c0-5-3-9-8-13z" fill="#fff" opacity=".92"/><path d="M22 30V15" stroke="#01a950" stroke-width="2.4" stroke-linecap="round"/></svg>
+          </div>
+        </div>
+        <div class="slip">
+          <label class="sl">หลักฐานการโอน (รูปภาพ/PDF)</label>
+          <div class="drop">📎 แนบสลิปการโอน (คลิกเพื่อเลือกรูป/PDF)<br><small>รองรับรูปภาพหรือไฟล์ PDF</small></div>
+        </div>
+        <div class="mfoot">
+          <button class="cancel" id="mCancel">ยกเลิก</button>
+          <button class="go">ยืนยัน</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // theme toggle (also respects the artifact viewer's own toggle via tokens)
+  document.getElementById('themeBtn').addEventListener('click', () => {
+    const r = document.documentElement;
+    const cur = r.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    r.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  });
+
+  // selection → floating bar count + total
+  const rows = [...document.querySelectorAll('tbody tr')];
+  const barN = document.getElementById('barN'), selN = document.getElementById('selN'),
+        selSum = document.getElementById('selSum'), payBtn = document.getElementById('payBtn'),
+        ckAll = document.getElementById('ckAll');
+  const baht = n => '฿' + n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function sync() {
+    const sel = rows.filter(r => r.querySelector('.row-ck').checked);
+    const sum = sel.reduce((s, r) => s + parseFloat(r.dataset.amt), 0);
+    sel.forEach(r => r.classList.add('sel'));
+    rows.filter(r => !r.querySelector('.row-ck').checked).forEach(r => r.classList.remove('sel'));
+    barN.textContent = selN.textContent = sel.length;
+    selSum.textContent = baht(sum);
+    payBtn.disabled = sel.length === 0;
+  }
+  rows.forEach(r => r.querySelector('.row-ck').addEventListener('change', sync));
+  ckAll.addEventListener('change', () => { rows.forEach(r => r.querySelector('.row-ck').checked = ckAll.checked); sync(); });
+  sync();
+
+  // open / close modal + replay the total bounce
+  const overlay = document.getElementById('overlay'), totNum = document.getElementById('totNum');
+  function bounce() { totNum.classList.remove('price-bounce'); void totNum.offsetWidth; totNum.classList.add('price-bounce'); }
+  function openModal() { if (payBtn.disabled) return; overlay.classList.add('open'); bounce(); }
+  function closeModal() { overlay.classList.remove('open'); }
+  payBtn.addEventListener('click', openModal);
+  document.getElementById('mClose').addEventListener('click', closeModal);
+  document.getElementById('mCancel').addEventListener('click', closeModal);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+
+  // copy button feedback
+  const copyBtn = document.getElementById('copyBtn');
+  copyBtn.addEventListener('click', () => {
+    try { navigator.clipboard && navigator.clipboard.writeText('2252911440'); } catch (e) {}
+    copyBtn.textContent = 'คัดลอกแล้ว ✓'; copyBtn.classList.add('done');
+    setTimeout(() => { copyBtn.textContent = 'คัดลอก'; copyBtn.classList.remove('done'); }, 1500);
+  });
+
+  // deterministic QR-like render (finder patterns + patterned modules · no randomness)
+  (function drawQR() {
+    const c = document.getElementById('qr'), ctx = c.getContext('2d');
+    const N = 29, pad = 18, size = (240 - pad * 2) / N;
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 240, 240);
+    ctx.fillStyle = '#111';
+    const cell = (x, y) => ctx.fillRect(pad + x * size, pad + y * size, size + .5, size + .5);
+    const finder = (ox, oy) => {
+      for (let y = 0; y < 7; y++) for (let x = 0; x < 7; x++) {
+        const edge = x === 0 || x === 6 || y === 0 || y === 6;
+        const core = x >= 2 && x <= 4 && y >= 2 && y <= 4;
+        if (edge || core) cell(ox + x, oy + y);
+      }
+    };
+    const inFinder = (x, y) =>
+      (x < 8 && y < 8) || (x > N - 9 && y < 8) || (x < 8 && y > N - 9);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if (inFinder(x, y)) continue;
+      if (((x * 17 + y * 23 + x * y * 3 + ((x ^ y) * 5)) % 7) < 3) cell(x, y);
+    }
+    finder(0, 0); finder(N - 7, 0); finder(0, N - 7);
+    // timing lines
+    for (let i = 8; i < N - 8; i++) { if (i % 2 === 0) { cell(i, 6); cell(6, i); } }
+  })();
+</script>
+</body>
+</html>

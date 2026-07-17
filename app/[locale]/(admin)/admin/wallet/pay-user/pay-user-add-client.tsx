@@ -1234,7 +1234,7 @@ function PayModal({
         <div className="space-y-3">
           {keyType === "2"
             ? fwdRows.map((r) => (
-                <div key={r.fid} className="rounded-lg border border-gray-200 p-3">
+                <div key={r.fid} className="rounded-lg border border-dashed border-gray-300 p-3">
                   <div className="mb-1 flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-gray-900">เลขออเดอร์ {r.fid}</span>
                     {r.ftrackingchn && (
@@ -1269,7 +1269,7 @@ function PayModal({
                 </div>
               ))
             : shopRows.map((r) => (
-                <div key={r.hno} className="rounded-lg border border-gray-200 p-3">
+                <div key={r.hno} className="rounded-lg border border-dashed border-gray-300 p-3">
                   <div className="mb-1 font-semibold text-gray-900">เลขออเดอร์ #{r.hno}</div>
                   <div className="space-y-0.5 text-[13px] text-gray-700">
                     {r.title && <Row label="สินค้า" value={r.title} />}
@@ -1293,7 +1293,7 @@ function PayModal({
         {/* total bar */}
         <div className="rounded-lg bg-red-600 px-4 py-2.5 text-center text-white">
           <span className="text-[13px]">ยอดเงินที่ต้องชำระจริง: </span>
-          <span className="font-mono text-lg font-bold">{thb(total)}</span>
+          <span key={total} className="price-bounce-fx font-mono text-lg font-bold">{thb(total)}</span>
         </div>
         <p className="text-center text-[11px] text-gray-500">
           ยอดจริงคำนวณบนเซิร์ฟเวอร์ตามรายการที่เลือก (อาจต่างจากตัวอย่าง ≤1% หรือ ฿50)
@@ -1314,25 +1314,56 @@ function PayModal({
           <div className="space-y-4">
             <div className="flex flex-col items-center gap-2">
               {qrPending ? (
-                <div className="flex h-[220px] w-[220px] items-center justify-center rounded-lg border border-dashed border-gray-300 text-[13px] text-gray-500">
+                <div className="flex h-[240px] w-[240px] items-center justify-center rounded-lg border border-dashed border-gray-300 text-[13px] text-gray-500">
                   กำลังสร้าง QR…
                 </div>
               ) : qrDataUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={qrDataUrl} alt="PromptPay QR" width={220} height={220} className="h-[220px] w-[220px] object-contain" />
+                // The QR PNG is the static K-Shop merchant card — crop (via
+                // background-size/position, not a swap) to just the QR matrix so
+                // it scans easily. Same account, chrome trimmed off.
+                <div
+                  role="img"
+                  aria-label="PromptPay QR"
+                  className="h-[240px] w-[240px] rounded-lg border border-gray-200 bg-white shadow-sm"
+                  style={{
+                    backgroundImage: `url(${qrDataUrl})`,
+                    backgroundRepeat: "no-repeat",
+                    backgroundSize: "148% auto",
+                    backgroundPosition: "50% 40%",
+                  }}
+                />
               ) : (
-                <div className="flex h-[220px] w-[220px] items-center justify-center rounded-lg border border-dashed border-gray-300 text-center text-[12px] text-gray-400">
+                <div className="flex h-[240px] w-[240px] items-center justify-center rounded-lg border border-dashed border-gray-300 text-center text-[12px] text-gray-400">
                   ไม่มี QR — โอนตามเลขบัญชีด้านล่าง
                 </div>
               )}
+              <p className="text-center text-[11px] text-gray-500">
+                สแกน QR เพื่อโอน แล้วกรอกยอดเงินตามด้านบน
+              </p>
             </div>
 
             <div className="rounded-lg border border-green-300 bg-green-50 p-3 text-[13px]">
-              <div className="font-semibold text-green-900">{BANK.name}</div>
-              <div className="text-green-800">
-                เลขที่บัญชี <span className="font-mono font-semibold">{BANK.accountNumber}</span>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-semibold text-green-900">{BANK.name}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-green-800">เลขที่บัญชี</span>
+                    <span className="font-mono text-[15px] font-semibold tracking-wide text-green-900">
+                      {BANK.accountNumber}
+                    </span>
+                    <CopyButton text={BANK.accountNumber.replace(/\D/g, "")} />
+                  </div>
+                  <div className="mt-1 text-green-800">{BANK.accountName}</div>
+                  <div className="text-[11px] text-green-700/80">{BANK.accountType}</div>
+                </div>
+                <Image
+                  src="/images/bank/kbanklogo.png"
+                  alt={BANK.name}
+                  width={44}
+                  height={44}
+                  className="h-11 w-11 shrink-0 rounded-md object-contain"
+                />
               </div>
-              <div className="text-green-800">{BANK.accountName}</div>
             </div>
 
             {/* shop top-up amount (only when shop wallet is short) */}
@@ -1404,10 +1435,37 @@ function Row({
   className?: string;
 }) {
   return (
-    <div className={`flex items-center justify-between gap-3 ${className}`}>
-      <span>{label}</span>
-      <span className="font-mono">{value}</span>
+    <div className={`flex items-baseline gap-2 ${className}`}>
+      <span className="shrink-0">{label}</span>
+      <span aria-hidden className="min-w-[1rem] flex-1 self-center border-b border-dotted border-gray-300/80" />
+      <span className="text-right font-mono tabular-nums">{value}</span>
     </div>
+  );
+}
+
+// Copy-to-clipboard chip (bank account number · "คัดลอก" → "คัดลอกแล้ว ✓").
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        try {
+          navigator.clipboard?.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          /* clipboard unavailable — no-op */
+        }
+      }}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+        copied
+          ? "border-emerald-500 bg-emerald-500 text-white"
+          : "border-green-400 bg-white text-green-700 hover:bg-green-100"
+      }`}
+    >
+      {copied ? "คัดลอกแล้ว ✓" : "คัดลอก"}
+    </button>
   );
 }
 
