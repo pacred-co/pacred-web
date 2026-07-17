@@ -3,6 +3,20 @@
 
 ---
 
+# 🧾 2026-07-18 (เดฟ · Mac · resync run-long · integrate ปอน + MOMO audit P1/P2 + dangler cleanup) — ประวัติการคีย์ WHO + packing ผู้อัพ/ใช้แล้ว → ALL 4 BRANCHES · read FIRST
+
+> **🏁 SESSION CLOSE (owner "resync main pull dave-pacred · เอางานน้องมารวม · ทำงานที่เหลือให้ครบ run-long · push all ทีเดียวตอนจบ").** **main = dave-pacred = Poom-pacred = InwPond007 = `<HEAD>`** (ทั้ง 4 sync · Vercel prod). resync: `git fetch && git pull origin dave-pacred`. ⚠️ ข้ามเครื่องหลายเมล — session นี้ FF absorb งาน disk-machine 2026-07-17 (10 commit · mig 0259/0260) + integrate ปอน 6 commit. **NEXT FREE mig = 0261** (0259 shop_status_one_rule · 0260 momo_cost_road_vs_sea · applied prod โดย disk). gate: **tsc 0 · build 0** (`rm -f .next/dev/types/validator.ts` ก่อน · `unpdf` ต้อง `pnpm install` ใน worktree ใหม่). 🔑 prod pw chat-only `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ`.
+>
+> **✅ SHIPPED (run-long · safe · gate 0):**
+> - **🔀 integrate ปอน (InwPond007 6 commit):** ใบวางบิล column reorder + ประเภท=รหัส g/m/a/s + "ค่าขนส่งไทย" รวม + "อ้างอิง" · pay-user ใบแจ้งหนี้ modal/PDF · PR-links กดเข้าโปรไฟล์ทุกจุด (`CustomerCodeLink`). **2 conflict resolve เก็บทั้งคู่:** load-billing-run-document (disk fcredit + ปอน fproductstype/dims) · billing-run-paper (disk hasDueDate-guard เงินสดไม่มีครบกำหนด + ปอน อ้างอิง line). 0 money-write.
+> - **🔴 MOMO audit P1 — commit-history WHO (`037c86e0`):** review "commit ล่าสุด" เดิมโชว์แค่ commit_userid (=customer PR) → เพิ่ม **committed_by** (admin auth-uuid → profiles.id → ชื่อจริง · null=ระบบ/cron) + คอลัมน์ "ผู้ทำรายการ". (dup investigation 07-14 ต้องการ attribution นี้).
+> - **🔴 P2 — packing-upload ประวัติ (`037c86e0`):** คอลัมน์ "ผู้อัพ" (uploaded_by=20char-truncated uuid → prefix-match profiles.id) + pill "อัพไว้/✓ใช้แล้ว" + **ROOT** applyMomoPacking stamp applied_at+status='applied' (เดิมไม่เคย → แยกอัพเฉยๆ vs apply ไม่ได้). **⚠️ prod schema:** committed_by=full-uuid=profiles.id · uploaded_by=truncated · profiles = first_name+last_name (ไม่มี display_name).
+> - **🧹 dangler cleanup:** ข้ามเครื่องทิ้ง dangling staging 2 (JYM800120650588/LJ20503022 ชี้ row ที่ลบ = re-commit hazard) → repair re-point base-anchor. **health prod: dup=0·dangling=0·stranded driver-stop=0.** famount=0(4)+arrived-unpriced(1)=zeroed bill-headers (box-count SOT · display-only) → ไม่แตะ.
+>
+> **🟡 CARRYOVER (owner เคาะ · unsafe/external — ไม่ force):** (1) **box-split arrival-scan miss** (PR139) — barcode-import group-flip เมื่อ scanned≥expected **ถูกต้องแล้ว** · box-split ค้างเพราะยิงไม่ครบกล่อง = design ไม่ force (เสี่ยงยืนยันของยังไม่รับ). (2) **A7 ย้อนชำระฝากสั่งซื้อ** — ต้อง live wallet test. (3) **B1 list-void full-unwind** — A2 กันแล้ว optional. (4) 2 billed-lump (PR050 paid=บัญชี · PR047/KY box_detail เพี้ยน=MOMO re-scrape) · credit-lane auto-bill (owner spec · workflow ยังไม่จบ session limit) · P2#4 hub partial-sync display.
+
+---
+
 # 🔴🔴 2026-07-17 ดึก-4 (ปิด session · ไปต่อ Mac) — apply prod 3 อย่าง · ข้อ 1/2/4/5 ปิด · เหลือ ตัดจ่ายค่าตู้ + ตั้งต้นทุน 303 แถว — READ FIRST
 
 > **main = dave-pacred = HEAD** · mig 0260 applied prod · **NEXT FREE mig = 0261** · gate: tsc 0 · build 0 · dep ใหม่ `unpdf` (lockfile sync แล้ว)
