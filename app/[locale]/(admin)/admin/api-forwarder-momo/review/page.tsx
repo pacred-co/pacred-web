@@ -55,13 +55,33 @@ export default async function AdminMomoReviewPage() {
   const { data: recentCommittedRaw, error: recentCommittedErr } = await admin
     .from("momo_import_tracks")
     .select(
-      "id, momo_tracking_no, momo_container_no, committed_at, committed_forwarder_id, commit_userid",
+      // Audit P1 (2026-07-18) — committed_by = the ADMIN who committed (null = cron/
+      // ระบบ). commit_userid = the CUSTOMER PR (kept). Both are surfaced now so an
+      // attribution question (e.g. the 2026-07-14 dup investigation) is answerable.
+      "id, momo_tracking_no, momo_container_no, committed_at, committed_forwarder_id, commit_userid, committed_by",
     )
     .not("committed_at", "is", null)
     .order("committed_at", { ascending: false })
     .limit(20);
   if (recentCommittedErr) {
     console.error("[momo_import_tracks committed list] failed", recentCommittedErr);
+  }
+  // Resolve committed_by (admin id) → staff display name (batch · fall back to id).
+  const committerIds = Array.from(
+    new Set(((recentCommittedRaw ?? []) as Array<{ committed_by: string | null }>).map((r) => (r.committed_by ?? "").trim()).filter(Boolean)),
+  );
+  const committerNameById = new Map<string, string>();
+  if (committerIds.length > 0) {
+    // committed_by = the admin's auth UUID (= profiles.id).
+    const { data: committers, error: cErr } = await admin
+      .from("profiles")
+      .select("id, first_name, last_name")
+      .in("id", committerIds);
+    if (cErr) console.error("[review committed_by resolve] failed", { code: cErr.code, message: cErr.message });
+    for (const p of (committers ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null }>) {
+      const nm = `${(p.first_name ?? "").trim()} ${(p.last_name ?? "").trim()}`.trim();
+      if (p.id) committerNameById.set(p.id, nm || p.id);
+    }
   }
 
   // Coerce raw → PendingRow shape (extract qty/ship_by hint from raw blob).
@@ -198,6 +218,11 @@ export default async function AdminMomoReviewPage() {
     committedAt:           row.committed_at as string | null,
     committedForwarderId:  (row.committed_forwarder_id as number | null) ?? null,
     commitUserId:          (row.commit_userid as string | null) ?? null,
+    committedBy:           (row.committed_by as string | null) ?? null,
+    committedByName:       (() => {
+      const by = (row.committed_by as string | null)?.trim();
+      return by ? (committerNameById.get(by) ?? by) : null; // null = ระบบ/cron
+    })(),
   }));
 
   return (

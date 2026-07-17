@@ -489,6 +489,19 @@ export async function applyMomoPacking(input: unknown): Promise<AdminActionResul
       }
     }
 
+    // Audit P2 (2026-07-18) — stamp the upload-history row so it distinguishes
+    // "uploaded only (previewed)" from "APPLIED to tb_forwarder". The client
+    // records the upload at PREVIEW time (status='uploaded'); this closes the loop
+    // on APPLY. Match the newest still-'uploaded' row for this container. Best-effort.
+    if (containerNo) {
+      const { error: appliedErr } = await admin
+        .from("momo_packing_upload")
+        .update({ applied_at: new Date().toISOString(), status: "applied" })
+        .eq("container_no", containerNo)
+        .eq("status", "uploaded");
+      if (appliedErr) console.error("[momo-packing apply] applied_at stamp failed", { container: containerNo, code: appliedErr.code, message: appliedErr.message });
+    }
+
     await logAdminAction(adminId, "momo_packing.apply", "tb_forwarder", "", {
       container: preview.container,
       updated, boxShort, repriced, repriceFailed, advanced,

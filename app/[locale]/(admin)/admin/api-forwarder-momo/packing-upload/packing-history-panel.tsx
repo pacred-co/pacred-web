@@ -80,6 +80,8 @@ export function PackingHistoryPanel({ nonce }: { nonce: number }) {
                 <th className="px-2 py-2 text-left">วันที่อัพ</th>
                 <th className="px-2 py-2 text-left">ตู้</th>
                 <th className="px-2 py-2 text-left">ไฟล์</th>
+                <th className="px-2 py-2 text-left">ผู้อัพ</th>
+                <th className="px-2 py-2 text-center">สถานะ</th>
                 <th className="px-2 py-2 text-right">แทรคกิ้ง</th>
                 <th className="px-2 py-2 text-right">นน. / คิว</th>
                 <th className="px-2 py-2 text-center">เช็ค API</th>
@@ -95,6 +97,14 @@ export function PackingHistoryPanel({ nonce }: { nonce: number }) {
                       <td className="px-2 py-1.5 text-[11px] whitespace-nowrap">{formatThaiDateTime(r.uploadedAt)}</td>
                       <td className="px-2 py-1.5 font-mono font-semibold text-sky-800">{r.containerNo ?? "—"}</td>
                       <td className="px-2 py-1.5 text-[11px] max-w-[14rem] truncate" title={r.fileName ?? ""}>📎 {r.fileName ?? "—"}</td>
+                      <td className="px-2 py-1.5 text-[11px] whitespace-nowrap" title={r.uploadedBy ?? ""}>{r.uploadedByName ?? r.uploadedBy ?? "—"}</td>
+                      <td className="px-2 py-1.5 text-center">
+                        {r.status === "applied" || r.appliedAt ? (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800" title={r.appliedAt ? `ใช้แล้ว ${formatThaiDateTime(r.appliedAt)}` : "ใช้แล้ว"}>✓ ใช้แล้ว</span>
+                        ) : (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700" title="อัพไว้ · ยังไม่กด apply เข้าระบบ">อัพไว้</span>
+                        )}
+                      </td>
                       <td className="px-2 py-1.5 text-right">{r.rowCount}</td>
                       <td className="px-2 py-1.5 text-right text-[11px] text-muted">{n2(r.totalWeight)} / {n3(r.totalCbm)}</td>
                       <td className="px-2 py-1.5 text-center">
@@ -115,7 +125,7 @@ export function PackingHistoryPanel({ nonce }: { nonce: number }) {
                     </tr>
                     {expandedId === r.id && (
                       <tr className="bg-surface-alt/20">
-                        <td colSpan={7} className="px-3 py-3">
+                        <td colSpan={9} className="px-3 py-3">
                           {detailLoading && <p className="text-xs text-muted">กำลังโหลด…</p>}
                           {detail && detail.row.id === r.id && (
                             <div className="space-y-3">

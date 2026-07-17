@@ -100,6 +100,8 @@ type CommittedRow = {
   committedAt:           string | null;
   committedForwarderId:  number | null;
   commitUserId:          string | null;
+  committedBy:           string | null;
+  committedByName:       string | null; // null = ระบบ/cron
 };
 
 /** Per-row form state — admin overrides the prefilled defaults. */
@@ -816,6 +818,7 @@ export function ReviewGridClient({
                   <th className="text-left px-3 py-2.5 border-b border-border">ตู้</th>
                   <th className="text-left px-3 py-2.5 border-b border-border">userID</th>
                   <th className="text-left px-3 py-2.5 border-b border-border">tb_forwarder id</th>
+                  <th className="text-left px-3 py-2.5 border-b border-border">ผู้ทำรายการ</th>
                   <th className="text-left px-3 py-2.5 border-b border-border">เวลา</th>
                 </tr>
               </thead>
@@ -834,6 +837,11 @@ export function ReviewGridClient({
                           #{c.committedForwarderId}
                         </Link>
                       ) : "—"}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      {c.committedByName
+                        ? <span className="font-medium text-foreground">{c.committedByName}</span>
+                        : <span className="text-muted" title="สร้างโดยระบบ/cron อัตโนมัติ">ระบบ (cron)</span>}
                     </td>
                     <td className="px-3 py-2.5 text-muted">
                       {c.committedAt

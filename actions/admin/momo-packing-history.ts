@@ -69,6 +69,8 @@ export type MomoPackingUploadRow = {
   totalCbm: number | null;
   reverseCheck: ReverseCheck;
   uploadedBy: string | null;
+  /** Resolved staff display name for uploadedBy (Audit P2 · null = ระบบ/ไม่พบ). */
+  uploadedByName: string | null;
   uploadedAt: string;
   appliedAt: string | null;
   status: string;
@@ -222,24 +224,51 @@ export async function listMomoPackingUploads(containerNo?: string): Promise<Admi
       console.error("[momo-packing-history] list failed", { code: error.code, message: error.message });
       return { ok: false, error: "โหลดประวัติไม่สำเร็จ" };
     }
-    const rows: MomoPackingUploadRow[] = (data ?? []).map((r) => ({
-      id: r.id as number,
-      fileName: (r.file_name as string | null) ?? null,
-      filePath: (r.file_path as string | null) ?? null,
-      fileSize: (r.file_size as number | null) ?? null,
-      containerNo: (r.container_no as string | null) ?? null,
-      containerCode: (r.container_code as string | null) ?? null,
-      transportHint: (r.transport_hint as string | null) ?? null,
-      rowCount: (r.row_count as number | null) ?? 0,
-      trackingCount: (r.tracking_count as number | null) ?? null,
-      totalWeight: (r.total_weight as number | null) ?? null,
-      totalCbm: (r.total_cbm as number | null) ?? null,
-      reverseCheck: normalizeReverse(r.reverse_check),
-      uploadedBy: (r.uploaded_by as string | null) ?? null,
-      uploadedAt: r.uploaded_at as string,
-      appliedAt: (r.applied_at as string | null) ?? null,
-      status: (r.status as string | null) ?? "uploaded",
-    }));
+    // Audit P2 — resolve uploaded_by (an admin id) → a staff display name.
+    // uploaded_by is stored as the legacy adminid; profiles.employee_code carries
+    // the same code for staff. Batch-resolve, fall back to the raw id.
+    const uploaderIds = Array.from(
+      new Set(((data ?? []) as Array<{ uploaded_by: string | null }>).map((r) => (r.uploaded_by ?? "").trim()).filter(Boolean)),
+    );
+    // uploaded_by is the admin's auth UUID TRUNCATED to 20 chars (momo-packing-
+    // history.ts INSERT). Resolve by PREFIX-matching profiles.id — 20 uuid chars are
+    // unique enough. Fetch the small staff set once (admins) + prefix-match locally.
+    const nameById = new Map<string, string>();
+    if (uploaderIds.length > 0) {
+      const { data: profs, error: pErr } = await admin
+        .from("profiles")
+        .select("id, first_name, last_name")
+        .not("employee_code", "is", null)
+        .limit(2000);
+      if (pErr) console.error("[momo-packing-history] uploader resolve failed", { code: pErr.code, message: pErr.message });
+      const staff = (profs ?? []) as Array<{ id: string; first_name: string | null; last_name: string | null }>;
+      for (const up of uploaderIds) {
+        const hit = staff.find((s) => (s.id ?? "").startsWith(up));
+        if (hit) nameById.set(up, `${(hit.first_name ?? "").trim()} ${(hit.last_name ?? "").trim()}`.trim() || up);
+      }
+    }
+    const rows: MomoPackingUploadRow[] = (data ?? []).map((r) => {
+      const upBy = (r.uploaded_by as string | null) ?? null;
+      return {
+        id: r.id as number,
+        fileName: (r.file_name as string | null) ?? null,
+        filePath: (r.file_path as string | null) ?? null,
+        fileSize: (r.file_size as number | null) ?? null,
+        containerNo: (r.container_no as string | null) ?? null,
+        containerCode: (r.container_code as string | null) ?? null,
+        transportHint: (r.transport_hint as string | null) ?? null,
+        rowCount: (r.row_count as number | null) ?? 0,
+        trackingCount: (r.tracking_count as number | null) ?? null,
+        totalWeight: (r.total_weight as number | null) ?? null,
+        totalCbm: (r.total_cbm as number | null) ?? null,
+        reverseCheck: normalizeReverse(r.reverse_check),
+        uploadedBy: upBy,
+        uploadedByName: upBy ? (nameById.get(upBy.trim()) ?? null) : null,
+        uploadedAt: r.uploaded_at as string,
+        appliedAt: (r.applied_at as string | null) ?? null,
+        status: (r.status as string | null) ?? "uploaded",
+      };
+    });
     return { ok: true, data: rows };
   });
 }
@@ -286,6 +315,7 @@ export async function getMomoPackingUpload(id: number): Promise<AdminActionResul
       totalCbm: (data.total_cbm as number | null) ?? null,
       reverseCheck: normalizeReverse(data.reverse_check),
       uploadedBy: (data.uploaded_by as string | null) ?? null,
+      uploadedByName: null,
       uploadedAt: data.uploaded_at as string,
       appliedAt: (data.applied_at as string | null) ?? null,
       status: (data.status as string | null) ?? "uploaded",
