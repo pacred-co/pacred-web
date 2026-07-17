@@ -55,20 +55,53 @@ export async function countPendingDispatch(
   return readyIds.filter((id) => !assigned.has(id)).length;
 }
 
-/** The set of forwarder ids already in an OPEN driver batch (item fdistatus ''/1/null). */
+/**
+ * The set of forwarder ids already in an OPEN driver batch (item fdistatus ''/1/null
+ * AND its BATCH is still ดำเนินการ fdstatus='1').
+ *
+ * 🔴 batch-aware (bug-hunt 2026-07-18): an open-status stop ('' /'1') trapped in a
+ * CLOSED batch (expired '3' / completed '2') used to keep its order out of the
+ * dispatch queue forever — the expire cron only cascades '' stops → a '1' (loaded)
+ * stop in a force-expired batch stayed '1' and stranded the order. Joining
+ * tb_forwarder_driver.fdstatus='1' (open batch only) means a stop in a closed batch
+ * no longer blocks re-dispatch (or a new batch's dup-check). A delivered ('2') stop
+ * is excluded by the item filter regardless of its batch.
+ */
 export async function loadAssignedFids(
   admin: SupabaseClient,
   candidateIds: number[],
 ): Promise<Set<number>> {
   if (candidateIds.length === 0) return new Set();
+  // 2-query (no PostgREST FK embed between the item + batch tables): (1) open-status
+  // stops for the candidates, (2) which of THEIR batches are still open (fdstatus='1').
   const { data, error } = await admin
     .from("tb_forwarder_driver_item")
-    .select("fid")
+    .select("fid, fdid")
     .in("fid", candidateIds)
     .or("fdistatus.eq.,fdistatus.eq.1,fdistatus.is.null");
   if (error) {
     console.error("[loadAssignedFids] open driver-item read failed", { code: error.code, message: error.message });
     return new Set();
   }
-  return new Set((data ?? []).map((r) => (r as { fid: number }).fid));
+  const items = (data ?? []) as Array<{ fid: number; fdid: number }>;
+  if (items.length === 0) return new Set();
+  const batchIds = Array.from(new Set(items.map((r) => r.fdid).filter((n): n is number => typeof n === "number")));
+  const openBatchIds = new Set<number>();
+  if (batchIds.length > 0) {
+    const { data: batches, error: bErr } = await admin
+      .from("tb_forwarder_driver")
+      .select("id, fdstatus")
+      .in("id", batchIds);
+    if (bErr) {
+      console.error("[loadAssignedFids] batch status read failed", { code: bErr.code, message: bErr.message });
+      // fail-safe: treat all as open (old behaviour) rather than expose an assigned order
+      for (const b of batchIds) openBatchIds.add(b);
+    } else {
+      for (const b of (batches ?? []) as Array<{ id: number; fdstatus: string | null }>) {
+        if ((b.fdstatus ?? "").trim() === "1") openBatchIds.add(b.id);
+      }
+    }
+  }
+  // Only count a stop whose BATCH is still open (fdstatus='1').
+  return new Set(items.filter((r) => openBatchIds.has(r.fdid)).map((r) => r.fid));
 }

@@ -56,12 +56,52 @@ export async function GET(request: Request) {
         };
       }
 
-      const rows = (overdue ?? []) as unknown as Row[];
+      const allOverdue = (overdue ?? []) as unknown as Row[];
+
+      // 🔴 CREDIT GATE (bug-hunt 2026-07-18 · owner directive cbddd1d2): a CASH
+      // customer pays up-front and their bill deliberately hides the due date
+      // (billing-run-paper.tsx hasDueDate) — so an "เลยกำหนดชำระ" nag to a cash
+      // customer contradicts that + is wrong. Only CREDIT bills have a real
+      // payment term. tb_forwarder_invoice has no is_credit column → derive it
+      // from the linked forwarder rows (fcredit='1' = ติดเครดิต · same isCreditRow
+      // SOT the paper uses). Given tb_credit=0 system-wide, this correctly sends 0.
+      const rows: Row[] = await (async () => {
+        if (allOverdue.length === 0) return [];
+        const invIds = allOverdue.map((r) => r.id);
+        // 2-query (no PostgREST FK embed invoice_item→forwarder): items → forwarder_ids,
+        // then fcredit for those forwarders → the set of invoices that are credit.
+        const { data: items, error: itemErr } = await supabase
+          .from("tb_forwarder_invoice_item")
+          .select("invoice_id, forwarder_id")
+          .in("invoice_id", invIds);
+        if (itemErr) {
+          console.error("[cron billing-run-overdue credit-gate items] failed", { code: itemErr.code, message: itemErr.message });
+          return []; // fail-CLOSED: never nag a cash customer on a lookup error
+        }
+        const itemRows = (items ?? []) as Array<{ invoice_id: number; forwarder_id: number }>;
+        const fwdIds = Array.from(new Set(itemRows.map((r) => r.forwarder_id)));
+        if (fwdIds.length === 0) return [];
+        const { data: fwds, error: fwdErr } = await supabase
+          .from("tb_forwarder")
+          .select("id, fcredit")
+          .in("id", fwdIds);
+        if (fwdErr) {
+          console.error("[cron billing-run-overdue credit-gate fcredit] failed", { code: fwdErr.code, message: fwdErr.message });
+          return []; // fail-CLOSED
+        }
+        const creditFwdIds = new Set(
+          ((fwds ?? []) as Array<{ id: number; fcredit: string | null }>).filter((f) => (f.fcredit ?? "").trim() === "1").map((f) => f.id),
+        );
+        const creditInvoiceIds = new Set<number>();
+        for (const it of itemRows) if (creditFwdIds.has(it.forwarder_id)) creditInvoiceIds.add(it.invoice_id);
+        return allOverdue.filter((r) => creditInvoiceIds.has(r.id));
+      })();
+
       if (rows.length === 0) {
         return {
           status:  "success" as const,
-          summary: { overdueCount: 0, notified: 0 },
-          payload: { ok: true, overdueCount: 0, notified: 0 },
+          summary: { overdueCount: allOverdue.length, notified: 0, skippedCash: allOverdue.length },
+          payload: { ok: true, overdueCount: allOverdue.length, notified: 0, skippedCash: allOverdue.length },
         };
       }
 

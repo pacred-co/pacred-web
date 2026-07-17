@@ -52,6 +52,7 @@
 import type { createAdminClient } from "@/lib/supabase/admin";
 import type { ForwarderPriceFields } from "@/lib/forwarder/outstanding";
 import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-total";
+import { resolveMaoAnchorIds } from "@/lib/forwarder/mao-anchor";
 import { mintReceiptDocNo } from "@/lib/admin/mint-receipt-doc-no";
 import { resolveReceiptMaoFee } from "@/lib/admin/receipt-mao-fee";
 import { legacyReceiptAmount, LEGACY_RECEIPT_WHT_MIN } from "@/lib/tax/wht";
@@ -408,6 +409,14 @@ export async function autoIssueReceiptOnPaymentLand(
   // engine the pay path + the bill use, and fold it into the receipt total so the
   // two docs reconcile to the satang. Stored separately (mao_fee_thb) → shown as its
   // own line on the receipt paper, mirroring the bill.
+  // 🔴 per-SHIPMENT เหมาๆ anchor (bug-hunt 2026-07-18): a MOMO split-at-commit
+  // shipment with NO bare base row (only -1/n…-N/n) has no suffix-0 anchor, so the
+  // base-only rule yields maoFee=0 → the recomputed receipt runs ฿100 SHORT vs the
+  // wallet debit (which passes maoAnchorIds via resolveMaoAnchorIds). Thread the
+  // SAME anchor election the pay path + bill use so the receipt's เหมาๆ matches the
+  // amount actually collected. (billing-run-issued receipts use opts.maoFeeOverride
+  // below + skip this recompute anyway — safe either way.)
+  const maoAnchorIds = await resolveMaoAnchorIds(admin, rows.map((r) => r.ftrackingchn));
   const maoBatch = computeForwarderDebitBatch(
     rows.map((r) => ({
       id: r.id, fshipby: r.fshipby, ftrackingchn: r.ftrackingchn, fcabinetnumber: r.fcabinetnumber,
@@ -416,7 +425,7 @@ export async function autoIssueReceiptOnPaymentLand(
       pricecrate: r.pricecrate, ftransportpricechnthb: r.ftransportpricechnthb,
       priceother: r.priceother, fdiscount: r.fdiscount,
     })),
-    { userId: userid, isCorporate: corporate === 1 },
+    { userId: userid, isCorporate: corporate === 1, maoAnchorIds },
   );
   const recomputedMaoFeeThb = Math.round(
     maoBatch.lines.reduce((s, l) => s + l.breakdown.maoFee, 0) * 100,

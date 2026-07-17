@@ -19,7 +19,7 @@
 
 import { revalidatePath } from "next/cache";
 import { MAO_FLAT_FEE } from "@/lib/forwarder/mao-fee";
-import { findDuplicateSlips } from "@/lib/admin/duplicate-slip-check";
+import { findDuplicateSlips, findDuplicateYuanSlips } from "@/lib/admin/duplicate-slip-check";
 import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
@@ -550,7 +550,7 @@ export async function adminBulkApproveYuanPaymentsTb(
 
       const { data: rows, error: readErr } = await admin
         .from("tb_payment")
-        .select("id, userid, payyuan, paythb, paystatus, tax_doc_pref, reviewed_at")
+        .select("id, userid, payyuan, paythb, paystatus, tax_doc_pref, reviewed_at, paydate")
         .in("id", ids)
         .eq("paystatus", "1");
       if (readErr) return { ok: false, error: readErr.message };
@@ -562,7 +562,7 @@ export async function adminBulkApproveYuanPaymentsTb(
       const approvedRows = rows as unknown as Array<{
         id: number; userid: string | null;
         payyuan: number | string | null; paythb: number | string | null;
-        tax_doc_pref: string | null; reviewed_at: string | null;
+        tax_doc_pref: string | null; reviewed_at: string | null; paydate: string | null;
       }>;
 
       // ── Legacy approve cost-capture (payment.php L613-625) ──────────────
@@ -594,6 +594,18 @@ export async function adminBulkApproveYuanPaymentsTb(
         // slips already ROUND-1 reviewed. Skip un-reviewed rows + report them.
         if (!r.reviewed_at) {
           errors.push(`id=${r.id}: ยังไม่ได้ตรวจสลิป รอบ 1 — ตรวจรอบ 1 ที่หน้ารายละเอียดก่อน`);
+          continue;
+        }
+        // 🔴 เวียนเทียน dup-slip GATE (bug-hunt 2026-07-18): the single-row yuan
+        // approve (yuan-payments.ts adminUpdateYuanPayment) blocks a duplicate slip
+        // (same userid + paydate-day + paythb) with an acknowledge dialog; the bulk
+        // path skipped it entirely → a re-used/double slip could settle. Yuan lives
+        // in tb_payment (the wallet dup-gate never covers it), so this is the ONLY
+        // เวียนเทียน guard for yuan. Skip a suspected dup → force one-by-one on the
+        // detail page where the acknowledge dialog lives.
+        const yuanDups = await findDuplicateYuanSlips(admin, { id: r.id, userid: r.userid, paythb: r.paythb, paydate: r.paydate });
+        if (yuanDups.length > 0) {
+          errors.push(`id=${r.id}: พบสลิปโอนหยวนที่อาจซ้ำ (${yuanDups.map((d) => `#${d.id}`).join(", ")}) — อนุมัติทีละรายการที่หน้ารายละเอียดเพื่อยืนยัน`);
           continue;
         }
         const payThbCost   = Math.round(Number(r.payyuan ?? 0) * payRateCost * 100) / 100;

@@ -164,15 +164,16 @@ export default async function BillingRunDetailPage({
             {header.doc_no}
           </h1>
           <p className="text-xs text-muted mt-0.5">
-            ลูกค้า: <Link href={`/admin/customers/${header.userid}`} className="text-primary-600 hover:underline">{header.userid}</Link> · ออก {header.date_issued} · ครบกำหนด {header.date_due}
+            {/* ครบกำหนด = เครดิตเท่านั้น (bug-hunt 2026-07-18 · mirror billing-run-paper hasDueDate) */}
+            ลูกค้า: <Link href={`/admin/customers/${header.userid}`} className="text-primary-600 hover:underline">{header.userid}</Link> · ออก {header.date_issued}{header.is_credit && ` · ครบกำหนด ${header.date_due}`}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {header.status === "issued" && header.is_overdue && (
+          {header.status === "issued" && header.is_credit && header.is_overdue && (
             <span className="rounded-full bg-red-50 text-red-700 border border-red-200 px-3 py-1 text-sm font-medium">⚠️ เลยกำหนดแล้ว</span>
           )}
-          {header.status === "issued" && !header.is_overdue && (
+          {header.status === "issued" && (!header.is_credit || !header.is_overdue) && (
             <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1 text-sm font-medium">รอชำระเงิน</span>
           )}
           {header.status === "paid" && (

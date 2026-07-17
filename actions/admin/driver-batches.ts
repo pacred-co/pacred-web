@@ -43,6 +43,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNotification } from "@/lib/notifications";
 import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 import { maybeAutoCompleteDriverBatch } from "@/lib/admin/driver-batch-complete";
+import { loadAssignedFids } from "@/lib/admin/pending-dispatch";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 // ────────────────────────────────────────────────────────────
@@ -705,20 +706,40 @@ export async function reopenDriverBatch(
       return { ok: false, error: updErr.message };
     }
 
-    // Reset only the failed stops so they re-enter the driver's work-list.
-    const { error: resetErr } = await admin
+    // Reset the failed stops so they re-enter the driver's work-list — but 🔴 NOT a
+    // forwarder that was already re-added to ANOTHER open batch (bug-hunt 2026-07-18):
+    // a failed ('3') stop does NOT block re-dispatch, so ops may have put that order in
+    // a fresh batch under a different driver. Resurrecting it here too would give the
+    // SAME parcel to two drivers. Skip any fid that already has an open stop elsewhere
+    // (loadAssignedFids is batch-aware — this batch's own '3' stops don't count).
+    const { data: failedStops, error: failErr } = await admin
       .from("tb_forwarder_driver_item")
-      .update({ fdistatus: "" })
+      .select("id, fid")
       .eq("fdid", batchId)
       .eq("fdistatus", "3");
-    if (resetErr) {
-      console.error("reopenDriverBatch: item reset failed", resetErr, { batchId });
-      // Batch already re-opened — don't hard-fail; surface a soft warning.
-      return { ok: false, error: `เปิดรอบแล้วแต่รีเซ็ตรายการไม่สำเร็จ: ${resetErr.message}` };
+    if (failErr) {
+      console.error("reopenDriverBatch: failed-stops read", failErr, { batchId });
+      return { ok: false, error: `เปิดรอบแล้วแต่อ่านรายการไม่สำเร็จ: ${failErr.message}` };
+    }
+    const failed = (failedStops ?? []) as Array<{ id: number; fid: number }>;
+    const assignedElsewhere = await loadAssignedFids(admin, failed.map((s) => s.fid));
+    const resurrectIds = failed.filter((s) => !assignedElsewhere.has(s.fid)).map((s) => s.id);
+    const skippedDup = failed.length - resurrectIds.length;
+    if (resurrectIds.length > 0) {
+      const { error: resetErr } = await admin
+        .from("tb_forwarder_driver_item")
+        .update({ fdistatus: "" })
+        .in("id", resurrectIds)
+        .eq("fdistatus", "3");
+      if (resetErr) {
+        console.error("reopenDriverBatch: item reset failed", resetErr, { batchId });
+        return { ok: false, error: `เปิดรอบแล้วแต่รีเซ็ตรายการไม่สำเร็จ: ${resetErr.message}` };
+      }
     }
 
     await logAdminAction(adminId, "tb_forwarder_driver.reopen", "tb_forwarder_driver", String(batchId), {
       from_status: batch.fdstatus, end_time_hours: endTimeHours,
+      resurrected: resurrectIds.length, skipped_assigned_elsewhere: skippedDup,
     });
     revalidatePath(`/admin/drivers/${batchId}`);
     revalidatePath("/admin/drivers");

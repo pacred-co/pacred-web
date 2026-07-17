@@ -2084,8 +2084,13 @@ async function markBillingRunPaidImpl(
           try {
             const { data: creditRows, error: creditRowsErr } = await admin
               .from("tb_forwarder")
+              // 🔴 include paymethod (bug-hunt 2026-07-18) — calcForwarderOutstanding
+              // → forwarderPriceFull excludes the COD domestic leg (paymethod===2 ? 0
+              // : ftransportprice). Without it paymethod=undefined→leg ADDED → the
+              // credit-settle decrements tb_credit by the COD ฿ the BILL (calcForwarderGross,
+              // which DOES read paymethod) excluded → over-frees the credit line.
               .select(
-                "id, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany",
+                "id, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany, paymethod",
               )
               .in("id", Array.from(invFids))
               .eq("fcredit", "1");
@@ -2119,6 +2124,13 @@ async function markBillingRunPaidImpl(
               // (clamp ≥0 · mirrors credit.ts L410). Only when a credit row actually flipped
               // and a tb_credit row exists (best-effort · never create/insert here).
               if (settledSum > 0 && cur.userid) {
+                // 🔴 log the ACTUAL removed amount (post-clamp), NOT the raw settledSum
+                // (bug-hunt 2026-07-18): the decrement clamps at 0, so if creditvalue <
+                // settledSum only creditvalue is removed. adminReverseBillingRunPaid
+                // reads settled_amount to RESTORE — logging the raw settledSum there
+                // would over-restore the credit line. Default 0 (no creditRow = nothing
+                // removed = reverse restores 0).
+                let creditRemoved = 0;
                 const { data: creditRow, error: creditReadErr } = await admin
                   .from("tb_credit")
                   .select("creditvalue")
@@ -2129,6 +2141,7 @@ async function markBillingRunPaidImpl(
                 } else if (creditRow) {
                   const current = Number(creditRow.creditvalue ?? 0) || 0;
                   const next = Math.max(0, Math.round((current - settledSum) * 100) / 100);
+                  creditRemoved = Math.round((current - next) * 100) / 100;
                   const { error: creditUpdErr } = await admin
                     .from("tb_credit")
                     .update({ creditvalue: next })
@@ -2136,7 +2149,7 @@ async function markBillingRunPaidImpl(
                   if (creditUpdErr) console.error("[markBillingRunPaid credit-decrement]", { code: creditUpdErr.code, message: creditUpdErr.message, userid: cur.userid });
                 }
                 await logAdminAction(adminId, "billing_run.credit_settled", "forwarder_invoice", String(v.invoiceId), {
-                  doc_no: cur.doc_no, userid: cur.userid, settled_fids: settledIds, settled_amount: settledSum,
+                  doc_no: cur.doc_no, userid: cur.userid, settled_fids: settledIds, settled_amount: creditRemoved,
                 });
               }
             }
@@ -3007,7 +3020,27 @@ export async function sendBillingRunNotification(
       // (c) Build payload + send via unified channel
       const totalThb = Number(inv.total_thb);
       const today = new Date().toISOString().slice(0, 10);
-      const isOverdueAtSend = inv.date_due < today;
+      // 🔴 CREDIT GATE (bug-hunt 2026-07-18 · owner directive cbddd1d2): only a
+      // CREDIT bill has a real payment term — a CASH customer's bill hides the due
+      // date, so "เลยกำหนดชำระ" would be wrong for them. Resolve fcredit from the
+      // linked forwarder rows (isCreditRow SOT). Cash → send the plain รอชำระ notice.
+      let sendIsCredit = false;
+      {
+        // 2-query (no PostgREST FK embed invoice_item→forwarder).
+        const { data: creditItems, error: creditItemErr } = await admin
+          .from("tb_forwarder_invoice_item")
+          .select("forwarder_id")
+          .eq("invoice_id", v.invoiceId);
+        if (creditItemErr) console.error("[sendBillingRunNotification credit-items] failed", { code: creditItemErr.code, message: creditItemErr.message });
+        const cFwdIds = ((creditItems ?? []) as Array<{ forwarder_id: number }>).map((r) => r.forwarder_id);
+        if (cFwdIds.length > 0) {
+          const { data: cFwds, error: cFwdErr } = await admin
+            .from("tb_forwarder").select("fcredit").in("id", cFwdIds);
+          if (cFwdErr) console.error("[sendBillingRunNotification credit-fcredit] failed", { code: cFwdErr.code, message: cFwdErr.message });
+          sendIsCredit = ((cFwds ?? []) as Array<{ fcredit: string | null }>).some((f) => (f.fcredit ?? "").trim() === "1");
+        }
+      }
+      const isOverdueAtSend = sendIsCredit && inv.date_due < today;
 
       const result = await sendNotification(profileId, {
         category:       "payment",
