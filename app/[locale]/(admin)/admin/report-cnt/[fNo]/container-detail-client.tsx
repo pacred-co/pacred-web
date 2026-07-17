@@ -774,15 +774,21 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                 // near-white (pcs-row-done · #e6f5ec). c6baf98d neutralised the SETTLED band
                 // (6/7/8) but left arrived '4' rows red. '5' (รอชำระ · notCollected · ยัง
                 // เก็บเงินไม่ได้) stays red on purpose; '<4' (in transit) stays red.
-                const settled = isRowSettled(r.fstatus);
-                const arrivedReady = (r.fstatus ?? "").trim() === "4";
+                // 🔴 owner 2026-07-17 "ไล่แก้เรื่องสีให้จบ · กล่อง/ชิปเม้น/แทรคกิ้ง ที่สแกน
+                // แล้วยังแดงอยู่ · คนโกดังและพนักงานงงกันหมด" — the tint used to be BINARY:
+                // in-the-check-queue → white, everything else → the legacy alert-danger pink.
+                // So รอเข้าโกดังจีน (1) · ถึงโกดังจีน (2) · กำลังส่งมาไทย (3) all screamed the
+                // same red — three unrelated situations, one alarm — and with 296 of ~600 prod
+                // rows sitting at '3' a freshly-closed container reads as a wall of red. Red
+                // that means "everything" means nothing, so staff stopped trusting it.
+                // Now the row wears its STATUS, from the same SOT the /admin/forwarders list
+                // uses (FSTATUS_CFG): each stage is its own colour, and RED is reserved for
+                // the one row-state that actually needs money action (5 · รอชำระเงิน).
                 const rowCls = selected.has(r.id)
                   ? "pcs-row-selected"
                   : r.inCheckQueue
                     ? "pcs-row-check"
-                    : settled || arrivedReady
-                      ? "pcs-row-done"
-                      : "pcs-row";
+                    : `pcs-row-st${(r.fstatus ?? "").trim() || "0"}`;
                 return (
                 <tr
                   key={r.id}
@@ -1375,18 +1381,6 @@ function productTypeLabel(t: string | null): string {
 function shipByLabel(s: string | null): string {
   const k = (s ?? "").trim();
   return SHIP_BY_LABEL[k] ?? (k || "-");
-}
-
-/**
- * A row whose money+dispatch work is DONE — fstatus 6 (เตรียมส่ง · already billed AND
- * paid) / 7 (ส่งแล้ว) / 8. Owner 2026-07-16: such a row must never wear the "ยังไม่ได้
- * ตรวจ" pink. 5 (รอชำระเงิน) is NOT settled — that one still needs the money, so it
- * stays red on purpose. Kept next to legacyStatusClass() so both status→colour maps
- * live in one place.
- */
-function isRowSettled(fstatus: string | null): boolean {
-  const s = (fstatus ?? "").trim();
-  return s === "6" || s === "7" || s === "8";
 }
 
 // Legacy report-cnt "สถานะสินค้า" badge colour by fstatus — 1:1 with the legacy

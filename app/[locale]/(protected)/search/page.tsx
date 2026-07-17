@@ -10,6 +10,7 @@ import { SearchRecents } from "./search-recents";
 import { SearchHistoryLogger } from "./search-history-logger";
 import { SearchImagePanel } from "./search-image-panel";
 import { UrlPasteAddToCart } from "./url-paste-add-to-cart";
+import { MAX_ORDER_QTY, clampOrderQty } from "@/lib/validators/order-qty";
 
 /**
  * China product search / search-results screen — a FAITHFUL 1:1
@@ -817,7 +818,11 @@ async function UrlPasteMode({
                     rsDefault={rsDefault}
                     fxRates={fxRates}
                     minQty={1}
-                    maxQty={999}
+                    // owner 2026-07-17 "ปลดเพดานเป็นไม่จำกัด · ลูกค้าเจ้าใหญ่สั่งเป็นล้านชิ้น":
+                    // this was a hardcoded 999 — never from the listing. It was the invisible
+                    // wall that failed every wholesale pick (while reporting itself as
+                    // "ยังไม่ใส่ราคา CNY"). The only real ceiling is the int32 column.
+                    maxQty={MAX_ORDER_QTY}
                     detailAvailable={detailAvailable}
                     skuAxes={detail?.sku_axes?.map((ax) => ({
                       name: ax.name,

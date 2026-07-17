@@ -24,6 +24,7 @@ import {
   type ForwarderDebitRow,
   type ForwarderCollectBreakdown,
 } from "@/lib/forwarder/forwarder-debit-total";
+import { resolveMaoAnchorIds } from "@/lib/forwarder/mao-anchor";
 import { computeShopOrderDebitTotal } from "@/lib/service-order/debit-total";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { SHIP_BY_LABEL } from "@/actions/admin/reports-profit-types";
@@ -302,7 +303,11 @@ export async function getPayUserForwarderView(
 
     // Authoritative per-row price (เหมาๆ ฿50 + 1% นิติ if batch ≥ ฿1000) — same
     // engine the pay action debits, on the SAME eligible set.
-    const batch = computeForwarderDebitBatch(rows, { userId: code, isCorporate: p.panel.is_corporate });
+    // 🔴 owner 2026-07-16 — elect the เหมาๆ carrier PER SHIPMENT (reads every sibling
+    // in the DB) so a MOMO split-at-commit shipment with no bare base row still gets its
+    // ฿100 here. Without it this VIEW showed 1,085.55 while the bill said 1,184.54.
+    const maoAnchorIds = await resolveMaoAnchorIds(admin, rows.map((r) => r.ftrackingchn));
+    const batch = computeForwarderDebitBatch(rows, { userId: code, isCorporate: p.panel.is_corporate, maoAnchorIds });
     const lineById = new Map(batch.lines.map((l) => [l.id, l]));
 
     // Batch-resolve the cover thumbnails (parallel).

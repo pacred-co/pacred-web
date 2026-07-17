@@ -32,6 +32,7 @@ import {
   computeLowestVacantPrCode,
   describeReassignPlan,
   reassignSyntheticEmail,
+  shouldRealignAuthEmail,
   PR_CODE_RE,
   type ReassignPlan,
 } from "./reassign-member-code";
@@ -168,8 +169,9 @@ export async function moveMemberCode(args: {
     }
 
     // Current auth row for `from`.
-    const prof = (await c.query(`SELECT id, email FROM profiles WHERE member_code=$1`, [from])).rows[0] as
-      | { id: string; email: string | null }
+    const prof = (await c.query(
+      `SELECT id, email, migrated_from_pcs FROM profiles WHERE member_code=$1`, [from])).rows[0] as
+      | { id: string; email: string | null; migrated_from_pcs: boolean | null }
       | undefined;
     const supa = createAdminClient();
     let authEmailFrom: string | null = null;
@@ -177,6 +179,13 @@ export async function moveMemberCode(args: {
       const { data } = await supa.auth.admin.getUserById(prof.id);
       authEmailFrom = data?.user?.email ?? null;
     }
+    // Only a code-keyed (migrated) account's login derives its email from the PR
+    // code — realigning a NATIVE one fabricates a credential it never had. See
+    // shouldRealignAuthEmail for the actions/auth.ts branch this mirrors.
+    const realignAuth = shouldRealignAuthEmail({
+      migratedFromPcs: prof?.migrated_from_pcs,
+      authUserId: prof?.id,
+    });
 
     const plan = describeReassignPlan({ fromCode: from, toCode: to, tables, authEmailFrom });
 
@@ -199,10 +208,11 @@ export async function moveMemberCode(args: {
       return { ok: false, error: `move_rolled_back:${(e as Error).message}` };
     }
 
-    // 5. Realign the auth email (post-commit) so NATIVE login still resolves.
+    // 5. Realign the auth email (post-commit) so login-by-code still resolves —
+    //    ONLY for a migrated (code-keyed) account. A native account needs none.
     let authRealigned = false;
     let authWarning: string | undefined;
-    if (prof?.id) {
+    if (realignAuth && prof?.id) {
       const { error: aeErr } = await supa.auth.admin.updateUserById(prof.id, {
         email: plan.authEmailTo,
         email_confirm: true,

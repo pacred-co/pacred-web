@@ -41,7 +41,16 @@ import { Package, CreditCard, ClipboardCheck, ChevronDown, ExternalLink } from "
 import { Link } from "@/i18n/navigation";
 import { adminBulkUpdateForwarderTbStatus } from "@/actions/admin/forwarders";
 import { adminMarkForwarderCredit } from "@/actions/admin/forwarders-field-edits";
-import { confirm } from "@/components/ui/confirm";
+// 2026-07-17 (owner "ทำให้สามารถถอยสถานะได้ตั้งแต่ตรงนี้เลย · เฉพาะ ultra · พอถอย
+// สถานะเอกสาร สถานะงานก็ต้องถอยตามกลับมาหมด") — a BACKWARD pick routes to the
+// ultra-only rollback, which unwinds คนขับ/การชำระ/ใบวางบิล/ใบเสร็จ/เครดิต first.
+// Forward picks keep going through adminBulkUpdateForwarderTbStatus unchanged.
+import {
+  previewForwarderRollback,
+  adminRollbackForwarderStatus,
+} from "@/actions/admin/forwarder-rollback";
+import { isRollbackTransition } from "@/lib/admin/forwarder-rollback-plan";
+import { confirm, prompt } from "@/components/ui/confirm";
 
 type Status = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "99";
 
@@ -121,6 +130,11 @@ function rank(s: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** ฿ with 2dp — for the rollback confirm/summary money lines. */
+function baht(n: number): string {
+  return `฿${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export function ForwarderStatusWorkflow(p: Props) {
   const router = useRouter();
 
@@ -143,10 +157,21 @@ export function ForwarderStatusWorkflow(p: Props) {
   const statusOptions: Array<{ v: string; label: string; disabled: boolean }> = [];
   for (let n = 1; n <= windowMax; n++) {
     const sv = String(n);
-    const disabled = paid && n < curInt; // already-paid + passed → locked
+    const isBack = isRollbackTransition(p.currentStatus, sv);
+    // owner 2026-07-17 — a backward pick is now OPEN to Ultra Admin Z, even on a
+    // paid row: it routes to adminRollbackForwarderStatus, which ยกเลิก/ย้อน the
+    // documents + money FIRST ("ถ้าถอยสถานะที่ออกเอกสารไปแล้ว ก็ยกเลิกไปให้ด้วยเลย
+    // เพราะจะต้องทำใหม่"). ส่งแล้ว(7) stays locked — the server refuses it too
+    // (ของอยู่กับลูกค้าแล้ว). Everyone else keeps the legacy paid-lock.
+    const backOpen = p.isUltra && curInt !== 7;
+    const disabled = paid && n < curInt && !backOpen;
     statusOptions.push({
       v: sv,
-      label: (disabled ? "จ่ายแล้ว · " : "") + STATUS_LABEL[sv],
+      label: disabled
+        ? `จ่ายแล้ว · ${STATUS_LABEL[sv]}`
+        : isBack
+          ? `↩ ถอยกลับ · ${STATUS_LABEL[sv]}`
+          : STATUS_LABEL[sv],
       disabled,
     });
   }
@@ -158,17 +183,107 @@ export function ForwarderStatusWorkflow(p: Props) {
   const isCreditSel = selected === "credit";
   const showPricing = selected === "4"; // legacy showForm4()
   const showTracking = rank(selected) >= 6; // legacy showForm6()
+  // owner 2026-07-17 — a BACKWARD pick (never 99 / credit / forward) goes down the
+  // ultra-only rollback path instead of the plain forward status write.
+  const isRollbackSel = isRollbackTransition(p.currentStatus, selected);
 
   // owner 2026-06-11 "เอาเลขตู้ + หมายเหตุ ออกจากฟอร์มสถานะ": ฟอร์มนี้เปลี่ยน "สถานะ" อย่างเดียว
   // (เลขตู้แก้ inline ในกล่องข้อมูลด้านบนแทน · โหมดเครดิตใช้ฟอร์ม "ติดเครดิต" ด้านล่าง).
   const statusDirty = selected !== p.currentStatus;
   const canSave = !isCreditSel && statusDirty;
 
+  /**
+   * ถอยสถานะ (ultra-only) — §0f demands the confirm ENUMERATE what gets cancelled,
+   * so we ask the server for the real plan FIRST (previewForwarderRollback reads
+   * the actual bill/receipt/payment/credit/driver state) and list it verbatim.
+   * A refusal (ส่งแล้ว · คนขับออกรถ · สลิปรวม · บิล/ใบเสร็จครอบหลายออเดอร์) surfaces
+   * here as the server's Thai reason — it never silently does a partial job.
+   */
+  async function onRollback() {
+    const prev = await previewForwarderRollback({ fid: p.fId, to: selected });
+    if (!prev.ok) {
+      setError(prev.error ?? "ตรวจสอบการถอยสถานะไม่สำเร็จ");
+      return;
+    }
+    const d = prev.data;
+    if (!d) {
+      setError("ตรวจสอบการถอยสถานะไม่สำเร็จ");
+      return;
+    }
+    const lines: string[] = [];
+    if (d.paymentAmount > 0) {
+      lines.push(
+        `• ย้อนการชำระเงิน ${baht(d.paymentAmount)}` +
+          (d.paymentIsWalletFunded ? " (คืนเข้ากระเป๋าลูกค้า)" : " (จ่ายเข้าธนาคาร — ไม่คืนกระเป๋า)"),
+      );
+    } else if (d.steps.includes("reverse_payment")) {
+      lines.push("• ย้อนการชำระเงินของออเดอร์นี้");
+    }
+    if (d.billDocNos.length > 0) lines.push(`• ยกเลิกใบวางบิล ${d.billDocNos.join(", ")}`);
+    if (d.receiptRids.length > 0) lines.push(`• ยกเลิกใบเสร็จ ${d.receiptRids.join(", ")}`);
+    if (d.steps.includes("release_credit")) {
+      lines.push(d.creditAmount > 0 ? `• ปลดเครดิต คืนวงเงิน ${baht(d.creditAmount)}` : "• ปลดเครดิตของออเดอร์นี้ (ถ้ามี)");
+    }
+    if (d.openDriverStops > 0) lines.push(`• ถอดออกจากรอบคนขับ ${d.openDriverStops} จุด`);
+
+    const body =
+      `ถอยสถานะ #${p.fNo}\n"${d.fromLabel}" → "${d.toLabel}"\n\n` +
+      (lines.length > 0
+        ? `⚠️ ระบบจะย้อน/ยกเลิกสิ่งต่อไปนี้ให้อัตโนมัติ (เอกสารต้องทำใหม่):\n${lines.join("\n")}\n\n`
+        : "ออเดอร์นี้ยังไม่มีเอกสาร/การชำระเงินที่ต้องยกเลิก\n\n") +
+      "หลังถอยแล้ว ต้องเดินสถานะใหม่ตาม process เท่านั้น";
+
+    if (!(await confirm(body, { title: "ยืนยันถอยสถานะ", confirmLabel: "ถอยสถานะ" }))) return;
+
+    const reason = await prompt(
+      `ระบุเหตุผลที่ถอยสถานะ #${p.fNo} (เก็บลง log · อย่างน้อย 3 ตัวอักษร)`,
+      "",
+      { title: "เหตุผลการถอยสถานะ", confirmLabel: "บันทึก" },
+    );
+    if (reason === null) return;
+    if (reason.trim().length < 3) {
+      setError("กรุณาระบุเหตุผล (อย่างน้อย 3 ตัวอักษร)");
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await adminRollbackForwarderStatus({ fid: p.fId, to: selected, reason: reason.trim() });
+      if (!res.ok) {
+        setError(res.error ?? "ถอยสถานะไม่สำเร็จ");
+        return;
+      }
+      const r = res.data;
+      if (!r) {
+        setError("ถอยสถานะไม่สำเร็จ (ไม่ได้รับผลลัพธ์)");
+        return;
+      }
+      const done: string[] = [];
+      if (r.reversedPayment > 0) done.push(`คืนกระเป๋า ${baht(r.reversedPayment)}`);
+      if (r.cancelledBills.length > 0) done.push(`ยกเลิกใบวางบิล ${r.cancelledBills.join(", ")}`);
+      if (r.voidedReceipts.length > 0) done.push(`ยกเลิกใบเสร็จ ${r.voidedReceipts.join(", ")}`);
+      if (r.releasedCredit > 0) done.push(`ปลดเครดิต ${baht(r.releasedCredit)}`);
+      if (r.removedDriverStops > 0) done.push(`ถอดรอบคนขับ ${r.removedDriverStops} จุด`);
+      setSuccess(
+        `ถอยสถานะสำเร็จ — #${p.fNo} “${r.fromLabel}” → “${r.toLabel}”` +
+          (done.length > 0 ? ` · ${done.join(" · ")}` : ""),
+      );
+      // warnings = สิ่งที่ระบบไม่เดาให้ (เช่น ไม่ทราบยอดเครดิตเดิม) → ต้องมีคนตามต่อ
+      if (r.warnings.length > 0) setError(`⚠ ต้องตรวจสอบเพิ่ม: ${r.warnings.join(" · ")}`);
+      router.refresh();
+      setTimeout(() => setSuccess(null), 8000);
+    });
+  }
+
   async function onSaveAll() {
     setError(null);
     setSuccess(null);
     if (isCreditSel || !statusDirty) {
       setError("ไม่มีการเปลี่ยนแปลง — เลือกสถานะใหม่ก่อนบันทึก");
+      return;
+    }
+    // ถอย → the unwinding path (ultra-only · server re-asserts). เดินหน้า → เดิมเป๊ะ.
+    if (isRollbackSel) {
+      await onRollback();
       return;
     }
     const statusLabel = STATUS_LABEL[selected] ?? selected;
@@ -243,7 +358,9 @@ export function ForwarderStatusWorkflow(p: Props) {
 
         {/* per-status helper — tells staff WHAT to do for the picked status */}
         <p className="text-[11px] text-muted">
-          {showPricing
+          {isRollbackSel
+            ? "↩ ถอยสถานะ — ระบบจะย้อนการชำระ + ยกเลิกใบวางบิล/ใบเสร็จ + ปลดเครดิต + ถอดรอบคนขับ ให้อัตโนมัติ (เอกสารต้องทำใหม่) · กด “บันทึก” เพื่อดูรายการที่จะยกเลิกก่อนยืนยัน"
+            : showPricing
             ? "📦 ของถึงไทยแล้ว — กรอกขนาด/น้ำหนัก/เรทราคาในฟอร์มด้านล่าง แล้วกด “บันทึกข้อมูล”"
             : showTracking
               ? "🚚 ใส่เลขพัสดุไทยในฟอร์มด้านล่างเพื่อปิดงาน “ส่งแล้ว”"

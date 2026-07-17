@@ -41,6 +41,7 @@ import { RevenueCarouselCard } from "@/components/admin/revenue-carousel-card";
 import { getWalletSystemTotals } from "@/lib/admin/wallet-totals";
 import { pendingTopupFilter, pendingWithdrawFilter } from "@/lib/wallet/wallet-hs";
 import { collapseWalletBillingPairs, computeTopupBadge } from "@/lib/admin/topup-slip-dedup";
+import { computeBillWht } from "@/lib/billing/wht";
 import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
 import { Link, redirect } from "@/i18n/navigation";
 import { getLocale } from "next-intl/server";
@@ -754,7 +755,7 @@ async function fetchBillingRunSlipRows(
 ): Promise<BillingRunSlipRow[]> {
   const { data, error } = await admin
     .from("tb_forwarder_invoice")
-    .select("id, doc_no, userid, buyer_name, total_thb, slip_path, slip_uploaded_at")
+    .select("id, doc_no, userid, buyer_name, total_thb, is_juristic, slip_path, slip_uploaded_at")
     .eq("status", "issued")
     .eq("slip_status", "pending")
     .order("slip_uploaded_at", { ascending: false, nullsFirst: false })
@@ -765,7 +766,8 @@ async function fetchBillingRunSlipRows(
   }
   const list = (data ?? []) as Array<{
     id: number; doc_no: string; userid: string | null; buyer_name: string | null;
-    total_thb: number | string | null; slip_path: string | null; slip_uploaded_at: string | null;
+    total_thb: number | string | null; is_juristic: boolean | null;
+    slip_path: string | null; slip_uploaded_at: string | null;
   }>;
 
   // Batch-read the forwarder ids each FRI bills so the topup queue can collapse a
@@ -796,7 +798,10 @@ async function fetchBillingRunSlipRows(
       created_at: r.slip_uploaded_at ?? "",
       member_code: r.userid ?? "",
       customer_name: r.buyer_name ?? "",
-      amount: Number(r.total_thb ?? 0),
+      // NET payable (gross − WHT 1% for juristic ≥฿1,000) — the SAME value the billing-run
+      // detail + ใบเสร็จ compute. Was Number(total_thb) = GROSS → showed 1,196.50 for a
+      // juristic bill whose real payable is 1,184.54 (WHT-fix 2026-07-16).
+      amount: computeBillWht(Boolean(r.is_juristic), Number(r.total_thb ?? 0)).net_payable,
       detail: `🧾 ใบวางบิล ${escapeHtmlInline(r.doc_no)} · <span class="text-emerald-600">📎 แนบสลิปแล้ว (รอบัญชีตรวจ)</span>`,
       link: `/admin/billing-run/${r.id}`,
       status: "1",

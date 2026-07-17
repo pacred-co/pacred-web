@@ -63,6 +63,7 @@ import {
   type ForwarderDebitRow,
   type ForwarderCollectBreakdown,
 } from "@/lib/forwarder/forwarder-debit-total";
+import { resolveMaoAnchorIds } from "@/lib/forwarder/mao-anchor";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
 import { assertNoDriverEnRoute, removeOpenDriverStops } from "@/lib/admin/revert-driver-cleanup";
@@ -241,7 +242,8 @@ export async function getPayUserContext(
     const fEligible = (fRows ?? []) as Array<
       ForwarderDebitRow & { ftrackingchn: string | null; fstatus: string | null; fcredit: string | null }
     >;
-    const fBatch = computeForwarderDebitBatch(fEligible, { userId: code, isCorporate });
+    const fMaoAnchorIds = await resolveMaoAnchorIds(admin, fEligible.map((r) => r.ftrackingchn));
+    const fBatch = computeForwarderDebitBatch(fEligible, { userId: code, isCorporate, maoAnchorIds: fMaoAnchorIds });
     const lineById = new Map(fBatch.lines.map((l) => [l.id, l]));
 
     const forwarders: PayUserForwarder[] = fEligible
@@ -550,7 +552,11 @@ export async function adminPayForwardersOnBehalf(
     const eligible = (eligibleRaw ?? []) as Array<ForwarderDebitRow & { fcredit: string | null }>;
     if (eligible.length === 0) return { ok: false, error: "ไม่พบรายการฝากนำเข้าที่พร้อมชำระของลูกค้ารายนี้" };
 
-    const batch = computeForwarderDebitBatch(eligible, { userId, isCorporate });
+    // 🔴 owner 2026-07-16 — per-SHIPMENT เหมาๆ carrier (see lib/forwarder/mao-anchor.ts).
+    // This is the real DEBIT: without the election a split-box shipment was settled ฿100
+    // short of its own bill. The carrier is one row, so two pay actions can't both fire it.
+    const maoAnchorIds = await resolveMaoAnchorIds(admin, eligible.map((r) => r.ftrackingchn));
+    const batch = computeForwarderDebitBatch(eligible, { userId, isCorporate, maoAnchorIds });
     const priceById = new Map(batch.lines.map((l) => [l.id, l.price_thb]));
     const creditById = new Map(eligible.map((r) => [String(r.id), (r.fcredit ?? "").trim() === "1"]));
     // legacy stamps fUserCompany='1' on EVERY settled row when the batch
@@ -1340,7 +1346,11 @@ export async function adminPayForwardersWithTopUp(
     const eligible = (eligibleRaw ?? []) as Array<ForwarderDebitRow & { fcredit: string | null }>;
     if (eligible.length === 0) return { ok: false, error: "ไม่พบรายการฝากนำเข้าที่พร้อมชำระของลูกค้ารายนี้" };
 
-    const batch = computeForwarderDebitBatch(eligible, { userId, isCorporate });
+    // 🔴 owner 2026-07-16 — per-SHIPMENT เหมาๆ carrier (see lib/forwarder/mao-anchor.ts).
+    // This is the real DEBIT: without the election a split-box shipment was settled ฿100
+    // short of its own bill. The carrier is one row, so two pay actions can't both fire it.
+    const maoAnchorIds = await resolveMaoAnchorIds(admin, eligible.map((r) => r.ftrackingchn));
+    const batch = computeForwarderDebitBatch(eligible, { userId, isCorporate, maoAnchorIds });
     const priceById = new Map(batch.lines.map((l) => [l.id, l.price_thb]));
     const creditById = new Map(eligible.map((r) => [String(r.id), (r.fcredit ?? "").trim() === "1"]));
     const fUserCompanyValue = batch.applyCorporateDiscount ? "1" : "";

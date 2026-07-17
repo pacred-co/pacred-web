@@ -9,6 +9,7 @@ import {
   costColumn,
   costBasisMode,
   productTypeIdx,
+  containerRate,
   resolveRowCost,
   resolveOrderCost,
 } from "./resolve-cost";
@@ -127,6 +128,107 @@ eq(order.perRow.length, 2, "aggregate perRow count");
 eq(order.perRow[0].cost, 116.15, "aggregate row1 cost");
 eq(order.perRow[1].cost, 1691.32, "aggregate row2 cost (IEEE-754: 1691.3249… → 1691.32)");
 eq(order.total, 1807.47, "aggregate total = round-then-sum (NOT 1807.48)");
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE WATERFALL — tier 1 (accounting's per-container rate) BEATS tier 2
+// (the tb_settings global default). Owner 2026-07-17: "บัญชีก็ตั้งต้นทุนตู้ตอน
+// ตรวจตู้เป็น 4700 แล้ว ระบบก็ไม่เห็นดึงมาใช้เลยครับ".
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── source is reported on the settings path (back-compat: 2-arg call) ──
+eq(r52028.source, "settings", "2-arg call → source=settings (back-compat)");
+eq(rEmpty.source, "none", "rate 0 → source=none");
+eq(rBad.source, "none", "invalid wh → source=none");
+
+// ── containerRate — pick the cell for the row's product type ──
+const CC = { fproductstype1: 4700, fproductstype2: 4800, fproductstype3: 4900, fproductstype4: 5000 };
+eq(containerRate(CC, "1"), 4700, "container rate type 1");
+eq(containerRate(CC, "3"), 4900, "container rate type 3");
+eq(containerRate(CC, null), 4700, "container rate null type → type 1 cell");
+eq(containerRate(null, "1"), 0, "no container row → 0 (fall through)");
+eq(containerRate({ fproductstype1: 0 }, "1"), 0, "unset cell → 0 (fall through)");
+eq(containerRate({ fproductstype1: "4700.00" }, "1"), 4700, "numeric string cell (pg numeric) → 4700");
+eq(containerRate({ fproductstype1: "abc" }, "1"), 0, "garbage cell → 0 (never guess)");
+eq(containerRate({ fproductstype1: -5 }, "1"), 0, "negative cell → 0 (never guess)");
+
+// ── 🔴 THE OWNER'S ROW · prod 52184 · tracking 500255762943 · GZE260701-1 ──
+// MOMO(8) · ROAD(1) · กวางโจว · ทั่วไป · cbm 0.0536. Accounting set the container
+// to 4,700 at ตรวจตู้; the global MOMO road default is 2,500 (mig 0194).
+// Booked prod fcosttotalprice = 251.92 — the resolver MUST reproduce it exactly.
+const ownerRow = { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "1", fproductstype: "1", fweight: 72, fvolume: 0.0536 } as const;
+const rOwner = resolveRowCost(ownerRow, { fcostcar1defaultmomo: 2500 }, { fproductstype1: 4700 });
+eq(rOwner.rate, 4700, "52184 rate = 4700 (container beats the 2500 default)");
+eq(rOwner.source, "container", "52184 source = container");
+eq(rOwner.basis, "cbm", "52184 basis = cbm (MOMO)");
+eq(rOwner.cost, 251.92, "52184 cost = round2(0.0536 × 4700) = the booked 251.92");
+// the pre-fix behaviour, pinned as the REGRESSION: settings-only → the wrong ฿134
+eq(resolveRowCost(ownerRow, { fcostcar1defaultmomo: 2500 }).cost, 134, "52184 settings-only = the ฿134 the panel wrongly showed");
+
+// ── ROAD ≠ SEA (owner: "เรท รถ และ เรือ ไม่เท่ากันนะครับ") ──
+// Same container rate applies to both modes; the tb_settings FALLBACK is what
+// must differ per mode. Prod accounting: ROAD 4,700 · SEA 2,500.
+const settingsBothModes = { fcostcar1defaultmomo: 2500, fcostship1defaultmomo: 2500 };
+eq(
+  resolveRowCost({ ...ownerRow, ftransporttype: "1" }, settingsBothModes).column,
+  "fcostcar1defaultmomo",
+  "ROAD → fcostcar column",
+);
+eq(
+  resolveRowCost({ ...ownerRow, ftransporttype: "2" }, settingsBothModes).column,
+  "fcostship1defaultmomo",
+  "SEA → fcostship column",
+);
+// mig 0194 set BOTH to 2500 → road and sea resolve identically = the flattening
+// the owner flagged. Pinned so a per-mode correction is a visible test change.
+eq(
+  resolveRowCost({ ...ownerRow, ftransporttype: "1" }, settingsBothModes).rate,
+  resolveRowCost({ ...ownerRow, ftransporttype: "2" }, settingsBothModes).rate,
+  "mig 0194 flattening: road default == sea default (2500) — the regression",
+);
+// with per-mode defaults restored, road and sea diverge as accounting intends
+const perMode = { fcostcar1defaultmomo: 4700, fcostship1defaultmomo: 2500 };
+eq(resolveRowCost({ ...ownerRow, ftransporttype: "1" }, perMode).rate, 4700, "per-mode: ROAD → 4700");
+eq(resolveRowCost({ ...ownerRow, ftransporttype: "2" }, perMode).rate, 2500, "per-mode: SEA → 2500");
+
+// ── container rate wins even when the global cell is UNSET (0) ──
+// A rated container must cost out even where "never guess" leaves tier 2 empty.
+const rNoDefault = resolveRowCost(ownerRow, {}, { fproductstype1: 4700 });
+eq(rNoDefault.rate, 4700, "container rate works with an empty settings matrix");
+eq(rNoDefault.cost, 251.92, "container-only cost still exact");
+eq(rNoDefault.source, "container", "container-only source");
+
+// ── an EMPTY/garbage container row falls through to the default (no guessing) ──
+eq(resolveRowCost(ownerRow, { fcostcar1defaultmomo: 2500 }, {}).source, "settings", "empty container row → settings");
+eq(resolveRowCost(ownerRow, { fcostcar1defaultmomo: 2500 }, { fproductstype1: 0 }).rate, 2500, "unset container cell → settings 2500");
+eq(resolveRowCost(ownerRow, {}, {}).cost, 0, "no tier produces a rate → cost 0 (never guess)");
+
+// ── product-type routing: the container cell must follow fproductstype ──
+eq(resolveRowCost({ ...ownerRow, fproductstype: "3" }, {}, CC).rate, 4900, "type 3 → container cell 3");
+
+// ── weight-basis carrier + container rate (the ฿-explosion shape) ──
+// Sang(1)/MX(4) cost by WEIGHT. A per-CBM container rate (4,700) × kg is exactly
+// the GZE260627-1 ฿328M fire — the resolver computes it faithfully; the WRITE
+// path's sanity backstop is what refuses it. Pinned so the basis stays visible.
+const rSangWeight = resolveRowCost(
+  { fwarehousename: "1", fwarehousechina: "1", ftransporttype: "1", fproductstype: "1", fweight: 2792.66, fvolume: 0.4 },
+  {},
+  { fproductstype1: 4700 },
+);
+eq(rSangWeight.basis, "weight", "Sang basis = weight even with a container rate");
+eq(rSangWeight.dimension, 2792.66, "Sang dimension = fweight");
+eq(rSangWeight.cost, 13125502, "Sang: 2792.66kg × 4700/CBM = ฿13.1M — the basis-mismatch shape");
+
+// ── resolveOrderCost threads the container rate to every row ──
+const orderCC = resolveOrderCost(
+  [
+    { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "1", fproductstype: "1", fweight: 72, fvolume: 0.0536 },
+    { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "1", fproductstype: "1", fweight: 10, fvolume: 0.1 },
+  ],
+  { fcostcar1defaultmomo: 2500 },
+  { fproductstype1: 4700 },
+);
+eq(orderCC.perRow.every((r) => r.source === "container"), true, "aggregate: every row uses the container rate");
+eq(orderCC.total, 251.92 + 470, "aggregate total at the container rate");
 
 console.log(`\nresolve-cost.test: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

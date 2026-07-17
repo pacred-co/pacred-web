@@ -48,6 +48,8 @@ import {
   type WarehouseDigit,
   type CostTransport,
   type CostBasis,
+  type CostRateSource,
+  type ContainerRateRow,
 } from "@/lib/forwarder/resolve-cost";
 // Cost-reveal blur gate (owner ภูม 2026-06-16) — blur ต้นทุน by default; the eye
 // in the header opens a PIN dialog to reveal.
@@ -217,13 +219,17 @@ export async function ForwarderCostSection({
     fweight: number;
     fvolume: number;
   } | null = null;
+  // The container this row sits in — the key to accounting's per-container cost
+  // rate (tb_cost_container · tier 1 of the waterfall). Owner 2026-07-17.
+  let costCabinet: string | null = null;
   {
     const { data: hdr, error } = await admin
       .from("tb_forwarder")
       .select(
         "import_duty_pct, import_duty_thb, fcosttotalprice, ftotalprice, ftransportprice, fpriceupdate, " +
           "fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, " +
-          "fwarehousename, fwarehousechina, ftransporttype, fproductstype, fweight, fvolume",
+          "fwarehousename, fwarehousechina, ftransporttype, fproductstype, fweight, fvolume, " +
+          "fcabinetnumber",
       )
       .eq("id", fId)
       .maybeSingle<{
@@ -244,10 +250,12 @@ export async function ForwarderCostSection({
         fproductstype: string | null;
         fweight: number | string | null;
         fvolume: number | string | null;
+        fcabinetnumber: string | null;
       }>();
     if (error) {
       console.error(`[ForwarderCostSection tb_forwarder header]`, { code: error.code, message: error.message, fid: fId });
     } else if (hdr) {
+      costCabinet = (hdr.fcabinetnumber ?? "").trim() || null;
       importDutyPct = (hdr.import_duty_pct as number | string | null) ?? null;
       importDutyThb = (hdr.import_duty_thb as number | string | null) ?? null;
       const n = (v: unknown) => { const x = Number(v ?? 0); return Number.isFinite(x) ? x : 0; };
@@ -269,24 +277,52 @@ export async function ForwarderCostSection({
     }
   }
 
-  // ── Live COST from the 144-cell matrix (option A) ──
-  // Resolve the carrier×mode×type×city cell, fetch JUST that tb_settings column,
-  // compute ต้นทุน = round2(dimension × rate) via the shared resolver (mirrors
-  // report-cnt). Live wins; falls back to the stored fcosttotalprice when the
-  // matrix cell is unset (so a report-cnt-computed cost still shows).
+  // ── Live COST via the documented waterfall (resolve-cost.ts) ──
+  // TIER 1 = tb_cost_container (the rate accounting types at ตรวจตู้ for THIS
+  // container) · TIER 2 = the tb_settings carrier×mode×type×city default. The
+  // accountant always wins. Compute ต้นทุน = round2(dimension × rate) via the
+  // shared resolver (mirrors report-cnt, which owns the write).
+  //
+  // 🔴 Owner 2026-07-17 ("บัญชีก็ตั้งต้นทุนตู้ตอนตรวจตู้เป็น 4700 แล้ว ระบบก็ไม่เห็น
+  // ดึงมาใช้เลยครับ"): tier 1 was missing here — the panel read tb_settings only
+  // and reported the global MOMO default (2,500) as "เรทระบบ" for containers
+  // accounting had rated 4,700, contradicting the cost actually booked.
   let liveCost = 0;
   let liveCostRate = 0;
   let liveCostBasis: CostBasis = "cbm";
   let liveCostDim = 0;
   let liveCostCol: string | null = null;
+  let liveCostSource: CostRateSource = "none";
   if (costDims) {
     const wh = (costDims.fwarehousename ?? "") as WarehouseDigit;
     const transport: CostTransport = costDims.ftransporttype === "2" ? "2" : "1";
     liveCostCol = ["1", "2", "3", "4", "5", "6", "7", "8"].includes(wh)
       ? costColumn(wh, productTypeIdx(costDims.fproductstype), transport, costDims.fwarehousechina ?? "")
       : null;
+
+    // TIER 1 — accounting's per-container rate. Fetched independently of the
+    // settings cell: a rated container must resolve even when the global default
+    // cell is unset (0), which is exactly the "never guess a rate" fallback case.
+    let ccRow: ContainerRateRow | null = null;
+    if (costCabinet) {
+      const { data: cc, error: ccErr } = await admin
+        .from("tb_cost_container")
+        .select("fproductstype1, fproductstype2, fproductstype3, fproductstype4")
+        .eq("fcabinetnumber", costCabinet)
+        .maybeSingle<ContainerRateRow>();
+      if (ccErr) {
+        // Fail SOFT to tier 2 — never block the panel, but say so loudly: a
+        // silent miss here is what made the panel quote the wrong rate.
+        console.error(`[ForwarderCostSection tb_cost_container]`, { code: ccErr.code, message: ccErr.message, cabinet: costCabinet });
+      } else {
+        ccRow = cc ?? null;
+      }
+    }
+
+    // TIER 2 — the global default cell (fallback only).
+    let cs: Record<string, number | string | null> | null = null;
     if (liveCostCol) {
-      const { data: cs, error } = await admin
+      const { data, error } = await admin
         .from("tb_settings")
         .select(liveCostCol)
         .eq("id", 1)
@@ -294,12 +330,15 @@ export async function ForwarderCostSection({
       if (error) {
         console.error(`[ForwarderCostSection tb_settings cost]`, { code: error.code, message: error.message, col: liveCostCol });
       }
-      const rc = resolveRowCost(costDims, cs ?? {});
-      liveCost = rc.cost;
-      liveCostRate = rc.rate;
-      liveCostBasis = rc.basis;
-      liveCostDim = rc.dimension;
+      cs = data ?? null;
     }
+
+    const rc = resolveRowCost(costDims, cs ?? {}, ccRow);
+    liveCost = rc.cost;
+    liveCostRate = rc.rate;
+    liveCostBasis = rc.basis;
+    liveCostDim = rc.dimension;
+    liveCostSource = rc.source;
   }
   // displayCost precedence (review 2026-06-18 · two reviewers flagged): the live
   // matrix figure uses the carrier-DEFAULT basis. A container that was MANUALLY
@@ -358,6 +397,7 @@ export async function ForwarderCostSection({
             liveRate={liveCostRate}
             liveBasis={liveCostBasis}
             liveDimension={liveCostDim}
+            liveSource={liveCostSource}
             storedCost={fCostTotal}
             costDiverged={costDiverged}
           />
@@ -511,6 +551,7 @@ function ForwarderProfitPanel({
   liveRate,
   liveBasis,
   liveDimension,
+  liveSource,
   storedCost,
   costDiverged,
 }: {
@@ -524,6 +565,8 @@ function ForwarderProfitPanel({
   liveBasis: CostBasis;
   /** the dimension multiplied (kg or cbm) */
   liveDimension: number;
+  /** which waterfall tier produced liveRate — "container" = accounting's ตรวจตู้ rate */
+  liveSource: CostRateSource;
   /** report-cnt-stored fcosttotalprice (accounting-authoritative) */
   storedCost: number;
   /** live (matrix-default) ≠ stored (custom-rated/booked) by > ฿0.01 */
@@ -539,9 +582,9 @@ function ForwarderProfitPanel({
   const hasCost = Number.isFinite(costTotal) && costTotal > 0;
   const profit = hasCost ? sellNet - costTotal : 0;
   const marginVat = computeMarginVat(profit); // GAP 8 — canonical 7%-on-margin helper
-  // costTotal = displayCost: live matrix figure unless it diverges from a stored
-  // (custom-rated/booked) cost, in which case the stored value wins.
-  const usingLive = hasCost && liveCost > 0 && !costDiverged;
+  // costTotal = displayCost: the live figure unless it diverges from a stored
+  // (booked) cost, in which case the stored value wins. The live line labels its
+  // OWN source via `liveSource` (container vs settings) — owner 2026-07-17.
   const usingStored = hasCost && (costDiverged || (liveCost <= 0 && storedCost > 0));
   return (
     <div className="rounded-lg border border-indigo-200 bg-indigo-50/40 dark:bg-indigo-950/10 p-3">
@@ -555,18 +598,32 @@ function ForwarderProfitPanel({
           {liveCost > 0 && (
             <p className="text-muted">
               คิดตาม{liveBasis === "weight" ? "น้ำหนัก" : "ปริมาตร"} {nf(liveDimension, liveBasis === "weight" ? 2 : 5)} x {nf(liveRate, 0)} = <strong className="text-foreground">{baht(liveCost)}</strong>
-              {usingLive ? "" : " (เรทระบบ)"}
+              {/* Owner 2026-07-17 "นายดึงเรทไหนมาคำนวณนะครับ" — always name the
+                  rate's source, so the number can be traced without reading code. */}
+              {liveSource === "container"
+                ? " (เรทที่บัญชีตั้งไว้ต่อตู้)"
+                : " (เรทระบบหลัก · บัญชียังไม่ตั้งเรทตู้นี้)"}
             </p>
           )}
           <p>ต้นทุน ส่วนลด : {baht(0)}</p>
           <p>ต้นทุน เพิ่ม/ลด เงิน : {baht(0)}</p>
           <p>ราคาต้นทุน : <strong>{hasCost ? baht(costTotal) : "— ยังไม่ตั้งเรทต้นทุน"}</strong></p>
           <p className="inline-flex items-center gap-1 rounded bg-red-100 text-red-700 px-2 py-0.5 text-[11px] font-medium mt-0.5">
-            ระบบเลือกต้นทุนโดย {usingStored ? "ต้นทุนที่บันทึก (ตู้)" : "เรทต้นทุนระบบหลัก"}
+            ระบบเลือกต้นทุนโดย{" "}
+            {usingStored
+              ? "ต้นทุนที่บันทึก (ตู้)"
+              : liveSource === "container"
+                ? "เรทที่บัญชีตั้งไว้ต่อตู้"
+                : "เรทต้นทุนระบบหลัก"}
           </p>
           {costDiverged && (
+            /* With the container tier wired (owner 2026-07-17), a divergence is no
+               longer "we read the wrong table" — it means the stored cost is STALE
+               (rate/dims changed after ตรวจตู้) or was rated on a non-default basis.
+               Say which, so accounting knows whether to re-run คิดเรท. */
             <p className="text-[11px] text-amber-700">
-              ⚠ เรทระบบ(สด) {baht(liveCost)} ≠ ต้นทุนที่บันทึก(ตู้) {baht(storedCost)} — บัญชีใช้ตัวที่บันทึก
+              ⚠ คำนวณสด {baht(liveCost)} ({liveSource === "container" ? "เรทตู้ที่บัญชีตั้ง" : "เรทระบบหลัก"}) ≠ ต้นทุนที่บันทึก {baht(storedCost)} — บัญชีใช้ตัวที่บันทึก
+              {liveSource === "container" && " · เรทตรงกันแล้วแต่ยอดไม่ตรง = ตัวเลขที่บันทึกเก่า (กด “คิดเรท” ที่รายการตู้ใหม่)"}
             </p>
           )}
         </div>

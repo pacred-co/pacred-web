@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 import { imageUrlField } from "@/lib/validators/image-url";
+import { MAX_ORDER_QTY } from "@/lib/validators/order-qty";
 
 export const PROVIDERS = ["1688", "taobao", "tmall", "shop", "nice"] as const;
 export type Provider = (typeof PROVIDERS)[number];
@@ -95,7 +96,13 @@ export const cartItemSchema = z.object({
   color:      z.string().trim().max(200).optional().or(z.literal("").transform(() => undefined)),
   size:       z.string().trim().max(200).optional().or(z.literal("").transform(() => undefined)),
   price_cny:  z.number().nonnegative({ message: "ราคาต้องไม่ติดลบ" }),
-  amount:     z.number().int().positive({ message: "จำนวนต้องมากกว่า 0" }),
+  // owner 2026-07-17 "ปลดเพดานเป็นไม่จำกัด · เป็นล้านชิ้น" — there is deliberately NO
+  // business cap here (a wholesale order of a million pieces is the point). The bound is
+  // the only real one: tb_cart.camount is int32, so a bigger number would be a DB error,
+  // not an order. Rejecting it here gives a clean message instead of a 500.
+  amount:     z.number().int()
+                .positive({ message: "จำนวนต้องมากกว่า 0" })
+                .max(MAX_ORDER_QTY, { message: `จำนวนต้องไม่เกิน ${MAX_ORDER_QTY.toLocaleString()} ชิ้น` }),
   details:    z.string().trim().max(2000).optional().or(z.literal("").transform(() => undefined)),
   // Currency selector (price-per-piece entered in ANY currency). When
   // input_currency ≠ CNY, the SERVER re-derives cprice = ¥-equivalent from

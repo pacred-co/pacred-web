@@ -1,50 +1,78 @@
-# เหมาๆ dropped on จ่ายแทนลูกค้า for split-box shipments (2026-07-16 · #52474 · MONEY)
+# เหมาๆ on a split-box shipment — dropped, then hand-patched into the wrong column (RESOLVED 2026-07-17)
 
-> Owner: "จ่ายแทนลูกค้า /admin/forwarders/52474 เอกสารไม่แจงค่าเหมาๆ · ระวังไปเก็บซ้ำ
-> เหมาๆ อย่าให้เกิดอีก." Precisely diagnosed; NOT yet fixed — the correct fix is a
-> cross-batch per-shipment anchor (double-charge-critical) that needs careful work,
-> not a rush. Continues the prior `mao-fee-pay-on-behalf-audit` (hit usage limit mid-design).
+> Owner 2026-07-16: "จ่ายแทนลูกค้า /admin/forwarders/52474 เอกสารไม่แจงค่าเหมาๆ · ระวังไป
+> เก็บซ้ำ เหมาๆ อย่าให้เกิดอีก."
+> **STATUS: FIXED + prod-reconciled 2026-07-17.** Diagnosed 2026-07-16 and deliberately
+> deferred (the naive fix double-charges); the correct per-SHIPMENT anchor is now built,
+> tested (10 assertions incl. both double-charge shapes) and wired.
 
 ## The bug (prod-verified)
-- **#52474** = `tb_forwarder` PR139 · fshipby=**PCSF** (เหมาๆ) · ftransportprice=**0** ·
-  ftrackingchn=**`JYM800120650588-1/4`** (a **-N/M SPLIT box** sub-row) · fstatus=5.
-- `computeForwarderDebitBatch` (`lib/forwarder/forwarder-debit-total.ts`) charges เหมาๆ
-  ฿100 **once per batch**, anchored to the **BASE tracking** (no `-N` suffix). Rule L183
-  (owner 2026-06-23 กันเก็บตังเบิ้ล): **a `-N` box sub-row NEVER anchors.** So a batch that
-  contains ONLY `-N` boxes (the base tracking isn't an eligible row) has **no anchor →
-  maoFee=0 → the จ่ายแทนลูกค้า total drops the ฿100** (shows subtotal×0.99 = 1085.55 instead
-  of the correct 1184.54; the ฿98.99 gap = ฿100 − 1% WHT).
-- The **BILL is correct** (FRI2607-00080 total_thb=1196.50 = subtotal 1096.50 + 100), but the
-  ฿100 sits in **`delivery_th_thb`, with `mao_fee_thb=0`** — the pay-on-behalf recompute never
-  sees it.
+- **#52474** = PR139 · fshipby=**PCSF** (เหมาๆ) · ftransportprice=**0** ·
+  ftrackingchn=**`JYM800120650588-1/4`** — a `-N/M` **split box**. Its whole shipment is
+  4 rows (`-1/4 … -4/4`); **no bare base row exists** (MOMO split at commit).
+- `computeForwarderDebitBatch` anchored the ฿100 on the **BASE row (suffix 0)**, and by the
+  2026-06-23 กันเก็บตังเบิ้ล rule **"a -N box sub-row NEVER anchors"** → a batch of only
+  `-N` rows had **no anchor → maoFee = 0 → the fee vanished**.
+- Blast radius measured on prod: **7 of 60** PCSF shipments have no base row
+  (1783051207 19 rows · JYM800120650588 4 · X9002769 3 · LJ20503022 2 · X9002751 2 · …).
 
-## Two facets (do NOT conflate)
-1. **DROP (owner's complaint):** split-box batches lose เหมาๆ on จ่ายแทนลูกค้า (above).
-2. **DOUBLE-CHARGE (owner's fear):** the CURRENT anchor is **per-batch** (forwarder-debit-total.ts
-   L176 "exactly ONE anchor across the entire batch"). If a shipment is split across **two bills**,
-   each batch could anchor its own ฿100 → ฿200 for one ลอบส่ง. The naive "let -N boxes anchor when
-   no base present" fix REINTRODUCES this — two -N batches of the same shipment both anchor.
+### The three symptoms were ONE root
+| symptom the owner saw | mechanism |
+|---|---|
+| จ่ายแทนลูกค้า collects **1,085.55** vs the bill's **1,184.54** (−฿98.99 = ฿100 − 1% WHT) | `maoFee=0` → the debit is ฿100 short |
+| **"เอกสารไม่แจงค่าเหมาๆ"** | `autoMaoFee=0` → staff hand-typed ฿100 into the free-text **"ค่าขนส่งไทย"** → it landed in `delivery_th_thb` while `mao_fee_thb=0`; the papers itemise เหมาๆ **from mao_fee_thb** → the line never rendered and the fee hid inside "ค่าขนส่งในไทย" |
+| **"ระวังไปเก็บซ้ำ"** | `billing-run.ts` totals `subtotal + maoFeeTotal + … + deliveryThThb` — **two slots that both add**. Fixing the engine without moving the hand-patched ฿100 would bill ฿200 of เหมาๆ. (Prod check: **0 invoices had both** — the hole never fired.) |
 
-## The correct fix = per-SHIPMENT anchor (spanning batches)
-Anchor เหมาๆ to the **base tracking of the shipment** (`baseTracking(ftrackingchn)` strip `-N/M`),
-charged **once per shipment regardless of how the bill is sliced**. This needs cross-batch state
-(which forwarder/base already carries the เหมาๆ) — `computeForwarderDebitBatch` is a pure per-batch
-fn, so the anchor decision must move up to a shipment-scoped resolver (or a stored `is_mao_anchor`
-flag on the anchor forwarder, set once at bill/commit time). The prior audit's design table:
-`[A-bare,B-1/2]→anchor A-bare ฿100 · [B-1/2,B-2/2] (no base)→anchor B-1/2 ฿100 · [B-2/2] alone→฿0
-(no re-charge) · billA(-1,-4)+billB(-3,-4)→100+0` — i.e. the anchor is one row per shipment, and a
-split that separates the anchor from a batch must NOT re-anchor.
+## Why the naive fix is wrong (the reason it was deferred)
+"Let the lowest `-N` **in the batch** anchor when no base is present" fixes the drop and
+re-opens the fear: bill A(-1,-4) → ฿100 · bill B(-3,-4) → ฿100 = **฿200 for one ลอบส่ง**.
+The election must not depend on how the batch is sliced.
 
-## Data (prod · owner-gated · money)
-6 active invoices carry เหมาๆ in `delivery_th_thb` with `mao_fee_thb=0` (the misfiled column):
-**FRI2607-00080 / 00032 / 00029 / 00019 (100) · FRI2606-00022 (100) · FRI2606-00006 (50)**. These
-BILL correctly (total includes it) but any recompute-based surface (จ่ายแทนลูกค้า) drops it. Backfill
-= move the value delivery_th_thb→mao_fee_thb where it's the เหมาๆ (owner reviews · money).
+## The fix — elect the carrier from the SHIPMENT, not the batch
+**`lib/forwarder/mao-anchor.ts` · `resolveMaoAnchorIds(admin, trackings)`** reads EVERY
+sibling of each base in `tb_forwarder` and elects ONE carrier fid per shipment:
 
-## Why not rushed this session
-The fix is cross-batch money-anchor logic with a real ฿200 double-charge failure mode — exactly what
-the owner said "อย่าให้เกิดอีก". Verifying it needs the shipment-scoped resolver + a test matrix over
-split/merge/re-bill (the prior audit was building this when it hit the limit). Rushing it on a
-constrained budget would risk the money bug. Safe next step: build the per-shipment anchor resolver
-+ its test matrix, then wire pay-user + the bill through it, then the 6-invoice backfill. See
-[[status-rollback-on-cancel]] · `lib/forwarder/forwarder-debit-total.ts` · `lib/admin/momo-bill-header.ts` (baseTracking).
+    the bare base row (suffix 0) if the shipment has one   ← identical to legacy
+    else the LOWEST-suffix เหมาๆ-eligible sibling           ← the previously-dropped case
+
+`computeForwarderDebitBatch(rows, { …, maoAnchorIds })` then charges ฿100 iff the batch
+**contains** that one row. Omit the option → unchanged legacy behaviour (back-compat).
+
+    shipment HAS a base:  bill(base,-2) → ฿100 · bill(-3,-4) → ฿0     (= legacy)
+    no base (MOMO split): bill(-1,-4)   → ฿100 · bill(-3,-4) → ฿0     (was ฿0 · ฿0)
+    every box paid SOLO                 → ฿100 total, once
+
+**Double-charge is impossible BY CONSTRUCTION** — two batches can never both contain the
+same single carrier row. The per-BILL rule (owner 2026-07-15 · one ฿100 per collection
+event even across containers) is untouched: the engine still takes at most ONE anchor out
+of whatever is eligible.
+
+Wired: `pay-user-view.ts` (the view) · `pay-user.ts` ×3 (the real debit) ·
+`billing-run.ts` (so the fee lands in `mao_fee_thb` and the "ค่าส่งเหมาๆ (PCSF)" line
+renders — the itemisation ask). Locked by `lib/forwarder/mao-anchor-split.test.ts` (10).
+
+Fails safe: a DB error in the resolver returns an empty set → the engine falls back to
+base-only → under-charge, **never** double-charge. Residual: a shipment with neither a base
+nor a `-1` (prod: 1783051207 only, minSuffix=2, already billed) still drops — fails closed.
+
+## Prod data reconcile (`scripts/reconcile-mao-fee-column-2026-07-16.mjs` · applied)
+Moved the hand-patched fee `delivery_th_thb → mao_fee_thb` on **4 invoices** — **money-neutral**
+(`total_thb` untouched; the script asserts every invoice still foots before COMMIT):
+
+    FRI2607-00080 ฿100 · FRI2607-00032 ฿100 · FRI2606-00022 ฿100 · FRI2606-00006 ฿50
+
+Correctly **SKIPPED** (the ฿100 there is NOT เหมาๆ): FRI2607-00019 (carrier `PCS` =
+รับเองที่โกดัง) · FRI2607-00029 (blank carrier) · FRI2606-00008 (Flash — its rows carry
+฿165 of real Thai shipping). Eligibility requires every billed row to be a เหมาๆ carrier
+with `ftransportprice = 0`.
+
+## Follow-ups
+- `delivery_th_thb` is still a free-text field with no cross-check against the auto เหมาๆ.
+  The drop is gone (so the workaround has no reason to recur) but a **guard** — warn when
+  staff type ≈the flat fee on a PCSF-only bill that already has an auto fee — would close
+  the slot-collision for good.
+- 1783051207 (19 rows, minSuffix=2, no base, fstatus=6/billed) — owner call whether to
+  re-bill the missed ฿100.
+
+See [[momo-container-per-box-not-per-tracking]] · [[money-doc-chain-cod-and-linkage]] ·
+`lib/forwarder/forwarder-debit-total.ts` · `lib/forwarder/mao-anchor.ts`.

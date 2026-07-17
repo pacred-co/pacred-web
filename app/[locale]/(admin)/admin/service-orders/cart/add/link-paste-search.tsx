@@ -39,6 +39,7 @@ import {
 } from "@/actions/admin/product-search";
 import { adminAddItemToCart, adminAddItemsToCartBulk } from "@/actions/admin/cart";
 import { ADMIN_CART_PROVIDERS } from "@/lib/validators/admin-cart";
+import { MAX_ORDER_QTY, clampOrderQty } from "@/lib/validators/order-qty";
 
 type Props = {
   /** Cart owner — PR<n> if admin chose a customer, else myAdminId. */
@@ -559,11 +560,11 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
                               <input
                                 type="number"
                                 min={0}
-                                max={Math.max(sku.stock, 9999)}
+                                max={MAX_ORDER_QTY}
                                 value={q}
                                 onChange={(e) => {
                                   const n = Number(e.target.value) || 0;
-                                  setQtyBySku((prev) => ({ ...prev, [idx]: Math.max(0, Math.min(99999, Math.floor(n))) }));
+                                  setQtyBySku((prev) => ({ ...prev, [idx]: clampOrderQty(n, 1, true) }));
                                   setFlash(null);
                                 }}
                                 disabled={adding || outOfStock}
@@ -571,7 +572,7 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
                               />
                               <button
                                 type="button"
-                                onClick={() => setQtyBySku((prev) => ({ ...prev, [idx]: Math.min(99999, (prev[idx] ?? 0) + 1) }))}
+                                onClick={() => setQtyBySku((prev) => ({ ...prev, [idx]: clampOrderQty((prev[idx] ?? 0) + 1, 1, true) }))}
                                 disabled={adding || outOfStock}
                                 className="rounded-md border border-border bg-white w-7 h-7 text-sm hover:bg-surface-alt disabled:opacity-40 leading-none"
                                 aria-label="เพิ่ม"
@@ -683,15 +684,15 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
                     id="lps_qty"
                     type="number"
                     min={1}
-                    max={9999}
+                    max={MAX_ORDER_QTY}
                     value={qty}
-                    onChange={(e) => setQty(Math.max(1, Math.min(9999, Number(e.target.value) || 1)))}
+                    onChange={(e) => setQty(clampOrderQty(e.target.value))}
                     disabled={adding}
                     className={`${INPUT_CLS} text-center font-mono w-20`}
                   />
                   <button
                     type="button"
-                    onClick={() => setQty((q) => Math.min(9999, q + 1))}
+                    onClick={() => setQty((q) => clampOrderQty(q + 1))}
                     disabled={adding || qty >= 9999}
                     className="rounded-lg border border-border bg-white px-3 py-2 text-sm hover:bg-surface-alt disabled:opacity-50"
                   >

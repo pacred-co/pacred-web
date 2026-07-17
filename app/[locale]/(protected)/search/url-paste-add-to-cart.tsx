@@ -35,6 +35,8 @@ import { ShoppingCart, Plus, Minus, CheckCircle2, AlertTriangle } from "lucide-r
 import { Link } from "@/i18n/navigation";
 import { addCartItem, addCartItemsBulk } from "@/actions/cart";
 import { toYuanEquivalent } from "@/lib/forwarder/currency-convert";
+import { MAX_ORDER_QTY, clampOrderQty } from "@/lib/validators/order-qty";
+import { TranslateProvider, AutoTranslateText } from "@/components/translate/auto-translate";
 
 // Mirrors PROVIDERS in lib/validators/cart.ts L7 (only these 5 are
 // accepted by the cart Zod schema).
@@ -110,6 +112,20 @@ export function UrlPasteAddToCart({
   const t = useTranslations("searchPage");
   const minClamp = Math.max(1, minQty);
   const maxClamp = Math.max(minClamp, maxQty || 999);
+  /**
+   * The per-option ceiling in the multi-pick grid — ONE source for the input's `max`
+   * AND for the submit check.
+   *
+   * 🔴 owner 2026-07-17 "ลูกค้าหลายเจ้าสั่งของไม่ได้" (PR619 · 1688 stickers ¥0.17 ×
+   * 90,000): the qty input allowed the SKU's full stock while onSubmit validated against
+   * `maxClamp` — which falls back to **999** when the listing gives no maxQty. So a
+   * wholesale pick typed fine, the button enabled, and the click died. Two ceilings that
+   * disagreed = a wall the customer could never see. They are the same number now.
+   */
+  // owner 2026-07-17 "ปลดเพดานเป็นไม่จำกัด · ทั้งลูกค้าและพนักงาน" — stock is INFORMATION
+  // (a 1688 seller restocks on demand), never a limit. The only ceiling is the int32
+  // column. `stock` is still shown in its own column so the customer sees what is staged.
+  const skuMaxQty = (_stock: number) => MAX_ORDER_QTY;
 
   // priceThb is computed locally from priceCny × rsDefault inside this
   // island (so the qty stepper recomputes the total live).  Kept as a
@@ -285,7 +301,7 @@ export function UrlPasteAddToCart({
     setQty((q) => {
       const next = q + delta;
       if (next < minClamp) return minClamp;
-      if (next > maxClamp) return maxClamp;
+      if (next > MAX_ORDER_QTY) return MAX_ORDER_QTY;
       return next;
     });
   }
@@ -297,8 +313,17 @@ export function UrlPasteAddToCart({
       for (let i = 0; i < skuMap.length; i++) {
         const q = qtyBySku[i] ?? 0;
         if (q <= 0) continue;
-        if (q < minClamp || q > maxClamp) {
-          setError(t("priceNotEnteredError"));
+        // 🔴 owner 2026-07-17 — was `q > maxClamp` (999 by default) + the message
+        // t("priceNotEnteredError") = "ยังไม่ใส่ราคา CNY". BOTH were wrong: the ceiling
+        // contradicted the input the customer had just typed into, and the message
+        // blamed the PRICE for a QUANTITY problem — so PR619 saw "ยังไม่ใส่ราคา CNY"
+        // with ¥0.17 sitting right there, entered it again, and stayed stuck. Now the
+        // bound is the same one the input enforces, and the error names the real
+        // option + the real limit.
+        const cap = skuMaxQty(skuMap[i].stock);
+        if (q < minClamp || q > cap) {
+          const label = Object.values(skuMap[i].prop_path).join(" / ") || `ตัวเลือกที่ ${i + 1}`;
+          setError(t("qtyOutOfRangeError", { option: label, min: minClamp, max: cap.toLocaleString() }));
           return;
         }
         const sku = skuMap[i];
@@ -424,7 +449,13 @@ export function UrlPasteAddToCart({
 
   const lineTotalThb = effectivePriceThb * qty;
 
+  // ONE batch ZH→TH round-trip for everything Chinese on this card (the title + every
+  // option label). Cached server-side (translation_cache · mig 0246), so a second view of
+  // the listing — by anyone — is instant.
+  const zhTexts = [title, ...(skuMap ?? []).map((sk) => Object.values(sk.prop_path).join(" · "))];
+
   return (
+    <TranslateProvider texts={zhTexts}>
     <div className="space-y-3">
       {/* ── SKU PICKER — clickable axes (color · size · style · ...) ─
           Mirrors admin pattern at
@@ -492,11 +523,13 @@ export function UrlPasteAddToCart({
                           <input
                             type="number"
                             min={0}
-                            max={Math.max(maxClamp, sku.stock)}
+                            max={skuMaxQty(sku.stock)}
                             value={q}
                             onChange={(e) => {
                               const n = Number(e.target.value) || 0;
-                              setQtyBySku((prev) => ({ ...prev, [idx]: Math.max(0, Math.min(99999, Math.floor(n))) }));
+                              // clamp to the SAME ceiling onSubmit checks — a number the
+                              // submit would reject must never be typeable (owner 2026-07-17).
+                              setQtyBySku((prev) => ({ ...prev, [idx]: clampOrderQty(n, minClamp, true) }));
                               setError(null);
                             }}
                             disabled={pending || outOfStock}
@@ -716,19 +749,17 @@ export function UrlPasteAddToCart({
               onChange={(e) => {
                 const n = Number(e.target.value);
                 if (!Number.isFinite(n) || Number.isNaN(n)) return;
-                if (n < minClamp) setQty(minClamp);
-                else if (n > maxClamp) setQty(maxClamp);
-                else setQty(Math.floor(n));
+                setQty(clampOrderQty(n, minClamp));
               }}
               min={minClamp}
-              max={maxClamp}
+              max={MAX_ORDER_QTY}
               inputMode="numeric"
               className="w-20 h-11 text-center rounded-lg border border-border bg-white dark:bg-surface text-base font-semibold focus:outline-none focus:ring-2 focus:ring-primary-500/50"
             />
             <button
               type="button"
               onClick={() => adjQty(1)}
-              disabled={pending || qty >= maxClamp}
+              disabled={pending || qty >= MAX_ORDER_QTY}
               aria-label={t("increaseQuantity")}
               className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white dark:bg-surface text-foreground hover:bg-surface-alt disabled:opacity-40 disabled:cursor-not-allowed"
             >
@@ -803,5 +834,6 @@ export function UrlPasteAddToCart({
                   : t("addToCart")}
       </button>
     </div>
+    </TranslateProvider>
   );
 }
