@@ -32,6 +32,7 @@
 
 import type { MomoLiveParcel } from "./types";
 import { isMomoRoutingPlaceholder } from "@/lib/admin/momo-container-resolve";
+import { baseTrackingOf } from "./live-parcel-metrics";
 
 /**
  * A REAL container code = one that carries a GZ* transport token (GZS sea /
@@ -149,4 +150,86 @@ export function closeDateFromParcel(p: MomoLiveParcel): string | null {
     if (cleaned) return cleaned;
   }
   return null;
+}
+
+/** The REAL container + its close date resolved for a tracking. */
+export type BaseContainerInfo = {
+  container: string;
+  /** วันปิดตู้ from the parcel's status_date (prepare_export→exported); null if not yet closed on MOMO. */
+  closeDate: string | null;
+  /**
+   * BASE-map only: MOMO reported this base under >1 real container (a cross-container
+   * split). There is no correct single container for the base → the caller must SKIP
+   * rather than pick one and double-count a container. Never set on the EXACT map.
+   */
+  ambiguous?: boolean;
+};
+
+/**
+ * The Live container truth, two ways:
+ *   byExact — tracking (with its "-N" suffix) → its OWN container. THE truth.
+ *   byBase  — base → container, for a stored row held under the bare base. Carries
+ *             `ambiguous` when MOMO split that base across containers.
+ */
+export type LiveContainerIndex = {
+  byExact: Map<string, BaseContainerInfo>;
+  byBase: Map<string, BaseContainerInfo>;
+};
+
+/**
+ * PURE — resolve the REAL container + close date per EXACT tracking, plus a per-BASE
+ * fallback, from a set of Live parcels.
+ *
+ * 🔴 owner 2026-07-16 "ตรวจแทรคกิ้งเทียบ momo live ยังไม่ตรงกับในระบบเลย · ทั้งกล่อง
+ * ทั้งแทรคกิ้ง และคิวก็ยังเบิ้ล · แก้ให้โดนต้นตอ และห้ามเกิดปัญหาขึ้นอีก"
+ *
+ * This used to key ONLY by base and keep "the FIRST real container seen", on the
+ * stated assumption that "a base tracking's boxes all share one container · the split
+ * boxes never disagree on the ตู้". THE PROD DATA DISPROVES IT — MOMO loads one base's
+ * boxes into SEVERAL containers:
+ *   1783582423      → GZS260710-1 (60 กล่อง) · GZS260710-2 (28) · GZS260712-1 (28)
+ *   KY4001030721114 → GZE260709-1 (69 กล่อง) · GZE260712-1 (61)
+ * MOMO hands us the correct container ON EVERY PARCEL; collapsing to the base threw
+ * that truth away and stamped ONE container onto all N siblings → that container
+ * double-counted its กล่อง/น้ำหนัก/คิว while the others read empty (warehouse could not
+ * complete a scan · admin could not collect). It came back after every fix because
+ * this pump re-applied it on each cron run.
+ *
+ * NOW: `byExact` is the truth (each parcel keeps ITS OWN container); `byBase` remains
+ * a FALLBACK for a stored row whose ftrackingchn is the bare base while MOMO returned
+ * only suffixed parcels. For a single-container base both maps agree → unchanged
+ * behaviour; only a genuine cross-container split now resolves per box.
+ *
+ * Only REAL containers (GZS/GZE/GZA) are kept; a parcel whose containerName is a
+ * routing-batch/sack/empty is ignored. The close date comes from the SAME parcel that
+ * supplied the container; if it has no close phase yet, a sibling's is adopted (the
+ * close event is per container, and same-container siblings share it).
+ */
+export function realContainerByBase(parcels: readonly MomoLiveParcel[]): LiveContainerIndex {
+  const byExact = new Map<string, BaseContainerInfo>();
+  const byBase = new Map<string, BaseContainerInfo>();
+  for (const p of parcels) {
+    const tracking = (p.tracking ?? "").trim();
+    if (!tracking) continue;
+    const container = (p.containerName ?? "").trim();
+    if (!isRealContainerCode(container)) continue;
+    const closeDate = closeDateFromParcel(p);
+
+    // EXACT — never merged across parcels: this box's own ตู้, verbatim from MOMO.
+    const prevExact = byExact.get(tracking);
+    if (!prevExact) byExact.set(tracking, { container, closeDate });
+    else if (!prevExact.closeDate && closeDate) prevExact.closeDate = closeDate;
+
+    // BASE fallback — only meaningful when the base is single-container. If MOMO
+    // reports the base across DIFFERENT containers there is no correct single answer,
+    // so flag it and let the caller skip rather than guess wrong.
+    const base = baseTrackingOf(tracking);
+    const prevBase = byBase.get(base);
+    if (!prevBase) byBase.set(base, { container, closeDate });
+    else {
+      if (prevBase.container !== container) prevBase.ambiguous = true;
+      if (!prevBase.closeDate && closeDate) prevBase.closeDate = closeDate;
+    }
+  }
+  return { byExact, byBase };
 }

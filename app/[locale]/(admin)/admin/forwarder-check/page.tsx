@@ -49,6 +49,7 @@ import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { SHIP_BY_LABEL } from "@/actions/admin/reports-profit-types";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
+import { resolvePackingConfirmedCabs } from "@/lib/admin/packing-confirmed-cabs";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportForwarderCheckAll } from "@/actions/admin/export/forwarder-check";
 import {
@@ -428,14 +429,12 @@ export default async function AdminForwarderCheckPage({
       new Set(rows.map((r) => (r.cabinet_number ?? "").trim()).filter((c) => c !== "" && c !== "0")),
     );
     if (cabs.length > 0) {
-      const { data: recRows, error: recErr } = await admin
-        .from("container_packing_reconcile")
-        .select("container_no")
-        .in("container_no", cabs);
-      if (recErr) {
-        console.error("[forwarder-check packingByCab] failed", { code: recErr.code, message: recErr.message });
-      }
-      for (const rr of (recRows ?? []) as { container_no: string }[]) packingByCab[rr.container_no] = true;
+      // 🔴 owner 2026-07-16 — same class as report-cnt: this read ONLY the reconcile
+      // table (mig 0245) and missed momo_packing_upload (mig 0254), so a container the
+      // staff DID upload still badged "ยังไม่อัพ" and blocked collection. One SOT now
+      // (reconcile OR upload) — shared with the billing gate + the container list.
+      const confirmed = await resolvePackingConfirmedCabs(admin, cabs);
+      for (const cab of confirmed) packingByCab[cab] = true;
     }
   }
 

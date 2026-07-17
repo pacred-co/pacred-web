@@ -29,15 +29,26 @@ export function ArriveThScanPanel() {
       await alert("กรุณาสแกน/พิมพ์เลข tracking หรือรหัสออเดอร์");
       return;
     }
+    // owner 2026-07-16 "ยิงชิปเม้นทีเดียว แล้วขึ้นครบเลยทุกกล่อง" — one scan takes the
+    // WHOLE shipment (base + every box sibling) in, so say so before it happens.
     const ok = await confirm(
-      `ยืนยันรับสินค้าเข้าโกดังไทย?\n\nTracking/รหัส: ${k}\n\nสถานะจะเปลี่ยนเป็น "ถึงไทยแล้ว"`,
+      `ยืนยันรับสินค้าเข้าโกดังไทย?\n\nTracking/รหัส: ${k}\n\nระบบจะรับเข้า "ทั้งชิปเม้น" (ทุกกล่องของแทรคกิ้งนี้) → สถานะ "ถึงไทยแล้ว"`,
     );
     if (!ok) return;
 
     startTransition(async () => {
       const res = await warehouseArriveThScan({ keysearch: k });
       if (res.ok && res.data) {
-        setLastResult(`✓ รับเข้าไทยแล้ว #${res.data.fid} (สถานะ → ถึงไทยแล้ว)`);
+        const { base, arrived, boxes, alreadyArrived, blocked } = res.data;
+        const parts: string[] = [];
+        if (arrived > 0) parts.push(`${arrived} แทรค${boxes > 0 ? ` · ${boxes} กล่อง` : ""}`);
+        if (alreadyArrived > 0) parts.push(`${alreadyArrived} รับเข้าไปแล้วก่อนหน้า`);
+        if (blocked > 0) parts.push(`⚠️ ${blocked} ยังรับไม่ได้ (สถานะไม่พร้อม)`);
+        setLastResult(
+          arrived > 0
+            ? `✓ รับเข้าไทยแล้ว ${base} — ${parts.join(" · ")} (สถานะ → ถึงไทยแล้ว)`
+            : `✓ ${base} รับเข้าไทยครบอยู่แล้ว (${alreadyArrived} แทรค)`,
+        );
         setKeysearch("");
         inputRef.current?.focus();
         router.refresh();

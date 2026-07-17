@@ -32,6 +32,7 @@ export const PAY_AT_ORIGIN_CARRIERS: ReadonlySet<string> = new Set([
   "PCSF",  // PCS เหมาๆ (legacy code)
   "PRF",   // PR เหมาๆ (D1 rebrand of PCSF · new orders write this)
   "PCSE",  // PCS Express
+  "PRE",   // PR Express (D1 rebrand of PCSE)
   "24",    // J&T Express
   "2",     // Flash Express
   "11",    // ไปรษณีย์ไทย / Thai Post
