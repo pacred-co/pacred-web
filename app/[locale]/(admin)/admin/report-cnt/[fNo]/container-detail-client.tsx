@@ -61,6 +61,10 @@ export type DetailRow = {
   famountfi: number | null;
   fvolume: number | null;
   fweight: number | null;
+  /** owner 2026-07-18 — physical dims (cm) for the per-tracking packing-list dropdown. */
+  fwidth: number | null;
+  flength: number | null;
+  fheight: number | null;
   fproductstype: string | null;
   /** Secondary product-type enum used for cost calc (Wave 16 P0-3 modal target) */
   fproductstype2: string | null;
@@ -314,6 +318,7 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
   const renderItems = useMemo(() => {
     const items: Array<
       | { kind: "summary"; group: DetailRow[]; gkey: string; open: boolean }
+      | { kind: "pack"; group: DetailRow[]; gkey: string }
       | { kind: "row"; r: DetailRow; member: boolean }
     > = [];
     for (const g of groups) {
@@ -322,7 +327,10 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
         const gkey = base ? `${base}|${g[0].userid}` : `__solo_${g[0].id}`;
         const open = expanded.has(gkey);
         items.push({ kind: "summary", group: g, gkey, open });
-        if (open) for (const r of g) items.push({ kind: "row", r, member: true });
+        // owner 2026-07-18 — the dropdown is now a NEUTRAL gray/white packing-list of the
+        // shipment's trackings (แทรค · ก · ย · ส · น้ำหนัก · CBM · กล่อง), NOT coloured data
+        // rows. ONE nested detail row replaces the N member rows.
+        if (open) items.push({ kind: "pack", group: g, gkey });
       } else {
         items.push({ kind: "row", r: g[0], member: false });
       }
@@ -386,8 +394,13 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
   // row the gate would reject (avoid the staff "ticked + submit + bounced"
   // ping-pong). Mirrors the server-side STATUS GATE in
   // adminReportCntAddCheck (lib/admin/report-cnt-add-check-gate.ts).
+  // owner 2026-07-18 — select-all (+ the master checkbox) skips any row not fully box-scanned
+  // (famountfi < famount) so a ยิงไม่ครบ shipment can never be ticked → sent to วางบิล.
   const eligibleFilteredIds = useMemo(
-    () => filtered.filter((r) => isRowEligibleForAddCheck(r.fstatus)).map((r) => r.id),
+    () =>
+      filtered
+        .filter((r) => isRowEligibleForAddCheck(r.fstatus) && isScanComplete(r.famountfi, r.famount, r.fstatus))
+        .map((r) => r.id),
     [filtered],
   );
 
@@ -433,6 +446,11 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
   // checkbox + customer link stop-propagate so they don't also toggle.
   function renderSummaryRow(g: DetailRow[], gkey: string, isOpen: boolean) {
     const a = aggregateGroup(g);
+    // owner 2026-07-18 — ยิงกล่องครบทั้งชิปเม้น? drives the RED/WHITE header + the billing gate.
+    // EVERY tracking must be fully received (not Σgot≥Σexp — an over-received tracking must
+    // NOT mask a short one · review 2026-07-18). One short/in-transit แทรค → the whole ชิปเม้น
+    // is not billable.
+    const scanned = g.every((r) => isScanComplete(r.famountfi, r.famount, r.fstatus));
     const base = baseTracking(g[0].ftrackingchn) ?? g[0].ftrackingchn ?? "-";
     const eligibleIds = g
       .filter((r) => !r.inCheckQueue && isRowEligibleForAddCheck(r.fstatus))
@@ -443,14 +461,13 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
       <tr
         key={`sum-${gkey}-${g[0].id}`}
         onClick={() => toggleGroup(gkey)}
-        /* 🔴 owner 2026-07-16 "หัวข้อสีแดงพอเปิดมาข้างในสีขาว คืออะไรนิ้ · ใช้สีอื่นไป
-           เลย · หัวตารางรายการ · เทาๆหน่อยก็ได้" — this row is a GROUP HEADER, not a
-           data row, but it wore the data tint `pcs-row` (legacy alert-danger pink)
-           unconditionally. Its children render white once they're in the check queue
-           → a red header opening onto white rows, which reads as a bug. A header is
-           now neutral GREY: it states what the group IS, never its money/queue state
-           (the children own that). */
-        className="pcs-row-group cursor-pointer"
+        /* 🔴 owner 2026-07-18 "หัวแถว ต้องไม่ใช่สีเทา ต้องสีแดง และขาว · บอกสถานะ การเก็บเงิน
+           การสแกน · สแกนแล้ว→ขาว · เขียวน้ำเงินไม่เอา · แดง/ขาวเท่านั้น" — the shipment
+           HEADER row now reads its SCAN state: RED = ยังยิงกล่องไม่ครบทั้งชิปเม้น (can't
+           bill yet) · WHITE = ยิงครบแล้ว (ready). The old 2026-07-16 neutral-grey is
+           superseded — its "red header → white children" confusion is gone because the
+           dropdown is now a NEUTRAL packing-list (below), not coloured data rows. */
+        className={`${scanned ? "pcs-row-scan-ok" : "pcs-row-scan-wait"} cursor-pointer`}
       >
         {checkColumn && (
           <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
@@ -459,11 +476,13 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                 type="checkbox"
                 checked={groupSel}
                 onChange={() => toggleGroupSelect(eligibleIds)}
-                disabled={!checkInteractive}
+                disabled={!checkInteractive || !scanned}
                 title={
-                  checkInteractive
-                    ? `เลือกทั้งออเดอร์ (${eligibleIds.length} แทรคที่ถึงไทยแล้ว)`
-                    : "ตู้นี้จ่ายค่าตู้แล้ว · แก้ผ่านบิลจ่ายเงินตู้"
+                  !checkInteractive
+                    ? "ตู้นี้จ่ายค่าตู้แล้ว · แก้ผ่านบิลจ่ายเงินตู้"
+                    : !scanned
+                      ? `ยิงกล่องไม่ครบ (${fmtN(a.boxGot)}/${fmtN(a.boxExp)}) · เลือกวางบิลไม่ได้จนกว่าจะยิงครบทั้งชิปเม้น`
+                      : `เลือกทั้งออเดอร์ (${eligibleIds.length} แทรคที่ถึงไทยแล้ว)`
                 }
                 aria-label={`เลือกออเดอร์ ${base}`}
               />
@@ -506,10 +525,19 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
         <td className="px-2 py-2 text-right">{fmt(a.weight, 2)}</td>
         {/* ประเภท */}
         <td className="px-2 py-2">{a.productType != null ? productTypeLabel(a.productType) : "หลายประเภท"}</td>
-        {/* เรทต้นทุน — rate is not summable */}
-        {showMoney && <td className="px-2 py-2 text-right text-muted">—</td>}
-        {/* ค่านำเข้า */}
-        <td className="px-2 py-2 text-right">{fmt(a.ftotalprice, 2)}</td>
+        {/* เรทต้นทุน — owner 2026-07-18: คิดทีเดียวทั้งชิปเม้น. The cost rate is per-CBM/
+            mode (uniform across a shipment's trackings) → show it ONCE on the header. */}
+        {showMoney && (
+          <td className="px-2 py-2 text-right font-semibold">
+            {a.rate != null && a.rate > 0
+              ? fmt(a.rate, 0)
+              : g.some((r) => r.rate > 0)
+                ? <span className="text-amber-600 text-[11px]" title="รายในชิปเม้นเรทต้นทุนไม่เท่ากัน">หลายเรท</span>
+                : <span className="text-muted">—</span>}
+          </td>
+        )}
+        {/* ค่านำเข้า (รวมทั้งชิปเม้น) */}
+        <td className="px-2 py-2 text-right font-semibold">{fmt(a.ftotalprice, 2)}</td>
         {/* ค่าอัปเดต */}
         <td className="px-2 py-2 text-right">{fmt(a.fpriceupdate, 2)}</td>
         {/* ค่าตีลัง */}
@@ -555,11 +583,19 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
           )}
           {/* Per-SHIPMENT pay: bill the whole -N split at once (restored 2026-06-19
               — was lost when the collapsible grouping landed; owner: "เลือกชำระราย
-              ชิปเม้น หายไป"). Only when goods arrived (fstatus 4) + money-tier. */}
+              ชิปเม้น หายไป"). Only when goods arrived (fstatus 4) + money-tier.
+              🔴 owner 2026-07-18 GATE: "ยังยิงกล่องไม่ครบทั้งชิปเม้นก็เลือกวางบิลไม่ได้ เพราะ
+              ของลูกค้าในตู้ยังยิงไม่ครบ" — hide the bill button until fully box-scanned. */}
           {showMoney && a.billableIds.length > 0 && (
-            <div className="mt-1">
-              <GroupCollectButton fIDs={a.billableIds} base={base} userid={a.userid} />
-            </div>
+            scanned ? (
+              <div className="mt-1">
+                <GroupCollectButton fIDs={a.billableIds} base={base} userid={a.userid} />
+              </div>
+            ) : (
+              <div className="mt-1 text-[11px] text-red-700" title={`ยิงรับกล่องแล้ว ${fmtN(a.boxGot)}/${fmtN(a.boxExp)} — ต้องครบทั้งชิปเม้นก่อนวางบิล`}>
+                ⛔ ยิงกล่องไม่ครบ ({fmtN(a.boxGot)}/{fmtN(a.boxExp)}) · วางบิลไม่ได้
+              </div>
+            )
           )}
           {/* Reverse bill link (read-only) — union of the group members' bills,
               deduped, newest invoice first. Groups collapse by default so surface
@@ -597,6 +633,66 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
         <td className="px-2 py-2 text-right">฿{fmt(a.priceGetUser, 2)}</td>
         {/* หมายเหตุ */}
         <td className="px-2 py-2"></td>
+      </tr>
+    );
+  }
+
+  // 🔴 owner 2026-07-18 — the shipment dropdown is a NEUTRAL gray/white striped packing-list
+  // (แบบแพคกิ้งลิส) of the trackings INSIDE this shipment: which trackings it has, how many
+  // boxes (รับ/คาด), w × l × h (cm), weight (kg), CBM. NOT red/white data rows — the header
+  // owns the scan/pay state; this is pure detail ("มีแทรคไรบ้าง · กี่กล่อง · ขนาด · น้ำหนัก · กี่คิว").
+  function renderPackingList(g: DetailRow[], gkey: string) {
+    return (
+      <tr key={`pack-${gkey}`} className="pcs-row-packwrap">
+        <td colSpan={totalCols} className="p-0">
+          <div className="pcs-pack-wrap">
+            <table className="pcs-pack">
+              <thead>
+                <tr>
+                  <th className="text-right">#</th>
+                  <th className="text-left">แทรคกิ้ง</th>
+                  <th className="text-right">กว้าง (ซม.)</th>
+                  <th className="text-right">ยาว</th>
+                  <th className="text-right">สูง</th>
+                  <th className="text-right">น้ำหนัก (กก.)</th>
+                  <th className="text-right">CBM</th>
+                  <th className="text-right">กล่อง (รับ/คาด)</th>
+                  <th className="text-left">ประเภท</th>
+                </tr>
+              </thead>
+              <tbody>
+                {g.map((r, i) => {
+                  const rowScanned = isScanComplete(r.famountfi, r.famount, r.fstatus);
+                  return (
+                    <tr key={r.id}>
+                      <td className="text-right text-muted">{i + 1}</td>
+                      <td className="text-left font-mono">
+                        <Link href={`/admin/forwarders/${r.id}`} className="text-primary-600 hover:underline">
+                          {r.ftrackingchn ?? "-"}
+                        </Link>
+                        <span className="text-muted"> · #{r.id}</span>
+                      </td>
+                      <td className="text-right">{r.fwidth != null && r.fwidth > 0 ? fmt(r.fwidth, 0) : "—"}</td>
+                      <td className="text-right">{r.flength != null && r.flength > 0 ? fmt(r.flength, 0) : "—"}</td>
+                      <td className="text-right">{r.fheight != null && r.fheight > 0 ? fmt(r.fheight, 0) : "—"}</td>
+                      <td className="text-right">{fmt(r.fweight, 2)}</td>
+                      <td className="text-right">{fmt(r.fvolume, 6)}</td>
+                      <td
+                        /* neutral packing-list (owner: gray/white) — a bold weight is the
+                           only cue for a short tracking; no red row/cell colour here. */
+                        className={`text-right ${rowScanned ? "" : "font-semibold"}`}
+                        title={rowScanned ? "ยิงรับกล่องครบแล้ว" : "ยังยิงรับกล่องไม่ครบ"}
+                      >
+                        {fmtN(r.famountfi)}/{fmtN(r.famount)}
+                      </td>
+                      <td className="text-left">{productTypeLabel(r.fproductstype)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </td>
       </tr>
     );
   }
@@ -756,49 +852,27 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                 if (it.kind === "summary") {
                   return renderSummaryRow(it.group, it.gkey, it.open);
                 }
+                if (it.kind === "pack") {
+                  return renderPackingList(it.group, it.gkey);
+                }
                 const r = it.r;
-                // Legacy row colour: base = alert-danger (pink) · ticked =
-                // bg-color-select (green-blue) · already-in-check = bg-color-check.
-                //
-                // 🔴 owner 2026-07-16 "ทำไมยังแดงอยู่เลย · บางงานเก็บตังไปแล้ว ส่งไปแล้ว" —
-                // the tint was decided by the CHECK QUEUE alone, so a row that is already
-                // billed/paid/delivered (fstatus ≥ 6) still screamed pink forever just
-                // because nobody ever added it to a check list. The pink is supposed to
-                // mean "ยังไม่ได้ตรวจ/ยังเก็บเงินไม่ได้" — on a settled row it is a lie, and
-                // a page where everything is red tells staff nothing. Settled rows now go
-                // neutral-done, so red once again means "ต้องทำอะไรสักอย่าง".
-                // 🔴 owner 2026-07-16 "ตอนยิงของเข้าแล้ว ยังแดงอยู่ · ต้องเปลี่ยนเป็นขาว" —
-                // red (pcs-row = alert-danger pink) is supposed to mean "ยังไม่ถึง/ต้องทำ
-                // อะไรสักอย่าง". Once a parcel is ยิงเข้าโกดังไทยแล้ว (fstatus='4' ถึงไทยแล้ว)
-                // it is no longer a red case — the alarming red must clear to a neutral
-                // near-white (pcs-row-done · #e6f5ec). c6baf98d neutralised the SETTLED band
-                // (6/7/8) but left arrived '4' rows red. '5' (รอชำระ · notCollected · ยัง
-                // เก็บเงินไม่ได้) stays red on purpose; '<4' (in transit) stays red.
-                // 🔴 owner 2026-07-17 "ไล่แก้เรื่องสีให้จบ · กล่อง/ชิปเม้น/แทรคกิ้ง ที่สแกน
-                // แล้วยังแดงอยู่ · คนโกดังและพนักงานงงกันหมด" — the tint used to be BINARY:
-                // in-the-check-queue → white, everything else → the legacy alert-danger pink.
-                // So รอเข้าโกดังจีน (1) · ถึงโกดังจีน (2) · กำลังส่งมาไทย (3) all screamed the
-                // same red — three unrelated situations, one alarm — and with 296 of ~600 prod
-                // rows sitting at '3' a freshly-closed container reads as a wall of red. Red
-                // that means "everything" means nothing, so staff stopped trusting it.
-                // Now the row wears its STATUS, from the same SOT the /admin/forwarders list
-                // uses (FSTATUS_CFG): each stage is its own colour.
-                // 🔴 owner 2026-07-17 (เคาะแล้ว · ถามตรงๆ): "แดงคือยังไม่ได้สแกนเข้าโกดังครับ"
-                // — พี่ทัก 2 รอบ "กล่อง 1/1 6/6 7/7 แต่ยังแดงเต็มไปหมด · ยังไม่เห็นหายเลย".
-                // เดิมแดงจองไว้ให้ '5' (รอชำระเงิน) — แต่แถวนั้น**สแกนเข้าโกดังไปแล้ว** → แดง = โกหก
-                // (และตู้ที่ถึงไทยส่วนใหญ่นั่งที่ '5' → ทั้งหน้าแดงอีกรอบ).
-                // เส้นแบ่งเดียวตอนนี้ = สแกนเข้าโกดังไทยแล้วหรือยัง: ยังไม่สแกน (1/2/3) = ตระกูลแดง ·
-                // สแกนแล้ว (4+) = สีสงบ. สีอยู่ใน legacy-report-cnt.css (.pcs-row-st*) — แก้ที่นั่นที่เดียว.
-                // ป้ายสถานะ (chip) ของ '5' ยังแดงตาม FSTATUS_CFG = ป้ายบอกสถานะ ไม่ใช่สัญญาณของขาด.
+                // 🔴 owner 2026-07-18 — RED (ยังยิงกล่องไม่ครบ) / WHITE (ยิงครบแล้ว) ONLY, no
+                // เขียว/น้ำเงิน/ส้ม. A single-tracking shipment is its own "หัวแถว" (no dropdown)
+                // → same scan-based colour as the group header. Selected (emerald · interaction
+                // feedback) + already-in-check-queue (white) still win. Supersedes the
+                // 2026-07-17 per-fstatus palette — the box-scan completeness is the one signal.
+                const rowScanned = isScanComplete(r.famountfi, r.famount, r.fstatus);
                 const rowCls = selected.has(r.id)
                   ? "pcs-row-selected"
                   : r.inCheckQueue
                     ? "pcs-row-check"
-                    : `pcs-row-st${(r.fstatus ?? "").trim() || "0"}`;
+                    : rowScanned
+                      ? "pcs-row-scan-ok"
+                      : "pcs-row-scan-wait";
                 return (
                 <tr
                   key={r.id}
-                  className={`${rowCls}${it.member ? " pcs-row-member" : ""}`}
+                  className={rowCls}
                 >
                   {checkColumn && (
                     <td className="px-2 py-2 text-center align-middle">
@@ -816,13 +890,15 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                             type="checkbox"
                             checked={selected.has(r.id)}
                             onChange={() => toggleRow(r.id)}
-                            disabled={!eligible || !checkInteractive}
+                            disabled={!eligible || !checkInteractive || !rowScanned}
                             title={
                               !checkInteractive
                                 ? "ตู้นี้จ่ายค่าตู้แล้ว · แก้ผ่านบิลจ่ายเงินตู้"
-                                : eligible
-                                  ? `เลือก ${r.fidorco ?? `#${r.id}`}`
-                                  : `รอของถึงโกดังก่อน · สถานะปัจจุบัน: ${currentLabel}`
+                                : !eligible
+                                  ? `รอของถึงโกดังก่อน · สถานะปัจจุบัน: ${currentLabel}`
+                                  : !rowScanned
+                                    ? `ยิงกล่องไม่ครบ (${fmtN(r.famountfi)}/${fmtN(r.famount)}) · เลือกวางบิลไม่ได้จนกว่าจะยิงครบ`
+                                    : `เลือก ${r.fidorco ?? `#${r.id}`}`
                             }
                             aria-label={`เลือก ${r.id}`}
                           />
@@ -1031,11 +1107,20 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                         only, and ONLY when the goods have arrived (fstatus 4 =
                         ถึงไทยแล้ว). Audit 2026-06-18: was `< 5` (showed on 1/2/3
                         too → could bill goods still in China). 5/6/7 = already
-                        billed (the action no-ops those). */}
+                        billed (the action no-ops those).
+                        🔴 owner 2026-07-18 GATE — also require ยิงกล่องครบ (rowScanned):
+                        an arrived-but-partially-boxed row (famountfi<famount) is RED and
+                        must NOT be billable until fully scanned. */}
                     {showMoney && Number(r.fstatus) === 4 && (
-                      <div className="mt-1">
-                        <BillToCustomerButton fID={r.id} />
-                      </div>
+                      rowScanned ? (
+                        <div className="mt-1">
+                          <BillToCustomerButton fID={r.id} />
+                        </div>
+                      ) : (
+                        <div className="mt-1 text-[11px] text-red-700" title={`ยิงรับกล่องแล้ว ${fmtN(r.famountfi)}/${fmtN(r.famount)} — ต้องครบก่อนวางบิล`}>
+                          ⛔ ยิงกล่องไม่ครบ ({fmtN(r.famountfi)}/{fmtN(r.famount)}) · วางบิลไม่ได้
+                        </div>
+                      )
                     )}
                     {/* Reverse bill link (read-only) — the ใบวางบิล(s) covering
                         this forwarder. No bill → nothing renders. */}
@@ -1310,6 +1395,24 @@ function GroupCollectButton({ fIDs, base, userid }: { fIDs: number[]; base: stri
 // null (the summary renders a "หลาย…" marker). Mirrors the same money columns
 // the per-row table + the bottom totals band already sum (display-only · no
 // money is written here).
+/**
+ * owner 2026-07-18 — "ยิงกล่องครบ" = all expected boxes of this row/shipment have
+ * been scanned-received at the TH warehouse (famountfi ≥ famount). This drives BOTH
+ *   • the RED (ยังไม่ครบ) / WHITE (ครบ) header-row colour, and
+ *   • the billing gate (a shipment can't be selected for วางบิล until fully scanned).
+ * When no expected box-count is set (famount 0/null), fall back to the arrival scan
+ * (fstatus ≥ 4 = ถึงไทยแล้ว) so a measured-but-unboxed arrived row still reads WHITE.
+ */
+function isScanComplete(
+  got: number | null | undefined,
+  exp: number | null | undefined,
+  fstatus: string | null | undefined,
+): boolean {
+  const e = Number(exp ?? 0);
+  if (e > 0) return Number(got ?? 0) >= e;
+  return Number((fstatus ?? "").trim() || 0) >= 4;
+}
+
 function aggregateGroup(g: DetailRow[]) {
   const sum = (f: (r: DetailRow) => number) => g.reduce((s, r) => s + (Number(f(r)) || 0), 0);
   function uniq<T>(f: (r: DetailRow) => T): T | null {
@@ -1323,6 +1426,10 @@ function aggregateGroup(g: DetailRow[]) {
     volume:                sum((r) => r.fvolume ?? 0),
     weight:                sum((r) => r.fweight ?? 0),
     ftotalprice:           sum((r) => r.ftotalprice),
+    // owner 2026-07-18 — เรทต้นทุน is per-CBM/mode, the SAME for every tracking of a
+    // shipment (one container/mode) → show it ONCE on the header (was blank "—").
+    // uniq keeps it null on the rare mixed-rate group (falls back to "หลายเรท").
+    rate:                  uniq((r) => r.rate),
     fpriceupdate:          sum((r) => r.fpriceupdate),
     pricecrate:            sum((r) => r.pricecrate),
     ftransportpricechnthb: sum((r) => r.ftransportpricechnthb),

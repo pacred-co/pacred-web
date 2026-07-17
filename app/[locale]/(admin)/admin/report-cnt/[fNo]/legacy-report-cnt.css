@@ -303,6 +303,30 @@
 .pcs-rc .pcs-table tr.pcs-row-check .text-success { color: #1f9d57 !important; }
 .pcs-rc .pcs-table tr.pcs-row-check .text-danger { color: #d63354 !important; }
 
+/* ── 🔴 owner 2026-07-18: RED / WHITE ONLY on the shipment HEADER + single rows ──
+   สแกน (ยิงกล่อง) ครบทั้งชิปเม้น → ขาว (พร้อมวางบิล) · ยังไม่ครบ → แดง (วางบิลไม่ได้).
+   No เขียว/น้ำเงิน/ส้ม. Supersedes the per-fstatus .pcs-row-st* palette (now unused for
+   these rows). The dropdown packing-list (.pcs-pack) is neutral gray/white, not red/white. */
+.pcs-rc .pcs-table tr.pcs-row-scan-ok td   { background: #ffffff; color: #37404a; }
+.pcs-rc .pcs-table tr.pcs-row-scan-ok a    { color: #1e5f8c; }
+.pcs-rc .pcs-table tr.pcs-row-scan-ok:hover td   { background: #f4f7fa; }
+.pcs-rc .pcs-table tr.pcs-row-scan-wait td { background: #f5aab0; color: #960014; }
+.pcs-rc .pcs-table tr.pcs-row-scan-wait a  { color: #1e5f8c; }
+.pcs-rc .pcs-table tr.pcs-row-scan-wait:hover td { background: #f19aa1; }
+.pcs-rc .pcs-table tr.pcs-row-scan-wait td [class*="text-green"],
+.pcs-rc .pcs-table tr.pcs-row-scan-wait td [class*="text-red"] { color: #960014 !important; }
+
+/* ── ดรอปดาว = แพคกิ้งลิสต์ (ตารางสลับสี เทา/ขาว · ไม่ใช่แดง/ขาว) ── */
+.pcs-rc .pcs-table tr.pcs-row-packwrap > td { background: #eef1f4; padding: 0; }
+.pcs-rc .pcs-pack-wrap { padding: 6px 10px 10px 34px; overflow-x: auto; }
+.pcs-rc table.pcs-pack { width: 100%; border-collapse: collapse; font-size: 12px; background: #fff; border: 1px solid #d5dbe1; }
+.pcs-rc table.pcs-pack thead th { background: #dfe4ea; color: #37404a; font-weight: 600; padding: 5px 8px; border: 1px solid #cfd6dd; white-space: nowrap; }
+.pcs-rc table.pcs-pack tbody td { padding: 4px 8px; border: 1px solid #e3e7ec; color: #37404a; white-space: nowrap; }
+.pcs-rc table.pcs-pack tbody tr:nth-child(odd) td  { background: #ffffff; }
+.pcs-rc table.pcs-pack tbody tr:nth-child(even) td { background: #f2f5f8; }
+.pcs-rc table.pcs-pack tbody tr:hover td { background: #e7edf3; }
+.pcs-rc table.pcs-pack a { color: #1e5f8c; }
+
 .pcs-rc .prod-img {
   width: 40px; height: 40px; object-fit: cover; border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 2px; background: #fff;

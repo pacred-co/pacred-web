@@ -161,7 +161,7 @@ export default async function AdminReportCntDetailPage({
   const { data: cntRows, error: cntErr } = await admin
     .from("tb_forwarder")
     .select(
-      "id, fidorco, ftrackingchn, userid, fdetail, fcover, famount, fvolume, fweight, fproductstype, fproductstype2, frefrate, ftotalprice, frefprice, fpriceupdate, pricecrate, ftransportpricechnthb, priceother, fshipby, faddressdistrict, faddressprovince, faddresszipcode, paymethod, ftransportprice, fdiscount, fcosttotalprice, fcosttotalpricesheet, fstatus, fcredit, fnote, fwarehousename, fwarehousechina, ftransporttype, fusercompany, fshippingservice, fdatecontainerclose, fdatestatus2, fdatestatus3, fdatestatus4, fdatestatus5, fdatestatus6, fdatestatus7",
+      "id, fidorco, ftrackingchn, userid, fdetail, fcover, famount, fvolume, fweight, fwidth, flength, fheight, fproductstype, fproductstype2, frefrate, ftotalprice, frefprice, fpriceupdate, pricecrate, ftransportpricechnthb, priceother, fshipby, faddressdistrict, faddressprovince, faddresszipcode, paymethod, ftransportprice, fdiscount, fcosttotalprice, fcosttotalpricesheet, fstatus, fcredit, fnote, fwarehousename, fwarehousechina, ftransporttype, fusercompany, fshippingservice, fdatecontainerclose, fdatestatus2, fdatestatus3, fdatestatus4, fdatestatus5, fdatestatus6, fdatestatus7",
     )
     .eq("fcabinetnumber", fCabinetNumber)
     .order("id", { ascending: true })
@@ -535,6 +535,11 @@ export default async function AdminReportCntDetailPage({
       famountfi: receivedByFid.has(Number(r.id)) ? receivedByFid.get(Number(r.id))! : null,
       fvolume: Number(r.fvolume ?? 0),
       fweight: Number(r.fweight ?? 0),
+      // owner 2026-07-18 — physical dims (cm · fwidth/flength/fheight) for the
+      // per-tracking packing-list detail shown in the shipment dropdown.
+      fwidth:  (r as Record<string, unknown>).fwidth  == null ? null : Number((r as Record<string, unknown>).fwidth),
+      flength: (r as Record<string, unknown>).flength == null ? null : Number((r as Record<string, unknown>).flength),
+      fheight: (r as Record<string, unknown>).fheight == null ? null : Number((r as Record<string, unknown>).fheight),
       fproductstype: pType || null,
       fproductstype2:
         // Wave 16 P0-3 modal target — raw secondary product-type for cost calc
