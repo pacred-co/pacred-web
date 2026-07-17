@@ -1,8 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { baseTrackingOf } from "@/lib/integrations/momo-web/live-parcel-metrics";
-import { trackingSuffix } from "@/lib/admin/momo-bill-header";
-import { isMaoCarrier } from "@/lib/forwarder/mao-fee";
+import { electMaoCarrier } from "@/lib/forwarder/mao-anchor-plan";
 
 /**
  * WHICH ROW CARRIES THE เหมาๆ ฿100 — resolved PER SHIPMENT, across every batch.
@@ -99,22 +98,9 @@ export async function resolveMaoAnchorIds(
   }
 
   for (const [, siblings] of byBase) {
-    // Only a เหมาๆ-eligible row may carry the fee (same predicate as the engine:
-    // a เหมาๆ carrier whose Thai leg is 0 — a row with its own ftransportprice pays
-    // a real courier, not the flat fee).
-    const eligible = siblings.filter(
-      (r) => isMaoCarrier(r.fshipby) && Number(r.ftransportprice ?? 0) === 0,
-    );
-    if (eligible.length === 0) continue;
-    // the bare base wins; otherwise the lowest suffix (deterministic + stable across
-    // batches). Tie-break on id so the election can never flip between two reads.
-    const carrier = eligible.reduce((best, r) => {
-      const bs = trackingSuffix(best.ftrackingchn);
-      const rs = trackingSuffix(r.ftrackingchn);
-      if (rs !== bs) return rs < bs ? r : best;
-      return Number(r.id) < Number(best.id) ? r : best;
-    });
-    anchors.add(Number(carrier.id));
+    // The money-critical decision is PURE + unit-pinned — see mao-anchor-plan.ts.
+    const carrier = electMaoCarrier(siblings);
+    if (carrier != null) anchors.add(carrier);
   }
   return anchors;
 }

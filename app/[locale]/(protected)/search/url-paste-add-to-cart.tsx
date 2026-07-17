@@ -35,6 +35,7 @@ import { ShoppingCart, Plus, Minus, CheckCircle2, AlertTriangle } from "lucide-r
 import { Link } from "@/i18n/navigation";
 import { addCartItem, addCartItemsBulk } from "@/actions/cart";
 import { toYuanEquivalent } from "@/lib/forwarder/currency-convert";
+import { MAX_ORDER_QTY, clampOrderQty } from "@/lib/validators/order-qty";
 import { TranslateProvider, AutoTranslateText } from "@/components/translate/auto-translate";
 
 // Mirrors PROVIDERS in lib/validators/cart.ts L7 (only these 5 are
@@ -121,7 +122,10 @@ export function UrlPasteAddToCart({
    * wholesale pick typed fine, the button enabled, and the click died. Two ceilings that
    * disagreed = a wall the customer could never see. They are the same number now.
    */
-  const skuMaxQty = (stock: number) => Math.max(maxClamp, stock, 0);
+  // owner 2026-07-17 "ปลดเพดานเป็นไม่จำกัด · ทั้งลูกค้าและพนักงาน" — stock is INFORMATION
+  // (a 1688 seller restocks on demand), never a limit. The only ceiling is the int32
+  // column. `stock` is still shown in its own column so the customer sees what is staged.
+  const skuMaxQty = (_stock: number) => MAX_ORDER_QTY;
 
   // priceThb is computed locally from priceCny × rsDefault inside this
   // island (so the qty stepper recomputes the total live).  Kept as a
@@ -297,7 +301,7 @@ export function UrlPasteAddToCart({
     setQty((q) => {
       const next = q + delta;
       if (next < minClamp) return minClamp;
-      if (next > maxClamp) return maxClamp;
+      if (next > MAX_ORDER_QTY) return MAX_ORDER_QTY;
       return next;
     });
   }
@@ -525,7 +529,7 @@ export function UrlPasteAddToCart({
                               const n = Number(e.target.value) || 0;
                               // clamp to the SAME ceiling onSubmit checks — a number the
                               // submit would reject must never be typeable (owner 2026-07-17).
-                              setQtyBySku((prev) => ({ ...prev, [idx]: Math.max(0, Math.min(skuMaxQty(sku.stock), Math.floor(n))) }));
+                              setQtyBySku((prev) => ({ ...prev, [idx]: clampOrderQty(n, minClamp, true) }));
                               setError(null);
                             }}
                             disabled={pending || outOfStock}
@@ -745,19 +749,17 @@ export function UrlPasteAddToCart({
               onChange={(e) => {
                 const n = Number(e.target.value);
                 if (!Number.isFinite(n) || Number.isNaN(n)) return;
-                if (n < minClamp) setQty(minClamp);
-                else if (n > maxClamp) setQty(maxClamp);
-                else setQty(Math.floor(n));
+                setQty(clampOrderQty(n, minClamp));
               }}
               min={minClamp}
-              max={maxClamp}
+              max={MAX_ORDER_QTY}
               inputMode="numeric"
               className="w-20 h-11 text-center rounded-lg border border-border bg-white dark:bg-surface text-base font-semibold focus:outline-none focus:ring-2 focus:ring-primary-500/50"
             />
             <button
               type="button"
               onClick={() => adjQty(1)}
-              disabled={pending || qty >= maxClamp}
+              disabled={pending || qty >= MAX_ORDER_QTY}
               aria-label={t("increaseQuantity")}
               className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-white dark:bg-surface text-foreground hover:bg-surface-alt disabled:opacity-40 disabled:cursor-not-allowed"
             >

@@ -380,3 +380,26 @@
   padding: 0 0.35rem; margin-left: 0.35rem; border-radius: 10rem; font-size: 0.72rem; font-weight: 700;
   background: rgba(0, 0, 0, 0.28); color: #fff; line-height: 1;
 }
+
+/* ── row tint = the ROW'S STATUS (owner 2026-07-17 "ไล่แก้เรื่องสีให้จบ · ที่สแกนแล้ว
+   ยังแดงอยู่ · คนโกดังงงกันหมด") ─────────────────────────────────────────────────
+   Was binary: in-check-queue → white, everything else → legacy alert-danger pink. So
+   รอเข้าโกดังจีน / ถึงโกดังจีน / กำลังส่งมาไทย all looked identically alarming, and with
+   296 of ~600 prod rows at fstatus='3' a new container was a wall of red. Colours mirror
+   FSTATUS_CFG.rowBg (lib/admin/forwarder-status.ts) so this page and /admin/forwarders
+   say the same thing, softened to fit the dense legacy grid. RED now means exactly one
+   thing: รอชำระเงิน — money action needed. */
+.pcs-rc .pcs-table tr[class*="pcs-row-st"] a { color: #1e5f8c; }
+.pcs-rc .pcs-table tr.pcs-row-st1 td { background: #fdf3d3; color: #5c4a00; } /* รอเข้าโกดังจีน */
+.pcs-rc .pcs-table tr.pcs-row-st2 td { background: #d9f2fa; color: #10495c; } /* ถึงโกดังจีนแล้ว */
+.pcs-rc .pcs-table tr.pcs-row-st3 td { background: #fce4ec; color: #7a2846; } /* กำลังส่งมาไทย */
+.pcs-rc .pcs-table tr.pcs-row-st4 td { background: #e6f5ec; color: #245c3d; } /* ถึงไทยแล้ว = ยิงเข้าแล้ว */
+.pcs-rc .pcs-table tr.pcs-row-st5 td { background: #f5aab0; color: #960014; } /* 🔴 รอชำระเงิน — the ONLY red */
+.pcs-rc .pcs-table tr.pcs-row-st6 td { background: #dfe6fb; color: #1f2f6b; } /* เตรียมส่ง */
+.pcs-rc .pcs-table tr.pcs-row-st7 td,
+.pcs-rc .pcs-table tr.pcs-row-st8 td { background: #d8f3e3; color: #14512f; } /* ส่งแล้ว */
+.pcs-rc .pcs-table tr.pcs-row-st0 td { background: #f1f3f5; color: #4e5154; } /* ไม่มีสถานะ */
+/* profit/loss figures stay readable on the light tints (the old white-on-pink override
+   only made sense against the solid alert-danger band). */
+.pcs-rc .pcs-table tr[class*="pcs-row-st"] td [class*="text-green"] { color: #14512f !important; }
+.pcs-rc .pcs-table tr[class*="pcs-row-st"] td [class*="text-red"]   { color: #960014 !important; }
