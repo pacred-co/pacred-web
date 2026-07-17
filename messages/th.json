@@ -3480,6 +3480,7 @@
       "promos": "แบนเนอร์โปรโมชัน",
       "rates": "อัตราค่าขนส่งสินค้า",
       "rateGeneral": "เรททั่วไป",
+      "rateQuoteDefault": "ตั้งเรทใบเสนอราคา",
       "rateVip": "เรทลูกค้า VIP",
       "rateCustomUser": "เรท Custom-user",
       "rateCustomHs": "เรท Custom-HS",

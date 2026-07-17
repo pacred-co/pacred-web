@@ -3480,6 +3480,7 @@
       "promos": "Promo banners",
       "rates": "Shipping rates",
       "rateGeneral": "General rates",
+      "rateQuoteDefault": "Set quotation rates",
       "rateVip": "VIP customer rates",
       "rateCustomUser": "Custom-user rates",
       "rateCustomHs": "Custom-HS rates",

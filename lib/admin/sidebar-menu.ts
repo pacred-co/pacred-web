@@ -683,6 +683,9 @@ const blockSettingsCargo: MenuItem = {
       icon: "SlidersHorizontal",
       children: [
         { labelKey: "settingsCargo.rateGeneral", href: "/admin/rates/general", icon: "Users" },
+        // ตั้งเรทใบเสนอราคา (owner ปอน 2026-07-17) — เซ็ตเรท default ทั้งระบบ สไตล์ใบเสนอราคา
+        // (เขียน tb_rate_g_* เหมือน rateGeneral แต่ UI แบบ quote card + บันทึกทีละแถว).
+        { labelKey: "settingsCargo.rateQuoteDefault", href: "/admin/rates/quote-default", icon: "FileText" },
         // rateVip removed 2026-06-01 · rateCustomUser (VIP-group editor → tb_rate_vip_*)
         // RETIRED 2026-07-10 (owner: ยกเลิก tier VIP → ยึดเรทเฉพาะตัวหน้า profile) — the
         // VIP-group tier is no longer read by the pricing resolver, so that editor became

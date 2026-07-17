@@ -173,6 +173,18 @@ export const YIWU_TRUCK_SURCHARGE_CBM = 600;
 /** ปลายทาง กทม./ปริมณฑล เริ่มต้น (บาท · ไม่มีขั้นต่ำ). */
 export const BKK_DELIVERY_START = 100;
 
+/**
+ * อย. · พิเศษ (FDA / น้ำยา / ควบคุม · รหัสสินค้า 3–4) — เรทเหมาตายตัว
+ * (owner ปอน 2026-07-17). สินค้า อย./ควบคุม คิดแพงกว่าทั่วไป → เรทเดียว
+ * **ทุกโกดัง** (ไม่บวก อี้อู +600) · **ทุกแพ็กเกจ** · เป็น default เมื่อลูกค้า
+ * ยังไม่มีเรทเฉพาะตัว (tb_rate_custom_*). เฉพาะ ฿/คิว + ฿/กก. — "ระยะเวลา"
+ * ยังมาจากแพ็กเกจตามเดิม.
+ */
+export const FDA_SPECIAL_RATE: Record<QuoteMode, { cbm: number; kg: number }> = {
+  truck: { cbm: 7600, kg: 45 },
+  ship: { cbm: 6600, kg: 35 },
+};
+
 export const WAREHOUSE_LABEL = { guangzhou: "กว่างโจว", yiwu: "อี้อู" } as const;
 export type WarehouseKey = keyof typeof WAREHOUSE_LABEL;
 export const WAREHOUSE_KEYS = ["guangzhou", "yiwu"] as const;
@@ -192,4 +204,38 @@ export function rateFor(
   const base = (licensed && pkg.licensedRates ? pkg.licensedRates : pkg.rates)[mode];
   const cbm = warehouse === "yiwu" && mode === "truck" ? base.cbm + YIWU_TRUCK_SURCHARGE_CBM : base.cbm;
   return { cbm, kg: base.kg, days: base.days };
+}
+
+/** ประเภทสินค้าของใบเสนอราคา → tier เรทที่ใช้ (general · fda · licensed). */
+export type QuoteRateVariant = "general" | "fda" | "licensed";
+
+/**
+ * Map ประเภทสินค้า label → rate variant.
+ *   ทั่วไป · มอก.          → general (เรทฐานของแพ็กเกจ)
+ *   อย. · น้ำยา · พิเศษ    → fda      (เรทเหมา FDA_SPECIAL_RATE · owner ปอน 2026-07-17)
+ *   ลิขสิทธิ์               → licensed (variant ลิขสิทธิ์ของแพ็กเกจ ถ้ามี)
+ */
+export function quoteRateVariantOf(productType: string): QuoteRateVariant {
+  const p = productType.trim();
+  if (p === "ลิขสิทธิ์") return "licensed";
+  if (p.startsWith("อย") || p === "พิเศษ" || p === "น้ำยา") return "fda";
+  return "general";
+}
+
+/**
+ * Effective rate for a package × variant × warehouse × mode.
+ *   general/licensed → rateFor() เดิม (folds อี้อู-รถ surcharge · licensed variant).
+ *   fda              → FDA_SPECIAL_RATE เหมาตายตัว (ไม่บวก surcharge · เรทเดียวทุก
+ *                      โกดัง/แพ็กเกจ) โดยคง "ระยะเวลา" จากแพ็กเกจ.
+ */
+export function rateForVariant(
+  pkg: CargoPromoPackage,
+  variant: QuoteRateVariant,
+  warehouse: WarehouseKey,
+  mode: QuoteMode,
+): PackageRate {
+  if (variant === "fda") {
+    return { cbm: FDA_SPECIAL_RATE[mode].cbm, kg: FDA_SPECIAL_RATE[mode].kg, days: pkg.rates[mode].days };
+  }
+  return rateFor(pkg, variant === "licensed", warehouse, mode);
 }

@@ -21,7 +21,7 @@ import { calcFreight, calcQuoteTotals, round2 } from "@/lib/quote/cargo-quote-ca
 import {
   CARGO_PROMO_PACKAGES, CUSTOMS_ADDON, DEFAULT_COMPARISON, MIN_CHARGE, MODE_LABEL,
   MODE_KEYS, QUOTE_NOTES, WAREHOUSE_KEYS, WAREHOUSE_LABEL,
-  rateFor, type CargoPromoPackage, type QuoteMode, type WarehouseKey,
+  rateFor, rateForVariant, type CargoPromoPackage, type QuoteMode, type WarehouseKey,
 } from "@/lib/quote/cargo-promo-packages";
 // Shared render + serializers — the admin card AND the public /q/[token] page
 // render byte-identically from the same QuoteModel (mirrors receipt-paper.tsx).
@@ -34,6 +34,7 @@ import { saveQuotationForShare } from "@/actions/admin/save-quotation";
 import { adminSaveCustomerRate } from "@/actions/admin/customer-rate";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import type { CustomerRateMatrix, ProductId, TransportId, WarehouseId } from "@/lib/admin/customer-rate-tables";
+import type { QuoteDefaultGrid } from "@/lib/admin/quote-default-rates-shared";
 
 const JURISTIC_WHT = 0.01;
 
@@ -76,6 +77,7 @@ export function QuoteTab({
   buyerIsJuristic = false,
   buyerPhone: buyerPhoneInit = "",
   matrix,
+  generalDefaults,
 }: {
   customerName: string;
   userid: string;
@@ -91,6 +93,9 @@ export function QuoteTab({
   /** The customer's CONFIGURED rate matrix — the เทียบราคา table seeds from this
    *  (per product-category) so the quote shows the real rate, not promo defaults. */
   matrix?: CustomerRateMatrix;
+  /** เรท default ใบเสนอราคา = เรททั่วไป tb_rate_g_* (global · หน้า "ตั้งเรทใบเสนอราคา"
+   *  · owner ปอน 2026-07-17) — ชั้น default กลาง SVIP ▸ นี่ ▸ promo/FDA. */
+  generalDefaults: QuoteDefaultGrid;
 }) {
   const [view, setView] = useState<View>("compare");
   // ประเภทบริการ — Cargo เปิดใช้อย่างเดียว · Freight/Clearance เทาไว้ (เร็วๆ นี้ · ปอน 2026-07-03)
@@ -167,23 +172,31 @@ export function QuoteTab({
     const compareRows: CompareRow[] = WAREHOUSE_KEYS.flatMap((w) => {
       const whId = WH_KEY_TO_ID[w];
       const wh = matrix?.byWarehouse?.[whId];
-      const promoTruck = rateFor(pkg, effLicensed, w, "truck");
-      const promoShip = rateFor(pkg, effLicensed, w, "ship");
-      return QUOTE_RATE_GROUPS.map((g) => ({
-        warehouse: WAREHOUSE_LABEL[w], isYiwu: w === "yiwu",
-        category: g.category, warehouseId: whId, products: [...g.products],
-        truck: {
-          cbm: wh?.cbm["1"][g.rep] ?? promoTruck.cbm,
-          kg: wh?.kg["1"][g.rep] ?? promoTruck.kg,
-          // อี้อู·ทางรถ: fold the +2–3 transit days into the range (owner 2026-07-10).
-          days: w === "yiwu" ? foldExtraDays(promoTruck.days, 2, 3) : promoTruck.days,
-        },
-        ship: {
-          cbm: wh?.cbm["2"][g.rep] ?? promoShip.cbm,
-          kg: wh?.kg["2"][g.rep] ?? promoShip.kg,
-          days: promoShip.days,
-        },
-      }));
+      const gd = generalDefaults[whId]; // เรท default ใบเสนอราคา (tb_rate_g_* · ต่อทาง '1'รถ/'2'เรือ)
+      return QUOTE_RATE_GROUPS.map((g) => {
+        // ชั้น default: SVIP (matrix) ▸ เรททั่วไป (generalDefaults · หน้า "ตั้งเรทใบเสนอราคา"
+        // = เรทบิลจริง tb_rate_g_*) ▸ promo/FDA hardcoded ต่อแพ็กเกจ (fallback สุดท้าย ·
+        // อย.·พิเศษ รหัส 3–4 = เรทเหมา FDA 7,600/6,600 · owner ปอน 2026-07-17).
+        const groupKey = g.rep === "3" ? "fda" : "general";
+        const variant = g.rep === "3" ? "fda" : effLicensed ? "licensed" : "general";
+        const promoTruck = rateForVariant(pkg, variant, w, "truck");
+        const promoShip = rateForVariant(pkg, variant, w, "ship");
+        return {
+          warehouse: WAREHOUSE_LABEL[w], isYiwu: w === "yiwu",
+          category: g.category, warehouseId: whId, products: [...g.products],
+          truck: {
+            cbm: wh?.cbm["1"][g.rep] ?? gd["1"][groupKey].cbm ?? promoTruck.cbm,
+            kg: wh?.kg["1"][g.rep] ?? gd["1"][groupKey].kg ?? promoTruck.kg,
+            // อี้อู·ทางรถ: fold the +2–3 transit days into the range (owner 2026-07-10).
+            days: w === "yiwu" ? foldExtraDays(promoTruck.days, 2, 3) : promoTruck.days,
+          },
+          ship: {
+            cbm: wh?.cbm["2"][g.rep] ?? gd["2"][groupKey].cbm ?? promoShip.cbm,
+            kg: wh?.kg["2"][g.rep] ?? gd["2"][groupKey].kg ?? promoShip.kg,
+            days: promoShip.days,
+          },
+        };
+      });
     });
 
     const lines: DisplayLine[] = [];
@@ -217,7 +230,7 @@ export function QuoteTab({
       conditions: pkg.conditions, notes: QUOTE_NOTES, extraNote: "",
     };
   }, [view, service, pkg, effLicensed, warehouse, mode, cbm, kg, comparison, freight, customs, issueTax, juristic,
-    refNoSeed, validUntilSeed, buyerNameSeed, buyerTaxIdInit, buyerAddressInit, buyerPhoneInit, today, userid, showCustomsInfo, matrix]);
+    refNoSeed, validUntilSeed, buyerNameSeed, buyerTaxIdInit, buyerAddressInit, buyerPhoneInit, today, userid, showCustomsInfo, matrix, generalDefaults]);
 
   // The rep's inline edits — a field-level override merged over the auto-model.
   // Calc-derived fields (lines · compareRows · route · package · conditions) are

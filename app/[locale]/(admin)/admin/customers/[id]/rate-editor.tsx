@@ -29,6 +29,7 @@ import {
   type RateMatrix,
 } from "@/lib/admin/customer-rate-tables";
 import type { ProductId, TransportId, WarehouseId } from "@/lib/admin/customer-rate-tables";
+import type { QuoteDefaultGrid } from "@/lib/admin/quote-default-rates-shared";
 import type { SellFloorCbmConfig, SellFloorKgConfig } from "@/lib/admin/sell-floor-config";
 import { DEFAULT_COMPARISON } from "@/lib/quote/cargo-promo-packages";
 import { QuoteTab } from "./quote-tab";
@@ -76,6 +77,7 @@ export function CustomerRateEditor({
   buyerIsJuristic = false,
   buyerPhone = "",
   matrix,
+  generalDefaults,
   comparisonEnabled = false,
   comparisonValue = 0,
   sellFloorCbm,
@@ -93,6 +95,8 @@ export function CustomerRateEditor({
   /** Customer phone — seeds the ใบเสนอราคา buyer phone. */
   buyerPhone?: string;
   matrix: CustomerRateMatrix;
+  /** เรท default ใบเสนอราคา = เรททั่วไป tb_rate_g_* (global · owner ปอน 2026-07-17). */
+  generalDefaults: QuoteDefaultGrid;
   /** tb_users.userComparison==1 — ค่าเทียบ (CPS) is currently ON. */
   comparisonEnabled?: boolean;
   /** tb_users.userComparisonValue — the kg-per-CBM density threshold. */
@@ -315,7 +319,7 @@ export function CustomerRateEditor({
         {/* ── ใบเสนอราคา (default) — the quote tool + collapsed rate settings ── */}
         {tab === "quote" && (
           <div className="space-y-3">
-            <QuoteTab customerName={customerName} userid={userid} comparisonValue={comparisonValue} buyerTaxId={buyerTaxId} buyerAddress={buyerAddress} buyerIsJuristic={buyerIsJuristic} buyerPhone={buyerPhone} matrix={matrix} />
+            <QuoteTab customerName={customerName} userid={userid} comparisonValue={comparisonValue} buyerTaxId={buyerTaxId} buyerAddress={buyerAddress} buyerIsJuristic={buyerIsJuristic} buyerPhone={buyerPhone} matrix={matrix} generalDefaults={generalDefaults} />
 
             {/* Rate-setting screens collapsed into the ใบเสนอราคา tab (owner ปอน 2026-07-03) */}
             <details className="rounded-lg border border-border bg-surface-alt/20">
