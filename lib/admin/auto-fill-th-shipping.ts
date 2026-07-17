@@ -30,6 +30,11 @@ import {
 export async function autoFillThShippingForForwarder(
   admin: ReturnType<typeof createAdminClient>,
   fId: number,
+  /** owner 2026-07-18 ("เรทค่าขนส่งไม่ยอมขึ้น auto · Flash/J&T เก็บตามจริง") — the
+   *  measure-save + carrier-select hooks pass `costOnly: true`: fill ONLY the quoted
+   *  ftransportprice (fill-when-empty) and NEVER rewrite the carrier/paymethod the
+   *  admin just chose (the full rewrite is reserved for the billing surfaces). */
+  opts?: { costOnly?: boolean },
 ): Promise<AutoThShippingFill | null> {
   const { data: row, error } = await admin
     .from("tb_forwarder")
@@ -70,13 +75,15 @@ export async function autoFillThShippingForForwarder(
   // Write only the delivery decision. The re-guard (ftransportprice still ฿0/null)
   // makes a concurrent manual fill win — 0 rows updated → we return null so the
   // caller doesn't over-report a cost that didn't land.
+  // costOnly (measure/carrier hooks): record ONLY the quoted cost — the carrier +
+  // paymethod the admin chose stay untouched. Skip a ฿0 quote (nothing to record).
+  if (opts?.costOnly && !(fill.cost > 0)) return null;
+  const patch = opts?.costOnly
+    ? { ftransportprice: fill.cost }
+    : { fshipby: fill.carrier, paymethod: fill.payMethod, ftransportprice: fill.cost };
   const { data: updated, error: updErr } = await admin
     .from("tb_forwarder")
-    .update({
-      fshipby: fill.carrier,
-      paymethod: fill.payMethod,
-      ftransportprice: fill.cost,
-    })
+    .update(patch)
     .eq("id", fId)
     .or("ftransportprice.is.null,ftransportprice.eq.0")
     .select("id");

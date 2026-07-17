@@ -84,6 +84,7 @@ import { baseOf as baseOfTracking } from "@/lib/integrations/momo-web/split-box-
 import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
+import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shipping";
 import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
 import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
 import { canonicalProvince } from "@/lib/forwarder/carrier-province-coverage";
@@ -773,6 +774,14 @@ export async function adminUpdateForwarderShipBy(
         : null;
     if (persistedProvince) update.faddressprovince = persistedProvince;
 
+    // 🔴 owner 2026-07-18 — stamp payMethod from the CHOSEN carrier on the ADMIN path
+    // too (own-fleet → ต้นทาง '1' · ขนส่งเอกชน → ปลายทาง '2' COD). The customer/CS path
+    // (updateLegacyForwarderShipBy) already does; this admin path used to leave it stale.
+    // Not on billed rows (>5) — the row's collection state is settled there.
+    if (fStatusInt <= 5) {
+      update.paymethod = derivePayMethodForDelivery(fShipBy, { addressID: null, zip: null });
+    }
+
     const { error: updErr } = await admin
       .from("tb_forwarder")
       .update(update)
@@ -780,6 +789,14 @@ export async function adminUpdateForwarderShipBy(
     if (updErr) {
       console.error(`[adminUpdateForwarderShipBy update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
       return { ok: false, error: `บันทึกผู้ขนส่งไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    // owner 2026-07-18 "เรทค่าขนส่งไม่ยอมขึ้น auto · Flash/J&T เก็บตามจริง ไม่ใช่ 50" —
+    // right after the carrier lands, quote the REAL courier rate (Flash table · measured
+    // girth+kg) into ftransportprice when it's still ฿0. costOnly: never rewrites the
+    // carrier/paymethod just chosen · fill-when-empty · best-effort (null = no change).
+    if (fStatusInt <= 5 && !["PCS", "PCSF", "PCSE", "PRF", "PRE"].includes(fShipBy)) {
+      await autoFillThShippingForForwarder(admin, d.fId, { costOnly: true });
     }
 
     await logAdminAction(adminId, "tb_forwarder.update_ship_by", "tb_forwarder", String(d.fId), {

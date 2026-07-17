@@ -223,7 +223,10 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
     const fill = resolveAutoThShippingFill({ fshipby: "2", ftransportprice: 0, zip: "50000", weightKg: 13, sizeCm: 180, province: "เชียงใหม่" });
     assert.ok(fill, "upcountry external ฿0 + measured (kg+dims) → auto-fills (Flash + margin)");
     assert.equal(fill!.carrier, "2", "upcountry external → Flash carrier '2'");
-    assert.equal(fill!.payMethod, "1", "owner: DEFAULT ต้นทาง (COD is manual-only now)");
+    // owner 2026-07-18 — ANY ขนส่งเอกชน → ปลายทาง '2' COD (supersedes the 2026-07-09
+    // ต้นทาง default; the quoted rate is RECORDED in ftransportprice · the COD gate
+    // keeps it off the Pacred bill while paymethod stays '2').
+    assert.equal(fill!.payMethod, "2", "owner 2026-07-18: ขนส่งเอกชน → ปลายทาง '2' (COD)");
     assert.equal(fill!.zone, "upcountry");
     assert.ok(fill!.cost > MAO_FLAT_FEE, "13kg/180cm upcountry Flash+margin > ฿100");
     assert.equal(fill!.cost, resolveThShippingAutoPrice({ zip: "50000", kg: 13, sizeCm: 180 }),

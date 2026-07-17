@@ -529,6 +529,46 @@ export async function adminReportCntAddCheck(fIDs: number[]): Promise<AdminActio
       return { ok: false, error: parts.join(" · ") };
     }
 
+    // ── 🔴 ADDRESS GATE (owner 2026-07-18 "บางรายการยังไม่ได้ตั้งที่อยู่จัดส่ง ก็ยัง
+    // เข้ามาในการตรวจสอบ — ต้องใส่ให้ครบก่อน ไม่งั้นบัคเรื่องเงิน") ──
+    // A row with NO delivery address can't have its ค่าขนส่งไทย computed → billing
+    // it under-collects. Refuse the batch until the address (or self-pickup) is set.
+    // "has address" = province OR zipcode present · self-pickup (fshipby='PCS') is
+    // exempt (the warehouse address is the destination · no domestic leg to price).
+    {
+      const { data: addrRows, error: addrErr } = await admin
+        .from("tb_forwarder")
+        .select("id, fidorco, fshipby, faddressprovince, faddresszipcode")
+        .in("id", parsed.data.fIDs);
+      if (addrErr) {
+        console.error(`[tb_forwarder address-gate] failed`, { code: addrErr.code, message: addrErr.message });
+        return { ok: false, error: "โหลดที่อยู่จัดส่งไม่สำเร็จ — กรุณาลองใหม่" };
+      }
+      const noAddress = ((addrRows ?? []) as Array<{
+        id: number; fidorco: string | null; fshipby: string | null;
+        faddressprovince: string | null; faddresszipcode: string | null;
+      }>).filter((r) => {
+        if ((r.fshipby ?? "").trim() === "PCS") return false; // รับเองโกดัง — exempt
+        const hasAddr = (r.faddressprovince ?? "").trim() !== "" || (r.faddresszipcode ?? "").trim() !== "";
+        return !hasAddr;
+      });
+      if (noAddress.length > 0) {
+        const sample = noAddress.slice(0, 5).map((r) => r.fidorco ?? `#${r.id}`);
+        await logAdminAction(adminId, "report_cnt.add_check_rejected", "tb_forwarder", sample.join(","), {
+          reason: "no_delivery_address",
+          blocked_count: noAddress.length,
+          blocked_sample: sample,
+          attempted_total: parsed.data.fIDs.length,
+        });
+        return {
+          ok: false,
+          error:
+            `มี ${noAddress.length} รายการที่ยังไม่ได้ตั้งที่อยู่จัดส่ง (${sample.join(", ")}${noAddress.length > 5 ? ` และอีก ${noAddress.length - 5} รายการ` : ""}) — ` +
+            `กรุณาตั้งที่อยู่จัดส่ง/เลือกขนส่ง ที่หน้ารายละเอียดออเดอร์ก่อนเข้าคิวแจ้งชำระ (กันค่าขนส่งไทยตกหล่นตอนวางบิล)`,
+        };
+      }
+    }
+
     // Skip rows that already exist (legacy doesn't guard — leaves a dup
     // row when an admin clicks twice. We guard for cleanliness; the
     // observable behaviour matches "the row is in the queue").

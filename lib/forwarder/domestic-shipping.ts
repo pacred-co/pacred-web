@@ -516,8 +516,13 @@ export function resolveAutoThShippingFill(args: {
   return {
     carrier: "2", // Flash Express (the auto-quoted external courier)
     cost,
-    payMethod: "1", // ต้นทาง (prepaid · the real cost + margin is billed)
+    // 🔴 owner 2026-07-18: ANY ขนส่งเอกชน → ปลายทาง '2' (COD) — the courier collects
+    // the real rate at the door (supersedes the 2026-07-09 ต้นทาง default here; same
+    // rule as lib/forwarder/pay-method.ts). The quoted cost is still RECORDED in
+    // ftransportprice (เก็บตามจริง · display + the basis if admin flips to ต้นทาง);
+    // the COD gate keeps it OFF the Pacred bill while paymethod stays '2'.
+    payMethod: "2",
     zone,
-    label: `Flash ${DOMESTIC_ZONE_LABEL[zone]} · ฿${cost.toLocaleString("th-TH")}`,
+    label: `Flash ${DOMESTIC_ZONE_LABEL[zone]} · ฿${cost.toLocaleString("th-TH")} (ปลายทาง COD)`,
   };
 }

@@ -50,6 +50,7 @@ import {
   type TransportMode,
 } from "@/lib/forwarder/cabinet-transport";
 import { evaluateRateModeGuard, type RateModeGuard } from "@/lib/forwarder/rate-mode-guard";
+import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shipping";
 import { getMinSellFloors } from "@/lib/pricing/min-sell-config";
 import {
   getMinSellAdvisory,
@@ -757,6 +758,15 @@ export async function adminUpdateForwarderDimensions(
       // Best-effort — a logging miss must never fail the price save.
       if (advancedToFive) {
         await appendStatusLog(admin, before.id, "4", "5", legacyAdminId);
+      }
+
+      // owner 2026-07-18 "เรทค่าขนส่งไม่ยอมขึ้น auto · Flash/J&T เก็บตามจริง" — the
+      // MEASURE save is the moment the quote inputs (kg + girth) become complete →
+      // quote the real courier rate into ftransportprice NOW if it's still ฿0.
+      // costOnly (never touches carrier/paymethod) · fill-when-empty (a typed
+      // fTransportPrice above wins — the helper re-guards 0/null) · best-effort.
+      if (d.fTransportPrice === undefined || !(Number(d.fTransportPrice) > 0)) {
+        await autoFillThShippingForForwarder(admin, before.id, { costOnly: true });
       }
 
       // ─── UPDATE tb_forwarder_item rows ──────────────────────────

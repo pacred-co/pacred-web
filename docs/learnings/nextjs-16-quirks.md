@@ -1229,3 +1229,15 @@ Building the cost-reveal provider I wrote `const r = useRef(x); r.current = x;` 
 **Why this matters next time:** To force a recompile of one file, just **`touch` the file** (HMR recompiles from clean source) — that alone fixes a stale-compile. If you must clear the cache, **stop the server first**. Do NOT delete anything under `.next/` while `next dev` is running. And a stale HMR compile can come from doing an import-removal Edit *before* the usage-removal Edit — order edits so the file is never transiently broken (remove usages first, then the import), or expect one stale error that a `touch`+reload clears.
 
 **Cross-links:** `.claude/skills/branch-integrate-loop` (the "`rm -rf .next` when validator is stale" note) · AGENTS.md §11 (prod smoke) · §0c verify-deep-flow (the browser render caught this, the gate didn't).
+
+---
+
+## [2026-07-18] A FILLED transform animation on a route-wide wrapper breaks EVERY `position:fixed` modal (the "popup ต้องเลื่อนจอหา" class)
+
+**Symptom:** owner — "popup ทั้งระบบแย่ ต้องเลื่อนจอลงไปหา popup". Every hand-rolled `fixed inset-0 flex items-center justify-center` modal (29 files) centered against the WHOLE PAGE HEIGHT instead of the viewport: on a long table the dialog landed thousands of px below/above the visible screen. Native `<dialog>` components (pacred-dialog/confirm) were immune (top-layer).
+
+**Root cause:** `<RouteFade>` wraps ALL admin page content in `.animate-fade-in`, whose keyframe animated `transform: translateY(4px) → none` with `animation-fill-mode: both`. A **filled animation whose keyframes include `transform` keeps the element a CONTAINING BLOCK for `position:fixed` descendants** (Chromium behavior — even though the filled `to` value is `transform: none`). So `fixed inset-0` resolved against the route-wide wrapper's box (document-height tall), not the viewport. Same trap previously hit the report-cnt floating bar (2026-07-16 "portal to body" fix) — that patched ONE element; the class-wide root was the keyframe itself.
+
+**Fix (one line, whole class):** make `app-fade-in` animate **opacity only** — no transform in any keyframe of an animation applied to a WIDE wrapper (route/layout/section shells). The 4px slide was cosmetic; every fixed overlay platform-wide instantly re-anchored to the viewport. Rule: **transform/filter/will-change/backdrop-filter (incl. inside filled animations) NEVER belong on layout-level wrappers** — put motion on leaf elements. If a wide wrapper must transform, every fixed descendant needs `createPortal(document.body)`.
+
+**Debug recipe:** modal appears "somewhere in the page" instead of the viewport → walk up the ancestors looking for transform/filter/will-change/contain AND any `animation` with fill-mode whose keyframes mention transform. Cross-link: [[fix-root-prevent-whole-class]] — the portal-per-element fix (2026-07-16) treated a symptom; the keyframe was the class.

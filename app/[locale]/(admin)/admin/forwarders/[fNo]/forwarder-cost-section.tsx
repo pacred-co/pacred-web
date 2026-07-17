@@ -36,6 +36,8 @@ import {
 // GAP 8 (2026-06-12) — wire the previously-DEAD computeMarginVat (the NON-VAT
 // 7%-on-margin staff figure · legacy function.php) into the GAP 9 profit panel.
 import { computeMarginVat } from "@/lib/tax/tax-doc-mode";
+// owner 2026-07-18 — shipment (sibling) rollup for the "ทำไมติดลบ" explainer.
+import { baseTracking } from "@/lib/admin/momo-bill-header";
 import { getCustomsFxRates, fxRateMap } from "@/lib/admin/customs-fx";
 // Live COST resolver (option A · ภูม/พี่ป๊อป 2026-06-18 "แบบ PCS forwarder.php —
 // คำนวณต้นทุนสด") — reads the 144-cell tb_settings matrix the SAME way report-cnt
@@ -222,6 +224,12 @@ export async function ForwarderCostSection({
   // The container this row sits in — the key to accounting's per-container cost
   // rate (tb_cost_container · tier 1 of the waterfall). Owner 2026-07-17.
   let costCabinet: string | null = null;
+  // owner 2026-07-18 ("งานติดลบบางงานเรางงมาก เช่น 52197") — for a box-split shipment
+  // the SELL is allocated per-tracking by one basis while the COST allocates by CBM,
+  // so a light tracking can read NEGATIVE even though the WHOLE shipment is positive.
+  // Fetch the shipment (sibling) rollup so the panel can explain instead of confuse.
+  let rowTracking: string | null = null;
+  let rowUserid: string | null = null;
   {
     const { data: hdr, error } = await admin
       .from("tb_forwarder")
@@ -229,7 +237,7 @@ export async function ForwarderCostSection({
         "import_duty_pct, import_duty_thb, fcosttotalprice, ftotalprice, ftransportprice, fpriceupdate, " +
           "fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, " +
           "fwarehousename, fwarehousechina, ftransporttype, fproductstype, fweight, fvolume, " +
-          "fcabinetnumber",
+          "fcabinetnumber, ftrackingchn, userid",
       )
       .eq("id", fId)
       .maybeSingle<{
@@ -251,10 +259,14 @@ export async function ForwarderCostSection({
         fweight: number | string | null;
         fvolume: number | string | null;
         fcabinetnumber: string | null;
+        ftrackingchn: string | null;
+        userid: string | null;
       }>();
     if (error) {
       console.error(`[ForwarderCostSection tb_forwarder header]`, { code: error.code, message: error.message, fid: fId });
     } else if (hdr) {
+      rowTracking = (hdr.ftrackingchn ?? "").trim() || null;
+      rowUserid = (hdr.userid ?? "").trim() || null;
       costCabinet = (hdr.fcabinetnumber ?? "").trim() || null;
       importDutyPct = (hdr.import_duty_pct as number | string | null) ?? null;
       importDutyThb = (hdr.import_duty_thb as number | string | null) ?? null;
@@ -349,6 +361,39 @@ export async function ForwarderCostSection({
   // so the displayed กำไร never silently contradicts the booked cost.
   const costDiverged = liveCost > 0 && fCostTotal > 0 && Math.abs(liveCost - fCostTotal) > 0.01;
   const displayCost = costDiverged ? fCostTotal : liveCost > 0 ? liveCost : fCostTotal;
+
+  // ── owner 2026-07-18 — SHIPMENT rollup (the "ทำไมงานนี้ติดลบ" explainer · #52197) ──
+  // A box-split shipment allocates SELL per-tracking by one basis (e.g. น้ำหนัก) while
+  // COST allocates by CBM → a light-but-bulky tracking reads NEGATIVE per-row even
+  // though the WHOLE shipment is profitable. Aggregate the siblings (same base
+  // tracking + same customer · non-cancelled) so the panel can show the shipment
+  // truth next to the per-row figure. READ-ONLY · display only.
+  let shipmentAgg: { count: number; sell: number; cost: number } | null = null;
+  const shipBase = baseTracking(rowTracking);
+  if (shipBase && rowUserid) {
+    const { data: sibs, error: sibErr } = await admin
+      .from("tb_forwarder")
+      .select("id, ftrackingchn, ftotalprice, fcosttotalprice")
+      .eq("userid", rowUserid)
+      .neq("fstatus", "99")
+      .like("ftrackingchn", `${shipBase}%`)
+      .limit(200);
+    if (sibErr) {
+      console.error(`[ForwarderCostSection siblings]`, { code: sibErr.code, message: sibErr.message, fid: fId });
+    } else {
+      const members = (sibs ?? []).filter(
+        (s) => baseTracking((s as { ftrackingchn: string | null }).ftrackingchn) === shipBase,
+      ) as Array<{ id: number; ftotalprice: number | string | null; fcosttotalprice: number | string | null }>;
+      if (members.length > 1) {
+        const num = (v: unknown) => { const x = Number(v ?? 0); return Number.isFinite(x) ? x : 0; };
+        shipmentAgg = {
+          count: members.length,
+          sell: members.reduce((s, m) => s + num(m.ftotalprice), 0),
+          cost: members.reduce((s, m) => s + num(m.fcosttotalprice), 0),
+        };
+      }
+    }
+  }
   // DIRECT-forwarder (THB cost) cost/unit seed = the header cost total ÷ Σqty
   // (fcosttotalprice is now resolved). Owner correction 2026-06-12.
   const fwdRealCostUnit = fwdTotalQty > 0 ? fCostTotal / fwdTotalQty : 0;
@@ -400,6 +445,7 @@ export async function ForwarderCostSection({
             liveSource={liveCostSource}
             storedCost={fCostTotal}
             costDiverged={costDiverged}
+            shipmentAgg={shipmentAgg}
           />
         )}
 
@@ -554,6 +600,7 @@ function ForwarderProfitPanel({
   liveSource,
   storedCost,
   costDiverged,
+  shipmentAgg = null,
 }: {
   sellNet: number;
   costTotal: number;
@@ -571,6 +618,10 @@ function ForwarderProfitPanel({
   storedCost: number;
   /** live (matrix-default) ≠ stored (custom-rated/booked) by > ฿0.01 */
   costDiverged: boolean;
+  /** owner 2026-07-18 — sibling-shipment rollup (null = single-tracking shipment).
+   *  Explains a per-row negative on a box-split shipment (#52197): SELL splits by
+   *  one basis, COST by CBM → per-row can be red while the SHIPMENT is green. */
+  shipmentAgg?: { count: number; sell: number; cost: number } | null;
 }) {
   // 2026-06-18 (ภูม/พี่ป๊อป "ให้เหมือน PCS เป๊ะ" · option A) — ต้นทุน computed LIVE
   // from the 144-cell matrix (เรท × คิว/กก. · like PCS forwarder.php) · กำไร =
@@ -640,6 +691,26 @@ function ForwarderProfitPanel({
           {hasCost && <p className="text-[11px] text-muted">VAT ณ กำไร 7% (ภายใน) : {baht(marginVat)}</p>}
         </div>
       </div>
+      {/* owner 2026-07-18 "งานติดลบบางงานเรางงมาก เช่น 52197 โดนบ่นตาย" — a box-split
+          shipment splits the SELL per-tracking by basis (เช่น น้ำหนัก) while COST splits
+          by CBM → a light-but-bulky tracking reads red per-row even when the WHOLE
+          shipment earns. Show the shipment truth right here so no one panics. */}
+      {shipmentAgg && (() => {
+        const shipProfit = shipmentAgg.sell - shipmentAgg.cost;
+        return (
+          <div className={`mt-2 rounded-md border px-3 py-2 text-[11px] leading-relaxed ${shipProfit >= 0 ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-red-300 bg-red-50 text-red-800"}`}>
+            <b>🧾 กำไรคิดทั้งชิปเม้น ({shipmentAgg.count} แทรค):</b>{" "}
+            ค่านำเข้ารวม {baht(shipmentAgg.sell)} − ต้นทุนรวม {baht(shipmentAgg.cost)} ={" "}
+            <strong className="font-mono">{shipProfit >= 0 ? "+" : ""}{baht(shipProfit)}</strong>
+            {profit < 0 && shipProfit >= 0 && (
+              <span className="block mt-0.5">
+                แทรคนี้ติดลบเพราะเป็น<b>การแบ่งภายในชิปเม้น</b> (ยอดขายแบ่งตามน้ำหนัก · ต้นทุนแบ่งตามคิว)
+                — เงินจริงดูที่ยอดชิปเม้นด้านบน ไม่ได้ขาดทุนจริง
+              </span>
+            )}
+          </div>
+        );
+      })()}
       {!hasCost && (
         <p className="mt-1.5 text-[11px] text-amber-700">
           ⚠ ยังไม่มีเรทต้นทุนสำหรับขนส่ง/โหมด/ประเภทนี้ — ตั้งเรทที่ <span className="font-medium">ตั้งค่า › เรทต้นทุนนำเข้า</span> (/admin/settings/forwarder-costs) แล้วต้นทุน + กำไรจะคำนวณเอง

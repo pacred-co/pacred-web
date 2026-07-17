@@ -395,11 +395,12 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
   // ping-pong). Mirrors the server-side STATUS GATE in
   // adminReportCntAddCheck (lib/admin/report-cnt-add-check-gate.ts).
   // owner 2026-07-18 — select-all (+ the master checkbox) skips any row not fully box-scanned
-  // (famountfi < famount) so a ยิงไม่ครบ shipment can never be ticked → sent to วางบิล.
+  // (famountfi < famount) OR with no delivery address set, so a ยิงไม่ครบ/ไม่มีที่อยู่
+  // shipment can never be ticked → sent to วางบิล (mirrors the server gates).
   const eligibleFilteredIds = useMemo(
     () =>
       filtered
-        .filter((r) => isRowEligibleForAddCheck(r.fstatus) && isScanComplete(r.famountfi, r.famount, r.fstatus))
+        .filter((r) => isRowEligibleForAddCheck(r.fstatus) && isScanComplete(r.famountfi, r.famount, r.fstatus) && hasDeliveryAddress(r))
         .map((r) => r.id),
     [filtered],
   );
@@ -453,7 +454,7 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
     const scanned = g.every((r) => isScanComplete(r.famountfi, r.famount, r.fstatus));
     const base = baseTracking(g[0].ftrackingchn) ?? g[0].ftrackingchn ?? "-";
     const eligibleIds = g
-      .filter((r) => !r.inCheckQueue && isRowEligibleForAddCheck(r.fstatus))
+      .filter((r) => !r.inCheckQueue && isRowEligibleForAddCheck(r.fstatus) && hasDeliveryAddress(r))
       .map((r) => r.id);
     const groupSel = eligibleIds.length > 0 && eligibleIds.every((id) => selected.has(id));
     const statusBadge = a.status != null ? fstatusBadge(a.status) : null;
@@ -934,15 +935,17 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                             type="checkbox"
                             checked={selected.has(r.id)}
                             onChange={() => toggleRow(r.id)}
-                            disabled={!eligible || !checkInteractive || !rowScanned}
+                            disabled={!eligible || !checkInteractive || !rowScanned || !hasDeliveryAddress(r)}
                             title={
                               !checkInteractive
                                 ? "ตู้นี้จ่ายค่าตู้แล้ว · แก้ผ่านบิลจ่ายเงินตู้"
                                 : !eligible
                                   ? `รอของถึงโกดังก่อน · สถานะปัจจุบัน: ${currentLabel}`
                                   : !rowScanned
-                                    ? `ยิงกล่องไม่ครบ (${fmtN(r.famountfi)}/${fmtN(r.famount)}) · เลือกวางบิลไม่ได้จนกว่าจะยิงครบ`
-                                    : `เลือก ${r.fidorco ?? `#${r.id}`}`
+                                    ? `ยิงกล่องไม่ครบ (${fmtBox(r.famountfi, r.famount)}) · เลือกวางบิลไม่ได้จนกว่าจะยิงครบ`
+                                    : !hasDeliveryAddress(r)
+                                      ? "ยังไม่ได้ตั้งที่อยู่จัดส่ง/เลือกขนส่ง — ตั้งก่อนเข้าคิวแจ้งชำระ (กันค่าขนส่งไทยตกหล่น)"
+                                      : `เลือก ${r.fidorco ?? `#${r.id}`}`
                             }
                             aria-label={`เลือก ${r.id}`}
                           />
@@ -1439,6 +1442,16 @@ function GroupCollectButton({ fIDs, base, userid }: { fIDs: number[]; base: stri
 // null (the summary renders a "หลาย…" marker). Mirrors the same money columns
 // the per-row table + the bottom totals band already sum (display-only · no
 // money is written here).
+/**
+ * owner 2026-07-18 — "ตั้งที่อยู่จัดส่งแล้ว?" — a row with no delivery address can't
+ * price its ค่าขนส่งไทย → the bill under-collects. Mirrors the SERVER address-gate in
+ * adminReportCntAddCheck (province OR zipcode set · self-pickup PCS exempt).
+ */
+function hasDeliveryAddress(r: DetailRow): boolean {
+  if ((r.fshipby ?? "").trim() === "PCS") return true; // รับเองโกดัง
+  return (r.faddressprovince ?? "").trim() !== "" || (r.faddresszipcode ?? "").trim() !== "";
+}
+
 /**
  * owner 2026-07-18 — "ยิงกล่องครบ" = all expected boxes of this row/shipment have
  * been scanned-received at the TH warehouse (famountfi ≥ famount). This drives BOTH
