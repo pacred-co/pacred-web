@@ -28,6 +28,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton } from "@/components/admin/csv-button";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 
 export const dynamic = "force-dynamic";
 
@@ -182,7 +183,7 @@ export default async function DebtorsReport({
                     <tr key={w.userid} className="border-t border-border">
                       <td className="px-4 py-3 text-xs">
                         <p>{customerName || "—"}</p>
-                        <p className="font-mono text-[11px] text-muted">{w.userid}</p>
+                        <CustomerCodeLink code={w.userid} className="text-[11px]" />
                         {u?.userTel && <p className="text-[11px] text-muted">☎ {u.userTel}</p>}
                       </td>
                       <td className={`px-4 py-3 text-right font-mono text-xs font-semibold ${Number(w.wallettotal) < 0 ? "text-red-700" : "text-muted"}`}>

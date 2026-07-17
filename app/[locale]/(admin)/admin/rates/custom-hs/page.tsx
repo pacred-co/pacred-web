@@ -34,6 +34,7 @@ import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportRatesCustomHsAll } from "@/actions/admin/export/rates-custom-hs";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { HsRateEditForm, type HsCellInitial } from "./edit-form";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName, type CorporateIdentityRow } from "@/lib/admin/customer-identity";
 
@@ -304,7 +305,7 @@ export default async function CustomHsRatesPage({
                     const u = userMap.get(h.userid);
                     return (
                       <tr key={h.id} className="border-t border-border hover:bg-surface-alt/30">
-                        <td className="px-3 py-2 font-mono">{h.userid}</td>
+                        <td className="px-3 py-2"><CustomerCodeLink code={h.userid} /></td>
                         <td className="px-3 py-2">
                           {historyNameOf(u)}
                         </td>

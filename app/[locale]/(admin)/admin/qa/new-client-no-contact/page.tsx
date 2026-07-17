@@ -19,6 +19,7 @@ import { Link } from "@/i18n/navigation";
 import { nowMs, cutoffIsoDaysAgo } from "@/lib/datetime-helpers";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportQaNewClientNoContactAll } from "@/actions/admin/export/qa-new-client-no-contact";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
@@ -206,7 +207,7 @@ export default async function NewClientNoContactPage({
                     : "ไม่เคย login";
                   return (
                     <tr key={u.userID} className="border-t border-border hover:bg-surface-alt/30">
-                      <td className="px-2 py-2 font-mono">{u.userID}</td>
+                      <td className="px-2 py-2"><CustomerCodeLink code={u.userID} /></td>
                       <td className="px-2 py-2 whitespace-nowrap">
                         {u.userRegistered ? String(u.userRegistered).slice(0, 10) : "—"}
                       </td>

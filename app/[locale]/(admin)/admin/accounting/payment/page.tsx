@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { exportAccPaymentAll } from "@/actions/admin/export/acc-payment";
 import {
   resolveBillingIdentity,
@@ -828,12 +829,7 @@ export default async function AdminAccountingPaymentPage({
                                             to /admin/users/<id>
                                             acc-payment.php L230 */}
                                         <td>
-                                          <Link
-                                            href={`/admin/users/${row.userid}`}
-                                            className="text-info"
-                                          >
-                                            {row.userid}
-                                          </Link>
+                                          <CustomerCodeLink code={row.userid} />
                                         </td>
                                         {/* 12 — ชื่อ-นามสกุล/ชื่อบริษัท
                                             (juristic → company name)

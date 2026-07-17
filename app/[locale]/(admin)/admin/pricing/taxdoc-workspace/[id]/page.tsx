@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { requireAdmin, getAdminRoles, hasRole } from "@/lib/auth/require-admin";
 import { adminGetCargoTaxdocJob } from "@/actions/admin/cargo-taxdoc-workspace";
 import { TaxdocStageActions } from "./taxdoc-stage-actions";
@@ -82,7 +83,7 @@ export default async function TaxdocJobDetailPage({
         <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · ใบกำกับ/ใบขน · งาน</p>
         <h1 className="mt-1 text-2xl font-bold">
           {sourceLabel}
-          {j.userid && <span className="ml-2 text-base font-normal text-muted">{j.userid}</span>}
+          {j.userid && <span className="ml-2"><CustomerCodeLink code={j.userid} className="text-base font-normal" /></span>}
         </h1>
         <p className="text-xs text-muted mt-1 flex flex-wrap items-center gap-2">
           <span>ตู้ <span className="font-mono">{j.cabinetNo ?? "—"}</span></span>

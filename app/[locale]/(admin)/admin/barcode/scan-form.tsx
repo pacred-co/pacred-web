@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { adminBarcodeScan, type BarcodeScanResult } from "@/actions/admin/barcode";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 
 // Extend Window for BarcodeDetector (Chrome/Android native API)
 declare global {
@@ -314,7 +315,7 @@ export function ScanForm({
               <span className="ml-2">{lastResult.msg}</span>
               {lastResult.detail?.customer_name && (
                 <div className="text-xs mt-0.5 opacity-75">
-                  {lastResult.detail.member_code && <span className="font-mono mr-2">{lastResult.detail.member_code}</span>}
+                  {lastResult.detail.member_code && <CustomerCodeLink code={lastResult.detail.member_code} className="mr-2" />}
                   {lastResult.detail.customer_name}
                 </div>
               )}
@@ -372,7 +373,7 @@ export function ScanForm({
                     <span className="font-mono">{entry.code}</span>
                     <span className={`ml-2 ${entry.ok ? "text-green-700" : "text-red-700"}`}>{entry.msg}</span>
                     {entry.detail?.customer_name && (
-                      <span className="ml-2 text-muted">{entry.detail.member_code} {entry.detail.customer_name}</span>
+                      <span className="ml-2 text-muted"><CustomerCodeLink code={entry.detail.member_code} /> {entry.detail.customer_name}</span>
                     )}
                   </div>
                   <span className="text-muted shrink-0">{entry.ts}</span>

@@ -45,8 +45,9 @@ export function PacredDialog({
 }: {
   dialogRef: RefObject<HTMLDialogElement | null>;
   title: string;
-  /** `md` = ~560px (default form modals) · `lg` = ~960px (multi-column edit) */
-  size?: "md" | "lg";
+  /** `md` = ~560px (default form modals) · `lg` = ~960px (multi-column edit) ·
+   * `xl` = ~1140px (document-style modals, e.g. the invoice/ใบแจ้งหนี้ pay modal) */
+  size?: "md" | "lg" | "xl";
   children: ReactNode;
   onClose?: () => void;
 }) {
@@ -55,7 +56,11 @@ export function PacredDialog({
   // or on ESC — the user resolves via the explicit ✕ / cancel / save buttons.
 
   const widthClass =
-    size === "lg" ? "w-[min(960px,95vw)]" : "w-[min(560px,95vw)]";
+    size === "xl"
+      ? "w-[min(1140px,96vw)]"
+      : size === "lg"
+        ? "w-[min(960px,95vw)]"
+        : "w-[min(560px,95vw)]";
 
   return (
     <dialog

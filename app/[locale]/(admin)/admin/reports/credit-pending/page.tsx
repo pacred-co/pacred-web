@@ -36,6 +36,7 @@ import { CsvButton } from "@/components/admin/csv-button";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { legacyForwarderStatusThai } from "@/lib/legacy-status-map";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 
@@ -323,7 +324,7 @@ export default async function CreditPendingReport({
                       </td>
                       <td className="px-4 py-3 text-xs">
                         <div>{r.customer.name || "—"}</div>
-                        <div className="font-mono text-[11px] text-muted">{r.customer.member_code}</div>
+                        <CustomerCodeLink code={r.customer.member_code} className="text-[11px]" />
                         {r.customer.phone && <div className="text-[11px] text-muted">☎ {r.customer.phone}</div>}
                       </td>
                       <td className="px-4 py-3 text-right font-mono font-semibold">{thb(r.outstanding_thb)}</td>

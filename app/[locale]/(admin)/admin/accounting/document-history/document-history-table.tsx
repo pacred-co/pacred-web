@@ -9,6 +9,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 
 export type DocRow = {
   kind: "receipt" | "bill" | "tax";
@@ -161,7 +162,7 @@ export function DocumentHistoryTable({ rows, from, to, capped = false, perTable 
                   <td className="px-3 py-2">
                     <div className="font-medium text-foreground">{r.customerName}</div>
                     <div className="flex items-center gap-1 text-[11px] text-muted">
-                      <span className="font-mono">{r.userid || "—"}</span>
+                      <CustomerCodeLink code={r.userid} />
                       <span className={`rounded border px-1 ${r.isJuristic ? "border-indigo-200 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-slate-50 text-slate-600"}`}>
                         {r.isJuristic ? "นิติ" : "บุคคล"}
                       </span>

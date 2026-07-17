@@ -24,6 +24,7 @@ import { Explain, GUIDE } from "@/components/ui/tooltip";
 import { BulkActionsToolbar } from "./bulk-actions-toolbar";
 // 2026-06-11 (Lane B · doc-choice visibility) — per-row tax-document badge.
 import { TaxDocBadge, JuristicWhtChip } from "@/components/admin/tax-doc-badge";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 // 2026-07-06 (ภูม · legacy fidelity) — reuse the shared admin SHIP_BY_LABEL SOT
 // (actions/admin/reports-profit-types = a NON-"use server" pure const module,
 // safe to import into this client component) so the TH-carrier label never drifts.
@@ -1067,7 +1068,7 @@ export function ForwardersTable({
                       <td className="px-2 py-2.5">
                         {/* §0h — primary identity (รหัสลูกค้า) sized up to text-sm so
                             the eye lands on "whose row" first; name + phone stay secondary. */}
-                        <div className="font-mono text-sm font-semibold text-foreground">{r.customer?.userid ?? "—"}</div>
+                        <div className="text-sm"><CustomerCodeLink code={r.customer?.userid} /></div>
                         <div className="truncate max-w-[140px]" title={r.customer?.name ?? ""}>
                           {r.customer?.name || "—"}
                         </div>
@@ -1546,7 +1547,7 @@ export function ForwardersTable({
                             <div className="mb-1.5 text-[11px] font-medium text-slate-600">
                               พัสดุในกลุ่ม <span className="font-mono">{groupBase}</span> ·{" "}
                               {aggMembers.length} เลข · ลูกค้า{" "}
-                              <span className="font-mono">{r.customer?.userid ?? "—"}</span>
+                              <CustomerCodeLink code={r.customer?.userid} className="text-[11px]" />
                             </div>
                             <table className="w-full max-w-4xl text-[11px]">
                               <thead>

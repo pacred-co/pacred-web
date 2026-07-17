@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
@@ -256,7 +257,7 @@ export default async function AdminFreightShipmentsListPage({
                       {r.profile?.company_name ?? `${r.profile?.first_name ?? ""} ${r.profile?.last_name ?? ""}`.trim() ?? "—"}
                     </p>
                     {r.profile?.member_code && (
-                      <p className="font-mono text-[11px] text-muted">{r.profile.member_code}</p>
+                      <p className="text-[11px]"><CustomerCodeLink code={r.profile.member_code} className="text-[11px]" /></p>
                     )}
                   </td>
                   <td className="px-3 py-2 text-xs">{FREIGHT_TRANSPORT_MODE_LABEL[r.transport_mode]}</td>

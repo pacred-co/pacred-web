@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { PageHeader } from "@/components/admin/page-header";
@@ -163,7 +164,7 @@ export default async function AdminShopPayoutsPage({
                       {new Date(r.created_at).toLocaleString("th-TH")}
                     </td>
                     <td className="px-4 py-3 text-xs">
-                      <div className="font-mono">{r.profile?.member_code ?? "—"}</div>
+                      <div><CustomerCodeLink code={r.profile?.member_code} /></div>
                       <div>
                         {r.profile?.first_name} {r.profile?.last_name}
                       </div>

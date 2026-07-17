@@ -26,6 +26,7 @@
 
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { PageHeader } from "@/components/admin/page-header";
@@ -293,7 +294,7 @@ export default async function AdminForwarderActionPage({ searchParams }: { searc
                         <td className="px-2 py-2 font-mono">{r.id as number}</td>
                         <td className="px-2 py-2">{r.hdate ? String(r.hdate).slice(0, 10) : "-"}</td>
                         <td className="px-2 py-2 font-mono">{(r.hno as string) || "-"}</td>
-                        <td className="px-2 py-2 font-mono">{(r.userid as string) || "-"}</td>
+                        <td className="px-2 py-2"><CustomerCodeLink code={(r.userid as string) || null} /></td>
                         <td className="px-2 py-2 max-w-[240px] truncate" title={(r.htitle as string) ?? ""}>
                           {(r.htitle as string) || "-"} {r.hcount ? `(${r.hcount as number})` : ""}
                         </td>

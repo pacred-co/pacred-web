@@ -21,6 +21,7 @@
  */
 
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
@@ -297,7 +298,7 @@ export default async function AdminWithdrawalsQueuePage({
                             : "—"}
                         </td>
                         <td className="px-3 py-3 text-xs">
-                          <div className="font-mono">{r.userid ?? "—"}</div>
+                          <div><CustomerCodeLink code={r.userid} /></div>
                           <div>{customerName}</div>
                           {u?.userTel ? <div className="text-muted">{u.userTel}</div> : null}
                         </td>

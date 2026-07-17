@@ -31,6 +31,7 @@ import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportServiceOrderNotesAll } from "@/actions/admin/export/service-order-notes";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 
 export const dynamic = "force-dynamic";
@@ -265,7 +266,7 @@ export default async function ServiceOrderNotesPage({
                         </td>
                         <td className="px-4 py-3 text-xs font-mono font-semibold">{r.hno}</td>
                         <td className="px-4 py-3 text-xs">
-                          <div className="font-mono font-semibold">{r.userid || "—"}</div>
+                          <CustomerCodeLink code={r.userid} />
                           <div className="text-muted">{customerName || "—"}</div>
                           <div className="text-[11px] text-muted">{user?.userTel}</div>
                         </td>

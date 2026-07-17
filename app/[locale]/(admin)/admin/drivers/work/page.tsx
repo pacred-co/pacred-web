@@ -53,6 +53,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { DriverItemActionButtons } from "./action-buttons";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 
 export const dynamic = "force-dynamic";
 
@@ -590,7 +591,7 @@ function Card({
         <div className="min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap">
             {pr && (
-              <span className="font-mono text-base font-bold text-primary-600">{pr}</span>
+              <CustomerCodeLink code={pr} className="text-base font-bold" />
             )}
             <span className="text-lg font-bold leading-tight">{customerName}</span>
           </div>

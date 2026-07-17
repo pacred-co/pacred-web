@@ -17,6 +17,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
@@ -241,7 +242,7 @@ export default async function RecentlyActiveCustomersPage({
                         {name}
                       </Link>
                       <div className="text-[11px] text-muted font-mono">
-                        {r.userID} · {isJuristic ? "นิติบุคคล" : "บุคคล"}
+                        <CustomerCodeLink code={r.userID} className="text-[11px]" /> · {isJuristic ? "นิติบุคคล" : "บุคคล"}
                       </div>
                     </td>
                     <td className="px-3 py-2 text-muted">{r.userTel ?? "—"}</td>

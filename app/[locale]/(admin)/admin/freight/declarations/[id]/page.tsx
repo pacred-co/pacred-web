@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import {
   CUSTOMS_DECLARATION_STATUS_LABEL,
@@ -291,7 +292,7 @@ export default async function AdminCustomsDeclarationDetailPage({
           {customer?.company_name
             ?? `${customer?.first_name ?? ""} ${customer?.last_name ?? ""}`.trim()
             ?? "—"}
-          {customer?.member_code && <span className="ml-2 font-mono text-[11px] text-muted">({customer.member_code})</span>}
+          {customer?.member_code && <span className="ml-2 text-[11px]">(<CustomerCodeLink code={customer.member_code} className="text-[11px]" />)</span>}
         </p>
         {customer?.email && <p className="text-muted">✉️ {customer.email}</p>}
         {customer?.phone && <p className="text-muted">📞 {customer.phone}</p>}

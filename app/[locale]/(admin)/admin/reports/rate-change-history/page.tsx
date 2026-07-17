@@ -44,6 +44,7 @@ import {
   type WarehouseId,
 } from "@/lib/admin/customer-rate-tables";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 
 export const dynamic = "force-dynamic";
 
@@ -408,7 +409,7 @@ export default async function RateChangeHistoryReport({
                           "—"
                         )}
                         {h.userid && (
-                          <span className="block font-mono text-[11px] text-muted">{h.userid}</span>
+                          <CustomerCodeLink code={h.userid} className="block text-[11px]" />
                         )}
                       </td>
                       <td className="px-4 py-3 text-xs whitespace-nowrap">{fmtDate(h.date)}</td>

@@ -69,7 +69,7 @@
  */
 
 import { notFound } from "next/navigation";
-import { User as UserIcon } from "lucide-react";
+import { User as UserIcon, Printer } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -535,6 +535,54 @@ export default async function AdminWalletDetail({
           ? `ไม่จำเป็นต้องมีสลิปสำหรับรายการประเภทนี้ (${typeLabel} — หักจากกระเป๋าโดยตรง)`
           : "ลูกค้ายังไม่ได้อัพโหลดสลิป";
 
+  // ── Issued receipt (owner 2026-07-16) ──────────────────────────────
+  //    A settled forwarder-slip mints a ใบเสร็จ (tb_receipt). The auto-issue
+  //    hook links it back to the FUNDING slip via tb_receipt.refwhid = this
+  //    tb_wallet_hs.id (lib/admin/auto-issue-receipt.ts). Surface its เลขที่ +
+  //    a print link + a jump to the receipt history — the legacy completed view.
+  //    Fallback: older receipts (pre-refwhid backfill) are reachable only via
+  //    tb_receipt_item.fid, so when refwhid finds nothing and reforder is a
+  //    forwarder id, resolve the receipt through the item table instead.
+  //    rstatus='2' (ยกเลิก) is excluded — a voided receipt is not "this receipt".
+  //    Fail-soft: any read error logs + leaves issuedReceipt null (never blocks
+  //    the page or the approve flow).
+  let issuedReceipt: { id: number; rid: string } | null = null;
+  if (!isPending) {
+    const { data: byWhid, error: rcptErr } = await admin
+      .from("tb_receipt")
+      .select("id,rid")
+      .eq("refwhid", row.id)
+      .neq("rstatus", "2")
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ id: number; rid: string }>();
+    if (rcptErr) console.error(`[tb_receipt by refwhid] failed`, { code: rcptErr.code, message: rcptErr.message });
+    if (byWhid) {
+      issuedReceipt = { id: byWhid.id, rid: byWhid.rid };
+    } else if (row.reforder && /^\d+$/.test(row.reforder)) {
+      const { data: items, error: itemErr } = await admin
+        .from("tb_receipt_item")
+        .select("rid")
+        .eq("fid", Number(row.reforder));
+      if (itemErr) console.error(`[tb_receipt_item by fid] failed`, { code: itemErr.code, message: itemErr.message });
+      const rids = [
+        ...new Set(((items ?? []) as Array<{ rid: string | null }>).map((i) => i.rid).filter((x): x is string => !!x)),
+      ];
+      if (rids.length > 0) {
+        const { data: byItem, error: byItemErr } = await admin
+          .from("tb_receipt")
+          .select("id,rid")
+          .in("rid", rids)
+          .neq("rstatus", "2")
+          .order("id", { ascending: false })
+          .limit(1)
+          .maybeSingle<{ id: number; rid: string }>();
+        if (byItemErr) console.error(`[tb_receipt by item rids] failed`, { code: byItemErr.code, message: byItemErr.message });
+        if (byItem) issuedReceipt = { id: byItem.id, rid: byItem.rid };
+      }
+    }
+  }
+
   // ────────────────────────────────────────────────────────────
   // RENDER
   // ────────────────────────────────────────────────────────────
@@ -810,6 +858,35 @@ export default async function AdminWalletDetail({
                     ยอดรวมทุกรายการ : {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                   </span>
                 </p>
+
+                {/* ใบเสร็จที่ออกแล้ว (owner 2026-07-16) — เลขที่ + พิมพ์ใบเสร็จรายการนี้
+                    + ไปยังประวัติใบเสร็จ. Shown once this settled row minted (or points
+                    to) a ใบเสร็จ (tb_receipt) — mirrors the legacy completed view. */}
+                {issuedReceipt && (
+                  <div className="mt-2 border-t border-border/60 pt-2 space-y-2">
+                    <p className="text-sm text-foreground">
+                      เลขที่ใบเสร็จชำระเงิน :{" "}
+                      <span className="font-mono font-bold text-primary-700 dark:text-primary-400">
+                        {issuedReceipt.rid}
+                      </span>
+                    </p>
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Link
+                        href={`/admin/accounting/forwarder-invoice/${issuedReceipt.id}`}
+                        target="_blank"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-emerald-700"
+                      >
+                        <Printer className="h-3.5 w-3.5" /> ใบเสร็จรายการนี้
+                      </Link>
+                      <Link
+                        href="/admin/accounting/receipts"
+                        className="inline-flex items-center gap-1.5 rounded-md bg-orange-500 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-orange-600"
+                      >
+                        ไปยังประวัติใบเสร็จ
+                      </Link>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -878,10 +955,15 @@ export default async function AdminWalletDetail({
               </>
             )}
 
-            {/* Completed → audit line */}
+            {/* Completed → audit badge (owner 2026-07-16 · red status pill like
+                legacy PCS · was a flat grey box). Centered · white on danger-red
+                (#FF4961 · same danger hue as the rejected status pill above). */}
             {!isPending && (
-              <div className="rounded-xl border border-border bg-surface-alt/40 px-3 py-2 text-xs text-muted">
-                ดำเนินรายการแล้ว โดย: <span className="font-mono text-foreground">{row.adminidupdate ?? "—"}</span>
+              <div className="flex justify-center pt-1">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FF4961] px-4 py-1.5 text-[13px] font-medium text-white">
+                  ดำเนินรายการแล้ว โดย :{" "}
+                  <span className="font-mono font-semibold">{row.adminidupdate ?? "—"}</span>
+                </span>
               </div>
             )}
 

@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { getEtaxBundle, getShopEtaxBundle } from "@/actions/admin/etax-export";
 import { buildEtaxXml } from "@/lib/etax/build-xml";
 import { EtaxRowDownloads } from "./etax-row-downloads";
@@ -212,7 +213,7 @@ export default async function AdminEtaxPage({
                       <td className="px-3 py-2 font-mono text-xs">{r.serial_no ?? `TI-${r.id}`}</td>
                       <td className="px-3 py-2 text-xs whitespace-nowrap">{fmtDate(r.issued_at)}</td>
                       <td className="px-3 py-2 text-xs">
-                        <div className="font-medium">{r.buyer_name || r.userid}</div>
+                        <div className="font-medium">{r.buyer_name || <CustomerCodeLink code={r.userid} />}</div>
                         <div className="text-[11px] text-muted font-mono">
                           {r.buyer_tax_id || "—"} · {r.is_juristic ? "นิติบุคคล" : "ทั่วไป"}
                         </div>
@@ -313,7 +314,7 @@ export default async function AdminEtaxPage({
                         <span className="block text-[11px] text-muted">{r.doc_mode === "customs" ? "ใบขน" : "ใบกำกับ"}</span>
                       </td>
                       <td className="px-3 py-2 text-xs">
-                        <div className="font-medium">{r.buyer_name || r.userid}</div>
+                        <div className="font-medium">{r.buyer_name || <CustomerCodeLink code={r.userid} />}</div>
                         <div className="text-[11px] text-muted font-mono">
                           {r.buyer_tax_id || "—"} · {r.is_juristic ? "นิติบุคคล" : "ทั่วไป"}
                         </div>

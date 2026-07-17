@@ -11,6 +11,7 @@ import { useMemo, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import { Explain } from "@/components/ui/tooltip";
 import { PaymentBoardSettle } from "./payment-board-settle";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import type { PaymentBoardRow } from "@/actions/admin/payment-board-types";
 
 const baht = (n: number) => `฿${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -165,7 +166,7 @@ export function PaymentBoardTable({
                   <td className="px-3 py-2">
                     <div className="font-semibold text-foreground">{r.customerName}</div>
                     <div className="flex items-center gap-1.5 text-[11px] text-muted">
-                      <span className="font-mono">{r.userid}</span>
+                      <CustomerCodeLink code={r.userid} />
                       <span className="font-mono text-primary-700">F{r.fid}</span>
                       {r.tracking !== "—" && <span className="font-mono">· {r.tracking}</span>}
                     </div>

@@ -44,6 +44,7 @@ import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { legacyForwarderStatusThai } from "@/lib/legacy-status-map";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 
 export const dynamic = "force-dynamic";
 
@@ -394,7 +395,7 @@ export default async function AdminDeliveryHistoryPage({
                     </Link>
                   </td>
                   <td className="px-3 py-3 text-xs">
-                    {r.userid && <div className="font-mono">{r.userid}</div>}
+                    {r.userid && <CustomerCodeLink code={r.userid} />}
                     {name && <div>{name}</div>}
                     {recipient && recipient !== name && (
                       <div className="text-muted">ผู้รับ: {recipient}</div>

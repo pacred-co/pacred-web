@@ -16,6 +16,7 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { PageHeader } from "@/components/admin/page-header";
 import { CargoDocPicker, type PickItem } from "../../forwarders/[fNo]/customs-doc/cargo-doc-picker";
 
@@ -104,7 +105,7 @@ export default async function ReportCntCustomsDocPage({
             <section key={f.id} className="rounded-2xl border border-border bg-white dark:bg-surface p-4 lg:p-5 space-y-3">
               <header className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-bold text-primary-700">F{f.id}</span>
-                <span className="text-xs text-muted">ลูกค้า {f.userid || "—"} · แทรคกิ้ง {f.ftrackingchn || "—"}</span>
+                <span className="text-xs text-muted">ลูกค้า <CustomerCodeLink code={f.userid} className="text-xs" /> · แทรคกิ้ง {f.ftrackingchn || "—"}</span>
                 <Link href={`/admin/forwarders/${f.id}`} className="ml-auto text-[11px] text-primary-500 hover:underline">เปิดฝากนำเข้า →</Link>
               </header>
               {existing && (

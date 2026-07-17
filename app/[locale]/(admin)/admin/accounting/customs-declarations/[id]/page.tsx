@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { AccountingMenubar } from "@/components/admin/accounting-menubar";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import {
   CUSTOMS_DECLARATION_STATUS_LABEL,
   CUSTOMS_DECLARATION_TYPE_LABEL,
@@ -255,7 +256,11 @@ export default async function AdminAccountingCustomsDeclarationDetailPage({
             {customer?.company_name
               ?? `${customer?.first_name ?? ""} ${customer?.last_name ?? ""}`.trim()
               ?? "—"}
-            {customer?.member_code && <span className="ml-2 font-mono text-[11px] text-muted">({customer.member_code})</span>}
+            {customer?.member_code && (
+              <span className="ml-2 text-[11px] text-muted">
+                (<CustomerCodeLink code={customer.member_code} className="text-[11px]" />)
+              </span>
+            )}
           </p>
           {customer?.email && <p className="text-muted">✉️ {customer.email}</p>}
           {customer?.phone && <p className="text-muted">📞 {customer.phone}</p>}

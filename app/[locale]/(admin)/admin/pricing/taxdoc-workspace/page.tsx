@@ -1,4 +1,5 @@
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import {
   adminListCargoTaxdocJobs,
@@ -168,7 +169,7 @@ export default async function TaxdocWorkspacePage() {
                           #{c.fid}
                         </Link>
                       </td>
-                      <td className="px-3 py-2 text-[11px]">{c.userid ?? "—"}</td>
+                      <td className="px-3 py-2 text-[11px]"><CustomerCodeLink code={c.userid} className="text-[11px]" /></td>
                       <td className="px-3 py-2 text-[11px] font-mono">{c.cabinetNo ?? "—"}</td>
                       <td className="px-3 py-2">
                         <span className={`rounded-full border px-2 py-0.5 text-[11px] ${DOC_MODE_CLS[c.docMode] ?? DOC_MODE_CLS.none}`}>
@@ -206,7 +207,7 @@ export default async function TaxdocWorkspacePage() {
           ) : (
             <span className="font-mono text-xs">{j.source === "forwarder" ? `#${j.fid}` : j.hno}</span>
           )}
-          {j.userid && <span className="ml-2 text-muted">{j.userid}</span>}
+          {j.userid && <span className="ml-2"><CustomerCodeLink code={j.userid} /></span>}
           <span className="ml-2 rounded bg-surface-alt px-1 py-0.5 text-[11px] text-muted">
             {j.source === "forwarder" ? "ฝากนำเข้า" : "ฝากสั่งซื้อ"}
           </span>

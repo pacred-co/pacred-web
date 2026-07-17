@@ -2,6 +2,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin, getAdminRoles, hasRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AccountingMenubar } from "@/components/admin/accounting-menubar";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 
 import {
   CUSTOMS_DECLARATION_STATUS_LABEL,
@@ -189,7 +190,7 @@ export default async function CargoDeclarationsPage() {
                           </td>
                           <td className="px-3 py-2 text-[11px]">
                             <span className="font-mono">#{d.cargo_forwarder_id}</span>
-                            {fwd?.userid && <span className="ml-2 text-muted">{fwd.userid}</span>}
+                            {fwd?.userid && <CustomerCodeLink code={fwd.userid} className="ml-2" />}
                           </td>
                           <td className="px-3 py-2 text-[11px] font-mono">{d.cargo_cabinet_no ?? "—"}</td>
                           <td className="px-3 py-2 text-right font-mono text-xs">{thb(d.total_declared_value_thb)}</td>
@@ -243,7 +244,7 @@ export default async function CargoDeclarationsPage() {
                             #{f.id}
                           </Link>
                         </td>
-                        <td className="px-3 py-2 text-[11px]">{f.userid ?? "—"}</td>
+                        <td className="px-3 py-2 text-[11px]"><CustomerCodeLink code={f.userid} className="text-[11px]" /></td>
                         <td className="px-3 py-2 text-[11px] font-mono">{f.fcabinetnumber?.trim() || "—"}</td>
                         <td className="px-3 py-2 text-[11px]">{TRANSPORT_LABEL[f.ftransporttype ?? ""] ?? "—"}</td>
                         <td className="px-3 py-2 text-[11px] text-muted">{fmtDate(f.fdatetothai ?? f.fdate)}</td>

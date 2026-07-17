@@ -51,19 +51,31 @@ export default async function BillingRunPrintPage({
   const { header, items } = res.data!;
 
   const rows: BillingRunPaperRow[] = items.map((it, idx) => ({
-    no:        idx + 1,
-    fid:       String(it.forwarder_id),
-    tracking:  it.forwarder?.ftrackingchn ?? "",
-    cabinet:   it.forwarder?.cabinet ?? "",
-    transport: it.forwarder?.transport ?? "",
-    rateBasis: it.forwarder?.rate_basis ?? "",
-    rate:      it.forwarder?.rate ?? 0,
-    famount:   it.forwarder?.famount ?? 0,
-    fweight:   it.forwarder?.fweight ?? 0,
-    fvolume:   it.forwarder?.fvolume ?? 0,
-    freight:   it.forwarder?.freight ?? 0,
-    amount:    it.amount_thb,
+    no:          idx + 1,
+    fid:         String(it.forwarder_id),
+    tracking:    it.forwarder?.ftrackingchn ?? "",
+    productType: it.forwarder?.product_type ?? "",
+    cabinet:     it.forwarder?.cabinet ?? "",
+    transport:   it.forwarder?.transport ?? "",
+    rateBasis:   it.forwarder?.rate_basis ?? "",
+    rate:        it.forwarder?.rate ?? 0,
+    famount:     it.forwarder?.famount ?? 0,
+    fweight:     it.forwarder?.fweight ?? 0,
+    fwidth:      it.forwarder?.fwidth ?? 0,
+    fheight:     it.forwarder?.fheight ?? 0,
+    flength:     it.forwarder?.flength ?? 0,
+    fvolume:     it.forwarder?.fvolume ?? 0,
+    freight:     it.forwarder?.freight ?? 0,
+    amount:      it.amount_thb,
   }));
+
+  // อ้างอิง — เลขออเดอร์ฝากนำเข้าที่บิลนี้ครอบ (owner 2026-07-18 · mirror ใบเสร็จ).
+  // ย่อเมื่อมีหลายรายการ ("#a, #b … (+N)") กันล้นกล่อง meta.
+  const orderNos = Array.from(new Set(items.map((it) => it.forwarder_id)));
+  const referenceOrder =
+    orderNos.length <= 6
+      ? orderNos.map((n) => `#${n}`).join(", ")
+      : `${orderNos.slice(0, 5).map((n) => `#${n}`).join(", ")} …(+${orderNos.length - 5})`;
 
   // Chunk the rows into pages of ROWS_PER_PAGE so a long bill lays out across
   // A4 pages (the summary renders only on the last page). The summary money on
@@ -97,6 +109,7 @@ export default async function BillingRunPrintPage({
 
       <BillingRunPaper
         docNo={header.doc_no}
+        referenceOrder={referenceOrder}
         issuerAddress={ADDRESSES.office.full}
         dateIssued={header.date_issued}
         dateDue={header.is_credit ? header.date_due : null}

@@ -14,6 +14,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { Pencil, Trash2, Plus, Loader2 } from "lucide-react";
 import { PacredDialog, DialogFooter, useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { adminSetUserComparison, adminRemoveUserComparison } from "@/actions/admin/users-pricing";
@@ -201,7 +202,7 @@ export function ComparisonTable({ rows, picks }: { rows: ComparisonRow[]; picks:
       {/* Edit value dialog */}
       <PacredDialog dialogRef={editRef} title={`แก้ไขค่าเทียบ — ${editTarget?.fullName ?? ""}`}>
         <form onSubmit={submitEdit}>
-          <p className="mb-2 text-xs text-muted">รหัสสมาชิก: <span className="font-mono">{editTarget?.userID}</span></p>
+          <p className="mb-2 text-xs text-muted">รหัสสมาชิก: <CustomerCodeLink code={editTarget?.userID} className="text-xs" /></p>
           <label className="block text-sm font-medium text-gray-800">ค่าเทียบที่ใช้คิดค่าขนส่ง</label>
           <input
             type="number"

@@ -29,6 +29,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { exportQaChnShopOver2dAll } from "@/actions/admin/export/qa-chn-shop-over-2d";
@@ -244,7 +245,7 @@ export default async function AdminQaChnShopOver2dPage({
                         )}
                       </td>
                       <td className="px-3 py-3 text-xs">
-                        <div className="font-mono">{r.userid ?? "—"}</div>
+                        <CustomerCodeLink code={r.userid} />
                         <div>{customerName}</div>
                         {u?.userTel ? <div className="text-muted">{u.userTel}</div> : null}
                       </td>

@@ -46,12 +46,18 @@ export type BillingRunPaperRow = {
   no:          number;
   fid:         string;
   tracking:    string;
+  /** ประเภทสินค้า — ทั่วไป/มอก./อย./พิเศษ (owner 2026-07-18). */
+  productType: string;
   cabinet:     string;
   transport:   string;
   rateBasis:   string;
   rate:        number;
   famount:     number;
   fweight:     number;
+  /** มิติกล่อง ก·ส·ย (ซม.) — owner 2026-07-18 · แสดงใต้คอลลัม ลัง. */
+  fwidth:      number;
+  fheight:     number;
+  flength:     number;
   fvolume:     number;
   /** ค่าขนส่งสินค้า (freight-only · ftotalprice) — the row Amount so Rate × Kg
    *  reconciles on the paper. The GROSS amount_thb is unchanged in storage. */
@@ -66,6 +72,9 @@ export type BillingRunPaperRow = {
  */
 export type BillingRunCommonProps = {
   docNo:         string;
+  /** อ้างอิง — เลขออเดอร์ฝากนำเข้าที่บิลนี้ครอบ (เช่น "#52066, #52064") ·
+   *  ว่าง → fallback เป็นเลขเอกสาร (mirror ใบเสร็จ referenceOrder). */
+  referenceOrder: string;
   issuerAddress: string;
   dateIssued:    string;
   /**
@@ -152,7 +161,11 @@ function BillingRunPage({
   const feeUpdate   = r2(p.sumUpdate);                      // ค่าอัปเดต
   const feeOther    = r2(p.sumOtherRows + p.other);         // ค่าอื่นๆ
   const feeDiscount = r2(p.sumDiscountRows + p.discount);   // ส่วนลด
-  const feeMao      = r2(p.maoFee);                         // ค่าส่งเหมาๆ (SERVICE)
+  const feeMao      = r2(p.maoFee);                         // เหมาๆ PRF (own-fleet flat)
+  // owner 2026-07-18: "เหมาๆ คือ ค่าขนส่งไทย · ไม่เขียนว่าเหมาๆ" — รวมค่าขนส่งใน
+  // ไทย (external carrier) + เหมาๆ PRF เป็นบรรทัดเดียว "ค่าขนส่งไทย" (ลูกค้าไม่เห็นคำ
+  // "เหมาๆ"). ยอดรวม/feeFreight ไม่ขยับ — แค่จับ 2 ก้อนแสดงรวมกัน (display-only).
+  const feeThaiShip = r2(feeThai + feeMao);                 // ค่าขนส่งไทย (รวม เหมาๆ)
   const feeFreight  = r2(
     r2(p.total) - feeMao - (feeThai + feeChn + feeCrate + feeUpdate + feeOther - feeDiscount),
   );
@@ -223,6 +236,9 @@ function BillingRunPage({
               <MetaLine k="วันที่ออก :" v={p.dateIssued} />
               {/* เครดิตเท่านั้น — เงินสด (dateDue ว่าง) เอาหัวข้อออกทั้งบรรทัด (owner 2026-07-17) */}
               {hasDueDate && <MetaLine k="ครบกำหนดชำระ :" v={p.dateDue as string} strong />}
+              {/* อ้างอิง — เลขออเดอร์ฝากนำเข้าที่บิลนี้ครอบ (owner 2026-07-18 ·
+                  mirror ใบเสร็จ · fallback = เลขเอกสาร ไม่ให้ว่าง). */}
+              <MetaLine k="อ้างอิง :" v={p.referenceOrder || p.docNo} />
               {/* หน้า X/N — only when the bill spans >1 page (mirrors the ใบเสร็จ
                   meta-box). Lives here so it appears on EVERY page. */}
               {pageCount > 1 && <MetaLine k="หน้า :" v={`${pageNumber}/${pageCount}`} />}
@@ -244,22 +260,24 @@ function BillingRunPage({
             <thead>
               <tr>
                 <Th w="4%"  th="ลำดับ"   en="No." left />
-                <Th w="8%"  th="ออเดอร์"  en="Order" left />
-                <Th w="17%" th="รหัสพัสดุ" en="Tracking" left />
-                <Th w="13%" th="เลขตู้"   en="Cabinet" left />
+                <Th w="7%"  th="ออเดอร์"  en="Order" left />
+                <Th w="15%" th="รหัสพัสดุ" en="Tracking" left />
+                <Th w="7%"  th="ประเภท"   en="Type" center />
+                <Th w="11%" th="เลขตู้"   en="Cabinet" left />
                 <Th w="6%"  th="ขนส่ง"    en="Ship" center />
                 <Th w="5%"  th="ลัง"      en="Box" right />
-                <Th w="8%"  th="น้ำหนัก"  en="Kg" right />
-                <Th w="9%"  th="ปริมาตร"  en="CBM" right />
-                <Th w="7%"  th="คิดตาม"   en="Basis" center />
-                <Th w="9%"  th="เรท"      en="Rate ฿" right />
-                <Th w="14%" th="ค่าขนส่ง" en="Amount" right />
+                <Th w="6%"  th="กว้าง"    en="W·cm" right />
+                <Th w="6%"  th="สูง"      en="H·cm" right />
+                <Th w="6%"  th="ยาว"      en="L·cm" right />
+                <Th w="8%"  th="ปริมาตร"  en="CBM" right />
+                <Th w="6%"  th="คิดตาม"   en="Basis" center />
+                <Th w="13%" th="ค่าขนส่ง" en="Amount" right />
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={11} style={{ padding: "8px 4px", textAlign: "center", fontSize: "10px", color: "#6b7280", background: "#fff" }}>
+                  <td colSpan={13} style={{ padding: "8px 4px", textAlign: "center", fontSize: "10px", color: "#6b7280", background: "#fff" }}>
                     ไม่พบรายการ
                   </td>
                 </tr>
@@ -269,13 +287,15 @@ function BillingRunPage({
                     <td style={tdC}>{row.no}</td>
                     <td style={tdMonoC}>#{row.fid}</td>
                     <td style={tdMono}>{row.tracking}</td>
+                    <td style={{ ...tdC, fontSize: "8px", color: "#374151" }}>{row.productType || "—"}</td>
                     <td style={{ ...tdMono, color: "#374151" }}>{row.cabinet || "—"}</td>
                     <td style={{ ...tdMonoC, fontWeight: "bold", color: row.transport === "SEA" ? "#1d4ed8" : "#b45309" }}>{row.transport || "—"}</td>
                     <td style={tdNum}>{fmt0(row.famount)}</td>
-                    <td style={tdNum}>{fmt2(row.fweight)}</td>
+                    <td style={tdNum}>{fmtDim(row.fwidth)}</td>
+                    <td style={tdNum}>{fmtDim(row.fheight)}</td>
+                    <td style={tdNum}>{fmtDim(row.flength)}</td>
                     <td style={tdNum}>{fmt5(row.fvolume)}</td>
                     <td style={{ ...tdC, fontSize: "8px", color: "#374151" }}>{row.rateBasis || "—"}</td>
-                    <td style={tdNum}>{row.rate > 0 ? fmt2(row.rate) : "—"}</td>
                     {/* Amount = ค่าขนส่งสินค้า (freight-only) so Rate × Kg reconciles;
                         the non-freight fees are itemized in the สรุป below. */}
                     <td style={tdNum}>{fmt2(row.freight)}</td>
@@ -306,14 +326,14 @@ function BillingRunPage({
                 <DocSectionLabel section="summary" />
                 <div style={{ flex: 1 }}>
                   <SumLine k="ค่าขนส่งสินค้า" v={`${fmt2(feeFreight)} บาท`} />
-                  {/* ค่าขนส่งในไทย (LOGISTICS) — distinct from ค่าส่งเหมาๆ (SERVICE promo). */}
-                  {feeThai > 0 && <SumLine k="+ ค่าขนส่งในไทย" v={`${fmt2(feeThai)} บาท`} />}
+                  {/* ค่าขนส่งไทย = external carrier + เหมาๆ PRF รวมกัน (owner 2026-07-18 ·
+                      ลูกค้าไม่เห็นคำ "เหมาๆ" · เหมาๆ = ค่าขนส่งไทย). */}
+                  {feeThaiShip > 0 && <SumLine k="+ ค่าขนส่งไทย" v={`${fmt2(feeThaiShip)} บาท`} />}
                   {feeChn > 0 && <SumLine k="+ ค่าขนส่งจีน+" v={`${fmt2(feeChn)} บาท`} />}
                   {feeCrate > 0 && <SumLine k="+ ค่าตีลัง" v={`${fmt2(feeCrate)} บาท`} />}
                   {feeUpdate > 0 && <SumLine k="+ ค่าอัปเดต" v={`${fmt2(feeUpdate)} บาท`} />}
                   {feeOther > 0 && <SumLine k="+ ค่าอื่นๆ" v={`${fmt2(feeOther)} บาท`} />}
                   {feeDiscount > 0 && <SumLine k="− ส่วนลด" v={`${fmt2(feeDiscount)} บาท`} red />}
-                  {feeMao > 0 && <SumLine k="+ ค่าส่งเหมาๆ (PRF)" v={`${fmt2(feeMao)} บาท`} />}
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderTop: "0.5px solid #e5e7eb", paddingTop: "2px", marginTop: "2px" }}>
                     <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>ยอดชำระสุทธิ</p>
                     <p style={{ margin: 0, fontSize: "10px", color: "#111827", maxWidth: "55mm", textAlign: "right" }}>
@@ -430,6 +450,9 @@ const tdMono   = { padding: "3px 3px", fontSize: "8px", wordBreak: "break-all" a
 const tdMonoC  = { ...tdMono, textAlign: "center" as const };
 const tdNum    = { padding: "3px 3px", fontSize: "9px", textAlign: "right" as const, fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" };
 
+/** ก·ส·ย (ซม.) — up to 2 decimals, "—" when unmeasured (0/empty). */
+const fmtDim = (n: number) => (n > 0 ? n.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—");
+
 function Th({ w, th, en, left, center, right }: { w: string; th: string; en: string; left?: boolean; center?: boolean; right?: boolean }) {
   const align = left ? "left" : center ? "center" : right ? "right" : "left";
   return (
@@ -463,9 +486,9 @@ function IconLine({ icon, v }: { icon: string; v: string }) {
 
 function MetaLine({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 8px", marginBottom: "2px" }}>
-      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280" }}>{k}</p>
-      <p style={{ margin: 0, fontSize: "10px", fontWeight: strong ? "bold" : "normal", color: strong ? "#b45309" : "#111827" }}>{v}</p>
+    <div style={{ display: "flex", justifyContent: "space-between", gap: "4mm", padding: "3px 8px", marginBottom: "2px" }}>
+      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#6b7280", whiteSpace: "nowrap" }}>{k}</p>
+      <p style={{ margin: 0, fontSize: "10px", fontWeight: strong ? "bold" : "normal", color: strong ? "#b45309" : "#111827", maxWidth: "34mm", textAlign: "right", wordBreak: "break-word" }}>{v}</p>
     </div>
   );
 }

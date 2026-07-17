@@ -21,6 +21,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import { loadAssignedFids } from "@/lib/admin/pending-dispatch";
 import { getMomoRecentArrivals } from "@/lib/admin/momo-recent-arrivals";
@@ -218,7 +219,7 @@ export default async function LogisticsBoardPage() {
                 return (
                   <li key={r.id} className="flex items-center justify-between gap-2 rounded bg-white/60 px-2 py-1">
                     <span className="font-mono truncate">{modeIcon} {r.ftrackingchn || `#${r.id}`}</span>
-                    <span className="whitespace-nowrap">{r.userid ?? "-"}{isJuristic(r) ? " · นิติ" : ""}</span>
+                    <span className="whitespace-nowrap"><CustomerCodeLink code={r.userid} />{isJuristic(r) ? " · นิติ" : ""}</span>
                   </li>
                 );
               })}

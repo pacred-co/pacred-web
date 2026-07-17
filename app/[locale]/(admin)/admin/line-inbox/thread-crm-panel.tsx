@@ -12,6 +12,7 @@
  */
 
 import { useState, useRef } from "react";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import {
   assignLineAgent,
   linkLineContactToMember,
@@ -151,7 +152,7 @@ export function ThreadCrmPanel({
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-foreground">
                   {snapshot.name || "ลูกค้า"}{" "}
-                  <span className="font-mono text-xs text-primary-600">{snapshot.memberCode}</span>
+                  <CustomerCodeLink code={snapshot.memberCode} className="text-xs" />
                 </p>
                 {snapshot.tel && <p className="text-xs text-muted">{snapshot.tel}</p>}
               </div>

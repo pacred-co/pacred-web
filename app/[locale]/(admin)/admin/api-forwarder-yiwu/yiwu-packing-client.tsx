@@ -9,6 +9,7 @@
  */
 
 import { useRef, useState, useTransition } from "react";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import {
   previewYiwuPacking,
   applyYiwuPacking,
@@ -144,7 +145,7 @@ export function YiwuPackingClient() {
                 {shown.results.map((r, i) => (
                   <tr key={i} className="odd:bg-white even:bg-gray-50/60">
                     <td className="px-2.5 py-1.5 font-medium">{r.base}</td>
-                    <td className="px-2.5 py-1.5">{r.userid ?? "—"}</td>
+                    <td className="px-2.5 py-1.5"><CustomerCodeLink code={r.userid} /></td>
                     <td className="px-2.5 py-1.5 text-right tabular-nums">{r.boxes ?? "—"}</td>
                     <td className="px-2.5 py-1.5 text-right tabular-nums">{n2(r.weight)}</td>
                     <td className="px-2.5 py-1.5 text-right font-mono text-[12px] tabular-nums">{dims(r.width, r.length, r.height)}</td>

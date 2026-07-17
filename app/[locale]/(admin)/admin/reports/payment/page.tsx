@@ -35,6 +35,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton } from "@/components/admin/csv-button";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { parsePage } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 
@@ -391,7 +392,7 @@ export default async function AdminReportPaymentPage({
                         <Link href={`/admin/customers/${r.userid}`} className="text-primary-600 hover:underline">
                           {r.customer.name || "—"}
                         </Link>
-                        <div className="font-mono text-[11px] text-muted">{r.userid}</div>
+                        <CustomerCodeLink code={r.userid} className="text-[11px]" />
                         {r.customer.phone && <div className="text-[11px] text-muted">☎ {r.customer.phone}</div>}
                       </td>
                       <td className="px-4 py-3 text-xs text-muted max-w-xs truncate" title={r.paydetail ?? ""}>

@@ -65,6 +65,7 @@ import { MarkArrivedChinaButton } from "@/components/admin/mark-arrived-china-bu
 import { OrderInlineEdits, OrderRateInlineEdit } from "../inline-edits";
 import { CostInlineEdit } from "../cost-inline-edit";
 import { resolveBillingIdentity, type CorporateIdentityRow } from "@/lib/admin/customer-identity";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { canViewCost } from "@/lib/admin/money-visibility";
 import { autoExpireOverdueShopOrder } from "@/lib/service-order/auto-expire";
 import { OrderAddressPanel, type SavedAddress } from "../order-address-panel";
@@ -583,7 +584,7 @@ export default async function AdminServiceOrderEditPage({
               <Link href={`/admin/customers/${encodeURIComponent(r.userid)}`} className="text-primary-600 hover:underline">
                 {customerName}
               </Link>
-              <span className="text-muted/70"> · {r.userid}</span>
+              <span className="text-muted/70"> · <CustomerCodeLink code={r.userid} className="text-xs" /></span>
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -665,7 +666,7 @@ export default async function AdminServiceOrderEditPage({
               >
                 {customerName}
               </Link>
-              <p className="text-xs text-muted">รหัสสมาชิก: {r.userid}</p>
+              <p className="text-xs text-muted">รหัสสมาชิก: <CustomerCodeLink code={r.userid} className="text-xs" /></p>
               <div className="space-y-1 pt-1 text-sm">
                 {u?.userEmail && (
                   <KV label="อีเมล" value={<a href={`mailto:${u.userEmail}`} className="text-primary-600 hover:underline">{u.userEmail}</a>} />

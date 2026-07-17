@@ -14,6 +14,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { Pencil, Trash2, Plus, Loader2 } from "lucide-react";
 import { PacredDialog, useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { Explain } from "@/components/ui/tooltip";
@@ -229,7 +230,7 @@ export function CreditTable({ rows, picks }: { rows: CreditRow[]; picks: Custome
       {/* Edit credit dialog */}
       <PacredDialog dialogRef={editRef} title={`แก้ไขเครดิต — ${editTarget?.fullName ?? ""}`}>
         <form onSubmit={submitEdit} className="space-y-3">
-          <p className="text-xs text-muted">รหัสสมาชิก: <span className="font-mono">{editTarget?.userID}</span></p>
+          <p className="text-xs text-muted">รหัสสมาชิก: <CustomerCodeLink code={editTarget?.userID} className="text-xs" /></p>
           <div>
             <label className="block text-sm font-medium text-gray-800">วงเงินเครดิต (บาท)</label>
             <input type="number" min={0} step="0.01" value={editLimit} onChange={(e) => setEditLimit(e.target.value)} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-right text-sm" required />

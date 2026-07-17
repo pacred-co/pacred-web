@@ -17,6 +17,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { Clock } from "lucide-react";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
@@ -229,7 +230,7 @@ export default async function AdminCustomersPendingPage({
                     <td className="px-2 py-3 w-8">
                       <TbCustomerRowCheckbox userid={c.userID} />
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-muted">{c.userID}</td>
+                    <td className="px-4 py-3"><CustomerCodeLink code={c.userID} className="text-xs" /></td>
                     <td className="px-4 py-3 font-medium text-foreground max-w-[200px] truncate">
                       {personalName}
                     </td>

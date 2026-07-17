@@ -41,6 +41,7 @@ import { CsvButton } from "@/components/admin/csv-button";
 import { legacyForwarderStatusThai } from "@/lib/legacy-status-map";
 import { parsePage } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 
 export const dynamic = "force-dynamic";
 
@@ -340,7 +341,7 @@ export default async function RefundsReport({
                           {userDisplayName(r.user)}
                         </Link>
                       </p>
-                      <p className="font-mono text-[11px] text-muted">{r.userid}</p>
+                      <CustomerCodeLink code={r.userid} className="text-[11px]" />
                       {r.user?.userTel && <p className="text-[11px] text-muted">☎ {r.user.userTel}</p>}
                     </td>
                     <td className="px-4 py-3 text-right font-mono font-semibold text-green-700">{thb(r.amount)}</td>
