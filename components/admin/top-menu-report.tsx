@@ -31,6 +31,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { FREE_SHIPPING_ZIPS, FREE_SHIPPING_ZIPS_IN_CLAUSE } from "@/lib/forwarder/free-shipping-zips";
+import { REPORT_CNT_ADD_CHECK_MIN_FSTATUS } from "@/lib/admin/report-cnt-add-check-gate";
 
 type CountKey =
   | "waiting"
@@ -58,12 +59,32 @@ async function loadCounts(): Promise<Counts> {
   const from = () =>
     admin.from("tb_forwarder").select("id", { count: "exact", head: true });
 
-  // Wave 16 P0-2 — separate head-counter for the tb_check_forwarder queue
+  // Wave 16 P0-2 — separate counter for the tb_check_forwarder queue
   // (the bulk-bill page reads this table directly, not tb_forwarder).
+  //
+  // 2026-07-17 (owner · §0f "badge ต้องเป๊ะ") — was a raw COUNT of the whole
+  // queue, which on prod read 168 while only 8 rows were actually billable:
+  // the queue's only consumer (adminCallPriceUser) works on fstatus='4' ONLY,
+  // and rows at 5/6/7 (แจ้งชำระไปแล้ว) that slipped past the old gate stay in
+  // the table forever. A badge that counts un-actionable rows sends staff to
+  // an empty queue. Now: fetch the queued fIDs, then count only those whose
+  // tb_forwarder row is at the billable status — same set the page renders.
+  // 2 round-trips instead of 1 (the menu already fans out ~12 counts, and an
+  // honest number is worth the hop). Fails soft to 0 like every other count.
   const checkQueueCount = admin
     .from("tb_check_forwarder")
-    .select("id", { count: "exact", head: true })
-    .then((r) => r.count ?? 0);
+    .select("fID")
+    .limit(500)
+    .then(async (r) => {
+      const queuedFids = ((r.data ?? []) as Array<{ fID: number }>).map((x) => x.fID);
+      if (queuedFids.length === 0) return 0;
+      const billable = await admin
+        .from("tb_forwarder")
+        .select("id", { count: "exact", head: true })
+        .in("id", queuedFids)
+        .eq("fstatus", REPORT_CNT_ADD_CHECK_MIN_FSTATUS);
+      return billable.count ?? 0;
+    });
 
   // "ประวัติเข้าโกดังไทย" badge = countErrorF4 (legacy Warehouse.php L7-9) —
   // warehouse scans made TODAY (tb_forwarder_import2.fi2Date=today) that have

@@ -35,13 +35,24 @@ assertion-vs-ours diff is the real "ขัดแย้ง" detector.
 - `GZE…` (รถ)  → unit **4,700.00** ✓
 Matches `lib/forwarder/cabinet-transport.ts` (GZS/SEA=เรือ · GZE/EK=รถ).
 
-### lineTotal = unitPrice × CBM — **qty is a BOX COUNT, not a multiplier**
-Verified on 39/39 lines. e.g. `760234506976-2 … 0.4298 CBM · qty 14 · 4,700.00 → 2,020.06` = 4700×0.4298.
+### ⚠️ CORRECTED 2026-07-17 ดึก-2 — **MOMO เปลี่ยนความหมายคอลัมน์ CBM ระหว่างรุ่นใบ**
+> 🔴 **ที่เขียนไว้ตอนแรกว่า "lineTotal = unitPrice × CBM · qty ไม่ใช่ตัวคูณ · verified 39/39" — จริงเฉพาะใบ ก.ค.**
+> ผมสรุปเหมาเกินจากใบเดียว. หลักฐานหักล้าง = fixture ที่มีอยู่ที่ HEAD ก่อนแล้ว (ป้าย *Real INV-20260618-0003*):
+> `1779955936`: **0.1554 × 2,500 × 2 = 777.00** ✓ (ไม่ใช่ 388.50) · `1779955936-2`: **0.0441 × 2,500 × 40 = 4,410.00** ✓
 
-> 🔴 **Existing parser bug:** `lib/admin/momo-invoice-parser.ts` computes
-> `expected = round2(unitPrice * cbm * qty)` → `totalMismatch` fires on **every multi-box line**.
-> `lineTotal` itself is read from the text so the *ingested cost was right*; the flag is noise —
-> but it makes the new reconcile UI cry wolf. Fix: `expected = unitPrice * cbm`.
+| รุ่นใบ | ความหมาย CBM | สูตร |
+|---|---|---|
+| **INV-202606…** (มิ.ย.) | คิว **ต่อกล่อง** | `lineTotal = unitPrice × cbm × qty` |
+| **INV-202607…** (ก.ค.) | คิว **ทั้งบรรทัด** | `lineTotal = unitPrice × cbm` (qty = จำนวนกล่อง) |
+
+→ **parser เดิม (× qty) ไม่ได้ผิด — มันถูกสำหรับใบ มิ.ย.** และมาผิดเพราะ MOMO เปลี่ยนรูปแบบ.
+→ นี่คือ **ความไม่คงเส้นคงวาตัวเดียวกัน** กับที่เจอใน `momo_box_detail` (ดูข้อ 3 ท้ายไฟล์) = **ยืนยัน 2 ทางอิสระ**
+
+> 🔴 **ห้ามแก้ด้วย "OR ของ 2 สูตร"** (WIP รอบนี้ทำแบบนั้น = blocker A) — ถ้ายอมทั้งสองสูตร แล้ว MOMO
+> คิดเกินแบบ ×qty จริง (เช่น 4,700 × 0.4298 × 14 = **฿28,280.84** แทน ฿2,020.06 = **เกิน 14 เท่า**)
+> จะ **ไม่ถูก flag** และ `reconciles` ก็ผ่าน เพราะ Sub-total ของ MOMO สอดคล้องกับความผิดของตัวเอง
+> → **ธงตาบอดบนทุกบรรทัด qty>1** ซึ่งคือหัวใจของ "รายงาน ตรง/ขัดแย้ง ก่อนกดตัดจ่าย"
+> **ทางที่ถูก:** ตรวจ **รุ่นใบ** (prefix `INV-202606` vs `INV-202607` หรือ majority-fit ทั้งใบ) → **ใช้สูตรเดียว เข้มทั้งใบ**
 
 ---
 

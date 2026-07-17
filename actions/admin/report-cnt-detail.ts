@@ -49,6 +49,7 @@ const VALID_WH = new Set<string>(["1", "2", "3", "4", "5", "6", "7", "8"]);
 import {
   evaluateReportCntAddCheckStatus,
   REPORT_CNT_ADD_CHECK_MIN_FSTATUS,
+  REPORT_CNT_ADD_CHECK_MAX_FSTATUS,
   FSTATUS_LABEL,
 } from "@/lib/admin/report-cnt-add-check-gate";
 
@@ -409,7 +410,7 @@ export async function adminReportCntResetRate(fCabinetNumber: string): Promise<A
 //   INSERT INTO tb_check_forwarder (cfstatus, fid, date, adminid)
 //   for each selected fID. Skips IDs that already have a row.
 //
-// 2026-06-09 (ภูม-reported bug fix) — STATUS GATE.
+// 2026-06-09 (ภูม-reported bug fix) — STATUS GATE (ขอบล่าง).
 //   The legacy POST handler accepted any fID the admin checked, which
 //   meant a row whose physical goods were still in transit (fstatus '1'/
 //   '2'/'3' / not yet at the TH warehouse) could land in the QA queue
@@ -418,11 +419,20 @@ export async function adminReportCntResetRate(fCabinetNumber: string): Promise<A
 //   All-or-nothing (better UX than silent partial: the staff fix the
 //   selection, retry, and KNOW which rows were rejected).
 //
+// 2026-07-17 (owner) — STATUS GATE (ขอบบน) · แก้ที่ต้นตอ:
+//   owner: "บางสถานะมัน ส่งแล้ว หรือ รอส่ง มันจะยังไม่ส่งแจ้งชำระในรอตรวจสอบอีก
+//   ได้ไงหละครับ · มันควรจะเข้าไปแค่ รายการที่จะให้ลูกค้าชำระเงิน"
+//   คิวนี้มี consumer เดียว = adminCallPriceUser (แจ้งชำระ 4→5) ที่อ่าน
+//   `.eq("fstatus","4")` → แถว ≥5 เข้าคิวได้แต่แจ้งชำระไม่ได้ + ไม่เคยถูกลบ
+//   (ลบเฉพาะ successfulFids) → **ค้างถาวร**. prod 2026-07-17 คิว 168 แถว =
+//   fstatus 4 แค่ 8 · ค้าง 159 (5:27 · 6:112 · 7:20).
+//   → gate เป็น '4' เป๊ะ (min == max) = เซ็ตเดียวกับที่ consumer ทำงานด้วยได้.
+//   money-safe: '4' = แถวที่ยังไม่เก็บเงิน ยังผ่านเหมือนเดิม · ≥5 = แจ้งชำระไป
+//   แล้ว (การ flip 4→5 คือตัวแจ้งชำระเอง) → กันออกไม่ทำให้เก็บเงินขาด.
+//   เคลม/ของเสียหายของแถวที่ส่งแล้ว → ใช้ /admin/forwarders/exceptions (G7 · mig 0230).
+//
 //   NULL fstatus is treated as "<min" → rejected (defensive · a row
 //   with no status string predates the workflow and shouldn't be queued).
-//   fstatus '7' (ส่งแล้ว = delivered) is also accepted — a delivered
-//   row CAN go back into QA if there's a customer dispute / damage claim,
-//   the legacy let it (no upper bound), and we keep that behaviour.
 // ─────────────────────────────────────────────────────────────────────
 
 // INTERNAL — `"use server"` files may only export async functions.
@@ -478,21 +488,45 @@ export async function adminReportCntAddCheck(fIDs: number[]): Promise<AdminActio
     const gate = evaluateReportCntAddCheckStatus(fetched);
     if (!gate.ok) {
       await logAdminAction(adminId, "report_cnt.add_check_rejected", "tb_forwarder", gate.blockedFidorcos.join(","), {
-        reason:           "fstatus_too_low",
-        min_fstatus:      REPORT_CNT_ADD_CHECK_MIN_FSTATUS,
-        blocked_count:    gate.blockedCount,
-        blocked_sample:   gate.blockedFidorcos,
-        sample_statuses:  gate.sampleStatuses,
-        attempted_total:  parsed.data.fIDs.length,
+        reason:              gate.tooEarly.count > 0 && gate.alreadyBilled.count > 0
+          ? "fstatus_out_of_range"
+          : gate.tooEarly.count > 0
+            ? "fstatus_too_low"
+            : "fstatus_already_billed",
+        min_fstatus:         REPORT_CNT_ADD_CHECK_MIN_FSTATUS,
+        max_fstatus:         REPORT_CNT_ADD_CHECK_MAX_FSTATUS,
+        blocked_count:       gate.blockedCount,
+        blocked_sample:      gate.blockedFidorcos,
+        sample_statuses:     gate.sampleStatuses,
+        too_early_count:     gate.tooEarly.count,
+        already_billed_count: gate.alreadyBilled.count,
+        attempted_total:     parsed.data.fIDs.length,
       });
-      const moreSuffix = gate.blockedCount > gate.blockedFidorcos.length
-        ? ` (และอีก ${gate.blockedCount - gate.blockedFidorcos.length} รายการ)`
-        : "";
+
+      // ข้อความต้องบอก "บล็อกจริงเพราะอะไร" แยกตามเหตุผล — ยุบเป็นข้อความเดียว
+      // ไม่ได้ เพราะแถว fstatus=6 จะได้ "ยังไม่ถึงโกดังไทย" = โกหก → พนักงานไป
+      // รอ MOMO sync ที่ไม่มีวันมา ([[wrong-error-message-hides-real-block]]).
       const minLabel = FSTATUS_LABEL[REPORT_CNT_ADD_CHECK_MIN_FSTATUS] ?? REPORT_CNT_ADD_CHECK_MIN_FSTATUS;
-      return {
-        ok:    false,
-        error: `บางรายการยังไม่ถึงโกดังไทย — รอ MOMO sync update สถานะถึง "${minLabel}" ก่อน (รายการ ${gate.blockedFidorcos.join(", ")})${moreSuffix}`,
+      const part = (count: number, fidorcos: string[], text: string) => {
+        const more = count > fidorcos.length ? ` (และอีก ${count - fidorcos.length} รายการ)` : "";
+        return `${text} — ${count} รายการ (${fidorcos.join(", ")})${more}`;
       };
+      const parts: string[] = [];
+      if (gate.alreadyBilled.count > 0) {
+        parts.push(part(
+          gate.alreadyBilled.count,
+          gate.alreadyBilled.fidorcos,
+          `แจ้งชำระเงินไปแล้ว · ไม่ต้องเข้าคิวแจ้งชำระอีก (ถ้าลูกค้าเคลม/ของเสียหาย ให้ใช้ "คิวปัญหาพัสดุ" ที่ /admin/forwarders/exceptions)`,
+        ));
+      }
+      if (gate.tooEarly.count > 0) {
+        parts.push(part(
+          gate.tooEarly.count,
+          gate.tooEarly.fidorcos,
+          `ยังไม่ถึงโกดังไทย · รอ MOMO sync update สถานะถึง "${minLabel}" ก่อน`,
+        ));
+      }
+      return { ok: false, error: parts.join(" · ") };
     }
 
     // Skip rows that already exist (legacy doesn't guard — leaves a dup

@@ -7,6 +7,7 @@ import {
   codBaseTrackings,
   resolveAutoThShippingFill,
   resolveThShippingAutoPrice,
+  diagnoseThShippingBlock,
 } from "./domestic-shipping";
 import { MAO_FLAT_FEE, MAO_CARRIER_CODE } from "./mao-fee";
 import { getPrivateCarrierOptionsForProvince } from "@/lib/cart/ship-by-eligibility";
@@ -282,6 +283,68 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
     const base = resolveThShippingAutoPrice({ zip: "50000", kg: 13, sizeCm: 180 })!; // ตจว, no surcharge
     const remote = resolveThShippingAutoPrice({ zip: "20120", kg: 13, sizeCm: 180 })!; // remote-area zip (+50)
     assert.ok(remote > base, "remote-area zip adds surcharge");
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// diagnoseThShippingBlock — "ทำไมแจ้งชำระไม่ได้" (owner 2026-07-17 · ผิดพลาด 8)
+// ────────────────────────────────────────────────────────────────────────
+{
+  // แถวจริงบน prod ที่ทำให้ owner เห็น "ผิดพลาด 8" — ต้องบอกเหตุผลได้ถูกตัว.
+
+  // #52162 PR043 — เลือก Flash แล้ว · มี zip · แต่ dims 0x0x0 → ขาดแค่ "วัดขนาด"
+  {
+    const d = diagnoseThShippingBlock({ fshipby: "2", zip: "63110", weightKg: 16, sizeCm: 0 });
+    assert.deepEqual(d.missing, ["dimensions"], "#52162 → ยังไม่วัดขนาด");
+    assert.ok(d.reason.includes("วัดขนาด"), "reason พูดถึงการวัดขนาด");
+    assert.ok(d.nextAction.includes("โกดัง"), "nextAction ชี้ไปที่โกดัง");
+  }
+
+  // #52163 PR043 — Flash · ไม่มี zip · ไม่ได้วัด → ต้องรายงาน **ทั้งสองอย่าง**
+  // (ของเดิม short-circuit ที่ dims อย่างเดียว → CS ใส่ที่อยู่แล้วก็ยังตัน = ติดวนลูป)
+  {
+    const d = diagnoseThShippingBlock({ fshipby: "2", zip: "", weightKg: 8, sizeCm: 0 });
+    assert.deepEqual(d.missing, ["address", "dimensions"], "#52163 → ขาดทั้งที่อยู่ + ขนาด");
+    assert.ok(d.reason.includes("ที่อยู่") && d.reason.includes("ขนาด"), "reason แจงครบทั้ง 2");
+  }
+
+  // #52194/#52197 PR067 — ไม่เลือกขนส่ง · ไม่มี zip · ไม่ได้วัด (มีแต่น้ำหนักมั่ว)
+  {
+    const d = diagnoseThShippingBlock({ fshipby: "", zip: "", weightKg: 10741.5, sizeCm: 0 });
+    assert.deepEqual(d.missing, ["carrier", "address", "dimensions"], "PR067 → ขาด 3 อย่าง");
+  }
+
+  // วัดครบ + มีที่อยู่ + เลือกขนส่ง แต่เกินพิสัย Flash → ต้องกรอกค่าส่งเอง
+  {
+    const d = diagnoseThShippingBlock({ fshipby: "2", zip: "50000", weightKg: 104, sizeCm: 200 });
+    assert.deepEqual(d.missing, ["over_limit"], "เกิน 50 กก. → over_limit");
+    assert.ok(d.nextAction.includes("กรอกค่าส่ง"), "บอกให้กรอกเอง");
+  }
+
+  // PRE Express — ระบบคิดให้ไม่ได้ ไม่ว่าที่อยู่/ขนาดจะครบหรือไม่
+  {
+    const d = diagnoseThShippingBlock({ fshipby: "PCSE", zip: "", weightKg: 0, sizeCm: 0 });
+    assert.deepEqual(d.missing, ["manual_carrier"], "PCSE → manual เสมอ");
+  }
+
+  // ไม่ชั่งน้ำหนัก (วัดขนาดแล้ว)
+  {
+    const d = diagnoseThShippingBlock({ fshipby: "2", zip: "50000", weightKg: 0, sizeCm: 180 });
+    assert.deepEqual(d.missing, ["weight"], "ขาดน้ำหนักอย่างเดียว");
+  }
+
+  // ทุกเคสต้องมี reason + nextAction ที่ไม่ว่าง — error ต้องพูดความจริงเสมอ
+  // ([[wrong-error-message-hides-real-block]])
+  for (const args of [
+    { fshipby: "2", zip: "63110", weightKg: 16, sizeCm: 0 },
+    { fshipby: "", zip: "", weightKg: 0, sizeCm: 0 },
+    { fshipby: "PCSE", zip: "10120", weightKg: 5, sizeCm: 60 },
+    { fshipby: "24", zip: "50000", weightKg: 104, sizeCm: 200 },
+  ]) {
+    const d = diagnoseThShippingBlock(args);
+    assert.ok(d.missing.length > 0, "ต้องระบุอย่างน้อย 1 สาเหตุเสมอ");
+    assert.ok(d.reason.trim().length > 0, "reason ต้องไม่ว่าง");
+    assert.ok(d.nextAction.trim().length > 0, "nextAction ต้องไม่ว่าง");
   }
 }
 

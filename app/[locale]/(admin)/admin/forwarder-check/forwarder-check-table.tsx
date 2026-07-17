@@ -37,6 +37,7 @@ import { ArrowUpDown } from "lucide-react";
 import {
   adminCallPriceUser,
   adminRemoveFromCheckQueue,
+  type BillFailure,
 } from "@/actions/admin/forwarder-check";
 import { confirm } from "@/components/ui/confirm";
 import { SelectedItemsConfirmDialog } from "@/components/admin/selected-items-confirm-dialog";
@@ -240,6 +241,10 @@ export function ForwarderCheckTable({
     | { kind: "err"; text: string }
     | null
   >(null);
+  // owner 2026-07-17 — the per-row reasons behind "ผิดพลาด N". The action always
+  // carried them; the UI used to throw them away, so staff saw a bare count and
+  // had no idea what to fix ([[wrong-error-message-hides-real-block]]).
+  const [failures, setFailures] = useState<BillFailure[]>([]);
   // Lane C 2026-06-02 — sortable column headers (ภูม flag #3). Default
   // sort preserves the server's order until staff clicks a header.
   const [sortKey, setSortKey] = useState<FwckSortKey | null>(null);
@@ -305,6 +310,7 @@ export function ForwarderCheckTable({
 
   function runBill() {
     setResultBanner(null);
+    setFailures([]);
     const fids = Array.from(selected);
     if (fids.length === 0) return;
     startTransition(async () => {
@@ -312,10 +318,12 @@ export function ForwarderCheckTable({
       setConfirmingBill(false);
       if (res.ok && res.data) {
         const d = res.data;
+        setFailures(d.failures ?? []);
         const parts: string[] = [
           `✅ แจ้งชำระเงินสำเร็จ ${d.processed} รายการ`,
         ];
-        if (d.failed > 0) parts.push(`· ผิดพลาด ${d.failed} รายการ`);
+        // The count alone is meaningless — the reasons render in the panel below.
+        if (d.failed > 0) parts.push(`· แจ้งไม่ได้ ${d.failed} รายการ (ดูเหตุผลด้านล่าง)`);
 
         // Channel breakdown — show only channels that actually moved data so
         // the banner stays compact. SMS · LINE · email all surface side-by-side
@@ -333,8 +341,10 @@ export function ForwarderCheckTable({
         if (d.no_profile > 0)   failNotes.push(`ไม่มีโปรไฟล์ ${d.no_profile}`);
         if (failNotes.length > 0) parts.push(`(ส่งไม่สำเร็จ: ${failNotes.join(" / ")} — เช็คใน Sentry)`);
 
-        setResultBanner({ kind: "ok", text: parts.join(" ") });
-        setSelected(new Set());
+        // 0 สำเร็จ = ไม่ใช่ผลลัพธ์ที่ดี → อย่าโชว์แถบเขียว (เดิม "สำเร็จ 0" ขึ้นเขียว = หลอกตา).
+        setResultBanner({ kind: d.processed > 0 ? "ok" : "err", text: parts.join(" ") });
+        // ไม่มีอะไรสำเร็จ → คงรายการที่ติ๊กไว้ ให้แก้แล้วกดซ้ำได้เลย ไม่ต้องติ๊กใหม่.
+        if (d.processed > 0) setSelected(new Set());
         router.refresh();
       } else if (!res.ok) {
         setResultBanner({ kind: "err", text: res.error });
@@ -409,6 +419,67 @@ export function ForwarderCheckTable({
           }`}
         >
           {resultBanner.text}
+        </div>
+      )}
+
+      {/* owner 2026-07-17 — "แจ้งชำระเงินสำเร็จ 0 · ผิดพลาด 8" บอกแค่ตัวเลข พนักงานไม่รู้ว่าติดอะไร
+          → แจงรายตัว: ติดอะไร · ต้องทำอะไรต่อ · กดเข้าไปแก้ได้เลย (§0g self-explaining row). */}
+      {failures.length > 0 && (
+        <div className="rounded-2xl border border-red-200 bg-red-50/60 overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-red-200 bg-red-100/60">
+            <p className="text-sm font-semibold text-red-800">
+              🚫 แจ้งชำระไม่ได้ {failures.length} รายการ — ต้องแก้ก่อน
+            </p>
+            <button
+              type="button"
+              onClick={() => setFailures([])}
+              className="text-[11px] text-red-700 hover:underline shrink-0"
+            >
+              ปิด
+            </button>
+          </div>
+          <ul className="divide-y divide-red-200/70">
+            {failures.map((f) => {
+              const row = rows.find((r) => r.id === f.fid);
+              return (
+                <li key={f.fid} className="px-3 py-2.5 text-[11px] leading-relaxed">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <Link
+                      href={`/admin/forwarders/${f.fid}`}
+                      className="font-mono text-xs font-semibold text-primary-700 hover:underline"
+                    >
+                      #{f.fid}
+                    </Link>
+                    {row && (
+                      <>
+                        <span className="font-semibold text-foreground">
+                          {row.userid} · {row.customer_name || "—"}
+                        </span>
+                        {row.tracking_chn && (
+                          <span className="font-mono text-muted">{row.tracking_chn}</span>
+                        )}
+                        {row.cabinet_number && (
+                          <span className="font-mono text-muted">ตู้ {row.cabinet_number}</span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <p className="mt-1 text-red-800">
+                    <span className="font-semibold">ติดอะไร:</span> {f.reason}
+                  </p>
+                  <p className="mt-0.5 text-emerald-900">
+                    <span className="font-semibold">👉 ต้องทำอะไรต่อ:</span> {f.nextAction}
+                  </p>
+                  <Link
+                    href={`/admin/forwarders/${f.fid}`}
+                    className="mt-1 inline-block rounded-md border border-red-300 bg-white px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50"
+                  >
+                    เปิดรายการ #{f.fid} ไปแก้
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 
