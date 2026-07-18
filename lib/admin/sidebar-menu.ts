@@ -537,36 +537,17 @@ const blockApiForwarderUpdate: MenuItem = {
     { labelKey: "apiForwarderUpdate.yiwu", href: "/admin/api-forwarder-yiwu", icon: "FileImage" },
     // TTW/อี้อู packing-list staging → CS ใส่ PR (mig 0262 · ttw_packing_line · owner 2026-07-18).
     { labelKey: "apiForwarderUpdate.ttw",  href: "/admin/api-forwarder-ttw",  icon: "PackagePlus" },
-    { labelKey: "apiForwarderUpdate.cn",   href: "/admin/api-forwarder-cn",   icon: "Truck" },
-    // 2026-06-14 (W6 · carrier-fidelity) — port the 3 remaining legacy
-    // carrier API pages: JMF (read-only history viewer over tb_forwarder_jmf_tmp) ·
-    // TTP (read-only · live cargothai.tech pull, no local table) · GOGO (owner
-    // confirmed DECOMMISSIONED "ไม่ได้ใช้ละ ใช้ momo" → retire banner).
-    { labelKey: "apiForwarderUpdate.jmf",  href: "/admin/api-forwarder-jmf",  icon: "Truck" },
-    { labelKey: "apiForwarderUpdate.ttp",  href: "/admin/api-forwarder-ttp",  icon: "Truck" },
-    { labelKey: "apiForwarderUpdate.gogo", href: "/admin/api-forwarder-gogo", icon: "Ban" },
-    // 2026-05-25 (Wave 18-A · orphan wiring) — surface MOMO LCL sack tracking
-    // (Gap #6) and CargoThai PO sync (Gap #4) under the legacy "อัปเดตฝากนำเข้า"
-    // parent. Both pages existed since dave-pacred merge but had no sidebar
-    // entry — staff could only reach them by URL typing. i18n keys
-    // `forwarder.momoLclSack` + `forwarder.cargothaiSync` already live in both
-    // messages files; we reference them here.
+    // owner 2026-07-18 "พาร์ทเนอร์ใช้แค่ MOMO กับ TTW · เจ้าอื่นเอาออกให้หมด เกะกะรก" —
+    // retired-partner API pages removed from the sidebar (CargoCenter/JMF/TTP/GOGO/CargoThai).
+    // The route files stay (reachable by URL for old-shipment history if ever needed).
+    // MOMO LCL sack tracking = a MOMO sub-page → kept.
     { labelKey: "forwarder.momoLclSack",   href: "/admin/momo-lcl",  icon: "Barcode" },
-    { labelKey: "forwarder.cargothaiSync", href: "/admin/cargothai", icon: "RefreshCw" },
     // 2026-06-29 (owner "เอาข้อมูล wechat เข้า database") — searchable archive of
     // the decrypted China-ops coordination chats (MOMO/PCS/AXELRA/HUAHAI/柏盛泰/
     // Yiwu/แลกหยวน/退税/per-container). Read-only · mig 0228 wechat_ops_message.
     { labelKey: "apiForwarderUpdate.wechatOps", href: "/admin/wechat-ops", icon: "MessageCircle" },
-    {
-      labelKey: "apiSheets.adjustGroup",
-      icon: "SlidersHorizontal",
-      children: [
-        { labelKey: "apiSheets.ctt",  href: "/admin/api-sheets-ctt",  icon: "Package" },
-        { labelKey: "apiSheets.sang", href: "/admin/api-sheets-sang", icon: "Package" },
-        { labelKey: "apiSheets.mk",   href: "/admin/api-sheets-mk",   icon: "Package" },
-        { labelKey: "apiSheets.mx",   href: "/admin/api-sheets-mx",   icon: "Package" },
-      ],
-    },
+    // owner 2026-07-18 — the "ปรับชีต" group (CTT/แสง/MK/MX sheet-adjusters) = retired
+    // partners → removed from the sidebar (routes stay for history if ever needed).
   ],
 };
 
