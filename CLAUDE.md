@@ -3,6 +3,22 @@
 
 ---
 
+# 📦 2026-07-18 (เดฟ · resume) — integrate ภูม/ปอน → main + อี้อู/TTW warehouse (8 packing lists staged · report-cnt MOMO/TTW + POD ต้นทาง · CS ใส่ PR) → main = dave = InwPond · read FIRST
+
+> **🏁 STATE. main = dave-pacred = InwPond007 = `bfdf6460`** (Vercel prod). **Poom-pacred 1-ahead (ภูม `7e081f57` bulk-search — integrate next round · the chase).** gate ทุก commit: **tsc 0 · build 0 · i18n 0** + **adversarial money-review (2-lens+verify): money-isolation CLEAN · 1 HIGH UX bug จับได้+fixed**. **mig 0262 ttw_packing_line applied prod+dev · NEXT FREE = 0263.** 🔑 prod pw chat-only `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ`. ⚠️ admin surfaces NOT authed-render (standing §0c — no test admin login).
+>
+> **✅ integrate น้อง → main (`c906f75a`):** ภูม (Poom-pacred) warehouse handheld home `/admin/warehouse/home` (fPallet = client cookie · dispatch-home read-only) · ปอน (InwPond007) ใบเสนอราคา data-driven packages (business_config `pricing.quote_packages` · gate super/accounting · "ไม่กระทบบิลจริง"). ทั้งคู่ money-safe · no migration.
+>
+> **✅ อี้อู/TTW warehouse (owner ส่ง 8 xlsx แพคกิ้งลิสต์อี้อู · 3 เฟส · [[ttw-yiwu-warehouse-2026-07-18]]):**
+> - **🔑 TWO axes (STORED cols · NOT derived):** **โกดัง = freight OPERATOR** `fwarehousename` ("8"=MOMO/กวางโจว · **"9"=TTW**/อี้อู · relabeled "9" อี้อู→TTW ครบ 4 maps: report-cnt list+detail · billing-run · container-bulletin) · **POD ต้นทาง = origin CITY** `fwarehousechina` ("1"=กวางโจว · "2"=อี้อู · คอลัมน์ใหม่บน report-cnt LIST ผ่าน podByCab supplementary query · ไม่แตะ RPC).
+> - **cabinet-transport YW** — YWS=เรือ/YWE=รถ/YWA=แอร์ (owner "แค่ GZ→YW"). ⚠️ **ตู้ TTW ยุคแรกใช้ GZ+"-NT" suffix** (`GZS260614-1T` = ตู้ที่1 TTW ≠ MOMO `GZS260614-1` no-T · ทั้งคู่มีใน prod = distinct) → "-\d+T$" = TTW marker สะอาด (ไม่มีตู้เดิม end digit+T).
+> - **ingest** `scripts/ingest-ttw-packing-2026-07-18.ts` → **mig 0262 `ttw_packing_line`** STAGING (§0e isolation · no FK money) · parse ผ่าน `lib/admin/yiwu-packing-xlsx-parser` (มีอยู่แล้ว · Σagg==footer เป๊ะทุกไฟล์ · **container จาก FILENAME** ไม่ใช่เซลล์). **447 tracking/8 ตู้ applied prod** (idempotent · dry-run+backup) · 9 auto-PR จากมาร์ค PR### = ลูกค้าจริงทั้งหมด (PR032=ตุ๋ยสโตร์…PR572=Joyce) · ที่เหลือ CS.
+> - **CS surface** `/admin/api-forwarder-ttw` (sidebar apiForwarderUpdate.ttw) — ดูตามตู้ + ใส่ PR (`adminAssignTtwPackingPr` gate CS · เขียนแค่ member_code · refuse ถ้า committed · §0f explicit save). review-fix: filter key บน SAVED PR ไม่ใช่ live buffer (พิมพ์บนแท็บ "ยังไม่มี PR" แถวไม่หาย).
+>
+> **🔴 CARRYOVER (owner "เดี๋ยวไปกรุ๊ปรวมอีกที"):** (1) **TTW commit-to-billable** — CS จับกลุ่ม → สร้าง tb_forwarder row จาก staged line (resolve/create customer · stamp fwarehousename=9/fwarehousechina=2 · price · กัน dup) → แล้วโผล่ report-cnt เป็น TTW/อี้อู. ยังไม่ทำ (money/identity-heavy). (2) integrate ภูม `7e081f57` (Poom-pacred 1-ahead). (3) carryover เดิม (data-health · void FRI2606-00013 · ยิงรับเข้าไทย 14 แถว · G6).
+
+---
+
 # 🩺 2026-07-18 ปิด session-4 (เดฟ · Mac · long-run) — DATA-HEALTH INVARIANT MONITOR: "ระบบ on green สม่ำเสมอ · จบยุคลูกค้าเป็นหนูลองยา" — 12 checks จาก 6 failure classes · cron รายชั่วโมง→incidents · /admin/data-health · autocommit post-verify → ALL 4 BRANCHES · read FIRST
 
 > **🏁 SESSION CLOSE (owner: "วิเคราะห์ทุกปัญหาที่ผ่านมาทั้งระบบ → พัฒนาไม่ให้เกิดอีก · on green สม่ำเสมอ · MOMO_CRON_AUTOCOMMIT=true อยู่แล้ว ห้ามข้อมูลมั่ว · plan→push savepoint→รันยาว→push all branch").** **main = dave-pacred = Poom-pacred = InwPond007 = `<HEAD>`** (pushed ครบ 4). gate: **tsc 0 · BUILD_EXIT=0 · i18n ✓ · tests ผ่านหมด (data-health 4/4 · plan 38/38)**. no migration (NEXT FREE = 0262). 🔑 prod pw chat-only `DqOzfEZVXfMHIryz`. ⚠️ dashboard NOT authed-render (standing — owner เปิด /admin/data-health บน prod ได้เลย).
