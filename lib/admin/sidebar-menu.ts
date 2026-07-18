@@ -1322,7 +1322,7 @@ const wrapServiceImport: MenuItem = {
     // 2026-07-07 — expand to mirror the legacy บริการนำเข้า group (reuse existing
     // routes + i18n keys · nav-only, no data change). ค้นหา → รายการ → หมายเหตุ →
     // เช็คต้นทุน → รายงานตู้ → ประวัติโกดัง → (คงเดิม) อัปเดต API + กระสอบรวม.
-    { labelKey: "forwarder.search",      href: "/admin/forwarders",             icon: "Search" },
+    { labelKey: "forwarder.search",      href: "/admin/forwarders/search",      icon: "Search" },
     { labelKey: "forwarder.searchMulti", href: "/admin/forwarders/bulk-search", icon: "Search" },
     {
       labelKey: "forwarder.list",
@@ -1725,7 +1725,7 @@ const menuWarehouse: MenuSection[] = [
         icon: "Package",
         badge: "forwarderArrived",
         children: [
-          { labelKey: "forwarder.search",      href: "/admin/forwarders",                   icon: "Search" },
+          { labelKey: "forwarder.search",      href: "/admin/forwarders/search",            icon: "Search" },
           { labelKey: "forwarder.searchMulti", href: "/admin/forwarders/bulk-search",       icon: "Search" },
           { labelKey: "forwarder.listAll",     href: "/admin/forwarders",                   icon: "Package" },
           { labelKey: "forwarder.whHistory",   href: "/admin/forwarders/warehouse-history", icon: "PackageCheck", badge: "forwarderWhError" },

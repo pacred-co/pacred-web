@@ -21,7 +21,11 @@ import { requireAdmin } from "@/lib/auth/require-admin";
  * which calls the action + manages local state for results display.
  */
 
-export default async function BulkSearchPage() {
+export default async function BulkSearchPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string | string[] }>;
+}) {
   // W-1 (gap-admin H-1): page-level role gate, consistent with the
   // forwarders list. The bulk-search action is withAdmin-gated, but
   // gate the page too so the chrome is not shown to non-relevant roles.
@@ -31,6 +35,10 @@ export default async function BulkSearchPage() {
   // explicitly exposes this tool to warehouse role (paste tracking list
   // → find forwarder rows is the daily intake-search workflow).
   await requireAdmin(["ops", "accounting", "warehouse"]);
+
+  // ?q=<tracking> — the warehouse-home tracking search hands one tracking here.
+  const sp = await searchParams;
+  const initialQuery = (typeof sp.q === "string" ? sp.q : "").trim();
 
   return (
     <main className="p-6 lg:p-8 space-y-5 max-w-5xl">
@@ -52,7 +60,7 @@ export default async function BulkSearchPage() {
         </div>
       </div>
 
-      <BulkSearchForm />
+      <BulkSearchForm initialQuery={initialQuery} />
     </main>
   );
 }
