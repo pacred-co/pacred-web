@@ -30,6 +30,7 @@ import {
 } from "@/lib/admin/customer-rate-tables";
 import type { ProductId, TransportId, WarehouseId } from "@/lib/admin/customer-rate-tables";
 import type { QuoteDefaultGrid } from "@/lib/admin/quote-default-rates-shared";
+import type { QuotePackage } from "@/lib/quote/quote-packages-shared";
 import type { SellFloorCbmConfig, SellFloorKgConfig } from "@/lib/admin/sell-floor-config";
 import { DEFAULT_COMPARISON } from "@/lib/quote/cargo-promo-packages";
 import { QuoteTab } from "./quote-tab";
@@ -78,6 +79,7 @@ export function CustomerRateEditor({
   buyerPhone = "",
   matrix,
   generalDefaults,
+  quotePackages,
   comparisonEnabled = false,
   comparisonValue = 0,
   sellFloorCbm,
@@ -97,6 +99,8 @@ export function CustomerRateEditor({
   matrix: CustomerRateMatrix;
   /** เรท default ใบเสนอราคา = เรททั่วไป tb_rate_g_* (global · owner ปอน 2026-07-17). */
   generalDefaults: QuoteDefaultGrid;
+  /** แพ็กเกจใบเสนอราคา (data-driven · owner ปอน 2026-07-18) — ส่งต่อ QuoteTab. */
+  quotePackages: QuotePackage[];
   /** tb_users.userComparison==1 — ค่าเทียบ (CPS) is currently ON. */
   comparisonEnabled?: boolean;
   /** tb_users.userComparisonValue — the kg-per-CBM density threshold. */
@@ -319,7 +323,7 @@ export function CustomerRateEditor({
         {/* ── ใบเสนอราคา (default) — the quote tool + collapsed rate settings ── */}
         {tab === "quote" && (
           <div className="space-y-3">
-            <QuoteTab customerName={customerName} userid={userid} comparisonValue={comparisonValue} buyerTaxId={buyerTaxId} buyerAddress={buyerAddress} buyerIsJuristic={buyerIsJuristic} buyerPhone={buyerPhone} matrix={matrix} generalDefaults={generalDefaults} />
+            <QuoteTab customerName={customerName} userid={userid} comparisonValue={comparisonValue} buyerTaxId={buyerTaxId} buyerAddress={buyerAddress} buyerIsJuristic={buyerIsJuristic} buyerPhone={buyerPhone} matrix={matrix} generalDefaults={generalDefaults} quotePackages={quotePackages} />
 
             {/* Rate-setting screens collapsed into the ใบเสนอราคา tab (owner ปอน 2026-07-03) */}
             <details className="rounded-lg border border-border bg-surface-alt/20">

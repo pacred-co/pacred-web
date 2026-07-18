@@ -26,7 +26,7 @@ import {
 // Shared render + serializers — the admin card AND the public /q/[token] page
 // render byte-identically from the same QuoteModel (mirrors receipt-paper.tsx).
 import {
-  buildQuoteText, buildPrintHtml,
+  buildQuoteText, buildPrintHtml, lockFdaCompareRows,
   type QuoteModel, type View, type DisplayLine, type CompareRow,
 } from "@/components/quote/quote-paper";
 import { EditableQuoteCard } from "@/components/quote/editable-quote-card";
@@ -35,6 +35,7 @@ import { adminSaveCustomerRate } from "@/actions/admin/customer-rate";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import type { CustomerRateMatrix, ProductId, TransportId, WarehouseId } from "@/lib/admin/customer-rate-tables";
 import type { QuoteDefaultGrid } from "@/lib/admin/quote-default-rates-shared";
+import type { QuotePackage } from "@/lib/quote/quote-packages-shared";
 
 const JURISTIC_WHT = 0.01;
 
@@ -78,6 +79,7 @@ export function QuoteTab({
   buyerPhone: buyerPhoneInit = "",
   matrix,
   generalDefaults,
+  quotePackages,
 }: {
   customerName: string;
   userid: string;
@@ -94,13 +96,16 @@ export function QuoteTab({
    *  (per product-category) so the quote shows the real rate, not promo defaults. */
   matrix?: CustomerRateMatrix;
   /** เรท default ใบเสนอราคา = เรททั่วไป tb_rate_g_* (global · หน้า "ตั้งเรทใบเสนอราคา"
-   *  · owner ปอน 2026-07-17) — ชั้น default กลาง SVIP ▸ นี่ ▸ promo/FDA. */
+   *  · owner ปอน 2026-07-17) — ชั้น default กลาง SVIP ▸ แพ็ก ▸ นี่ ▸ promo/FDA. */
   generalDefaults: QuoteDefaultGrid;
+  /** แพ็กเกจใบเสนอราคา (data-driven · owner ปอน 2026-07-18) — dropdown + เรทพรีเซ็ต
+   *  ชั้นระหว่าง SVIP ▸ นี่ ▸ ทั่วไป · เลือกแพ็ก = โชว์เรทแพ็ก · ไม่กระทบบิลจริง. */
+  quotePackages: QuotePackage[];
 }) {
   const [view, setView] = useState<View>("compare");
   // ประเภทบริการ — Cargo เปิดใช้อย่างเดียว · Freight/Clearance เทาไว้ (เร็วๆ นี้ · ปอน 2026-07-03)
   const [service, setService] = useState("cargo");
-  const [pkgId, setPkgId] = useState(CARGO_PROMO_PACKAGES[0].id);
+  const [pkgId, setPkgId] = useState(quotePackages[0]?.id ?? CARGO_PROMO_PACKAGES[0].id);
   const [licensed, setLicensed] = useState(false);
   // Juristic default from the resolved customer identity (was hardcoded false →
   // the rep had to know + tick it). Admin can still toggle.
@@ -117,9 +122,17 @@ export function QuoteTab({
   const [showCustomsInfo, setShowCustomsInfo] = useState(false);
 
   const pkg = useMemo<CargoPromoPackage>(() => CARGO_PROMO_PACKAGES.find((p) => p.id === pkgId) ?? CARGO_PROMO_PACKAGES[0], [pkgId]);
+  // แพ็กเกจ config (data-driven) — เรทพรีเซ็ต + ชื่อ + เงื่อนไข + ระยะเวลา (owner ปอน 2026-07-18).
+  const qpkg = useMemo<QuotePackage>(() => quotePackages.find((p) => p.id === pkgId) ?? quotePackages[0], [pkgId, quotePackages]);
+  const pkgIndex = useMemo(() => { const i = quotePackages.findIndex((p) => p.id === pkgId); return i >= 0 ? i : 0; }, [pkgId, quotePackages]);
   const hasLicensed = !!pkg.licensedRates;
   const effLicensed = licensed && hasLicensed;
-  const eff = useMemo(() => rateFor(pkg, effLicensed, warehouse, mode), [pkg, effLicensed, warehouse, mode]);
+  const eff = useMemo(() => {
+    const promoEff = rateFor(pkg, effLicensed, warehouse, mode);
+    if (effLicensed) return promoEff; // ลิขสิทธิ์ = concept ของ promo (config package ไม่มี)
+    const cell = qpkg.rates[WH_KEY_TO_ID[warehouse]][mode === "truck" ? "1" : "2"].general;
+    return { cbm: cell.cbm > 0 ? cell.cbm : promoEff.cbm, kg: cell.kg > 0 ? cell.kg : promoEff.kg, days: promoEff.days };
+  }, [pkg, qpkg, effLicensed, warehouse, mode]);
 
   // editable rate (calc mode), seeded from the folded rate
   const [ratePerCbm, setRatePerCbm] = useState(String(eff.cbm));
@@ -127,7 +140,7 @@ export function QuoteTab({
   // Re-seed the editable rate when package/warehouse/mode/licensed changes —
   // adjust state DURING render (React's recommended pattern), not a
   // setState-in-effect (which triggers cascading renders).
-  const rateKey = `${pkg.id}|${effLicensed}|${warehouse}|${mode}`;
+  const rateKey = `${pkgId}|${effLicensed}|${warehouse}|${mode}`;
   const [prevRateKey, setPrevRateKey] = useState(rateKey);
   if (rateKey !== prevRateKey) {
     setPrevRateKey(rateKey);
@@ -169,7 +182,8 @@ export function QuoteTab({
     // from the customer's CONFIGURED rate (matrix) for its representative product,
     // falling back to the selected promo package's rate where none is configured.
     // "days" always comes from the promo package (not stored per-customer).
-    const compareRows: CompareRow[] = WAREHOUSE_KEYS.flatMap((w) => {
+    // อย.·พิเศษ = ล็อกเรทเหมา FDA 7,600/6,600 (owner ปอน 2026-07-18) — override SVIP/แพ็ก/ทั่วไป.
+    const compareRows: CompareRow[] = lockFdaCompareRows(WAREHOUSE_KEYS.flatMap((w) => {
       const whId = WH_KEY_TO_ID[w];
       const wh = matrix?.byWarehouse?.[whId];
       const gd = generalDefaults[whId]; // เรท default ใบเสนอราคา (tb_rate_g_* · ต่อทาง '1'รถ/'2'เรือ)
@@ -181,23 +195,28 @@ export function QuoteTab({
         const variant = g.rep === "3" ? "fda" : effLicensed ? "licensed" : "general";
         const promoTruck = rateForVariant(pkg, variant, w, "truck");
         const promoShip = rateForVariant(pkg, variant, w, "ship");
+        // ชั้นแพ็ก (config · owner ปอน 2026-07-18): SVIP ▸ แพ็ก ▸ ทั่วไป ▸ promo · 0/ว่าง = ตกไปทั่วไป.
+        const qTruck = qpkg.rates[whId]["1"][groupKey];
+        const qShip = qpkg.rates[whId]["2"][groupKey];
+        const qc = (v: number) => (v > 0 ? v : undefined);
+        const truckDays = qpkg.days.truck || promoTruck.days;
         return {
           warehouse: WAREHOUSE_LABEL[w], isYiwu: w === "yiwu",
           category: g.category, warehouseId: whId, products: [...g.products],
           truck: {
-            cbm: wh?.cbm["1"][g.rep] ?? gd["1"][groupKey].cbm ?? promoTruck.cbm,
-            kg: wh?.kg["1"][g.rep] ?? gd["1"][groupKey].kg ?? promoTruck.kg,
+            cbm: wh?.cbm["1"][g.rep] ?? qc(qTruck.cbm) ?? gd["1"][groupKey].cbm ?? promoTruck.cbm,
+            kg: wh?.kg["1"][g.rep] ?? qc(qTruck.kg) ?? gd["1"][groupKey].kg ?? promoTruck.kg,
             // อี้อู·ทางรถ: fold the +2–3 transit days into the range (owner 2026-07-10).
-            days: w === "yiwu" ? foldExtraDays(promoTruck.days, 2, 3) : promoTruck.days,
+            days: w === "yiwu" ? foldExtraDays(truckDays, 2, 3) : truckDays,
           },
           ship: {
-            cbm: wh?.cbm["2"][g.rep] ?? gd["2"][groupKey].cbm ?? promoShip.cbm,
-            kg: wh?.kg["2"][g.rep] ?? gd["2"][groupKey].kg ?? promoShip.kg,
-            days: promoShip.days,
+            cbm: wh?.cbm["2"][g.rep] ?? qc(qShip.cbm) ?? gd["2"][groupKey].cbm ?? promoShip.cbm,
+            kg: wh?.kg["2"][g.rep] ?? qc(qShip.kg) ?? gd["2"][groupKey].kg ?? promoShip.kg,
+            days: qpkg.days.ship || promoShip.days,
           },
         };
       });
-    });
+    }));
 
     const lines: DisplayLine[] = [];
     if (view === "calc" && (num(cbm) > 0 || num(kg) > 0)) {
@@ -221,15 +240,15 @@ export function QuoteTab({
     return {
       view, service, refNo: refNoSeed, customerCode: userid, dateLabel: today.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" }), validUntil: validUntilSeed,
       buyerName: buyerNameSeed, buyerTaxId: buyerTaxIdInit, buyerAddress: buyerAddressInit, buyerPhone: buyerPhoneInit, salesName: "", salesTel: "",
-      packageLabel: `แพ็คเกจที่ ${pkg.no}: ${pkg.name}${effLicensed ? " · สินค้าลิขสิทธิ์" : ""}`,
+      packageLabel: `แพ็คเกจที่ ${pkgIndex + 1}: ${qpkg.name}${effLicensed ? " · สินค้าลิขสิทธิ์" : ""}`,
       juristic, compareRows,
       routeLabel: `${WAREHOUSE_LABEL[warehouse]} · ${MODE_LABEL[mode]}${freight.density != null ? ` · คิดตาม ${freight.basis === "kg" ? "น้ำหนัก (KG)" : "ปริมาตร (CBM)"}` : ""}`,
       density: freight.density, basisLabel: freight.basis === "kg" ? "น้ำหนัก (KG)" : "ปริมาตร (CBM)",
       comparison: num(comparison) > 0 ? num(comparison) : DEFAULT_COMPARISON,
       lines, totals, showCustomsInfo,
-      conditions: pkg.conditions, notes: QUOTE_NOTES, extraNote: "",
+      conditions: qpkg.conditions.length ? qpkg.conditions : pkg.conditions, notes: QUOTE_NOTES, extraNote: "",
     };
-  }, [view, service, pkg, effLicensed, warehouse, mode, cbm, kg, comparison, freight, customs, issueTax, juristic,
+  }, [view, service, pkg, qpkg, pkgIndex, effLicensed, warehouse, mode, cbm, kg, comparison, freight, customs, issueTax, juristic,
     refNoSeed, validUntilSeed, buyerNameSeed, buyerTaxIdInit, buyerAddressInit, buyerPhoneInit, today, userid, showCustomsInfo, matrix, generalDefaults]);
 
   // The rep's inline edits — a field-level override merged over the auto-model.
@@ -237,7 +256,7 @@ export function QuoteTab({
   // dropped when a calc INPUT changes so they regenerate; text edits (buyer ·
   // meta · notes) survive. (ปอน 2026-07-04 — PEAK-style editable ใบเสนอราคา.)
   const [overrides, setOverrides] = useState<Partial<QuoteModel>>({});
-  const calcKey = `${view}|${pkg.id}|${effLicensed}|${warehouse}|${mode}|${cbm}|${kg}|${comparison}|${[...customs].sort((a, b) => a - b).join(",")}|${issueTax}|${juristic}|${ratePerCbm}|${ratePerKg}|${showCustomsInfo}`;
+  const calcKey = `${view}|${pkgId}|${effLicensed}|${warehouse}|${mode}|${cbm}|${kg}|${comparison}|${[...customs].sort((a, b) => a - b).join(",")}|${issueTax}|${juristic}|${ratePerCbm}|${ratePerKg}|${showCustomsInfo}`;
   const [prevCalcKey, setPrevCalcKey] = useState(calcKey);
   if (calcKey !== prevCalcKey) {
     setPrevCalcKey(calcKey);
@@ -423,8 +442,8 @@ export function QuoteTab({
       <label className="flex items-center gap-2">
         <span className="text-[12px] font-semibold text-foreground whitespace-nowrap">แพ็คเกจ:</span>
         <select value={pkgId} onChange={(e) => setPkgId(e.target.value)} className={`flex-1 ${selectCls}`}>
-          {CARGO_PROMO_PACKAGES.map((p) => (
-            <option key={p.id} value={p.id}>แพ็คเกจที่ {p.no}: {p.name}</option>
+          {quotePackages.map((p, i) => (
+            <option key={p.id} value={p.id}>แพ็คเกจที่ {i + 1}: {p.name}</option>
           ))}
         </select>
       </label>
