@@ -3,6 +3,26 @@
 
 ---
 
+# 🧾 2026-07-18 ปิด session-3 (เดฟ · Mac) — 🔴 PR050 เบิ้ลกล่อง 2→4 = HALF-SPLIT RESIDUE → แก้แก่นราก 3 ด้าน (absorb self-heal · family-dedup chokepoint · prod sweep 5 กลุ่ม) + กู้งาน limit 07-13 (5 fixes + USD) → dave-pacred + MAIN · read FIRST
+
+> **🏁 SESSION CLOSE (owner: "resync · ต่องาน disk · PR050 519218029029 มี 2 กล่องแสดง 4 ทั้งหน้าบ้านหลังบ้าน · ไล่คลีนทั้งระบบ ดึงข้อมูลที่เดียวกัน แก้ที่ต้นตอ · push dave-pacred + main").** **dave-pacred = main = `<HEAD>`** (pushed · main authorized this session). gate ทุก commit: **tsc 0 · BUILD_EXIT=0 (อ่านจาก log) · plan-tests 38/38 · safety 58/58**. no migration (NEXT FREE = 0262). 🔑 prod pw chat-only `DqOzfEZVXfMHIryz`. ⚠️ NOT authed-render (standing).
+>
+> **✅ กู้งานติด limit 07-13 (ต้นเซสชัน · จาก 2 worktree uncommitted → review เอง → push dave-pacred `196c9aa9`):** Fix A resilientMomoUpsert (dedup→chunk→per-row · งานหายทั้ง window เพราะ 1 แถวเสีย) · Fix B `.lt(fstatus)` demotion guard ใน propagate UPDATE WHERE · Fix C report-cnt ฿0 gate (เก็บเงินขาด) · Fix D credit-settle on markBillingRunPaid (เคลียร์ fcredit + ลด tb_credit · **ตัด paydeposit='1' ของ agent ออก — จะทำให้ order เครดิตที่จ่ายแล้วหายจากคิวมอบงานคนขับ** · pending-dispatch gate) · Fix E prefill ตู้เครดิต 4/5→4/5/6 · Fix F dedup chokepoint v1 · USD form (owner P22353 · ¥ SOT · effRate · 10 tests).
+>
+> **🔴 HALF-SPLIT RESIDUE (เคส PR050 `519218029029` · ราก 3 ชั้น):** MOMO **re-key พัสดุกลางทาง** — import feed ส่ง base เปล่าก่อน (commit 07-08 = แถวรวม ฿730 ตู้เรือผี GZS260705-1) แล้วส่งกลับเป็น `-1/2`/`-2/2` (commit 07-10 อิสระ · ตู้รถจริง GZE260707-1) → ทุก Σ กลุ่มเบิ้ล (4 กล่อง/73kg/2 ตู้/cost ×3). ที่ไม่ self-heal: (1) split idempotent-skip เห็น sibling → already_split → **cement** aggregate ถาวร (2) findMultiBoxBases ดูแค่ box_detail — re-key ผ่าน import feed ไม่มี box_detail ก็มี (เคสอื่น) (3) Fix F exact-match มองไม่เห็น cross-shape. **Discriminator แม่น: proper split ไม่มีทางมีแถว `-1/n` (กล่อง 1 อยู่บน bare anchor เสมอ · sibling เริ่ม -2/n) → «-1/n live คู่ bare» = residue เสมอ ไม่ false-positive.**
+>
+> **✅ แก้ครบ 3 ด้าน:**
+> - **HEAL:** `planResidueAbsorb` (pure · split-box-rows-plan.ts · 9 checks · modes bare-priced/unpriced/empty-bare · Σsell preserved EXACT · guards billed/settled/advance/reforder/on-invoice/Σ-2%/sibs-priced-refuse) + `absorbResidueGroup` writer (shares→anchor adopt box-1→delete -1/n→**staging re-point กัน dangling-ptr re-commit**→survivor dup-cost 0 · compensating reverts) + `findResidueBases` (scan tb_forwarder เอง ไม่พึ่ง box_detail) → wired pass-5 = **cron self-heal ทุกยิงต่อไป**.
+> - **PREVENT:** commitMomoRowCore 4a½ upgrade เป็น **family-aware**: suffixed เข้า + bare live → refuse · bare เข้า + suffixed live → refuse · suffixed ต่างกล่อง ไม่ block กันเอง (ใช้ baseOf/suffixOf ตัวเดียวกับ split = ไม่มีวัน parse ต่างกัน).
+> - **SWEEP prod:** `scripts/absorb-split-residue-2026-07-18.ts` (dry-run→backup→apply · brain เดียวกับ cron) → 7 residue: **5 absorbed** (PR050 **4→2 กล่อง · 73→36.5kg · ฿730→฿730 เป๊ะ · ตู้ผี GZS หลุด · cost 1,003→334.40 · staging 0 dangler** + 4 empty-header PR204/PR9217/PR086/PR075 Σ identical) · backup `scripts/_backup-absorb-residue-1784337968255.json`.
+> - **DISPLAY SOT verify (owner "ดึงที่เดียวกัน"):** ยืนยันแล้ว **unified อยู่แล้วจริง** — ลูกค้า service-import + admin forwarders-table + items-table + report-cnt detail ทุกตัวรวมกลุ่ม/Σ ผ่าน `lib/admin/momo-bill-header.ts` ตัวเดียว → ที่เบิ้ลคือ DATA (แก้แล้ว) ไม่ใช่ display แตกแถว.
+>
+> **🔴 บัญชี 2 เคส (billed · เงิน frozen · ห้าม auto — flagged จาก sweep):** (1) **PR107 `1780555730` = เก็บเงินซ้ำยืนยันแล้ว**: กล่อง 6 ใบบิลบน **FRI2606-00013 (฿1,318.80 · issued ยังไม่จ่าย)** + แถวรวมบิลแยกบน **FRI2606-00024 (฿1,405.35 · จ่ายแล้ว)** = ของชุดเดียวกัน 2 ใบ → **ต้อง void FRI2606-00013 ก่อนใครไปเก็บซ้ำ**. (2) PR107 `1780629608` bare ฿0/324.5kg (st7 · ไม่อยู่บนใบ) ซ้อนกล่องที่บิลจ่ายแล้ว (FRI2606-00014) → เบิ้ลน้ำหนักในรายงานเท่านั้น · ลบแถวรวม = เคาะ manual.
+>
+> **🔴 NEXT / carryover:** (1) บัญชี void FRI2606-00013 + เคาะลบ bare `1780629608`. (2) `MOMO_CRON_AUTOCOMMIT` flip = owner เคาะ (dedup ครบ dup-safe + family-aware แล้ว). (3) PR050 กลุ่มยัง fstatus 3 แม้ fdatetothai 07-11 — รอ scan โกดังตามปกติ. (4) standing เดิม (reprice-stale-cargo รอเคาะ · crate per-item migration · #52194/#52196 · DOC BOT reconcile).
+
+---
+
 # 🧾 2026-07-18 ปิด session-2 (เดฟ · Mac · owner iterate 3 จุด K-M) — สี selection จี๊ดจ๊าด · หัวแถว=รายละเอียดครบเหมือนแถวเดี่ยว · backfill ต้นทุนตู้ถึงไทย 11 แถว → ALL 4 BRANCHES · read FIRST
 
 > **🏁 STATE. main = dave-pacred = Poom-pacred = InwPond007 = `<HEAD>`** (Vercel prod). plan: [`docs/wip/plan-2026-07-18-reportcnt-iterate3.md`](docs/wip/plan-2026-07-18-reportcnt-iterate3.md) K-M ✅. gate: **tsc 0 · build 0**. no migration (NEXT FREE = 0262). 🔑 prod pw chat-only `DqOzfEZVXfMHIryz`. ⚠️ NOT authed-render — owner ทดสอบบน prod.

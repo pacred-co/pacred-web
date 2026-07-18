@@ -315,3 +315,31 @@ curl -s "https://opendata.dbd.go.th/api/3/action/datastore_search?resource_id=f0
 - A "does this row already exist" pre-check that lives only in the CALLER (batch, fail-open) protects nothing under concurrency — the guard belongs at the single write chokepoint, fail-closed.
 
 **Cross-links:** the [2026-06-29] harvest entry above (same files) · `lib/admin/commit-momo-row-core.ts` 4a½ · `lib/admin/pending-dispatch.ts` · AGENTS.md §0e/§0f.
+
+## [2026-07-18] MOMO re-keys a parcel base→"-1/n" mid-flight → HALF-SPLIT residue double-counts everywhere · the "-1/n signature" + absorb
+
+**Context:** owner escalation — PR050 `519218029029` physically has **2 boxes**, both หลังบ้าน AND หน้าบ้าน showed **4 กล่อง · 73 kg · 0.1423 CBM** ("ไม่เบิ้ลกล่อง ก็เบิ้ลคิว เบิ้ลน้ำหนัก เงินเพี้ยน · แก้ที่ต้นตอ"). The 2026-07-18 close had parked this as "box-detail-reconcile จะ self-heal" — it never did.
+
+**The state (HALF-SPLIT RESIDUE):** a bare AGGREGATE `tb_forwarder` row (full shipment metrics · ฿730 sell · sea container GZS260705-1) coexisted with a FULL set of box rows `-1/2` + `-2/2` (real road container GZE260707-1). MOMO's import feed **re-keyed the parcel mid-flight**: first returned the bare base (committed 07-08 → aggregate row), then returned the SAME parcel as suffixed box trackings (07-10 · separate staging rows → each committed as an independent row, pre-Fix-F). Every group Σ then double-counts, the parcel is counted in TWO containers, and each box row carried the FULL shipment cost (Σcost ×3).
+
+**Why NO existing machinery healed it (three misses):**
+1. The split pass's idempotent skip — "a suffixed sibling exists → already_split → leave" — **cements** the residue: the guard can't tell a PROPER split from a half-split.
+2. `findMultiBoxBases` scans `momo_box_detail` only — a residue whose re-key came via the import feed (never the Live boards) has no box_detail → never a candidate.
+3. Fix F's dedup was EXACT-match — `"-1/2"` ≠ `"519218029029"` → the box commits sailed through.
+
+**The precise discriminator (the "-1/n signature"):** `planBoxRowSplit` NEVER creates a `-1/n` row — box 1 always lives ON the bare anchor; siblings start at `-2/n`. So **a live suffix-1 row beside a bare row ⇒ residue, always**. This cannot false-positive on a correct split (even identical-weight twins), which a Σ-comparison alone would destroy.
+
+**The fix (all three ends):**
+- **Absorb (self-heal · `planResidueAbsorb` in split-box-rows-plan.ts + `absorbResidueGroup` in split-box-rows.ts):** convert residue → canonical shape. Anchor (bare row · keeps id + staging linkage + suffix-0 เหมาๆ anchor) adopts box-1's payload; the `-1/n` row is deleted; its staging ptr re-points to the anchor (kills the dangling-ptr re-commit engine · Root 3 of 07-14); survivors keep their rows; survivor dup-costs → 0 (shipment cost lives ONCE on the anchor). Σ(sell) preserved EXACTLY (คิว-first allocation · anchor absorbs the satang remainder). Modes: bare-priced (allocate) · unpriced (engine re-price) · empty-bare (row-identity swap incl. box-1's own price). Guards: every row unbilled/unsettled/no-advance/no-reforder/NOT-on-invoice · Σ coverage within 2% · sibs-priced → refuse (ambiguous money → human).
+- **Candidates:** `findResidueBases` scans tb_forwarder for live suffix-1 rows → unioned into pass-5 candidates, so a residue heals even with ZERO box_detail.
+- **Prevent (chokepoint):** Fix F upgraded to FAMILY-aware — incoming suffixed + live bare ⇒ refuse (the split/absorb owns the conversion); incoming bare + live suffixed ⇒ refuse (no late empty-header). A suffixed incoming never blocks on a DIFFERENT suffixed sibling (multi-box commits stay possible).
+- **Sweep:** `scripts/absorb-split-residue-2026-07-18.ts` (same pure planner = one brain · dry-run→backup→apply) — prod: 7 residue groups → **5 absorbed** (PR050 ฿730→฿730 · 73→36.5 kg · 4 empty-header swaps ΣB identical) · **2 billed → flagged to accounting**, incl. a CONFIRMED double-bill: PR107 `1780555730` — the 6 boxes billed on FRI2606-00013 (฿1,318.80 issued) AND the aggregate billed on FRI2606-00024 (฿1,405.35 PAID) = same goods on two invoices.
+
+**Display side (owner "ดึงข้อมูลที่เดียวกัน"):** verified structurally UNIFIED already — customer `service-import/forwarder-interactivity`, admin `forwarders-table`, forwarder items-table, report-cnt container-detail ALL group/sum via `lib/admin/momo-bill-header.ts` (baseTracking · countableGroupMembers · filterCountableForwarderRows). The doubled display came purely from doubled DATA — fix the data + the writers, don't fork the display.
+
+**Why this matters next time:**
+- An "idempotent skip" that keys on a COARSE signal (any sibling exists) can cement a corrupted intermediate state forever. Idempotency checks must distinguish "done" from "half-done" — find a state signature that separates them precisely (here: the suffix-1 row).
+- When a partner can RE-KEY an entity's identity mid-stream, exact-match dedup is not dedup. Guard at the FAMILY level (base-normalized) at the single write chokepoint.
+- A heal pass is only as good as its CANDIDATE SET — enumerate candidates from the LIVE store's own anomaly signature, not only from the partner's (ephemeral/optional) side-tables.
+
+**Cross-links:** [2026-07-13] entry above (Fix F v1 · resilient upsert) · memory [[momo-boxsplit-3-roots-2026-07-14]] · `lib/integrations/momo-web/split-box-rows-plan.ts` (planResidueAbsorb · 9 unit checks) · `lib/admin/momo-bill-header.ts` (the group-display SOT).
