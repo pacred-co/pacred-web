@@ -113,6 +113,13 @@ import {
 } from "@/lib/admin/auto-commit-momo-safety";
 import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 import { logger } from "@/lib/logger";
+import { captureIncident } from "@/lib/observability/incident-store";
+// Family parsing for the post-commit verify — the SAME parser the split/absorb +
+// chokepoint dedup use (one brain, no shape drift).
+import {
+  baseOf as momoFamilyBaseOf,
+  suffixOf as momoFamilySuffixOf,
+} from "@/lib/integrations/momo-web/split-box-rows-plan";
 import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
 import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 
@@ -660,6 +667,61 @@ export async function autoCommitEligibleMomoRows(
       },
     );
     result.alerted = true;
+  }
+
+  // 8. POST-COMMIT VERIFY (owner 2026-07-18 "AUTOCOMMIT=true แต่ห้ามแสดงผลข้อมูลมั่ว") —
+  //    an unattended write gets an unattended CHECK. Re-query the just-committed
+  //    trackings' FAMILIES and assert no dup/residue slipped through (the chokepoint
+  //    guard should make this impossible; this is the verify-after-write net that
+  //    screams the same minute if it ever isn't). READ-ONLY · best-effort.
+  const committedTracks = result.perRow
+    .filter((r) => r.outcome === "committed" && r.momoTrackingNo)
+    .map((r) => r.momoTrackingNo as string);
+  if (committedTracks.length > 0) {
+    try {
+      const bases = [...new Set(committedTracks.map((t) => momoFamilyBaseOf(t)))];
+      for (const base of bases) {
+        const { data: fam, error: famErr } = await admin
+          .from("tb_forwarder")
+          .select("id, ftrackingchn, fstatus")
+          .or(`ftrackingchn.eq.${base},ftrackingchn.like.${base}-%`)
+          .limit(40);
+        if (famErr) {
+          logger.warn(SCOPE, "post-commit verify read failed", { base, code: famErr.code });
+          continue;
+        }
+        const live = ((fam ?? []) as Array<{ id: number; ftrackingchn: string | null; fstatus: string | null }>)
+          .filter((r) => momoFamilyBaseOf(String(r.ftrackingchn ?? "")) === base)
+          .filter((r) => r.fstatus != null && !["", "0", "99"].includes(String(r.fstatus)));
+        const byExact = new Map<string, number[]>();
+        for (const r of live) {
+          const t = String(r.ftrackingchn ?? "").trim();
+          byExact.set(t, [...(byExact.get(t) ?? []), r.id]);
+        }
+        const dupExact = [...byExact.entries()].filter(([, ids]) => ids.length > 1);
+        const bare = live.find((r) => momoFamilySuffixOf(String(r.ftrackingchn ?? "")) === 0);
+        const hasSuffix1 = live.some((r) => momoFamilySuffixOf(String(r.ftrackingchn ?? "")) === 1);
+        if (dupExact.length > 0 || (bare && hasSuffix1)) {
+          console.error("[autoCommitEligibleMomoRows] 🔴 POST-COMMIT VERIFY VIOLATION", {
+            base, dupExact, residue: !!(bare && hasSuffix1),
+            liveRows: live.map((r) => ({ id: r.id, t: r.ftrackingchn })),
+          });
+          await captureIncident({
+            source: "server",
+            kind: "server_error",
+            severity: "high",
+            route: "/api/cron/momo-sync",
+            message:
+              "MOMO autocommit post-verify: a duplicate/half-split family appeared right after an unattended commit. Autocommit wrote a row it should not have — inspect /admin/data-health + the review queue.",
+            surfaceMeta: { base, dupExact, residue: !!(bare && hasSuffix1) },
+          });
+        }
+      }
+    } catch (e) {
+      logger.warn(SCOPE, "post-commit verify threw (non-fatal)", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
 
   return result;

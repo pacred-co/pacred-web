@@ -3574,7 +3574,8 @@
       "withdrawalsAll": "รายการเบิกเงิน (รวม)",
       "teamLeaders": "หัวหน้าทีมขาย (ค่าคอม)",
       "bookings": "คิวการจอง (RFQ)",
-      "refunds": "คืนเงินลูกค้า"
+      "refunds": "คืนเงินลูกค้า",
+      "dataHealth": "สุขภาพข้อมูล (Data Health)"
     },
     "warehouse": {
       "containers": "ตู้คอนเทนเนอร์",

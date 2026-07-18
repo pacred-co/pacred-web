@@ -938,6 +938,11 @@ const blockExtIncidents: MenuItem = {
   // Phase 2 — incident triage aligns with QA queues (also Phase 2).
   labelKey: "extension.incidents", href: "/admin/incidents", icon: "AlertTriangle", badge: "incidents", phase: 2,
 };
+const blockExtDataHealth: MenuItem = {
+  // 2026-07-18 (owner "ระบบ on green สม่ำเสมอ · ห้ามแสดงผลข้อมูลมั่ว") — live
+  // production data-invariant dashboard; the hourly cron twin files incidents.
+  labelKey: "extension.dataHealth", href: "/admin/data-health", icon: "Activity", phase: 2,
+};
 
 // ── 6 Phase 2 orphan extensions (ภูม flagged 2026-05-21) ─────────
 // Wired to menuSuper Extension section. All `phase: 2` → non-super
@@ -1254,6 +1259,7 @@ const wrapClassDev: MenuItem = {
     blockExtWorkboard,
     blockExtHistory,
     blockExtIncidents,
+    blockExtDataHealth,
   ],
 };
 
@@ -1557,6 +1563,7 @@ const menuManager: MenuSection[] = [
     blockExtMeetingRoom,
     blockExtHistory,
     blockExtIncidents,
+    blockExtDataHealth,
   ]),
 ];
 
