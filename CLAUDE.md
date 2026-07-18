@@ -3,6 +3,24 @@
 
 ---
 
+# 🩺 2026-07-18 ปิด session-4 (เดฟ · Mac · long-run) — DATA-HEALTH INVARIANT MONITOR: "ระบบ on green สม่ำเสมอ · จบยุคลูกค้าเป็นหนูลองยา" — 12 checks จาก 6 failure classes · cron รายชั่วโมง→incidents · /admin/data-health · autocommit post-verify → ALL 4 BRANCHES · read FIRST
+
+> **🏁 SESSION CLOSE (owner: "วิเคราะห์ทุกปัญหาที่ผ่านมาทั้งระบบ → พัฒนาไม่ให้เกิดอีก · on green สม่ำเสมอ · MOMO_CRON_AUTOCOMMIT=true อยู่แล้ว ห้ามข้อมูลมั่ว · plan→push savepoint→รันยาว→push all branch").** **main = dave-pacred = Poom-pacred = InwPond007 = `<HEAD>`** (pushed ครบ 4). gate: **tsc 0 · BUILD_EXIT=0 · i18n ✓ · tests ผ่านหมด (data-health 4/4 · plan 38/38)**. no migration (NEXT FREE = 0262). 🔑 prod pw chat-only `DqOzfEZVXfMHIryz`. ⚠️ dashboard NOT authed-render (standing — owner เปิด /admin/data-health บน prod ได้เลย).
+>
+> **🔑 THE 4-LAYER RULE (มาตรฐานใหม่ทุก data fix):** (1) write-guard ที่ chokepoint · (2) cron heal · (3) one-off sweep · (4) **standing invariant check ใน `lib/admin/data-health/checks.ts`** — fix ที่ไม่มีชั้น 4 = recurrence ที่รอวันโดนด่า. Retrospective 6 classes → [`docs/wip/plan-2026-07-18-data-health-invariants.md`](docs/wip/plan-2026-07-18-data-health-invariants.md) · learning [`docs/learnings/data-health-invariant-monitor.md`](docs/learnings/data-health-invariant-monitor.md).
+>
+> **✅ SHIPPED:**
+> - **`lib/admin/data-health/checks.ts`** — 12 invariants (READ-ONLY 100% · shared scan · fail-visible · group-aware กัน split-anchor false-positive): residue_half_split · dup_exact_tracking · dangling_staging_ptr · multi_container_shipment · awaiting_payment_zero_price · double_billed (row + aggregate-covers-boxes) · credit_unsettled_after_paid · group_cost_ratio · arrived_status_stuck · dispatch_blocked_g6 · empty_bare_headers · shop_status_drift.
+> - **`/api/cron/data-health`** รายชั่วโมง (vercel.json `20 * * * *`) — instrumentCron + captureIncident fingerprint คงที่/check (wallet-reconcile pattern · เด้ง /admin/incidents) · **`/admin/data-health`** dashboard รันสด (super/ops/accounting · sidebar CLASS→DEV · §0g self-explaining: เคยเกิดอะไร/ทำไงต่อ/ลิงก์แถวจริง) · **`scripts/run-data-health.ts`** CLI (exit 2 เมื่อ red).
+> - **autocommit post-verify** (auto-commit-momo.ts step 8): ทุก batch → re-check family dup/residue ทันที → incident. **เขียน unattended = ตรวจ unattended** (เกราะ MOMO_CRON_AUTOCOMMIT=true).
+> - **Calibration จาก first prod run:** "double-bill" 60527103087 จริงๆ คือคนละล็อต (bare 48ชิ้น/624kg + "-2" 12ชิ้น/156kg disjoint) → double_billed แดงเฉพาะ **aggregate-covers-boxes overlap** (bareW≈ΣboxW ต่างใบ). กติกา: check ใหม่ต้องรัน prod + probe ทุกแดง ก่อน ship.
+>
+> **📊 FIRST FULL AUDIT (หลัง root fixes session-3) — ระบบเขียวจริง:** 🔴 = คิวบัญชีที่รู้แล้วเป๊ะ (2 billed residues [1780555730 · 1780629608] + **เก็บเงินซ้ำ FRI2606-00013 (issued ฿1,318.80) ↔ FRI2606-00024 (paid) → ต้อง void 00013**) · 🟠 = 4 multi-container shipments (review · อาจ legit ข้ามรอบรถ: KY4001030721114 · 1783582423 · 1783051207 · JYM188058949964) + 1 cost ratio (SF0217434505936 ฿84.13 vs คำนวณ ฿47.36 — fix-garbage script ไม่จับ = อาจ cost ใบ MOMO จริง · บัญชีดู) + **14 แถวของถึงไทยแล้ว (fdatetothai) แต่ค้าง fstatus 2/3 = คิวโกดังยิงรับเข้าไทย** (PR103 ×7 · PR050 -2/2 · PR137 · PR172 ×2 …) · 🟡 G6 1 แถว (SF5194722436826) · ที่เหลือ ✅ หมด (dup 0 · dangler 0 · ฿0-bill 0 · เครดิตค้าง 0 · shop drift 0).
+>
+> **🔴 NEXT / carryover:** (1) บัญชี: void FRI2606-00013 + เคาะลบ bare 1780629608 (฿0/324.5kg) — dashboard จะแดงจนกว่าเคลียร์. (2) โกดัง: ยิงรับเข้าไทย 14 แถวค้าง (ลิสต์บน dashboard). (3) 4 multi-container = ตรวจว่าข้ามรอบจริงไหม. (4) G6 semantic รอ owner เคาะ (แถวเดียว). (5) standing เดิม (reprice-stale-cargo · crate per-item mig · #52194/#52196 · DOC BOT reconcile).
+
+---
+
 # 🧾 2026-07-18 ปิด session-3 (เดฟ · Mac) — 🔴 PR050 เบิ้ลกล่อง 2→4 = HALF-SPLIT RESIDUE → แก้แก่นราก 3 ด้าน (absorb self-heal · family-dedup chokepoint · prod sweep 5 กลุ่ม) + กู้งาน limit 07-13 (5 fixes + USD) → dave-pacred + MAIN · read FIRST
 
 > **🏁 SESSION CLOSE (owner: "resync · ต่องาน disk · PR050 519218029029 มี 2 กล่องแสดง 4 ทั้งหน้าบ้านหลังบ้าน · ไล่คลีนทั้งระบบ ดึงข้อมูลที่เดียวกัน แก้ที่ต้นตอ · push dave-pacred + main").** **dave-pacred = main = `<HEAD>`** (pushed · main authorized this session). gate ทุก commit: **tsc 0 · BUILD_EXIT=0 (อ่านจาก log) · plan-tests 38/38 · safety 58/58**. no migration (NEXT FREE = 0262). 🔑 prod pw chat-only `DqOzfEZVXfMHIryz`. ⚠️ NOT authed-render (standing).
