@@ -23,6 +23,7 @@ import { loadWarehouseDispatchHome } from "@/lib/warehouse/dispatch-home";
 import { ShoppingCart, PackageX, Truck, Warehouse, History, Info } from "lucide-react";
 import { WarehouseBottomNav } from "./warehouse-bottom-nav";
 import { HomeTrackingSearch } from "./home-search";
+import { HomeLocation } from "./home-location";
 
 export const dynamic = "force-dynamic";
 
@@ -112,8 +113,13 @@ export default async function WarehouseHome() {
         </Link>
       </section>
 
+      {/* Current warehouse zone (fPallet) — worker-set, shared with scan-in */}
+      <section className="mt-3">
+        <HomeLocation />
+      </section>
+
       {/* Tracking search */}
-      <section className="mt-4">
+      <section className="mt-3">
         <HomeTrackingSearch />
       </section>
 
