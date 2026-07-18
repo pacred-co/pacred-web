@@ -3,7 +3,9 @@
 /**
  * Tracking search box on the warehouse home — faithful to the legacy
  * "ค้นหาหมายเลข Tracking..." field with the red magnifier button. Routes the
- * worker to the container/tracking report where the lookup happens.
+ * worker to the bulk tracking-search (owner-approved) with the typed value
+ * pre-filled + auto-run so results show immediately (searches tracking
+ * จีน/ไทย/สินค้า).
  */
 
 import { useState } from "react";
@@ -16,7 +18,7 @@ export function HomeTrackingSearch() {
 
   function go() {
     const q = value.trim();
-    router.push(q ? `/admin/report-cnt?find=${encodeURIComponent(q)}` : "/admin/report-cnt");
+    router.push(q ? `/admin/forwarders/bulk-search?q=${encodeURIComponent(q)}` : "/admin/forwarders/bulk-search");
   }
 
   return (
