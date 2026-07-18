@@ -46,6 +46,7 @@ import { isMomoRoutingPlaceholder } from "@/lib/admin/momo-container-resolve";
 export type CntListRow = {
   fcabinetnumber: string;
   fwarehousename: string;
+  fwarehousechina: string; // origin city code (1=กวางโจว · 2=อี้อู) → POD ต้นทาง
   fdatecontainerclose: string | null;
   fdatestatus4: string | null;
   ftransporttype: string;
@@ -63,6 +64,7 @@ type Props = {
   showMoney: boolean;
   isWaiting: boolean;
   warehouseLabel: Record<string, string>;
+  warehouseChinaLabel: Record<string, string>; // POD ต้นทาง (1=กวางโจว · 2=อี้อู)
   transportLabel: Record<string, string>;
   /**
    * Phase 3 (ops-workflow audit §30) — per-container completeness from
@@ -295,6 +297,7 @@ export function CntListTable({
   showMoney,
   isWaiting,
   warehouseLabel,
+  warehouseChinaLabel,
   transportLabel,
   completenessByCab,
   momoInfoByCab,
@@ -309,9 +312,9 @@ export function CntListTable({
   const canSelect = showMoney;
 
   // Total column count — drives the expanded box-detail row's colSpan.
-  // checkbox(canSelect) + 14 base cols (incl. ETD + ETA + T/T) + 3 money cols
-  // (showMoney) + 2 status cols.
-  const colCount = (canSelect ? 1 : 0) + 14 + (showMoney ? 3 : 0) + 2;
+  // checkbox(canSelect) + 15 base cols (incl. POD ต้นทาง + ETD + ETA + T/T) + 3
+  // money cols (showMoney) + 2 status cols.
+  const colCount = (canSelect ? 1 : 0) + 15 + (showMoney ? 3 : 0) + 2;
 
   // ติ๊กตู้ที่ส่งมาจากใบแจ้งหนี้ MOMO ไว้ให้ตั้งแต่เปิดหน้า (ถ้าไม่มี = เซ็ตว่างเหมือนเดิม).
   // seed ตอน mount เท่านั้น — หลังจากนั้นเป็นของผู้ใช้ (ติ๊ก/เอาออกได้ตามปกติ).
@@ -616,6 +619,11 @@ export function CntListTable({
               )}
               <SortableTH sortKeyValue="fcabinetnumber"      align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>หมายเลขตู้</SortableTH>
               <SortableTH sortKeyValue="fwarehousename"      align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>โกดัง</SortableTH>
+              {/* POD ต้นทาง — origin CITY (กวางโจว/อี้อู) · separate axis from โกดัง
+                  (MOMO/TTW operator) · owner 2026-07-18. Plain th (not sortable). */}
+              <th className="px-2 py-2 text-left">
+                <Explain align="left" label="POD ต้นทาง" def="โกดังต้นทางในจีน — กวางโจว (สาย MOMO) หรือ อี้อู (สาย TTW). แยกจากคอลัมน์ โกดัง ที่บอกบริษัทเฟรท (MOMO/TTW)" />
+              </th>
               <SortableTH sortKeyValue="fdatecontainerclose" align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>วันที่ปิดตู้</SortableTH>
               {/* ETD/ETA (report-cnt #4) — sea-departure (ETD) + Thailand-arrival
                   (ETA) per container · แต้ม (iTAM) PRIMARY · MOMO fallback (from
@@ -652,8 +660,8 @@ export function CntListTable({
                 the 2026-06-19 white variant (owner now wants it 100% เหมือน legacy). */}
             <tr className="bg-gradient-to-r from-[#ee7411] to-[#c24e4e] text-white text-sm border-y border-white/25 [&>td]:!border-white/30">
               {canSelect && <td className="px-2 py-2"></td>}
-              {/* colSpan covers หมายเลขตู้ + โกดัง + วันที่ปิดตู้ + ETD + ETA + T/T + ขนส่ง (7) */}
-              <td className="px-2 py-2 text-base font-bold" colSpan={7}>รวม ({search ? `${filteredRows.length}/${rows.length}` : rows.length} ตู้)</td>
+              {/* colSpan covers หมายเลขตู้ + โกดัง + POD ต้นทาง + วันที่ปิดตู้ + ETD + ETA + T/T + ขนส่ง (8) */}
+              <td className="px-2 py-2 text-base font-bold" colSpan={8}>รวม ({search ? `${filteredRows.length}/${rows.length}` : rows.length} ตู้)</td>
               <td className="px-2 py-2 text-right">เฉลี่ย: {totals.avgDay.toLocaleString()} วัน</td>
               <td className="px-2 py-2"></td>
               <td className="px-2 py-2 text-right">{totals.trackCount.toLocaleString()}</td>
@@ -820,6 +828,7 @@ export function CntListTable({
                     )}
                   </td>
                   <td className="px-2 py-2">{warehouseLabel[r.fwarehousename] ?? r.fwarehousename}</td>
+                  <td className="px-2 py-2 text-muted-foreground">{warehouseChinaLabel[r.fwarehousechina] ?? "—"}</td>
                   <td className="px-2 py-2 text-right">{fmtDate(r.fdatecontainerclose)}</td>
                   {/* ETD/ETA (report-cnt #4 · A) — แต้ม (iTAM) PRIMARY · MOMO fallback.
                       Source dot: green = แต้ม (ยึดเป็นหลัก) · gray = MOMO (มาเทียบ).

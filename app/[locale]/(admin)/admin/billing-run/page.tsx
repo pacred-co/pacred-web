@@ -62,8 +62,10 @@ export const dynamic = "force-dynamic";
 // Kept inline so this page is self-contained.
 const WAREHOUSE_LABEL: Record<string, string> = {
   "1": "แสง", "2": "CTT", "3": "MK", "4": "MX",
-  "5": "JMF", "6": "GOGO", "7": "Cargo Center", "8": "MOMO",
+  "5": "JMF", "6": "GOGO", "7": "Cargo Center", "8": "MOMO", "9": "TTW",
 };
+// POD ต้นทาง (origin city) — mirrors report-cnt (owner 2026-07-18).
+const WAREHOUSE_CHINA_LABEL: Record<string, string> = { "1": "กวางโจว", "2": "อี้อู" };
 const TRANSPORT_LABEL: Record<string, string> = {
   "1": "🚛 ทางรถ", "2": "🚢 ทางเรือ", "3": "✈️ ทางอากาศ",
 };
@@ -91,7 +93,7 @@ async function loadEligibleCabinets(): Promise<CntListRow[]> {
   const { data: rows, error } = await admin
     .from("tb_forwarder")
     .select(
-      "fwarehousename,fdatestatus4,fstatus,fcabinetnumber,fdatecontainerclose,ftransporttype,fvolume,fweight,fcosttotalprice,ftotalprice",
+      "fwarehousename,fwarehousechina,fdatestatus4,fstatus,fcabinetnumber,fdatecontainerclose,ftransporttype,fvolume,fweight,fcosttotalprice,ftotalprice",
     )
     .not("fcabinetnumber", "is", null)
     .neq("fcabinetnumber", "")
@@ -110,6 +112,7 @@ async function loadEligibleCabinets(): Promise<CntListRow[]> {
   // aggregate at app layer · same as /admin/report-cnt).
   type Row = {
     fwarehousename: string;
+    fwarehousechina: string;
     fdatestatus4: string | null;
     fstatus: string;
     fcabinetnumber: string;
@@ -137,6 +140,7 @@ async function loadEligibleCabinets(): Promise<CntListRow[]> {
       byContainer.set(k, {
         fcabinetnumber: k,
         fwarehousename: r.fwarehousename,
+        fwarehousechina: r.fwarehousechina ?? "",
         fdatecontainerclose: r.fdatecontainerclose,
         fdatestatus4: r.fdatestatus4,
         ftransporttype: r.ftransporttype,
@@ -441,6 +445,7 @@ export default async function BillingRunListPage({
                 showMoney={showMoney}
                 isWaiting={false}
                 warehouseLabel={WAREHOUSE_LABEL}
+                warehouseChinaLabel={WAREHOUSE_CHINA_LABEL}
                 transportLabel={TRANSPORT_LABEL}
               />
             </div>

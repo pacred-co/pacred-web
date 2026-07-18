@@ -80,10 +80,19 @@ type SP = {
 };
 
 // Legacy nameWarehouse() — fWarehouseName int → display name
+// โกดัง = the freight OPERATOR (fwarehousename). "8" = MOMO (กวางโจว route),
+// "9" = TTW (อี้อู/Yiwu route · owner 2026-07-18: "ถ้ามาจากทาง อี้อู ตอนนี้เราใช้ TTW
+// ไม่ใช่ MOMO"). The origin CITY (กวางโจว/อี้อู) is a SEPARATE axis = fwarehousechina,
+// shown in the new "POD ต้นทาง" column via WAREHOUSE_CHINA_LABEL below.
 const WAREHOUSE_LABEL: Record<string, string> = {
   "1": "แสง", "2": "CTT", "3": "MK", "4": "MX",
-  "5": "JMF", "6": "GOGO", "7": "Cargo Center", "8": "MOMO", "9": "อี้อู",
+  "5": "JMF", "6": "GOGO", "7": "Cargo Center", "8": "MOMO", "9": "TTW",
 };
+
+// POD ต้นทาง = origin warehouse CITY (fwarehousechina). Matches the detail
+// page's WAREHOUSE_CHINA_LABEL so list ↔ detail agree (owner 2026-07-18 "เพิ่ม
+// คอลัมน์ POD ต้นทาง เป็น กวางโจว หรือ อี้อู").
+const WAREHOUSE_CHINA_LABEL: Record<string, string> = { "1": "กวางโจว", "2": "อี้อู" };
 
 // Legacy nameTransportType2() — fTransportType
 const TRANSPORT_LABEL: Record<string, string> = {
@@ -98,6 +107,7 @@ const TRANSPORT_LABEL: Record<string, string> = {
 
 type Row = {
   fwarehousename: string;
+  fwarehousechina: string;
   fdatestatus4: string | null;
   fstatus: string;
   fcabinetnumber: string;
@@ -112,6 +122,7 @@ type Row = {
 type Grouped = {
   fcabinetnumber: string;
   fwarehousename: string;
+  fwarehousechina: string; // origin CITY code (1=กวางโจว · 2=อี้อู) → POD ต้นทาง column
   fdatecontainerclose: string | null;
   fdatestatus4: string | null;
   ftransporttype: string;
@@ -164,6 +175,7 @@ function groupByContainer(rows: Row[], paidContainers: Set<string>): Grouped[] {
       byContainer.set(k, {
         fcabinetnumber: k,
         fwarehousename: r.fwarehousename,
+        fwarehousechina: r.fwarehousechina ?? "",
         fdatecontainerclose: r.fdatecontainerclose,
         fdatestatus4: r.fdatestatus4,
         ftransporttype: r.ftransporttype,
@@ -280,7 +292,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
     let q = admin
       .from("tb_forwarder")
       .select(
-        "fwarehousename,fdatestatus4,fstatus,fcabinetnumber,fdatecontainerclose,ftransporttype,fvolume,fweight,fcosttotalprice,ftotalprice",
+        "fwarehousename,fwarehousechina,fdatestatus4,fstatus,fcabinetnumber,fdatecontainerclose,ftransporttype,fvolume,fweight,fcosttotalprice,ftotalprice",
       )
       .not("fcabinetnumber", "is", null)
       .neq("fcabinetnumber", "")
@@ -317,6 +329,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
     groupedNoPaid = ((rpcRes.data ?? []) as RpcSummary[]).map((r) => ({
       fcabinetnumber:      r.fcabinetnumber,
       fwarehousename:      r.fwarehousename ?? "",
+      fwarehousechina:     "", // RPC doesn't aggregate origin → filled by the podByCab map below
       fdatecontainerclose: r.fdatecontainerclose,
       fdatestatus4:        r.latest_fdatestatus4,
       ftransporttype:      r.ftransporttype ?? "",
@@ -360,9 +373,34 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
     paidSet = new Set((paidRows ?? []).map((r) => (r as { fCabinetNumber: string }).fCabinetNumber));
   }
 
+  // POD ต้นทาง (origin city) per container — the RPC only aggregates fwarehousename
+  // (operator), not fwarehousechina (origin). One cheap scoped read of the visible
+  // cabinets fills it (owner 2026-07-18: "เพิ่มคอลัมน์ POD ต้นทาง"). Uses the MAX
+  // origin code per cabinet (mirrors the RPC's MAX(fwarehousename) discipline).
+  const podByCab = new Map<string, string>();
+  if (visibleCabs.length > 0) {
+    const { data: podRows, error: podErr } = await admin
+      .from("tb_forwarder")
+      .select("fcabinetnumber,fwarehousechina")
+      .in("fcabinetnumber", visibleCabs);
+    if (podErr) {
+      console.error(`[report-cnt POD origin] failed`, { code: podErr.code, message: podErr.message });
+    }
+    for (const r of (podRows ?? []) as { fcabinetnumber: string; fwarehousechina: string | null }[]) {
+      const cur = podByCab.get(r.fcabinetnumber) ?? "";
+      const v = r.fwarehousechina ?? "";
+      if (v && v > cur) podByCab.set(r.fcabinetnumber, v);
+      else if (!podByCab.has(r.fcabinetnumber)) podByCab.set(r.fcabinetnumber, cur);
+    }
+  }
+
   let grouped: Grouped[] = queryFailed
     ? []
-    : groupedNoPaid.map((g) => ({ ...g, isPaid: paidSet.has(g.fcabinetnumber) }));
+    : groupedNoPaid.map((g) => ({
+        ...g,
+        fwarehousechina: g.fwarehousechina || (podByCab.get(g.fcabinetnumber) ?? ""),
+        isPaid: paidSet.has(g.fcabinetnumber),
+      }));
 
   if (actionPay === "1") grouped = grouped.filter((g) => !g.isPaid);
   if (actionPay === "2") grouped = grouped.filter((g) =>  g.isPaid);
@@ -453,6 +491,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
       "หมายเลขตู้":        g.fcabinetnumber,
       "เลขตู้/กระสอบจริง":  realContainer,
       "โกดัง":             WAREHOUSE_LABEL[g.fwarehousename] ?? g.fwarehousename,
+      "POD ต้นทาง":        WAREHOUSE_CHINA_LABEL[g.fwarehousechina] ?? "",
       "ขนส่ง":             TRANSPORT_LABEL[resolveTransportMode(g.fcabinetnumber, g.ftransporttype)] ?? g.ftransporttype,
       "วันที่ปิดตู้":       g.fdatecontainerclose ?? "",
       // ETD/ETA — แต้ม-primary · MOMO-fallback (momo_container_details · 0120).
@@ -606,6 +645,7 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
             showMoney={showMoney}
             isWaiting={isWaiting}
             warehouseLabel={WAREHOUSE_LABEL}
+            warehouseChinaLabel={WAREHOUSE_CHINA_LABEL}
             transportLabel={TRANSPORT_LABEL}
             completenessByCab={completenessByCab}
             momoInfoByCab={momoInfoByCab}

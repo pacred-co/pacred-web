@@ -19,6 +19,13 @@ ok(transportModeFromCabinetName("EK260601-3") === "1", "EK = road");
 ok(transportModeFromCabinetName("GZA260601-1") === "3", "GZA = air");
 ok(transportModeFromCabinetName("CBX260616-AIR02") === "3", "CBX…AIR = air");
 
+// YW — อี้อู/Yiwu (TTW route · owner 2026-07-18): YWS=เรือ · YWE=รถ · YWA=แอร์
+ok(transportModeFromCabinetName("YWS260717-8T") === "2", "YWS = sea");
+ok(transportModeFromCabinetName("YWE260801-2T") === "1", "YWE = road");
+ok(transportModeFromCabinetName("YWA260801-1T") === "3", "YWA = air");
+// early TTW containers kept GZ prefixes + a "-NT" TTW suffix → GZS still decodes sea
+ok(transportModeFromCabinetName("GZS260614-1T") === "2", "GZS…-1T (early TTW) = sea");
+
 // No token → null
 ok(transportModeFromCabinetName("") === null, "empty = null");
 ok(transportModeFromCabinetName(null) === null, "null = null");
