@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import { Link } from "@/i18n/navigation";
 import {
   adminBulkTrackingSearch,
@@ -26,9 +26,9 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled:        "ยกเลิก",
 };
 
-export function BulkSearchForm() {
+export function BulkSearchForm({ initialQuery = "" }: { initialQuery?: string }) {
   const [pending, startTransition] = useTransition();
-  const [raw, setRaw] = useState("");
+  const [raw, setRaw] = useState(initialQuery); // prefill from ?q (warehouse home)
   const [result, setResult] = useState<BulkSearchResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -49,20 +49,6 @@ export function BulkSearchForm() {
     e.preventDefault();
     runSearch(raw);
   }
-
-  // Prefill + auto-run from ?q=<tracking> — the warehouse-home tracking search
-  // (/admin/warehouse/home) hands a single tracking here. Ref-guarded so it
-  // fires exactly once (React StrictMode double-invokes effects in dev).
-  const didPrefill = useRef(false);
-  useEffect(() => {
-    if (didPrefill.current) return;
-    const q = new URLSearchParams(window.location.search).get("q")?.trim();
-    if (!q) return;
-    didPrefill.current = true;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setRaw(q);
-    runSearch(q);
-  }, [runSearch]);
 
   function clear() {
     setRaw("");
