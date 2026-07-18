@@ -49,6 +49,12 @@ import {
 } from "@/lib/admin/momo-raw-helpers";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { splitAggregatedMomoBoxRows } from "@/lib/integrations/momo-web/split-box-rows";
+// Base/suffix parsing for the family-aware dedup (4a½) — pure module, same parser
+// the split/absorb machinery uses, so the two sides can never disagree on shape.
+import {
+  baseOf as momoBaseOf,
+  suffixOf as momoSuffixOf,
+} from "@/lib/integrations/momo-web/split-box-rows-plan";
 import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
 import { ADDRESSES } from "@/components/seo/site";
@@ -536,36 +542,68 @@ export async function commitMomoRowCore(
 
   const nowIso = new Date().toISOString();
 
-  // ── 4a½. DEDUP vs an EXISTING tb_forwarder row (Fix F · 2026-07-13) ──
+  // ── 4a½. DEDUP vs the EXISTING tb_forwarder FAMILY (Fix F 2026-07-13 ·
+  //         cross-shape upgrade 2026-07-18 owner "ไม่เบิ้ลกล่อง ก็เบิ้ลคิว") ──
   // 💰 The 4b claim below only guards THIS staging row against a double-commit;
-  // it cannot see a forwarder row for the SAME tracking that another path
-  // already created (manual /review click on an older staging row · quick-add
-  // api-forwarder-manual · แต้ม reconcile). The autocommit cron pre-checks this
-  // in a BATCH read (auto-commit-momo.ts step 4), but that check is read-at-load
-  // (TOCTOU vs a concurrent manual commit) and fails OPEN when its lookup
-  // errors — so re-assert at the single chokepoint EVERY commit path funnels
-  // through, right before the claim+INSERT. Same semantics as
-  // checkNotDuplicateTracking (auto-commit-momo-safety.ts): fstatus ''/'0' =
-  // cleared → recommit OK. EXACT match only — box-split siblings carry a
-  // suffixed "<base>-i/n" tracking + insert via split-box-rows.ts, never here.
+  // it cannot see a forwarder row that another path already created (manual
+  // /review click on an older staging row · quick-add · แต้ม reconcile). The
+  // autocommit cron pre-checks in a BATCH read (auto-commit-momo.ts step 4),
+  // but that is read-at-load (TOCTOU) and fails OPEN on a lookup error — so
+  // re-assert at the single chokepoint EVERY commit path funnels through.
+  //
+  // THREE dup shapes (PR050 519218029029 = the cross-shape case: MOMO re-keyed
+  // the parcel base → "-1/2"/"-2/2" mid-flight, and each box was committed as
+  // an INDEPENDENT row → every group Σ double-counted, หน้าบ้าน+หลังบ้าน):
+  //   1. EXACT — a live row with this very tracking → refuse (Fix F เดิม).
+  //   2. incoming SUFFIXED "-i/n" + a live BARE base row → the shipment already
+  //      exists as an aggregate → refuse; the split/absorb pass (split-box-rows)
+  //      owns the aggregate→boxes conversion. Committing here would stack an
+  //      independent box row on top of the aggregate = the double-count.
+  //   3. incoming BARE + live SUFFIXED rows → the boxes already exist → refuse
+  //      (a late bare header would re-create the empty-aggregate residue).
+  // Live = fstatus not ''/'0' (checkNotDuplicateTracking semantics · cleared
+  // rows never block). A suffixed incoming NEVER blocks on a DIFFERENT suffixed
+  // sibling (multi-box commits of distinct boxes stay allowed).
+  const familyBase = momoBaseOf(trackingNo);
   const { data: dupRows, error: dupErr } = await admin
     .from("tb_forwarder")
-    .select("id, fstatus")
-    .eq("ftrackingchn", trackingNo)
-    .limit(5);
+    .select("id, fstatus, ftrackingchn")
+    .or(`ftrackingchn.eq.${familyBase},ftrackingchn.like.${familyBase}-%`)
+    .limit(40);
   if (dupErr) {
     // Fail CLOSED — a billable INSERT must not proceed on an unverifiable dedup.
     console.error(`[tb_forwarder dedup lookup] failed`, { code: dupErr.code, message: dupErr.message });
     return { ok: false, error: `db_error:${dupErr.code ?? "unknown"}` };
   }
-  const liveDup = ((dupRows ?? []) as Array<{ id: number; fstatus: string | null }>).find(
-    (r) => r.fstatus != null && r.fstatus !== "0" && r.fstatus !== "",
-  );
-  if (liveDup) {
+  // Exact-base filter (the .like can catch a longer tracking sharing the prefix —
+  // base "178055573" vs "1780555731") + live-only.
+  const family = ((dupRows ?? []) as Array<{ id: number; fstatus: string | null; ftrackingchn: string | null }>)
+    .filter((r) => momoBaseOf(String(r.ftrackingchn ?? "")) === familyBase)
+    .filter((r) => r.fstatus != null && r.fstatus !== "0" && r.fstatus !== "");
+  const incomingSuffix = momoSuffixOf(trackingNo);
+  const liveExact = family.find((r) => String(r.ftrackingchn ?? "").trim() === trackingNo);
+  if (liveExact) {
     return {
       ok: false,
-      error: `tracking นี้มีในระบบแล้ว (tb_forwarder #${liveDup.id} · fstatus=${liveDup.fstatus}) — ไม่สร้างแถวซ้ำ`,
+      error: `tracking นี้มีในระบบแล้ว (tb_forwarder #${liveExact.id} · fstatus=${liveExact.fstatus}) — ไม่สร้างแถวซ้ำ`,
     };
+  }
+  if (incomingSuffix > 0) {
+    const liveBare = family.find((r) => momoSuffixOf(String(r.ftrackingchn ?? "")) === 0);
+    if (liveBare) {
+      return {
+        ok: false,
+        error: `shipment นี้มีแถวรวมอยู่แล้ว (tb_forwarder #${liveBare.id}) — ห้าม commit กล่อง "-${incomingSuffix}/n" ซ้อน (ระบบ box-split/absorb จะแตกกล่องให้เอง)`,
+      };
+    }
+  } else {
+    const liveSuffixed = family.filter((r) => momoSuffixOf(String(r.ftrackingchn ?? "")) > 0);
+    if (liveSuffixed.length > 0) {
+      return {
+        ok: false,
+        error: `tracking นี้มีแถวกล่อง (-i/n) อยู่แล้ว (${liveSuffixed.map((r) => `#${r.id}`).join(", ")}) — ไม่สร้างแถวรวมซ้อน`,
+      };
+    }
   }
 
   // ── 4b. ATOMICALLY CLAIM the source row before the billable INSERT ──

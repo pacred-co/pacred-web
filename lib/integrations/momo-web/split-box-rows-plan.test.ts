@@ -435,4 +435,110 @@ check("NORMAL consistent boxes are UNCHANGED by the fallback (stored path still 
   assert.equal(d.rows[1].fweight, 21.5);
 });
 
+
+// ═════════════════════════════════════════════════════════════════════════════
+// planResidueAbsorb — heal «bare aggregate + "-1/n".."-n/n"» (2026-07-18 · PR050)
+// ═════════════════════════════════════════════════════════════════════════════
+
+import { planResidueAbsorb, type ResidueRowInput } from "./split-box-rows-plan";
+
+/** A residue-group row. Defaults = unbilled, untouched. Override per-test. */
+function rrow(p: Partial<ResidueRowInput> & { id: number; ftrackingchn: string }): ResidueRowInput {
+  return {
+    fstatus: "3", reforder: "", paydeposit: "0", advanceBillConfirmed: "0",
+    fweight: 0, fvolume: 0, fwidth: 0, flength: 0, fheight: 0, famount: 0,
+    famountcount: null, ftotalprice: 0, frefrate: 0, frefprice: "0", fcosttotalprice: 0,
+    ...p,
+  };
+}
+
+// The REAL PR050 519218029029 state (prod probe 2026-07-18).
+const PR050_BARE = rrow({
+  id: 52380, ftrackingchn: "519218029029", famount: 2, fweight: 36.5, fvolume: 0.071174,
+  ftotalprice: 730, frefrate: 20, frefprice: "1", fcosttotalprice: 334.4,
+});
+const PR050_SIBS = [
+  rrow({ id: 52477, ftrackingchn: "519218029029-1/2", famount: 1, fweight: 16.5, fvolume: 0.0356,  fwidth: 22, flength: 33, fheight: 49, fcosttotalprice: 334.52 }),
+  rrow({ id: 52478, ftrackingchn: "519218029029-2/2", famount: 1, fweight: 20,   fvolume: 0.035574, fwidth: 22, flength: 33, fheight: 49, fcosttotalprice: 334.52 }),
+];
+
+check("residue: PR050 bare-priced absorb — Σ(sell) preserved exactly · box-1 deleted · anchor adopts box-1", () => {
+  const d = planResidueAbsorb(PR050_BARE, PR050_SIBS, { allowPriced: true });
+  assert.ok(d.absorb);
+  if (!d.absorb) return;
+  assert.equal(d.mode, "bare-priced");
+  assert.equal(d.deleteSibId, 52477);                       // the "-1/2" row
+  assert.deepEqual(d.surviveSibIds, [52478]);
+  assert.equal(d.anchorPatch.fweight, 16.5);                // anchor = box 1
+  assert.equal(d.anchorPatch.famount, 1);
+  const sum = d.anchorPatch.ftotalprice + d.sibPatches.reduce((s, p) => s + p.ftotalprice, 0);
+  assert.equal(Math.round(sum * 100) / 100, 730);           // Σ === the bare's frozen total
+  assert.equal(d.sibPatches[0].id, 52478);
+  assert.ok(d.sibPatches[0].ftotalprice > 0);
+});
+
+check("residue: priced bare WITHOUT allowPriced → refused (cron never moves money)", () => {
+  const d = planResidueAbsorb(PR050_BARE, PR050_SIBS, {});
+  assert.ok(!d.absorb && d.reason === "bare_priced_needs_optin");
+});
+
+check("residue: unpriced weighted bare absorbs on the cron path (no money to move)", () => {
+  const bare = rrow({ ...PR050_BARE, id: 1, ftotalprice: 0, frefrate: 0 });
+  const d = planResidueAbsorb(bare, PR050_SIBS, {});
+  assert.ok(d.absorb);
+  if (!d.absorb) return;
+  assert.equal(d.mode, "unpriced");
+  assert.equal(d.anchorPatch.ftotalprice, 0);
+  assert.equal(d.sibPatches.length, 0);
+});
+
+check("residue: EMPTY bare (re-key header) — row-identity swap incl. box-1's own price", () => {
+  const bare = rrow({ id: 10, ftrackingchn: "888073011722" });
+  const sibs = [
+    rrow({ id: 11, ftrackingchn: "888073011722-1/2", famount: 1, fweight: 4, fvolume: 0.01, ftotalprice: 55 }),
+    rrow({ id: 12, ftrackingchn: "888073011722-2/2", famount: 1, fweight: 5, fvolume: 0.012 }),
+  ];
+  const d = planResidueAbsorb(bare, sibs, {});
+  assert.ok(d.absorb);
+  if (!d.absorb) return;
+  assert.equal(d.mode, "empty-bare");
+  assert.equal(d.anchorPatch.fweight, 4);
+  assert.equal(d.anchorPatch.ftotalprice, 55);              // box-1's own sell moves verbatim
+  assert.equal(d.deleteSibId, 11);
+});
+
+check("residue: PROPER split shape (bare anchor + '-2/n' only · no '-1/n') → refused no_box1_sib", () => {
+  const bare = rrow({ id: 20, ftrackingchn: "908006917359", famount: 1, fweight: 28.5, fvolume: 0.0138 });
+  const sibs = [rrow({ id: 21, ftrackingchn: "908006917359-2", famount: 1, fweight: 21.5, fvolume: 0.00882 })];
+  const d = planResidueAbsorb(bare, sibs, {});
+  assert.ok(!d.absorb && d.reason === "no_box1_sib");       // identical-weight twin can NEVER be destroyed
+});
+
+check("residue: any row billed/settled → refused (fstatus 5 · paydeposit · advance)", () => {
+  const d1 = planResidueAbsorb(rrow({ ...PR050_BARE, fstatus: "5" }), PR050_SIBS, { allowPriced: true });
+  assert.ok(!d1.absorb && d1.reason === "billed_or_settled");
+  const d2 = planResidueAbsorb(PR050_BARE, [ { ...PR050_SIBS[0], paydeposit: "1" }, PR050_SIBS[1] ], { allowPriced: true });
+  assert.ok(!d2.absorb && d2.reason === "billed_or_settled");
+  const d3 = planResidueAbsorb(PR050_BARE, [ { ...PR050_SIBS[0], advanceBillConfirmed: "1" }, PR050_SIBS[1] ], { allowPriced: true });
+  assert.ok(!d3.absorb && d3.reason === "billed_or_settled");
+});
+
+check("residue: sibling carries sell while bare weighted → refused sibs_priced (ambiguous money)", () => {
+  const d = planResidueAbsorb(PR050_BARE, [ { ...PR050_SIBS[0], ftotalprice: 100 }, PR050_SIBS[1] ], { allowPriced: true });
+  assert.ok(!d.absorb && d.reason === "sibs_priced");
+});
+
+check("residue: partial coverage (Σ sibs ≠ bare) → refused weight_mismatch/qty_mismatch", () => {
+  const dQty = planResidueAbsorb(PR050_BARE, [PR050_SIBS[0]], { allowPriced: true });
+  assert.ok(!dQty.absorb && dQty.reason === "qty_mismatch"); // 1 box vs famount 2
+  const dW = planResidueAbsorb(
+    rrow({ ...PR050_BARE, famount: 2, fweight: 99 }), PR050_SIBS, { allowPriced: true });
+  assert.ok(!dW.absorb && dW.reason === "weight_mismatch");
+});
+
+check("residue: reforder-linked group → refused has_reforder", () => {
+  const d = planResidueAbsorb(rrow({ ...PR050_BARE, reforder: "H123" }), PR050_SIBS, { allowPriced: true });
+  assert.ok(!d.absorb && d.reason === "has_reforder");
+});
+
 console.log(`\n✅ split-box-rows-plan.test.ts — ${passed} checks passed`);

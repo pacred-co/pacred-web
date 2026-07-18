@@ -410,3 +410,206 @@ export function planBoxRowSplit(
 
   return { split: true, priced, rows };
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// RESIDUE ABSORB — complete a HALF-SPLIT shipment (owner 2026-07-18 · PR050
+// 519218029029 "มีแค่ 2 กล่อง แต่ระบบแสดง 4 · ไม่เบิ้ลกล่อง ก็เบิ้ลคิว เบิ้ลน้ำหนัก").
+//
+// THE STATE THIS HEALS: a bare AGGREGATE tb_forwarder row (full shipment metrics)
+// coexists with a FULL set of suffixed box rows ("-1/n".."-n/n") for the SAME base.
+// It arises when MOMO RE-KEYS a parcel mid-flight: the import feed first returns the
+// bare base (committed → aggregate row), then later returns the same parcel as
+// "-1/n".."-n/n" staging rows, each committed as its OWN independent row (pre-Fix-F
+// backlog · or any future path that slips the chokepoint). Every group Σ (boxes /
+// weight / คิว / cost) then DOUBLE-COUNTS — หน้าบ้าน + หลังบ้าน both read the same
+// wrong rows, so both show the doubled numbers.
+//
+// WHY THE SPLIT'S OWN IDEMPOTENT SKIP CAN'T HEAL IT: splitAggregatedMomoBoxRows sees
+// "a suffixed sibling exists" → skipped.already_split → the aggregate is cemented
+// forever. This planner distinguishes the two states PRECISELY:
+//
+//   PROPER SPLIT  = bare anchor carries BOX 1 + siblings start at "-2/n"
+//                   (planBoxRowSplit NEVER creates a "-1/n" row — box 1 lives on
+//                   the bare anchor) → NOT residue → leave intact.
+//   RESIDUE       = a live "-1/n" (suffix === 1) row exists ALONGSIDE the bare row
+//                   → the box-1 row exists separately → the bare row is the stale
+//                   pre-split aggregate (or an empty re-key header).
+//
+// THE CONVERSION (→ the canonical split shape · anchor keeps id + bare tracking +
+// the momo_import_tracks linkage + suffix-0 เหมาๆ anchor):
+//   - anchor (the bare row) ADOPTS box-1's per-box payload; the "-1/n" row is DELETED
+//     (the writer re-points its staging committed_forwarder_id to the anchor so the
+//     dangling-ptr re-commit engine can never fire).
+//   - "-2/n".."-n/n" rows stay as-is.
+//   - MONEY: Σ(sell) across the group is PRESERVED EXACTLY —
+//       · bare priced + sibs unpriced → allocate the bare's frozen total across the
+//         boxes (คิว-first basis · anchor absorbs the satang remainder) — allowPriced
+//         callers only (the human-supervised sweep), NEVER the unattended cron.
+//       · all unpriced → convert; the caller re-prices each row from its OWN คิว.
+//       · sibs carry sell (ambiguous double-money state) → REFUSE + flag for a human.
+//   - An EMPTY bare (0 weight · 0 pieces · ฿0 — the re-key header that never got
+//     data) adopts box-1's payload VERBATIM incl. its price columns (row-identity
+//     swap · Σ unchanged by construction).
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** One LIVE tb_forwarder row of the residue group (bare + suffixed siblings). */
+export type ResidueRowInput = {
+  id: number;
+  ftrackingchn: string;
+  fstatus: string;
+  reforder: string;
+  paydeposit?: string | null;
+  advanceBillConfirmed?: string | null;
+  fweight: number;
+  fvolume: number;
+  fwidth: number;
+  flength: number;
+  fheight: number;
+  famount: number;
+  famountcount?: string | null;
+  ftotalprice: number;
+  frefrate?: number | string | null;
+  frefprice?: number | string | null;
+  fcosttotalprice?: number;
+};
+
+export type ResidueSkipReason =
+  | "billed_or_settled"     // any row fstatus 5/6/7/99 · paydeposit='1' · advance-confirmed
+  | "has_reforder"          // any row linked to a ฝากสั่งซื้อ
+  | "no_box1_sib"           // no suffix-1 row → not the residue signature (proper split)
+  | "sibs_priced"           // a sibling carries sell → ambiguous money state → human
+  | "bare_priced_needs_optin" // bare carries sell; caller didn't pass allowPriced (cron)
+  | "qty_mismatch"          // Σ sib pieces ≠ bare famount (not a full-coverage residue)
+  | "weight_mismatch"       // Σ sib weight ≉ bare fweight
+  | "cbm_mismatch";         // Σ sib คิว ≉ bare fvolume
+
+export type ResidueAbsorbDecision =
+  | {
+      absorb: true;
+      mode: "bare-priced" | "unpriced" | "empty-bare";
+      /** Per-box payload the bare ANCHOR row adopts (box 1). */
+      anchorPatch: {
+        fweight: number; fvolume: number; fwidth: number; flength: number;
+        fheight: number; famount: number;
+        ftotalprice: number; frefrate: number | string | null; frefprice: number | string | null;
+      };
+      /** bare-priced mode: allocated shares for the surviving suffixed rows. */
+      sibPatches: Array<{ id: number; ftotalprice: number; frefrate: number | string | null; frefprice: number | string | null }>;
+      /** The "-1/n" row to DELETE (its payload moved onto the anchor). */
+      deleteSibId: number;
+      /** Suffixed rows (≥2) that survive — for the writer's cost-dedup sweep. */
+      surviveSibIds: number[];
+    }
+  | { absorb: false; reason: ResidueSkipReason };
+
+const RESIDUE_FILLABLE = new Set(["1", "2", "3", "4"]);
+
+/**
+ * Decide whether — and HOW — to absorb a half-split residue group back into the
+ * canonical split shape. PURE (unit-testable); the writer applies the decision.
+ *
+ * @param bare  the suffix-0 aggregate row
+ * @param sibs  every LIVE suffixed row of the same base (any order)
+ */
+export function planResidueAbsorb(
+  bare: ResidueRowInput,
+  sibs: readonly ResidueRowInput[],
+  opts: BoxSplitOptions = {},
+): ResidueAbsorbDecision {
+  const relTolerance = opts.relTolerance ?? 0.02;
+
+  // ── hard money guards — EVERY row must be untouched by billing/settlement ──
+  const all = [bare, ...sibs];
+  for (const r of all) {
+    if (!RESIDUE_FILLABLE.has((r.fstatus ?? "").trim())) return { absorb: false, reason: "billed_or_settled" };
+    if ((r.paydeposit ?? "").trim() === "1") return { absorb: false, reason: "billed_or_settled" };
+    if ((r.advanceBillConfirmed ?? "").trim() === "1") return { absorb: false, reason: "billed_or_settled" };
+    if ((r.reforder ?? "").trim() !== "") return { absorb: false, reason: "has_reforder" };
+  }
+
+  // ── the residue signature: a live suffix-1 row (proper splits never have one) ──
+  const sorted = [...sibs].sort(
+    (a, b) => suffixOf(a.ftrackingchn) - suffixOf(b.ftrackingchn) || a.ftrackingchn.localeCompare(b.ftrackingchn),
+  );
+  const box1 = sorted[0];
+  if (!box1 || suffixOf(box1.ftrackingchn) !== 1) return { absorb: false, reason: "no_box1_sib" };
+  const survivors = sorted.slice(1);
+
+  const barePriced = Number(bare.ftotalprice) > 0;
+  const sibsPriced = sorted.some((s) => Number(s.ftotalprice) > 0);
+  const bareEmpty =
+    !(Number(bare.fweight) > 0) && !(Number(bare.famount) > 0) &&
+    !barePriced && !(Number(bare.fcosttotalprice ?? 0) > 0);
+
+  // ── EMPTY bare (re-key header that never got data): row-identity swap ──
+  // box-1's payload — incl. its OWN price columns — moves onto the anchor verbatim;
+  // Σ across the group is unchanged by construction (no allocation, no guard needed).
+  if (bareEmpty) {
+    return {
+      absorb: true,
+      mode: "empty-bare",
+      anchorPatch: {
+        fweight: r2(box1.fweight), fvolume: r6(box1.fvolume),
+        fwidth: r2(box1.fwidth), flength: r2(box1.flength), fheight: r2(box1.fheight),
+        famount: piecesOf(box1.famount),
+        ftotalprice: money2(box1.ftotalprice), frefrate: box1.frefrate ?? 0, frefprice: box1.frefprice ?? "0",
+      },
+      sibPatches: [],
+      deleteSibId: box1.id,
+      surviveSibIds: survivors.map((s) => s.id),
+    };
+  }
+
+  // ── WEIGHTED bare (the duplicated aggregate): full-coverage Σ guards ──
+  if (sibsPriced) return { absorb: false, reason: "sibs_priced" };
+
+  const sumQty = sorted.reduce((s, b) => s + piecesOf(b.famount), 0);
+  const sumWeight = sorted.reduce((s, b) => s + (Number(b.fweight) || 0), 0);
+  const sumCbm = sorted.reduce((s, b) => s + (Number(b.fvolume) || 0), 0);
+  const isFolded = (bare.famountcount ?? "").trim() === "1";
+  if (!isFolded && sumQty !== Math.round(Number(bare.famount))) {
+    return { absorb: false, reason: "qty_mismatch" };
+  }
+  if (relDiff(sumWeight, Number(bare.fweight) || 0) > relTolerance) {
+    return { absorb: false, reason: "weight_mismatch" };
+  }
+  if (relDiff(sumCbm, Number(bare.fvolume) || 0) > relTolerance) {
+    return { absorb: false, reason: "cbm_mismatch" };
+  }
+
+  // ── money: preserve the bare's frozen total EXACTLY (คิว-first basis) ──
+  if (barePriced && !opts.allowPriced) return { absorb: false, reason: "bare_priced_needs_optin" };
+
+  let anchorPrice = 0;
+  const patches: Array<{ id: number; ftotalprice: number; frefrate: number | string | null; frefprice: number | string | null }> = [];
+  if (barePriced) {
+    const total = money2(Number(bare.ftotalprice));
+    let basis = sorted.map((b) => Number(b.fvolume) || 0);
+    let basisSum = basis.reduce((s, v) => s + v, 0);
+    if (!(basisSum > 0)) { basis = sorted.map((b) => Number(b.fweight) || 0); basisSum = basis.reduce((s, v) => s + v, 0); }
+    if (!(basisSum > 0)) { basis = sorted.map(() => 1); basisSum = sorted.length; }
+    let survivorSum = 0;
+    for (let i = 1; i < sorted.length; i++) {
+      const share = money2((total * basis[i]) / basisSum);
+      patches.push({ id: sorted[i].id, ftotalprice: share, frefrate: bare.frefrate ?? 0, frefprice: bare.frefprice ?? "0" });
+      survivorSum = money2(survivorSum + share);
+    }
+    anchorPrice = money2(total - survivorSum); // anchor absorbs the remainder → Σ === total
+  }
+
+  return {
+    absorb: true,
+    mode: barePriced ? "bare-priced" : "unpriced",
+    anchorPatch: {
+      fweight: r2(box1.fweight), fvolume: r6(box1.fvolume),
+      fwidth: r2(box1.fwidth), flength: r2(box1.flength), fheight: r2(box1.fheight),
+      famount: piecesOf(box1.famount),
+      ftotalprice: anchorPrice,
+      frefrate: barePriced ? (bare.frefrate ?? 0) : 0,
+      frefprice: barePriced ? (bare.frefprice ?? "0") : "0",
+    },
+    sibPatches: patches,
+    deleteSibId: box1.id,
+    surviveSibIds: survivors.map((s) => s.id),
+  };
+}

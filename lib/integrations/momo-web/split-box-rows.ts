@@ -45,12 +45,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import {
   planBoxRowSplit,
+  planResidueAbsorb,
   baseOf,
   suffixOf,
   type BoxDetailInput,
   type AggregateRowInput,
   type BoxSplitOptions,
   type SplitSkipReason,
+  type ResidueRowInput,
 } from "./split-box-rows-plan";
 
 /** fstatus codes IN or THROUGH billing — a split must NEVER touch these rows (defence
@@ -91,8 +93,13 @@ export type BoxSplitResult = {
   siblingsCreated: number;
   /** Rows re-priced after the split (anchor + new siblings). */
   repriced: number;
-  /** Aggregates left intact, by reason (money-neutral guard / idempotency). */
-  skipped: Record<SplitSkipReason | "already_split" | "no_aggregate_row", number>;
+  /** HALF-SPLIT residue groups healed (bare aggregate absorbed into the box rows —
+   *  the double-count state · owner 2026-07-18 PR050 519218029029). */
+  absorbed: number;
+  /** Aggregates left intact, by reason (money-neutral guard / idempotency).
+   *  `residue_flagged` = a detected residue group REFUSED by the absorb guards
+   *  (billed / sibs-priced / Σ-mismatch / priced-without-optin) → needs a human. */
+  skipped: Record<SplitSkipReason | "already_split" | "no_aggregate_row" | "residue_flagged", number>;
   /** Per-item errors. Best-effort: an error never aborts the whole run. */
   errors: Array<{ scope: string; message: string }>;
 };
@@ -103,6 +110,7 @@ export function emptyBoxSplitResult(): BoxSplitResult {
     split: 0,
     siblingsCreated: 0,
     repriced: 0,
+    absorbed: 0,
     skipped: {
       already_billed: 0,
       has_reforder: 0,
@@ -114,6 +122,7 @@ export function emptyBoxSplitResult(): BoxSplitResult {
       not_bare_base: 0,
       already_split: 0,
       no_aggregate_row: 0,
+      residue_flagged: 0,
     },
     errors: [],
   };
@@ -179,6 +188,37 @@ export async function findMultiBoxBases(admin: SupabaseClient): Promise<string[]
 }
 
 /**
+ * RESIDUE candidate set (2026-07-18 · PR050) — bases whose live tb_forwarder rows
+ * show the HALF-SPLIT signature: a "-1/n" row (suffix 1) coexisting with rows of the
+ * same base. These need the ABSORB path even when momo_box_detail has NO rows for
+ * them (the re-key arrived via the import feed, never the Live boards — exactly why
+ * findMultiBoxBases alone can't see them). Cheap: suffix-1 rows are rare; one paged
+ * scan of the tracking column per cron.
+ */
+export async function findResidueBases(admin: SupabaseClient): Promise<string[]> {
+  const bases = new Set<string>();
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await admin
+      .from("tb_forwarder")
+      .select("ftrackingchn")
+      .like("ftrackingchn", "%-1/%")
+      .range(from, from + PAGE - 1);
+    if (error) {
+      console.error("[findResidueBases] scan failed", { code: error.code, message: error.message });
+      break;
+    }
+    const rows = (data ?? []) as { ftrackingchn: string | null }[];
+    for (const r of rows) {
+      const t = (r.ftrackingchn ?? "").trim();
+      if (suffixOf(t) === 1) bases.add(baseOf(t));
+    }
+    if (rows.length < PAGE) break;
+  }
+  return [...bases];
+}
+
+/**
  * Split the aggregate tb_forwarder rows for the given base trackings into N sibling
  * box rows (one per momo_box_detail box), money-neutral + idempotent.
  *
@@ -225,8 +265,17 @@ export async function splitAggregatedMomoBoxRows(
     }
   }
 
-  // Only bases with >1 box are split candidates.
-  const multiBoxBases = Array.from(boxesByBase.entries()).filter(([, rows]) => rows.length > 1);
+  // Only bases with >1 box are SPLIT candidates — but RESIDUE groups (a live "-1/n"
+  // row beside a bare row · the half-split double-count state) need the ABSORB path
+  // even when momo_box_detail has NOTHING for them (the re-key came via the import
+  // feed, never the Live boards). One cheap scan; the per-base loop re-guards.
+  const residueSet = new Set(await findResidueBases(admin));
+  for (const b of residueSet) {
+    if (!boxesByBase.has(b)) boxesByBase.set(b, []);
+  }
+  const multiBoxBases = Array.from(boxesByBase.entries()).filter(
+    ([b, rows]) => rows.length > 1 || residueSet.has(b),
+  );
   result.candidates = multiBoxBases.length;
   if (multiBoxBases.length === 0) return result;
 
@@ -254,11 +303,23 @@ export async function splitAggregatedMomoBoxRows(
       result.skipped.no_aggregate_row += 1;
       continue;
     }
-    // IDEMPOTENT: if ANY sibling with a suffix already exists, this shipment is already
-    // split → leave it (never double-split).
+    // IDEMPOTENT vs RESIDUE (owner 2026-07-18 · PR050 519218029029):
+    // a suffixed sibling existing does NOT always mean "already split". A PROPER split
+    // never creates a "-1/n" row (box 1 lives on the bare anchor · siblings start at
+    // "-2/n"). When a live "-1/n" row coexists with the bare row, the bare row is the
+    // STALE PRE-SPLIT AGGREGATE (MOMO re-keyed the parcel → the boxes were committed as
+    // independent rows) → every group Σ double-counts. That state can NEVER self-heal
+    // under a blanket skip — absorb it back into the canonical shape instead.
     const hasSuffixSibling = exact.some((r) => suffixOf(String(r.ftrackingchn ?? "")) > 0);
     if (hasSuffixSibling) {
-      result.skipped.already_split += 1;
+      const bareRaw = exact.find((r) => suffixOf(String(r.ftrackingchn ?? "")) === 0);
+      const sufRaws = exact.filter((r) => suffixOf(String(r.ftrackingchn ?? "")) > 0);
+      const minSuf = Math.min(...sufRaws.map((r) => suffixOf(String(r.ftrackingchn ?? ""))));
+      if (bareRaw && minSuf === 1) {
+        await absorbResidueGroup(admin, base, bareRaw, sufRaws, result, opts);
+      } else {
+        result.skipped.already_split += 1; // proper split shape (bare anchor + "-2/n"…)
+      }
       continue;
     }
     // Exactly one aggregate row (the bare base) is expected.
@@ -441,4 +502,212 @@ export async function splitAggregatedMomoBoxRows(
   }
 
   return result;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// RESIDUE ABSORB writer — apply a planResidueAbsorb decision (see the plan module
+// for the full state description). Converts «bare aggregate + "-1/n".."-n/n"» back
+// into the canonical split shape: the bare ANCHOR adopts box-1's payload, the
+// "-1/n" row is deleted, its staging ptr re-points to the anchor, survivors keep
+// their own box rows. Σ(sell) preserved EXACTLY per the plan; best-effort with
+// compensating reverts on the money steps (same discipline as the split writer).
+// ═════════════════════════════════════════════════════════════════════════════
+async function absorbResidueGroup(
+  admin: SupabaseClient,
+  base: string,
+  bareRaw: Record<string, unknown>,
+  sufRaws: Array<Record<string, unknown>>,
+  result: BoxSplitResult,
+  opts: BoxSplitOptions,
+): Promise<void> {
+  const toInput = (r: Record<string, unknown>): ResidueRowInput => ({
+    id: Number(r.id),
+    ftrackingchn: String(r.ftrackingchn ?? ""),
+    fstatus: String(r.fstatus ?? ""),
+    reforder: String(r.reforder ?? ""),
+    paydeposit: (r.paydeposit as string | null) ?? null,
+    advanceBillConfirmed: (r.advance_bill_confirmed as string | null) ?? null,
+    fweight: n(r.fweight as number | string | null),
+    fvolume: n(r.fvolume as number | string | null),
+    fwidth: n(r.fwidth as number | string | null),
+    flength: n(r.flength as number | string | null),
+    fheight: n(r.fheight as number | string | null),
+    famount: n(r.famount as number | string | null),
+    famountcount: (r.famountcount as string | null) ?? null,
+    ftotalprice: n(r.ftotalprice as number | string | null),
+    frefrate: r.frefrate as number | string | null,
+    frefprice: r.frefprice as number | string | null,
+    fcosttotalprice: n(r.fcosttotalprice as number | string | null),
+  });
+  const bare = toInput(bareRaw);
+  const sibs = sufRaws.map(toInput);
+
+  const flag = (reason: string) => {
+    result.skipped.residue_flagged += 1;
+    result.errors.push({ scope: `residue:${base}`, message: reason });
+  };
+
+  // ── extra hard guard the pure plan can't see: NO row on ANY invoice ──
+  const allIds = [bare.id, ...sibs.map((s) => s.id)];
+  const { data: invItems, error: invErr } = await admin
+    .from("tb_forwarder_invoice_item")
+    .select("forwarder_id")
+    .in("forwarder_id", allIds);
+  if (invErr) {
+    flag(`invoice-guard read failed: ${invErr.code} ${invErr.message}`);
+    return;
+  }
+  if ((invItems ?? []).length > 0) {
+    flag(`on an invoice (${(invItems ?? []).map((i) => (i as { forwarder_id: number }).forwarder_id).join(",")}) — accounting must resolve`);
+    return;
+  }
+
+  const decision = planResidueAbsorb(bare, sibs, opts);
+  if (!decision.absorb) {
+    flag(decision.reason);
+    return;
+  }
+  const box1 = sibs.find((s) => s.id === decision.deleteSibId)!;
+
+  // ── cabinet / transport / arrival adoption (data columns · money-free) ──
+  // The suffixed rows came from the NEWER MOMO feed → their container is the real
+  // one (PR050: bare said GZS260705-1 sea · boxes + staging said GZE260707-1 road).
+  // Adopt when the sibs AGREE on a non-empty cabinet that differs from the bare's
+  // and the bare isn't hand-locked (fcabinet_locked · mig 0150).
+  const sibCabs = new Set(sufRaws.map((r) => String(r.fcabinetnumber ?? "").trim()).filter(Boolean));
+  const sibCab = sibCabs.size === 1 ? [...sibCabs][0]! : null;
+  const bareCab = String(bareRaw.fcabinetnumber ?? "").trim();
+  const cabLocked = bareRaw.fcabinet_locked === true;
+  const adoptCab = sibCab && sibCab !== bareCab && !cabLocked ? sibCab : null;
+  const sibTt = new Set(sufRaws.map((r) => String(r.ftransporttype ?? "").trim()).filter(Boolean));
+  const adoptTt = adoptCab && sibTt.size === 1 ? [...sibTt][0]! : null;
+  // fdatetothai — fill-when-empty from the boxes (they carry the real TH arrival).
+  const bareDate = String(bareRaw.fdatetothai ?? "").trim();
+  const sibDates = sufRaws.map((r) => String(r.fdatetothai ?? "").trim()).filter((d) => d && d !== "0000-00-00");
+  const adoptDate = (!bareDate || bareDate === "0000-00-00") && sibDates.length > 0 ? sibDates.sort().at(-1)! : null;
+
+  // ── 1. survivor price patches FIRST (bare-priced mode · adds the shares) ──
+  // Transient over-count window (share on survivor + full total still on the bare)
+  // is the safe direction; a failure reverts the applied patches → group unchanged.
+  const patched: number[] = [];
+  for (const p of decision.sibPatches) {
+    const { data: pr, error: pErr } = await admin
+      .from("tb_forwarder")
+      .update({ ftotalprice: p.ftotalprice, frefrate: p.frefrate, frefprice: p.frefprice, adminidupdate: "sys-absorb" })
+      .eq("id", p.id)
+      .lte("ftotalprice", 0) // TOCTOU — still unpriced, else 0 rows
+      .in("fstatus", FILLABLE_FSTATUS)
+      .select("id");
+    if (pErr || !pr || pr.length === 0) {
+      for (const id of patched) {
+        await admin.from("tb_forwarder").update({ ftotalprice: 0, frefrate: 0, frefprice: "0" }).eq("id", id);
+      }
+      flag(`survivor price patch failed/raced (fid ${p.id}${pErr ? ` · ${pErr.code} ${pErr.message}` : ""}) — reverted`);
+      return;
+    }
+    patched.push(p.id);
+  }
+
+  // ── 2. ANCHOR adopts box-1's payload (+ the real cabinet/date) ──
+  let anchorQ = admin
+    .from("tb_forwarder")
+    .update({
+      fweight: decision.anchorPatch.fweight,
+      fvolume: decision.anchorPatch.fvolume,
+      fwidth: decision.anchorPatch.fwidth,
+      flength: decision.anchorPatch.flength,
+      fheight: decision.anchorPatch.fheight,
+      famount: decision.anchorPatch.famount,
+      ftotalprice: decision.anchorPatch.ftotalprice,
+      frefrate: decision.anchorPatch.frefrate,
+      frefprice: decision.anchorPatch.frefprice,
+      // empty-bare = row-identity swap → box-1's shipment cost moves too (it is the
+      // only place the group's cost survives once the "-1/n" row is deleted below).
+      ...(decision.mode === "empty-bare" ? { fcosttotalprice: box1.fcosttotalprice ?? 0 } : {}),
+      ...(adoptCab ? { fcabinetnumber: adoptCab } : {}),
+      ...(adoptTt ? { ftransporttype: adoptTt } : {}),
+      ...(adoptDate ? { fdatetothai: adoptDate } : {}),
+      adminidupdate: "sys-absorb",
+    })
+    .eq("id", bare.id)
+    .eq("famount", bare.famount) // TOCTOU — still the same aggregate
+    .in("fstatus", FILLABLE_FSTATUS);
+  anchorQ = decision.mode === "bare-priced"
+    ? anchorQ.eq("ftotalprice", bare.ftotalprice)
+    : anchorQ.lte("ftotalprice", 0);
+  const { data: aRows, error: aErr } = await anchorQ.select("id");
+  if (aErr || !aRows || aRows.length === 0) {
+    for (const id of patched) {
+      await admin.from("tb_forwarder").update({ ftotalprice: 0, frefrate: 0, frefprice: "0" }).eq("id", id);
+    }
+    flag(`anchor adopt failed/raced (fid ${bare.id}${aErr ? ` · ${aErr.code} ${aErr.message}` : ""}) — survivors reverted`);
+    return;
+  }
+
+  // ── 3. DELETE the "-1/n" row (its payload now lives on the anchor) ──
+  const { data: dRows, error: dErr } = await admin
+    .from("tb_forwarder")
+    .delete()
+    .eq("id", decision.deleteSibId)
+    .eq("ftotalprice", box1.ftotalprice) // unchanged since read (0 in weighted modes)
+    .in("fstatus", FILLABLE_FSTATUS)
+    .select("id");
+  if (dErr || !dRows || dRows.length === 0) {
+    // Anchor already adopted → box-1 now DOUBLE-counted until a human resolves.
+    // Next cron re-detects the group but Σ guards will refuse (by design) → LOUD.
+    console.error("[absorbResidueGroup] 🔴 box-1 delete failed AFTER anchor adopt — box-1 double-counted until manual fix", {
+      base, deleteSibId: decision.deleteSibId, code: dErr?.code, message: dErr?.message,
+    });
+    flag(`box-1 delete failed after anchor adopt (fid ${decision.deleteSibId}) — MANUAL`);
+    return;
+  }
+
+  // ── 4. Re-point the deleted row's staging ptr → the anchor (kills the
+  //      dangling-ptr re-commit engine · momo-boxsplit-3-roots Root 3) ──
+  const { error: rpErr } = await admin
+    .from("momo_import_tracks")
+    .update({ committed_forwarder_id: bare.id, updated_at: new Date().toISOString() })
+    .eq("committed_forwarder_id", decision.deleteSibId);
+  if (rpErr) {
+    console.error("[absorbResidueGroup] staging re-point failed (dangling ptr!)", {
+      base, from: decision.deleteSibId, to: bare.id, code: rpErr.code, message: rpErr.message,
+    });
+    result.errors.push({ scope: `residue-repoint:${base}`, message: `${rpErr.code} ${rpErr.message}` });
+  }
+
+  // ── 5. Cost dedup on survivors — in the residue state each committed box row
+  //      carried the FULL shipment cost (the dup-commit compute) → shipment cost
+  //      must live ONCE (anchor · SHIPMENT_LEVEL_MONEY rule). Money-INTERNAL
+  //      (fcosttotalprice is cost, not customer sell). ──
+  const dupCostIds = decision.surviveSibIds.filter((id) => {
+    const s = sibs.find((x) => x.id === id);
+    return (s?.fcosttotalprice ?? 0) > 0;
+  });
+  if (dupCostIds.length > 0) {
+    const { error: cErr } = await admin
+      .from("tb_forwarder")
+      .update({ fcosttotalprice: 0 })
+      .in("id", dupCostIds);
+    if (cErr) {
+      result.errors.push({ scope: `residue-cost:${base}`, message: `${cErr.code} ${cErr.message}` });
+    }
+  }
+
+  result.absorbed += 1;
+  console.info("[absorbResidueGroup] healed half-split residue", {
+    base, mode: decision.mode, anchor: bare.id, deleted: decision.deleteSibId,
+    survivors: decision.surviveSibIds, adoptCab, adoptDate,
+  });
+
+  // ── 6. UNPRICED mode → engine re-price each surviving row from its OWN คิว ──
+  if (decision.mode === "unpriced") {
+    for (const id of [bare.id, ...decision.surviveSibIds]) {
+      try {
+        const rr = await computeAndFillForwarderImportRate(admin, id);
+        if (rr.wrote) result.repriced += 1;
+      } catch (e) {
+        console.error("[absorbResidueGroup] re-price threw", { id, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+  }
 }
