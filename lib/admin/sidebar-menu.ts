@@ -535,6 +535,8 @@ const blockApiForwarderUpdate: MenuItem = {
     // box-split arrival rows (fstatus 2 · fwarehousechina 2 = อี้อู rate card). The
     // packing-list upload later assigns the container + advances to "กำลังมาไทย".
     { labelKey: "apiForwarderUpdate.yiwu", href: "/admin/api-forwarder-yiwu", icon: "FileImage" },
+    // TTW/อี้อู packing-list staging → CS ใส่ PR (mig 0262 · ttw_packing_line · owner 2026-07-18).
+    { labelKey: "apiForwarderUpdate.ttw",  href: "/admin/api-forwarder-ttw",  icon: "PackagePlus" },
     { labelKey: "apiForwarderUpdate.cn",   href: "/admin/api-forwarder-cn",   icon: "Truck" },
     // 2026-06-14 (W6 · carrier-fidelity) — port the 3 remaining legacy
     // carrier API pages: JMF (read-only history viewer over tb_forwarder_jmf_tmp) ·
