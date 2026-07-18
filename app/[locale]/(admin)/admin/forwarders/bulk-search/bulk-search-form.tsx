@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { Link } from "@/i18n/navigation";
 import {
   adminBulkTrackingSearch,
@@ -32,19 +32,37 @@ export function BulkSearchForm() {
   const [result, setResult] = useState<BulkSearchResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const runSearch = useCallback((input: string) => {
     setErr(null);
     setResult(null);
     startTransition(async () => {
-      const res = await adminBulkTrackingSearch({ raw_input: raw });
+      const res = await adminBulkTrackingSearch({ raw_input: input });
       if (res.ok && res.data) {
         setResult(res.data);
       } else if (!res.ok) {
         setErr(res.error);
       }
     });
+  }, []);
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    runSearch(raw);
   }
+
+  // Prefill + auto-run from ?q=<tracking> — the warehouse-home tracking search
+  // (/admin/warehouse/home) hands a single tracking here. Ref-guarded so it
+  // fires exactly once (React StrictMode double-invokes effects in dev).
+  const didPrefill = useRef(false);
+  useEffect(() => {
+    if (didPrefill.current) return;
+    const q = new URLSearchParams(window.location.search).get("q")?.trim();
+    if (!q) return;
+    didPrefill.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRaw(q);
+    runSearch(q);
+  }, [runSearch]);
 
   function clear() {
     setRaw("");
