@@ -3,6 +3,24 @@
 
 ---
 
+# 🧾 2026-07-18 ปิด session (เดฟ · Mac · owner iterate 9 จุด · plan-checkpoint ครบ A-J) — หัวแถว=แถวเดี่ยว · แพคกิ้งลิสต์ตรงตารางใหญ่+รูป · popup ROOT-FIX ทั้งระบบ · sidebar hover-intent · กำไรติดลบ explainer · gate ที่อยู่ · เรทขนส่งไทย auto · ปลด packing-gate → ALL 4 BRANCHES · read FIRST
+
+> **🏁 STATE. main = dave-pacred = Poom-pacred = InwPond007 = `<HEAD>`** (Vercel prod). plan-checkpoint: [`docs/wip/plan-2026-07-18-reportcnt-iterate2.md`](docs/wip/plan-2026-07-18-reportcnt-iterate2.md) = A-I ✅. gate: **tsc 0 · build 0 · tests (domestic-shipping / debit-total 91 / pay-method 31 / carrier-guard 69)**. no migration (NEXT FREE = 0262). 🔑 prod pw chat-only `DqOzfEZVXfMHIryz`. ⚠️ NOT authed-render (§0c) — owner ทดสอบบน prod.
+>
+> **✅ SHIPPED (owner iterate จากทดสอบ deploy จริง):**
+> - **หัวแถวชิปเม้น = ทำงานเหมือนแถวเดี่ยว** (report-cnt/[fNo]): checkbox โชว์เสมอ (disabled+เหตุผล: ยังไม่ถึงไทย/ยิงไม่ครบ/ไม่มีที่อยู่/จ่ายค่าตู้แล้ว) · **ติ๊กแล้วเขียว** (pcs-row-selected) · **เลขแทรคหัวแถว = ลิงก์** → /admin/forwarders/[id] · tag ครบเหมือนแถวเดี่ยว (pill ปริมาตร/น้ำหนัก ใน ค่านำเข้า + pill เรทขาย frefrate ใต้ ประเภท).
+> - **แพคกิ้งลิสต์ (ดรอปดาว) เรียงคอลัมน์ตรงตารางใหญ่**: # · แทรคกิ้ง · **รูป** · ลัง(รับ/คาด) · ปริมาตร CBM · หนัก · ประเภท → ก·ย·ส ท้ายสุด. รูปต่อแทรค = thumbnail ย่อ (.pcs-pack-img) · **hover ขยาย ×4.5 · คลิกเปิดแท็บใหม่**. กล่อง/ลัง = **"0/1" เสมอ** (fmtBox · เลิก "-/1").
+> - **🔴 popup ทั้งระบบ ROOT-FIX** ("ต้องเลื่อนจอหา popup แย่จัด 5555"): `app-fade-in` เลิก animate transform — filled transform animation บน RouteFade (ครอบทุกหน้า admin) = **containing block ของ fixed ทุกตัว** → 29 modal center กับความสูงทั้งหน้า. opacity-only = ทุก modal กลับมากลางจอ ทั้ง platform (1 บรรทัด · [[nextjs-16-quirks]] · ห้ามใส่ transform กลับ).
+> - **sidebar "กางบังไม่ยอมพับ" (admin_aom)**: hover-intent 0.28s ก่อนกาง (ปัดผ่านไม่เด้ง · หุบทันที) + floating bars ใช้ `.admin-floating-action` (track pinned-open 17rem/rail 5rem/rail-hover — admin_aom = pinned-open ทับ left-80px เดิม).
+> - **กำไรติดลบ 52197 "โดนบ่นตาย"**: ไม่ใช่ขาดทุนจริง — box-split แบ่งขายตามน้ำหนัก/ต้นทุนตามคิว → แทรคเบาแดงรายแถว แต่ทั้งชิปเม้นบวก (1782555393: Σขาย 46,244 > Σทุน 34,973). ForwarderProfitPanel + **rollup "กำไรคิดทั้งชิปเม้น (N แทรค)" + explainer** (display-only).
+> - **🔴 gate คิวตรวจสอบ = ต้องตั้งที่อยู่จัดส่งก่อน** (server adminReportCntAddCheck + client mirror · PCS รับเองยกเว้น) — กันค่าขนส่งไทยตกตอนวางบิล.
+> - **🔴 เรทขนส่งไทย auto "เก็บตามจริง ไม่ใช่ 50"**: quote จริง (Flash table girth+kg+margin) ยิงตอน **วัดขนาดเซฟ + เลือกขนส่ง** (autoFillThShippingForForwarder `{costOnly}` · fill-when-empty · ไม่ทับ carrier/paymethod ที่เพิ่งเลือก). + admin carrier-select stamp paymethod ตามกฎเอกชน→ปลายทาง (path นี้ไม่เคย stamp) · Flash full-fill payMethod '1'→'2' (align กฎ · COD gate กันไม่ขึ้นบิล).
+> - **ปลด packing-upload gate ก่อนวางบิล** (advisory · `PACKING_GATE_ENFORCED=false` ใน createBillingRunInvoice · re-lock 1 จุด) + tag ย่อเหลือ 📦/⏳ + tooltip. (box-scan gate ยิงกล่องครบ **ยังอยู่** — คนละตัว.)
+>
+> **🟡 CARRYOVER:** เดิมทั้งหมดยังอยู่ (GZE260624-1 underpriced=pricing เคาะ · 5 ตู้ cost=0 รอ MOMO invoice · 519218029029 self-heal · arrival-scan design · A7 live-test · billed-lump).
+
+---
+
 # 🧾 2026-07-18 ดึก (เดฟ · Mac · owner จากรูป container-detail) — report-cnt/[fNo] คิดเงินต่อชิปเม้น + ดรอปดาว=แพคกิ้งลิสต์ + หัวแถวแดง/ขาว + gate วางบิลตามยิงกล่องครบ → ALL 4 BRANCHES · read FIRST
 
 > **🏁 STATE. main = dave-pacred = Poom-pacred = InwPond007 = `eb133d54`** (Vercel prod · integrate ปอน marketing-planner `a324511f` = merge สะอาด · no migration). gate: **tsc 0 · build 0 · 3-agent adversarial review** (จับ FAIL: single-tracking gate หลุด → fix). ⚠️ ไม่มี admin login → verify tsc/build/review · **NOT authed-render** (§0c). prod pw chat-only `DqOzfEZVXfMHIryz`.
