@@ -3,6 +3,19 @@
 
 ---
 
+# 🧾 2026-07-18 ปิด session-2 (เดฟ · Mac · owner iterate 3 จุด K-M) — สี selection จี๊ดจ๊าด · หัวแถว=รายละเอียดครบเหมือนแถวเดี่ยว · backfill ต้นทุนตู้ถึงไทย 11 แถว → ALL 4 BRANCHES · read FIRST
+
+> **🏁 STATE. main = dave-pacred = Poom-pacred = InwPond007 = `<HEAD>`** (Vercel prod). plan: [`docs/wip/plan-2026-07-18-reportcnt-iterate3.md`](docs/wip/plan-2026-07-18-reportcnt-iterate3.md) K-M ✅. gate: **tsc 0 · build 0**. no migration (NEXT FREE = 0262). 🔑 prod pw chat-only `DqOzfEZVXfMHIryz`. ⚠️ NOT authed-render — owner ทดสอบบน prod.
+>
+> **✅ SHIPPED:**
+> - **สี selection VIVID (owner "ไม่เอาเขียวจืด · จี๊ดจ๊าดเข้ม ไล่ทั้งระบบ")**: report-cnt LIST selected `bg-emerald-50`→**`bg-emerald-300 ring-2 emerald-600`** · pill จ่ายแล้ว/ยังไม่จ่าย -100→solid-600 bold. (DETAIL selection = magenta→orange gradient เข้มอยู่แล้ว · FSTATUS chip solid-500/600 จาก 2026-07-15 → tags ไม่ต้องแก้.)
+> - **หัวแถว/หัวบิล (summary) = รายละเอียดครบเหมือนแถวเดี่ยว** (owner "tag ไม่ครบ · คำอธิบายไม่มี"): aggregateGroup += fcredit/isJuristic/paymethod/faddress·/detailDisplay → summary โชว์ **ที่อยู่จัดส่ง + ปลายทาง(COD)** ใต้การขนส่ง · **นิติ/เครดิตได้ + next-action hint** (🔔) ในสถานะ. ชิปเม้น = ออเดอร์ลูกค้า 1 อัน ไม่ต่างจากแถวแทรคเดียว.
+> - **🔴 backfill ต้นทุนตู้ถึงไทย** (`scripts/backfill-arrived-cost-empty-2026-07-18` · applied prod · dry-run+backup): 11 แถว fstatus 4/5 · cost=0 · **unbilled** → fill = fvolume × rate (2500 เรือ/4700 รถ · mig 0260 · ตรง live-cost ที่ page แสดง). money-NEUTRAL (cost internal). Σ ฿3,594 · re-scan 0. **no_addr 16 + tth-ว่าง(zip ว่าง/สมใจสาย) 5 = fill ไม่ได้** (ต้องที่อยู่จริง · ห้ามกุ) → G-gate บล็อคคิวไว้ · CS ใส่ที่อยู่.
+>
+> **🟡 CARRYOVER (owner/CS · ไม่ auto):** 16 แถวถึงไทยยังไม่มีที่อยู่จัดส่ง + 5 แถว Flash/เอกชน zip ว่าง (ค่าส่งไทย=0) → CS ใส่ที่อยู่/เลือกขนส่ง (G-gate กันเข้าคิวแล้ว). เดิมทั้งหมดยังอยู่ (GZE260624-1 underpriced · 519218029029 self-heal · A7 live-test · billed-lump).
+
+---
+
 # 🧾 2026-07-18 ปิด session (เดฟ · Mac · owner iterate 9 จุด · plan-checkpoint ครบ A-J) — หัวแถว=แถวเดี่ยว · แพคกิ้งลิสต์ตรงตารางใหญ่+รูป · popup ROOT-FIX ทั้งระบบ · sidebar hover-intent · กำไรติดลบ explainer · gate ที่อยู่ · เรทขนส่งไทย auto · ปลด packing-gate → ALL 4 BRANCHES · read FIRST
 
 > **🏁 STATE. main = dave-pacred = Poom-pacred = InwPond007 = `<HEAD>`** (Vercel prod). plan-checkpoint: [`docs/wip/plan-2026-07-18-reportcnt-iterate2.md`](docs/wip/plan-2026-07-18-reportcnt-iterate2.md) = A-I ✅. gate: **tsc 0 · build 0 · tests (domestic-shipping / debit-total 91 / pay-method 31 / carrier-guard 69)**. no migration (NEXT FREE = 0262). 🔑 prod pw chat-only `DqOzfEZVXfMHIryz`. ⚠️ NOT authed-render (§0c) — owner ทดสอบบน prod.

@@ -18,7 +18,7 @@
       probe prod (read-only) หา: (a) แถวในคิว/ถึงไทย ที่ ค่าขนส่งไทยว่าง (Flash/J&T · measured) → auto-quote
       (b) ต้นทุน/เรทว่าง (มี rate card) → live-cost fill (c) box-count/สแกนไม่ตรง. dry-run + backup ก่อน --apply.
       money = fill-when-empty · ห้ามแตะ billed (fstatus≥5 ใน bill) · verify Σ.
-- [ ] **N. Close: gate + learnings + memory + savepoint + push all 4.**
+- [x] **N. Close: gate + learnings + memory + savepoint + push all 4.**
 
 ## กติกา
 - push dave-pacred ระหว่างทาง · money = default-fill เท่านั้น · dry-run ก่อน write · gate tsc0/build0.
