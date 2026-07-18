@@ -23,7 +23,7 @@ import { Phone, Mail, Globe, User } from "lucide-react";
 import { round2, type QuoteTotals } from "@/lib/quote/cargo-quote-calc";
 import { readThaiBaht } from "@/lib/utils/thai-number";
 import {
-  CUSTOMS_ADDON, QUOTE_HEADER, QUOTE_HOW_TO, type PackageRate,
+  CUSTOMS_ADDON, QUOTE_HEADER, QUOTE_HOW_TO, FDA_SPECIAL_RATE, type PackageRate,
 } from "@/lib/quote/cargo-promo-packages";
 
 export const QUOTE_LOGO = "/images/pacred-logo-red.png";
@@ -51,6 +51,27 @@ export type CompareRow = {
    *  the source warehouse id "1"|"2" + the product ids this row maps to (["1","2"]). */
   warehouseId?: string; products?: string[];
 };
+
+/**
+ * อย.·พิเศษ = เรทเหมา FDA ล็อกทั้งระบบ (owner ปอน 2026-07-18) — 7,600 ฿/คิว·45 ฿/กก. (รถ) ·
+ * 6,600 ฿/คิว·35 ฿/กก. (เรือ) · ทุกโกดัง/แพ็ก/ลูกค้า · override SVIP/ทั่วไป · ทั้งใบเก่า+ใหม่.
+ * บังคับที่ทั้ง seed (ใบใหม่) และ render/serialize (ใบที่บันทึกไว้แล้ว) → ไม่ต้องแก้ DB.
+ */
+export const FDA_LOCK_CATEGORY = "อย. · พิเศษ";
+export function isFdaLockRow(r: { category?: string }): boolean {
+  return (r.category ?? "").replace(/\s+/g, "") === FDA_LOCK_CATEGORY.replace(/\s+/g, "");
+}
+export function lockFdaCompareRows(rows: CompareRow[]): CompareRow[] {
+  return rows.map((r) =>
+    isFdaLockRow(r)
+      ? {
+          ...r,
+          truck: { ...r.truck, cbm: FDA_SPECIAL_RATE.truck.cbm, kg: FDA_SPECIAL_RATE.truck.kg },
+          ship: { ...r.ship, cbm: FDA_SPECIAL_RATE.ship.cbm, kg: FDA_SPECIAL_RATE.ship.kg },
+        }
+      : r,
+  );
+}
 
 /**
  * The complete render model — serialized into `customer_quotations.payload`.
@@ -204,10 +225,11 @@ function CompareTable({ model }: { model: QuoteModel }) {
           <tr><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">โกดัง</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ประเภทสินค้า</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ทางรถ 🚛</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ทางเรือ 🚢</th></tr>
         </thead>
         <tbody>
-          {model.compareRows.map((r, i) => {
+          {lockFdaCompareRows(model.compareRows).map((r, i, arr) => {
             // Show the warehouse name only on the first row of each warehouse group
             // (the 2 category rows share it) — cleaner than repeating it.
-            const showWh = i === 0 || model.compareRows[i - 1].warehouse !== r.warehouse;
+            // lockFdaCompareRows: อย.·พิเศษ = เรทเหมา FDA ล็อก (ครอบใบเก่าที่บันทึกไว้ · ปอน 2026-07-18).
+            const showWh = i === 0 || arr[i - 1].warehouse !== r.warehouse;
             return (
               <tr key={i} className="border-t border-slate-100 align-top">
                 <td className="px-2 sm:px-3 py-2 font-semibold whitespace-nowrap">{showWh ? r.warehouse : ""}</td>
@@ -389,7 +411,7 @@ export function buildQuoteText(m: QuoteModel): string {
   L.push("");
   if (m.view === "compare") {
     L.push("เทียบราคา (บาท/คิว · บาท/กก. · ระยะเวลา):");
-    m.compareRows.forEach((r) => {
+    lockFdaCompareRows(m.compareRows).forEach((r) => {
       L.push(` • ${r.warehouse}${r.category ? ` · ${r.category}` : ""} · รถ ฿${BAHT(r.truck.cbm)}/คิว ฿${BAHT(r.truck.kg)}/กก. (${r.truck.days})`);
       L.push(`            เรือ ฿${BAHT(r.ship.cbm)}/คิว ฿${BAHT(r.ship.kg)}/กก. (${r.ship.days})`);
     });
@@ -431,9 +453,9 @@ export function buildPrintHtml(m: QuoteModel): string {
 
   let body = "";
   if (m.view === "compare") {
-    const rows = m.compareRows
-      .map((r, i) => {
-        const showWh = i === 0 || m.compareRows[i - 1].warehouse !== r.warehouse;
+    const rows = lockFdaCompareRows(m.compareRows)
+      .map((r, i, arr) => {
+        const showWh = i === 0 || arr[i - 1].warehouse !== r.warehouse;
         return `<tr><td class="b">${showWh ? esc(r.warehouse) : ""}</td><td class="mut">${esc(r.category ?? "")}</td>
         <td>${BAHT(r.truck.cbm)}<small>/คิว</small> · ${BAHT(r.truck.kg)}<small>/กก.</small><br><span class="mut">${esc(r.truck.days)}</span></td>
         <td>${BAHT(r.ship.cbm)}<small>/คิว</small> · ${BAHT(r.ship.kg)}<small>/กก.</small><br><span class="mut">${esc(r.ship.days)}</span></td></tr>`;

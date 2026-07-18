@@ -2,7 +2,9 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { GENERAL_COID } from "@/lib/forwarder/coid";
 import { getQuoteDefaultRates } from "@/lib/admin/quote-default-rates";
+import { getQuotePackages } from "@/lib/quote/quote-packages";
 import { QuoteDefaultEditor } from "./quote-default-editor";
+import { QuotePackagesEditor } from "./quote-packages-editor";
 
 // "ตั้งเรทใบเสนอราคา" (owner ปอน 2026-07-17) — เซ็ตเรท default ทั้งระบบ สไตล์ใบเสนอราคา.
 // เขียนเรททั่วไป tb_rate_g_* (coid 'PR') ผ่าน adminUpdateGeneralRateCells (reuse) →
@@ -13,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminRatesQuoteDefaultPage() {
   await requireAdmin(["super", "accounting"]);
-  const grid = await getQuoteDefaultRates();
+  const [grid, packages] = await Promise.all([getQuoteDefaultRates(), getQuotePackages()]);
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -39,7 +41,24 @@ export default async function AdminRatesQuoteDefaultPage() {
         แยกละเอียด → หน้า <Link href="/admin/rates/general" className="underline">เรททั่วไป (General)</Link>
       </div>
 
-      <QuoteDefaultEditor grid={grid} />
+      <div>
+        <h2 className="text-lg font-bold">ทั่วไป (เรทฐาน · คิดเงินจริง)</h2>
+        <p className="mt-0.5 text-sm text-muted">เรท default ที่ engine ใช้จริง (บิล + ใบเสนอราคาเมื่อไม่เลือกแพ็ก)</p>
+        <div className="mt-3">
+          <QuoteDefaultEditor grid={grid} />
+        </div>
+      </div>
+
+      <div className="border-t border-border pt-5">
+        <h2 className="text-lg font-bold">แพ็กเกจ (ใบเสนอราคา)</h2>
+        <p className="mt-0.5 text-sm text-muted">
+          พรีเซ็ตเรทสำหรับ <b>ใบเสนอราคา</b> — เลือกแพ็กในใบเสนอราคาลูกค้าแล้วเรทเปลี่ยนตามแพ็ก ·
+          แก้/เพิ่ม/ลบได้ไม่จำกัด · <b>ไม่กระทบการคิดเงินจริง</b>
+        </p>
+        <div className="mt-3">
+          <QuotePackagesEditor packages={packages} />
+        </div>
+      </div>
     </main>
   );
 }
