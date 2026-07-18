@@ -36,21 +36,29 @@ export function TtwStagingClient({
   nameByPr: Record<string, string>;
   loadError: boolean;
 }) {
-  // Local mirror of member_code + save state, keyed by row id.
+  // Two separate mirrors, keyed by row id:
+  //  - `edits` = the live INPUT buffer (updates on every keystroke · display only).
+  //  - `saved` = the effective SAVED PR after a successful save (drives classification).
+  // Filtering/search/progress key on the SAVED PR — NOT the live input — so typing a PR
+  // into a row on the "ยังไม่มี PR" tab does NOT drop the row on the first keystroke
+  // (the row moves only after the user SAVES · review-fix 2026-07-18).
   const [edits, setEdits] = useState<Record<string, string>>({});
-  const [saved, setSaved] = useState<Record<string, { found: boolean; name: string | null }>>({});
+  const [saved, setSaved] = useState<Record<string, { pr: string | null; found: boolean; name: string | null }>>({});
   const [busyMap, setBusy] = useState<Record<string, boolean>>({});
   const [, startT] = useTransition();
   const [filter, setFilter] = useState<Filter>("no_pr");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
-  const prOf = (r: TtwLine) => edits[r.id] ?? r.member_code ?? "";
+  // The effective SAVED PR of a row (post-save local mirror, else the server value).
+  const assignedPr = (r: TtwLine) => (r.id in saved ? saved[r.id].pr : r.member_code) ?? "";
+  // The INPUT value (live buffer · seeded from the saved PR).
+  const inputVal = (r: TtwLine) => edits[r.id] ?? assignedPr(r);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toUpperCase();
     return rows.filter((r) => {
-      const pr = prOf(r);
+      const pr = assignedPr(r);
       if (filter === "no_pr" && pr) return false;
       if (filter === "has_pr" && !pr) return false;
       if (needle) {
@@ -60,7 +68,7 @@ export function TtwStagingClient({
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, filter, q, edits]);
+  }, [rows, filter, q, saved]);
 
   // Group the FILTERED rows by container.
   const groups = useMemo(() => {
@@ -73,7 +81,7 @@ export function TtwStagingClient({
     return Array.from(m.entries()).map(([container, lines]) => {
       // Summary over ALL lines of this container (not just filtered) for accurate PR-progress.
       const allLines = rows.filter((r) => r.container_no === container);
-      const withPr = allLines.filter((r) => prOf(r)).length;
+      const withPr = allLines.filter((r) => assignedPr(r)).length;
       const boxes = allLines.reduce((s, r) => s + (r.boxes ?? 0), 0);
       const wt = allLines.reduce((s, r) => s + Number(r.weight_kg ?? 0), 0);
       const cbm = allLines.reduce((s, r) => s + Number(r.cbm ?? 0), 0);
@@ -81,22 +89,25 @@ export function TtwStagingClient({
       return { container, lines, allCount: allLines.length, withPr, boxes, wt, cbm, first };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered, rows, edits]);
+  }, [filtered, rows, saved]);
 
   const totalTracks = rows.length;
-  const totalNoPr = rows.filter((r) => !prOf(r)).length;
+  const totalNoPr = rows.filter((r) => !assignedPr(r)).length;
   const totalContainers = new Set(rows.map((r) => r.container_no)).size;
   const totalCommitted = rows.filter((r) => r.committed_forwarder_id != null).length;
 
   function save(r: TtwLine) {
-    const value = (edits[r.id] ?? r.member_code ?? "").trim().toUpperCase();
+    const value = inputVal(r).trim().toUpperCase();
     setBusy((p) => ({ ...p, [r.id]: true }));
     startT(async () => {
       const res = await adminAssignTtwPackingPr({ id: r.id, memberCode: value });
       setBusy((p) => ({ ...p, [r.id]: false }));
       if (res.ok) {
-        setSaved((s) => ({ ...s, [r.id]: { found: res.data?.found ?? false, name: res.data?.customerName ?? null } }));
-        setEdits((e) => ({ ...e, [r.id]: res.data?.memberCode ?? "" }));
+        const pr = res.data?.memberCode ?? null;
+        // Record the SAVED PR → the row reclassifies (moves out of "ยังไม่มี PR") only NOW,
+        // not while typing. Also normalise the input buffer to the saved value.
+        setSaved((s) => ({ ...s, [r.id]: { pr, found: res.data?.found ?? false, name: res.data?.customerName ?? null } }));
+        setEdits((e) => ({ ...e, [r.id]: pr ?? "" }));
       } else {
         alert(res.error);
       }
@@ -187,10 +198,11 @@ export function TtwStagingClient({
                     <tbody>
                       {g.lines.map((r, i) => {
                         const committed = r.committed_forwarder_id != null;
-                        const pr = prOf(r);
+                        const inputPr = inputVal(r);          // live input buffer (display + live badge)
+                        const committedPr = assignedPr(r);    // the saved PR (committed badge)
                         const savedInfo = saved[r.id];
-                        const name = savedInfo?.name ?? (pr ? nameByPr[pr] : null) ?? null;
-                        const found = savedInfo ? savedInfo.found : pr ? pr in nameByPr : false;
+                        const name = savedInfo?.name ?? (inputPr ? nameByPr[inputPr] : null) ?? null;
+                        const found = savedInfo ? savedInfo.found : inputPr ? inputPr in nameByPr : false;
                         const busy = busyMap[r.id];
                         return (
                           <tr key={r.id} className={`border-b last:border-0 [&>td]:px-2 [&>td]:py-1.5 ${committed ? "bg-emerald-50/40" : ""}`}>
@@ -204,12 +216,12 @@ export function TtwStagingClient({
                             <td>
                               {committed ? (
                                 <span className="rounded bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                                  ✓ {pr || "—"} (commit แล้ว)
+                                  ✓ {committedPr || "—"} (commit แล้ว)
                                 </span>
                               ) : (
                                 <div className="flex items-center gap-1.5">
                                   <input
-                                    value={pr}
+                                    value={inputPr}
                                     onChange={(e) => setEdits((ed) => ({ ...ed, [r.id]: e.target.value }))}
                                     onKeyDown={(e) => { if (e.key === "Enter") save(r); }}
                                     placeholder="PR…"
@@ -223,7 +235,7 @@ export function TtwStagingClient({
                                   >
                                     {busy ? "…" : "บันทึก"}
                                   </button>
-                                  {pr && (found ? (
+                                  {inputPr && (found ? (
                                     <span className="text-[11px] text-emerald-600" title={name ?? ""}>✓ {name ? name.slice(0, 18) : "พบ"}</span>
                                   ) : (
                                     <span className="text-[11px] text-amber-600">⚠ ยังไม่พบ PR นี้</span>
