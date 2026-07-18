@@ -32,7 +32,7 @@ import { confirm } from "@/components/ui/confirm";
 import { SelectedItemsConfirmDialog } from "@/components/admin/selected-items-confirm-dialog";
 import { baseTracking } from "@/lib/admin/momo-bill-header";
 import { ForwarderCostEditButton } from "@/components/admin/forwarder-cost-edit-button";
-import { fstatusBadge, CNTSTATUS_CFG } from "@/lib/admin/forwarder-status";
+import { fstatusBadge, CNTSTATUS_CFG, FSTATUS_CFG } from "@/lib/admin/forwarder-status";
 import { SHIP_BY_LABEL } from "@/actions/admin/reports-profit-types";
 import {
   isRowEligibleForAddCheck,
@@ -576,8 +576,18 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
         <td className="px-2 py-2 text-right">{fmt(a.ftransportpricechnthb, 2)}</td>
         {/* ค่าอื่นๆ */}
         <td className="px-2 py-2 text-right">{fmt(a.priceother, 2)}</td>
-        {/* การขนส่ง */}
-        <td className="px-2 py-2 text-[11px]">{a.shipBy != null ? shipByLabel(a.shipBy) : "—"}</td>
+        {/* การขนส่ง — + ปลายทาง(COD) + ที่อยู่จัดส่ง เหมือนแถวเดี่ยว (owner 2026-07-18 รอบ3) */}
+        <td className="px-2 py-2 text-[11px]">
+          {a.shipBy != null ? shipByLabel(a.shipBy) : (g.length > 1 ? "หลายขนส่ง" : "—")}
+          {a.paymethod === "2" && <span className="badge badge-danger badge-pill font-10" style={{ marginLeft: ".25rem" }}>ปลายทาง</span>}
+          {a.shipBy !== "PCS" && (a.addressDistrict || a.addressProvince) && (
+            <>
+              <br />
+              {a.addressDistrict ?? ""}
+              {a.addressProvince ? ` · จ.${a.addressProvince}` : ""}
+            </>
+          )}
+        </td>
         {/* ค่าขนส่งไทย */}
         <td className="px-2 py-2 text-right">{fmt(a.ftransportprice, 2)}</td>
         {/* ส่วนลด */}
@@ -610,6 +620,23 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
             </span>
           ) : (
             <span className="badge badge-secondary badge-pill">หลายสถานะ</span>
+          )}
+          {/* next-action hint + credit/นิติ badges — same detail a single row shows
+              (owner 2026-07-18 รอบ3 "หัวแถวรายละเอียดไม่ครบ · tag/คำอธิบายไม่ขึ้น"). */}
+          {a.status != null && FSTATUS_CFG[a.status as keyof typeof FSTATUS_CFG]?.next && (
+            <div className={`mt-0.5 text-[11px] whitespace-nowrap ${FSTATUS_CFG[a.status as keyof typeof FSTATUS_CFG].act ? "font-semibold text-rose-600" : "text-muted"}`}>
+              {FSTATUS_CFG[a.status as keyof typeof FSTATUS_CFG].act ? "🔔 " : ""}{FSTATUS_CFG[a.status as keyof typeof FSTATUS_CFG].next}
+            </div>
+          )}
+          {(a.fcredit || a.isJuristic) && (
+            <div className="mt-1 flex flex-wrap justify-center gap-1">
+              {a.isJuristic && <span className="badge badge-vip badge-pill font-10">นิติ</span>}
+              {a.fcredit && (
+                <Link href={`/admin/forwarders/${g[0].id}`} onClick={(e) => e.stopPropagation()} className="badge badge-success badge-pill font-10">
+                  เครดิตได้
+                </Link>
+              )}
+            </div>
           )}
           {/* Per-SHIPMENT pay: bill the whole -N split at once (restored 2026-06-19
               — was lost when the collapsible grouping landed; owner: "เลือกชำระราย
@@ -1506,7 +1533,14 @@ function aggregateGroup(g: DetailRow[]) {
     shipBy:                uniq((r) => (r.fshipby ?? "").trim()),
     status:                uniq((r) => r.fstatus),
     fidorco:               uniq((r) => r.fidorco ?? "") ?? "",
-    detail:                uniq((r) => (r.fdetail ?? "").trim() || null),
+    detail:                uniq((r) => (r.detailDisplay ?? "").trim() || null),
+    // owner 2026-07-18 รอบ3 — the header must carry the SAME detail as a single row:
+    // credit/นิติ badges · COD · the delivery address · the next-action hint.
+    fcredit:               g.some((r) => (r.fcredit ?? "").trim() === "1"),
+    isJuristic:            g.some((r) => (r.usercompany ?? "").trim() === "1"),
+    paymethod:             uniq((r) => (r.paymethod ?? "").trim()),
+    addressDistrict:       uniq((r) => (r.faddressdistrict ?? "").trim() || null),
+    addressProvince:       uniq((r) => (r.faddressprovince ?? "").trim() || null),
     allPaid:               g.every((r) => r.cntPaid),
     nonePaid:              g.every((r) => !r.cntPaid),
     // fids billable now = goods arrived in TH (fstatus 4 = ถึงไทยแล้ว). Feeds the

@@ -699,7 +699,10 @@ export function CntListTable({
               // neutral table (แจงรายละเอียด) — never red. The selection highlight
               // (emerald) still wins — it's checkbox/floating-bar interaction feedback.
               const rowTint = isOn
-                ? "bg-emerald-50 ring-1 ring-inset ring-emerald-300"
+                // owner 2026-07-18 — "ไม่เอาเขียวจืด · จี๊ดจ๊าดเข้ม": VIVID selection
+                // (was bg-emerald-50 · faint) so a ticked ตู้ pops. Matches the detail
+                // page's loud selected-row feel.
+                ? "bg-emerald-300 ring-2 ring-inset ring-emerald-600 font-medium"
                 : boxesComplete
                   ? "bg-white dark:bg-surface hover:bg-surface-alt/60"
                   : "bg-red-50 ring-1 ring-inset ring-red-200 hover:bg-red-100/70";
@@ -909,9 +912,9 @@ export function CntListTable({
                   </td>
                   <td className="px-2 py-2 text-center">
                     {r.isPaid ? (
-                      <span className="inline-block rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 px-2 py-0.5 text-[11px] font-medium">จ่ายแล้ว</span>
+                      <span className="inline-block rounded-full bg-emerald-600 text-white border border-emerald-700 px-2 py-0.5 text-[11px] font-bold">จ่ายแล้ว</span>
                     ) : (
-                      <span className="inline-block rounded-full bg-red-100 text-red-700 border border-red-300 px-2 py-0.5 text-[11px] font-medium">ยังไม่จ่าย</span>
+                      <span className="inline-block rounded-full bg-red-600 text-white border border-red-700 px-2 py-0.5 text-[11px] font-bold">ยังไม่จ่าย</span>
                     )}
                   </td>
                 </tr>
