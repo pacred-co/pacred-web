@@ -113,13 +113,14 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     // role='warehouse' → user lands on /admin → requireAdmin below
     // rejects warehouse → notFound() → first-screen 404 for every staff.
     // Caught with a real end-to-end test login (admin_test_warehouse)
-    // pre-handoff. Bounce to /admin/forwarders/warehouse-history —
-    // the warehouse role's actual landing (intake history + "+ สแกน
-    // รายการเพิ่ม" link straight into the daily barcode flow).
+    // pre-handoff.
+    // 2026-07-18 (owner): the warehouse role now has its OWN handheld home —
+    // the faithful PCS warehouse-staff launcher (4 summary cards + bottom
+    // tab-bar) at /admin/warehouse/home. Land warehouse-only staff there.
     const isWarehouseOnly = allRoles.every((r) => r === "warehouse");
     if (isWarehouseOnly) {
       const locale = await getLocale();
-      redirect({ href: "/admin/forwarders/warehouse-history", locale });
+      redirect({ href: "/admin/warehouse/home", locale });
     }
   }
 
