@@ -4,6 +4,7 @@ import {
   resolveAutoThShippingFill,
   type AutoThShippingFill,
 } from "@/lib/forwarder/domestic-shipping";
+import { isMaoCarrier } from "@/lib/forwarder/mao-fee";
 
 /**
  * autoFillThShippingForForwarder — พี่ป๊อป spec #7 (owner 2026-07-08 · "ต้อง auto").
@@ -39,11 +40,13 @@ export async function autoFillThShippingForForwarder(
   const { data: row, error } = await admin
     .from("tb_forwarder")
     .select(
-      "id, fshipby, ftransportprice, faddresszipcode, faddressprovince, faddressdistrict, fweight, fwidth, flength, fheight",
+      "id, userid, fcabinetnumber, fshipby, ftransportprice, faddresszipcode, faddressprovince, faddressdistrict, fweight, fwidth, flength, fheight",
     )
     .eq("id", fId)
     .maybeSingle<{
       id: number;
+      userid: string | null;
+      fcabinetnumber: string | null;
       fshipby: string | null;
       ftransportprice: number | string | null;
       faddresszipcode: string | null;
@@ -55,6 +58,25 @@ export async function autoFillThShippingForForwarder(
       fheight: number | string | null;
     }>();
   if (error || !row) return null;
+
+  // 🔴 GUARD (owner 2026-07-18 "ค่าบริการอื่นๆ 7,004 ไม่มีค่านี้") — a เหมาๆ own-fleet
+  // shipment's domestic delivery IS the ฿100 flat maoFee. Do NOT auto-fill a per-tracking
+  // ftransportprice on it (the pay-modal sums it ON TOP of the ฿100 = double-charge). The
+  // shipment is เหมาๆ if the row's own carrier is PCSF/PRF, OR (empty carrier) a sibling of
+  // the SAME (customer, container) is — the empty-carrier siblings inherit the เหมาๆ delivery.
+  const cab = (row.fcabinetnumber ?? "").trim();
+  let shipmentIsMao = isMaoCarrier(row.fshipby);
+  if (!shipmentIsMao && (row.fshipby ?? "").trim() === "" && cab && row.userid) {
+    const { data: sib } = await admin
+      .from("tb_forwarder")
+      .select("id")
+      .eq("userid", row.userid)
+      .eq("fcabinetnumber", cab)
+      .in("fshipby", ["PCSF", "PRF"])
+      .limit(1);
+    shipmentIsMao = !!(sib && sib.length > 0);
+  }
+  if (shipmentIsMao) return null; // เหมาๆ = ฿100 flat only · never a per-tracking domestic leg
 
   // girth (w+l+h, cm) — Flash prices by max(kg, size); pass it so a light/bulky
   // parcel isn't under-quoted. 0 when dims are unknown (weight-only path is safe).
