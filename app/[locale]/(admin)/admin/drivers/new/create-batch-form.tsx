@@ -362,7 +362,7 @@ export function CreateBatchForm({
       <div className="overflow-x-auto scrollbar-x-visible rounded border border-border bg-white">
         <table className="w-full text-sm border-collapse min-w-[1100px]">
           <thead>
-            <tr className="bg-surface-alt text-left text-[11px] uppercase tracking-wide text-muted">
+            <tr className="bg-surface-alt/60 text-left text-[13px] font-bold text-[#6b6f82]">
               <th className="border-b border-border px-2 py-2 w-10 text-center">
                 <input
                   type="checkbox"
@@ -421,20 +421,16 @@ export function CreateBatchForm({
                       />
                     </td>
 
-                    {/* จำนวน — box + tracking count for this stop */}
+                    {/* จำนวน — tracking-row count for this stop (legacy "N รายการ") */}
                     <td className="px-3 py-2 text-center whitespace-nowrap">
-                      <div className="font-bold text-base text-foreground tabular-nums">{g.totalBoxes}</div>
-                      <div className="text-[11px] text-muted">กล่อง</div>
-                      <div className="text-[11px] text-muted">({g.items.length} แทรค)</div>
+                      <div className="text-sm font-semibold text-foreground tabular-nums">{g.items.length} รายการ</div>
                     </td>
 
-                    {/* บริษัทขนส่ง */}
-                    <td className="px-3 py-2">
-                      <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 text-blue-800 px-1.5 py-0.5 text-[11px] font-medium">
-                        {g.shipByLabel}
-                      </span>
-                      <div className="mt-1 text-xs font-medium text-foreground">คุณ{g.recipientName}</div>
-                      <div className="text-[11px] font-mono text-primary-700">{g.userid}</div>
+                    {/* บริษัทขนส่ง — plain carrier label (legacy "PCS เหมาๆ" · no pill,
+                        no customer name/code: those live in the nested รหัสสมาชิก + the
+                        ที่อยู่ recipient name, matching the legacy add-page). */}
+                    <td className="px-3 py-2 text-sm text-foreground">
+                      {g.shipByLabel}
                     </td>
 
                     {/* เลขแทรคกิ้ง — the nested per-tracking sub-table (legacy inner
@@ -495,17 +491,20 @@ export function CreateBatchForm({
                       </table>
                     </td>
 
-                    {/* ลำดับส่ง — district route order (legacy $arrPositF index) */}
+                    {/* ลำดับส่ง — district route order (legacy $arrPositF index) ·
+                        plain number like the legacy add-page (was an orange box). */}
                     <td className="px-3 py-2 text-center">
                       <span
                         title="ลำดับเส้นทางวิ่งรถ — เขตใกล้โกดัง = เลขน้อย · ไกล = เลขมาก"
-                        className="inline-flex items-center justify-center rounded bg-orange-100 border border-orange-300 px-2 py-1 text-base font-extrabold text-orange-700 tabular-nums"
+                        className="text-base font-bold text-foreground tabular-nums"
                       >
                         {order}
                       </span>
                     </td>
 
-                    {/* ที่อยู่ — full delivery address, อำเภอ highlighted (legacy rightmost) */}
+                    {/* ที่อยู่ — legacy add-page format: leads with the recipient name,
+                        full "ตำบล/แขวง … อำเภอ/เขต [highlight] … จังหวัด …" wording, โทร
+                        inline at the end. */}
                     <td className="px-3 py-2 text-sm">
                       {g.addressMissing ? (
                         <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-1">
@@ -513,14 +512,15 @@ export function CreateBatchForm({
                         </span>
                       ) : (
                         <span className="text-foreground/90 leading-relaxed">
+                          <b className="font-semibold">คุณ{g.recipientName}</b>{" "}
                           {g.address.no}
-                          {g.address.subDistrict ? <> ต.{g.address.subDistrict}</> : null}{" "}
-                          {g.address.district ? <>อ.<span className="bg-[#ff9149] px-1 rounded text-white font-medium">{g.address.district}</span>{" "}</> : null}
-                          {g.address.province ? <>จ.{g.address.province} </> : null}{g.address.zipCode}
+                          {g.address.subDistrict ? <> ตำบล/แขวง {g.address.subDistrict}</> : null}{" "}
+                          {g.address.district ? <>อำเภอ/เขต <span className="bg-[#ff9149] px-1 rounded text-white font-medium">{g.address.district}</span>{" "}</> : null}
+                          {g.address.province ? <>จังหวัด {g.address.province} </> : null}{g.address.zipCode}
+                          {g.address.tel && g.address.tel !== "-" && (
+                            <> โทร. {g.address.tel}</>
+                          )}
                         </span>
-                      )}
-                      {g.address.tel && g.address.tel !== "-" && (
-                        <div className="mt-1 text-xs text-muted">โทร. {g.address.tel}</div>
                       )}
                     </td>
                   </tr>

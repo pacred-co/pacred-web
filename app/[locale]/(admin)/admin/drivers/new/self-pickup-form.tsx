@@ -298,15 +298,14 @@ function CustomerPickupCard({
       {/* Customer header — one dense legacy-style row: จำนวน · บริษัทขนส่ง + ลูกค้า
           (mirrors create-batch-form's จำนวน + บริษัทขนส่ง columns) */}
       <div className="flex flex-wrap items-center gap-3 border-b border-border bg-surface-alt px-3 py-2">
-        {/* จำนวน — box + tracking count for this customer (legacy จำนวน column) */}
+        {/* จำนวน — tracking-row count for this customer (legacy "N รายการ") */}
         <div className="text-center whitespace-nowrap">
-          <div className="font-bold text-base text-foreground tabular-nums">{group.totalBoxes}</div>
-          <div className="text-[11px] text-muted">กล่อง · {group.items.length} แทรค</div>
+          <div className="text-sm font-semibold text-foreground tabular-nums">{group.items.length} รายการ</div>
         </div>
-        {/* บริษัทขนส่ง + ลูกค้า (legacy บริษัทขนส่ง column style: blue carrier pill,
-            recipient name, mono member code in primary) */}
+        {/* บริษัทขนส่ง + ลูกค้า — plain carrier label (legacy · no pill), then the
+            customer name + code (the card identity for customer self-pickup). */}
         <div className="min-w-0 flex-1">
-          <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 text-blue-800 px-1.5 py-0.5 text-[11px] font-medium">
+          <span className="text-sm text-foreground">
             {group.shipByLabel}
           </span>
           <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
@@ -332,7 +331,7 @@ function CustomerPickupCard({
       <div className="overflow-x-auto scrollbar-x-visible">
         <table className="w-full text-sm border-collapse min-w-[720px]">
           <thead>
-            <tr className="bg-surface-alt/30 text-left text-[11px] uppercase tracking-wide text-muted">
+            <tr className="bg-surface-alt/60 text-left text-[11px] font-bold text-[#6b6f82]">
               <th className="border-b border-border px-2 py-2 w-10 text-center">
                 <input
                   type="checkbox"
@@ -403,8 +402,8 @@ function CustomerPickupCard({
                 </tr>
               );
             })}
-            {/* รวม summary row */}
-            <tr className="border-t border-border bg-surface-alt/60 font-semibold text-foreground">
+            {/* รวม summary row — legacy PINK (alert-danger #f5aab0/#7a0012) */}
+            <tr className="border-t border-border bg-[#f5aab0] font-semibold text-[#7a0012]">
               <td colSpan={5} className="px-2 py-1.5 text-right">รวมทั้งลูกค้า</td>
               <td className="px-2 py-1.5 text-right tabular-nums">{group.totalBoxes}</td>
               <td className="px-2 py-1.5 text-right tabular-nums">{group.totalWeight.toFixed(2)}</td>

@@ -45,17 +45,20 @@ const BATCH_STATUS_LABEL: Record<FdStatus, string> = {
   "3": "ไม่สำเร็จ",
 };
 
+// Solid legacy badge palette (badge-warning/success/danger) — matches the drivers
+// list STATUS_CLS + the legacy "สถานะ : สำเร็จ" green pill. State color is scannable
+// LOGIC → solid, not a faint pastel.
 const BATCH_STATUS_CLS: Record<FdStatus, string> = {
-  "1": "bg-amber-50 text-amber-700 border-amber-200",
-  "2": "bg-emerald-50 text-emerald-700 border-emerald-200",
-  "3": "bg-rose-50 text-rose-700 border-rose-200",
+  "1": "bg-[#ff9149] text-white border-transparent",
+  "2": "bg-[#28d094] text-white border-transparent",
+  "3": "bg-[#ff4961] text-white border-transparent",
 };
 
 const ITEM_STATUS_CLS: Record<FdiStatus, string> = {
-  "":  "bg-gray-100 text-gray-700 border-gray-200",
-  "1": "bg-blue-100 text-blue-700 border-blue-200",
-  "2": "bg-emerald-100 text-emerald-700 border-emerald-200",
-  "3": "bg-rose-100 text-rose-700 border-rose-200",
+  "":  "bg-slate-400 text-white border-transparent",
+  "1": "bg-[#1e9ff2] text-white border-transparent",
+  "2": "bg-[#28d094] text-white border-transparent",
+  "3": "bg-[#ff4961] text-white border-transparent",
 };
 
 // Faithful nameShipBy() — legacy pcs-admin/include/function.php L185-242. A driver
@@ -722,7 +725,15 @@ export default async function AdminDriverBatchDetailPage({
           <p className="text-sm text-muted">ไม่มีรายการในรอบนี้</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="rounded-xl border border-border bg-white overflow-hidden">
+          {/* Legacy detail-table header (forwarder-driver.php detail:
+              จำนวน | บริษัทขนส่ง | ข้อมูล) — the stops below read as ONE bordered
+              table, not floaty cards (ภูม 2026-07-19 "ตารางยังไม่เหมือน"). */}
+          <div className="hidden xl:grid xl:grid-cols-[180px_minmax(220px,1fr)_minmax(0,1.5fr)] divide-x divide-border border-b border-border bg-surface-alt/60 text-[13px] font-bold text-[#6b6f82]">
+            <div className="px-3 py-2">จำนวน · สถานะ · รูปส่ง</div>
+            <div className="px-3 py-2">บริษัทขนส่ง · ที่อยู่</div>
+            <div className="px-3 py-2">ข้อมูล (ออเดอร์ · แทรคกิ้ง)</div>
+          </div>
           {stopsWithPhotos.map((stop, idx) => {
             const f = stop.forwarder;
             const total = stop.items.length;
@@ -745,7 +756,7 @@ export default async function AdminDriverBatchDetailPage({
               .filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
 
             return (
-              <section key={stop.addressKey} className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
+              <section key={stop.addressKey} className="bg-white border-b border-border last:border-b-0">
                 <div className="grid grid-cols-1 xl:grid-cols-[180px_minmax(220px,1fr)_minmax(0,1.5fr)] divide-y xl:divide-y-0 xl:divide-x divide-border">
 
                   {/* ZONE 1 — จำนวน + สถานะส่ง + รูปส่ง */}
@@ -866,8 +877,8 @@ export default async function AdminDriverBatchDetailPage({
                   {/* ZONE 3 — ตารางย่อยออเดอร์ (cover + ออเดอร์ + รหัสสมาชิก + แทรคกิ้ง + กล่อง/นน./ปริมาตร) */}
                   <div className="p-3">
                     <div className="overflow-x-auto rounded-lg border border-border scrollbar-x-visible">
-                      <table className="w-full text-xs">
-                        <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
+                      <table className="w-full text-xs border-collapse [&_td]:border [&_td]:border-border/50 [&_th]:border [&_th]:border-border/50">
+                        <thead className="bg-surface-alt/60 text-left text-[11px] font-bold text-[#6b6f82]">
                           <tr>
                             <th className="px-2 py-1.5 w-6">#</th>
                             <th className="px-2 py-1.5">ออเดอร์</th>
@@ -922,9 +933,9 @@ export default async function AdminDriverBatchDetailPage({
                               </tr>
                             );
                           })}
-                          {/* รวม */}
-                          <tr className="border-t-2 border-border bg-surface-alt/40 font-semibold">
-                            <td className="px-2 py-1.5 text-right text-muted" colSpan={4}>รวม</td>
+                          {/* รวม — legacy PINK summary row (alert-danger #f5aab0/#7a0012) */}
+                          <tr className="bg-[#f5aab0] font-semibold text-[#7a0012]">
+                            <td className="px-2 py-1.5 text-right" colSpan={4}>รวม</td>
                             <td className="px-2 py-1.5 text-right">{stop.totalBoxes}</td>
                             <td className="px-2 py-1.5 text-right">{stop.totalWeight.toFixed(2)}</td>
                             <td className="px-2 py-1.5 text-right">{stop.totalVolume.toFixed(5)}</td>
