@@ -48,10 +48,12 @@ const STATUS_LABEL: Record<FdStatus, string> = {
   "3": "ไม่สำเร็จ",
 };
 
+// Solid legacy PCS badge pills (badge-warning/success/danger) — white text on a
+// vivid fill, matching forwarder-driver.php (owner: "สีจี๊ดจ๊าด ไม่เอาสีจืด").
 const STATUS_CLS: Record<FdStatus, string> = {
-  "1": "bg-amber-50 text-amber-700 border-amber-200",
-  "2": "bg-emerald-50 text-emerald-700 border-emerald-200",
-  "3": "bg-rose-50 text-rose-700 border-rose-200",
+  "1": "bg-[#ff9149] text-white",  // กำลังดำเนินการ · badge-warning
+  "2": "bg-[#28d094] text-white",  // สำเร็จ · badge-success (verified live #28d094)
+  "3": "bg-[#ff4961] text-white",  // ไม่สำเร็จ · badge-danger
 };
 
 const STATUS_ICON: Record<FdStatus, React.ReactNode> = {
@@ -368,7 +370,7 @@ export default async function AdminDriversPage({
                 const agg      = itemAgg.get(r.id) ?? { itemCount: 0, boxSum: 0, doneCount: 0 };
                 const expired  = r.endtime && new Date(r.endtime) < new Date() && fdstatus === "1";
                 const driver   = r.fdadminid ? driverDirectory.get(r.fdadminid) : null;
-                const zebra    = ri % 2 === 0 ? "bg-white" : "bg-surface-alt/20";
+                const zebra    = ri % 2 === 0 ? "bg-white" : "bg-[#cabcbf]/30"; // legacy pink stripe (rgba(202,188,191,.28))
                 return (
                   <tr key={r.id} className={`border-b border-border align-top hover:bg-primary-50/30 ${zebra}`}>
                     {/* เลขที่ (ID) */}
@@ -421,7 +423,7 @@ export default async function AdminDriversPage({
                     </td>
                     {/* สถานะ */}
                     <td className="px-3 py-3 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_CLS[fdstatus]}`}>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_CLS[fdstatus]}`}>
                         {STATUS_ICON[fdstatus]}
                         {STATUS_LABEL[fdstatus]}
                       </span>
