@@ -329,10 +329,11 @@ function CustomerPickupCard({
           inner table: [☑] / # / เลขออเดอร์ / รหัสสมาชิก / เลขแทรคกิ้ง(+location) /
           กล่อง / น้ำหนัก / ปริมาตร → รวม row) — matched to create-batch-form. */}
       <div className="overflow-x-auto scrollbar-x-visible">
-        <table className="w-full text-sm border-collapse min-w-[720px]">
+        {/* table-bordered — full gridlines (เส้นตัดทุกช่อง) like legacy · same as create-batch */}
+        <table className="w-full text-sm border-collapse min-w-[720px] [&>thead>tr>th]:border [&>thead>tr>th]:border-[#dcdfe4] [&>tbody>tr>td]:border [&>tbody>tr>td]:border-[#dcdfe4]">
           <thead>
             <tr className="bg-surface-alt/60 text-left text-[11px] font-bold text-[#6b6f82]">
-              <th className="border-b border-border px-2 py-2 w-10 text-center">
+              <th className="px-2 py-2 w-10 text-center">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -342,13 +343,13 @@ function CustomerPickupCard({
                   aria-label={`เลือกพัสดุทั้งหมดของ ${group.userid}`}
                 />
               </th>
-              <th className="border-b border-border px-2 py-2 w-10 text-center">#</th>
-              <th className="border-b border-border px-2 py-2 w-32">เลขออเดอร์</th>
-              <th className="border-b border-border px-2 py-2 w-24">รหัสสมาชิก</th>
-              <th className="border-b border-border px-2 py-2">เลขแทรคกิ้ง</th>
-              <th className="border-b border-border px-2 py-2 w-16 text-right">กล่อง</th>
-              <th className="border-b border-border px-2 py-2 w-20 text-right">น้ำหนัก</th>
-              <th className="border-b border-border px-2 py-2 w-20 text-right">ปริมาตร</th>
+              <th className="px-2 py-2 w-10 text-center">#</th>
+              <th className="px-2 py-2 w-32">เลขออเดอร์</th>
+              <th className="px-2 py-2 w-24">รหัสสมาชิก</th>
+              <th className="px-2 py-2">เลขแทรคกิ้ง</th>
+              <th className="px-2 py-2 w-16 text-right">กล่อง</th>
+              <th className="px-2 py-2 w-20 text-right">น้ำหนัก</th>
+              <th className="px-2 py-2 w-20 text-right">ปริมาตร</th>
             </tr>
           </thead>
           <tbody>
@@ -403,7 +404,7 @@ function CustomerPickupCard({
               );
             })}
             {/* รวม summary row — legacy PINK (alert-danger #f5aab0/#7a0012) */}
-            <tr className="border-t border-border bg-[#f5aab0] font-semibold text-[#7a0012]">
+            <tr className="bg-[#f5aab0] font-semibold text-[#7a0012]">
               <td colSpan={5} className="px-2 py-1.5 text-right">รวมทั้งลูกค้า</td>
               <td className="px-2 py-1.5 text-right tabular-nums">{group.totalBoxes}</td>
               <td className="px-2 py-1.5 text-right tabular-nums">{group.totalWeight.toFixed(2)}</td>

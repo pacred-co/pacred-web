@@ -725,11 +725,11 @@ export default async function AdminDriverBatchDetailPage({
           <p className="text-sm text-muted">ไม่มีรายการในรอบนี้</p>
         </div>
       ) : (
-        <div className="rounded-xl border border-border bg-white overflow-hidden">
+        <div className="rounded-xl border border-[#dcdfe4] bg-white overflow-hidden">
           {/* Legacy detail-table header (forwarder-driver.php detail:
               จำนวน | บริษัทขนส่ง | ข้อมูล) — the stops below read as ONE bordered
               table, not floaty cards (ภูม 2026-07-19 "ตารางยังไม่เหมือน"). */}
-          <div className="hidden xl:grid xl:grid-cols-[180px_minmax(220px,1fr)_minmax(0,1.5fr)] divide-x divide-border border-b border-border bg-surface-alt/60 text-[13px] font-bold text-[#6b6f82]">
+          <div className="hidden xl:grid xl:grid-cols-[180px_minmax(220px,1fr)_minmax(0,1.5fr)] divide-x divide-[#dcdfe4] border-b border-[#dcdfe4] bg-surface-alt/60 text-[13px] font-bold text-[#6b6f82]">
             <div className="px-3 py-2">จำนวน · สถานะ · รูปส่ง</div>
             <div className="px-3 py-2">บริษัทขนส่ง · ที่อยู่</div>
             <div className="px-3 py-2">ข้อมูล (ออเดอร์ · แทรคกิ้ง)</div>
@@ -756,8 +756,8 @@ export default async function AdminDriverBatchDetailPage({
               .filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
 
             return (
-              <section key={stop.addressKey} className="bg-white border-b border-border last:border-b-0">
-                <div className="grid grid-cols-1 xl:grid-cols-[180px_minmax(220px,1fr)_minmax(0,1.5fr)] divide-y xl:divide-y-0 xl:divide-x divide-border">
+              <section key={stop.addressKey} className="bg-white border-b border-[#dcdfe4] last:border-b-0">
+                <div className="grid grid-cols-1 xl:grid-cols-[180px_minmax(220px,1fr)_minmax(0,1.5fr)] divide-y xl:divide-y-0 xl:divide-x divide-[#dcdfe4]">
 
                   {/* ZONE 1 — จำนวน + สถานะส่ง + รูปส่ง */}
                   <div className="p-3 space-y-2">
@@ -877,7 +877,7 @@ export default async function AdminDriverBatchDetailPage({
                   {/* ZONE 3 — ตารางย่อยออเดอร์ (cover + ออเดอร์ + รหัสสมาชิก + แทรคกิ้ง + กล่อง/นน./ปริมาตร) */}
                   <div className="p-3">
                     <div className="overflow-x-auto rounded-lg border border-border scrollbar-x-visible">
-                      <table className="w-full text-xs border-collapse [&_td]:border [&_td]:border-border/50 [&_th]:border [&_th]:border-border/50">
+                      <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-[#dcdfe4] [&>tbody>tr>td]:border [&>tbody>tr>td]:border-[#dcdfe4]">
                         <thead className="bg-surface-alt/60 text-left text-[11px] font-bold text-[#6b6f82]">
                           <tr>
                             <th className="px-2 py-1.5 w-6">#</th>

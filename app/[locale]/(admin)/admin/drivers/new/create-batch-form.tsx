@@ -360,10 +360,13 @@ export function CreateBatchForm({
           Columns (legacy forwarder-driver.php?page=add): [☑] · จำนวน · บริษัทขนส่ง ·
           เลขแทรคกิ้ง (nested sub-table) · ลำดับส่ง · ที่อยู่. */}
       <div className="overflow-x-auto scrollbar-x-visible rounded border border-border bg-white">
-        <table className="w-full text-sm border-collapse min-w-[1100px]">
+        {/* table-bordered — full gridlines (เส้นตัดทุกช่อง แนวตั้ง+แนวนอน) like legacy
+            forwarder-driver.php add-page. Child combinators keep the rule scoped to
+            THIS table's cells (the nested per-tracking table gets its own below). */}
+        <table className="w-full text-sm border-collapse min-w-[1100px] [&>thead>tr>th]:border [&>thead>tr>th]:border-[#dcdfe4] [&>tbody>tr>td]:border [&>tbody>tr>td]:border-[#dcdfe4]">
           <thead>
             <tr className="bg-surface-alt/60 text-left text-[13px] font-bold text-[#6b6f82]">
-              <th className="border-b border-border px-2 py-2 w-10 text-center">
+              <th className="px-2 py-2 w-10 text-center">
                 <input
                   type="checkbox"
                   checked={filteredGroups.length > 0 && filteredGroups.every((g) => selectedKeys.has(g.key))}
@@ -375,11 +378,11 @@ export function CreateBatchForm({
                   aria-label="เลือกทั้งหมด"
                 />
               </th>
-              <th className="border-b border-border px-3 py-2 w-20 text-center">จำนวน</th>
-              <th className="border-b border-border px-3 py-2 w-40">บริษัทขนส่ง</th>
-              <th className="border-b border-border px-3 py-2">เลขแทรคกิ้ง</th>
-              <th className="border-b border-border px-3 py-2 w-20 text-center">ลำดับส่ง</th>
-              <th className="border-b border-border px-3 py-2 w-[26rem]">ที่อยู่</th>
+              <th className="px-3 py-2 w-20 text-center">จำนวน</th>
+              <th className="px-3 py-2 w-40">บริษัทขนส่ง</th>
+              <th className="px-3 py-2">เลขแทรคกิ้ง</th>
+              <th className="px-3 py-2 w-20 text-center">ลำดับส่ง</th>
+              <th className="px-3 py-2 w-[26rem]">ที่อยู่</th>
             </tr>
           </thead>
           <tbody>
@@ -436,22 +439,22 @@ export function CreateBatchForm({
                     {/* เลขแทรคกิ้ง — the nested per-tracking sub-table (legacy inner
                         table: # / เลขออเดอร์ / รหัสสมาชิก / เลขแทรคกิ้ง+location /
                         กล่อง / น้ำหนัก / ปริมาตร → รวม row) */}
-                    <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
-                      <table className="w-full text-xs border-collapse">
+                    <td className="p-0 align-top" onClick={(e) => e.stopPropagation()}>
+                      <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-[#dcdfe4] [&>tbody>tr>td]:border [&>tbody>tr>td]:border-[#dcdfe4]">
                         <thead>
-                          <tr className="text-left text-[11px] text-muted">
-                            <th className="px-1.5 py-1 font-medium w-8">#</th>
-                            <th className="px-1.5 py-1 font-medium">เลขออเดอร์</th>
-                            <th className="px-1.5 py-1 font-medium">รหัสสมาชิก</th>
-                            <th className="px-1.5 py-1 font-medium">เลขแทรคกิ้ง</th>
-                            <th className="px-1.5 py-1 font-medium text-right">กล่อง</th>
-                            <th className="px-1.5 py-1 font-medium text-right">น้ำหนัก</th>
-                            <th className="px-1.5 py-1 font-medium text-right">ปริมาตร</th>
+                          <tr className="bg-surface-alt/40 text-left text-[11px] font-bold text-[#6b6f82]">
+                            <th className="px-1.5 py-1 w-8">#</th>
+                            <th className="px-1.5 py-1">เลขออเดอร์</th>
+                            <th className="px-1.5 py-1">รหัสสมาชิก</th>
+                            <th className="px-1.5 py-1">เลขแทรคกิ้ง</th>
+                            <th className="px-1.5 py-1 text-right">กล่อง</th>
+                            <th className="px-1.5 py-1 text-right">น้ำหนัก</th>
+                            <th className="px-1.5 py-1 text-right">ปริมาตร</th>
                           </tr>
                         </thead>
                         <tbody>
                           {g.items.map((it, idx) => (
-                            <tr key={it.id} className="border-t border-border/50">
+                            <tr key={it.id}>
                               <td className="px-1.5 py-1 text-muted tabular-nums">{idx + 1}</td>
                               <td className="px-1.5 py-1">
                                 <Link
@@ -481,7 +484,7 @@ export function CreateBatchForm({
                           ))}
                           {/* รวม summary row — legacy PINK (alert-danger · #f5aab0/#960014),
                               matches forwarder-driver.php add-page (owner 2026-07-16) */}
-                          <tr className="border-t border-border bg-[#f5aab0] font-semibold text-[#7a0012]">
+                          <tr className="bg-[#f5aab0] font-semibold text-[#7a0012]">
                             <td colSpan={4} className="px-1.5 py-1 text-right">รวม</td>
                             <td className="px-1.5 py-1 text-right tabular-nums">{g.totalBoxes}</td>
                             <td className="px-1.5 py-1 text-right tabular-nums">{g.totalWeight.toFixed(2)}</td>
