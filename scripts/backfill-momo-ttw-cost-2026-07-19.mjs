@@ -48,7 +48,7 @@ async function main() {
   const ccByCab = new Map(ccRows.map((r) => [r.cab, r]));
 
   const rows = (await c.query(
-    `SELECT id, fwarehousename wh, fwarehousechina wc, fcabinetnumber cab, fproductstype pt, fvolume, fcosttotalprice cost
+    `SELECT id, fwarehousename wh, fwarehousechina wc, fcabinetnumber cab, fproductstype pt, fvolume, famount, famountcount, fcosttotalprice cost
        FROM tb_forwarder
       WHERE fwarehousename IN ('8','9') AND fstatus IN ('1','2','3','4')`)).rows;
 
@@ -66,7 +66,10 @@ async function main() {
     const cc = ccByCab.get(r.cab);
     const tier1 = cc ? pos(cc[`p${idx}`]) : 0;
     const rate = tier1 > 0 ? tier1 : pos(settings[col]);
-    const dim = pos(r.fvolume);
+    // row-TOTAL CBM (famountcount rule · mirrors lib/forwarder/quantities.ts):
+    // '1' = fvolume already total · else fvolume × max(famount,1)
+    const isTotal = String(r.famountcount ?? "").trim() === "1";
+    const dim = isTotal ? pos(r.fvolume) : pos(r.fvolume) * Math.max(pos(r.famount), 1);
     const newCost = rate > 0 && dim > 0 ? round2(dim * rate) : 0;
     const oldCost = round2(Number(r.cost ?? 0) || 0);
     if (Math.abs(newCost - oldCost) < 0.01) { unchanged++; continue; }

@@ -49,6 +49,8 @@
  * means a real basis/staleness gap, not merely "we read the wrong table".
  */
 
+import { totalCbmOf } from "./quantities";
+
 export type WarehouseDigit = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 export type CostTransport = "1" | "2"; // 1 = รถ (car) · 2 = เรือ (ship)
 export type CostBasis = "weight" | "cbm";
@@ -106,10 +108,16 @@ export type CostRowInput = {
   fwarehousechina: string | null | undefined;
   ftransporttype: string | null | undefined;
   fproductstype: string | null | undefined;
-  /** RAW per-row weight (kg) — the same value report-cnt feeds calcRowCost. */
+  /** Row-TOTAL weight (kg) — fweight is always a total (no per-box convention). */
   fweight: number;
-  /** RAW per-row volume (cbm) — the same value report-cnt feeds calcRowCost. */
+  /** RAW stored fvolume — may be PER-BOX (famountcount≠'1') or TOTAL ('1').
+   *  The resolver derives the true total via totalCbmOf (quantities.ts SOT) —
+   *  callers pass the stored value as-is + the two discriminator fields below. */
   fvolume: number;
+  /** Box count (tb_forwarder.famount) — the per-box→total multiplier. */
+  famount: number | string | null | undefined;
+  /** The fvolume-convention discriminator ('1' = fvolume already total). */
+  famountcount: number | string | null | undefined;
 };
 
 /**
@@ -197,7 +205,10 @@ export function resolveRowCost(
     fromContainer > 0 ? "container" : fromSettings > 0 ? "settings" : "none";
 
   const basis = costBasisMode(wh);
-  const rawDim = basis === "weight" ? row.fweight : row.fvolume;
+  // CBM basis MUST use the row-TOTAL CBM (totalCbmOf honours the famountcount
+  // convention: '1' = fvolume already total · else fvolume×famount). Raw fvolume
+  // on a per-box row under-costed by ×famount (owner 2026-07-19 · TTW กำไรเกินจริง).
+  const rawDim = basis === "weight" ? row.fweight : totalCbmOf(row);
   const dimension = Number.isFinite(rawDim) && rawDim > 0 ? rawDim : 0;
   const cost = rate > 0 && dimension > 0 ? round2(dimension * rate) : 0;
   return { rate, source, basis, dimension, cost, column };

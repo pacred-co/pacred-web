@@ -33,6 +33,7 @@
  */
 
 import { notFound } from "next/navigation";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { ChevronDown, Truck } from "lucide-react";
 import { requireAdmin, hasRole } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
@@ -161,7 +162,7 @@ export default async function AdminReportCntDetailPage({
   const { data: cntRows, error: cntErr } = await admin
     .from("tb_forwarder")
     .select(
-      "id, fidorco, ftrackingchn, userid, fdetail, fcover, famount, fvolume, fweight, fwidth, flength, fheight, fproductstype, fproductstype2, frefrate, ftotalprice, frefprice, fpriceupdate, pricecrate, ftransportpricechnthb, priceother, fshipby, faddressdistrict, faddressprovince, faddresszipcode, paymethod, ftransportprice, fdiscount, fcosttotalprice, fcosttotalpricesheet, fstatus, fcredit, fnote, fwarehousename, fwarehousechina, ftransporttype, fusercompany, fshippingservice, fdatecontainerclose, fdatestatus2, fdatestatus3, fdatestatus4, fdatestatus5, fdatestatus6, fdatestatus7",
+      "id, fidorco, ftrackingchn, userid, fdetail, fcover, famount, famountcount, fvolume, fweight, fwidth, flength, fheight, fproductstype, fproductstype2, frefrate, ftotalprice, frefprice, fpriceupdate, pricecrate, ftransportpricechnthb, priceother, fshipby, faddressdistrict, faddressprovince, faddresszipcode, paymethod, ftransportprice, fdiscount, fcosttotalprice, fcosttotalpricesheet, fstatus, fcredit, fnote, fwarehousename, fwarehousechina, ftransporttype, fusercompany, fshippingservice, fdatecontainerclose, fdatestatus2, fdatestatus3, fdatestatus4, fdatestatus5, fdatestatus6, fdatestatus7",
     )
     .eq("fcabinetnumber", fCabinetNumber)
     .order("id", { ascending: true })
@@ -480,7 +481,10 @@ export default async function AdminReportCntDetailPage({
     // (may be a manual adjustment); an unfilled rate (0) also keeps the stored value.
     const storedCost            = Number(r.fcosttotalprice ?? 0);
     const costBasisIsWeight     = WEIGHT_DEFAULT_WAREHOUSES.has(fWarehouseName);
-    const costDim               = costBasisIsWeight ? Number(r.fweight ?? 0) : Number(r.fvolume ?? 0);
+    // row-TOTAL CBM (famountcount rule · quantities.ts SOT) — raw fvolume on a
+    // per-box row under-computed BOTH live cost and live sell by ×famount.
+    const rowTotalCbm           = totalCbmOf(r);
+    const costDim               = costBasisIsWeight ? Number(r.fweight ?? 0) : rowTotalCbm;
     const liveCost              = Math.round(rate * costDim * 100) / 100;
     const fCostTotalPrice       = (!cabinetIsPaid && rate > 0) ? liveCost : storedCost;
 
@@ -533,7 +537,9 @@ export default async function AdminReportCntDetailPage({
       // V-D4 — boxes actually received at TH warehouse (sum of fi2amount).
       // null when the parcel has no import2 scan row yet (shows "-/M").
       famountfi: receivedByFid.has(Number(r.id)) ? receivedByFid.get(Number(r.id))! : null,
-      fvolume: Number(r.fvolume ?? 0),
+      // TOTAL CBM per row (not the stored per-box value) — the client sums,
+      // displays, and bills this, so it must already be the row total.
+      fvolume: rowTotalCbm,
       fweight: Number(r.fweight ?? 0),
       // owner 2026-07-18 — physical dims (cm · fwidth/flength/fheight) for the
       // per-tracking packing-list detail shown in the shipment dropdown.
@@ -653,7 +659,7 @@ export default async function AdminReportCntDetailPage({
   );
   // Box (CTNS) / CBM / weight totals for the journey strip — reuse completeness
   // for the expected box count; sum volume/weight across the container's rows.
-  const journeyVolumeCbm = cntRows.reduce((s, r) => s + Number(r.fvolume ?? 0), 0);
+  const journeyVolumeCbm = cntRows.reduce((s, r) => s + totalCbmOf(r), 0);
   const journeyWeightKg = cntRows.reduce((s, r) => s + Number(r.fweight ?? 0), 0);
   const journeyTotals = {
     trackCount: detailRows.length,

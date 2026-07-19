@@ -253,6 +253,9 @@ export async function ForwarderPerTrackingEditor({
       length: num(row.flength),
       height: num(row.fheight),
       cbm: num(row.fvolume),
+      // fvolume convention (quantities.ts SOT): '1' = the cbm above is already the
+      // row TOTAL (MOMO) · else PER-BOX (× boxes for any aggregate/ค่าเทียบ math).
+      volumeIsTotal: String(row.famountcount ?? "").trim() === "1",
       productType: (VALID_PRODUCT.includes(row.fproductstype ?? "")
         ? row.fproductstype
         : "1") as PerTrackingRow["productType"],

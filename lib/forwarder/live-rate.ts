@@ -512,6 +512,45 @@ export async function computeAndFillForwarderImportRate(
     transportModeFromCabinetName(row.fcabinetnumber) ??
     transportModeFromCabinetName(row.ftrackingchn) ??
     resolveTransportMode(null, row.ftransporttype);
+
+  // ── SHIPMENT-level ค่าเทียบ (owner 2026-07-19 "คิดเป็นชิปเม้น ไม่ใช่แยกแทรคกิ้ง") ──
+  // The KG-vs-CBM decision must be made on the SHIPMENT-TOTAL density (Σ over all
+  // sibling trackings of the same base, e.g. X9002653-1..-4) — a heavy tracking
+  // inside a bulky shipment must NOT flip to weight on its own. The BILLED value
+  // stays per-row (this row's weight/cbmProduct); only the DECISION aggregates
+  // (resolve-rate.ts comparisonKgPerCbm — same input the multi-tracking editor
+  // save already threads). Single-tracking shipments: unchanged (row-local).
+  let shipmentKgPerCbm = 0;
+  {
+    const base = baseOf((row.ftrackingchn ?? "").trim());
+    if (base) {
+      const { data: sibs, error: sibErr } = await admin
+        .from("tb_forwarder")
+        .select("fweight, fvolume, famount, famountcount, ftrackingchn")
+        .eq("userid", row.userid)
+        .neq("fstatus", "99")
+        .ilike("ftrackingchn", `${base.replace(/[%_]/g, "\\$&")}%`)
+        .limit(200);
+      if (sibErr) {
+        console.error(`[computeAndFillForwarderImportRate: shipment siblings] failed`, {
+          code: sibErr.code, message: sibErr.message, fid, base,
+        });
+      } else {
+        const fam = (sibs ?? []).filter((s) => baseOf((s.ftrackingchn ?? "").trim()) === base);
+        if (fam.length > 1) {
+          let w = 0, cbm = 0;
+          for (const s of fam) {
+            w += num(s.fweight);
+            const fc = String(s.famountcount ?? "").trim();
+            const v = num(s.fvolume);
+            cbm += fc === "1" ? v : v * Math.max(num(s.famount), 1);
+          }
+          if (cbm > 0) shipmentKgPerCbm = w / cbm;
+        }
+      }
+    }
+  }
+
   const ctx: PricingRowContext = {
     userid:              row.userid,
     fwarehousechina:     String(row.fwarehousechina ?? "").trim(),
@@ -531,6 +570,9 @@ export async function computeAndFillForwarderImportRate(
     customComparisonValue,
     docTierEligible,
     docTierDiscountCbm,
+    // shipment-total density (0 = single-tracking / unknown → resolver falls
+    // back to this row's own ratio · resolve-rate.ts L362-367)
+    comparisonKgPerCbm: shipmentKgPerCbm > 0 ? shipmentKgPerCbm : undefined,
   };
 
   // ── 3. Resolve the rate ──

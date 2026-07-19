@@ -220,6 +220,8 @@ export async function ForwarderCostSection({
     fproductstype: string | null;
     fweight: number;
     fvolume: number;
+    famount: number | string | null;
+    famountcount: number | string | null;
   } | null = null;
   // The container this row sits in — the key to accounting's per-container cost
   // rate (tb_cost_container · tier 1 of the waterfall). Owner 2026-07-17.
@@ -236,7 +238,7 @@ export async function ForwarderCostSection({
       .select(
         "import_duty_pct, import_duty_thb, fcosttotalprice, ftotalprice, ftransportprice, fpriceupdate, " +
           "fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, " +
-          "fwarehousename, fwarehousechina, ftransporttype, fproductstype, fweight, fvolume, " +
+          "fwarehousename, fwarehousechina, ftransporttype, fproductstype, fweight, fvolume, famount, famountcount, " +
           "fcabinetnumber, ftrackingchn, userid",
       )
       .eq("id", fId)
@@ -258,6 +260,8 @@ export async function ForwarderCostSection({
         fproductstype: string | null;
         fweight: number | string | null;
         fvolume: number | string | null;
+        famount: number | string | null;
+        famountcount: number | string | null;
         fcabinetnumber: string | null;
         ftrackingchn: string | null;
         userid: string | null;
@@ -285,6 +289,8 @@ export async function ForwarderCostSection({
         fproductstype: hdr.fproductstype,
         fweight: n(hdr.fweight),
         fvolume: n(hdr.fvolume),
+        famount: hdr.famount ?? null,
+        famountcount: hdr.famountcount ?? null,
       };
     }
   }

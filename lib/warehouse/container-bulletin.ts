@@ -28,6 +28,7 @@
  */
 
 import "server-only";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { FSTATUS_CFG, type FStatus } from "@/lib/admin/forwarder-status";
 
@@ -67,6 +68,8 @@ type ForwarderRow = {
   fdatecontainerclose: string | null;
   fdatestatus4: string | null;
   fvolume: number | null;
+  famount: number | string | null;
+  famountcount: number | string | null;
   fweight: number | null;
 };
 
@@ -162,7 +165,7 @@ export async function buildContainerBulletin(
   const { data, error } = await admin
     .from("tb_forwarder")
     .select(
-      "fcabinetnumber,fstatus,ftransporttype,fwarehousename,fdatecontainerclose,fdatestatus4,fvolume,fweight",
+      "fcabinetnumber,fstatus,ftransporttype,fwarehousename,fdatecontainerclose,fdatestatus4,fvolume,famount,famountcount,fweight",
     )
     .not("fcabinetnumber", "is", null)
     .neq("fcabinetnumber", "")
@@ -214,7 +217,7 @@ export async function buildContainerBulletin(
       byCabinet.set(cab, acc);
     }
     acc.trackCount += 1;
-    acc.volumeSum += Number(r.fvolume ?? 0);
+    acc.volumeSum += totalCbmOf(r); // row-TOTAL CBM (famountcount rule)
     acc.weightSum += Number(r.fweight ?? 0);
 
     const st = (r.fstatus ?? "").trim();

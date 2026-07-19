@@ -1,4 +1,5 @@
 import "server-only";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 
 /**
  * Billing-run (ใบวางบิล) document loader (FAITHFUL PORT) — the SINGLE source of
@@ -214,6 +215,7 @@ type FwdHydRow = {
   id: number;
   ftrackingchn: string | null;
   famount: number | string | null;
+  famountcount: number | string | null;
   fweight: number | string | null;
   fvolume: number | string | null;
   fdate: string | null;
@@ -288,7 +290,7 @@ export async function loadBillingRunDocument(
     const { data: fwdRaw, error: fwdErr } = await admin
       .from("tb_forwarder")
       .select(
-        "id, ftrackingchn, famount, fweight, fvolume, fdate, fstatus, fcabinetnumber, " +
+        "id, ftrackingchn, famount, famountcount, fweight, fvolume, fdate, fstatus, fcabinetnumber, " +
           "ftransporttype, frefprice, frefrate, fcredit, fproductstype, fwidth, flength, fheight, " +
           // price columns for the named-fee split (owner 2026-07-07)
           "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
@@ -382,7 +384,7 @@ export async function loadBillingRunDocument(
               ftrackingchn: f.ftrackingchn ?? "",
               famount:      f.famount != null ? Number(f.famount) : null,
               fweight:      f.fweight != null ? Number(f.fweight) : null,
-              fvolume:      f.fvolume != null ? Number(f.fvolume) : null,
+              fvolume:      f.fvolume != null ? totalCbmOf(f) : null, // row-TOTAL CBM (famountcount rule)
               fdate:        f.fdate,
               fstatus:      f.fstatus,
               cabinet:      f.fcabinetnumber ?? "",

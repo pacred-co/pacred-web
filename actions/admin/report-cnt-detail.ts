@@ -33,6 +33,7 @@ import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
 import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
 import { logger } from "@/lib/logger";
 import { costBasisMode } from "@/lib/forwarder/resolve-cost";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shipping";
@@ -264,7 +265,7 @@ export async function adminReportCntCustomRate(input: CustomRateInput): Promise<
     //    costBasisMode — so the two recompute paths can no longer diverge.
     const { data: rows, error: rowsErr } = await admin
       .from("tb_forwarder")
-      .select("id, fvolume, fweight, fproductstype, fwarehousename")
+      .select("id, fvolume, fweight, famount, famountcount, fproductstype, fwarehousename")
       .eq("fcabinetnumber", fCabinetNumber);
     if (rowsErr) return { ok: false, error: rowsErr.message };
 
@@ -279,11 +280,13 @@ export async function adminReportCntCustomRate(input: CustomRateInput): Promise<
     // toggle; unknown wh → modal default) + a sanity backstop BEFORE any write.
     const plan: Array<{ id: number; cost: number; frefprice: string }> = [];
     let plannedTotal = 0;
-    for (const r of (rows ?? []) as Array<{ id: number; fvolume: number | null; fweight: number | null; fproductstype: string | null; fwarehousename: string | null }>) {
+    for (const r of (rows ?? []) as Array<{ id: number; fvolume: number | null; fweight: number | null; famount: number | string | null; famountcount: number | string | null; fproductstype: string | null; fwarehousename: string | null }>) {
       const rate = pickRate(rates, r.fproductstype);
       const wh = r.fwarehousename ?? "";
       const basis = VALID_WH.has(wh) ? costBasisMode(wh as WarehouseDigit) : mode; // carrier wins; unknown wh → modal default
-      const dim = basis === "weight" ? r.fweight : r.fvolume;
+      // CBM basis = row-TOTAL CBM (totalCbmOf honours famountcount: '1'=total,
+      // else per-box × famount) — raw fvolume under-costed per-box rows ×famount.
+      const dim = basis === "weight" ? r.fweight : totalCbmOf(r);
       const cost = calcRowCost(dim, rate);
       plannedTotal += cost;
       plan.push({ id: r.id, cost, frefprice: basis === "weight" ? "1" : "2" });
@@ -346,7 +349,7 @@ export async function adminReportCntResetRate(fCabinetNumber: string): Promise<A
     // ── (b) Load settings + container rows ──
     const { data: rows, error: rowsErr } = await admin
       .from("tb_forwarder")
-      .select("id, fvolume, fweight, fproductstype, fwarehousename, fwarehousechina, ftransporttype")
+      .select("id, fvolume, fweight, famount, famountcount, fproductstype, fwarehousename, fwarehousechina, ftransporttype")
       .eq("fcabinetnumber", parsed.data.fCabinetNumber);
     if (rowsErr) return { ok: false, error: rowsErr.message };
 
@@ -363,6 +366,8 @@ export async function adminReportCntResetRate(fCabinetNumber: string): Promise<A
       id: number;
       fvolume: number | null;
       fweight: number | null;
+      famount: number | string | null;
+      famountcount: number | string | null;
       fproductstype: string | null;
       fwarehousename: string | null;
       fwarehousechina: string | null;
@@ -370,7 +375,7 @@ export async function adminReportCntResetRate(fCabinetNumber: string): Promise<A
     }>) {
       const wh = (r.fwarehousename ?? "") as WarehouseDigit;
       const transport = ((r.ftransporttype ?? "1") as TransportMode) === "2" ? "2" : "1";
-      if (!wh || (wh !== "1" && wh !== "2" && wh !== "3" && wh !== "4" && wh !== "5" && wh !== "6" && wh !== "7" && wh !== "8")) continue;
+      if (!wh || !VALID_WH.has(wh)) continue; // VALID_WH is the SOT (incl. TTW "9" · was a hardcoded 1-8 list that silently skipped TTW rows)
 
       const idx = ((): 1 | 2 | 3 | 4 => {
         switch ((r.fproductstype ?? "").trim()) {
@@ -391,7 +396,7 @@ export async function adminReportCntResetRate(fCabinetNumber: string): Promise<A
       // Then compute cost using the matching dimension.
       const carrierDefaultMode: "weight" | "cbm" = (wh === "1" || wh === "4") ? "weight" : "cbm";
       const refPriceValue = carrierDefaultMode === "weight" ? "1" : "2";
-      const dim = carrierDefaultMode === "weight" ? r.fweight : r.fvolume;
+      const dim = carrierDefaultMode === "weight" ? r.fweight : totalCbmOf(r); // row-TOTAL CBM (famountcount rule)
       const cost = calcRowCost(dim, rate);
       const { error: updErr } = await admin
         .from("tb_forwarder")

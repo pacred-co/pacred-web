@@ -50,6 +50,8 @@ export type PerTrackingRow = {
   length: number;
   height: number;
   cbm: number;
+  /** '1'-convention row → cbm is already the row TOTAL; else cbm is PER-BOX. */
+  volumeIsTotal: boolean;
   productType: "1" | "2" | "3" | "4";
   warehouseChina: "1" | "2";
   warehouseName: "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
@@ -192,7 +194,7 @@ export function PerTrackingEditorClient({
 
   // ── per-tracking rows (string-valued for free typing) ──
   type RowState = {
-    id: number; tracking: string; detail: string; boxes: number;
+    id: number; tracking: string; detail: string; boxes: number; volumeIsTotal: boolean;
     productType: PerTrackingRow["productType"];
     warehouseChina: PerTrackingRow["warehouseChina"];
     warehouseName: PerTrackingRow["warehouseName"];
@@ -202,7 +204,7 @@ export function PerTrackingEditorClient({
   };
   const [rows, setRows] = useState<RowState[]>(() =>
     rowsInit.map((r) => ({
-      id: r.id, tracking: r.tracking, detail: r.detail, boxes: r.boxes,
+      id: r.id, tracking: r.tracking, detail: r.detail, boxes: r.boxes, volumeIsTotal: r.volumeIsTotal,
       productType: r.productType, warehouseChina: r.warehouseChina, warehouseName: r.warehouseName,
       weight: String(r.weight), width: String(r.width), length: String(r.length),
       height: String(r.height), cbm: String(r.cbm),
@@ -251,7 +253,11 @@ export function PerTrackingEditorClient({
     let w = 0, v = 0, chnThb = 0, service = 0, other = 0, thai = 0, discount = 0;
     for (const r of rows) {
       w += parseFloat(r.weight) || 0;
-      v += parseFloat(r.cbm) || 0;
+      // row-TOTAL CBM (famountcount rule) — the cbm INPUT is per-box on a
+      // per-box-convention row; summing it raw made ค่าเทียบ = kg/Σper-box (e.g.
+      // 261÷0.704 = 370 > 250) → the save flipped a bulky shipment to WEIGHT
+      // pricing every time staff hit บันทึกขนาด (owner 2026-07-19 · the revert engine).
+      v += (parseFloat(r.cbm) || 0) * (r.volumeIsTotal ? 1 : Math.max(r.boxes || 0, 1));
       chnThb += parseFloat(r.fTransportPriceChnThb) || 0;
       service += parseFloat(r.fShippingService) || 0;
       other += parseFloat(r.priceOther) || 0;

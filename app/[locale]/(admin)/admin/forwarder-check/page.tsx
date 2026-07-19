@@ -40,6 +40,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { Link } from "@/i18n/navigation";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -388,7 +389,7 @@ export default async function AdminForwarderCheckPage({
       amount: Number(r.famount ?? 0),
       amount_fi: fiAmount,
       amount_count: r.famountcount,
-      volume_cbm: Number(r.fvolume ?? 0),
+      volume_cbm: totalCbmOf(r), // row-TOTAL CBM (famountcount rule)
       weight_kg: Number(r.fweight ?? 0),
       products_type: r.fproductstype ?? "",
       transport_type: r.ftransporttype,

@@ -1,4 +1,5 @@
 import "server-only";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 
 /**
  * Receipt document loader (FAITHFUL PORT) — the SINGLE source of the receipt's
@@ -74,6 +75,7 @@ type RawForwarder = {
   fcabinetnumber:        string | null;
   fid:                   string | null;
   famount:               number | null;
+  famountcount:          number | string | null;
   fweight:               number | string | null;
   fvolume:               number | string | null;
   fdate:                 string | null;
@@ -230,7 +232,7 @@ export async function loadReceiptDocument(
     const { data: fwdRows, error: fwdErr } = await admin
       .from("tb_forwarder")
       .select(
-        "id, userid, ftrackingchn, fcabinetnumber, famount, fweight, fvolume, fdate, " +
+        "id, userid, ftrackingchn, fcabinetnumber, famount, famountcount, fweight, fvolume, fdate, " +
           "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
           "pricecrate, ftransportpricechnthb, priceother, fdiscount, " +
           // ภูม flag round 8 — extra cols the /service-import table already shows:
@@ -351,7 +353,7 @@ export async function loadReceiptDocument(
         rate:         toNumber(f.frefrate),
         famount:      toNumber(f.famount),
         fweight:      toNumber(f.fweight),
-        fvolume:      toNumber(f.fvolume),
+        fvolume:      totalCbmOf(f), // row-TOTAL CBM on the doc (famountcount rule)
         ftotalprice:  fTotalPrice,
       };
 

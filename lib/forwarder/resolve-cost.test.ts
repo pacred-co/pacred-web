@@ -56,7 +56,7 @@ eq(productTypeIdx("9"), 1, "invalid → 1");
 // ── resolveRowCost — the real DEV order 52028 (MOMO·เรือ·กวางโจว·ทั่วไป) ──
 // rate fcostship1defaultmomo = 2500 (ภูม set 2026-06-18) · cbm 0.04646
 const r52028 = resolveRowCost(
-  { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "2", fproductstype: "1", fweight: 7.5, fvolume: 0.04646 },
+  { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "2", fproductstype: "1", fweight: 7.5, fvolume: 0.04646, famount: 1, famountcount: "1" },
   { fcostship1defaultmomo: 2500 },
 );
 eq(r52028.column, "fcostship1defaultmomo", "52028 column");
@@ -67,7 +67,7 @@ eq(r52028.cost, 116.15, "52028 cost = round2(0.04646 × 2500)");
 
 // ── empty rate cell → cost 0 (NEVER guess) ──
 const rEmpty = resolveRowCost(
-  { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "2", fproductstype: "1", fweight: 7.5, fvolume: 0.04646 },
+  { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "2", fproductstype: "1", fweight: 7.5, fvolume: 0.04646, famount: 1, famountcount: "1" },
   { fcostship1defaultmomo: 0 },
 );
 eq(rEmpty.cost, 0, "rate 0 → cost 0");
@@ -75,14 +75,14 @@ eq(rEmpty.rate, 0, "rate 0 read");
 
 // ── settings missing the column → cost 0 ──
 const rNoSetting = resolveRowCost(
-  { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "2", fproductstype: "1", fweight: 7.5, fvolume: 0.04646 },
+  { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "2", fproductstype: "1", fweight: 7.5, fvolume: 0.04646, famount: 1, famountcount: "1" },
   {},
 );
 eq(rNoSetting.cost, 0, "missing settings → cost 0");
 
 // ── weight-basis carrier (MX) uses fweight, not fvolume ──
 const rMx = resolveRowCost(
-  { fwarehousename: "4", fwarehousechina: "1", ftransporttype: "2", fproductstype: "3", fweight: 44.5, fvolume: 0.67653 },
+  { fwarehousename: "4", fwarehousechina: "1", ftransporttype: "2", fproductstype: "3", fweight: 44.5, fvolume: 0.67653, famount: 1, famountcount: "1" },
   { fcostship3defaultmkcargo: 50 },
 );
 eq(rMx.basis, "weight", "MX basis = weight");
@@ -91,7 +91,7 @@ eq(rMx.cost, 2225, "MX cost = round2(44.5 × 50)");
 
 // ── invalid warehouse → cost 0, column null ──
 const rBad = resolveRowCost(
-  { fwarehousename: "", fwarehousechina: "1", ftransporttype: "2", fproductstype: "1", fweight: 7.5, fvolume: 0.04646 },
+  { fwarehousename: "", fwarehousechina: "1", ftransporttype: "2", fproductstype: "1", fweight: 7.5, fvolume: 0.04646, famount: 1, famountcount: "1" },
   { fcostship1defaultmomo: 2500 },
 );
 eq(rBad.cost, 0, "invalid wh → cost 0");
@@ -100,7 +100,7 @@ eq(rBad.column, null, "invalid wh → column null");
 // ── zero/negative dimension → cost 0 ──
 eq(
   resolveRowCost(
-    { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "2", fproductstype: "1", fweight: 0, fvolume: 0 },
+    { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "2", fproductstype: "1", fweight: 0, fvolume: 0, famount: 1, famountcount: "1" },
     { fcostship1defaultmomo: 2500 },
   ).cost,
   0,
@@ -110,8 +110,8 @@ eq(
 // ── resolveOrderCost — multi-tracking aggregate ──
 const order = resolveOrderCost(
   [
-    { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "2", fproductstype: "1", fweight: 7.5, fvolume: 0.04646 },
-    { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "2", fproductstype: "1", fweight: 44.5, fvolume: 0.67653 },
+    { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "2", fproductstype: "1", fweight: 7.5, fvolume: 0.04646, famount: 1, famountcount: "1" },
+    { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "2", fproductstype: "1", fweight: 44.5, fvolume: 0.67653, famount: 1, famountcount: "1" },
   ],
   { fcostship1defaultmomo: 2500 },
 );
@@ -155,7 +155,7 @@ eq(containerRate({ fproductstype1: -5 }, "1"), 0, "negative cell → 0 (never gu
 // MOMO(8) · ROAD(1) · กวางโจว · ทั่วไป · cbm 0.0536. Accounting set the container
 // to 4,700 at ตรวจตู้; the global MOMO road default is 2,500 (mig 0194).
 // Booked prod fcosttotalprice = 251.92 — the resolver MUST reproduce it exactly.
-const ownerRow = { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "1", fproductstype: "1", fweight: 72, fvolume: 0.0536 } as const;
+const ownerRow = { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "1", fproductstype: "1", fweight: 72, fvolume: 0.0536, famount: 1, famountcount: "1" } as const;
 const rOwner = resolveRowCost(ownerRow, { fcostcar1defaultmomo: 2500 }, { fproductstype1: 4700 });
 eq(rOwner.rate, 4700, "52184 rate = 4700 (container beats the 2500 default)");
 eq(rOwner.source, "container", "52184 source = container");
@@ -210,7 +210,7 @@ eq(resolveRowCost({ ...ownerRow, fproductstype: "3" }, {}, CC).rate, 4900, "type
 // the GZE260627-1 ฿328M fire — the resolver computes it faithfully; the WRITE
 // path's sanity backstop is what refuses it. Pinned so the basis stays visible.
 const rSangWeight = resolveRowCost(
-  { fwarehousename: "1", fwarehousechina: "1", ftransporttype: "1", fproductstype: "1", fweight: 2792.66, fvolume: 0.4 },
+  { fwarehousename: "1", fwarehousechina: "1", ftransporttype: "1", fproductstype: "1", fweight: 2792.66, fvolume: 0.4, famount: 1, famountcount: "1" },
   {},
   { fproductstype1: 4700 },
 );
@@ -221,14 +221,33 @@ eq(rSangWeight.cost, 13125502, "Sang: 2792.66kg × 4700/CBM = ฿13.1M — the b
 // ── resolveOrderCost threads the container rate to every row ──
 const orderCC = resolveOrderCost(
   [
-    { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "1", fproductstype: "1", fweight: 72, fvolume: 0.0536 },
-    { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "1", fproductstype: "1", fweight: 10, fvolume: 0.1 },
+    { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "1", fproductstype: "1", fweight: 72, fvolume: 0.0536, famount: 1, famountcount: "1" },
+    { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "1", fproductstype: "1", fweight: 10, fvolume: 0.1, famount: 1, famountcount: "1" },
   ],
   { fcostcar1defaultmomo: 2500 },
   { fproductstype1: 4700 },
 );
 eq(orderCC.perRow.every((r) => r.source === "container"), true, "aggregate: every row uses the container rate");
 eq(orderCC.total, 251.92 + 470, "aggregate total at the container rate");
+
+
+// ── per-box convention (famountcount≠'1' · owner 2026-07-19 TTW กำไรเกินจริง) ──
+// PR172 52179: fvolume 0.18067 PER BOX × 19 boxes → total 3.43273 CBM. Cost must
+// use the TOTAL (อี้อู sea 2600 → ฿8,925.10), NOT the per-box 0.18067 (฿469.74).
+const rPerBox = resolveRowCost(
+  { fwarehousename: "9", fwarehousechina: "2", ftransporttype: "2", fproductstype: "1", fweight: 171, fvolume: 0.18067, famount: 19, famountcount: null },
+  { fcostship1defaultmomo2: 2600 },
+);
+eq(rPerBox.column, "fcostship1defaultmomo2", "TTW per-box column → momo2 (อี้อู)");
+eq(rPerBox.dimension, 3.43273, "per-box dimension = fvolume × famount");
+eq(rPerBox.cost, 8925.1, "per-box cost = round2(3.43273 × 2600)");
+// famountcount='1' with famount>1 → fvolume already total, NO multiply
+const rTotal = resolveRowCost(
+  { fwarehousename: "8", fwarehousechina: "1", ftransporttype: "2", fproductstype: "1", fweight: 100, fvolume: 1.494, famount: 10, famountcount: "1" },
+  { fcostship1defaultmomo: 2500 },
+);
+eq(rTotal.dimension, 1.494, "total-convention: dimension = fvolume as-is");
+eq(rTotal.cost, 3735, "total-convention cost = 1.494 × 2500");
 
 console.log(`\nresolve-cost.test: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

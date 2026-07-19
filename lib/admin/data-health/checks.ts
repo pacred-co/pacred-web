@@ -28,6 +28,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { baseOf, suffixOf } from "@/lib/integrations/momo-web/split-box-rows-plan";
 import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 
 export type HealthSeverity = "red" | "warn" | "info";
 
@@ -56,6 +57,7 @@ type FwdRow = {
   paydeposit: string;
   fcredit: string;
   famount: number;
+  famountcount: string | null;
   fweight: number;
   fvolume: number;
   ftotalprice: number;
@@ -85,7 +87,7 @@ async function loadContext(admin: SupabaseClient): Promise<HealthContext> {
     const { data, error } = await admin
       .from("tb_forwarder")
       .select(
-        "id, ftrackingchn, fstatus, paydeposit, fcredit, famount, fweight, fvolume, ftotalprice, fcosttotalprice, fcabinetnumber, ftransporttype, fdatetothai, userid",
+        "id, ftrackingchn, fstatus, paydeposit, fcredit, famount, famountcount, fweight, fvolume, ftotalprice, fcosttotalprice, fcabinetnumber, ftransporttype, fdatetothai, userid",
       )
       .range(from, from + 999);
     if (error) throw new Error(`tb_forwarder scan: ${error.code} ${error.message}`);
@@ -97,6 +99,7 @@ async function loadContext(admin: SupabaseClient): Promise<HealthContext> {
         paydeposit: str(r.paydeposit),
         fcredit: str(r.fcredit),
         famount: num(r.famount),
+        famountcount: r.famountcount == null ? null : String(r.famountcount),
         fweight: num(r.fweight),
         fvolume: num(r.fvolume),
         ftotalprice: num(r.ftotalprice),
@@ -338,7 +341,9 @@ const CHECKS: CheckDef[] = [
       const out: Array<Record<string, unknown>> = [];
       for (const [base, rows] of ctx.groups) {
         const cost = rows.reduce((s, r) => s + r.fcosttotalprice, 0);
-        const vol = rows.reduce((s, r) => s + r.fvolume, 0);
+        // Σ row-TOTAL CBM (famountcount rule · quantities.ts SOT) — raw fvolume on a
+        // per-box row under-sums ×famount → the ratio false-flags a correct cost.
+        const vol = rows.reduce((s, r) => s + totalCbmOf(r), 0);
         if (!(cost > 0) || !(vol > 0)) continue;
         // Derive the mode from the container CODE (the SOT · GZS/YWS=sea "2" · GZE/YWE/EK=road
         // "1"), NOT the stored ftransporttype — a stale ftransporttype='2' on a GZE(road) tู้
