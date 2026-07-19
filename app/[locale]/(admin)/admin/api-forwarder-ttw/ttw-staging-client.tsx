@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { adminAssignTtwPackingPr } from "@/actions/admin/ttw-packing";
 
 export type TtwLine = {
@@ -49,6 +50,9 @@ export function TtwStagingClient({
   const [filter, setFilter] = useState<Filter>("no_pr");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  // Last-save notice — surfaces the mark-family propagation ("ติดให้ทั้งมาร์คอีก N แถว").
+  const [notice, setNotice] = useState<string | null>(null);
+  const router = useRouter();
 
   // The effective SAVED PR of a row (post-save local mirror, else the server value).
   const assignedPr = (r: TtwLine) => (r.id in saved ? saved[r.id].pr : r.member_code) ?? "";
@@ -95,6 +99,11 @@ export function TtwStagingClient({
   const totalNoPr = rows.filter((r) => !assignedPr(r)).length;
   const totalContainers = new Set(rows.map((r) => r.container_no)).size;
   const totalCommitted = rows.filter((r) => r.committed_forwarder_id != null).length;
+  // The REAL CS workload: distinct 唛头 marks among the no-PR rows — one assignment per
+  // MARK fills its whole family (438 แถว ≠ 438 ลูกค้า · จริงๆ ~123 มาร์ค).
+  const totalNoPrMarks = new Set(
+    rows.filter((r) => !assignedPr(r)).map((r) => (r.shipping_mark ?? "").trim()).filter(Boolean),
+  ).size;
 
   function save(r: TtwLine) {
     const value = inputVal(r).trim().toUpperCase();
@@ -108,6 +117,17 @@ export function TtwStagingClient({
         // not while typing. Also normalise the input buffer to the saved value.
         setSaved((s) => ({ ...s, [r.id]: { pr, found: res.data?.found ?? false, name: res.data?.customerName ?? null } }));
         setEdits((e) => ({ ...e, [r.id]: pr ?? "" }));
+        const prop = res.data?.propagated ?? 0;
+        setNotice(
+          pr
+            ? prop > 0
+              ? `✅ ${r.base_tracking} → ${pr} · ติดให้มาร์คเดียวกัน (${r.shipping_mark ?? "—"}) อีก ${prop} แถวอัตโนมัติ`
+              : `✅ ${r.base_tracking} → ${pr}`
+            : `ล้าง PR ของ ${r.base_tracking} แล้ว`,
+        );
+        // Mark-propagation changed OTHER rows server-side → refresh the server props
+        // so their PR cells update without a manual reload.
+        if (prop > 0) router.refresh();
       } else {
         alert(res.error);
       }
@@ -117,7 +137,7 @@ export function TtwStagingClient({
   if (rows.length === 0) {
     return (
       <div className="p-6">
-        <Header totalContainers={0} totalTracks={0} totalNoPr={0} totalCommitted={0} />
+        <Header totalContainers={0} totalTracks={0} totalNoPr={0} totalNoPrMarks={0} totalCommitted={0} />
         <div className="mt-6 rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
           {loadError ? "โหลดข้อมูลไม่สำเร็จ" : "ยังไม่มีแพคกิ้งลิสต์อี้อู/TTW ในระบบ — รัน scripts/ingest-ttw-packing-2026-07-18.ts ก่อน"}
         </div>
@@ -127,7 +147,13 @@ export function TtwStagingClient({
 
   return (
     <div className="p-4 sm:p-6">
-      <Header totalContainers={totalContainers} totalTracks={totalTracks} totalNoPr={totalNoPr} totalCommitted={totalCommitted} />
+      <Header totalContainers={totalContainers} totalTracks={totalTracks} totalNoPr={totalNoPr} totalNoPrMarks={totalNoPrMarks} totalCommitted={totalCommitted} />
+
+      {notice && (
+        <div className="mt-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-[13px] text-emerald-800">
+          {notice}
+        </div>
+      )}
 
       {/* Filter + search */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -265,20 +291,23 @@ export function TtwStagingClient({
 }
 
 function Header({
-  totalContainers, totalTracks, totalNoPr, totalCommitted,
-}: { totalContainers: number; totalTracks: number; totalNoPr: number; totalCommitted: number }) {
+  totalContainers, totalTracks, totalNoPr, totalNoPrMarks, totalCommitted,
+}: { totalContainers: number; totalTracks: number; totalNoPr: number; totalNoPrMarks: number; totalCommitted: number }) {
   return (
     <div>
       <h1 className="text-2xl font-bold">📦 แพคกิ้งลิสต์ อี้อู / TTW — ใส่ PR ให้ลูกค้า</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         ตู้จากโกดัง <b>อี้อู</b> (เฟรท <b>TTW</b>) เข้าระบบแล้ว — แต่ยังไม่รู้ว่าของใคร (会员=YY).
-        CS จับคู่ <b>มาร์ค (唛头)</b> กับ <b>ใบส่งของ</b> → ใส่รหัสลูกค้า (PR) ในช่องด้านล่าง.
+        CS จับคู่ <b>มาร์ค (唛头)</b> กับ <b>ใบส่งของ</b> → ใส่รหัสลูกค้า (PR) ในช่องด้านล่าง.{" "}
+        <b className="text-emerald-700">ใส่ PR แถวเดียว = ระบบติดให้ทุกแถวของมาร์คเดียวกันอัตโนมัติ</b>{" "}
+        (มาร์ค = รหัสลูกค้าของ TTW · เช่น SPK/KTM888/SEA ทั้ง 101 แถว = ลูกค้าคนเดียว → ทำจริงแค่ครั้งเดียวต่อมาร์ค).
         การใส่ PR ที่นี่ยัง <b>ไม่</b> สร้างรายการนำเข้า/บิล — เป็นการจับคู่ไว้ก่อน (ขั้นถัดไป = จับกลุ่ม + สร้างรายการนำเข้า).
       </p>
       <div className="mt-3 flex flex-wrap gap-2 text-[13px]">
         <Stat label="ตู้" value={totalContainers} />
         <Stat label="แทรคกิ้ง" value={totalTracks} />
-        <Stat label="ยังไม่มี PR" value={totalNoPr} tone={totalNoPr ? "rose" : "emerald"} />
+        <Stat label="แถวยังไม่มี PR" value={totalNoPr} tone={totalNoPr ? "rose" : "emerald"} />
+        <Stat label="เหลือจริง (มาร์ค)" value={totalNoPrMarks} tone={totalNoPrMarks ? "rose" : "emerald"} />
         <Stat label="commit แล้ว" value={totalCommitted} tone="emerald" />
       </div>
     </div>
