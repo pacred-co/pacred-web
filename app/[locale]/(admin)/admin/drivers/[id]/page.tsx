@@ -25,6 +25,7 @@ import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "
 import {
   Truck, Clock, CheckCircle2, XCircle, MapPin, Phone,
   Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2, ClipboardList, Tag,
+  ChevronsUpDown,
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
@@ -730,9 +731,9 @@ export default async function AdminDriverBatchDetailPage({
               จำนวน | บริษัทขนส่ง | ข้อมูล) — the stops below read as ONE bordered
               table, not floaty cards (ภูม 2026-07-19 "ตารางยังไม่เหมือน"). */}
           <div className="hidden xl:grid xl:grid-cols-[180px_minmax(220px,1fr)_minmax(0,1.5fr)] divide-x divide-[#dcdfe4] border-b border-[#dcdfe4] bg-surface-alt/60 text-[13px] font-bold text-[#6b6f82]">
-            <div className="px-3 py-2">จำนวน · สถานะ · รูปส่ง</div>
-            <div className="px-3 py-2">บริษัทขนส่ง · ที่อยู่</div>
-            <div className="px-3 py-2">ข้อมูล (ออเดอร์ · แทรคกิ้ง)</div>
+            <div className="px-3 py-2">จำนวน · สถานะ · รูปส่ง <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></div>
+            <div className="px-3 py-2">บริษัทขนส่ง · ที่อยู่ <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></div>
+            <div className="px-3 py-2">ข้อมูล (ออเดอร์ · แทรคกิ้ง) <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></div>
           </div>
           {stopsWithPhotos.map((stop, idx) => {
             const f = stop.forwarder;
@@ -874,9 +875,11 @@ export default async function AdminDriverBatchDetailPage({
                     )}
                   </div>
 
-                  {/* ZONE 3 — ตารางย่อยออเดอร์ (cover + ออเดอร์ + รหัสสมาชิก + แทรคกิ้ง + กล่อง/นน./ปริมาตร) */}
-                  <div className="p-3">
-                    <div className="overflow-x-auto rounded-lg border border-border scrollbar-x-visible">
+                  {/* ZONE 3 — ตารางย่อยออเดอร์ FLUSH edge-to-edge เหมือน legacy (cover +
+                      ออเดอร์ + รหัสสมาชิก + แทรคกิ้ง + กล่อง/นน./ปริมาตร + ตัวเลือก).
+                      ปุ่มลบย้ายมาท้ายแต่ละแถว (ตัวเลือก) — รู้ว่าลบรายการไหน (ภูม 2026-07-19). */}
+                  <div className="p-0">
+                    <div className="overflow-x-auto scrollbar-x-visible">
                       <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-[#dcdfe4] [&>tbody>tr>td]:border [&>tbody>tr>td]:border-[#dcdfe4]">
                         <thead className="bg-surface-alt/60 text-left text-[11px] font-bold text-[#6b6f82]">
                           <tr>
@@ -887,13 +890,14 @@ export default async function AdminDriverBatchDetailPage({
                             <th className="px-2 py-1.5 text-right">กล่อง</th>
                             <th className="px-2 py-1.5 text-right">น้ำหนัก</th>
                             <th className="px-2 py-1.5 text-right">ปริมาตร</th>
+                            {isOpsOverride && <th className="px-2 py-1.5 text-center w-20">ตัวเลือก</th>}
                           </tr>
                         </thead>
                         <tbody>
                           {stop.items.map(({ item, forwarder, coverUrl }, i) => {
                             const fNo = forwarder.fidorco ?? `#${forwarder.id}`;
                             return (
-                              <tr key={item.id} className="border-t border-border align-top">
+                              <tr key={item.id} className="align-top">
                                 <td className="px-2 py-1.5 text-muted">{i + 1}</td>
                                 <td className="px-2 py-1.5">
                                   <div className="flex items-center gap-1.5">
@@ -930,6 +934,11 @@ export default async function AdminDriverBatchDetailPage({
                                 <td className="px-2 py-1.5 text-right">{forwarder.famount ?? 0}</td>
                                 <td className="px-2 py-1.5 text-right">{Number(forwarder.fweight ?? 0).toFixed(2)}</td>
                                 <td className="px-2 py-1.5 text-right">{Number(forwarder.fvolume ?? 0).toFixed(5)}</td>
+                                {isOpsOverride && (
+                                  <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                                    <RemoveItemButton itemId={item.id} fNo={fNo} delivered={item.fdistatus === "2"} />
+                                  </td>
+                                )}
                               </tr>
                             );
                           })}
@@ -939,14 +948,17 @@ export default async function AdminDriverBatchDetailPage({
                             <td className="px-2 py-1.5 text-right">{stop.totalBoxes}</td>
                             <td className="px-2 py-1.5 text-right">{stop.totalWeight.toFixed(2)}</td>
                             <td className="px-2 py-1.5 text-right">{stop.totalVolume.toFixed(5)}</td>
+                            {isOpsOverride && <td className="px-2 py-1.5" />}
                           </tr>
                         </tbody>
                       </table>
                     </div>
 
-                    {/* ส่งไม่ได้ — เหตุผลที่คนขับบันทึก (0213 fdinote) */}
-                    {stop.items.some((e) => e.item.fdistatus === "3" && e.item.fdinote) && (
-                      <div className="mt-2 space-y-1">
+                    {/* notes + courier-link — padded sub-section below the flush table.
+                        (ปุ่มลบย้ายเข้าไปในคอลัมน์ "ตัวเลือก" ท้ายแต่ละแถวแล้ว) */}
+                    {(stop.items.some((e) => e.item.fdistatus === "3" && e.item.fdinote) || isOpsOverride) && (
+                      <div className="p-3 space-y-2">
+                        {/* ส่งไม่ได้ — เหตุผลที่คนขับบันทึก (0213 fdinote) */}
                         {stop.items
                           .filter((e) => e.item.fdistatus === "3" && e.item.fdinote)
                           .map(({ item, forwarder }) => (
@@ -954,39 +966,23 @@ export default async function AdminDriverBatchDetailPage({
                               ⚠️ {forwarder.fidorco ?? `#${forwarder.id}`} ส่งไม่ได้: {item.fdinote}
                             </p>
                           ))}
-                      </div>
-                    )}
-
-                    {/* per-stop actions — ยกเลิกรายการ + ลิงก์ติดตามขนส่ง (ops only · compact) */}
-                    {isOpsOverride && (
-                      <div className="mt-2 space-y-2">
-                        <div className="flex flex-wrap gap-1.5">
-                          {stop.items.map(({ item, forwarder }) => {
-                            const fNo = forwarder.fidorco ?? `#${forwarder.id}`;
-                            return (
-                              <RemoveItemButton
-                                key={`rm-${item.id}`}
-                                itemId={item.id}
-                                fNo={fNo}
-                                delivered={item.fdistatus === "2"}
-                              />
-                            );
-                          })}
-                        </div>
-                        <details className="rounded-lg border border-border">
-                          <summary className="cursor-pointer select-none px-2 py-1.5 text-[11px] font-medium text-muted flex items-center gap-1">
-                            <Link2 className="h-3 w-3" /> ลิงก์ติดตามขนส่ง (ลูกค้าเห็น) — {stop.items.length} รายการ
-                          </summary>
-                          <div className="px-2 pb-2 pt-1 space-y-1.5">
-                            {stop.items.map(({ forwarder }) => (
-                              <CourierUrlInput
-                                key={`courier-${forwarder.id}`}
-                                forwarderId={forwarder.id}
-                                initialUrl={forwarder.courier_tracking_url}
-                              />
-                            ))}
-                          </div>
-                        </details>
+                        {/* ลิงก์ติดตามขนส่ง (ลูกค้าเห็น · ops only) */}
+                        {isOpsOverride && (
+                          <details className="rounded-lg border border-border">
+                            <summary className="cursor-pointer select-none px-2 py-1.5 text-[11px] font-medium text-muted flex items-center gap-1">
+                              <Link2 className="h-3 w-3" /> ลิงก์ติดตามขนส่ง (ลูกค้าเห็น) — {stop.items.length} รายการ
+                            </summary>
+                            <div className="px-2 pb-2 pt-1 space-y-1.5">
+                              {stop.items.map(({ forwarder }) => (
+                                <CourierUrlInput
+                                  key={`courier-${forwarder.id}`}
+                                  forwarderId={forwarder.id}
+                                  initialUrl={forwarder.courier_tracking_url}
+                                />
+                              ))}
+                            </div>
+                          </details>
+                        )}
                       </div>
                     )}
                   </div>

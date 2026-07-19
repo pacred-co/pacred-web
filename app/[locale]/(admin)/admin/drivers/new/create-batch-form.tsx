@@ -29,7 +29,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { Truck } from "lucide-react";
+import { Truck, ChevronsUpDown } from "lucide-react";
 import { createDriverBatch } from "@/actions/admin/driver-batches";
 import { exportFlashPickupCsv } from "@/actions/admin/export/flash-pickup";
 import { recommendVehicle } from "@/lib/admin/vehicle-recommendation";
@@ -378,11 +378,11 @@ export function CreateBatchForm({
                   aria-label="เลือกทั้งหมด"
                 />
               </th>
-              <th className="px-3 py-2 w-20 text-center">จำนวน</th>
-              <th className="px-3 py-2 w-40">บริษัทขนส่ง</th>
-              <th className="px-3 py-2">เลขแทรคกิ้ง</th>
-              <th className="px-3 py-2 w-20 text-center">ลำดับส่ง</th>
-              <th className="px-3 py-2 w-[26rem]">ที่อยู่</th>
+              <th className="px-3 py-2 w-20 text-center">จำนวน <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></th>
+              <th className="px-3 py-2 w-40">บริษัทขนส่ง <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></th>
+              <th className="px-3 py-2">เลขแทรคกิ้ง <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></th>
+              <th className="px-3 py-2 w-20 text-center">ลำดับส่ง <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></th>
+              <th className="px-3 py-2 w-[26rem]">ที่อยู่ <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></th>
             </tr>
           </thead>
           <tbody>

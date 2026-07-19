@@ -33,7 +33,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { Camera, CheckCircle2, Phone } from "lucide-react";
+import { Camera, CheckCircle2, Phone, ChevronsUpDown } from "lucide-react";
 import { markForwarderSelfPickupDelivered } from "@/actions/admin/forwarder-self-pickup";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { compressImageFile } from "@/lib/image-compress";
@@ -344,12 +344,12 @@ function CustomerPickupCard({
                 />
               </th>
               <th className="px-2 py-2 w-10 text-center">#</th>
-              <th className="px-2 py-2 w-32">เลขออเดอร์</th>
-              <th className="px-2 py-2 w-24">รหัสสมาชิก</th>
-              <th className="px-2 py-2">เลขแทรคกิ้ง</th>
-              <th className="px-2 py-2 w-16 text-right">กล่อง</th>
-              <th className="px-2 py-2 w-20 text-right">น้ำหนัก</th>
-              <th className="px-2 py-2 w-20 text-right">ปริมาตร</th>
+              <th className="px-2 py-2 w-32">เลขออเดอร์ <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></th>
+              <th className="px-2 py-2 w-24">รหัสสมาชิก <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></th>
+              <th className="px-2 py-2">เลขแทรคกิ้ง <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></th>
+              <th className="px-2 py-2 w-16 text-right">กล่อง <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></th>
+              <th className="px-2 py-2 w-20 text-right">น้ำหนัก <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></th>
+              <th className="px-2 py-2 w-20 text-right">ปริมาตร <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></th>
             </tr>
           </thead>
           <tbody>
