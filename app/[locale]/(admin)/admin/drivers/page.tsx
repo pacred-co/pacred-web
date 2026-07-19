@@ -331,7 +331,7 @@ export default async function AdminDriversPage({
           ผู้สร้างรายการ · สถานะ · ตัวเลือก). No driver grouping — 1 row = 1 รอบ. */}
       <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white shadow-sm">
         <table className="w-full text-sm border-collapse min-w-[1000px] [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
-          <thead className="bg-surface-alt/60 text-left text-[11px] uppercase tracking-wide text-muted">
+          <thead className="bg-surface-alt/60 text-center text-[13px] font-bold tracking-wide text-[#6b6f82]">
             <tr>
               {/* legacy forwarder-driver.php list mode L157-166: ID / วันที่สร้าง / ชื่อรายการ /
                   ผู้รับผิดชอบ / ผู้สร้างรายการ / สถานะ / ตัวเลือก (ส่งแล้ว = Pacred progress add). */}
