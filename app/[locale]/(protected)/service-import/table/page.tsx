@@ -234,6 +234,7 @@ type ForwarderRow = {
   fcabinetnumber: string | null;
   ftotalprice: number | null;
   ftransportprice: number | null;
+  paymethod: string | null;
   fpriceupdate: number | null;
   fdiscount: number | null;
   fshippingservice: number | null;
@@ -342,7 +343,7 @@ export default async function ForwarderTablePage({
   let tableQuery = admin
     .from("tb_forwarder")
     .select(
-      "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftransporttype, fshipby, fcredit, fdetail, fcover, famount, fweight, fvolume, fwidth, fheight, flength, fproductstype, frefprice, frefrate, fcabinetnumber, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, reforder, fdatestatus2, fdatestatus3, fdatestatus4",
+      "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftransporttype, fshipby, paymethod, fcredit, fdetail, fcover, famount, fweight, fvolume, fwidth, fheight, flength, fproductstype, frefprice, frefrate, fcabinetnumber, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, reforder, fdatestatus2, fdatestatus3, fdatestatus4",
     )
     .eq("userid", memberCode);
 
@@ -397,6 +398,7 @@ export default async function ForwarderTablePage({
       frefrate: row.frefrate == null ? null : Number(row.frefrate),
       fcabinetnumber: (row.fcabinetnumber as string) ?? null,
       ftotalprice: row.ftotalprice == null ? null : Number(row.ftotalprice),
+      paymethod: (row.paymethod as string | null) ?? null,
       ftransportprice: row.ftransportprice == null ? null : Number(row.ftransportprice),
       fpriceupdate: row.fpriceupdate == null ? null : Number(row.fpriceupdate),
       fdiscount: row.fdiscount == null ? null : Number(row.fdiscount),
@@ -578,6 +580,7 @@ export default async function ForwarderTablePage({
     fvolume: r.fvolume ?? 0,
     ftotalprice: r.ftotalprice ?? 0,
     ftransportprice: r.ftransportprice ?? 0,
+    paymethod: r.paymethod ?? null,
     fpriceupdate: r.fpriceupdate ?? 0,
     fdiscount: r.fdiscount ?? 0,
     fshippingservice: r.fshippingservice ?? 0,

@@ -103,6 +103,11 @@ const SHOP_STATUS: Record<
   "4": { cls: "bg-blue-100 text-blue-700 border-blue-200",       dot: "bg-blue-500"    },
   "5": { cls: "bg-emerald-100 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
   "6": { cls: "bg-neutral-200 text-neutral-600 border-neutral-300", dot: "bg-neutral-500" },
+  // '40' ถึงโกดังจีน — the 3-stage shop-order rule (trigger 0235 · mig 0185)
+  // sets this when every shop's goods reached the China warehouse but not all
+  // are containerized yet. Without this entry the pill vanished on the main
+  // customer list while /pending + admin showed it (customer↔staff parity fix).
+  "40": { cls: "bg-teal-100 text-teal-700 border-teal-200", dot: "bg-teal-500" },
 };
 
 function StatusBadge({ hStatus, label }: { hStatus: string; label: string }) {

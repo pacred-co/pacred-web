@@ -1243,11 +1243,12 @@ export async function adminMarkForwarderCredit(
     // 1. Read the forwarder price components + state (legacy L1402-1404).
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, userid, fstatus, fcredit, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount")
+      .select("id, userid, fstatus, fcredit, ftotalprice, ftransportprice, paymethod, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount")
       .eq("id", d.fId)
       .maybeSingle<{
         id: number; userid: string; fstatus: string | null; fcredit: string | null;
         ftotalprice: number | string | null; ftransportprice: number | string | null;
+        paymethod: string | null;
         fpriceupdate: number | string | null; fshippingservice: number | string | null;
         pricecrate: number | string | null; ftransportpricechnthb: number | string | null;
         priceother: number | string | null; fdiscount: number | string | null;
@@ -1298,8 +1299,14 @@ export async function adminMarkForwarderCredit(
     const outstanding = numCol(creditRow?.creditvalue);
 
     // 4. Compute pricePay (legacy L1424) + corporate 1% allowance.
+    // COD (paymethod='2') — the courier collects the Thai domestic leg at the door,
+    // so it is NOT part of the credit AR. This MIRRORS forwarderPriceFull (the settle
+    // side): without it the grant adds the leg to tb_credit but markBillingRunPaid
+    // settles calcForwarderOutstanding (COD-excluded) → the credit line under-frees
+    // by the leg on a COD credit order. (grant == settle for COD · #6 2026-07-19)
+    const domesticLeg = Number(fwd.paymethod) === 2 ? 0 : numCol(fwd.ftransportprice);
     let pricePay =
-      numCol(fwd.ftotalprice) + numCol(fwd.ftransportprice) + numCol(fwd.fpriceupdate) +
+      numCol(fwd.ftotalprice) + domesticLeg + numCol(fwd.fpriceupdate) +
       numCol(fwd.fshippingservice) + numCol(fwd.pricecrate) + numCol(fwd.ftransportpricechnthb) +
       numCol(fwd.priceother) - numCol(fwd.fdiscount);
     if ((u?.userCompany ?? "").trim() === "1") pricePay = pricePay - pricePay * 0.01;

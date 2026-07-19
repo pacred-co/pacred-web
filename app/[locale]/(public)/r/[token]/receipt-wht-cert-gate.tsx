@@ -94,8 +94,8 @@ export default function ReceiptWhtCertGate({
         <div className="flex items-start gap-3">
           <Clock className="h-5 w-5 mt-0.5 shrink-0" />
           <div className="text-sm">
-            <p className="font-semibold">แนบใบ 50 ทวิ แล้ว · รอแอดมินตรวจอนุมัติ</p>
-            <p className="mt-0.5 text-amber-800">เมื่อแอดมินอนุมัติแล้ว จะสามารถพิมพ์/ดาวน์โหลดใบเสร็จได้ทันที — โปรดกลับมาเช็คอีกครั้ง</p>
+            <p className="font-semibold">แนบใบ 50 ทวิ แล้ว · รอแอดมินตรวจรับ</p>
+            <p className="mt-0.5 text-amber-800">ใบเสร็จนี้พิมพ์/ดาวน์โหลดได้เลย ไม่ต้องรอ — ทางเราจะตรวจรับใบ 50 ทวิ ให้เรียบร้อยเอง</p>
             <button
               type="button"
               onClick={() => fileRef.current?.click()}

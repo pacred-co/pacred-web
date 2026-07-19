@@ -58,7 +58,11 @@ const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
   "4":   { label: "สินค้าถึงประเทศไทยแล้ว",cls: "bg-[#d7ccc8] text-[#5d4037] border-[#a1887f]"     },
   "5":   { label: "รอชำระเงิน",            cls: "bg-red-100 text-red-700 border-red-200"           },
   "6":   { label: "เตรียมส่ง",             cls: "bg-indigo-100 text-indigo-700 border-indigo-200"  },
-  "6.1": { label: "กำลังจัดส่ง",           cls: "bg-cyan-100 text-cyan-700 border-cyan-200"        },
+  // key "outForDelivery" (was the dotted 6·1): next-intl splits a message key on
+  // ".", so the dotted form tried to navigate status→6→1 and, since status.6 is a
+  // string, returned the RAW key to the customer while admin showed "กำลังจัดส่ง".
+  // A dot-free key resolves correctly. (customer↔staff parity)
+  "outForDelivery": { label: "กำลังจัดส่ง", cls: "bg-cyan-100 text-cyan-700 border-cyan-200"        },
   "7":   { label: "ส่งแล้ว",               cls: "bg-emerald-100 text-emerald-700 border-emerald-200" },
 };
 
@@ -73,7 +77,7 @@ export function StatusForwarderAll2({
   // Status 6 has two sub-states: 6 = "เตรียมส่ง" by default, 6.1 = "กำลังจัดส่ง"
   // when the row is in the out-for-delivery (tb_forwarder_driver_item) set.
   let key: string = fStatus ?? "";
-  if (fStatus === "6" && fStatusDriver === 1) key = "6.1";
+  if (fStatus === "6" && fStatusDriver === 1) key = "outForDelivery";
   const chip = STATUS_CHIP[key];
   if (!chip) return null;
   return (
@@ -240,6 +244,11 @@ export type ForwarderRow = {
   fvolume: number;
   ftotalprice: number;
   ftransportprice: number;
+  /** tb_forwarder.paymethod — '2' = ปลายทาง/COD (the courier collects the Thai
+   *  domestic leg at the door), else ต้นทาง. The pay-modal MUST drop the domestic
+   *  leg (ftransportprice) when '2' so the customer QR/slip never double-charges
+   *  what the server (collect/debit/receipt) already excludes for COD. */
+  paymethod: string | null;
   fpriceupdate: number;
   fdiscount: number;
   fshippingservice: number;

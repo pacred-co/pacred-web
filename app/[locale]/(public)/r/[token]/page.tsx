@@ -73,10 +73,21 @@ export default async function PublicReceiptPage({
   const showCertPrompt = doc.whtCert.locked;
   const certStatus = doc.whtCert.status === "pending" ? "pending" : "none";
 
+  // A CANCELLED (rstatus='2' · ยกเลิก) receipt must never present as a valid
+  // document to the customer — banner it (mirrors the admin statusBadge). Shows
+  // in print too so a printed copy can't be mistaken for live.
+  const isCancelled = doc.receipt.rstatus === "2";
+
   return (
     <div className="min-h-screen bg-slate-100 print:bg-white">
       <div className="px-2 pt-4 sm:px-4">
-        {showCertPrompt && <ReceiptWhtCertGate token={token} status={certStatus} />}
+        {isCancelled && (
+          <div className="mx-auto max-w-2xl rounded-2xl border-2 border-red-400 bg-red-50 p-4 text-center text-red-800 mb-3">
+            <p className="text-lg font-extrabold tracking-wide">⛔ เอกสารนี้ถูกยกเลิก / CANCELLED</p>
+            <p className="mt-0.5 text-sm text-red-700">ใบเสร็จเลขที่ {doc.receipt.rid} ถูกยกเลิกแล้ว — ไม่ถือเป็นเอกสารที่ใช้ได้</p>
+          </div>
+        )}
+        {!isCancelled && showCertPrompt && <ReceiptWhtCertGate token={token} status={certStatus} />}
       </div>
 
       {/* `id` is the toggle target for the toolbar's เต็มจอ/กระดาษ (.receipt-fit).

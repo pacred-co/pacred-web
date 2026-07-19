@@ -49,11 +49,20 @@ function numberFormat2(n: number): string {
   });
 }
 
+// COD (paymethod='2') → the courier collects the Thai domestic leg (ftransportprice)
+// at the door, so it is NOT part of the Pacred bill/QR. Every server surface
+// (computeForwarderCollectTotal · submitForwarderPayment · outstanding ·
+// computeForwarderDebitBatch · auto-issue-receipt) already drops it; the modal
+// must match or the customer double-pays (QR upfront + courier at door).
+function domesticLegOf(row: ForwarderRow): number {
+  return Number(row.paymethod) === 2 ? 0 : row.ftransportprice;
+}
+
 // getListPayForwarder.php L116 — per-row total (before bill-level adjust).
 function perRowTotal(row: ForwarderRow): number {
   return (
     row.ftotalprice +
-    row.ftransportprice +
+    domesticLegOf(row) +
     row.fpriceupdate +
     row.fshippingservice +
     row.pricecrate +
@@ -68,7 +77,7 @@ function perRowTotal(row: ForwarderRow): number {
 // other). `ftotalprice` (the import rate) and `fdiscount` get their own columns.
 function otherCharges(row: ForwarderRow): number {
   return (
-    row.ftransportprice +
+    domesticLegOf(row) +
     row.fpriceupdate +
     row.fshippingservice +
     row.pricecrate +

@@ -27,6 +27,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { baseOf, suffixOf } from "@/lib/integrations/momo-web/split-box-rows-plan";
+import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
 
 export type HealthSeverity = "red" | "warn" | "info";
 
@@ -339,8 +340,13 @@ const CHECKS: CheckDef[] = [
         const cost = rows.reduce((s, r) => s + r.fcosttotalprice, 0);
         const vol = rows.reduce((s, r) => s + r.fvolume, 0);
         if (!(cost > 0) || !(vol > 0)) continue;
-        const tts = [...new Set(rows.map((r) => r.ftransporttype).filter(Boolean))];
-        const rate = Math.max(...tts.map((t) => RATE[t] ?? 4700), 2500);
+        // Derive the mode from the container CODE (the SOT · GZS/YWS=sea "2" · GZE/YWE/EK=road
+        // "1"), NOT the stored ftransporttype — a stale ftransporttype='2' on a GZE(road) tู้
+        // used to false-flag a legit 4,700 road cost as "cost มั่ว". Fall back to the stored
+        // field only when the code carries no mode token. TTW rates (อี้อู 2600/5300) sit inside
+        // the 1.35× tolerance of MOMO 2500/4700, so no warehouse-specific rate is needed here.
+        const modes = [...new Set(rows.map((r) => transportModeFromCabinetName(r.fcabinetnumber) ?? r.ftransporttype).filter(Boolean))];
+        const rate = Math.max(...modes.map((t) => RATE[t] ?? 4700), 2500);
         const ratio = cost / vol;
         if (ratio > rate * TOL) {
           out.push({ base, userid: rows[0].userid, cost: Math.round(cost * 100) / 100, cbm: vol.toFixed(4), ratio: Math.round(ratio), rate });

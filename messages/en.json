@@ -3117,6 +3117,7 @@
     "status4": "Awaiting China Dispatch",
     "status5": "Completed",
     "status6": "Order Cancelled",
+    "status40": "Arrived at China warehouse",
     "moreItems": " and {n} more item(s)",
     "payBefore": "⚠ Please pay before",
     "payBarTitle": "Items awaiting payment",
@@ -4705,7 +4706,8 @@
       "4": "Arrived in Thailand",
       "5": "Awaiting payment",
       "6": "Preparing to ship",
-      "7": "Delivered"
+      "7": "Delivered",
+      "outForDelivery": "Out for delivery"
     },
     "cancelConfirm": "Confirm cancel import item #{id}?\nCancelled items are permanently deleted",
     "cancelErrorNotCancellable": "Cannot cancel (item already processed)",

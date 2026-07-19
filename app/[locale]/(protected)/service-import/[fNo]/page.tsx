@@ -6,6 +6,7 @@ import { computeSteps, hasRealStamp } from "@/lib/forwarder/customer-tracker-ste
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { legacyMemberUrl, forwarderCoverUrl } from "@/lib/legacy-image";
+import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { CoverThumb } from "../_shared/cover-thumb";
 import { code128SvgDataUrl } from "@/lib/barcode";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
@@ -879,6 +880,7 @@ export default async function ServiceImportDetailPage({
     fvolume:                fVolume,
     ftotalprice:            fTotalPrice,
     ftransportprice:        fTransportPrice,
+    paymethod:              row.paymethod ?? null,
     fpriceupdate:           fPriceUpdate,
     fdiscount:              fDiscount,
     fshippingservice:       fShippingService,
@@ -1013,6 +1015,17 @@ export default async function ServiceImportDetailPage({
   // (was the "PCS Cargo Shop" logo · brand leak flagged 2026-07-03) and a
   // `pcscargo.co.th` URL → the Supabase mirror instead of leaking the host.
   const coverUrl = forwarderCoverUrl(row.fcover);
+
+  // Delivery-proof photo (fphotoend). The MODERN driver flow (driver-work.ts)
+  // uploads to the private `forwarder-covers` bucket under `driver/<itemId>-off/…`
+  // → a path WITH slashes, resolved via a signed URL (same as admin). LEGACY rows
+  // stored a bare filename in the public images/shops mirror. Discriminate on "/"
+  // — else the customer saw a broken image (path fed to legacyMemberUrl 404'd).
+  const fphotoendUrl = row.fphotoend
+    ? row.fphotoend.includes("/")
+      ? await getSignedBucketUrl("forwarder-covers", row.fphotoend)
+      : legacyMemberUrl(`images/shops/${row.fphotoend}`)
+    : null;
 
   // Physical journey done-state is driven by the per-stage date stamps
   // (set by the warehouse scan), NOT the fstatus integer — see computeSteps.
@@ -1427,18 +1440,18 @@ export default async function ServiceImportDetailPage({
                                 </div>
                               </div>
                             )}
-                            {row.fphotoend && row.fphotoend !== "" && (
+                            {row.fphotoend && row.fphotoend !== "" && fphotoendUrl && (
                               <div>
                                 <p className="text-sm font-semibold text-foreground">
                                   {t("deliveryPhotoLabel")} :
                                 </p>
                                 <a
                                   className="image-popup-vertical-fit el-link mt-1 inline-block"
-                                  href={legacyMemberUrl(`images/shops/${row.fphotoend}`)}
+                                  href={fphotoendUrl}
                                 >
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img
-                                    src={legacyMemberUrl(`images/shops/${row.fphotoend}`)}
+                                    src={fphotoendUrl}
                                     alt=""
                                     className="w-full max-w-[200px] rounded-lg border border-border object-cover"
                                   />

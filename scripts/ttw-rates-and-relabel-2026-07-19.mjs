@@ -24,7 +24,10 @@ if (!PW) { console.error("SUPABASE_DB_PASSWORD required"); process.exit(1); }
 
 async function main() {
   const c = new pg.Client({
-    connectionString: `postgresql://postgres:${encodeURIComponent(PW)}@db.yzljakczhwrpbxflnmco.supabase.co:5432/postgres`,
+    // aws-1 session pooler (the direct db.<ref>.supabase.co host is IPv6-only /
+    // no longer resolves on IPv4 · pooler is the working path). pw from env only.
+    host: "aws-1-ap-southeast-1.pooler.supabase.com", port: 5432,
+    user: "postgres.yzljakczhwrpbxflnmco", password: PW, database: "postgres",
     ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 15000,
   });
   await c.connect();

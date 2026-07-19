@@ -155,6 +155,10 @@ export type ReceiptDocument = {
   receipt: {
     id:           number;
     rid:          string;
+    /** tb_receipt.rstatus — '1' ชำระแล้ว · '2' ยกเลิก · else รอชำระ. Surfaced so the
+     *  public /r/<token> page can watermark a CANCELLED receipt (else a voided
+     *  doc renders as a valid receipt to the customer). */
+    rstatus:      string;
     statusprint:  string | null;
     rdateprint:   string | null;
     adminidprint: string | null;
@@ -545,6 +549,7 @@ export async function loadReceiptDocument(
     receipt: {
       id:           receipt.id,
       rid:          receipt.rid,
+      rstatus:      receipt.rstatus ?? "",
       statusprint:  receipt.statusprint,
       rdateprint:   receipt.rdateprint,
       adminidprint: receipt.adminidprint,
