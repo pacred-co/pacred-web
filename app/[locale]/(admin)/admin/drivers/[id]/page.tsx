@@ -729,7 +729,7 @@ export default async function AdminDriverBatchDetailPage({
           {/* Legacy detail-table header (forwarder-driver.php detail:
               จำนวน | บริษัทขนส่ง | ข้อมูล) — the stops below read as ONE bordered
               table, not floaty cards (ภูม 2026-07-19 "ตารางยังไม่เหมือน"). */}
-          <div className="hidden xl:grid xl:grid-cols-[180px_minmax(220px,1fr)_minmax(0,1.5fr)] divide-x divide-[#dcdfe4] border-b border-[#dcdfe4] bg-surface-alt/60 text-[13px] font-bold text-[#6b6f82]">
+          <div className="hidden xl:grid xl:grid-cols-[180px_26rem_minmax(0,1fr)] divide-x divide-[#dcdfe4] border-b border-[#dcdfe4] bg-surface-alt/60 text-[13px] font-bold text-[#6b6f82]">
             <div className="px-3 py-2">จำนวน · สถานะ · รูปส่ง</div>
             <div className="px-3 py-2">บริษัทขนส่ง · ที่อยู่</div>
             <div className="px-3 py-2">ข้อมูล (ออเดอร์ · แทรคกิ้ง)</div>
@@ -757,7 +757,7 @@ export default async function AdminDriverBatchDetailPage({
 
             return (
               <section key={stop.addressKey} className="bg-white border-b border-[#dcdfe4] last:border-b-0">
-                <div className="grid grid-cols-1 xl:grid-cols-[180px_minmax(220px,1fr)_minmax(0,1.5fr)] divide-y xl:divide-y-0 xl:divide-x divide-[#dcdfe4]">
+                <div className="grid grid-cols-1 xl:grid-cols-[180px_26rem_minmax(0,1fr)] divide-y xl:divide-y-0 xl:divide-x divide-[#dcdfe4]">
 
                   {/* ZONE 1 — จำนวน + สถานะส่ง + รูปส่ง */}
                   <div className="p-3 space-y-2">
