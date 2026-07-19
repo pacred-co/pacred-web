@@ -29,7 +29,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { Truck } from "lucide-react";
+import { Truck, ChevronsUpDown, ChevronUp, ChevronDown } from "lucide-react";
 import { createDriverBatch } from "@/actions/admin/driver-batches";
 import { exportFlashPickupCsv } from "@/actions/admin/export/flash-pickup";
 import { recommendVehicle } from "@/lib/admin/vehicle-recommendation";
@@ -105,6 +105,17 @@ export function CreateBatchForm({
   const [page, setPage] = useState<number>(1);
   const [exporting, setExporting] = useState(false);
 
+  // Column sort (legacy DataTables ⇅) — click a header to sort asc → desc → off
+  // (off = back to the default ลำดับส่ง route order). WORKS (not a decorative icon).
+  type SortKey = "count" | "carrier" | "tracking" | "order" | "address";
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
+  function toggleSort(key: SortKey) {
+    setSort((prev) =>
+      !prev || prev.key !== key ? { key, dir: "asc" } : prev.dir === "asc" ? { key, dir: "desc" } : null,
+    );
+    setPage(1);
+  }
+
   // Aggregates for the selection summary.
   const summary = useMemo(() => {
     let stops = 0;
@@ -126,15 +137,26 @@ export function CreateBatchForm({
     return { stops, items, boxes, weight, volume, fwdIds };
   }, [groups, selectedKeys]);
 
-  // Sort the stops by ลำดับส่ง (district route order) — closest→farthest — so the
-  // list reads like the driver's actual run (legacy sorts the add-table the same way).
-  const sortedGroups = useMemo(
-    () =>
-      [...groups].sort(
-        (a, b) => routeOrderOf(a.address.district) - routeOrderOf(b.address.district),
-      ),
-    [groups],
-  );
+  // Sort the stops. Default = ลำดับส่ง (district route order) closest→farthest so the
+  // list reads like the driver's actual run. When a header ⇅ is clicked, sort by that
+  // column instead (asc/desc · legacy DataTables behaviour).
+  const sortedGroups = useMemo(() => {
+    const base = [...groups];
+    if (!sort) {
+      return base.sort((a, b) => routeOrderOf(a.address.district) - routeOrderOf(b.address.district));
+    }
+    const d = sort.dir === "asc" ? 1 : -1;
+    return base.sort((a, b) => {
+      switch (sort.key) {
+        case "count":    return (a.items.length - b.items.length) * d;
+        case "carrier":  return a.shipByLabel.localeCompare(b.shipByLabel, "th") * d;
+        case "tracking": return (a.items[0]?.ftrackingchn ?? "").localeCompare(b.items[0]?.ftrackingchn ?? "", "th") * d;
+        case "order":    return (routeOrderOf(a.address.district) - routeOrderOf(b.address.district)) * d;
+        case "address":  return (a.recipientName + a.address.district).localeCompare(b.recipientName + b.address.district, "th") * d;
+        default:         return 0;
+      }
+    });
+  }, [groups, sort]);
 
   // ขนส่ง filter — distinct carrier labels + count, biggest first (for the chip row).
   const carriers = useMemo(() => {
@@ -360,10 +382,13 @@ export function CreateBatchForm({
           Columns (legacy forwarder-driver.php?page=add): [☑] · จำนวน · บริษัทขนส่ง ·
           เลขแทรคกิ้ง (nested sub-table) · ลำดับส่ง · ที่อยู่. */}
       <div className="overflow-x-auto scrollbar-x-visible rounded border border-border bg-white">
-        <table className="w-full text-sm border-collapse min-w-[1100px]">
+        {/* table-bordered — full gridlines (เส้นตัดทุกช่อง แนวตั้ง+แนวนอน) like legacy
+            forwarder-driver.php add-page. Child combinators keep the rule scoped to
+            THIS table's cells (the nested per-tracking table gets its own below). */}
+        <table className="w-full text-sm border-collapse min-w-[1100px] [&>thead>tr>th]:border [&>thead>tr>th]:border-[#dcdfe4] [&>tbody>tr>td]:border [&>tbody>tr>td]:border-[#dcdfe4]">
           <thead>
-            <tr className="bg-surface-alt text-left text-[11px] uppercase tracking-wide text-muted">
-              <th className="border-b border-border px-2 py-2 w-10 text-center">
+            <tr className="bg-surface-alt/60 text-left text-[13px] font-bold text-[#6b6f82]">
+              <th className="px-2 py-2 w-10 text-center">
                 <input
                   type="checkbox"
                   checked={filteredGroups.length > 0 && filteredGroups.every((g) => selectedKeys.has(g.key))}
@@ -375,11 +400,31 @@ export function CreateBatchForm({
                   aria-label="เลือกทั้งหมด"
                 />
               </th>
-              <th className="border-b border-border px-3 py-2 w-20 text-center">จำนวน</th>
-              <th className="border-b border-border px-3 py-2 w-40">บริษัทขนส่ง</th>
-              <th className="border-b border-border px-3 py-2">เลขแทรคกิ้ง</th>
-              <th className="border-b border-border px-3 py-2 w-20 text-center">ลำดับส่ง</th>
-              <th className="border-b border-border px-3 py-2 w-[26rem]">ที่อยู่</th>
+              <th className="px-3 py-2 w-20 text-center">
+                <button type="button" onClick={() => toggleSort("count")} className="inline-flex items-center gap-1 hover:text-[#cc3333]">
+                  จำนวน <SortIcon state={sort?.key === "count" ? sort.dir : null} />
+                </button>
+              </th>
+              <th className="px-3 py-2 w-40">
+                <button type="button" onClick={() => toggleSort("carrier")} className="inline-flex items-center gap-1 hover:text-[#cc3333]">
+                  บริษัทขนส่ง <SortIcon state={sort?.key === "carrier" ? sort.dir : null} />
+                </button>
+              </th>
+              <th className="px-3 py-2">
+                <button type="button" onClick={() => toggleSort("tracking")} className="inline-flex items-center gap-1 hover:text-[#cc3333]">
+                  เลขแทรคกิ้ง <SortIcon state={sort?.key === "tracking" ? sort.dir : null} />
+                </button>
+              </th>
+              <th className="px-3 py-2 w-20 text-center">
+                <button type="button" onClick={() => toggleSort("order")} className="inline-flex items-center gap-1 hover:text-[#cc3333]">
+                  ลำดับส่ง <SortIcon state={sort?.key === "order" ? sort.dir : null} />
+                </button>
+              </th>
+              <th className="px-3 py-2 w-[26rem]">
+                <button type="button" onClick={() => toggleSort("address")} className="inline-flex items-center gap-1 hover:text-[#cc3333]">
+                  ที่อยู่ <SortIcon state={sort?.key === "address" ? sort.dir : null} />
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -421,52 +466,50 @@ export function CreateBatchForm({
                       />
                     </td>
 
-                    {/* จำนวน — box + tracking count for this stop */}
+                    {/* จำนวน — tracking-row count for this stop (legacy "N รายการ") */}
                     <td className="px-3 py-2 text-center whitespace-nowrap">
-                      <div className="font-bold text-base text-foreground tabular-nums">{g.totalBoxes}</div>
-                      <div className="text-[11px] text-muted">กล่อง</div>
-                      <div className="text-[11px] text-muted">({g.items.length} แทรค)</div>
+                      <div className="text-sm font-semibold text-foreground tabular-nums">{g.items.length} รายการ</div>
                     </td>
 
-                    {/* บริษัทขนส่ง */}
-                    <td className="px-3 py-2">
-                      <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 text-blue-800 px-1.5 py-0.5 text-[11px] font-medium">
-                        {g.shipByLabel}
-                      </span>
-                      <div className="mt-1 text-xs font-medium text-foreground">คุณ{g.recipientName}</div>
-                      <div className="text-[11px] font-mono text-primary-700">{g.userid}</div>
+                    {/* บริษัทขนส่ง — plain carrier label (legacy "PCS เหมาๆ" · no pill,
+                        no customer name/code: those live in the nested รหัสสมาชิก + the
+                        ที่อยู่ recipient name, matching the legacy add-page). */}
+                    <td className="px-3 py-2 text-sm text-foreground">
+                      {g.shipByLabel}
                     </td>
 
                     {/* เลขแทรคกิ้ง — the nested per-tracking sub-table (legacy inner
                         table: # / เลขออเดอร์ / รหัสสมาชิก / เลขแทรคกิ้ง+location /
                         กล่อง / น้ำหนัก / ปริมาตร → รวม row) */}
-                    <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
-                      <table className="w-full text-xs border-collapse">
+                    <td className="p-0 align-top" onClick={(e) => e.stopPropagation()}>
+                      {/* table-fixed + % widths → EVERY nested table shares the same
+                          column layout → columns line up across all rows (แก้เบี้ยว). */}
+                      <table className="w-full text-xs border-collapse table-fixed [&>thead>tr>th]:border [&>thead>tr>th]:border-[#dcdfe4] [&>tbody>tr>td]:border [&>tbody>tr>td]:border-[#dcdfe4]">
                         <thead>
-                          <tr className="text-left text-[11px] text-muted">
-                            <th className="px-1.5 py-1 font-medium w-8">#</th>
-                            <th className="px-1.5 py-1 font-medium">เลขออเดอร์</th>
-                            <th className="px-1.5 py-1 font-medium">รหัสสมาชิก</th>
-                            <th className="px-1.5 py-1 font-medium">เลขแทรคกิ้ง</th>
-                            <th className="px-1.5 py-1 font-medium text-right">กล่อง</th>
-                            <th className="px-1.5 py-1 font-medium text-right">น้ำหนัก</th>
-                            <th className="px-1.5 py-1 font-medium text-right">ปริมาตร</th>
+                          <tr className="bg-surface-alt/40 text-left text-[11px] font-bold text-[#6b6f82]">
+                            <th className="px-1.5 py-1 w-[5%]">#</th>
+                            <th className="px-1.5 py-1 w-[24%]">เลขออเดอร์</th>
+                            <th className="px-1.5 py-1 w-[15%]">รหัสสมาชิก</th>
+                            <th className="px-1.5 py-1 w-[28%]">เลขแทรคกิ้ง</th>
+                            <th className="px-1.5 py-1 text-right w-[9%]">กล่อง</th>
+                            <th className="px-1.5 py-1 text-right w-[9.5%]">น้ำหนัก</th>
+                            <th className="px-1.5 py-1 text-right w-[9.5%]">ปริมาตร</th>
                           </tr>
                         </thead>
                         <tbody>
                           {g.items.map((it, idx) => (
-                            <tr key={it.id} className="border-t border-border/50">
+                            <tr key={it.id}>
                               <td className="px-1.5 py-1 text-muted tabular-nums">{idx + 1}</td>
                               <td className="px-1.5 py-1">
                                 <Link
                                   href={`/admin/forwarders/${it.id}`}
-                                  className="font-mono text-[#1e9ff2] hover:underline"
+                                  className="font-mono text-[#1e9ff2] hover:underline break-all"
                                   target="_blank"
                                 >
                                   {it.fidorco}
                                 </Link>
                               </td>
-                              <td className="px-1.5 py-1 font-mono text-[11px]">{it.userid}</td>
+                              <td className="px-1.5 py-1 font-mono text-[11px] break-all">{it.userid}</td>
                               <td className="px-1.5 py-1">
                                 <div className="font-medium break-all">{it.ftrackingchn}</div>
                                 {it.fpallet && (
@@ -485,7 +528,7 @@ export function CreateBatchForm({
                           ))}
                           {/* รวม summary row — legacy PINK (alert-danger · #f5aab0/#960014),
                               matches forwarder-driver.php add-page (owner 2026-07-16) */}
-                          <tr className="border-t border-border bg-[#f5aab0] font-semibold text-[#7a0012]">
+                          <tr className="bg-[#f5aab0] font-semibold text-[#7a0012]">
                             <td colSpan={4} className="px-1.5 py-1 text-right">รวม</td>
                             <td className="px-1.5 py-1 text-right tabular-nums">{g.totalBoxes}</td>
                             <td className="px-1.5 py-1 text-right tabular-nums">{g.totalWeight.toFixed(2)}</td>
@@ -495,17 +538,20 @@ export function CreateBatchForm({
                       </table>
                     </td>
 
-                    {/* ลำดับส่ง — district route order (legacy $arrPositF index) */}
+                    {/* ลำดับส่ง — district route order (legacy $arrPositF index) ·
+                        plain number like the legacy add-page (was an orange box). */}
                     <td className="px-3 py-2 text-center">
                       <span
                         title="ลำดับเส้นทางวิ่งรถ — เขตใกล้โกดัง = เลขน้อย · ไกล = เลขมาก"
-                        className="inline-flex items-center justify-center rounded bg-orange-100 border border-orange-300 px-2 py-1 text-base font-extrabold text-orange-700 tabular-nums"
+                        className="text-base font-bold text-foreground tabular-nums"
                       >
                         {order}
                       </span>
                     </td>
 
-                    {/* ที่อยู่ — full delivery address, อำเภอ highlighted (legacy rightmost) */}
+                    {/* ที่อยู่ — legacy add-page format: leads with the recipient name,
+                        full "ตำบล/แขวง … อำเภอ/เขต [highlight] … จังหวัด …" wording, โทร
+                        inline at the end. */}
                     <td className="px-3 py-2 text-sm">
                       {g.addressMissing ? (
                         <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-1">
@@ -513,14 +559,15 @@ export function CreateBatchForm({
                         </span>
                       ) : (
                         <span className="text-foreground/90 leading-relaxed">
+                          <b className="font-semibold">คุณ{g.recipientName}</b>{" "}
                           {g.address.no}
-                          {g.address.subDistrict ? <> ต.{g.address.subDistrict}</> : null}{" "}
-                          {g.address.district ? <>อ.<span className="bg-[#ff9149] px-1 rounded text-white font-medium">{g.address.district}</span>{" "}</> : null}
-                          {g.address.province ? <>จ.{g.address.province} </> : null}{g.address.zipCode}
+                          {g.address.subDistrict ? <> ตำบล/แขวง {g.address.subDistrict}</> : null}{" "}
+                          {g.address.district ? <>อำเภอ/เขต <span className="bg-[#ff9149] px-1 rounded text-white font-medium">{g.address.district}</span>{" "}</> : null}
+                          {g.address.province ? <>จังหวัด {g.address.province} </> : null}{g.address.zipCode}
+                          {g.address.tel && g.address.tel !== "-" && (
+                            <> โทร. {g.address.tel}</>
+                          )}
                         </span>
-                      )}
-                      {g.address.tel && g.address.tel !== "-" && (
-                        <div className="mt-1 text-xs text-muted">โทร. {g.address.tel}</div>
                       )}
                     </td>
                   </tr>
@@ -648,4 +695,12 @@ export function CreateBatchForm({
       )}
     </form>
   );
+}
+
+// Sort-direction glyph for a clickable column header (legacy DataTables ⇅).
+// null = not sorted (gray ⇅) · asc = red ▲ · desc = red ▼.
+function SortIcon({ state }: { state: "asc" | "desc" | null }) {
+  if (state === "asc") return <ChevronUp className="inline h-3 w-3 text-[#cc3333] align-middle" />;
+  if (state === "desc") return <ChevronDown className="inline h-3 w-3 text-[#cc3333] align-middle" />;
+  return <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" />;
 }

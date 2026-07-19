@@ -51,6 +51,7 @@ import {
   adminUpdateForwarderCratePrice,
   adminUpdateForwarderShipBy,
   adminUpdateForwarderPayMethod,
+  adminUpdateForwarderThShipping,
   adminUpdateForwarderAmountCount,
   adminUpdateForwarderPallet,
   adminUpdateForwarderTrackingChn,
@@ -1054,6 +1055,82 @@ export function EditPayMethodField({
               <button type="button" disabled={pending} className={btnSave}
                 onClick={() => run(() => adminUpdateForwarderPayMethod({ fId, paymethod: payVal }), close)}>บันทึก</button>
               <button type="button" disabled={pending} className={btnCancel} onClick={close}>ยกเลิก</button>
+            </div>
+          </>
+        )}
+      </EditableRow>
+    </div>
+  );
+}
+
+/**
+ * ค่าขนส่งไทย (ftransportprice) — Thai domestic shipping cost, editable on the left
+ * panel (owner 2026-07-19). Fixes "Flash เลือกแล้วค่าส่งไม่ขึ้น" — the auto-quote
+ * no-ops until the parcel is measured (dims+kg), leaving ฿0 with no field to fix
+ * it here. Part of the customer bill; on a COD row the COD gate still drops the
+ * domestic leg from the Pacred bill (shown as a chip so staff know).
+ */
+export function EditThShippingField({
+  fId,
+  ftransportprice,
+  paymethod,
+}: { fId: number; ftransportprice: number | string | null; paymethod?: string | null }) {
+  const { pending, err, run } = useEditor();
+  const [editing, setEditing] = useState(false);
+  const current = Number(ftransportprice ?? 0);
+  const [val, setVal] = useState(current > 0 ? String(current) : "");
+  const isCod = paymethod === "2";
+  return (
+    <div>
+      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
+      <EditableRow
+        compact
+        label="ค่าขนส่งไทย"
+        editing={editing}
+        setEditing={setEditing}
+        display={
+          <span className="inline-flex items-center gap-2">
+            <span className={current > 0 ? "font-semibold text-foreground" : "text-amber-600 font-medium"}>
+              {current > 0
+                ? `฿${current.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                : "ยังไม่ระบุ (฿0)"}
+            </span>
+            {isCod && (
+              <span className="rounded bg-red-50 px-1.5 py-0.5 text-[11px] text-red-700">COD · ไม่คิดในบิลเรา</span>
+            )}
+          </span>
+        }
+      >
+        {(close) => (
+          <>
+            <p className="text-[11px] text-muted-foreground mb-1">
+              ค่าส่งในไทย (บาท) — ปกติระบบคิด Flash อัตโนมัติเมื่อวัดขนาด+น้ำหนักครบ · กรอกเองได้ถ้ายังไม่ขึ้น
+            </p>
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              inputMode="decimal"
+              className={selectCls}
+              value={val}
+              onChange={(e) => setVal(e.target.value)}
+              placeholder="0.00"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={pending}
+                className={btnSave}
+                onClick={() => {
+                  const n = Math.max(0, Number(val) || 0);
+                  run(() => adminUpdateForwarderThShipping({ fId, ftransportprice: n }), close);
+                }}
+              >
+                บันทึก
+              </button>
+              <button type="button" disabled={pending} className={btnCancel} onClick={close}>
+                ยกเลิก
+              </button>
             </div>
           </>
         )}

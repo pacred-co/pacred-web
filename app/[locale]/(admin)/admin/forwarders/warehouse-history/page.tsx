@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { isGeneralCoid } from "@/lib/forwarder/coid";
+import { FSTATUS_CFG, fstatusVivid, type FStatus } from "@/lib/admin/forwarder-status";
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportWarehouseHistoryAll } from "@/actions/admin/export/warehouse-history";
@@ -97,41 +98,36 @@ function nameProductsType(t: string | null): string {
 }
 
 /** Legacy `nameTransportType2($int)` — function.php L660-668.
- *  Returns a Tailwind <span> pill. */
+ *  Returns a Tailwind <span> pill. Solid legacy palette (badge-info blue / badge-
+ *  success green) — matches the sibling report-cnt TRANSPORT_MODE (#1e9ff2 ทางรถ ·
+ *  #28d094 ทางเรือ), not the old pastel that diverged from every other cargo table. */
 function NameTransportType2({ t }: { t: string | null }) {
-  if (t === "1") return <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-2 py-0.5 text-[11px] font-medium">🚛 ทางรถ</span>;
-  if (t === "2") return <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[11px] font-medium">🚢 ทางเรือ</span>;
+  if (t === "1") return <span className="inline-flex items-center rounded-full bg-[#1e9ff2] text-white px-2 py-0.5 text-[11px] font-semibold">ทางรถ</span>;
+  if (t === "2") return <span className="inline-flex items-center rounded-full bg-[#28d094] text-white px-2 py-0.5 text-[11px] font-semibold">ทางเรือ</span>;
   return <span className="text-muted text-xs">—</span>;
 }
 
 /** Legacy `statusForwarderAll($fStatus)` — function.php L893-904.
- *  Wave 20 rewrite: drops the legacy CDN icon image (was a 40px
- *  pcscargo.co.th asset · unbranded for Pacred); a Tailwind pill alone
- *  is enough information density and matches the sister page
- *  `/admin/forwarders` status chips. */
+ *  Wave 20 rewrite dropped the legacy CDN icon; 2026-07-19 fidelity pass routes
+ *  the color+label through the canonical `FSTATUS_CFG`/`fstatusVivid` SOT (the
+ *  legacy-verified SOLID palette that /admin/forwarders + /admin/report-cnt both
+ *  use) instead of a hand-rolled pastel map that diverged from both siblings AND
+ *  legacy. Status color is state-encoding LOGIC — staff scan the row by it — so it
+ *  must be a loud solid pill, never a faint pastel (forwarder-status.ts philosophy). */
 function StatusForwarderAll({ s }: { s: string | null }) {
-  const map: Record<string, { cls: string; text: string }> = {
-    "1": { cls: "bg-amber-100 text-amber-800",   text: "รอสินค้าเข้าโกดังจีน" },
-    "2": { cls: "bg-sky-100 text-sky-800",       text: "ถึงโกดังจีนแล้ว" },
-    "3": { cls: "bg-pink-100 text-pink-800",     text: "กำลังส่งมาไทย" },
-    "4": { cls: "bg-orange-100 text-orange-800", text: "ถึงไทยแล้ว" },
-    "5": { cls: "bg-red-100 text-red-800",       text: "รอชำระเงิน" },
-    "6": { cls: "bg-indigo-100 text-indigo-800", text: "เตรียมส่ง" },
-    "7": { cls: "bg-emerald-100 text-emerald-800", text: "ส่งแล้ว" },
-  };
-  const m = s ? map[s] : undefined;
-  if (!m) return <span className="text-muted text-xs">—</span>;
+  if (!s || !(s in FSTATUS_CFG)) return <span className="text-muted text-xs">—</span>;
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${m.cls}`}>
-      {m.text}
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${fstatusVivid(s)}`}>
+      {FSTATUS_CFG[s as FStatus].label}
     </span>
   );
 }
 
-/** Legacy `badgeNameWarehouseChina($int)` — function.php L1052-1059 */
+/** Legacy `badgeNameWarehouseChina($int)` — function.php L1052-1059.
+ *  Legacy badge-info (solid blue #1e9ff2) — the origin-city (POD ต้นทาง) tag. */
 function BadgeNameWarehouseChina({ w }: { w: string | null }) {
-  if (w === "1") return <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-2 py-0.5 text-[11px] font-medium">กวางโจว</span>;
-  if (w === "2") return <span className="inline-flex items-center rounded-full bg-sky-100 text-sky-800 px-2 py-0.5 text-[11px] font-medium">อี้อู</span>;
+  if (w === "1") return <span className="inline-flex items-center rounded-full bg-[#1e9ff2] text-white px-2 py-0.5 text-[11px] font-semibold">กวางโจว</span>;
+  if (w === "2") return <span className="inline-flex items-center rounded-full bg-[#1e9ff2] text-white px-2 py-0.5 text-[11px] font-semibold">อี้อู</span>;
   return null;
 }
 
@@ -141,8 +137,10 @@ function BadgeNameWarehouseChina({ w }: { w: string | null }) {
  *  additional queries per row would N+1; better to pre-aggregate them. */
 function BadgeVIP2({ coid }: { coid: string | null }) {
   if (isGeneralCoid(coid)) return null;
+  // Identity/tier badge = SOFT bordered pill (matches the forwarders-table coid
+  // tier chip) — distinct from the SOLID workflow-status pills above.
   return (
-    <span className="ml-1 inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[11px] font-bold uppercase">
+    <span className="ml-1 inline-flex items-center rounded-full border border-purple-300 bg-purple-50 px-1.5 py-0.5 text-[11px] font-semibold uppercase text-purple-700">
       {coid}
     </span>
   );
@@ -756,7 +754,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
           <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-3 py-1 text-xs font-medium">
             กล่องเกินมา {countBoxOverflowAll} รายการ
           </span>
-          <span className="inline-flex items-center rounded-full bg-indigo-100 text-indigo-800 px-3 py-1 text-xs font-medium">
+          <span className="inline-flex items-center rounded-full bg-orange-100 text-orange-800 px-3 py-1 text-xs font-medium">
             รายการซ้ำ {countErrorReAll} รายการ
           </span>
           {orphanRaw.length > 0 && (
@@ -786,8 +784,11 @@ export default async function AdminForwardersWarehouseHistoryPage({
                     Legacy .table td/th = 0.25rem/0.5rem padding + font-12 + zebra.
                     The [&>…]:px-2/py-1 table-level variants have higher specificity
                     than the per-cell px-3/py-2, so they compress every cell at once. */}
-                <table className="min-w-[1150px] w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-orange-400/50 [&>thead>tr>th]:px-2 [&>thead>tr>th]:py-1.5 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60 [&>tbody>tr>td]:px-2 [&>tbody>tr>td]:py-1 [&>tbody>tr>td]:align-top">
-                  <thead className="bg-orange-500 text-white">
+                <table className="min-w-[1150px] w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>thead>tr>th]:px-2 [&>thead>tr>th]:py-1.5 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60 [&>tbody>tr>td]:px-2 [&>tbody>tr>td]:py-1 [&>tbody>tr>td]:align-top">
+                  {/* thead — legacy warehouse-cluster header (gray #6b6f82 on
+                      surface-alt), unified with the drivers list header verified
+                      against live legacy · was an outlier bg-orange-500. */}
+                  <thead className="bg-surface-alt/60 text-[#6b6f82]">
                     <tr>
                       <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">ID</th>
                       <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">วันที่บันทึก</th>
@@ -806,7 +807,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
                     {orphanRaw.map((row) => {
                       const { date: scanDate, time: scanTime } = splitDateTime(row.fi2date);
                       return (
-                        <tr key={`orphan-${row.id}`} className="bg-rose-50/40 hover:bg-rose-50">
+                        <tr key={`orphan-${row.id}`} className="bg-rose-100 hover:bg-rose-200">
                           <td className="px-3 py-2 text-center text-muted">—</td>
                           <td className="px-3 py-2 text-center whitespace-nowrap">
                             <div>{scanDate}</div>
@@ -855,12 +856,16 @@ export default async function AdminForwardersWarehouseHistoryPage({
                           ? Number(row.f_fvolume) * Number(row.f_famount)
                           : null;
                       const containerCloseDDMMYYYY = formatDDMMYYYY(row.f_fdatecontainerclose);
+                      // Row-tint state machine (forwarder-status.ts philosophy —
+                      // readable state color, never a faint /30 tint). lacking =
+                      // rose (กล่องไม่ครบ) · hasDupes = orange (legacy trackingDup ·
+                      // was wrongly indigo) · fallback = legacy pink zebra #cabcbf.
                       const rowClass = lacking
-                        ? "bg-rose-50/30 hover:bg-rose-50"
+                        ? "bg-rose-100 hover:bg-rose-200"
                         : hasDupes
-                          ? "bg-indigo-50/30 hover:bg-indigo-50"
+                          ? "bg-orange-100 hover:bg-orange-200"
                           : idx % 2 === 1
-                            ? "bg-muted/20 hover:bg-surface-alt"
+                            ? "bg-[#cabcbf]/30 hover:bg-[#cabcbf]/50"
                             : "hover:bg-surface-alt";
 
                       return (

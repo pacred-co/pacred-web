@@ -58,6 +58,7 @@ import {
   EditTransportTypeField,
   EditShipByField,
   EditPayMethodField,
+  EditThShippingField,
   EditCrateField,
   EditAmountCountField,
   EditPalletField,
@@ -1102,6 +1103,7 @@ async function tryRenderTbForwarder(
               province={effectiveProvince}
               carriers={getPrivateCarrierOptionsForProvince(effectiveProvince)}
             />
+            <EditThShippingField fId={r.id} ftransportprice={r.ftransportprice} paymethod={r.paymethod} />
             <div className="text-foreground">
               <b className="font-semibold">ที่อยู่จัดส่งสินค้า : </b>
               {deliveryAddrFromProfile && (

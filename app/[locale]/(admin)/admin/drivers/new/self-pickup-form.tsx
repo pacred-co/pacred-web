@@ -33,7 +33,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { Camera, CheckCircle2, Phone } from "lucide-react";
+import { Camera, CheckCircle2, Phone, ChevronsUpDown, ChevronUp, ChevronDown } from "lucide-react";
 import { markForwarderSelfPickupDelivered } from "@/actions/admin/forwarder-self-pickup";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { compressImageFile } from "@/lib/image-compress";
@@ -242,6 +242,30 @@ function CustomerPickupCard({
 
   const allSelected = selected.count === group.items.length && group.items.length > 0;
 
+  // Column sort (legacy DataTables ⇅) — click a header → asc → desc → off.
+  // Display-only (selection keyed by item.id, unaffected by row order). WORKS.
+  type SortKey = "order" | "tracking" | "box" | "weight" | "volume";
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
+  function toggleSort(key: SortKey) {
+    setSort((prev) =>
+      !prev || prev.key !== key ? { key, dir: "asc" } : prev.dir === "asc" ? { key, dir: "desc" } : null,
+    );
+  }
+  const sortedItems = useMemo(() => {
+    if (!sort) return group.items;
+    const d = sort.dir === "asc" ? 1 : -1;
+    return [...group.items].sort((a, b) => {
+      switch (sort.key) {
+        case "order":    return a.fidorco.localeCompare(b.fidorco, "th") * d;
+        case "tracking": return a.ftrackingchn.localeCompare(b.ftrackingchn, "th") * d;
+        case "box":      return (a.famount - b.famount) * d;
+        case "weight":   return (a.fweight - b.fweight) * d;
+        case "volume":   return (a.fvolume - b.fvolume) * d;
+        default:         return 0;
+      }
+    });
+  }, [group.items, sort]);
+
   function toggleItem(id: number) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -298,15 +322,14 @@ function CustomerPickupCard({
       {/* Customer header — one dense legacy-style row: จำนวน · บริษัทขนส่ง + ลูกค้า
           (mirrors create-batch-form's จำนวน + บริษัทขนส่ง columns) */}
       <div className="flex flex-wrap items-center gap-3 border-b border-border bg-surface-alt px-3 py-2">
-        {/* จำนวน — box + tracking count for this customer (legacy จำนวน column) */}
+        {/* จำนวน — tracking-row count for this customer (legacy "N รายการ") */}
         <div className="text-center whitespace-nowrap">
-          <div className="font-bold text-base text-foreground tabular-nums">{group.totalBoxes}</div>
-          <div className="text-[11px] text-muted">กล่อง · {group.items.length} แทรค</div>
+          <div className="text-sm font-semibold text-foreground tabular-nums">{group.items.length} รายการ</div>
         </div>
-        {/* บริษัทขนส่ง + ลูกค้า (legacy บริษัทขนส่ง column style: blue carrier pill,
-            recipient name, mono member code in primary) */}
+        {/* บริษัทขนส่ง + ลูกค้า — plain carrier label (legacy · no pill), then the
+            customer name + code (the card identity for customer self-pickup). */}
         <div className="min-w-0 flex-1">
-          <span className="inline-flex items-center rounded bg-blue-50 border border-blue-200 text-blue-800 px-1.5 py-0.5 text-[11px] font-medium">
+          <span className="text-sm text-foreground">
             {group.shipByLabel}
           </span>
           <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
@@ -330,10 +353,12 @@ function CustomerPickupCard({
           inner table: [☑] / # / เลขออเดอร์ / รหัสสมาชิก / เลขแทรคกิ้ง(+location) /
           กล่อง / น้ำหนัก / ปริมาตร → รวม row) — matched to create-batch-form. */}
       <div className="overflow-x-auto scrollbar-x-visible">
-        <table className="w-full text-sm border-collapse min-w-[720px]">
+        {/* table-bordered + table-fixed % widths → เส้นตัดทุกช่อง + คอลัมน์ตรงกันทุกแถว
+            (แก้เบี้ยว) · หัวคอลัมน์กดเรียงได้จริง (⇅ functional) · same as create-batch. */}
+        <table className="w-full text-sm border-collapse table-fixed min-w-[720px] [&>thead>tr>th]:border [&>thead>tr>th]:border-[#dcdfe4] [&>tbody>tr>td]:border [&>tbody>tr>td]:border-[#dcdfe4]">
           <thead>
-            <tr className="bg-surface-alt/30 text-left text-[11px] uppercase tracking-wide text-muted">
-              <th className="border-b border-border px-2 py-2 w-10 text-center">
+            <tr className="bg-surface-alt/60 text-left text-[11px] font-bold text-[#6b6f82]">
+              <th className="px-2 py-2 w-[6%] text-center">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -343,17 +368,37 @@ function CustomerPickupCard({
                   aria-label={`เลือกพัสดุทั้งหมดของ ${group.userid}`}
                 />
               </th>
-              <th className="border-b border-border px-2 py-2 w-10 text-center">#</th>
-              <th className="border-b border-border px-2 py-2 w-32">เลขออเดอร์</th>
-              <th className="border-b border-border px-2 py-2 w-24">รหัสสมาชิก</th>
-              <th className="border-b border-border px-2 py-2">เลขแทรคกิ้ง</th>
-              <th className="border-b border-border px-2 py-2 w-16 text-right">กล่อง</th>
-              <th className="border-b border-border px-2 py-2 w-20 text-right">น้ำหนัก</th>
-              <th className="border-b border-border px-2 py-2 w-20 text-right">ปริมาตร</th>
+              <th className="px-2 py-2 w-[5%] text-center">#</th>
+              <th className="px-2 py-2 w-[22%]">
+                <button type="button" onClick={() => toggleSort("order")} className="inline-flex items-center gap-1 hover:text-[#cc3333]">
+                  เลขออเดอร์ <SortIcon state={sort?.key === "order" ? sort.dir : null} />
+                </button>
+              </th>
+              <th className="px-2 py-2 w-[15%]">รหัสสมาชิก</th>
+              <th className="px-2 py-2 w-[24%]">
+                <button type="button" onClick={() => toggleSort("tracking")} className="inline-flex items-center gap-1 hover:text-[#cc3333]">
+                  เลขแทรคกิ้ง <SortIcon state={sort?.key === "tracking" ? sort.dir : null} />
+                </button>
+              </th>
+              <th className="px-2 py-2 w-[8%] text-right">
+                <button type="button" onClick={() => toggleSort("box")} className="inline-flex items-center gap-1 hover:text-[#cc3333]">
+                  กล่อง <SortIcon state={sort?.key === "box" ? sort.dir : null} />
+                </button>
+              </th>
+              <th className="px-2 py-2 w-[10%] text-right">
+                <button type="button" onClick={() => toggleSort("weight")} className="inline-flex items-center gap-1 hover:text-[#cc3333]">
+                  น้ำหนัก <SortIcon state={sort?.key === "weight" ? sort.dir : null} />
+                </button>
+              </th>
+              <th className="px-2 py-2 w-[10%] text-right">
+                <button type="button" onClick={() => toggleSort("volume")} className="inline-flex items-center gap-1 hover:text-[#cc3333]">
+                  ปริมาตร <SortIcon state={sort?.key === "volume" ? sort.dir : null} />
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {group.items.map((it, idx) => {
+            {sortedItems.map((it, idx) => {
               const checked = selectedIds.has(it.id);
               const zebra = idx % 2 === 0 ? "bg-white" : "bg-surface-alt/30";
               return (
@@ -379,13 +424,13 @@ function CustomerPickupCard({
                   <td className="px-2 py-1.5">
                     <Link
                       href={`/admin/forwarders/${it.id}`}
-                      className="font-mono text-primary-600 hover:underline"
+                      className="font-mono text-primary-600 hover:underline break-all"
                       target="_blank"
                     >
                       {it.fidorco}
                     </Link>
                   </td>
-                  <td className="px-2 py-1.5 font-mono text-[11px]">{group.userid}</td>
+                  <td className="px-2 py-1.5 font-mono text-[11px] break-all">{group.userid}</td>
                   <td className="px-2 py-1.5">
                     <div className="font-medium break-all">{it.ftrackingchn}</div>
                     {it.fpallet && (
@@ -403,8 +448,8 @@ function CustomerPickupCard({
                 </tr>
               );
             })}
-            {/* รวม summary row */}
-            <tr className="border-t border-border bg-surface-alt/60 font-semibold text-foreground">
+            {/* รวม summary row — legacy PINK (alert-danger #f5aab0/#7a0012) */}
+            <tr className="bg-[#f5aab0] font-semibold text-[#7a0012]">
               <td colSpan={5} className="px-2 py-1.5 text-right">รวมทั้งลูกค้า</td>
               <td className="px-2 py-1.5 text-right tabular-nums">{group.totalBoxes}</td>
               <td className="px-2 py-1.5 text-right tabular-nums">{group.totalWeight.toFixed(2)}</td>
@@ -487,4 +532,12 @@ function CustomerPickupCard({
       </div>
     </li>
   );
+}
+
+// Sort-direction glyph for a clickable column header (legacy DataTables ⇅).
+// null = not sorted (gray ⇅) · asc = red ▲ · desc = red ▼.
+function SortIcon({ state }: { state: "asc" | "desc" | null }) {
+  if (state === "asc") return <ChevronUp className="inline h-3 w-3 text-[#cc3333] align-middle" />;
+  if (state === "desc") return <ChevronDown className="inline h-3 w-3 text-[#cc3333] align-middle" />;
+  return <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" />;
 }

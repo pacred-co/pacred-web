@@ -45,17 +45,20 @@ const BATCH_STATUS_LABEL: Record<FdStatus, string> = {
   "3": "ไม่สำเร็จ",
 };
 
+// Solid legacy badge palette (badge-warning/success/danger) — matches the drivers
+// list STATUS_CLS + the legacy "สถานะ : สำเร็จ" green pill. State color is scannable
+// LOGIC → solid, not a faint pastel.
 const BATCH_STATUS_CLS: Record<FdStatus, string> = {
-  "1": "bg-amber-50 text-amber-700 border-amber-200",
-  "2": "bg-emerald-50 text-emerald-700 border-emerald-200",
-  "3": "bg-rose-50 text-rose-700 border-rose-200",
+  "1": "bg-[#ff9149] text-white border-transparent",
+  "2": "bg-[#28d094] text-white border-transparent",
+  "3": "bg-[#ff4961] text-white border-transparent",
 };
 
 const ITEM_STATUS_CLS: Record<FdiStatus, string> = {
-  "":  "bg-gray-100 text-gray-700 border-gray-200",
-  "1": "bg-blue-100 text-blue-700 border-blue-200",
-  "2": "bg-emerald-100 text-emerald-700 border-emerald-200",
-  "3": "bg-rose-100 text-rose-700 border-rose-200",
+  "":  "bg-slate-400 text-white border-transparent",
+  "1": "bg-[#1e9ff2] text-white border-transparent",
+  "2": "bg-[#28d094] text-white border-transparent",
+  "3": "bg-[#ff4961] text-white border-transparent",
 };
 
 // Faithful nameShipBy() — legacy pcs-admin/include/function.php L185-242. A driver
@@ -722,7 +725,15 @@ export default async function AdminDriverBatchDetailPage({
           <p className="text-sm text-muted">ไม่มีรายการในรอบนี้</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="rounded-xl border border-[#dcdfe4] bg-white overflow-hidden">
+          {/* Legacy detail-table header (forwarder-driver.php detail:
+              จำนวน | บริษัทขนส่ง | ข้อมูล) — the stops below read as ONE bordered
+              table, not floaty cards (ภูม 2026-07-19 "ตารางยังไม่เหมือน"). */}
+          <div className="hidden xl:grid xl:grid-cols-[180px_26rem_minmax(0,1fr)] divide-x divide-[#dcdfe4] border-b border-[#dcdfe4] bg-surface-alt/60 text-[13px] font-bold text-[#6b6f82]">
+            <div className="px-3 py-2">จำนวน · สถานะ · รูปส่ง</div>
+            <div className="px-3 py-2">บริษัทขนส่ง · ที่อยู่</div>
+            <div className="px-3 py-2">ข้อมูล (ออเดอร์ · แทรคกิ้ง)</div>
+          </div>
           {stopsWithPhotos.map((stop, idx) => {
             const f = stop.forwarder;
             const total = stop.items.length;
@@ -745,8 +756,8 @@ export default async function AdminDriverBatchDetailPage({
               .filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
 
             return (
-              <section key={stop.addressKey} className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
-                <div className="grid grid-cols-1 xl:grid-cols-[180px_minmax(220px,1fr)_minmax(0,1.5fr)] divide-y xl:divide-y-0 xl:divide-x divide-border">
+              <section key={stop.addressKey} className="bg-white border-b border-[#dcdfe4] last:border-b-0">
+                <div className="grid grid-cols-1 xl:grid-cols-[180px_26rem_minmax(0,1fr)] divide-y xl:divide-y-0 xl:divide-x divide-[#dcdfe4]">
 
                   {/* ZONE 1 — จำนวน + สถานะส่ง + รูปส่ง */}
                   <div className="p-3 space-y-2">
@@ -863,48 +874,52 @@ export default async function AdminDriverBatchDetailPage({
                     )}
                   </div>
 
-                  {/* ZONE 3 — ตารางย่อยออเดอร์ (cover + ออเดอร์ + รหัสสมาชิก + แทรคกิ้ง + กล่อง/นน./ปริมาตร) */}
-                  <div className="p-3">
-                    <div className="overflow-x-auto rounded-lg border border-border scrollbar-x-visible">
-                      <table className="w-full text-xs">
-                        <thead className="bg-surface-alt/50 text-left text-[11px] uppercase tracking-wide text-muted">
+                  {/* ZONE 3 — ตารางย่อยออเดอร์ FLUSH edge-to-edge เหมือน legacy (cover +
+                      ออเดอร์ + รหัสสมาชิก + แทรคกิ้ง + กล่อง/นน./ปริมาตร + ตัวเลือก).
+                      ปุ่มลบย้ายมาท้ายแต่ละแถว (ตัวเลือก) — รู้ว่าลบรายการไหน (ภูม 2026-07-19). */}
+                  <div className="p-0">
+                    <div className="overflow-x-auto scrollbar-x-visible">
+                      {/* table-fixed + % widths → ทุกสต็อป (แต่ละ section) คอลัมน์ตรงกัน (แก้เบี้ยว) */}
+                      <table className="w-full text-xs border-collapse table-fixed [&>thead>tr>th]:border [&>thead>tr>th]:border-[#dcdfe4] [&>tbody>tr>td]:border [&>tbody>tr>td]:border-[#dcdfe4]">
+                        <thead className="bg-surface-alt/60 text-left text-[11px] font-bold text-[#6b6f82]">
                           <tr>
-                            <th className="px-2 py-1.5 w-6">#</th>
-                            <th className="px-2 py-1.5">ออเดอร์</th>
-                            <th className="px-2 py-1.5">รหัสสมาชิก</th>
-                            <th className="px-2 py-1.5">เลขแทรคกิ้ง</th>
-                            <th className="px-2 py-1.5 text-right">กล่อง</th>
-                            <th className="px-2 py-1.5 text-right">น้ำหนัก</th>
-                            <th className="px-2 py-1.5 text-right">ปริมาตร</th>
+                            <th className="px-2 py-1.5 w-[4%]">#</th>
+                            <th className="px-2 py-1.5 w-[18%]">ออเดอร์</th>
+                            <th className="px-2 py-1.5 w-[14%]">รหัสสมาชิก</th>
+                            <th className="px-2 py-1.5 w-[22%]">เลขแทรคกิ้ง</th>
+                            <th className="px-2 py-1.5 text-right w-[8%]">กล่อง</th>
+                            <th className="px-2 py-1.5 text-right w-[10%]">น้ำหนัก</th>
+                            <th className="px-2 py-1.5 text-right w-[10%]">ปริมาตร</th>
+                            {isOpsOverride && <th className="px-2 py-1.5 text-center w-[14%]">ตัวเลือก</th>}
                           </tr>
                         </thead>
                         <tbody>
                           {stop.items.map(({ item, forwarder, coverUrl }, i) => {
                             const fNo = forwarder.fidorco ?? `#${forwarder.id}`;
                             return (
-                              <tr key={item.id} className="border-t border-border align-top">
+                              <tr key={item.id} className="align-top">
                                 <td className="px-2 py-1.5 text-muted">{i + 1}</td>
                                 <td className="px-2 py-1.5">
-                                  <div className="flex items-center gap-1.5">
+                                  <div className="flex items-center gap-1.5 min-w-0">
                                     {coverUrl && (
                                       // eslint-disable-next-line @next/next/no-img-element
                                       <img src={coverUrl} alt="" className="h-8 w-8 rounded border border-border object-cover flex-shrink-0" />
                                     )}
-                                    <Link href={`/admin/forwarders/${forwarder.id}`} className="font-mono text-primary-600 hover:underline">
+                                    <Link href={`/admin/forwarders/${forwarder.id}`} className="font-mono text-primary-600 hover:underline break-all">
                                       {fNo}
                                     </Link>
                                   </div>
                                 </td>
                                 <td className="px-2 py-1.5">
                                   {forwarder.userid ? (
-                                    <Link href={`/admin/customers/${forwarder.userid}`} className="font-mono text-primary-600 hover:underline">
+                                    <Link href={`/admin/customers/${forwarder.userid}`} className="font-mono text-primary-600 hover:underline break-all">
                                       {forwarder.userid}
                                     </Link>
                                   ) : <span className="font-mono text-muted">—</span>}
-                                  <div className="text-[11px] text-foreground/80">{customerNameOf(forwarder.userid)}</div>
+                                  <div className="text-[11px] text-foreground/80 break-words">{customerNameOf(forwarder.userid)}</div>
                                 </td>
                                 <td className="px-2 py-1.5">
-                                  <Link href={`/admin/forwarders/${forwarder.id}`} className="hover:underline">
+                                  <Link href={`/admin/forwarders/${forwarder.id}`} className="hover:underline break-all">
                                     {forwarder.ftrackingchn ?? "—"}
                                   </Link>
                                   {forwarder.fpallet && (
@@ -919,23 +934,31 @@ export default async function AdminDriverBatchDetailPage({
                                 <td className="px-2 py-1.5 text-right">{forwarder.famount ?? 0}</td>
                                 <td className="px-2 py-1.5 text-right">{Number(forwarder.fweight ?? 0).toFixed(2)}</td>
                                 <td className="px-2 py-1.5 text-right">{Number(forwarder.fvolume ?? 0).toFixed(5)}</td>
+                                {isOpsOverride && (
+                                  <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                                    <RemoveItemButton itemId={item.id} fNo={fNo} delivered={item.fdistatus === "2"} />
+                                  </td>
+                                )}
                               </tr>
                             );
                           })}
-                          {/* รวม */}
-                          <tr className="border-t-2 border-border bg-surface-alt/40 font-semibold">
-                            <td className="px-2 py-1.5 text-right text-muted" colSpan={4}>รวม</td>
+                          {/* รวม — legacy PINK summary row (alert-danger #f5aab0/#7a0012) */}
+                          <tr className="bg-[#f5aab0] font-semibold text-[#7a0012]">
+                            <td className="px-2 py-1.5 text-right" colSpan={4}>รวม</td>
                             <td className="px-2 py-1.5 text-right">{stop.totalBoxes}</td>
                             <td className="px-2 py-1.5 text-right">{stop.totalWeight.toFixed(2)}</td>
                             <td className="px-2 py-1.5 text-right">{stop.totalVolume.toFixed(5)}</td>
+                            {isOpsOverride && <td className="px-2 py-1.5" />}
                           </tr>
                         </tbody>
                       </table>
                     </div>
 
-                    {/* ส่งไม่ได้ — เหตุผลที่คนขับบันทึก (0213 fdinote) */}
-                    {stop.items.some((e) => e.item.fdistatus === "3" && e.item.fdinote) && (
-                      <div className="mt-2 space-y-1">
+                    {/* notes + courier-link — padded sub-section below the flush table.
+                        (ปุ่มลบย้ายเข้าไปในคอลัมน์ "ตัวเลือก" ท้ายแต่ละแถวแล้ว) */}
+                    {(stop.items.some((e) => e.item.fdistatus === "3" && e.item.fdinote) || isOpsOverride) && (
+                      <div className="p-3 space-y-2">
+                        {/* ส่งไม่ได้ — เหตุผลที่คนขับบันทึก (0213 fdinote) */}
                         {stop.items
                           .filter((e) => e.item.fdistatus === "3" && e.item.fdinote)
                           .map(({ item, forwarder }) => (
@@ -943,39 +966,23 @@ export default async function AdminDriverBatchDetailPage({
                               ⚠️ {forwarder.fidorco ?? `#${forwarder.id}`} ส่งไม่ได้: {item.fdinote}
                             </p>
                           ))}
-                      </div>
-                    )}
-
-                    {/* per-stop actions — ยกเลิกรายการ + ลิงก์ติดตามขนส่ง (ops only · compact) */}
-                    {isOpsOverride && (
-                      <div className="mt-2 space-y-2">
-                        <div className="flex flex-wrap gap-1.5">
-                          {stop.items.map(({ item, forwarder }) => {
-                            const fNo = forwarder.fidorco ?? `#${forwarder.id}`;
-                            return (
-                              <RemoveItemButton
-                                key={`rm-${item.id}`}
-                                itemId={item.id}
-                                fNo={fNo}
-                                delivered={item.fdistatus === "2"}
-                              />
-                            );
-                          })}
-                        </div>
-                        <details className="rounded-lg border border-border">
-                          <summary className="cursor-pointer select-none px-2 py-1.5 text-[11px] font-medium text-muted flex items-center gap-1">
-                            <Link2 className="h-3 w-3" /> ลิงก์ติดตามขนส่ง (ลูกค้าเห็น) — {stop.items.length} รายการ
-                          </summary>
-                          <div className="px-2 pb-2 pt-1 space-y-1.5">
-                            {stop.items.map(({ forwarder }) => (
-                              <CourierUrlInput
-                                key={`courier-${forwarder.id}`}
-                                forwarderId={forwarder.id}
-                                initialUrl={forwarder.courier_tracking_url}
-                              />
-                            ))}
-                          </div>
-                        </details>
+                        {/* ลิงก์ติดตามขนส่ง (ลูกค้าเห็น · ops only) */}
+                        {isOpsOverride && (
+                          <details className="rounded-lg border border-border">
+                            <summary className="cursor-pointer select-none px-2 py-1.5 text-[11px] font-medium text-muted flex items-center gap-1">
+                              <Link2 className="h-3 w-3" /> ลิงก์ติดตามขนส่ง (ลูกค้าเห็น) — {stop.items.length} รายการ
+                            </summary>
+                            <div className="px-2 pb-2 pt-1 space-y-1.5">
+                              {stop.items.map(({ forwarder }) => (
+                                <CourierUrlInput
+                                  key={`courier-${forwarder.id}`}
+                                  forwarderId={forwarder.id}
+                                  initialUrl={forwarder.courier_tracking_url}
+                                />
+                              ))}
+                            </div>
+                          </details>
+                        )}
                       </div>
                     )}
                   </div>

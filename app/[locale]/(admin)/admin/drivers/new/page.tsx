@@ -516,31 +516,30 @@ export default async function CreateDriverBatchPage({
         </p>
       </div>
 
-      {/* Tab strip — legacy forwarder-driver.php "nav nav-tabs pcs-tabs" dashed red pills,
-          framed in a .pcs-card (owner 2026-07-16 "ทำให้เหมือน legacy"). 3 work-tabs +
-          กำลังจัดส่ง/ติดตาม link + the เตรียมส่ง·อนุมัติจ่ายแล้ว X/Y health indicator. */}
-      <div className="pcs-rc">
-        <section className="pcs-card !p-3">
-          <ul className="flex flex-wrap items-stretch gap-1.5">
-            <li><PcsDriverTab href="/admin/drivers/new" active={activeTab === "driver"} icon={<Truck className="h-4 w-4" />} label="มอบงานให้คนขับรถ" count={driverCount} /></li>
-            <li><PcsDriverTab href="/admin/drivers/new?tab=pickup" active={activeTab === "pickup"} icon={<Home className="h-4 w-4" />} label="รับเองหน้าโกดัง" count={pickupCount} /></li>
-            <li><PcsDriverTab href="/admin/drivers/new?tab=express" active={activeTab === "express"} icon={<Zap className="h-4 w-4" />} label="Express (ขนส่งภายนอก)" count={expressCount} /></li>
-            <li><PcsDriverTab href="/admin/drivers" active={false} icon={<Send className="h-4 w-4" />} label="กำลังจัดส่ง / ติดตาม" count={inProgress} /></li>
-            {/* Legacy tab (forwarder-driver.php:762) — a health/stat indicator: are all
-                payment-approved ready-to-ship rows accounted for? numerator = ยังไม่มอบ +
-                ออกส่งแล้ว · denominator = total fStatus=6 paydeposit-ok. Normally X/X. */}
-            <li>
-              <PcsDriverTab
-                href="/admin/forwarders?status=6"
-                active={false}
-                icon={<CheckCircle2 className="h-4 w-4" />}
-                label="เตรียมส่ง · อนุมัติจ่ายแล้ว"
-                badgeText={`${(driverCount + pickupCount + expressCount + inProgress).toLocaleString("th-TH")}/${totalReadyToShip.toLocaleString("th-TH")}`}
-                title="รายการที่อนุมัติจ่ายเงินแล้ว (สถานะเตรียมส่ง) ทั้งหมด — กดดูรายการเต็ม"
-              />
-            </li>
-          </ul>
-        </section>
+      {/* Tab strip — legacy forwarder-driver.php "nav nav-tabs" FLAT tabs with a red
+          underline on the active tab (ภูม 2026-07-19 "เอาตาม legacy"). 3 work-tabs +
+          กำลังจัดส่ง link + the เตรียมส่งอนุมัติจ่ายแล้ว X/Y health indicator. Express
+          tab is Pacred's own (ภูม's 3-way carrier split · kept). */}
+      <div className="overflow-x-auto scrollbar-x-visible border-b border-[#dcdfe4]">
+        <ul className="flex flex-nowrap items-stretch -mb-px min-w-max">
+          <li><PcsDriverTab href="/admin/drivers/new" active={activeTab === "driver"} icon={<Truck className="h-4 w-4" />} label="มอบงานให้คนขับรถ" count={driverCount} /></li>
+          <li><PcsDriverTab href="/admin/drivers/new?tab=pickup" active={activeTab === "pickup"} icon={<Home className="h-4 w-4" />} label="รายการรับเองหน้าโกดัง" count={pickupCount} /></li>
+          <li><PcsDriverTab href="/admin/drivers/new?tab=express" active={activeTab === "express"} icon={<Zap className="h-4 w-4" />} label="Express (ขนส่งภายนอก)" count={expressCount} /></li>
+          <li><PcsDriverTab href="/admin/drivers" active={false} icon={<Send className="h-4 w-4" />} label="กำลังจัดส่ง" count={inProgress} /></li>
+          {/* Legacy tab (forwarder-driver.php:762) — a health/stat indicator: are all
+              payment-approved ready-to-ship rows accounted for? numerator = ยังไม่มอบ +
+              ออกส่งแล้ว · denominator = total fStatus=6 paydeposit-ok. Normally X/X. */}
+          <li>
+            <PcsDriverTab
+              href="/admin/forwarders?status=6"
+              active={false}
+              icon={<CheckCircle2 className="h-4 w-4" />}
+              label="จำนวนรายการเตรียมส่งอนุมัติจ่ายเงินแล้ว"
+              badgeText={`${(driverCount + pickupCount + expressCount + inProgress).toLocaleString("th-TH")}/${totalReadyToShip.toLocaleString("th-TH")}`}
+              title="รายการที่อนุมัติจ่ายเงินแล้ว (สถานะเตรียมส่ง) ทั้งหมด — กดดูรายการเต็ม"
+            />
+          </li>
+        </ul>
       </div>
 
       {/* Plain legacy-style count line (PCS has no stat cards — just a summary row) */}
@@ -578,10 +577,11 @@ export default async function CreateDriverBatchPage({
   );
 }
 
-// Legacy forwarder-driver.php nav tab — dashed red pill (.pcs-dashsoft · inactive = pink
-// dashed + black-ish label · active = red dashed #cc3333 on red-50 · red count badge).
-// Same dashed frame as the report-cnt exception-strip; styled by legacy-report-cnt.css
-// (scoped .pcs-rc). `badgeText` = the X/Y health indicator; else the numeric `count`.
+// Legacy forwarder-driver.php nav tab — FLAT "nav-tabs" tab with a red underline on
+// the active tab (Bootstrap nav-tabs · ภูม 2026-07-19 "เอาตาม legacy"). Inactive =
+// gray text + transparent underline · active = red text (#cc3333) + red bottom border.
+// The count is a solid red pill (legacy badge-danger badge-pill). `badgeText` = the
+// X/Y health indicator; else the numeric `count`.
 function PcsDriverTab({
   href, active, icon, label, count, badgeText, title,
 }: {
@@ -592,16 +592,18 @@ function PcsDriverTab({
     <Link
       href={href}
       title={title}
-      className={`pcs-dashsoft inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[0.9rem] px-3.5 py-2 text-sm font-medium transition-colors ${
-        active ? "is-active bg-red-50 text-[#cc3333]" : "text-slate-700 hover:bg-red-50"
+      className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+        active
+          ? "border-[#cc3333] text-[#cc3333]"
+          : "border-transparent text-slate-600 hover:text-[#cc3333] hover:border-[#dcdfe4]"
       }`}
     >
       {icon}
       <span>{label}</span>
       {badgeText ? (
-        <span className="badge badge-danger badge-pill ml-1">{badgeText}</span>
+        <span className="ml-1 inline-flex items-center rounded-full bg-[#cc3333] px-2 py-0.5 text-[11px] font-semibold text-white">{badgeText}</span>
       ) : count && count > 0 ? (
-        <span className="badge badge-danger badge-pill ml-1">{count.toLocaleString("th-TH")}</span>
+        <span className="ml-1 inline-flex items-center rounded-full bg-[#cc3333] px-2 py-0.5 text-[11px] font-semibold text-white">{count.toLocaleString("th-TH")}</span>
       ) : null}
     </Link>
   );

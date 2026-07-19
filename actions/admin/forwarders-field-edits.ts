@@ -1141,6 +1141,66 @@ export async function adminUpdateForwarderCratePrice(
   });
 }
 
+// ── update_th_shipping — ค่าขนส่งไทย (ftransportprice) manual edit ────────────
+// Owner 2026-07-19: the [fNo] left panel had NO editable ค่าขนส่งไทย. When Flash's
+// auto-quote no-ops (parcel not yet measured → dims/kg incomplete) the cost sits at
+// ฿0 with nowhere to fix it here ("Flash เลือกแล้วค่าส่งไม่ขึ้น / save ไม่ติด").
+// This lets staff SEE + set it. Single money field — part of the bill
+// (pricePay += ftransportprice) · gated · logged. On a COD row (paymethod='2') the
+// value is stored but the COD gate still leaves the domestic leg off the Pacred
+// bill downstream (courier collects at destination · unchanged behaviour).
+const thShippingSchema = z.object({
+  fId:             z.number().int().positive(),
+  ftransportprice: z.number().min(0).max(1_000_000),
+});
+export type AdminUpdateForwarderThShippingInput = z.infer<typeof thShippingSchema>;
+
+export async function adminUpdateForwarderThShipping(
+  rawInput: AdminUpdateForwarderThShippingInput,
+): Promise<AdminActionResult> {
+  const parsed = thShippingSchema.safeParse(rawInput);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+
+    const { data: fwd, error: fwdErr } = await admin
+      .from("tb_forwarder")
+      .select("id, ftransportprice")
+      .eq("id", d.fId)
+      .maybeSingle<{ id: number; ftransportprice: number | string | null }>();
+    if (fwdErr) {
+      console.error(`[adminUpdateForwarderThShipping read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
+      return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
+    }
+    if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+
+    const before = Number(fwd.ftransportprice ?? 0);
+    if (before === d.ftransportprice) {
+      return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (ค่าขนส่งไทยเดิม)" };
+    }
+
+    const { error: updErr } = await admin
+      .from("tb_forwarder")
+      .update({ ftransportprice: d.ftransportprice, adminidupdate: legacyAdminId })
+      .eq("id", d.fId);
+    if (updErr) {
+      console.error(`[adminUpdateForwarderThShipping update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+      return { ok: false, error: `บันทึกค่าขนส่งไทยไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    await logAdminAction(adminId, "tb_forwarder.update_th_shipping", "tb_forwarder", String(d.fId), {
+      before, after: d.ftransportprice,
+    });
+
+    revalidatePath(`/admin/forwarders/${d.fId}`);
+    revalidatePath("/admin/forwarders");
+    return { ok: true };
+  });
+}
+
 // ── update_paymethod — เก็บเงินค่าขนส่งในไทย (ต้นทาง/ปลายทาง) ────────────────
 // Faithful counterpart to adminUpdateOrderPayMethod (service-orders-header-edits.ts)
 // — the ฝากสั่งซื้อ side already had this; ฝากนำเข้า was missing the per-field
