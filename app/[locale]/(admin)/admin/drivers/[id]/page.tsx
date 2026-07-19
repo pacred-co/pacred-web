@@ -25,7 +25,6 @@ import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "
 import {
   Truck, Clock, CheckCircle2, XCircle, MapPin, Phone,
   Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2, ClipboardList, Tag,
-  ChevronsUpDown,
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
@@ -731,9 +730,9 @@ export default async function AdminDriverBatchDetailPage({
               จำนวน | บริษัทขนส่ง | ข้อมูล) — the stops below read as ONE bordered
               table, not floaty cards (ภูม 2026-07-19 "ตารางยังไม่เหมือน"). */}
           <div className="hidden xl:grid xl:grid-cols-[180px_minmax(220px,1fr)_minmax(0,1.5fr)] divide-x divide-[#dcdfe4] border-b border-[#dcdfe4] bg-surface-alt/60 text-[13px] font-bold text-[#6b6f82]">
-            <div className="px-3 py-2">จำนวน · สถานะ · รูปส่ง <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></div>
-            <div className="px-3 py-2">บริษัทขนส่ง · ที่อยู่ <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></div>
-            <div className="px-3 py-2">ข้อมูล (ออเดอร์ · แทรคกิ้ง) <ChevronsUpDown className="inline h-3 w-3 text-muted/50 align-middle" /></div>
+            <div className="px-3 py-2">จำนวน · สถานะ · รูปส่ง</div>
+            <div className="px-3 py-2">บริษัทขนส่ง · ที่อยู่</div>
+            <div className="px-3 py-2">ข้อมูล (ออเดอร์ · แทรคกิ้ง)</div>
           </div>
           {stopsWithPhotos.map((stop, idx) => {
             const f = stop.forwarder;
@@ -880,17 +879,18 @@ export default async function AdminDriverBatchDetailPage({
                       ปุ่มลบย้ายมาท้ายแต่ละแถว (ตัวเลือก) — รู้ว่าลบรายการไหน (ภูม 2026-07-19). */}
                   <div className="p-0">
                     <div className="overflow-x-auto scrollbar-x-visible">
-                      <table className="w-full text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-[#dcdfe4] [&>tbody>tr>td]:border [&>tbody>tr>td]:border-[#dcdfe4]">
+                      {/* table-fixed + % widths → ทุกสต็อป (แต่ละ section) คอลัมน์ตรงกัน (แก้เบี้ยว) */}
+                      <table className="w-full text-xs border-collapse table-fixed [&>thead>tr>th]:border [&>thead>tr>th]:border-[#dcdfe4] [&>tbody>tr>td]:border [&>tbody>tr>td]:border-[#dcdfe4]">
                         <thead className="bg-surface-alt/60 text-left text-[11px] font-bold text-[#6b6f82]">
                           <tr>
-                            <th className="px-2 py-1.5 w-6">#</th>
-                            <th className="px-2 py-1.5">ออเดอร์</th>
-                            <th className="px-2 py-1.5">รหัสสมาชิก</th>
-                            <th className="px-2 py-1.5">เลขแทรคกิ้ง</th>
-                            <th className="px-2 py-1.5 text-right">กล่อง</th>
-                            <th className="px-2 py-1.5 text-right">น้ำหนัก</th>
-                            <th className="px-2 py-1.5 text-right">ปริมาตร</th>
-                            {isOpsOverride && <th className="px-2 py-1.5 text-center w-20">ตัวเลือก</th>}
+                            <th className="px-2 py-1.5 w-[4%]">#</th>
+                            <th className="px-2 py-1.5 w-[18%]">ออเดอร์</th>
+                            <th className="px-2 py-1.5 w-[14%]">รหัสสมาชิก</th>
+                            <th className="px-2 py-1.5 w-[22%]">เลขแทรคกิ้ง</th>
+                            <th className="px-2 py-1.5 text-right w-[8%]">กล่อง</th>
+                            <th className="px-2 py-1.5 text-right w-[10%]">น้ำหนัก</th>
+                            <th className="px-2 py-1.5 text-right w-[10%]">ปริมาตร</th>
+                            {isOpsOverride && <th className="px-2 py-1.5 text-center w-[14%]">ตัวเลือก</th>}
                           </tr>
                         </thead>
                         <tbody>
@@ -900,26 +900,26 @@ export default async function AdminDriverBatchDetailPage({
                               <tr key={item.id} className="align-top">
                                 <td className="px-2 py-1.5 text-muted">{i + 1}</td>
                                 <td className="px-2 py-1.5">
-                                  <div className="flex items-center gap-1.5">
+                                  <div className="flex items-center gap-1.5 min-w-0">
                                     {coverUrl && (
                                       // eslint-disable-next-line @next/next/no-img-element
                                       <img src={coverUrl} alt="" className="h-8 w-8 rounded border border-border object-cover flex-shrink-0" />
                                     )}
-                                    <Link href={`/admin/forwarders/${forwarder.id}`} className="font-mono text-primary-600 hover:underline">
+                                    <Link href={`/admin/forwarders/${forwarder.id}`} className="font-mono text-primary-600 hover:underline break-all">
                                       {fNo}
                                     </Link>
                                   </div>
                                 </td>
                                 <td className="px-2 py-1.5">
                                   {forwarder.userid ? (
-                                    <Link href={`/admin/customers/${forwarder.userid}`} className="font-mono text-primary-600 hover:underline">
+                                    <Link href={`/admin/customers/${forwarder.userid}`} className="font-mono text-primary-600 hover:underline break-all">
                                       {forwarder.userid}
                                     </Link>
                                   ) : <span className="font-mono text-muted">—</span>}
-                                  <div className="text-[11px] text-foreground/80">{customerNameOf(forwarder.userid)}</div>
+                                  <div className="text-[11px] text-foreground/80 break-words">{customerNameOf(forwarder.userid)}</div>
                                 </td>
                                 <td className="px-2 py-1.5">
-                                  <Link href={`/admin/forwarders/${forwarder.id}`} className="hover:underline">
+                                  <Link href={`/admin/forwarders/${forwarder.id}`} className="hover:underline break-all">
                                     {forwarder.ftrackingchn ?? "—"}
                                   </Link>
                                   {forwarder.fpallet && (
