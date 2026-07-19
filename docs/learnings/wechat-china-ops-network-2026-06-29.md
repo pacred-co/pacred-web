@@ -8,6 +8,29 @@
 > downstream of. 24,428 cargo-relevant messages were ingested into
 > `wechat_ops_message` (mig 0228 · prod+dev) and are searchable at `/admin/wechat-ops`.
 
+## 1b. 2026-07-19 — the SAME job on a **Mac** is BLOCKED (hardened runtime), not just harder
+
+The 2026-06-29 memory read used Windows `pymem`/`VirtualQueryEx` — a same-user process read
+that Windows allows. On **macOS the live-memory read fails even as root**:
+- Account + DBs are identical (`wxid_a47v4a2twg3e22_62d2` · `xwechat_files/…/db_storage/`,
+  message_1.db grew to 45 MB · salts stable · same SQLCipher4 scheme).
+- `sudo lldb -p <WeChat> -o "process save-core …"` → **`error: attach failed … Not allowed
+  to attach to process`** — WeChat is signed with the **hardened runtime** (no
+  `get-task-allow`), and **AMFI denies debugger attach even to root while SIP is enabled**.
+  So `task_for_pid` / lldb / dylib-inject / core-dump are ALL blocked. The macOS malloc
+  tools that DO inspect a hardened process (`heap`/`leaks`/`sample`) only emit summaries,
+  not raw heap bytes → useless for key recovery. Keychain has no WeChat key.
+- **The three real unlocks (owner picks · all reboot/modify/relocate):** (a) do it on a
+  **Windows PC** logged into the same WeChat — the pymem method just works, no SIP; (b)
+  temporarily **`csrutil disable`** from Recovery → dump → re-enable (2 reboots · reversible);
+  (c) **re-sign WeChat.app** with a `get-task-allow` entitlement + relaunch (no reboot but
+  modifies the app · Tencent anti-tamper may refuse). **DON'T** burn time re-trying `sudo
+  lldb` on a hardened Mac app — it can't work with SIP on.
+- Tooling is READY + committed: `scripts/wx-decrypt-mac-2026-07-19.py` (given a
+  `/tmp/wx.core` memory dump: scans for each DB's derived `enc` via an entropy gate +
+  the cheap page-1-MAC validator, tries HMAC-key dklen 64/32, decrypts → plain SQLite;
+  crypto self-tested). Only the DUMP step is blocked. Owner paused it 2026-07-19.
+
 ## 1. The decrypt — WeChat 4.x (Weixin 4.1.9.57) SQLCipher, the account-mismatch trap
 
 **The whole previous-session blocker was a wrong-account assumption, not crypto.**
