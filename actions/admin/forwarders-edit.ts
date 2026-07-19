@@ -174,7 +174,7 @@ const editForwarderSchema = z.object({
   fWarehouseChina: z.enum(["1", "2"] as const).optional(),
   /** โกดังที่รับในไทย · varchar(1) '1' แสง · '2' CTT · '3' MK · '4' MX ·
    *  '5' JMF · '6' GOGO · '7' Cargo Center · '8' MOMO */
-  fWarehouseName:  z.enum(["1", "2", "3", "4", "5", "6", "7", "8"] as const).optional(),
+  fWarehouseName:  z.enum(["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const).optional(),
 
   // Per-item crate list. Empty list = no crate updates.
   items:         z.array(itemCrateSchema).max(200).default([]),

@@ -52,7 +52,7 @@ export type PerTrackingRow = {
   cbm: number;
   productType: "1" | "2" | "3" | "4";
   warehouseChina: "1" | "2";
-  warehouseName: "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8";
+  warehouseName: "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
   fTransportPrice: number;        // ค่าขนส่งในไทย
   fDiscount: number;              // ส่วนลด
   fTransportPriceChnThb: number;  // ค่าจีน+ ภายหลัง
@@ -115,9 +115,11 @@ type Props = {
 const WAREHOUSE_CHINA = [
   { v: "1", label: "กวางโจว" }, { v: "2", label: "อี้อู" },
 ] as const;
+// owner 2026-07-19 "พาร์ทเนอร์ใช้แค่ MOMO+TTW · เจ้าอื่นเอาออก": the picker offers only
+// the two live operators. 8=MOMO(กวางโจว) · 9=TTW(อี้อู). Historical rows on a retired
+// code (1-7) still store fine; VALID_WH_TH keeps them valid — they just aren't offered.
 const WAREHOUSE_TH = [
-  { v: "1", label: "แสง" }, { v: "2", label: "CTT" }, { v: "3", label: "MK" }, { v: "4", label: "MX" },
-  { v: "5", label: "JMF" }, { v: "6", label: "GOGO" }, { v: "7", label: "Cargo Center" }, { v: "8", label: "MOMO" },
+  { v: "8", label: "MOMO (กวางโจว)" }, { v: "9", label: "TTW (อี้อู)" },
 ] as const;
 const PRODUCT_TYPES = [
   { v: "1", label: "ทั่วไป" }, { v: "2", label: "มอก." }, { v: "3", label: "อย." }, { v: "4", label: "พิเศษ" },

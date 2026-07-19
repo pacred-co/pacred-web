@@ -49,11 +49,11 @@
  * means a real basis/staleness gap, not merely "we read the wrong table".
  */
 
-export type WarehouseDigit = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8";
+export type WarehouseDigit = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 export type CostTransport = "1" | "2"; // 1 = รถ (car) · 2 = เรือ (ship)
 export type CostBasis = "weight" | "cbm";
 
-const VALID_WH: readonly string[] = ["1", "2", "3", "4", "5", "6", "7", "8"];
+const VALID_WH: readonly string[] = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
 /**
  * Build the `tb_settings` cost-column name for a carrier × mode × type × city.
@@ -80,12 +80,17 @@ export function costColumn(
     case "5": return `${prefix}${productTypeIdx}defaultjmf${citySuffix}`;         // JMF
     case "6": return `${prefix}${productTypeIdx}defaultgogo${citySuffix}`;        // GOGO
     case "7": return `${prefix}${productTypeIdx}defaultcargocenter${citySuffix}`; // Cargo Center
-    case "8": return `${prefix}${productTypeIdx}defaultmomo${citySuffix}`;        // MOMO
+    case "8": return `${prefix}${productTypeIdx}defaultmomo${citySuffix}`;        // MOMO (กวางโจว)
+    // TTW (อี้อู · owner 2026-07-19 "แค่ MOMO+TTW"): the COST rate is origin-driven, so
+    // TTW reads the SAME momo cells + the citySuffix — a TTW row (fwarehousechina='2')
+    // resolves `…defaultmomo2` = the อี้อู rate (เรือ 2600 / รถ 5300, set on tb_settings).
+    // MOMO stays `…defaultmomo` (กวางโจว · เรือ 2500 / รถ 4700). No new columns needed.
+    case "9": return `${prefix}${productTypeIdx}defaultmomo${citySuffix}`;        // TTW (อี้อู)
     default: return null;
   }
 }
 
-/** Sang(1) + MX(4) bill by weight; every other carrier by CBM (report-cnt L335). */
+/** Sang(1) + MX(4) bill by weight; every other carrier (incl. MOMO(8) / TTW(9)) by CBM. */
 export function costBasisMode(wh: WarehouseDigit): CostBasis {
   return wh === "1" || wh === "4" ? "weight" : "cbm";
 }

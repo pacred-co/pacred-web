@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { Fragment, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { adminAssignTtwPackingPr } from "@/actions/admin/ttw-packing";
 
 export type TtwLine = {
@@ -23,6 +24,12 @@ export type TtwLine = {
 };
 
 const TRANSPORT: Record<string, string> = { "1": "🚛 ทางรถ", "2": "🚢 ทางเรือ", "3": "✈️ ทางอากาศ" };
+// Colored transport pill — matches report-cnt (nameTransportType2 · ทางรถ=blue · ทางเรือ=green).
+const TRANSPORT_PILL: Record<string, { label: string; cls: string }> = {
+  "1": { label: "ทางรถ", cls: "bg-[#1e9ff2]" },
+  "2": { label: "ทางเรือ", cls: "bg-[#28d094]" },
+  "3": { label: "ทางอากาศ", cls: "bg-[#ff9149]" },
+};
 const num = (v: number | string | null, dp = 0) =>
   v == null ? "—" : Number(v).toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
 
@@ -180,37 +187,77 @@ export function TtwStagingClient({
         />
       </div>
 
-      {/* Per-container accordions */}
-      <div className="mt-4 space-y-3">
-        {groups.map((g) => {
-          const isOpen = open[g.container] ?? true;
-          const donePct = g.allCount ? Math.round((g.withPr / g.allCount) * 100) : 0;
-          return (
-            <div key={g.container} className="overflow-hidden rounded-lg border">
-              <button
-                onClick={() => setOpen((o) => ({ ...o, [g.container]: !isOpen }))}
-                className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 bg-muted/40 px-3 py-2.5 text-left hover:bg-muted/60"
-              >
-                <span className="text-[15px] font-bold">{isOpen ? "▾" : "▸"} {g.container}</span>
-                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">TTW</span>
-                <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800">อี้อู</span>
-                <span className="text-[12px] text-muted-foreground">{TRANSPORT[g.first?.transport_mode ?? "2"] ?? "🚢 ทางเรือ"}</span>
-                <span className="ml-auto flex items-center gap-3 text-[12px] text-muted-foreground">
-                  <span>{g.allCount} แทรค</span>
-                  <span>{num(g.boxes)} กล่อง</span>
-                  <span>{num(g.wt, 1)} กก.</span>
-                  <span>{num(g.cbm, 4)} CBM</span>
-                  <span className={`font-semibold ${g.withPr === g.allCount ? "text-emerald-600" : "text-rose-600"}`}>
-                    PR {g.withPr}/{g.allCount} ({donePct}%)
-                  </span>
-                </span>
-              </button>
+      {/* Container list — report-cnt style: a COLLAPSED table of container-summary
+          rows (ย่อรวมมาให้ดูก่อน · owner 2026-07-19) → click the ▸ chevron to open a
+          dropdown detail table + assign PR inline. Default = collapsed. */}
+      <div className="mt-4 overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
+        <table className="w-full min-w-[820px] text-[13px] border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-[#dcdfe4] [&>thead>tr>th]:py-1.5 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-[#dcdfe4] [&>tbody>tr>td]:py-1.5">
+          <thead className="bg-white dark:bg-surface text-[11px] text-foreground/80">
+            <tr className="[&>th]:px-2 [&>th]:text-left">
+              <th>หมายเลขตู้</th>
+              <th>โกดัง</th>
+              <th>POD ต้นทาง</th>
+              <th className="!text-center">ขนส่ง</th>
+              <th className="!text-right">แทรค</th>
+              <th className="!text-right">กล่อง</th>
+              <th className="!text-right">น้ำหนัก</th>
+              <th className="!text-right">CBM</th>
+              <th className="!text-center">ใส่ PR แล้ว</th>
+            </tr>
+          </thead>
+          <tbody>
+            {/* Summary band (orange→red · เหมือน report-cnt) — totals across visible containers. */}
+            <tr className="bg-gradient-to-r from-[#ee7411] to-[#c24e4e] text-white text-sm [&>td]:!border-white/30 [&>td]:px-2 [&>td]:py-2">
+              <td className="text-base font-bold" colSpan={4}>รวม ({groups.length} ตู้)</td>
+              <td className="text-right">{num(groups.reduce((s, g) => s + g.allCount, 0))}</td>
+              <td className="text-right">{num(groups.reduce((s, g) => s + g.boxes, 0))}</td>
+              <td className="text-right">{num(groups.reduce((s, g) => s + g.wt, 0), 1)}</td>
+              <td className="text-right">{num(groups.reduce((s, g) => s + g.cbm, 0), 4)}</td>
+              <td className="text-center">{groups.reduce((s, g) => s + g.withPr, 0)}/{groups.reduce((s, g) => s + g.allCount, 0)}</td>
+            </tr>
 
-              {isOpen && (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[900px] text-[13px]">
+            {groups.length === 0 && (
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-sm text-muted">ไม่พบตู้ที่ตรงตัวกรอง</td></tr>
+            )}
+
+            {groups.map((g) => {
+              const isOpen = open[g.container] ?? false; // collapsed by default (owner: ย่อมาก่อน)
+              const donePct = g.allCount ? Math.round((g.withPr / g.allCount) * 100) : 0;
+              const complete = g.withPr === g.allCount;
+              const pill = TRANSPORT_PILL[g.first?.transport_mode ?? "2"] ?? TRANSPORT_PILL["2"];
+              return (
+                <Fragment key={g.container}>
+                  <tr
+                    onClick={() => setOpen((o) => ({ ...o, [g.container]: !isOpen }))}
+                    className={`cursor-pointer border-t border-border ${isOpen ? "bg-amber-50" : complete ? "bg-white dark:bg-surface hover:bg-surface-alt/60" : "bg-rose-50/60 hover:bg-rose-50"}`}
+                  >
+                    <td className="px-2 font-mono">
+                      <span className="flex items-center gap-1.5">
+                        {isOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-primary-600" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted" />}
+                        <span className="font-semibold text-[#1e9ff2]">{g.container}</span>
+                      </span>
+                    </td>
+                    <td className="px-2"><span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">TTW</span></td>
+                    <td className="px-2 text-muted-foreground">อี้อู</td>
+                    <td className="px-2 text-center"><span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium text-white ${pill.cls}`}>{pill.label}</span></td>
+                    <td className="px-2 text-right">{g.allCount}</td>
+                    <td className="px-2 text-right">{num(g.boxes)}</td>
+                    <td className="px-2 text-right">{num(g.wt, 1)}</td>
+                    <td className="px-2 text-right">{num(g.cbm, 4)}</td>
+                    <td className="px-2 text-center">
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-bold text-white ${complete ? "bg-emerald-600" : "bg-rose-600"}`}>
+                        {g.withPr}/{g.allCount} ({donePct}%)
+                      </span>
+                    </td>
+                  </tr>
+
+                  {isOpen && (
+                <tr className="bg-surface-alt/30">
+                  <td colSpan={9} className="!border-t-0 px-2 pb-3 pt-1">
+                    <div className="overflow-x-auto rounded-lg border bg-white dark:bg-surface">
+                  <table className="w-full min-w-[860px] text-[13px]">
                     <thead>
-                      <tr className="border-y bg-muted/20 text-[11px] text-muted-foreground [&>th]:px-2 [&>th]:py-1.5 [&>th]:text-left">
+                      <tr className="border-b bg-muted/20 text-[11px] text-muted-foreground [&>th]:px-2 [&>th]:py-1.5 [&>th]:text-left">
                         <th>#</th>
                         <th>แทรคกิ้ง (单号)</th>
                         <th>มาร์ค (唛头)</th>
@@ -280,11 +327,15 @@ export function TtwStagingClient({
                       )}
                     </tbody>
                   </table>
-                </div>
-              )}
-            </div>
-          );
-        })}
+                    </div>
+                  </td>
+                </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

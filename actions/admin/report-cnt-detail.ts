@@ -45,7 +45,7 @@ import { baseTracking } from "@/lib/admin/momo-bill-header";
 
 // Valid warehouse digits → costBasisMode is the SINGLE source of the carrier
 // cost basis (Sang"1"/MX"4" = weight · every other carrier incl. MOMO"8" = cbm).
-const VALID_WH = new Set<string>(["1", "2", "3", "4", "5", "6", "7", "8"]);
+const VALID_WH = new Set<string>(["1", "2", "3", "4", "5", "6", "7", "8", "9"]);
 import {
   evaluateReportCntAddCheckStatus,
   REPORT_CNT_ADD_CHECK_MIN_FSTATUS,
@@ -105,7 +105,7 @@ export type CustomRateInput = z.input<typeof customRateSchema>;
 // tb_cost_container row exists yet.
 // ─────────────────────────────────────────────────────────────────────
 
-type WarehouseDigit = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8";
+type WarehouseDigit = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
 type TransportMode = "1" | "2"; // 1=Car, 2=Ship
 
 function warehouseSegment(fWarehouseName: WarehouseDigit, productTypeIdx: 1 | 2 | 3 | 4, transport: TransportMode, fWarehouseChina: string): string {
@@ -133,6 +133,12 @@ function warehouseSegment(fWarehouseName: WarehouseDigit, productTypeIdx: 1 | 2 
     case "7":
       return `${prefix}${productTypeIdx}defaultcargocenter${citySuffix}`;
     case "8":
+      return `${prefix}${productTypeIdx}defaultmomo${citySuffix}`; // MOMO (กวางโจว)
+    case "9":
+      // TTW (อี้อู · owner 2026-07-19) — origin-driven COST rate: same momo cells + the
+      // citySuffix → a TTW row (fwarehousechina='2') resolves …defaultmomo2 = อี้อู rate
+      // (เรือ 2600 / รถ 5300). MOMO stays …defaultmomo (กวางโจว · 2500/4700). Mirror of
+      // lib/forwarder/resolve-cost.ts costColumn (keep the two in lockstep).
       return `${prefix}${productTypeIdx}defaultmomo${citySuffix}`;
   }
 }

@@ -96,7 +96,9 @@ const SIBLING_SELECT =
   "ftransportprice, fdiscount, ftransportpricechnthb, priceother, fshippingservice, fshipby, ftotalprice";
 
 const VALID_PRODUCT = ["1", "2", "3", "4"];
-const VALID_WH_TH = ["1", "2", "3", "4", "5", "6", "7", "8"];
+// owner 2026-07-19 "ใช้แค่ MOMO+TTW": 8=MOMO(กวางโจว) · 9=TTW(อี้อู). 1-7 kept for
+// historical rows but a row with no/invalid warehouse defaults to MOMO (the dominant lane).
+const VALID_WH_TH = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
 function num(v: number | string | null | undefined): number {
   const n = typeof v === "number" ? v : parseFloat(String(v ?? "0"));
@@ -257,7 +259,7 @@ export async function ForwarderPerTrackingEditor({
       warehouseChina: (row.fwarehousechina === "2" ? "2" : "1") as PerTrackingRow["warehouseChina"],
       warehouseName: (VALID_WH_TH.includes(row.fwarehousename ?? "")
         ? row.fwarehousename
-        : "1") as PerTrackingRow["warehouseName"],
+        : "8") as PerTrackingRow["warehouseName"],
       fTransportPrice: num(row.ftransportprice),
       fDiscount: num(row.fdiscount),
       fTransportPriceChnThb: num(row.ftransportpricechnthb),
