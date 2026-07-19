@@ -3,6 +3,20 @@
 
 ---
 
+# 📐 2026-07-19 (เดฟ · run-long) — QUANTITY SOT (famountcount CBMProduct) ทั้ง flow + mig 0263 + ฆ่า "บันทึกขนาด revert-engine" + PR172 reprice + billed-misprice HTML audit + pre-delivery 8-lane audit → ALL 4 BRANCHES · read FIRST
+
+> **🏁 STATE. main = dave-pacred = InwPond007 = `14a2d3d1`+merge-ภูม** (Poom-pacred integrated after · Vercel prod). gate: **tsc 0 · BUILD_EXIT=0 · quantities 20 · resolve-cost 76 · outstanding 29 · debit 91 · resolve-rate 95 · data-health 4 · i18n ✓**. **mig 0263 container_summary_total_cbm applied PROD (DEV paused → apply on wake) · NEXT FREE = 0264.** 🔑 prod pw chat-only `DqOzfEZVXfMHIryz`. ⚠️ **Supabase direct host db.<ref>:5432 ตายแล้ว (IPv6-only) → ใช้ pooler aws-1 เท่านั้น** (dry-run ผ่าน host เก่าเคยอ่าน replica ค้าง).
+>
+> **🔑 THE famountcount RULE (จำให้ขึ้นใจ):** `fvolume` มี 2 convention — `famountcount='1'` = row TOTAL (MOMO) · else = **ต่อกล่อง → ×famount** (คีย์มือ/legacy/TTW). **SOT = `lib/forwarder/quantities.ts` (totalCbmOf) · SQL mirror = mig 0263.** ฝั่ง SELL เคารพเสมอ (cbmProduct) แต่ COST + Σ หลายจุดไม่ → swept: resolve-cost · ตรวจตู้ cost writes ×2 (+ reset path เคย hardcode wh 1-8 ข้าม TTW '9') · report-cnt list JS + RPC + [fNo] live cost/sell + client Σ · bulletin · forwarder-check · receipt/billing doc CBM · data-health.
+> **🔴 REVERT-ENGINE (เหตุที่แก้แล้วเด้งกลับ):** per-tracking editor client บวก CBM ต่อกล่องดิบ → ค่าเทียบ 370>250 → ทุกครั้งที่พนักงานกด "บันทึกขนาด" ราคา flip เป็นน้ำหนัก (ทับ reprice ภายในชั่วโมง) + โกดังยิงตามป้ายพิมพ์ "Packing ID: SEA0625-8211YW" re-stamp ตู้ → แก้: volumeIsTotal thread + **fcabinet_locked=true 14 แถว TTW** + rename tb_cost_container SEA→GZS260625-5T (เรทบัญชีตามไป). **บทเรียน: data-fix เด้งกลับ = หา WRITER loop ก่อน re-apply.**
+> **✅ คิดเป็นชิปเม้นทุก path:** live-rate fill ดึง sibling ฐานเดียวกัน → ส่ง shipment density เป็น comparisonKgPerCbm (single-tracking เดิม).
+> **✅ DATA (prod · backup /tmp):** PR172 X9002653 reprice ฿2,610→฿18,344 (CBM ฿3,300 custom) · cost backfill 9 แถว +฿28,325 · **VERIFIED RPC: GZS260625-5T = 7 แถว · 331kg · 7.3123 คิว (ตรง footer ใบส่งสินค้าเป๊ะ) · cost 19,012 · sell 24,131 · กำไร +5,119.**
+> **✅ pre-delivery 8-lane audit (`f5e423dd`):** 7 fixed (shop-40 badge · 6.1 dot-key · pay-modal COD double-charge · credit-grant COD · cancelled /r/[token] banner · WHT copy · delivery photo) + 5 owner-flags · **owner Q "แนบใบอะไรก่อนออกใบเสร็จ" = ไม่บังคับ (50-ทวิ non-blocking · hard gate = owner เคาะ)**.
+> **✅ billed-misprice HTML audit (`fdc20722`):** 83 แทรคที่บิลแล้วคิดพลาด (น้ำหนักทั้งที่ควร CBM / ขายต่ำกว่าทุน · Σ −฿10,653 · PR075 40 แถว) → artifact https://claude.ai/code/artifact/268e150b-cf6a-46ca-9915-56ad36deb23f ให้บัญชีเคาะย้อนหลัง (ระบบไม่แตะบิลออกแล้ว).
+> **🔴 CARRYOVER:** (1) บัญชีเคาะ 83 แถว billed-misprice. (2) mig 0263 → DEV ตอนตื่น. (3) 5 audit owner-flags (#3 receipts/print live-recompute แนะ pin frozen ramount). (4) carryover เดิม (TTW commit-to-billable · void FRI2606-00013 ฯลฯ).
+
+---
+
 # 📦 2026-07-18 ปิด session (เดฟ · resume) — integrate ภูม/ปอน → main + อี้อู/TTW warehouse + 🔴 เหมาๆ OVERCHARGE fix (ค่าบริการอื่นๆ 7,004 ผี) + SEA0625 relabel + เอาเจ้าอื่นออก → ALL 4 BRANCHES · read FIRST
 
 > **🏁 SESSION CLOSE. main = dave-pacred = Poom-pacred = InwPond007 = `881a3c8a`** (Vercel prod · ทั้ง 4 sync). gate ทุก commit: **tsc 0 · build 0 · i18n 0** + adversarial money-review (money-isolation CLEAN). **mig 0262 ttw_packing_line applied prod+dev · 0263 container_summary_total_cbm (sum_volume = famountcount CBMProduct rule · applied PROD 2026-07-19 · DEV unreachable/paused — apply on wake) · NEXT FREE = 0264.** 🔑 prod pw chat-only `DqOzfEZVXfMHIryz` · dev `n61OKDy28QcrB1ZJ`. ⚠️ admin surfaces NOT authed-render (standing §0c — no test admin login).
