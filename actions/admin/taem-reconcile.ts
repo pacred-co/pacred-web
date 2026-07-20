@@ -451,8 +451,8 @@ export async function applyTaemReconcile(input: unknown): Promise<AdminActionRes
       if (r.taemWt != null) updates.fweight = r.taemWt;
       if (r.taemVol != null) updates.fvolume = r.taemVol;
       if (r.taemParcel != null) updates.famount = r.taemParcel;
-      // 🔒 cabinet tier guard (owner 2026-07-20) — a sack (CBX…)/packing-batch
-      // (SEA0625-…) label in the file must never land at the ตู้ tier.
+      // 🔒 cabinet tier guard (owner 2026-07-20) — a sack (CBX…)/MOMO-placeholder id
+      // in the file must never land at the ตู้ tier (TTW ตู้ ids pass as-sent).
       if (r.taemContainer && !isNonContainerCabinetId(r.taemContainer)) updates.fcabinetnumber = r.taemContainer;
       if (transport) updates.ftransporttype = transport;
 

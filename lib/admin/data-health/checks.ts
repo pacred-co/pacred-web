@@ -219,14 +219,15 @@ const CHECKS: CheckDef[] = [
   },
   {
     id: "cabinet_not_real_container",
-    title: "ช่องเลขตู้ถือเลขกระสอบ/รอบแพค (ไม่ใช่ตู้จริง)",
+    title: "ช่องเลขตู้ถือเลขกระสอบ/placeholder ค้าง (ไม่ใช่ตู้จริง)",
     severity: "red",
     why:
-      "2026-07-20 — โกดังคีย์ป้ายบนกล่อง (Packing ID: SEA0625-8211YW / กระสอบ CBX…) ลงช่องตู้ทับค่าที่ระบบแก้แล้ว " +
-      "(ทะลุแม้ fcabinet_locked) → รายงานตู้โชว์กระสอบเป็นตู้ · tier ต้องเป็น ตู้ ⊃ กระสอบ ⊃ ชิปเม้น",
+      "tier ต้องเป็น ตู้ ⊃ กระสอบ ⊃ ชิปเม้น — เลขกระสอบ (CBX…) หรือ placeholder รอบจัดส่งของ MOMO " +
+      "(PR/MO/PCS+วันที่) ค้างในช่องตู้ = รายงานตู้โชว์ค่าที่ไม่ใช่ตู้. หมายเหตุ owner 2026-07-20: " +
+      "เลขตู้ TTW/อี้อู (SEA0625-8211YW · 0717-7072 YW SEA) = ตู้จริง ใช้ตามที่ TTW ส่งมา ไม่นับเป็นปัญหา",
     action:
-      "แก้ fcabinetnumber เป็นเลขตู้จริง (GZS/GZE/YW…) — ดูตู้จริงจาก MOMO Live/box_detail/packing · " +
-      "write-guard (cabinet-class.ts) กันขาเข้าแล้ว แถวที่โผล่ที่นี่ = ของค้างก่อน guard หรือ path ใหม่ที่หลุด",
+      "แก้ fcabinetnumber เป็นเลขตู้จริง (GZS/GZE/YW…/เลขตามใบปิดตู้ TTW) — ดูจาก MOMO Live/box_detail/packing · " +
+      "write-guard (cabinet-class.ts) กันขาเข้าแล้ว แถวที่โผล่ที่นี่ = ของค้างก่อน guard หรือ placeholder ที่ MOMO ไม่เคยปิดตู้",
     run: async (_admin, ctx) => {
       // Calibrated on prod 2026-07-20: a MOMO ROUTING placeholder (PR/MO/PCS+date)
       // is ⏳-by-design while in transit (report-cnt shows "รอ MOMO ผูกเลขตู้จริง" ·

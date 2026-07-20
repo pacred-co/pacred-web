@@ -414,7 +414,7 @@ export async function commitMomoRowCore(
   // still keeps momo_container_no separately for the momo_container_no column; and transport-mode
   // derivation already reads container_batch_no only, so no mode regression.)
   // Tier guard (owner 2026-07-20 · cabinet-class SOT): container_batch_no must be a
-  // ตู้ (GZS/GZE/…). If upstream ever hands a sack (CBX…)/batch label instead, keep
+  // ตู้. If upstream ever hands a sack (CBX…)/routing-placeholder instead, keep
   // fcabinetnumber EMPTY — propagate fills the real ตู้ later. กระสอบ ≠ ตู้.
   const rawCabinetBatch = (srcRow.container_batch_no ?? "").trim();
   const cabinetForDisplay = isNonContainerCabinetId(rawCabinetBatch) ? "" : rawCabinetBatch;

@@ -147,7 +147,7 @@ export async function createMissingMomoForwarderRow(
       const userID  = d.memberCode.toUpperCase();
 
       // 🔒 cabinet tier guard (owner 2026-07-20) — เลขตู้ต้องเป็นตู้จริง ไม่ใช่
-      // เลขกระสอบ (CBX…)/รอบแพค (Packing ID บนกล่อง)
+      // เลขกระสอบ (CBX…)/placeholder ของระบบ (เลขตู้ TTW ใช้ตามที่ส่งมาได้เลย)
       const cabGuard = cabinetWriteGuard({ next: cabinet });
       if (!cabGuard.ok) return { ok: false, error: cabGuard.reason };
 

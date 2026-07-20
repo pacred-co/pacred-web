@@ -1653,10 +1653,9 @@ export async function adminUpdateForwarderCabinet(
       return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (เลขตู้เดิม)" };
     }
 
-    // 🔒 cabinet tier guard (owner 2026-07-20) — THIS action re-stamped 7 LOCKED
-    // rows with the box-label batch id "SEA0625-8211YW" (it checked neither the
-    // mig-0150 lock nor the id shape). sack/batch ids are refused for everyone;
-    // the lock is overridable by god roles only.
+    // 🔒 cabinet tier guard (owner 2026-07-20) — refuse sack (CBX…)/MOMO-placeholder
+    // ids for everyone; the mig-0150 lock is overridable by god roles only.
+    // (TTW ids like "SEA0625-8211YW" = เลขตู้จริง per owner — the guard allows them.)
     const guard = cabinetWriteGuard({
       next: d.cabinet,
       current: fwd.fcabinetnumber,

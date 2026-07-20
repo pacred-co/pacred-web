@@ -299,7 +299,7 @@ export async function adminApiForwarderManualInsert(
       if (manifestDateParsed) {
         fDateToThai = addDays(manifestDateParsed, d.transport_code === "EK" ? 7 : 14);
         fDateContainerClose = manifestDateParsed;
-        // 🔒 cabinet tier guard (owner 2026-07-20) — refuse sack/batch labels as ตู้
+        // 🔒 cabinet tier guard (owner 2026-07-20) — refuse sack/MOMO-placeholder ids as ตู้
         const cabGuard = cabinetWriteGuard({ next: d.container_code.trim() });
         if (!cabGuard.ok) return { ok: false, error: cabGuard.reason };
         fCabinetNumber = d.container_code;

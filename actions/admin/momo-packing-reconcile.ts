@@ -382,8 +382,8 @@ export async function applyMomoPacking(input: unknown): Promise<AdminActionResul
       if (r.packingWidth != null)  updates.fwidth  = r.packingWidth;
       if (r.packingLength != null) updates.flength = r.packingLength;
       if (r.packingHeight != null) updates.fheight = r.packingHeight;
-      // 🔒 cabinet tier guard (owner 2026-07-20) — a sack (CBX…)/packing-batch
-      // (SEA0625-…) label in the file must never land at the ตู้ tier.
+      // 🔒 cabinet tier guard (owner 2026-07-20) — a sack (CBX…)/MOMO-placeholder id
+      // in the file must never land at the ตู้ tier (TTW ตู้ ids pass as-sent).
       if (r.container && !isNonContainerCabinetId(r.container)) updates.fcabinetnumber = r.container;
       if (transport) updates.ftransporttype = transport;
 

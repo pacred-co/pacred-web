@@ -798,19 +798,20 @@ export function CntListTable({
                           <span className="text-[11px] text-amber-600">⏳ รอ MOMO ผูกเลขตู้จริง</span>
                         </span>
                       ) : isNonContainerCabinetId(r.fcabinetnumber) ? (
-                        // owner 2026-07-20 — เลขกระสอบ (CBX…)/รอบแพค (SEA0625-…) หลุดมา
-                        // อยู่ tier ตู้: กระสอบต้องอยู่ "ในตู้" อีกชั้น ไม่ใช่เป็นตู้เอง.
+                        // owner 2026-07-20 — เลขกระสอบ (CBX…) หลุดมาอยู่ tier ตู้:
+                        // กระสอบต้องอยู่ "ในตู้" อีกชั้น ไม่ใช่เป็นตู้เอง. (เลขตู้ TTW เช่น
+                        // SEA0625-8211YW = ตู้จริง ใช้ตามที่ TTW ส่งมา — ไม่เข้าเงื่อนไขนี้.)
                         // write-guard (cabinet-class.ts) กันขาเข้าแล้ว — แถวนี้ = ข้อมูลค้าง
                         // ที่ต้องแก้เป็นเลขตู้จริง (data-health จะแดงจนกว่าจะเคลียร์).
                         <span className="flex flex-col leading-tight">
                           <Link
                             href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
                             className="font-semibold text-[#1e9ff2] hover:underline"
-                            title="ค่านี้เป็นเลขกระสอบ/รอบแพค (ป้ายบนกล่อง) ไม่ใช่เลขตู้จริง — แก้เลขตู้ที่หน้ารายการนำเข้า"
+                            title="ค่านี้เป็นเลขกระสอบ/รหัสรอบของระบบ ไม่ใช่เลขตู้จริง — แก้เลขตู้ที่หน้ารายการนำเข้า"
                           >
                             {r.fcabinetnumber}
                           </Link>
-                          <span className="text-[11px] font-semibold text-red-600">⚠ เลขกระสอบ/รอบแพค — ไม่ใช่เลขตู้จริง (ต้องแก้)</span>
+                          <span className="text-[11px] font-semibold text-red-600">⚠ เลขกระสอบ/placeholder — ไม่ใช่เลขตู้จริง (ต้องแก้)</span>
                         </span>
                       ) : (
                         <Link

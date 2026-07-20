@@ -145,7 +145,7 @@ export async function adminCarrierManualInsert(
   }
   const carrier = CARRIER_REGISTRY[d.carrier];
 
-  // 🔒 cabinet tier guard (owner 2026-07-20) — เลขตู้ต้องเป็นตู้จริง ไม่ใช่เลขกระสอบ/รอบแพค
+  // 🔒 cabinet tier guard (owner 2026-07-20) — เลขตู้ต้องเป็นตู้จริง ไม่ใช่เลขกระสอบ/placeholder
   const cabGuard = cabinetWriteGuard({ next: d.cabinetNumber.trim() });
   if (!cabGuard.ok) return { ok: false, error: cabGuard.reason };
 

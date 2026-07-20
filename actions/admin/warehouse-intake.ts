@@ -612,9 +612,9 @@ export async function warehouseAssignContainer(
       return { ok: false, error: "เลขตู้ถูกล็อกไว้ (fcabinet_locked) — แก้ไม่ได้" };
     }
 
-    // 🔒 cabinet tier guard (owner 2026-07-20) — the scan/key-in path is exactly
-    // where staff copy the printed box label ("Packing ID: SEA0625-8211YW" /
-    // sack "CBX…") into the ตู้ field. Those are กระสอบ/รอบแพค tiers, not a ตู้.
+    // 🔒 cabinet tier guard (owner 2026-07-20) — refuse a sack (CBX…) or a MOMO
+    // routing placeholder keyed into the ตู้ field. TTW labels ("Packing ID:
+    // SEA0625-8211YW") = เลขตู้จริง per owner — allowed as-is.
     const tierGuard = cabinetWriteGuard({ next: d.containerNo, current: fwd.fcabinetnumber });
     if (!tierGuard.ok) return { ok: false, error: tierGuard.reason };
 

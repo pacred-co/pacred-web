@@ -1,0 +1,59 @@
+{
+  "rows": [
+    {
+      "id": "52177",
+      "ftrackingchn": "X9002653-1",
+      "fcabinetnumber": "GZS260625-5T",
+      "fstatus": "4",
+      "fcabinet_locked": true
+    },
+    {
+      "id": "52178",
+      "ftrackingchn": "X9002653-2",
+      "fcabinetnumber": "GZS260625-5T",
+      "fstatus": "4",
+      "fcabinet_locked": true
+    },
+    {
+      "id": "52179",
+      "ftrackingchn": "X9002653-3",
+      "fcabinetnumber": "GZS260625-5T",
+      "fstatus": "3",
+      "fcabinet_locked": true
+    },
+    {
+      "id": "52180",
+      "ftrackingchn": "X9002653-4",
+      "fcabinetnumber": "GZS260625-5T",
+      "fstatus": "4",
+      "fcabinet_locked": true
+    },
+    {
+      "id": "52181",
+      "ftrackingchn": "X9002661-1",
+      "fcabinetnumber": "GZS260625-5T",
+      "fstatus": "4",
+      "fcabinet_locked": true
+    },
+    {
+      "id": "52182",
+      "ftrackingchn": "X9002661-2",
+      "fcabinetnumber": "GZS260625-5T",
+      "fstatus": "5",
+      "fcabinet_locked": true
+    },
+    {
+      "id": "52183",
+      "ftrackingchn": "X9002661-3",
+      "fcabinetnumber": "GZS260625-5T",
+      "fstatus": "5",
+      "fcabinet_locked": true
+    }
+  ],
+  "cards": [
+    {
+      "id": "2776",
+      "fcabinetnumber": "GZS260625-5T"
+    }
+  ]
+}

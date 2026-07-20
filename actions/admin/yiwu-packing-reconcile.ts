@@ -76,15 +76,15 @@ async function reconcileYiwuImpl(
   }
   const container = (parse.container ?? "").trim();
 
-  // 🔒 cabinet tier guard (owner 2026-07-20) — early TTW files were named with the
-  // PACKING-BATCH label (e.g. "SEA0625-8211YW"), not a ตู้. Re-applying such a file
-  // would re-introduce a batch id at the container tier → refuse with instructions.
+  // 🔒 cabinet tier guard (owner 2026-07-20) — TTW container ids are used AS-SENT
+  // (SEA0625-8211YW · 0717-7072 YW SEA = ตู้จริง). Refuse only a sack (CBX…) or a
+  // MOMO routing placeholder — those are not a ตู้ at any tier.
   if (container && isNonContainerCabinetId(container)) {
     return {
       ok: false,
       error:
-        `เลขตู้จากชื่อไฟล์ "${container}" เป็นเลขกระสอบ/รอบแพค ไม่ใช่เลขตู้จริง — ` +
-        `เปลี่ยนชื่อไฟล์เป็นเลขตู้จริง (GZS…/YWS…/YWE…) ก่อนอัพโหลด`,
+        `เลขตู้ "${container}" เป็นเลขกระสอบ/รหัสรอบของระบบ ไม่ใช่เลขตู้จริง — ` +
+        `ใช้เลขตู้ตามใบปิดตู้ของ TTW (เช่น SEA0625-8211YW · 0717-7072 YW SEA · GZS…/YW…)`,
     };
   }
 
