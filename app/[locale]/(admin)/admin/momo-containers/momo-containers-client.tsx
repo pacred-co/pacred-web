@@ -12,6 +12,7 @@
 import { Fragment, useMemo, useState, useTransition, type ReactNode } from "react";
 import { ALL_WORKBOOK_CARRIER_OPTIONS } from "@/lib/cart/ship-by-eligibility";
 import { baseTracking } from "@/lib/admin/momo-bill-header";
+import { cgMatchesQty } from "@/lib/forwarder/cg-range";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
@@ -232,6 +233,10 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
   const [copied, setCopied] = useState(false);
   // ⇅ sort + ⋮⋮ reorderable columns (ไอแต้ม-style · re-added on ปอน table 2026-07-14)
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" } | null>(null);
+  // ── shipment dropdown (owner 2026-07-19 "ทำเป็นดรอปดาว เรียงตามชิปเม้น · กดค่อยแสดงแทรค") ──
+  const [openFams, setOpenFams] = useState<Set<string>>(new Set());
+  const toggleFam = (base: string) =>
+    setOpenFams((prev) => { const nx = new Set(prev); if (nx.has(base)) nx.delete(base); else nx.add(base); return nx; });
   const [dragKey, setDragKey] = useState<string | null>(null);
   const { order: colOrder, move: moveCol, reset: resetCols } = useColumnOrder(DATA_KEYS);
   // ✎ inline-edit น้ำหนัก/คิว/จำนวน (pending only · updateMomoImportTrackFields · แก้ก่อนนำเข้า)
@@ -857,10 +862,18 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
               const famQty = fam.reduce((sm, x) => sm + (x.qty ?? 0), 0);
               const famWt = fam.reduce((sm, x) => sm + (x.weightKg || 0), 0);
               const famCbm = fam.reduce((sm, x) => sm + (x.cbm || 0), 0);
+              const isOpen = !grouped || openFams.has(base);
+              // CG box-number consistency (owner 2026-07-19 · เลขกล่อง): the CG range's
+              // box count must equal the tracking's Total Parcel — flag any mismatch.
+              const famCgMismatch = fam.some((x) => cgMatchesQty(x.cgNo, x.qty) === false);
               return (
                 <Fragment key={`fam-${base}-${famIdx}`}>
                 {grouped && (
-                  <tr className="border-t-2 border-slate-300 bg-slate-100/70 align-top">
+                  <tr
+                    className="cursor-pointer border-t-2 border-slate-300 bg-slate-100/70 align-top hover:bg-slate-200/60"
+                    title="กดเพื่อกาง/พับรายละเอียดแทรคกิ้งของชิปเม้นนี้"
+                    onClick={(e) => { if ((e.target as HTMLElement).closest("a,button,input,select,textarea")) return; toggleFam(base); }}
+                  >
                     <td className="px-2 py-1.5 text-center">
                       {famFid ? (
                         <Link href={`/admin/forwarders/${famFid}`} title={`เปิดชิปเม้น/ออเดอร์ #${famFid}`}
@@ -876,11 +889,23 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                       let node: ReactNode = null;
                       switch (key) {
                         case "tracking":
-                          node = famFid ? (
-                            <Link href={`/admin/forwarders/${famFid}`} title="เปิดชิปเม้น/ออเดอร์นี้"
-                              className="font-mono text-[13px] font-bold text-primary-700 hover:underline">{base}</Link>
-                          ) : (
-                            <span className="font-mono text-[13px] font-bold text-foreground">{base}</span>
+                          node = (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="text-[11px] text-slate-500">{isOpen ? "▾" : "▸"}</span>
+                              {famFid ? (
+                                <Link href={`/admin/forwarders/${famFid}`} title="เปิดชิปเม้น/ออเดอร์นี้"
+                                  className="font-mono text-[13px] font-bold text-primary-700 hover:underline">{base}</Link>
+                              ) : (
+                                <span className="font-mono text-[13px] font-bold text-foreground">{base}</span>
+                              )}
+                              <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-600">{fam.length} แทรค</span>
+                              {famCgMismatch && (
+                                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10.5px] font-bold text-amber-700"
+                                  title="ช่วงเลขกล่อง CG ของบางแทรคไม่ตรงกับจำนวนกล่อง (Total Parcel) — ข้อมูล MOMO ขัดกันเอง ตรวจสอบ">
+                                  ⚠ CG≠กล่อง
+                                </span>
+                              )}
+                            </span>
                           );
                           break;
                         case "totalParcel": node = <span className="font-bold">Σ {famQty}</span>; break;
@@ -898,7 +923,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                     })}
                   </tr>
                 )}
-                {fam.map((t) => {
+                {isOpen && fam.map((t) => {
               const i = n++;
               const rr = rowResult[t.id];
               const done = t.committed || rr?.ok;

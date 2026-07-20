@@ -708,6 +708,20 @@ export function extractCrateFromMomoRaw(raw: unknown): MomoCrate {
  * DEFAULT-SAFE: no images / non-array / non-string / empty → "" (today's value,
  * no regression). Display/data only — never money.
  */
+
+/**
+ * CG box-number range from MOMO raw (raw.CG_NO · packing col T "CG.") —
+ * e.g. "CG84280723002-CG84280723007" = the 6 physical box labels of this
+ * tracking. Persisted to tb_forwarder.fbox_mark at commit (the same column
+ * the แต้ม packing reconcile fills) so the box identity survives ingest.
+ * Parse/validate via lib/forwarder/cg-range.ts. "" when absent.
+ */
+export function extractCgFromMomoRaw(raw: unknown): string {
+  if (!raw || typeof raw !== "object") return "";
+  const v = (raw as Record<string, unknown>).CG_NO;
+  return typeof v === "string" ? v.trim() : "";
+}
+
 export function extractCoverFromMomoRaw(raw: unknown): string {
   if (!raw || typeof raw !== "object") return "";
   const r = raw as Record<string, unknown>;

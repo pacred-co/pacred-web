@@ -46,6 +46,7 @@ import {
   extractWarehouseDatesFromMomoRaw,
   extractCrateFromMomoRaw,
   extractCoverFromMomoRaw,
+  extractCgFromMomoRaw,
 } from "@/lib/admin/momo-raw-helpers";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { splitAggregatedMomoBoxRows } from "@/lib/integrations/momo-web/split-box-rows";
@@ -446,6 +447,9 @@ export async function commitMomoRowCore(
   // through unchanged so forwarder-check / report-cnt render them directly.
   // DEFAULT-SAFE: no images → "" (no regression). Display/data only.
   const momoCover = extractCoverFromMomoRaw(srcRow.raw);
+  // CG box numbers (owner 2026-07-19 "เลขกล่อง") — carry them into tb_forwarder.fbox_mark
+  // so the physical box identity survives the commit (was dropped · display/data only).
+  const momoCg = extractCgFromMomoRaw(srcRow.raw);
   // ── Transport type (รถ EK "1" / เรือ SEA "2") — พี่ป๊อป flag 2026-06-11 ──
   // Priority:
   //   1. d.fTransportType        — explicit admin override (review form) wins.
@@ -728,6 +732,7 @@ export async function commitMomoRowCore(
       fnoteuser:             "0",
       fnoteuserread:         "0",
       fcover:                momoCover,
+      fbox_mark:             momoCg,
       fphotoend:             "",
       fcostrefrate:          0,
       fpriceupdate:          0,
