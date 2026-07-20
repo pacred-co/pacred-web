@@ -227,13 +227,20 @@ export default async function MomoContainersPage() {
   // 1:1 — ตรวจง่าย + พิสูจน์ว่าดึง Live มาถูก). Loaded ONCE, chunked (avoid a huge IN list). ──
   const allBases = [...new Set(intermediate.map((r) => (r.tracking ? baseTrackingOf(r.tracking) : "")).filter(Boolean))];
   const boxesByBase = new Map<string, BoxConsistencyInput[]>();
+  // ── LIVE truth per base (owner 2026-07-19 "ทำไม Live ตรงกว่า · ใครมานั่งเช็ค") ──
+  // The import/track API feed goes STALE once a parcel advances (MOMO drops it), but
+  // momo_box_detail is refreshed from the MOMO **Live web boards** — it knows the
+  // CURRENT container / member-code / status. Collect it here and use it as the
+  // FALLBACK for staging blanks so the page reconciles automatically (no human
+  // cross-checking the Live page).
+  const liveMetaByBase = new Map<string, { container: string; memberCode: string; statusText: string }>();
   {
     const CHUNK = 300;
     for (let i = 0; i < allBases.length; i += CHUNK) {
       const slice = allBases.slice(i, i + CHUNK);
       const { data: bd, error: bdErr } = await admin
         .from("momo_box_detail")
-        .select("base_tracking, box_tracking, weight_kg, cbm, width, length, height, quantity")
+        .select("base_tracking, box_tracking, weight_kg, cbm, width, length, height, quantity, container_name, member_code, status_text")
         .in("base_tracking", slice);
       if (bdErr) { console.error("[momo-containers box_detail] failed", { code: bdErr.code, message: bdErr.message }); continue; }
       for (const r of (bd ?? []) as Array<Record<string, number | string | null>>) {
@@ -246,6 +253,12 @@ export default async function MomoContainersPage() {
           width: num(r.width), length: num(r.length), height: num(r.height), quantity: num(r.quantity),
         });
         boxesByBase.set(b, arr);
+        // live meta — first non-empty value per base wins (rows share the shipment's values)
+        const lm = liveMetaByBase.get(b) ?? { container: "", memberCode: "", statusText: "" };
+        if (!lm.container && r.container_name) lm.container = String(r.container_name).trim();
+        if (!lm.memberCode && r.member_code) lm.memberCode = String(r.member_code).trim();
+        if (!lm.statusText && r.status_text) lm.statusText = String(r.status_text).trim();
+        liveMetaByBase.set(b, lm);
       }
     }
   }
@@ -310,9 +323,17 @@ export default async function MomoContainersPage() {
     const base = r.tracking ? baseTrackingOf(r.tracking) : "";
     const pk = base ? packingByBase.get(base) : undefined;
     const lv = base ? liveByBase.get(base) : undefined;
+    // LIVE fallback (see liveMetaByBase above): staging blanks fill from the Live
+    // web-board truth — container ("ยังไม่เข้าตู้ปิด" that Live already assigned),
+    // PR ("MOMO ไม่ส่ง PR" rows whose Live board carries the member code).
+    const lm = base ? liveMetaByBase.get(base) : undefined;
+    const mergedContainer = r.container || (lm?.container ?? null);
+    const mergedUserId = r.guessedUserId || (lm?.memberCode ? lm.memberCode.toUpperCase() : null);
     return {
       ...r,
-      userIdValid: r.guessedUserId == null ? null : knownUserIds.has(r.guessedUserId.toUpperCase()),
+      container: mergedContainer,
+      guessedUserId: mergedUserId,
+      userIdValid: mergedUserId == null ? null : knownUserIds.has(mergedUserId.toUpperCase()),
       hasPacking: !!pk,
       packingWeight: pk?.weight ?? null,
       packingCbm: pk?.cbm ?? null,
@@ -322,8 +343,8 @@ export default async function MomoContainersPage() {
       liveCbm: lv?.cbm ?? null,
       momoGarbage: base ? garbageByBase.get(base) ?? null : null,
       boxes: displayBoxesOf(base ? boxesByBase.get(base) : undefined),
-      etd: (r.container && etaByCabinet.get(r.container)?.etd) || null,
-      eta: (r.container && etaByCabinet.get(r.container)?.eta) || null,
+      etd: (mergedContainer && etaByCabinet.get(mergedContainer)?.etd) || null,
+      eta: (mergedContainer && etaByCabinet.get(mergedContainer)?.eta) || null,
     };
   });
 
