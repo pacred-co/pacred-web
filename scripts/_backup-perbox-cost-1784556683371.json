@@ -1,0 +1,38 @@
+[
+  {
+    "id": "52154",
+    "ftrackingchn": "983824005",
+    "userid": "PR134",
+    "fstatus": "5",
+    "famount": 40,
+    "famountcount": "1",
+    "fweight": "660.00",
+    "fvolume": "0.040500",
+    "ftotalprice": "18480.00",
+    "fcosttotalprice": "101.25"
+  },
+  {
+    "id": "52184",
+    "ftrackingchn": "500255762943",
+    "userid": "PR9820",
+    "fstatus": "6",
+    "famount": 6,
+    "famountcount": "1",
+    "fweight": "72.00",
+    "fvolume": "0.053600",
+    "ftotalprice": "1224.00",
+    "fcosttotalprice": "251.92"
+  },
+  {
+    "id": "52422",
+    "ftrackingchn": "1783586200",
+    "userid": "PR566",
+    "fstatus": "6",
+    "famount": 13,
+    "famountcount": "1",
+    "fweight": "195.00",
+    "fvolume": "0.050630",
+    "ftotalprice": "3315.00",
+    "fcosttotalprice": "237.96"
+  }
+]

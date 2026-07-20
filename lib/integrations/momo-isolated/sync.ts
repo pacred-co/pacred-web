@@ -511,9 +511,9 @@ export async function runMomoSync(
   // best-effort — must NEVER fail the sync.
   try {
     const bl = await backlinkStagingCommitted(admin, { apply: true });
-    if (bl.stamped > 0 || bl.errors.length > 0) {
+    if (bl.stamped > 0 || bl.errors.length > 0 || bl.uncovered.length > 0) {
       console.info(
-        `[runMomoSync] staging back-link: scanned=${bl.scannedStaging} matched=${bl.matches.length} stamped=${bl.stamped} dupSkipped=${bl.dupSkipped.length} errors=${bl.errors.length}`,
+        `[runMomoSync] staging back-link: scanned=${bl.scannedStaging} matched=${bl.matches.length} stamped=${bl.stamped} dupSkipped=${bl.dupSkipped.length} uncovered=${bl.uncovered.length} errors=${bl.errors.length}`,
       );
     }
     for (const msg of bl.errors) {
