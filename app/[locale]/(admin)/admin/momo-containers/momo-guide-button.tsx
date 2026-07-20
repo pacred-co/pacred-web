@@ -54,7 +54,7 @@ export function MomoGuideButton() {
                 โชว์ tracking/ขนาด/จำนวน/น้ำหนัก/คิว ต่อกล่องจริง ตรงกับ MOMO Live 1:1 (เลขเฉลี่ยในแถวหลักจะได้ไม่หลอกตา).
               </li>
               <li>
-                <strong>🚩 flag &quot;MOMO มั่ว&quot;:</strong> แถวที่มี <span className="font-semibold text-red-700">🚩 พื้นแดง</span> = ข้อมูลกล่องของ MOMO (box_detail) <strong>ขัดกันเอง</strong>
+                <strong>🚩 flag &quot;ข้อมูล MOMO ขัดกันเอง&quot;:</strong> แถวที่มี <span className="font-semibold text-red-700">🚩 พื้นแดง</span> = ข้อมูลกล่องของ MOMO (box_detail) <strong>ขัดกันเอง</strong>
                 {" "}(แถวย่อยรวมหนักเกินก้อนรวม) → ต้อง<strong>อัพ packing list แต้ม</strong> ที่ตู้นั้น (auto ซ่อมไม่ได้) · กด pill 🚩 บนแถบบน = กรองเฉพาะแถวมั่ว.
               </li>
               <li>

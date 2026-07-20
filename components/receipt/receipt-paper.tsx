@@ -141,10 +141,15 @@ export function fmt2(n: number): string {
   });
 }
 
+/** CBM on money documents — FULL stored precision (numeric(14,6) · mig 0192).
+ *  Owner 2026-07-19 ("บัญชีคิดมือแล้วไม่ตรง"): the amount = round2(rate × the 6-dp
+ *  stored volume); printing the volume at 5 dp made a hand recompute miss by
+ *  ±฿0.01-0.02 (e.g. 0.630424×2900 = 1,828.23 but the printed 0.63042 gives
+ *  1,828.22). The doc must show the EXACT number the money was computed from. */
 export function fmt5(n: number): string {
   return n.toLocaleString("en-US", {
-    minimumFractionDigits: 5,
-    maximumFractionDigits: 5,
+    minimumFractionDigits: 6,
+    maximumFractionDigits: 6,
   });
 }
 

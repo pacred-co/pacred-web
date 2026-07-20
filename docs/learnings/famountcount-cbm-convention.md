@@ -42,3 +42,40 @@ mig 0263 (get_container_summary sum_volume CASE expression). Keep in lockstep.**
   unchanged). ทุก fill path จึง "คิดเป็นชิปเม้น" อัตโนมัติ.
 - Supabase direct host `db.<ref>:5432` ตายแล้ว (IPv6-only) — pooler aws-1 เท่านั้น;
   dry-run ผ่าน host เก่าเคยอ่าน replica ค้าง (โชว์ 39 แถวที่ primary มี 0).
+
+## 📛 THE TRACKING PATTERN (owner 2026-07-19 · canonical — ห้ามตีความอื่น)
+
+MOMO (และโกดังจีนทุกเจ้า) ใช้แพทเทิร์นเดียว:
+
+```
+710092508207          ← เลขชิปเม้น = เลขออเดอร์ = เลขหัวบิล (ถ้าส่งมาโดดๆ = แทรคกิ้งในตัว)
+710092508207-1/2      ← แทรคกิ้งกล่องที่ 1 ของชิปเม้นนั้น
+710092508207-2/2      ← แทรคกิ้งกล่องที่ 2
+```
+
+- **ตัด `-N` / `-N/M` ท้ายออก = ตัวตนของชิปเม้น** — แม้ MOMO ส่งมาแต่ -1/2,-2/2
+  (ไม่มีเลขเปล่า) หัวบิล/ออเดอร์ก็คือเลขที่ตัดแล้ว. SOT = `baseTracking()`
+  (lib/admin/momo-bill-header.ts) / `baseOf()` (split-box-rows-plan) — ทุก grouping
+  ต้องผ่านตัวนี้ ห้าม parse เอง.
+- **โกดังสแกนเลขชิปเม้น = รับทั้งครอบครัว** — `warehouseArriveThScan` resolve ทั้ง
+  family จาก member ใดก็ได้ (รวมเคสไม่มีแถวเปล่า) แล้ว flip ทุกแถว eligible พร้อมกัน.
+- **1 ชิปเม้น = 1 บิล active** — billing ครอบทุกแถวของ base เดียวกัน; ใบยกเลิก
+  = ประวัติ (ขีดฆ่าในจอ) ไม่ใช่บิลซ้ำ. Verified prod: 0 แถวอยู่บนบิล active >1 ใบ.
+- **จอทุกตัวจับกลุ่มตาม base** — report-cnt · pay-modal · ตรวจตู้ (momo-containers
+  family grouping 2026-07-19) · ห้าม render แถว -N เป็นหัวอิสระ.
+### ชั้นที่ 3 — เลขกล่อง CG (owner 2026-07-19)
+
+```
+ชิปเม้น 908007156796
+  └─ แทรคกิ้ง 908007156796    → กล่อง CG84280723002-CG84280723007  (ช่วงต่อเนื่อง = 6 ใบ)
+  └─ แทรคกิ้ง 908007156796-2  → กล่อง CG84280723008-CG84280723010  (3 ใบ)
+  └─ แทรคกิ้ง 908007156796-5  → กล่อง CG84280723015                (เดี่ยว = 1 ใบ)
+```
+
+- **CG = ป้ายกล่องจริงรายใบ** — ช่วง CG ต้องนับได้เท่า Total Parcel (famount) ของแทรคนั้น
+  เสมอ; ไม่ตรง = ข้อมูล MOMO ขัดกันเอง (flag ⚠ CG≠กล่อง บนหน้า ตรวจตู้ · ห้าม silently trust).
+- **SOT = `lib/forwarder/cg-range.ts`** (`parseCgRange`/`cgMatchesQty` · 17 tests) — ห้าม
+  parse ช่วง CG เอง.
+- **เก็บที่ `tb_forwarder.fbox_mark`** (คอลัมน์เดิมที่สาย แต้ม reconcile ใช้อยู่แล้ว — ไม่มี
+  migration ใหม่) · MOMO commit (`commit-momo-row-core` → `extractCgFromMomoRaw` จาก
+  raw.CG_NO) เติมตอนนำเข้าระบบ → ตัวตนกล่องไม่หายอีก.
