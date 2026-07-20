@@ -3,6 +3,25 @@
 
 ---
 
+# 🔴 2026-07-20 ต่อ (เดฟ · owner "ทำไมบัคเบิ้ลกระจุย · ทำไมยังเกิดอีก · แก้ที่ต้นตอ · งานอื่นที่เป็นแบบนี้แก้ให้หมด") — MOMO LIVE AGGREGATE-FANOUT: family-aware fill + proper-split self-heal + prod heal 2 ชิปเม้น + คลาสกลับด้าน "กล่องหาย" → dave-pacred · read FIRST
+
+> **🏁 dave-pacred = `817bf640`** (2 commits `ff251ff8`+`817bf640`). gate: **tsc 0 · test:unit เต็ม EXIT 0 · BUILD_EXIT=0 · reconcile-plan 22/22 · live-parcel-metrics 18/18 · data-health 4/4 + calibrate prod · md-links 0**. ไม่มี migration ใหม่ (NEXT FREE = 0267).
+>
+> **🔑 ROOT = MODEL-EVOLUTION DEBT (จำไว้ใช้กับเคสอื่น):** `fillLiveDataForParcels` (MOMO Live pass 2) เขียน **2026-07-01** ตอนโมเดลยังเป็น *"1 ชิปเม้น = 1 แถว"* — **box-split ขึ้น 2026-07-02** (N แถวต่อกล่อง) แต่ไม่มีใครกลับไปแก้ pass นี้ → มัน match แถวทั้งจาก base และทุก suffix แล้วเติมด้วย **Σ ทั้งครอบครัว**. PR179 `1783582423`: 22 แถว × (116 กล่อง/2,007.28kg/15.8228คิว) → รายงานต้นทุน **352.2848 × 2,500 = ฿880,712 เป๊ะ** (เลขคณิตชี้ตัวคนเขียน · `adminidupdate='sys-live'` = ของ pass สถานะ ชี้ผิดตัว).
+> **ซ่อนตัวได้ ~3 สัปดาห์เพราะ:** fill-when-empty (แถว split เกิดมาไม่มีน้ำหนัก → ระเบิดตอน Live ชั่ง) · stored cost ถูกอยู่ (รายงานคิด cost สดจาก CBM → พังแค่บนจอ) · audit column ชี้ผิด.
+> **ทำไม self-heal ไม่จับ:** `planBoxDetailReconcile` รู้จัก bare แค่ 2 ทรง (aggregate-header · priced-anchor) แต่ 2 เคสนี้เป็นทรง **proper-split** (กล่อง 1 อยู่บน bare · owner 2026-07-18) → `trueBoxTotals` ตัดกล่องของ bare ออก → เทียบไม่ตรง → **refuse เงียบทุกชั่วโมง**. **เจอเพราะเอา pure plan ไป replay ทับข้อมูลจริง** (อ่าน guard เฉยๆ ไม่มีทางเห็น).
+>
+> **✅ FIX 4 ชั้น:** (1) **fill = family-aware** — นับขนาดครอบครัวจาก **DB** (paged scan · fail-CLOSED) · แถวใน split family เติมจาก `aggregateLiveMetricsByExact` (พัสดุของตัวเอง) · base aggregate ใช้เฉพาะครอบครัวแถวเดียว. (2) **plan รู้จัก proper-split** ผ่าน `hasBareBox` (มาจาก box_detail = **bare-independent** → ครอบครัวที่**ไม่มีแถว bare เลย** ก็ heal ได้) + converge ตัว bare เอง (ไม่ zero) + **`countFixes`** ซ่อม famount=0 (เฉพาะ famountcount='1' = money-neutral · locked ด้วย test). (3) **sweep** `scripts/heal-live-fanout{,2}-2026-07-20.ts` (plan-driven · dry-run+backup) → PR179 22 แถว · PR208 `1784190161` 1 basis + 10 counts. (4) **data-health `aggregate_fanout_siblings`** (prod 0 หลังแก้).
+>
+> **🔴 คลาสกลับด้านที่เจอตอนกวาด (ใหม่ · `shipment_short_a_box`):** staging 2 กล่อง commit รวมเป็น tb_forwarder **แถวเดียว** → กล่องที่เหลือไม่มีแถว = **ไม่เคยถูกคิดเงิน**. prod **9 ชิปเม้นขาด 1 กล่อง** (PR208 · PR179 `1784432869` · PR079 ×2 · PR050 · PR622 · PR10366 · PR9820 · ทั้งหมด fstatus 2/3 ยังไม่บิล). เช็ค normalize ชื่อกล่อง #1 (bare vs `-1/N`) เป็น ordinal กัน false-positive. **READ-ONLY — การสร้างแถว billable อยู่บน path ที่ audited แล้ว (`/admin/momo-containers` "เพิ่มรายการที่ขาด") ห้าม cron สร้างเอง.**
+>
+> **🟠 OWNER/บัญชีเคาะ:** 3 แถวเก็บคิว **ต่อกล่อง** ใต้ธง `famountcount='1'` (52154 PR134 · 52422 PR566 · 52184 PR9820) → **ต้นทุนตู้ต่ำกว่าจริงรวม ≈฿8,064** · ขายคิดตามน้ำหนัก **ถูกแล้ว ลูกค้าไม่กระทบ** · แถวบิลแล้ว (5/6) = เปลี่ยนฐาน = บัญชีเคาะ.
+> **✅ ตรวจแล้วสะอาด (ไม่ต้องทำอะไร):** KY984284755 (PR189) ที่ agent แจ้งว่าเก็บเงินซ้ำ = **ตีตก** (box_detail+staging พิสูจน์ 2 กล่องจริง 33kg เท่ากันพอดี · qty=2/66kg) · 47 ตู้ max 18.5 คิว/6,045 kg ไม่มีตู้เกินจริง · "25 แถวขายต่ำกว่าทุน" = artefact การแบ่ง box-split (ชิปเม้น 1782555393 รวมแล้ว **+฿11,270.84**).
+>
+> **📚 learning:** [`docs/learnings/model-evolution-debt-aggregate-fanout.md`](docs/learnings/model-evolution-debt-aggregate-fanout.md) — โมเดลเปลี่ยน cardinality (1 แถว → N) ต้อง grep ทุก consumer ที่ aggregate ด้วย key เก่า · ตัวอันตรายคือตัวที่ *อ่านแล้วดูถูก* · docstring ที่ยังยืนยัน invariant เก่า = สัญญาณ · guard ที่ refuse เงียบต้อง audit ด้วยการ **replay** ไม่ใช่การอ่าน.
+
+---
+
 # 📦 2026-07-20 ปิด session (เดฟ · กู้งาน limit + owner pivot) — CABINET TIER SOT + 🔄 เลขตู้ TTW ใช้ตามแพทเทิร์นเขา VERBATIM (ห้าม relabel) + ใบปิดตู้ parser + prod heal/revert → dave-pacred · read FIRST
 
 > **🏁 SESSION CLOSE (กู้งานจากเมล์ติด limit → ทำต่อจนจบ → owner สั่ง integrate เข้า dave-pacred ปิด session).** **dave-pacred = `681391da`** (FF สะอาด · main ยังไม่ promote). gate: **tsc 0 · BUILD_EXIT=0 · test:unit เต็ม EXIT 0 · cabinet-class 41/41 · yiwu-parser 17/17 · data-health 4/4**. ไม่มี migration ใหม่ (NEXT FREE = 0265 · 0263/0264 ยังค้าง apply DEV ตอนตื่น).
