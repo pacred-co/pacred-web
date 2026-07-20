@@ -18,6 +18,7 @@ import {
   parcelTotals,
   baseTrackingOf,
   aggregateLiveMetricsByBase,
+  aggregateLiveMetricsByExact,
   decideMetricFill,
 } from "./live-parcel-metrics";
 import type { MomoLiveParcel } from "./types";
@@ -170,5 +171,33 @@ check("volume-only mismatch is caught when weight matches", () => {
   assert.equal(d.mismatch, true);
   assert.equal(d.fill, false);
 });
+
+
+check("aggregateLiveMetricsByExact — per-exact totals (the split-family fill source)", () => {
+  const map = aggregateLiveMetricsByExact([
+    parcel({ tracking: "1783582423", weightKg: 19, cbm: 0.1494, quantity: 13 }),
+    parcel({ tracking: "1783582423-2", weightKg: 10.3, cbm: 0.1005, quantity: 3 }),
+  ]);
+  assert.equal(map.size, 2);
+  const bare = map.get("1783582423")!;
+  assert.equal(bare.quantity, 13, "bare = ITS OWN 13 ชิ้น (never the family Σ)");
+  assert.ok(Math.abs(bare.weightKg - 247) < 1e-9, `bare kg ${bare.weightKg}`);
+  const s2 = map.get("1783582423-2")!;
+  assert.equal(s2.quantity, 3);
+  assert.ok(Math.abs(s2.weightKg - 30.9) < 1e-9);
+  assert.equal(s2.baseTracking, "1783582423");
+});
+
+check("byExact vs byBase — the base aggregate stays the Σ (single-row-family use only)", () => {
+  const parcels = [
+    parcel({ tracking: "X", weightKg: 19, cbm: 0.1494, quantity: 13 }),
+    parcel({ tracking: "X-2", weightKg: 10.3, cbm: 0.1005, quantity: 3 }),
+  ];
+  const base = aggregateLiveMetricsByBase(parcels).get("X")!;
+  assert.equal(base.quantity, 16);
+  assert.ok(Math.abs(base.weightKg - 277.9) < 1e-9);
+  assert.equal(base.parcelCount, 2);
+});
+
 
 console.log(`\n✅ all ${passed} MOMO Live parcel-metrics assertions passed`);

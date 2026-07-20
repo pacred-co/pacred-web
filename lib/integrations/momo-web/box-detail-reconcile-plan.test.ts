@@ -325,4 +325,67 @@ check("priced aggregate-on-detail with NO corroborating twin → review (never g
   assert.ok(plan.reviews.some((r) => r.kind === "priced_no_twin_corroboration" && r.id === 42));
 });
 
+
+// ── 6. PROPER-SPLIT FANOUT (owner 2026-07-20 · PR179 1783582423) ──
+// fillLiveDataForParcels (pre-fix) wrote the WHOLE-SHIPMENT Σ onto EVERY row of a
+// proper-split family (bare = box-1 · siblings -2..-N). The plan must converge each
+// row (incl. the bare) to its OWN box truth — and never zero the bare.
+check("fanout family: bare + every sibling converge to their OWN box truth", () => {
+  const boxes: ReconcileBox[] = [
+    box({ boxTracking: "FAN", weightKg: 10, cbm: 0.06, quantity: 2, width: 50, length: 40, height: 30 }),   // box1 (bare) → 20kg/0.12
+    box({ boxTracking: "FAN-2", weightKg: 5, cbm: 0.2, quantity: 1, width: 100, length: 50, height: 40 }),  // → 5kg/0.2
+    box({ boxTracking: "FAN-3", weightKg: 8, cbm: 0.15, quantity: 3, width: 60, length: 50, height: 50 }),  // → 24kg/0.45
+  ];
+  // whole-shipment Σ = 6 ชิ้น · 49 kg · 0.77 คิว — the fanout wrote THIS onto every row.
+  const corrupt = (id: number, t: string) => fwd({ id, ftrackingchn: t, famount: 6, fweight: 49, fvolume: 0.77 });
+  const group: ReconcileForwarderRow[] = [corrupt(60, "FAN"), corrupt(61, "FAN-2"), corrupt(62, "FAN-3")];
+  const plan = planBoxDetailReconcile(group, boxes);
+  assert.equal(plan.detailFixes.length, 3, "bare + 2 siblings all fixed");
+  const byId = new Map(plan.detailFixes.map((f) => [f.id, f]));
+  assert.deepEqual(
+    [byId.get(60)!.truth.famount, byId.get(60)!.truth.fweight, byId.get(60)!.truth.fvolume],
+    [2, 20, 0.12], "bare → its OWN box-1 truth (never the family Σ · never zeroed)");
+  assert.deepEqual(
+    [byId.get(61)!.truth.famount, byId.get(61)!.truth.fweight, byId.get(61)!.truth.fvolume],
+    [1, 5, 0.2]);
+  assert.deepEqual(
+    [byId.get(62)!.truth.famount, byId.get(62)!.truth.fweight, byId.get(62)!.truth.fvolume],
+    [3, 24, 0.45]);
+  assert.equal(plan.bareZeroes.length, 0, "proper-split bare is NEVER zeroed");
+  assert.equal(plan.reviews.length, 0);
+});
+
+check("fanout family, bare ALREADY healed: siblings still converge (bare-independent corroboration)", () => {
+  const boxes: ReconcileBox[] = [
+    box({ boxTracking: "FAN", weightKg: 10, cbm: 0.06, quantity: 2, width: 50, length: 40, height: 30 }),
+    box({ boxTracking: "FAN-2", weightKg: 5, cbm: 0.2, quantity: 1, width: 100, length: 50, height: 40 }),
+    box({ boxTracking: "FAN-3", weightKg: 8, cbm: 0.15, quantity: 3, width: 60, length: 50, height: 50 }),
+  ];
+  const group: ReconcileForwarderRow[] = [
+    fwd({ id: 70, ftrackingchn: "FAN", famount: 2, fweight: 20, fvolume: 0.12 }), // healed
+    fwd({ id: 71, ftrackingchn: "FAN-2", famount: 6, fweight: 49, fvolume: 0.77 }), // still fanout-corrupt
+    fwd({ id: 72, ftrackingchn: "FAN-3", famount: 6, fweight: 49, fvolume: 0.77 }),
+  ];
+  const plan = planBoxDetailReconcile(group, boxes);
+  assert.equal(plan.detailFixes.length, 2, "both corrupt siblings fixed despite the healed bare");
+  assert.equal(plan.bareZeroes.length, 0);
+  assert.equal(plan.reviews.length, 0, "healthy proper-split bare emits no review noise");
+});
+
+check("healthy UNPRICED proper-split family = full no-op (no fixes · no reviews)", () => {
+  const boxes: ReconcileBox[] = [
+    box({ boxTracking: "FAN", weightKg: 10, cbm: 0.06, quantity: 2, width: 50, length: 40, height: 30 }),
+    box({ boxTracking: "FAN-2", weightKg: 5, cbm: 0.2, quantity: 1, width: 100, length: 50, height: 40 }),
+  ];
+  const group: ReconcileForwarderRow[] = [
+    fwd({ id: 80, ftrackingchn: "FAN", famount: 2, fweight: 20, fvolume: 0.12 }),
+    fwd({ id: 81, ftrackingchn: "FAN-2", famount: 1, fweight: 5, fvolume: 0.2 }),
+  ];
+  const plan = planBoxDetailReconcile(group, boxes);
+  assert.equal(plan.detailFixes.length, 0);
+  assert.equal(plan.bareZeroes.length, 0);
+  assert.equal(plan.reviews.length, 0);
+});
+
+
 console.log(`\nbox-detail-reconcile-plan.test.ts — ${passed} checks passed`);

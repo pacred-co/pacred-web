@@ -130,6 +130,44 @@ export function aggregateLiveMetricsByBase(
   return byBase;
 }
 
+/**
+ * Aggregate Live parcels keyed by their EXACT tracking ("-i/n" kept) — each entry
+ * is that ONE parcel's totals (per-piece × qty; a rare duplicate exact tracking sums).
+ *
+ * 🔴 WHY (owner 2026-07-20 · the PR179 1783582423 fanout): since the BOX-SPLIT model
+ * (2026-07-02) a base can hold N SIBLING tb_forwarder rows — one per "-i/n" — so a
+ * SPLIT-FAMILY row must be filled from ITS OWN parcel's totals, never the base
+ * aggregate. Filling every sibling with `aggregateLiveMetricsByBase` wrote the
+ * whole-shipment Σ (116 กล่อง · 2,007.28 kg) onto all 22 rows → Σ ตู้บวม ~22×.
+ * The base aggregate remains correct ONLY for a single-row family.
+ */
+export function aggregateLiveMetricsByExact(
+  parcels: readonly MomoLiveParcel[],
+): Map<string, AggregatedLiveMetrics> {
+  const byExact = new Map<string, AggregatedLiveMetrics>();
+  for (const p of parcels) {
+    const tracking = (p.tracking ?? "").trim();
+    if (!tracking) continue;
+    const t = parcelTotals(p);
+    const prev = byExact.get(tracking);
+    if (prev) {
+      prev.weightKg += t.weightKg;
+      prev.cbm += t.cbm;
+      prev.quantity += t.quantity;
+      prev.parcelCount += 1;
+    } else {
+      byExact.set(tracking, {
+        baseTracking: baseTrackingOf(tracking),
+        weightKg: t.weightKg,
+        cbm: t.cbm,
+        quantity: t.quantity,
+        parcelCount: 1,
+      });
+    }
+  }
+  return byExact;
+}
+
 /** The outcome of deciding whether to fill a tb_forwarder row's metrics. */
 export type MetricFillDecision = {
   /** True → write the Live totals (the row's weight AND volume are both empty). */

@@ -279,6 +279,38 @@ const CHECKS: CheckDef[] = [
     },
   },
   {
+    id: "aggregate_fanout_siblings",
+    title: "แถวพี่น้องถือยอดรวมชิปเม้นซ้ำกัน (fanout เบิ้ล)",
+    severity: "red",
+    why:
+      "2026-07-20 PR179 1783582423 — MOMO Live data-fill (ก่อนแก้) เขียนยอดรวมทั้งชิปเม้น (116 กล่อง/2,007kg/15.82คิว) " +
+      "ลงทุกแถวย่อยของ split family → Σ ตู้บวม ~22 เท่า · ต้นทุนโชว์ ฿880k · กำไร −฿868k",
+    action:
+      "ต้นตอปิดแล้ว (fillLiveDataForParcels = family-aware · cron pass-6 converge ทรง proper-split ได้) — " +
+      "แถวที่โผล่ = ของค้าง/ path ใหม่ที่หลุด → รัน scripts/heal-live-fanout-2026-07-20.ts pattern (plan-driven · dry-run ก่อน)",
+    run: async (_admin, ctx) => {
+      // signature: ≥2 LIVE siblings of one base sharing the EXACT (famount, fweight,
+      // fvolume) trio with famount>1. famount=1 twins (same-size product boxes) are
+      // legit — calibrated on prod 2026-07-20: only the real fanout family matched.
+      const out: Array<Record<string, unknown>> = [];
+      for (const [base, rows] of ctx.groups) {
+        if (rows.length < 2) continue;
+        const byTrio = new Map<string, FwdRow[]>();
+        for (const r of rows) {
+          if (r.famount <= 1 || r.fweight <= 0) continue;
+          const k = `${r.famount}|${r.fweight}|${r.fvolume}`;
+          byTrio.set(k, [...(byTrio.get(k) ?? []), r]);
+        }
+        for (const [trio, dup] of byTrio) {
+          if (dup.length >= 2) {
+            out.push({ base, userid: dup[0].userid, trio, rows: dup.length, ids: dup.map((d) => d.id).slice(0, 10) });
+          }
+        }
+      }
+      return { count: out.length, sample: cap(out) };
+    },
+  },
+  {
     id: "awaiting_payment_zero_price",
     title: "รอชำระเงิน (5) แต่ราคา ฿0 — เก็บเงินขาด",
     severity: "red",

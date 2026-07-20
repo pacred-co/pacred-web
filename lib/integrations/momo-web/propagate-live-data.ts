@@ -41,6 +41,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MomoLiveParcel } from "./types";
 import {
   aggregateLiveMetricsByBase,
+  aggregateLiveMetricsByExact,
   baseTrackingOf,
   decideMetricFill,
   type AggregatedLiveMetrics,
@@ -148,10 +149,12 @@ function r6(n: number): number {
  * Fill tb_forwarder measurements from an already-collected set of Live parcels
  * (the same boards the STATUS propagate fetched — one MOMO login serves both).
  *
- * Matching: a tb_forwarder row is looked up by BASE tracking (the whole-tracking
- * aggregate). We collect both the EXACT ftrackingchn values and their BASE forms
- * so a row stored under the base ("1782544029") OR under a suffixed exact form is
- * found; the write always uses the base aggregate.
+ * Matching: rows are looked up by BOTH the base and the exact suffixed trackings.
+ * 🔴 The WRITE source is FAMILY-AWARE (owner 2026-07-20 · the PR179 fanout):
+ *   - single-row family → the whole-base aggregate (the original model), but
+ *   - a SPLIT family (≥2 live sibling rows in the DB) → each row gets ITS OWN
+ *     parcel's totals (byExact) — never the base aggregate (that fanned the
+ *     whole-shipment Σ onto every sibling → Σ ตู้บวม ~22×).
  */
 export async function fillLiveDataForParcels(
   admin: SupabaseClient,
@@ -159,6 +162,11 @@ export async function fillLiveDataForParcels(
   result: LiveDataFillResult = emptyDataFillResult(),
 ): Promise<LiveDataFillResult> {
   const byBase = aggregateLiveMetricsByBase(parcels);
+  // 🔴 family-aware fill (owner 2026-07-20 · the PR179 fanout): since the BOX-SPLIT
+  // model a base can hold N SIBLING rows — a split-family row must be filled from ITS
+  // OWN parcel's totals (byExact), NEVER the base aggregate. The base aggregate is
+  // correct ONLY for a single-row family (the pre-split "one row per base" model).
+  const byExact = aggregateLiveMetricsByExact(parcels);
   result.baseTrackingsSeen = byBase.size;
   if (byBase.size === 0) return result;
 
@@ -168,18 +176,19 @@ export async function fillLiveDataForParcels(
   // reasonable representative; the money fields weight/cbm are the aggregate.)
   const exactTrackings = new Set<string>();
   const dimsByBase = new Map<string, { width: number; length: number; height: number }>();
+  const dimsByExact = new Map<string, { width: number; length: number; height: number }>();
   for (const p of parcels) {
     const t = (p.tracking ?? "").trim();
     if (!t) continue;
     exactTrackings.add(t);
     const base = baseTrackingOf(t);
-    if (!dimsByBase.has(base)) {
-      dimsByBase.set(base, {
-        width: Number(p.width) || 0,
-        length: Number(p.length) || 0,
-        height: Number(p.height) || 0,
-      });
-    }
+    const dims = {
+      width: Number(p.width) || 0,
+      length: Number(p.length) || 0,
+      height: Number(p.height) || 0,
+    };
+    if (!dimsByBase.has(base)) dimsByBase.set(base, dims);
+    if (!dimsByExact.has(t)) dimsByExact.set(t, dims);
   }
   const lookupKeys = Array.from(new Set<string>([...byBase.keys(), ...exactTrackings]));
 
@@ -203,14 +212,59 @@ export async function fillLiveDataForParcels(
   }
   result.matched = rowsById.size;
 
+  // ── FAMILY SIZE from the DATABASE (not from the Live parcels) ──
+  // A split family whose siblings Live doesn't list (advanced off the boards) still
+  // must NEVER get the base aggregate — count the DB's live sibling rows per base.
+  const familyCount = new Map<string, number>();
+  {
+    const bases = Array.from(
+      new Set(
+        Array.from(rowsById.values())
+          .map((r) => baseTrackingOf((r.ftrackingchn ?? "").trim()))
+          .filter(Boolean),
+      ),
+    );
+    const BCHUNK = 50;
+    for (let i = 0; i < bases.length; i += BCHUNK) {
+      const slice = bases.slice(i, i + BCHUNK);
+      const orExpr = slice.map((b) => `ftrackingchn.like.${b}%`).join(",");
+      const { data, error } = await admin
+        .from("tb_forwarder")
+        .select("ftrackingchn, fstatus")
+        .or(orExpr);
+      if (error) {
+        console.error("[fillLiveData] family-count lookup failed", { code: error.code, message: error.message });
+        result.errors.push({ scope: "family-count", message: `${error.code} ${error.message}` });
+        // fail CLOSED for the affected bases: treat them as split families (exact-only
+        // fill) — an unknown family size must never enable an aggregate write.
+        for (const b of slice) familyCount.set(b, 2);
+        continue;
+      }
+      for (const r of (data ?? []) as Array<{ ftrackingchn: string | null; fstatus: string | null }>) {
+        const t = (r.ftrackingchn ?? "").trim();
+        if (!t) continue;
+        const st = (r.fstatus ?? "").trim();
+        if (st === "" || st === "0" || st === "99") continue; // dead rows don't count
+        const b = baseTrackingOf(t);
+        if (!slice.includes(b)) continue; // LIKE prefix over-match (different tracking)
+        familyCount.set(b, (familyCount.get(b) ?? 0) + 1);
+      }
+    }
+  }
+
   for (const row of rowsById.values()) {
     // Resolve the aggregate for THIS row: its ftrackingchn may be the base
     // ("1782544029") or a suffixed exact ("1782544029-2"); reduce to base.
     const rowTracking = (row.ftrackingchn ?? "").trim();
     if (!rowTracking) continue;
     const base = baseTrackingOf(rowTracking);
-    const agg: AggregatedLiveMetrics | undefined = byBase.get(base);
-    if (!agg) continue; // matched by exact key but its base rolled up elsewhere — skip
+    // Split family (≥2 live sibling rows) → THIS row's own parcel totals only.
+    // Single-row family → the whole-base aggregate (the original model).
+    const isSplitFamily = (familyCount.get(base) ?? 1) > 1;
+    const agg: AggregatedLiveMetrics | undefined = isSplitFamily
+      ? byExact.get(rowTracking)
+      : byBase.get(base);
+    if (!agg) continue; // split row Live doesn't list / base rolled up elsewhere — skip
 
     // SKIP BILLED (defence #1 · the WHERE guard below is defence #2).
     if (BILLED_FSTATUS.has(row.fstatus ?? "")) {
@@ -232,7 +286,9 @@ export async function fillLiveDataForParcels(
     // WHERE keeps it TOCTOU-safe against a race into billing.
     if (
       agg.parcelCount === 1 &&
-      rowTracking === base &&
+      // single-row family: only the bare row (the original rule). Split family: agg
+      // is already THIS row's own parcel (byExact) → per-row sync is the correct count.
+      (isSplitFamily || rowTracking === base) &&
       agg.quantity > 0 &&
       Math.round(Number(row.famount ?? 0)) !== agg.quantity
     ) {
@@ -282,7 +338,10 @@ export async function fillLiveDataForParcels(
     // BLANK (the per-box dims live on the MOMO Live board breakdown). คิวรวม already
     // carries the total volume for pricing, so the row is money-complete without a
     // (misleading) merged dim.
-    const dims = agg.parcelCount === 1 ? dimsByBase.get(base) : undefined;
+    const dims =
+      agg.parcelCount === 1
+        ? (isSplitFamily ? dimsByExact.get(rowTracking) : dimsByBase.get(base))
+        : undefined;
     if (dims) {
       const hasNoDims =
         !(Number(row.fwidth ?? 0) > 0) &&

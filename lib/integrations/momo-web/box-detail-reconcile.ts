@@ -228,13 +228,17 @@ export async function reconcileMomoBoxDetailRows(
 
       // ── 2a. DETAIL fixes — converge a "-N/M" row to its box truth ──
       for (const fix of plan.detailFixes) {
-        const update: Record<string, number> = {
+        const update: Record<string, number | string> = {
           famount: fix.truth.famount,
           fweight: fix.truth.fweight,
           fvolume: fix.truth.fvolume,
           fwidth: fix.truth.fwidth,
           flength: fix.truth.flength,
           fheight: fix.truth.fheight,
+          // truth.fvolume is the row TOTAL (Σ of its own box) → latch famountcount='1'
+          // so no consumer re-multiplies by famount (the CBMProduct rule — same latch
+          // as adminUpdateMomoBoxDetails + the แต้ม reconcile).
+          famountcount: "1",
         };
         // A priced fix carries its own twin-corroborated re-price; an unpriced fix
         // leaves price to the engine re-price below (never write a guessed ฿).

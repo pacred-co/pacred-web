@@ -281,6 +281,20 @@ export function planBoxDetailReconcile(
   const barePrice = bare ? num(bare.ftotalprice) : 0;
   const bareIsPricedAnchor = bare != null && barePrice > 0;
 
+  // ── PROPER-SPLIT shape (owner rule 2026-07-18: "กล่อง 1 อยู่บน bare เสมอ · sibling
+  //    เริ่ม -2/n") — box_detail carries a REAL box row for the base itself (decided
+  //    basis · real weight) → the bare is BOX #1, not an aggregate header. The
+  //    suffix-only `totals` drops that box, so the whole-shipment Σ = totalsAll.
+  //    2026-07-20 PR179 incident: fillLiveDataForParcels (pre-fix) fanned the
+  //    whole-shipment Σ onto EVERY row of such a family — this shape lets the heal
+  //    converge it: each row (incl. the bare) → its OWN box truth. Never zeroed. ──
+  const bareBox = boxes.find((b) => suffixOf(b.boxTracking) <= 0) ?? null;
+  const bareBasis = bareBox ? resolveMomoBoxBasis(bareBox) : null;
+  const properSplit =
+    bare != null && bareBasis != null && bareBasis.decided && bareBasis.totalWeightKg > 0;
+  const totalsAllWeight = properSplit && bareBasis ? r2(totals.fweight + bareBasis.totalWeightKg) : totals.fweight;
+  const totalsAllFamount = properSplit && bareBasis ? totals.famount + bareBasis.pieces : totals.famount;
+
   // ── (b) CORRUPT "-N/M" DETAIL rows — converge to their own momo box truth ──
   for (const row of group) {
     if (suffixOf(row.ftrackingchn) <= 0) continue;   // suffixed detail rows only
@@ -332,20 +346,34 @@ export function planBoxDetailReconcile(
       reviews.push({ kind: "priced_anchor_bare", id: row.id, tracking: row.ftrackingchn });
       continue;
     }
-    // corroboration 1: the detail row COPIED the bare's aggregate (famount + weight + คิว).
+    // corroboration 1: the detail row COPIED the bare's aggregate (famount + weight + คิว)
+    // — OR (proper-split fanout · 2026-07-20 PR179) it copied the WHOLE-SHIPMENT Σ
+    // (exact famount match + weight within TOL). The second form is bare-independent,
+    // so a partially-healed family (bare already converged) still heals its siblings.
     const copiesAggregate =
       curAmount === Math.round(num(bare.famount)) &&
       relDiff(num(row.fweight), num(bare.fweight)) <= TOL &&
       relDiff(num(row.fvolume), num(bare.fvolume)) <= TOL;
-    if (!copiesAggregate) {
+    const copiesWholeShipment =
+      properSplit &&
+      totals.count > 1 &&
+      curAmount === totalsAllFamount &&
+      relDiff(num(row.fweight), totalsAllWeight) <= TOL;
+    if (!copiesAggregate && !copiesWholeShipment) {
       reviews.push({ kind: "amount_inflated_not_bare_aggregate", id: row.id, tracking: row.ftrackingchn });
       continue;
     }
     // corroboration 2: momo RECONCILES the aggregate (bare.fweight ≈ Σ momo per-box).
     // REFUSES the MOMO-มั่ว case (Σ is a ×N tonnage vs the real bare). `undecided>0`
     // means some box's convention was unprovable, so the Σ is a guess → never spend it.
+    // Classic shape: the BARE carries the suffix-only Σ. Proper-split fanout shape:
+    // THE ROW ITSELF carries the whole-shipment Σ (incl. the bare's own box) — checked
+    // against the row (not the bare) so a partially-healed bare can't strand siblings.
     const momoReconciles =
-      totals.count > 1 && totals.undecided === 0 && relDiff(num(bare.fweight), totals.fweight) <= TOL;
+      totals.count > 1 &&
+      totals.undecided === 0 &&
+      (relDiff(num(bare.fweight), totals.fweight) <= TOL ||
+        (properSplit && relDiff(num(row.fweight), totalsAllWeight) <= TOL));
     if (!momoReconciles) {
       reviews.push({ kind: "momo_does_not_reconcile_aggregate", id: row.id, tracking: row.ftrackingchn });
       continue;
@@ -382,8 +410,45 @@ export function planBoxDetailReconcile(
     });
   }
 
+  // ── (c) PROPER-SPLIT bare carrying the WHOLE-SHIPMENT Σ — converge to its OWN box ──
+  // (2026-07-20 PR179 fanout: fillLiveDataForParcels wrote the family Σ onto the bare
+  // too. The bare is BOX #1 — it must hold its own box truth, NEVER be zeroed and
+  // NEVER keep the family Σ.) Guards: unbilled · unpriced (a priced bare is the anchor
+  // model → hands off) · momo Σ trustworthy · the bare provably carries the ALL-boxes Σ
+  // and NOT the suffix-only Σ (that would be the classic zero-case, handled in (a)).
+  let bareFixPlanned = false;
+  if (properSplit && bare && bareBasis && bareBox && !isBilled(bare.fstatus) && !bareIsPricedAnchor) {
+    const bareAmount = Math.round(num(bare.famount));
+    const bareCarriesAll =
+      totals.count > 1 &&
+      totals.undecided === 0 &&
+      relDiff(num(bare.fweight), totalsAllWeight) <= TOL &&
+      relDiff(num(bare.fweight), totals.fweight) > TOL;
+    const drifted =
+      bareAmount > bareBasis.pieces || relDiff(num(bare.fweight), bareBasis.totalWeightKg) > TOL;
+    if (bareCarriesAll && drifted) {
+      detailFixes.push({
+        id: bare.id,
+        tracking: bare.ftrackingchn,
+        truth: {
+          famount: bareBasis.pieces,
+          fweight: bareBasis.totalWeightKg,
+          fvolume: bareBasis.totalCbm,
+          fwidth: r2(num(bareBox.width)),
+          flength: r2(num(bareBox.length)),
+          fheight: r2(num(bareBox.height)),
+        },
+        priced: false,
+        newPrice: 0,
+        twinId: null,
+        twinPrice: null,
+      });
+      bareFixPlanned = true;
+    }
+  }
+
   // ── (a) LEFTOVER aggregate-weight BARE base — zero it (redundant double-count) ──
-  if (bare && !isBilled(bare.fstatus) && !bareIsPricedAnchor) {
+  if (!bareFixPlanned && bare && !isBilled(bare.fstatus) && !bareIsPricedAnchor) {
     const siblings = group.filter((r) => suffixOf(r.ftrackingchn) > 0);
     const hasBoxSibling = siblings.length > 0;
     const alreadyZero =
@@ -401,12 +466,18 @@ export function planBoxDetailReconcile(
       if (isTrueAggregate && siblingsCoverShipment) {
         bareZeroes.push({ id: bare.id, tracking: bare.ftrackingchn, trueSum: totals });
       } else if (num(bare.fweight) > 0) {
-        // a weighted bare that isn't a clean, sibling-covered aggregate → don't guess.
-        reviews.push({
-          kind: isTrueAggregate ? "aggregate_bare_siblings_dont_cover" : "weighted_bare_not_clean_aggregate",
-          id: bare.id,
-          tracking: bare.ftrackingchn,
-        });
+        // a HEALTHY proper-split bare (holds its OWN box truth) is the EXPECTED shape
+        // (owner rule: กล่อง 1 อยู่บน bare) — not review noise.
+        const healthyProperSplit =
+          properSplit && bareBasis != null && relDiff(num(bare.fweight), bareBasis.totalWeightKg) <= TOL;
+        if (!healthyProperSplit) {
+          // a weighted bare that isn't a clean, sibling-covered aggregate → don't guess.
+          reviews.push({
+            kind: isTrueAggregate ? "aggregate_bare_siblings_dont_cover" : "weighted_bare_not_clean_aggregate",
+            id: bare.id,
+            tracking: bare.ftrackingchn,
+          });
+        }
       }
     }
   }
