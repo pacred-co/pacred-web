@@ -321,7 +321,20 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
 
   // ── ติ๊กเลือก — เลือกได้เฉพาะแถวที่ "ยังไม่เข้าระบบ" และอยู่ในผลกรองปัจจุบัน ──
   const allPendingIds = useMemo(
-    () => filtered.filter((t) => !t.committed && !rowResult[t.id]?.ok).map((t) => t.id),
+    () => {
+      const pending = filtered.filter((t) => !t.committed && !rowResult[t.id]?.ok);
+      // a family must commit ONE shape (the box rows OR the bare aggregate — the
+      // commit chokepoint refuses the other anyway). Select-all prefers the box
+      // rows (real per-box dims) → skip the bare when pending box siblings exist.
+      const suffixBases = new Set(
+        pending
+          .filter((t) => t.tracking && baseTracking(t.tracking) !== t.tracking)
+          .map((t) => baseTracking(t.tracking!) ?? ""),
+      );
+      return pending
+        .filter((t) => !(t.tracking && baseTracking(t.tracking) === t.tracking && suffixBases.has(t.tracking)))
+        .map((t) => t.id);
+    },
     [filtered, rowResult],
   );
   const selectedTracks = useMemo(() => tracks.filter((t) => sel.has(t.id) && !t.committed), [tracks, sel]);
@@ -866,9 +879,16 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
               const grouped = fam.length > 1 || fam.some((x) => (x.tracking ?? "") !== base)
                 || (fam.length === 1 && fam[0].boxes.length > 0);
               const famFid = fam.map((x) => x.committedForwarderId).find((v) => v != null) ?? null;
-              const famQty = fam.reduce((sm, x) => sm + (x.qty ?? 0), 0);
-              const famWt = fam.reduce((sm, x) => sm + (x.weightKg || 0), 0);
-              const famCbm = fam.reduce((sm, x) => sm + (x.cbm || 0), 0);
+              // Σ over COUNTABLE members (owner 2026-07-19 "Σ 50 กล่อง = เบิ้ล"): when MOMO
+              // sends BOTH the bare AGGREGATE row (qty = ทั้งชิปเม้น) AND the -N/M box rows,
+              // the bare duplicates the boxes → Σ counts the box rows only (the same
+              // countable-members rule as momo-bill-header on tb_forwarder).
+              const hasBareMember = fam.some((x) => (x.tracking ?? "") === base);
+              const hasSuffixMembers = fam.some((x) => (x.tracking ?? "") !== base);
+              const countable = hasBareMember && hasSuffixMembers ? fam.filter((x) => (x.tracking ?? "") !== base) : fam;
+              const famQty = countable.reduce((sm, x) => sm + (x.qty ?? 0), 0);
+              const famWt = countable.reduce((sm, x) => sm + (x.weightKg || 0), 0);
+              const famCbm = countable.reduce((sm, x) => sm + (x.cbm || 0), 0);
               const isOpen = !grouped || openFams.has(base);
               // CG box-number consistency (owner 2026-07-19 · เลขกล่อง): the CG range's
               // box count must equal the tracking's Total Parcel — flag any mismatch.
@@ -912,7 +932,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                                 <span className="font-mono text-[13px] font-bold text-foreground">{base}</span>
                               )}
                               <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-600">
-                                {fam.length > 1 ? `${fam.length} แทรค` : `${famQty || fam[0].boxes.length} กล่อง`}
+                                {famQty > 0 ? `${famQty} กล่อง` : fam.length > 1 ? `${fam.length} แทรค` : `${fam[0].boxes.length} กล่อง`}
                               </span>
                               {famCgMismatch && (
                                 <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10.5px] font-bold text-amber-700"
@@ -977,7 +997,15 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                     return (
                       <td key={key} className={c.tdClass} title={c.tdTitle?.(t)}>
                         {isMember && key === "tracking" ? (
-                          <span className="inline-flex items-center gap-1 pl-2"><span className="text-sky-500">↳</span>{c.td(t)}</span>
+                          <span className="inline-flex items-center gap-1 pl-2">
+                            <span className="text-sky-500">↳</span>{c.td(t)}
+                            {grouped && (t.tracking ?? "") === base && hasSuffixMembers && (
+                              <span className="rounded bg-slate-200 px-1 py-0.5 text-[10px] font-semibold text-slate-500"
+                                title="แถวรวมของ MOMO (ยอดทั้งชิปเม้น) — Σ หัวชิปเม้นไม่นับแถวนี้ซ้ำ · กดนำเข้าได้อย่างใดอย่างหนึ่ง (ระบบกันเบิ้ลให้)">
+                                แถวรวม
+                              </span>
+                            )}
+                          </span>
                         ) : isMember && key === "smNumber" ? (
                           DASH /* เลขออเดอร์อยู่ที่หัวชิปเม้นแล้ว — แถวลูก = แทรคกิ้ง */
                         ) : c.td(t)}
