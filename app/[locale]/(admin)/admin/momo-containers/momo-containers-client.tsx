@@ -642,12 +642,12 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           {t.sack && <div className="text-[11px] text-muted">กระสอบ: {t.sack}</div>}
           {t.momoGarbage && (
             <div className="mt-0.5 inline-flex items-center gap-0.5 rounded bg-red-600 px-1 py-0.5 text-[11px] font-bold text-white"
-              title={`MOMO มั่ว — box_detail ${t.momoGarbage.boxCount} กล่อง รวม${
+              title={`ตัวเลข MOMO ขัดกันเอง — กล่องย่อย (box_detail) ${t.momoGarbage.boxCount} กล่อง รวม${
                 t.momoGarbage.reason === "weight"
                   ? `น้ำหนัก ${n2(t.momoGarbage.boxWeightSum)} กก. เกินก้อนรวม ${n2(t.momoGarbage.aggWeight)} กก.`
                   : `คิว ${n6(t.momoGarbage.boxCbmSum)} เกินก้อนรวม ${n6(t.momoGarbage.aggCbm)}`
               } · ขนาดกล่องก็เช็คไม่ได้ → แตกกล่องอัตโนมัติไม่ได้ · ต้องอัพ packing list แต้ม`}>
-              🚩 MOMO มั่ว
+              🚩 ข้อมูล MOMO ขัดกันเอง
             </div>
           )}
         </>
@@ -731,7 +731,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           <button type="button" onClick={() => setTab("garbage")}
             className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${tab === "garbage" ? "bg-red-600 text-white" : "bg-red-100 text-red-700 hover:bg-red-200"}`}
             title="MOMO ส่งน้ำหนัก/คิว ต่อกล่อง ขัดกับก้อนรวม (แถวย่อยหนักเกินก้อนรวม) · ระบบแตกกล่องอัตโนมัติไม่ได้ → ต้องอัพ packing list แต้ม">
-            🚩 MOMO มั่ว {counts.garbage}
+            🚩 ข้อมูล MOMO ขัดกัน {counts.garbage}
           </button>
         )}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหา แทรคกิ้ง / PR / เลขตู้…"
@@ -857,7 +857,12 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
               // STRIPPED base number (Σ กล่อง/นน./คิว) — clickable into the order once any
               // member is committed. Every staging tracking then nests as an ↳ member.
               const base = baseTracking(fam[0].tracking ?? "") ?? (fam[0].tracking ?? "");
-              const grouped = fam.length > 1 || fam.some((x) => (x.tracking ?? "") !== base);
+              // A shipment is collapsible when it has ANY per-box detail to show:
+              // multiple staging rows, a suffixed member, OR a single bare row whose
+              // boxes live in box_detail (owner 2026-07-19 "ทำไมบางงานไม่กรุ๊ป") —
+              // every shipment renders the SAME dropdown, no two looks.
+              const grouped = fam.length > 1 || fam.some((x) => (x.tracking ?? "") !== base)
+                || (fam.length === 1 && fam[0].boxes.length > 0);
               const famFid = fam.map((x) => x.committedForwarderId).find((v) => v != null) ?? null;
               const famQty = fam.reduce((sm, x) => sm + (x.qty ?? 0), 0);
               const famWt = fam.reduce((sm, x) => sm + (x.weightKg || 0), 0);
@@ -898,7 +903,9 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                               ) : (
                                 <span className="font-mono text-[13px] font-bold text-foreground">{base}</span>
                               )}
-                              <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-600">{fam.length} แทรค</span>
+                              <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-600">
+                                {fam.length > 1 ? `${fam.length} แทรค` : `${famQty || fam[0].boxes.length} กล่อง`}
+                              </span>
                               {famCgMismatch && (
                                 <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10.5px] font-bold text-amber-700"
                                   title="ช่วงเลขกล่อง CG ของบางแทรคไม่ตรงกับจำนวนกล่อง (Total Parcel) — ข้อมูล MOMO ขัดกันเอง ตรวจสอบ">
@@ -971,7 +978,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                 {/* กล่องย่อยของ MOMO (box_detail) — โชว์เฉพาะเมื่อชิปเม้นมี staging แถวเดียว
                     (แถวรวมที่กล่องแตกอยู่ใน box_detail) · ครอบครัวที่มีแถว -N อยู่แล้ว = แถวลูก
                     ด้านบนคือกล่องตัวจริง → ไม่ nest ซ้ำ (เคย 18 หัว × 18 กล่อง = เบิ้ลมโหฬาร) */}
-                {!grouped && t.boxes.map((box, bi) => (
+                {fam.length === 1 && isOpen && t.boxes.map((box, bi) => (
                   <tr key={`${t.id}-b${bi}`} className="bg-sky-50/40 text-[11px]">
                     <td className="px-2 py-1 text-center text-muted" title="กล่องย่อยจาก MOMO (box_detail)">📦</td>
                     {colOrder.map((key) => {
