@@ -663,6 +663,11 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
               🚩 ข้อมูล MOMO ขัดกันเอง
             </div>
           )}
+          {t.momoGarbage && (
+            <div className="mt-0.5 text-[10px] leading-tight text-red-600">
+              นำเข้าระบบได้ปกติ · ระบบจะยังไม่แตกกล่อง/ไม่เชื่อตัวเลขชุดนี้ จนกว่าอัพ packing list ยืนยัน
+            </div>
+          )}
         </>
       ),
     },
@@ -886,9 +891,24 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
               const hasBareMember = fam.some((x) => (x.tracking ?? "") === base);
               const hasSuffixMembers = fam.some((x) => (x.tracking ?? "") !== base);
               const countable = hasBareMember && hasSuffixMembers ? fam.filter((x) => (x.tracking ?? "") !== base) : fam;
-              const famQty = countable.reduce((sm, x) => sm + (x.qty ?? 0), 0);
-              const famWt = countable.reduce((sm, x) => sm + (x.weightKg || 0), 0);
-              const famCbm = countable.reduce((sm, x) => sm + (x.cbm || 0), 0);
+              // boxes MOMO's box_detail (Live) knows but the feed did NOT stage as rows
+              // (e.g. PR075 888073011722: staged only -2/2 while Live has -1/2 + -2/2) —
+              // surface them so the shipment count/box list is COMPLETE (owner 2026-07-19
+              // "มี 2 กล่อง นายบอกกล่องเดียว"). Only for mixed families; a bare-only family's
+              // nest IS its boxes (already counted by the bare's qty).
+              const memberTrackings = new Set(fam.map((x) => (x.tracking ?? "").trim()).filter(Boolean));
+              const extraBoxes = hasSuffixMembers
+                ? (fam[0].boxes ?? []).filter((b) => b.tracking && !memberTrackings.has(b.tracking.trim()))
+                : [];
+              const famQty = countable.reduce((sm, x) => sm + (x.qty ?? 0), 0) + extraBoxes.reduce((sm, b) => sm + (b.qty || 0), 0);
+              const famWt = countable.reduce((sm, x) => sm + (x.weightKg || 0), 0) + extraBoxes.reduce((sm, b) => sm + (b.weight || 0), 0);
+              const famCbm = countable.reduce((sm, x) => sm + (x.cbm || 0), 0) + extraBoxes.reduce((sm, b) => sm + (b.cbm || 0), 0);
+              // header checkbox = เลือกทั้งชิปเม้น (the selectable members · bare excluded —
+              // the box rows are the commit shape; the chokepoint guards the rest)
+              const famSelectableIds = fam
+                .filter((x) => !x.committed && !rowResult[x.id]?.ok && !(hasSuffixMembers && (x.tracking ?? "") === base))
+                .map((x) => x.id);
+              const famAllSel = famSelectableIds.length > 0 && famSelectableIds.every((id) => sel.has(id));
               const isOpen = !grouped || openFams.has(base);
               // CG box-number consistency (owner 2026-07-19 · เลขกล่อง): the CG range's
               // box count must equal the tracking's Total Parcel — flag any mismatch.
@@ -907,6 +927,17 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                           className="inline-flex items-center gap-1 text-[11px] font-bold text-primary-700 hover:underline">
                           #{famFid}
                         </Link>
+                      ) : famSelectableIds.length > 0 ? (
+                        <input type="checkbox" className="h-4 w-4 cursor-pointer accent-primary-600"
+                          title="เลือกทั้งชิปเม้น (ทุกแทรคกิ้งพร้อมนำเข้า)"
+                          checked={famAllSel}
+                          onChange={() => setSel((prev) => {
+                            const nx = new Set(prev);
+                            if (famAllSel) famSelectableIds.forEach((id) => nx.delete(id));
+                            else famSelectableIds.forEach((id) => nx.add(id));
+                            return nx;
+                          })}
+                        />
                       ) : (
                         <span className="text-[13px]" title="ชิปเม้นนี้ยังไม่นำเข้าระบบ">📦</span>
                       )}
@@ -949,8 +980,12 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                         case "vol": case "totalVol":
                           node = <span className="font-bold">Σ {famCbm.toLocaleString("en-US", { maximumFractionDigits: 6 })}</span>; break;
                         // shared per-shipment fields — render from the first member
+                        case "status":
+                          // the bare aggregate's status is often STALE ("รอต้นทางส่งเข้าโกดัง"
+                          // while the box rows already say "ปิดรอบรถแล้ว") — show the box rows'
+                          node = c ? c.td(countable[0] ?? fam[0]) : null; break;
                         case "image": case "container": case "trans": case "smDate": case "type":
-                        case "code": case "status": case "etd": case "eta":
+                        case "code": case "etd": case "eta":
                           node = c ? c.td(fam[0]) : null; break;
                         default: node = null;
                       }
@@ -958,7 +993,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                     })}
                   </tr>
                 )}
-                {isOpen && fam.map((t) => {
+                {isOpen && fam.filter((t) => !(hasSuffixMembers && (t.tracking ?? "") === base)).map((t) => {
               const i = n++;
               const rr = rowResult[t.id];
               const done = t.committed || rr?.ok;
@@ -1016,7 +1051,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                 {/* กล่องย่อยของ MOMO (box_detail) — โชว์เฉพาะเมื่อชิปเม้นมี staging แถวเดียว
                     (แถวรวมที่กล่องแตกอยู่ใน box_detail) · ครอบครัวที่มีแถว -N อยู่แล้ว = แถวลูก
                     ด้านบนคือกล่องตัวจริง → ไม่ nest ซ้ำ (เคย 18 หัว × 18 กล่อง = เบิ้ลมโหฬาร) */}
-                {fam.length === 1 && isOpen && t.boxes.map((box, bi) => (
+                {!hasSuffixMembers && isOpen && t.boxes.map((box, bi) => (
                   <tr key={`${t.id}-b${bi}`} className="bg-sky-50/40 text-[11px]">
                     <td className="px-2 py-1 text-center text-muted" title="กล่องย่อยจาก MOMO (box_detail)">📦</td>
                     {colOrder.map((key) => {
@@ -1028,6 +1063,16 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                 </Fragment>
               );
             })}
+                {/* กล่องที่ Live รู้แต่ feed ไม่ส่งมาเป็นแถว (complement) — โชว์ให้ครบชิปเม้น */}
+                {isOpen && extraBoxes.map((box, bi) => (
+                  <tr key={`extra-${base}-${bi}`} className="bg-sky-50/40 text-[11px]">
+                    <td className="px-2 py-1 text-center text-muted" title="กล่องจาก MOMO Live (box_detail) ที่ feed ยังไม่ส่งมาเป็นแถว — นับรวมใน Σ หัวชิปเม้นแล้ว">📦</td>
+                    {colOrder.map((key) => {
+                      const c = colDefs[key];
+                      return <td key={key} className={c?.tdClass ?? "px-2 py-1"}>{boxCell(box, key)}</td>;
+                    })}
+                  </tr>
+                ))}
                 </Fragment>
               );
             }); })()}
