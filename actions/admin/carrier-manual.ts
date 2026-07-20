@@ -44,6 +44,7 @@ import {
   isCarrierKey,
 } from "@/lib/carrier/registry";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { ADDRESSES } from "@/components/seo/site";
 import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
 
@@ -143,6 +144,10 @@ export async function adminCarrierManualInsert(
     return { ok: false, error: "unknown_carrier" };
   }
   const carrier = CARRIER_REGISTRY[d.carrier];
+
+  // 🔒 cabinet tier guard (owner 2026-07-20) — เลขตู้ต้องเป็นตู้จริง ไม่ใช่เลขกระสอบ/placeholder
+  const cabGuard = cabinetWriteGuard({ next: d.cabinetNumber.trim() });
+  if (!cabGuard.ok) return { ok: false, error: cabGuard.reason };
 
   return withAdmin<{ fid: number }>(
     // Wave 26 G5 (2026-05-28 ดึก) — audited against the legacy owner matrix.

@@ -11,11 +11,14 @@ import { useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, FileEdit, CheckCircle2, BarChart3, Plus, Trash2 } from "lucide-react";
 import type { ContentItem } from "@/lib/marketing-planner/types";
 import { usePlanner } from "@/lib/marketing-planner/store";
+import { ContentLibrary } from "./content-library";
 import { isResultEmpty } from "@/lib/marketing-planner/performance";
 import { pad2, TH_DAYS, TH_MONTHS, monthMatrix, sameYmd, toDateStr, weekDays } from "@/lib/marketing-planner/util";
 import { btnGhost, cx, useConfirm } from "./ui";
 
-type ViewMode = "month" | "week" | "day";
+/** โหมดดู — "table" คือข้อมูลชุดเดียวกับปฏิทิน แต่มองเป็นตาราง excel แก้ในตัวได้
+ *  (owner 2026-07-20 "สลับเป็นโหมดตาราง ก็คือเป็นข้อมูลตามในปฏิทินทั้งหมดแต่เป็นตาราง"). */
+type ViewMode = "month" | "week" | "day" | "table";
 
 function flags(c: ContentItem, labelOf: (id?: string) => string) {
   const draft = c.links.some((l) => /draft|ดราฟ|ร่าง/i.test(labelOf(l.linkTypeId)));
@@ -89,6 +92,13 @@ export function ContentCalendar({ items, onOpenContent, onCreateOn }: { items?: 
   const curYear = view === "month" ? year : ref.getFullYear();
   const curMonth = view === "month" ? month : ref.getMonth();
   const monthPrefix = `${curYear}-${pad2(curMonth + 1)}`;
+  // สร้างจาก byDate ตัวเดียวกับที่ปฏิทินวาด (ไม่ใช่กรอง src เอง) — โหมดตารางจึงเห็น
+  // "ของเดือนนี้" ชุดเดียวกับที่ปฏิทินเห็นเสมอ นับไม่มีทางเพี้ยนกัน
+  const monthItems = useMemo(() => {
+    const out: ContentItem[] = [];
+    for (const [ds, arr] of byDate) if (ds.startsWith(monthPrefix)) out.push(...arr);
+    return out.sort((a, b) => (a.publishDate ?? "").localeCompare(b.publishDate ?? ""));
+  }, [byDate, monthPrefix]);
   const monthIds = useMemo(() => {
     const ids: string[] = [];
     for (const [ds, arr] of byDate) if (ds.startsWith(monthPrefix)) for (const c of arr) ids.push(c.id);
@@ -154,10 +164,10 @@ export function ContentCalendar({ items, onOpenContent, onCreateOn }: { items?: 
             </button>
           )}
           <div className="inline-flex rounded-lg border border-border p-0.5">
-            {(["month", "week", "day"] as ViewMode[]).map((v) => (
+            {(["month", "week", "day", "table"] as ViewMode[]).map((v) => (
               <button key={v} type="button" onClick={() => setView(v)}
                 className={cx("rounded-md px-3 py-1 text-[12px] font-medium transition", view === v ? "bg-primary-600 text-white" : "text-muted hover:text-foreground")}>
-                {v === "month" ? "เดือน" : v === "week" ? "สัปดาห์" : "วัน"}
+                {v === "month" ? "เดือน" : v === "week" ? "สัปดาห์" : v === "day" ? "วัน" : "ตาราง"}
               </button>
             ))}
           </div>
@@ -167,6 +177,17 @@ export function ContentCalendar({ items, onOpenContent, onCreateOn }: { items?: 
       {view === "month" && <MonthGrid year={year} month={month} byDate={byDate} onOpen={onOpenContent} onCreate={onCreateOn} onDrop={drop} onSeeAll={(d) => { setRef(d); setView("day"); }} />}
       {view === "week" && <DayColumns days={weekDays(ref)} byDate={byDate} onOpen={onOpenContent} onCreate={onCreateOn} onDrop={drop} />}
       {view === "day" && <DayColumns days={[ref]} byDate={byDate} onOpen={onOpenContent} onCreate={onCreateOn} onDrop={drop} wide />}
+      {view === "table" && (
+        <>
+          <p className="mb-2 text-[12px] text-muted">
+            ตารางของเดือน {TH_MONTHS[curMonth]} {curYear + 543}{" — "}ข้อมูลชุดเดียวกับปฏิทิน แก้ในช่องได้เลย
+            (แก้ &quot;วันลง&quot; = การ์ดย้ายในปฏิทินทันที)
+          </p>
+          {/* ใช้ ContentLibrary ตัวเดียวกับแท็บคลังคอนเทนต์ — ไม่สร้างตารางที่สอง
+              ที่ต้องมาไล่แก้ให้ตรงกันทีหลัง */}
+          <ContentLibrary items={monthItems} onOpen={onOpenContent} onEdit={onOpenContent} onResult={onOpenContent} />
+        </>
+      )}
     </div>
   );
 }

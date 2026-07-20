@@ -32,13 +32,26 @@ export type CmsArticle = {
   caseRating: number | null;
   caseRoute: string;
   caseFacts: CaseFact[];
+  // English translation (mig 0265) — blank = fall back to Thai. Consumers should
+  // NOT read these directly; call localizeCmsArticle() once and use the normal
+  // fields, so every surface localises the same way.
+  titleEn: string;
+  excerptEn: string;
+  bodyEn: string;
+  metaTitleEn: string;
+  metaDescriptionEn: string;
+  caseRouteEn: string;
+  casePriceEn: string;
+  caseFactsEn: CaseFact[];
   publishedAt: string | null;
 };
 
 const COLS =
   "id, category, title, slug, excerpt, cover_url, body, sub_category, " +
   "meta_title, meta_description, tags, video_url, gallery_images, " +
-  "case_price, case_rating, case_route, case_facts, published_at";
+  "case_price, case_rating, case_route, case_facts, " +
+  "title_en, excerpt_en, body_en, meta_title_en, meta_description_en, " +
+  "case_route_en, case_price_en, case_facts_en, published_at";
 
 type Row = {
   id: number;
@@ -58,6 +71,14 @@ type Row = {
   case_rating: number | string | null;
   case_route: string | null;
   case_facts: CaseFact[] | null;
+  title_en: string | null;
+  excerpt_en: string | null;
+  body_en: string | null;
+  meta_title_en: string | null;
+  meta_description_en: string | null;
+  case_route_en: string | null;
+  case_price_en: string | null;
+  case_facts_en: CaseFact[] | null;
   published_at: string | null;
 };
 
@@ -80,7 +101,41 @@ function mapRow(r: Row): CmsArticle {
     caseRating: r.case_rating == null ? null : Number(r.case_rating),
     caseRoute: r.case_route ?? "",
     caseFacts: Array.isArray(r.case_facts) ? r.case_facts : [],
+    titleEn: r.title_en ?? "",
+    excerptEn: r.excerpt_en ?? "",
+    bodyEn: r.body_en ?? "",
+    metaTitleEn: r.meta_title_en ?? "",
+    metaDescriptionEn: r.meta_description_en ?? "",
+    caseRouteEn: r.case_route_en ?? "",
+    casePriceEn: r.case_price_en ?? "",
+    caseFactsEn: Array.isArray(r.case_facts_en) ? r.case_facts_en : [],
     publishedAt: r.published_at,
+  };
+}
+
+/**
+ * Swap the English translation in for an EN visitor, field by field, FALLING
+ * BACK to the Thai whenever a field is blank (mig 0265 · owner 2026-07-20).
+ *
+ * Per-field (not all-or-nothing) on purpose: a half-translated case still reads
+ * better than one that flips wholesale to Thai because a single field is empty.
+ * Language-neutral fields (slug · cover · gallery · video · rating · tags) are
+ * never touched — one case stays one URL with one set of stats.
+ *
+ * Call this ONCE right after fetching; downstream code keeps using `.title` etc.
+ */
+export function localizeCmsArticle(a: CmsArticle, locale: "th" | "en"): CmsArticle {
+  if (locale !== "en") return a;
+  return {
+    ...a,
+    title: a.titleEn || a.title,
+    excerpt: a.excerptEn || a.excerpt,
+    body: a.bodyEn || a.body,
+    metaTitle: a.metaTitleEn || a.metaTitle,
+    metaDescription: a.metaDescriptionEn || a.metaDescription,
+    caseRoute: a.caseRouteEn || a.caseRoute,
+    casePrice: a.casePriceEn || a.casePrice,
+    caseFacts: a.caseFactsEn.length > 0 ? a.caseFactsEn : a.caseFacts,
   };
 }
 

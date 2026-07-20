@@ -32,6 +32,7 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { parseTaemReconcile } from "@/lib/admin/taem-reconcile-parser";
 import { collectContainerEtdEta } from "@/lib/admin/taem-etd-eta";
 import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
+import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 
 const schema = z.object({ text: z.string().min(5).max(500_000) });
@@ -450,7 +451,9 @@ export async function applyTaemReconcile(input: unknown): Promise<AdminActionRes
       if (r.taemWt != null) updates.fweight = r.taemWt;
       if (r.taemVol != null) updates.fvolume = r.taemVol;
       if (r.taemParcel != null) updates.famount = r.taemParcel;
-      if (r.taemContainer) updates.fcabinetnumber = r.taemContainer;
+      // 🔒 cabinet tier guard (owner 2026-07-20) — a sack (CBX…)/MOMO-placeholder id
+      // in the file must never land at the ตู้ tier (TTW ตู้ ids pass as-sent).
+      if (r.taemContainer && !isNonContainerCabinetId(r.taemContainer)) updates.fcabinetnumber = r.taemContainer;
       if (transport) updates.ftransporttype = transport;
 
       // TOCTOU: re-assert non-billed in the WHERE so a row that got billed between

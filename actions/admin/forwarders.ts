@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { advanceLinkedShopOrder } from "@/lib/admin/advance-linked-shop-order";
 import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
+import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { canAdvanceCreditCustomer, isCreditRow } from "@/lib/forwarder/credit-advance-guard";
 import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
 import { sendNotification } from "@/lib/notifications";
@@ -95,6 +96,14 @@ export async function adminUpdateForwarder(input: UpdateForwarderInput): Promise
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
   const d = parsed.data;
+
+  // 🔒 cabinet tier guard (owner 2026-07-20) — เลขตู้ต้องเป็นตู้จริง ไม่ใช่เลขกระสอบ
+  // (CBX…)/รอบแพค (Packing ID บนกล่อง). Guard here covers the !statusChanged
+  // metaUpdate write; the statusChanged path delegates to the bulk action (guarded).
+  if (d.cabinet_number != null && d.cabinet_number.trim() !== "") {
+    const cabGuard = cabinetWriteGuard({ next: d.cabinet_number.trim() });
+    if (!cabGuard.ok) return { ok: false, error: cabGuard.reason };
+  }
 
   return withAdmin(["ops"], async ({ adminId }) => {
     const admin = createAdminClient();
@@ -528,6 +537,10 @@ export async function adminBulkUpdateForwarderTbStatus(
     // (backward-safe: prod has 0 locked rows until staff lock one).
     if (cabinet_number !== undefined && cabinet_number.trim() !== "") {
       const newCabinet = cabinet_number.trim();
+      // 🔒 cabinet tier guard (owner 2026-07-20) — refuse sack (CBX…)/packing-batch
+      // (SEA0625-…) labels as ตู้ before the per-row lock check below.
+      const tierGuard = cabinetWriteGuard({ next: newCabinet });
+      if (!tierGuard.ok) return { ok: false, error: tierGuard.reason };
       const lockedConflicts = beforeRows.filter(
         (r) =>
           r.fcabinet_locked === true &&

@@ -516,20 +516,14 @@ const blockApiForwarderUpdate: MenuItem = {
   labelKey: "apiForwarderUpdate.title",
   icon: "Wand2",
   children: [
-    // A3 (2026-07-13) — momoPending badge = MOMO tracks synced but not yet committed to a
-    // billable tb_forwarder row (momo_import_tracks.committed_at IS NULL). Now that the
-    // owner turned MOMO_CRON_AUTOCOMMIT ON, this shows the depth of what's still pending
-    // /review so staff can see when the auto-commit is caught up (or has a backlog).
-    { labelKey: "apiForwarderUpdate.momo", href: "/admin/api-forwarder-momo", icon: "Truck", badge: "momoPending" },
-    // ภูม 2026-07-14 — "MOMO ตรวจตู้": หน้ายึดตู้ เทียบระบบ vs packing list ต่อตู้
-    // (กล่อง/น้ำหนักตรงไหม + แทร็กที่ API ขาด) ก่อน/หลัง commit.
-    { labelKey: "apiForwarderUpdate.momoContainers", href: "/admin/momo-containers", icon: "PackageCheck" },
-    // ภูม 2026-06-30 — ทางลัด "MOMO (Live)" ใต้ MOMO เพื่อกดเข้าหน้าค้นข้อมูลสด
-    // ได้เลย ไม่ต้องเข้า MOMO → กดการ์ดอีกที. (การ์ดในหน้า dashboard ยังอยู่.)
-    { labelKey: "apiForwarderUpdate.momoLive", href: "/admin/api-forwarder-momo/live", icon: "Search" },
-    // ภูม 2026-07-03 — "คิวค้นเจอจาก MOMO Live": แทรคที่ MOMO API ทิ้ง (Live บอก
-    // มาไทยแล้ว/มีตู้ แต่ไม่มีในระบบ) → กดสร้างเข้าระบบได้ (ฝากสั่งซื้อหายค้างเอง).
-    { labelKey: "apiForwarderUpdate.momoDiscovery", href: "/admin/api-forwarder-momo/discovery", icon: "PackageCheck" },
+    // owner 2026-07-20 "ยุบทุกหน้า MOMO เหลือ hub + แพคกิ้งลิส · ไอแต้มไม่มีแล้ว · กระจาย
+    // จนหาไม่เจอ" — the old card-hub / live / discovery / review / drift entries are
+    // RETIRED (routes redirect into the hub). Sidebar = exactly the 2 workspaces:
+    //   1. ตรวจตู้ (hub — sync + pending/committed + Live merge + commit · momoPending
+    //      badge = แทรคที่ sync มาแล้วยังไม่เข้าระบบ)
+    //   2. อัพ packing list จาก MOMO (sole writer of container_packing_reconcile)
+    { labelKey: "apiForwarderUpdate.momoContainers", href: "/admin/momo-containers", icon: "PackageCheck", badge: "momoPending" },
+    { labelKey: "apiForwarderUpdate.momoPacking", href: "/admin/api-forwarder-momo/packing-upload", icon: "FileUp" },
     // ภูม 2026-07-16 — อี้อู (Yiwu) has NO API. Staff upload the ใบส่งของ (delivery-note)
     // IMAGE when goods land at the China warehouse → OCR-assisted review grid → commit
     // box-split arrival rows (fstatus 2 · fwarehousechina 2 = อี้อู rate card). The

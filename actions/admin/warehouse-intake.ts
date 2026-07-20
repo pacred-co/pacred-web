@@ -52,6 +52,7 @@ import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { baseTrackingOf } from "@/lib/integrations/momo-web/live-parcel-metrics";
+import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 
 // Worker-app role-set — matches the W10 spec.
 const WAREHOUSE_ROLES = ["super", "warehouse", "ops", "manager"] as const;
@@ -610,6 +611,12 @@ export async function warehouseAssignContainer(
     if (fwd.fcabinet_locked) {
       return { ok: false, error: "เลขตู้ถูกล็อกไว้ (fcabinet_locked) — แก้ไม่ได้" };
     }
+
+    // 🔒 cabinet tier guard (owner 2026-07-20) — refuse a sack (CBX…) or a MOMO
+    // routing placeholder keyed into the ตู้ field. TTW labels ("Packing ID:
+    // SEA0625-8211YW") = เลขตู้จริง per owner — allowed as-is.
+    const tierGuard = cabinetWriteGuard({ next: d.containerNo, current: fwd.fcabinetnumber });
+    if (!tierGuard.ok) return { ok: false, error: tierGuard.reason };
 
     const { error: updErr } = await admin
       .from("tb_forwarder")

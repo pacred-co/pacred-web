@@ -23,11 +23,12 @@ import { MomoGuideButton } from "./momo-guide-button";
 
 export const dynamic = "force-dynamic";
 
+// owner 2026-07-20 "ยุบให้เหลือ hub + แพคกิ้งลิส" — drift (iTAM ตาย) + review (ซ้ำ
+// กับ hub นี้) ถูก retire เป็น redirect แล้ว; เหลือเครื่องมือที่ใช้จริง 3 ปุ่ม.
 const HUB_LINKS: { href: string; label: string }[] = [
   { href: "/admin/api-forwarder-momo/sync", label: "📥 Sync จาก MOMO API" },
-  { href: "/admin/api-forwarder-momo/packing-upload", label: "📦 อัพ packing list" },
-  { href: "/admin/api-forwarder-momo/drift", label: "🔴 คิว drift (แทร็กหาย)" },
-  { href: "/admin/api-forwarder-momo/review", label: "✅ review / commit (เดิม)" },
+  { href: "/admin/api-forwarder-momo/packing-upload", label: "📦 อัพ packing list (จาก MOMO)" },
+  { href: "/admin/api-forwarder-momo/manual", label: "✍️ เพิ่มงานเอง (manual)" },
 ];
 
 /** momo_box_detail rows → the display box sub-rows (sorted by box number · per-box TOTAL
@@ -113,6 +114,7 @@ export default async function MomoContainersPage() {
       serviceFee: raw && typeof raw === "object" && raw.extra_cost != null ? num(raw.extra_cost) : null,
       guessedShipBy: str("ship_by"),
       guessedProductType: momoTypeToProductType(str("type")),
+      momoType: str("type") || null, // raw MOMO type — labels stay distinct (อย. ≠ น้ำยา)
       qty: colQ > 0 ? colQ : (numFromRaw("quantity") || null),
       weightKg: colW > 0 ? colW : numFromRaw("kg"),
       cbm: colV > 0 ? colV : numFromRaw("cbm"),
@@ -332,6 +334,15 @@ export default async function MomoContainersPage() {
     return {
       ...r,
       container: mergedContainer,
+      // ── transport re-derive (owner 2026-07-20 "ตู้มา GZS ทำไมยังขึ้นรถ") ──
+      // the early mapping derived mode from container_batch_no which is NULL for
+      // Live-merged rows → defaulted "1" รถ even when ship_by=ship. SOT order:
+      // ชื่อตู้ชนะเสมอ (GZS/YWS/SEA=เรือ · GZE/YWE/EK=รถ · GZA/YWA/AIR=อากาศ ·
+      // cabinet-transport) → else MOMO ship_by → else รถ.
+      transport: resolveTransportMode(
+        mergedContainer ?? "",
+        r.guessedShipBy === "ship" ? "2" : r.guessedShipBy === "air" ? "3" : r.guessedShipBy === "car" ? "1" : null,
+      ),
       guessedUserId: mergedUserId,
       userIdValid: mergedUserId == null ? null : knownUserIds.has(mergedUserId.toUpperCase()),
       hasPacking: !!pk,

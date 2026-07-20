@@ -113,12 +113,28 @@ export function parseYiwuPackingXlsx(buf: Uint8Array | Buffer): MomoPackingParse
   }
   const grid = sheetGrid(sheet);
 
-  // Container: scan the first rows for a container-like cell (GZS260625-5T at R0/C2).
+  // Container — TWO title shapes (owner 2026-07-20 "เอาตามแพทเทิน อี้อู ที่ TTW ส่งมา"):
+  //   1. ใบปิดตู้: a title cell "เลขที่ตู้ 0717-7072 YW SEA  อี้อู" → take the id VERBATIM
+  //      (strip the "เลขที่ตู้" label + a trailing "อี้อู" region word). TTW's own
+  //      pattern IS the เลขตู้ — never normalise/relabel it.
+  //   2. legacy packing list: a container-like cell (GZS260625-5T at R0/C2).
   let container: string | null = null;
-  outer: for (let r = 0; r < Math.min(grid.length, 6); r++) {
+  outer1: for (let r = 0; r < Math.min(grid.length, 6); r++) {
     for (const c of grid[r] ?? []) {
       const s = cellStr(c);
-      if (CONTAINER_RE.test(s)) { container = s; break outer; }
+      const m = /เลขที่ตู้\s*(.+)$/.exec(s);
+      if (m) {
+        const id = m[1].replace(/อี้อู\s*$/, "").trim();
+        if (id) { container = id; break outer1; }
+      }
+    }
+  }
+  if (!container) {
+    outer2: for (let r = 0; r < Math.min(grid.length, 6); r++) {
+      for (const c of grid[r] ?? []) {
+        const s = cellStr(c);
+        if (CONTAINER_RE.test(s)) { container = s; break outer2; }
+      }
     }
   }
 
@@ -149,8 +165,8 @@ export function parseYiwuPackingXlsx(buf: Uint8Array | Buffer): MomoPackingParse
   const cOrder = col(["单号"]);           // ORDER NO → tracking (key)
   const cMark = col(["唛头"]);            // mark → code
   const cBoxes = col(["件数"]);           // box count → parcelCount
-  const cWtBox = col(["单件重量"]);        // per-box weight → weightKg (ref)
-  const cTotalWt = col(["总重量"]);        // 💰 row total weight → totalWeight
+  const cWtBox = col(["单件重量", "单件重"]); // per-box weight → weightKg (ref · ใบปิดตู้ header = 单件重)
+  const cTotalWt = col(["总重量"], ["总重"]); // 💰 row total weight → totalWeight
   const cLen = col(["长"]);              // length
   const cWid = col(["宽"]);              // width
   const cHei = col(["高"]);              // height
@@ -180,6 +196,14 @@ export function parseYiwuPackingXlsx(buf: Uint8Array | Buffer): MomoPackingParse
       if (totalsRow == null && toNum(row[cTotalWt]) != null) totalsRow = row;
       continue; // footer / DISPIMG / blank
     }
+    // ใบปิดตู้ (owner 2026-07-20) carries merged footer lines starting at col 0
+    // ("ประมาณการตู้เข้า 04 - 10 สิงหาคม 2569" · disclaimer text) — those land in the
+    // 单号 column but have NO numbers in 件数/总重量/材积 → not data rows.
+    const hasAnyMetric =
+      (cBoxes >= 0 && toNum(row[cBoxes]) != null) ||
+      toNum(row[cTotalWt]) != null ||
+      (cCbm >= 0 && toNum(row[cCbm]) != null);
+    if (!hasAnyMetric) continue;
     const thai = cNameTh >= 0 ? cellStr(row[cNameTh]) : "";
     const zh = cNameZh >= 0 ? cellStr(row[cNameZh]) : "";
     rows.push({
