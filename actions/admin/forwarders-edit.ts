@@ -168,6 +168,14 @@ const editForwarderSchema = z.object({
    *  itself but on calPrice preview L243 + the receipt; admin can set it
    *  in the edit form per ภูม flag). */
   fShippingService:       z.number().min(0).max(9999999.99).optional(),
+  /** ค่าตีลังไม้ per row (tb_forwarder.pricecrate — PCS report-cnt "ค่าตีลัง"
+   *  column · owner 2026-07-21 "ค่าตีลังไม้ยังไม่เห็นมีให้ใส่"). Part of the same
+   *  grand-total composite as priceother/ftransportpricechnthb. */
+  priceCrate:             z.number().min(0).max(9999999.99).optional(),
+  /** จำนวนกล่อง (tb_forwarder.famount · owner 2026-07-21 "จำนวนกล่อง สามารถแก้ไข
+   *  และบันทึกได้") — sits behind the client's unlock gate. Changing it re-prices
+   *  through the SAME engine below: cbmProduct = famountcount==='1' ? cbm : cbm×famount. */
+  boxCount:               z.number().int().min(0).max(99999).optional(),
 
   // ── Warehouses (legacy L1112-1132) ──
   /** โกดังต้นทางในจีน · varchar(1) '1' กวางโจว · '2' อี้อู */
@@ -432,7 +440,10 @@ export async function adminUpdateForwarderDimensions(
           ? d.fWarehouseChina
           : String(before.fwarehousechina ?? "1");
       const famountCount = before.famountcount;
-      const famount = num(before.famount);
+      // owner 2026-07-21 — the unlock-gated จำนวนกล่อง edit: when the caller sends
+      // boxCount it wins over the stored famount AND flows into cbmProduct below,
+      // so the re-price runs on the corrected box count in the same save.
+      const famount = d.boxCount !== undefined ? d.boxCount : num(before.famount);
       // CBMProduct — legacy L1935-1941: famountcount==1 → fvolume; else fvolume*famount.
       const cbmProduct = String(famountCount ?? "").trim() === "1" ? cbm : cbm * famount;
 
@@ -586,6 +597,8 @@ export async function adminUpdateForwarderDimensions(
         d.fShippingService !== undefined
           ? d.fShippingService
           : num(before.fshippingservice);
+      const effectivePriceCrate =
+        d.priceCrate !== undefined ? d.priceCrate : num(before.pricecrate);
 
       const newFTotalPrice = resolved.transportSubtotal;
       const grandTotal =
@@ -593,7 +606,7 @@ export async function adminUpdateForwarderDimensions(
         num(before.fpriceupdate) +
         effectiveShippingService +
         effectiveTransportChnThb +
-        num(before.pricecrate) +
+        effectivePriceCrate +
         effectivePriceOther +
         effectiveTransportPrice -
         effectiveDiscount;
@@ -734,6 +747,14 @@ export async function adminUpdateForwarderDimensions(
       if (d.fShippingService !== undefined)      update.fshippingservice      = d.fShippingService;
       if (d.fWarehouseChina !== undefined)       update.fwarehousechina       = d.fWarehouseChina;
       if (d.fWarehouseName !== undefined)        update.fwarehousename        = d.fWarehouseName;
+      // ค่าตีลังไม้ (owner 2026-07-21) — header pricecrate. A positive fee also
+      // marks the row crated (legacy crate='1'); ฿0 leaves the flag alone (the
+      // per-item crate flags may still drive it via the items mirror below).
+      if (d.priceCrate !== undefined) {
+        update.pricecrate = d.priceCrate;
+        if (d.priceCrate > 0) update.crate = "1";
+      }
+      if (d.boxCount !== undefined)              update.famount               = d.boxCount;
       // 2026-06-17 (mig 0187 · ภูม "ให้สวิตซ์ค้างถาวร") — persist the per-order
       // ค่าเทียบ override so the "คิดค่าเทียบแบบกำหนดเอง" toggle stays ON (with its
       // value) after reload. Written only when the form actually sends it; when

@@ -88,12 +88,16 @@ type Row = {
   // base (owner #52559 · fweight=Σ boxes but no freight) has ftotalprice=0 → dropped
   // from the box count REGARDLESS of weight; a real priced anchor stays.
   ftotalprice: number | string | null;
+  // ค่าตีลังไม้ per row (owner 2026-07-21) + fstatus (identity fields lock on billed rows)
+  pricecrate: number | string | null;
+  fstatus: string | null;
 };
 
 const SIBLING_SELECT =
   "id, userid, ftrackingchn, reforder, fdetail, fproductstype, famount, famountcount, " +
   "fweight, fvolume, fwidth, flength, fheight, fwarehousechina, fwarehousename, ftransporttype, " +
-  "ftransportprice, fdiscount, ftransportpricechnthb, priceother, fshippingservice, fshipby, ftotalprice";
+  "ftransportprice, fdiscount, ftransportpricechnthb, priceother, fshippingservice, fshipby, ftotalprice, " +
+  "pricecrate, fstatus";
 
 const VALID_PRODUCT = ["1", "2", "3", "4"];
 // owner 2026-07-19 "ใช้แค่ MOMO+TTW": 8=MOMO(กวางโจว) · 9=TTW(อี้อู). 1-7 kept for
@@ -268,6 +272,8 @@ export async function ForwarderPerTrackingEditor({
       fTransportPriceChnThb: num(row.ftransportpricechnthb),
       priceOther: num(row.priceother),
       fShippingService: num(row.fshippingservice),
+      priceCrate: num(row.pricecrate),
+      fstatus: String(row.fstatus ?? "").trim(),
     };
   });
 

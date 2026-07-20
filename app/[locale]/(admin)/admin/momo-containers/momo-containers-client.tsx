@@ -1036,6 +1036,15 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                               <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-600">
                                 {famQty > 0 ? `${famQty} กล่อง` : fam.length > 1 ? `${fam.length} แทรค` : `${fam[0].boxes.length} กล่อง`}
                               </span>
+                              {/* owner 2026-07-21 "ฝั่ง API นำเข้าก็แก้ได้เหมือนกัน" — jump into the
+                                  shipment editor (แทรคกิ้ง/เลขชิปเม้น/กล่อง แก้ได้หลังปลดล็อก + ↺ reset) */}
+                              {famFid && (
+                                <Link href={`/admin/forwarders/${famFid}`}
+                                  title="แก้ไขข้อมูลชิปเม้นนี้ (เลขแทรคกิ้ง · เลขชิปเม้น · จำนวนกล่อง · ขนาด/ราคา · ↺ reset จากต้นทาง)"
+                                  className="rounded border border-border bg-white px-1.5 py-0.5 text-[10.5px] font-medium text-slate-600 hover:bg-slate-50">
+                                  ✏️ แก้ไข
+                                </Link>
+                              )}
                               {famCgMismatch && (
                                 <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10.5px] font-bold text-amber-700"
                                   title="ช่วงเลขกล่อง CG ของบางแทรคไม่ตรงกับจำนวนกล่อง (Total Parcel) — ข้อมูล MOMO ขัดกันเอง ตรวจสอบ">
