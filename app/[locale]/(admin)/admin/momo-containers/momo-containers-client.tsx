@@ -846,11 +846,64 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
             {sorted.length === 0 && (
               <tr><td colSpan={1 + colOrder.length} className="px-3 py-6 text-center text-xs text-muted">ไม่มีรายการตามเงื่อนไข</td></tr>
             )}
-            {families.flatMap((fam) => fam.map((t, fi) => ({ t, fi, famLen: fam.length }))).map(({ t, fi, famLen }, i) => {
+            {(() => { let n = 0; return families.map((fam, famIdx) => {
+              // ── SHIPMENT header (owner 2026-07-19 · pattern: base = ชิปเม้น = ออเดอร์ = หัวบิล) ──
+              // Any family with a -N/M member gets a synthetic header row showing the
+              // STRIPPED base number (Σ กล่อง/นน./คิว) — clickable into the order once any
+              // member is committed. Every staging tracking then nests as an ↳ member.
+              const base = baseTracking(fam[0].tracking ?? "") ?? (fam[0].tracking ?? "");
+              const grouped = fam.length > 1 || fam.some((x) => (x.tracking ?? "") !== base);
+              const famFid = fam.map((x) => x.committedForwarderId).find((v) => v != null) ?? null;
+              const famQty = fam.reduce((sm, x) => sm + (x.qty ?? 0), 0);
+              const famWt = fam.reduce((sm, x) => sm + (x.weightKg || 0), 0);
+              const famCbm = fam.reduce((sm, x) => sm + (x.cbm || 0), 0);
+              return (
+                <Fragment key={`fam-${base}-${famIdx}`}>
+                {grouped && (
+                  <tr className="border-t-2 border-slate-300 bg-slate-100/70 align-top">
+                    <td className="px-2 py-1.5 text-center">
+                      {famFid ? (
+                        <Link href={`/admin/forwarders/${famFid}`} title={`เปิดชิปเม้น/ออเดอร์ #${famFid}`}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-primary-700 hover:underline">
+                          #{famFid}
+                        </Link>
+                      ) : (
+                        <span className="text-[13px]" title="ชิปเม้นนี้ยังไม่นำเข้าระบบ">📦</span>
+                      )}
+                    </td>
+                    {colOrder.map((key) => {
+                      const c = colDefs[key];
+                      let node: ReactNode = null;
+                      switch (key) {
+                        case "tracking":
+                          node = famFid ? (
+                            <Link href={`/admin/forwarders/${famFid}`} title="เปิดชิปเม้น/ออเดอร์นี้"
+                              className="font-mono text-[13px] font-bold text-primary-700 hover:underline">{base}</Link>
+                          ) : (
+                            <span className="font-mono text-[13px] font-bold text-foreground">{base}</span>
+                          );
+                          break;
+                        case "totalParcel": node = <span className="font-bold">Σ {famQty}</span>; break;
+                        case "wt": case "totalWt":
+                          node = <span className="font-mono font-bold">Σ {famWt.toLocaleString("en-US", { maximumFractionDigits: 2 })}</span>; break;
+                        case "vol": case "totalVol":
+                          node = <span className="font-bold">Σ {famCbm.toLocaleString("en-US", { maximumFractionDigits: 6 })}</span>; break;
+                        // shared per-shipment fields — render from the first member
+                        case "image": case "container": case "trans": case "smDate": case "type":
+                        case "code": case "status": case "etd": case "eta":
+                          node = c ? c.td(fam[0]) : null; break;
+                        default: node = null;
+                      }
+                      return <td key={key} className={c?.tdClass ?? "px-2 py-1.5"}>{node}</td>;
+                    })}
+                  </tr>
+                )}
+                {fam.map((t) => {
+              const i = n++;
               const rr = rowResult[t.id];
               const done = t.committed || rr?.ok;
               const fid = t.committedForwarderId ?? rr?.fid ?? null;
-              const isMember = fi > 0 && famLen > 1; // a -N sibling under its shipment header
+              const isMember = grouped; // every tracking of the shipment nests under its header
               return (
                 <Fragment key={t.id}>
                 <tr className={`align-top ${isMember ? "border-l-4 border-sky-200 " : ""}${done ? "bg-emerald-50/40" : sel.has(t.id) ? "bg-primary-50/60" : t.momoGarbage ? "bg-red-50" : isMember ? "bg-sky-50/30" : t.userIdValid === false ? "bg-red-50/30" : ""}`}>
@@ -881,13 +934,19 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                   {colOrder.map((key) => {
                     const c = colDefs[key];
                     if (!c) return null;
-                    return <td key={key} className={c.tdClass} title={c.tdTitle?.(t)}>{c.td(t)}</td>;
+                    return (
+                      <td key={key} className={c.tdClass} title={c.tdTitle?.(t)}>
+                        {isMember && key === "tracking" ? (
+                          <span className="inline-flex items-center gap-1 pl-2"><span className="text-sky-500">↳</span>{c.td(t)}</span>
+                        ) : c.td(t)}
+                      </td>
+                    );
                   })}
                 </tr>
                 {/* กล่องย่อยของ MOMO (box_detail) — โชว์เฉพาะเมื่อชิปเม้นมี staging แถวเดียว
                     (แถวรวมที่กล่องแตกอยู่ใน box_detail) · ครอบครัวที่มีแถว -N อยู่แล้ว = แถวลูก
                     ด้านบนคือกล่องตัวจริง → ไม่ nest ซ้ำ (เคย 18 หัว × 18 กล่อง = เบิ้ลมโหฬาร) */}
-                {famLen === 1 && t.boxes.map((box, bi) => (
+                {!grouped && t.boxes.map((box, bi) => (
                   <tr key={`${t.id}-b${bi}`} className="bg-sky-50/40 text-[11px]">
                     <td className="px-2 py-1 text-center text-muted" title="กล่องย่อยจาก MOMO (box_detail)">📦</td>
                     {colOrder.map((key) => {
@@ -899,6 +958,9 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                 </Fragment>
               );
             })}
+                </Fragment>
+              );
+            }); })()}
           </tbody>
         </table>
       </div>
