@@ -35,6 +35,7 @@ import {
   advanceDepartedContainerForwarders,
   type AdvanceDepartedResult,
 } from "@/lib/admin/advance-departed-containers";
+import { backlinkStagingCommitted } from "@/lib/admin/backlink-staging-committed";
 import { isMomoWebConfigured } from "@/lib/integrations/momo-web/client";
 import { type LiveStatusPropagationResult } from "@/lib/integrations/momo-web/propagate-live-status";
 import {
@@ -499,6 +500,32 @@ export async function runMomoSync(
         message: err instanceof Error ? err.message : "unknown",
       });
     }
+  }
+
+  // ── 3.55 (2026-07-20 · owner "มีในระบบแล้วทำไมยังโชว์ยังไม่เข้าระบบ") — staging
+  // back-link heal. A tb_forwarder row can exist WITHOUT the staging stamp
+  // (box-split fan-out · manual add · bare-anchor commits) → ตรวจตู้ shows it
+  // pending forever + every commit bounces "มีในระบบแล้ว". Stamp uncommitted
+  // staging rows that match a live forwarder (exact → base-anchor → bare→box ·
+  // dup-live skipped). METADATA-ONLY (never writes tb_forwarder) · idempotent ·
+  // best-effort — must NEVER fail the sync.
+  try {
+    const bl = await backlinkStagingCommitted(admin, { apply: true });
+    if (bl.stamped > 0 || bl.errors.length > 0) {
+      console.info(
+        `[runMomoSync] staging back-link: scanned=${bl.scannedStaging} matched=${bl.matches.length} stamped=${bl.stamped} dupSkipped=${bl.dupSkipped.length} errors=${bl.errors.length}`,
+      );
+    }
+    for (const msg of bl.errors) {
+      errors.push({ scope: "staging_backlink", error: "MOMO_BACKLINK_ROW_FAILED", message: msg });
+    }
+  } catch (err) {
+    console.error("[runMomoSync] staging back-link threw", err);
+    errors.push({
+      scope:   "staging_backlink",
+      error:   "MOMO_BACKLINK_THREW",
+      message: err instanceof Error ? err.message : "unknown",
+    });
   }
 
   // ── 3.6 (2026-07-01) — DEPARTED-container auto-advance ──
