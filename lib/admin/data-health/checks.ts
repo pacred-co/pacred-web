@@ -30,6 +30,7 @@ import { baseOf, suffixOf } from "@/lib/integrations/momo-web/split-box-rows-pla
 import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
+import { planStagingBacklinks } from "@/lib/admin/backlink-staging-committed";
 import { isMomoRoutingPlaceholder } from "@/lib/admin/momo-container-resolve";
 
 export type HealthSeverity = "red" | "warn" | "info";
@@ -242,6 +243,38 @@ const CHECKS: CheckDef[] = [
           return Number(r.fstatus) >= 4;
         })
         .map((r) => ({ id: r.id, tracking: r.ftrackingchn, userid: r.userid, cabinet: r.fcabinetnumber, fstatus: r.fstatus }));
+      return { count: out.length, sample: cap(out) };
+    },
+  },
+  {
+    id: "staging_unstamped_live",
+    title: "ตรวจตู้โชว์ 'ยังไม่เข้าระบบ' ทั้งที่มีแถว live ในระบบแล้ว",
+    severity: "warn",
+    why:
+      "2026-07-20 — แถวเข้าระบบผ่าน box-split/คีย์มือ/แถวรวม ไม่เคยประทับ committed_at บน staging → " +
+      "ตรวจตู้นับเป็นค้างนำเข้า + กด commit เด้ง 'มีในระบบแล้ว' ทุกรอบ (ไม่สำเร็จ 37 spam)",
+    action:
+      "sync pass 3.55 (backlinkStagingCommitted) จะประทับให้เองภายใน ~5 นาที — ถ้าค้างข้ามชั่วโมง = " +
+      "heal พัง (ดู log scope staging_backlink) หรือ tracking ซ้ำหลายแถว (ดู check dup_exact_tracking)",
+    run: async (admin, ctx) => {
+      const staging: Array<{ id: string; tracking: string }> = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await admin
+          .from("momo_import_tracks")
+          .select("id, momo_tracking_no")
+          .is("committed_at", null)
+          .range(from, from + 999);
+        if (error) throw new Error(`${error.code} ${error.message}`);
+        for (const r of (data ?? []) as Array<{ id: string; momo_tracking_no: string | null }>) {
+          if (r.momo_tracking_no) staging.push({ id: String(r.id), tracking: String(r.momo_tracking_no) });
+        }
+        if ((data ?? []).length < 1000) break;
+      }
+      const plan = planStagingBacklinks(
+        staging,
+        ctx.fwd.map((r) => ({ id: r.id, tracking: r.ftrackingchn, fstatus: r.fstatus, userid: r.userid })),
+      );
+      const out = plan.matches.map((m) => ({ staging: m.stagingId, tracking: m.tracking, fid: m.fid, kind: m.kind }));
       return { count: out.length, sample: cap(out) };
     },
   },
