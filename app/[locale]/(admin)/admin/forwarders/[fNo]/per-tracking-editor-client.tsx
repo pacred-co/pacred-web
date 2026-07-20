@@ -192,6 +192,16 @@ export function PerTrackingEditorClient({
   const [customComparison, setCustomComparison] = useState<"0" | "1">("0");
   const [comparisonValue, setComparisonValue] = useState<string>("0");
 
+  // owner 2026-07-20 — merged-box auto-tick: typing ANY of the 3 values (เรทกก./
+  // เรทCBM/ค่าเทียบ) ticks the box ON; clearing ALL THREE unticks it. Both flags
+  // move together (the server's locked-pair guard is unchanged).
+  const autoTickCustom = (kg: string, cbm: string, cmp: string) => {
+    const any =
+      (parseFloat(kg) || 0) > 0 || (parseFloat(cbm) || 0) > 0 || (parseFloat(cmp) || 0) > 0;
+    setCustomRate(any ? "1" : "0");
+    setCustomComparison(any ? "1" : "0");
+  };
+
   // ── per-tracking rows (string-valued for free typing) ──
   type RowState = {
     id: number; tracking: string; detail: string; boxes: number; volumeIsTotal: boolean;
@@ -373,6 +383,20 @@ export function PerTrackingEditorClient({
       setError(`ค่าเทียบเกินเพดาน — 1 คิว ไม่เกิน ${MAX_COMPARISON} กก. (กรอก ${cmp})`);
       return;
     }
+    // owner 2026-07-20 — merged box rule: ติ๊กแล้วต้องกรอกครบทั้ง 3 ค่า
+    // (เรท ฿/กก. + เรท ฿/CBM + ค่าเทียบ) ไม่งั้นบันทึกไม่ได้.
+    if (customRate === "1") {
+      const kg = parseFloat(customRateKg) || 0;
+      const cbmRate = parseFloat(customRateCbm) || 0;
+      if (!(kg > 0) || !(cbmRate > 0) || !(cmp > 0)) {
+        setError(
+          "ติ๊ก “คิดราคา + ค่าเทียบ แบบกำหนดเอง” แล้ว ต้องกรอกครบทั้ง 3 ค่า — " +
+          `เรท ฿/กก. (${kg || "ว่าง"}) · เรท ฿/CBM (${cbmRate || "ว่าง"}) · ค่าเทียบ (${cmp || "ว่าง"}) — ` +
+          "หรือลบให้หมดทุกช่องเพื่อกลับไปใช้เรทระบบ",
+        );
+        return;
+      }
+    }
     // 2026-07-06 (owner) — LOCKED PAIR: "คิดราคาแบบกำหนดเอง" (custom sell price) และ
     // "คิดค่าเทียบแบบกำหนดเอง" (ค่าเทียบ) ต้องติ๊กพร้อมกัน หรือไม่ติ๊กทั้งคู่ — ห้ามติ๊ก
     // อันเดียว. ไม่ติ๊กทั้งคู่ = ใช้เรทระบบ (auto logic) · ติ๊กคู่ = กรอกราคาเอง + ค่าเทียบ.
@@ -388,7 +412,7 @@ export function PerTrackingEditorClient({
     const ok = await confirm(
       advanceToPayment
         ? `ยืนยันบันทึกขนาด/ราคา ${rows.length} แทรคกิง แล้ว "ส่งไปรอชำระเงิน" (ออเดอร์ที่ตั้งเรทแล้วจะย้ายไปสถานะรอชำระเงิน) ?`
-        : `ยืนยัน "บันทึกขนาด" ${rows.length} แทรคกิง — เก็บน้ำหนัก/กว้าง/ยาว/สูง/CBM ไว้ก่อน โดยยังไม่ส่งไปรอชำระเงิน (สถานะคงเดิม) ?`,
+        : `ยืนยัน "บันทึก" ${rows.length} แทรคกิง — อัพเดตน้ำหนัก/ขนาด/CBM/ราคา (สถานะคงเดิม · การเก็บเงินไปกดที่รายงานตู้) ?`,
     );
     if (!ok) return;
 
@@ -450,8 +474,8 @@ export function PerTrackingEditorClient({
         // DIMS-ONLY save — the pricer isn't billing yet. We deliberately kept
         // fstatus as-is; say so clearly so no one thinks it should have advanced.
         setSuccess(
-          `✓ บันทึกขนาด ${rows.length} แทรคกิงแล้ว · ยังไม่ส่งรอชำระ (สถานะคงเดิม) — ` +
-          `ตั้งเรท/ใส่ราคาให้ครบ แล้วกด "บันทึก + ส่งไปรอชำระเงิน" เมื่อพร้อมออกบิล`,
+          `✓ บันทึกแล้ว ${rows.length} แทรคกิง (สถานะคงเดิม) — ` +
+          `การเก็บเงิน: รายงานตู้ → เพิ่มรายการตรวจสอบ → แจ้งเก็บเงินลูกค้า (ตาม loop)`,
         );
       } else if (notAdvanced.length > 0) {
         // The save auto-advances ถึงไทยแล้ว(4) → รอชำระเงิน(5) server-side — forward-only,
@@ -496,44 +520,42 @@ export function PerTrackingEditorClient({
           2026-06-18 (ภูม · พี่ป๊อป "ไม่ยืด/บวม" · PCS รูป2) — compact: narrow
           fixed-width inputs (was CELL = full-width → stretched) + inline flex +
           tight padding. */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <div className={`rounded-lg border px-3 py-1.5 ${customRate === "1" ? "border-red-300 bg-red-50/40" : "border-border bg-surface-alt/30"}`}>
-          <label className="flex cursor-pointer items-center gap-2 select-none">
-            {/* 2026-07-06 LOCKED PAIR — ticking custom price auto-ticks ค่าเทียบ
-                (and untick clears it) so the two physically move together. Only
-                mirror the ค่าเทียบ side when the user MAY edit it (not warehouse). */}
-            <input type="checkbox" checked={customRate === "1"} onChange={(e) => { const on = e.target.checked; setCustomRate(on ? "1" : "0"); if (canEditComparison) setCustomComparison(on ? "1" : "0"); }} disabled={pending} className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary-500" />
-            <span className={`text-[13px] font-medium ${customRate === "1" ? "text-red-700" : "text-foreground"}`}>คิดราคาแบบกำหนดเอง</span>
-          </label>
-          {/* PINNED OPEN (ภูม 2026-06-19) — inputs always render so the seller fills the rate. */}
-          <div className="mt-1.5 flex flex-wrap items-end gap-2">
-            <label className="block"><span className="block text-[11px] text-muted">เรท ฿/กก.</span>
-              <input type="number" min={0} step="0.01" value={customRateKg} onChange={(e) => setCustomRateKg(e.target.value)} disabled={pending} placeholder="0" className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60" /></label>
-            <label className="block"><span className="block text-[11px] text-muted">เรท ฿/CBM</span>
-              <input type="number" min={0} step="0.01" value={customRateCbm} onChange={(e) => setCustomRateCbm(e.target.value)} disabled={pending} placeholder="0" className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60" /></label>
-          </div>
-          <p className="mt-1 text-[11px] text-muted">ติ๊ก = ใช้เรทที่กรอก (ต้องกรอกค่าเทียบด้วย · ติ๊กคู่กัน) · ไม่ติ๊ก = เรทระบบ (ค่าเทียบ 250)</p>
-          {/* Rate-mode guard (advisory) — warns if the typed ฿/CBM looks like the
-              WRONG transport mode's rate for this ตู้. A warning only · does NOT block. */}
-          {modeGuardWarn && (
-            <p className="mt-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700">
-              {modeGuardWarn}
-            </p>
-          )}
+      {/* ── ONE merged box (owner 2026-07-20 "ย้ายค่าเทียบไปรวม box เดียวกับกรอบตั้งราคาขายใหม่
+          · กรอกช่องใดช่องนึงติ๊กออโต้ · ลบหมดติ๊กหลุด · ติ๊กแล้วต้องครบทั้ง 3 ค่า") —
+          เรท ฿/กก. + เรท ฿/CBM + ค่าเทียบ อยู่กรอบเดียว ติ๊กเดียว. The tick mirrors onto
+          BOTH customRate + customComparison (the server's locked-pair guard unchanged). */}
+      <div className={`rounded-lg border px-3 py-1.5 ${customRate === "1" ? "border-red-300 bg-red-50/40" : "border-border bg-surface-alt/30"}`}>
+        <label className="flex cursor-pointer items-center gap-2 select-none">
+          <input type="checkbox" checked={customRate === "1"}
+            onChange={(e) => { const on = e.target.checked; setCustomRate(on ? "1" : "0"); setCustomComparison(on ? "1" : "0"); }}
+            disabled={pending} className="h-4 w-4 rounded border-border text-primary-600 focus:ring-primary-500" />
+          <span className={`text-[13px] font-medium ${customRate === "1" ? "text-red-700" : "text-foreground"}`}>คิดราคา + ค่าเทียบ แบบกำหนดเอง</span>
+        </label>
+        <div className="mt-1.5 flex flex-wrap items-end gap-2">
+          <label className="block"><span className="block text-[11px] text-muted">เรท ฿/กก.</span>
+            <input type="number" min={0} step="0.01" value={customRateKg}
+              onChange={(e) => { setCustomRateKg(e.target.value); autoTickCustom(e.target.value, customRateCbm, comparisonValue); }}
+              disabled={pending} placeholder="0" className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60" /></label>
+          <label className="block"><span className="block text-[11px] text-muted">เรท ฿/CBM</span>
+            <input type="number" min={0} step="0.01" value={customRateCbm}
+              onChange={(e) => { setCustomRateCbm(e.target.value); autoTickCustom(customRateKg, e.target.value, comparisonValue); }}
+              disabled={pending} placeholder="0" className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-200 disabled:opacity-60" /></label>
+          <label className="block"><span className="block text-[11px] text-muted">ค่าเทียบ (1 คิว = N กก. · ไม่เกิน {MAX_COMPARISON})</span>
+            <input type="number" min={0} max={MAX_COMPARISON} step="1" value={comparisonValue}
+              onChange={(e) => { setComparisonValue(e.target.value); autoTickCustom(customRateKg, customRateCbm, e.target.value); }}
+              disabled={pending || !canEditComparison} placeholder="0" className="mt-0.5 w-28 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-amber-500 focus:ring-amber-200 disabled:opacity-60" /></label>
         </div>
-        <div className={`rounded-lg border px-3 py-1.5 ${customComparison === "1" ? "border-amber-300 bg-amber-50/40" : "border-border bg-surface-alt/30"}`}>
-          <label className="flex cursor-pointer items-center gap-2 select-none">
-            {/* 2026-07-06 LOCKED PAIR — ticking ค่าเทียบ auto-ticks custom price too. */}
-            <input type="checkbox" checked={customComparison === "1"} onChange={(e) => { const on = e.target.checked; setCustomComparison(on ? "1" : "0"); setCustomRate(on ? "1" : "0"); }} disabled={pending || !canEditComparison} className="h-4 w-4 rounded border-border text-amber-600 focus:ring-amber-500 disabled:opacity-50" />
-            <span className={`text-[13px] font-medium ${customComparison === "1" ? "text-amber-700" : "text-foreground"}`}>คิดค่าเทียบแบบกำหนดเอง</span>
-          </label>
-          {/* PINNED OPEN + เพดาน 350 (ภูม 2026-06-19: "ค่าเทียบ 1 คิว ไม่เกิน 350 กก."). */}
-          <div className="mt-1.5 flex items-end gap-2">
-            <label className="block"><span className="block text-[11px] text-muted">ค่าเทียบ (1 คิว = N กก. · ไม่เกิน 350)</span>
-              <input type="number" min={0} max={MAX_COMPARISON} step="1" value={comparisonValue} onChange={(e) => setComparisonValue(e.target.value)} disabled={pending || !canEditComparison} placeholder="0" className="mt-0.5 w-24 rounded-md border border-border px-2 py-1 text-sm font-mono tabular-nums text-right outline-none focus:ring-2 focus:border-amber-500 focus:ring-amber-200 disabled:opacity-60" /></label>
-          </div>
-          <p className="mt-1 text-[11px] text-muted">{canEditComparison ? `ติ๊ก = ใช้ค่าเทียบที่กรอก · 1 คิว ไม่เกิน ${MAX_COMPARISON} กก.` : "🔒 ค่าเทียบสงวนไว้ — พนักงานโกดังแก้ไม่ได้"}</p>
-        </div>
+        <p className="mt-1 text-[11px] text-muted">
+          กรอกช่องใดช่องหนึ่ง = ติ๊กให้อัตโนมัติ · ลบหมด = ติ๊กหลุด · ติ๊กแล้วต้องกรอก<b>ครบทั้ง 3 ค่า</b>ถึงบันทึกได้ ·
+          ไม่ติ๊ก = เรทระบบ (ค่าเทียบ 250){!canEditComparison && " · 🔒 ค่าเทียบสงวนไว้ — พนักงานโกดังแก้ไม่ได้"}
+        </p>
+        {/* Rate-mode guard (advisory) — warns if the typed ฿/CBM looks like the
+            WRONG transport mode's rate for this ตู้. A warning only · does NOT block. */}
+        {modeGuardWarn && (
+          <p className="mt-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-700">
+            {modeGuardWarn}
+          </p>
+        )}
       </div>
 
       {/* ── per-tracking rows ── */}
@@ -663,25 +685,19 @@ export function PerTrackingEditorClient({
         </div>
       </div>
 
-      <p className="text-[11px] text-muted">⚠️ กรอกขนาด/ราคาของแต่ละแทรคกิง แล้วเลือกบันทึก — “💾 บันทึกขนาด” เก็บน้ำหนัก/ขนาด/CBM ไว้ก่อนโดยยังไม่ส่งรอชำระ (เผื่อเซลยังไม่ตั้งเรท) · “บันทึก + ส่งไปรอชำระเงิน” เมื่อพร้อมออกบิล · ระบบคำนวณราคาขายใหม่ให้แต่ละแทคตอนบันทึก (ต้นทุน/ค่าเทียบ จาก server)</p>
+      {/* owner 2026-07-20 "มันต้องมีแค่ปุ่มเดียวคือ บันทึก — ให้ข้อมูลได้รับการอัพเดทเท่านั้น ·
+          จะเก็บเงินไปกดที่ ตรวจรายการตู้ → ตรวจสอบรายการ → แจ้งเก็บเงิน ตาม loop · ลูกค้าไม่จ่าย
+          = จ่ายแทนลูกค้า (เงินสด บุคคล/นิติ) · ลูกค้าเครดิต = ออกใบวางบิลตาม flow PCS" —
+          the ส่งไปรอชำระ + ไปสร้างใบวางบิล buttons are REMOVED; save = data-only. */}
+      <p className="text-[11px] text-muted">⚠️ กรอกขนาด/ราคาของแต่ละแทรคกิง แล้วกด “บันทึก” — เก็บ/อัพเดตข้อมูลเท่านั้น สถานะคงเดิม (ระบบคำนวณราคาขายใหม่ให้แต่ละแทคตอนบันทึก · ต้นทุน/ค่าเทียบ จาก server) · การเก็บเงิน: รายงานตู้ → เพิ่มรายการตรวจสอบ → แจ้งเก็บเงินลูกค้า</p>
 
       {error && <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">⚠ {error}</div>}
       {success && <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">{success}</div>}
 
       <div className="flex flex-wrap items-center gap-3">
-        {/* ภูม 2026-07-01 — DIMS-ONLY: warehouse saves น้ำหนัก/ขนาด/CBM ก่อน โดยยังไม่ดัน
-            ไปรอชำระ (เผื่อเซลยังไม่ตั้งเรท). สถานะคงเดิม · ไม่ล็อก · ไม่ออกบิล. */}
-        <button type="button" onClick={() => onSave(false)} disabled={pending} className="rounded-lg border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-surface dark:text-foreground">
-          {pending ? "กำลังบันทึก..." : `💾 บันทึกขนาด (ยังไม่ส่งรอชำระ)`}
+        <button type="button" onClick={() => onSave(false)} disabled={pending} className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
+          {pending ? "กำลังบันทึก..." : `💾 บันทึก (${rows.length} แทรคกิง)`}
         </button>
-        <button type="button" onClick={() => onSave(true)} disabled={pending} className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
-          {pending ? "กำลังบันทึก..." : `บันทึก + ส่งไปรอชำระเงิน (${rows.length} แทรคกิง)`}
-        </button>
-        {/* owner 2026-06-23 "ครบจบๆ" — jump straight to สร้างใบวางบิล (renders below at
-            รอชำระเงิน/เตรียมส่ง). Save first → สถานะ → 5 → ปุ่มโผล่ → กดลิงก์นี้ลงไปวางบิลต่อ. */}
-        <a href="#bill-section" className="inline-flex items-center gap-1 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 hover:bg-blue-100">
-          🧾 ไปสร้างใบวางบิล ↓
-        </a>
       </div>
       {dialogs}
     </div>

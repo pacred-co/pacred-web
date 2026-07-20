@@ -181,7 +181,11 @@ export function ForwarderStatusWorkflow(p: Props) {
   // (rendered after credit so the dangerous option sits last)
 
   const isCreditSel = selected === "credit";
-  const showPricing = selected === "4"; // legacy showForm4()
+  // owner 2026-07-20 "ให้แสดง + บันทึกได้ตั้งแต่ ถึงโกดังจีน และ กำลังส่งมาไทย" —
+  // the editor opens from ถึงโกดังจีน(2)/กำลังมาไทย(3)/ถึงไทย(4) (was 4-only ตาม
+  // legacy showForm4 — PCS itself renders the form with "บันทึกข้อมูลไม่เปลี่ยนสถานะ"
+  // at every status). Saving from 2/3 is data-only (no status side-effect).
+  const showPricing = selected === "2" || selected === "3" || selected === "4";
   const showTracking = rank(selected) >= 6; // legacy showForm6()
   // owner 2026-07-17 — a BACKWARD pick (never 99 / credit / forward) goes down the
   // ultra-only rollback path instead of the plain forward status write.
@@ -361,7 +365,7 @@ export function ForwarderStatusWorkflow(p: Props) {
           {isRollbackSel
             ? "↩ ถอยสถานะ — ระบบจะย้อนการชำระ + ยกเลิกใบวางบิล/ใบเสร็จ + ปลดเครดิต + ถอดรอบคนขับ ให้อัตโนมัติ (เอกสารต้องทำใหม่) · กด “บันทึก” เพื่อดูรายการที่จะยกเลิกก่อนยืนยัน"
             : showPricing
-            ? "📦 ของถึงไทยแล้ว — กรอกขนาด/น้ำหนัก/เรทราคาในฟอร์มด้านล่าง แล้วกด “บันทึกข้อมูล”"
+            ? "📦 กรอกขนาด/น้ำหนัก/เรทราคาในฟอร์มด้านล่าง แล้วกด “บันทึก” (อัพเดตข้อมูลเท่านั้น · เก็บเงินไปที่รายงานตู้)"
             : showTracking
               ? "🚚 ใส่เลขพัสดุไทยในฟอร์มด้านล่างเพื่อปิดงาน “ส่งแล้ว”"
               : isCreditSel
@@ -414,7 +418,7 @@ export function ForwarderStatusWorkflow(p: Props) {
             <section className="mt-3 rounded-2xl border border-border border-l-4 border-l-indigo-400 bg-white dark:bg-surface shadow-sm overflow-hidden">
               <header className="flex items-center gap-2 px-4 pt-4">
                 <Package className="h-4 w-4 text-indigo-500" />
-                <h3 className="text-sm font-semibold tracking-wide">กรอกรายละเอียดสินค้า · ขนาด · ราคา (ถึงไทยแล้ว) · ทุกแทรคกิง</h3>
+                <h3 className="text-sm font-semibold tracking-wide">กรอกรายละเอียดสินค้า · ขนาด · ราคา · ทุกแทรคกิง (บันทึกได้ตั้งแต่ถึงโกดังจีน)</h3>
               </header>
               <div className="p-3 sm:p-4">
                 {/* 2026-06-18 (ภูม · A2) — หลายแถวตามแทรคกิง (สร้างฝั่ง server ใน page.tsx).
