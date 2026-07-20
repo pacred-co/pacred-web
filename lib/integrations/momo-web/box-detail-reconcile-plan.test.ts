@@ -388,4 +388,87 @@ check("healthy UNPRICED proper-split family = full no-op (no fixes · no reviews
 });
 
 
+
+// ── 7. FANOUT ON A FAMILY WITH **NO BARE ROW** (owner 2026-07-20 · PR208 1784190161) ──
+// fill-when-empty meant only the ONE row that happened to be weightless got the
+// family Σ; and that family never had a tb_forwarder bare row at all (box_detail
+// does have box #1). The corroboration must be bare-INDEPENDENT or this strands.
+check("no bare ROW: the single fanout sibling still converges to its own box", () => {
+  const boxes: ReconcileBox[] = [
+    box({ boxTracking: "NB", weightKg: 38.5, cbm: 0.1404, quantity: 1, width: 60, length: 52, height: 45 }),
+    box({ boxTracking: "NB-2", weightKg: 40, cbm: 0.1411, quantity: 1, width: 64, length: 63, height: 35 }),
+    box({ boxTracking: "NB-3", weightKg: 43.5, cbm: 0.1346, quantity: 1, width: 65, length: 46, height: 45 }),
+  ];
+  // whole-shipment Σ = 3 ชิ้น · 122 kg. Only NB-3 got fanned; NB-2 is healthy; no bare row.
+  const group: ReconcileForwarderRow[] = [
+    fwd({ id: 90, ftrackingchn: "NB-2", famount: 1, fweight: 40, fvolume: 0.1411 }),
+    fwd({ id: 91, ftrackingchn: "NB-3", famount: 3, fweight: 122, fvolume: 0.4161 }),
+  ];
+  const plan = planBoxDetailReconcile(group, boxes);
+  assert.equal(plan.detailFixes.length, 1, "the fanned sibling is fixed even with no bare row");
+  assert.equal(plan.detailFixes[0].id, 91);
+  assert.deepEqual(
+    [plan.detailFixes[0].truth.famount, plan.detailFixes[0].truth.fweight, plan.detailFixes[0].truth.fvolume],
+    [1, 43.5, 0.13455], "คิว from the box's own dims (65×46×45)");
+  assert.equal(plan.bareZeroes.length, 0);
+  assert.equal(plan.reviews.length, 0);
+});
+
+check("no bare ROW + inflated row that does NOT match the shipment Σ → review (never guess)", () => {
+  const boxes: ReconcileBox[] = [
+    box({ boxTracking: "NB", weightKg: 38.5, cbm: 0.1404, quantity: 1, width: 60, length: 52, height: 45 }),
+    box({ boxTracking: "NB-2", weightKg: 40, cbm: 0.1411, quantity: 1, width: 64, length: 63, height: 35 }),
+  ];
+  const group: ReconcileForwarderRow[] = [
+    fwd({ id: 95, ftrackingchn: "NB-2", famount: 9, fweight: 777, fvolume: 3.3 }), // matches nothing
+  ];
+  const plan = planBoxDetailReconcile(group, boxes);
+  assert.equal(plan.detailFixes.length, 0);
+  assert.ok(plan.reviews.some((r) => r.kind === "aggregate_on_detail_no_bare" && r.id === 95));
+});
+
+// ── 8. DISPLAY-ONLY COUNT REPAIR (famount 0 → the box truth · money-neutral) ──
+check("famount=0 with a correct money basis → countFix (only under famountcount='1')", () => {
+  const boxes: ReconcileBox[] = [
+    box({ boxTracking: "CT", weightKg: 10, cbm: 0.06, quantity: 1, width: 50, length: 40, height: 30 }),
+    box({ boxTracking: "CT-2", weightKg: 20, cbm: 0.12, quantity: 2, width: 50, length: 40, height: 30 }),
+  ];
+  const group: ReconcileForwarderRow[] = [
+    fwd({ id: 100, ftrackingchn: "CT-2", famount: 0, famountcount: "1", fweight: 20, fvolume: 0.12 }),
+  ];
+  const plan = planBoxDetailReconcile(group, boxes);
+  assert.equal(plan.detailFixes.length, 0, "the money basis is already right — no basis write");
+  assert.equal(plan.countFixes.length, 1);
+  assert.deepEqual([plan.countFixes[0].id, plan.countFixes[0].famount], [100, 2]);
+  assert.equal(plan.reviews.length, 0);
+});
+
+check("famount=0 under the PER-BOX convention is NEVER count-fixed (famount is a money multiplier)", () => {
+  const boxes: ReconcileBox[] = [
+    box({ boxTracking: "CT", weightKg: 10, cbm: 0.06, quantity: 1, width: 50, length: 40, height: 30 }),
+    box({ boxTracking: "CT-2", weightKg: 20, cbm: 0.12, quantity: 2, width: 50, length: 40, height: 30 }),
+  ];
+  const group: ReconcileForwarderRow[] = [
+    fwd({ id: 101, ftrackingchn: "CT-2", famount: 0, famountcount: "", fweight: 20, fvolume: 0.12 }),
+  ];
+  const plan = planBoxDetailReconcile(group, boxes);
+  assert.equal(plan.countFixes.length, 0);
+  assert.equal(plan.detailFixes.length, 0);
+});
+
+check("a CORRECT famount emits no countFix (idempotent)", () => {
+  const boxes: ReconcileBox[] = [
+    box({ boxTracking: "CT", weightKg: 10, cbm: 0.06, quantity: 1, width: 50, length: 40, height: 30 }),
+    box({ boxTracking: "CT-2", weightKg: 20, cbm: 0.12, quantity: 2, width: 50, length: 40, height: 30 }),
+  ];
+  const group: ReconcileForwarderRow[] = [
+    fwd({ id: 102, ftrackingchn: "CT-2", famount: 2, famountcount: "1", fweight: 20, fvolume: 0.12 }),
+  ];
+  const plan = planBoxDetailReconcile(group, boxes);
+  assert.equal(plan.countFixes.length, 0);
+  assert.equal(plan.detailFixes.length, 0);
+  assert.equal(plan.reviews.length, 0);
+});
+
+
 console.log(`\nbox-detail-reconcile-plan.test.ts — ${passed} checks passed`);

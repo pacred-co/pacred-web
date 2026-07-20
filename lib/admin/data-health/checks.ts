@@ -311,6 +311,55 @@ const CHECKS: CheckDef[] = [
     },
   },
   {
+    id: "shipment_short_a_box",
+    title: "ชิปเม้นมีแถวน้อยกว่ากล่องจริง (กล่องหาย = เก็บเงินขาด)",
+    severity: "red",
+    why:
+      "2026-07-20 — staging 2 แถว (กล่องคนละใบ) ถูก commit รวมเป็น tb_forwarder แถวเดียว → กล่องที่เหลือไม่มีแถว " +
+      "= ไม่ถูกคิดเงิน (PR208 1784190161 ขาด 38.5 กก. · PR179 1784432869 · PR079 ×2 …). ตรงข้ามกับ fanout: อันนั้นเบิ้ล อันนี้ขาด",
+    action:
+      "เพิ่มรายการที่ขาดผ่าน /admin/momo-containers (ปุ่มเพิ่มรายการที่ขาด · audited create path) — ห้าม auto-create จาก cron · " +
+      "แถว billed (5/6/7) = บัญชีเคาะ",
+    run: async (admin, ctx) => {
+      const boxesByBase = new Map<string, Set<string>>();
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await admin
+          .from("momo_box_detail")
+          .select("base_tracking, box_tracking")
+          .range(from, from + 999);
+        if (error) throw new Error(`momo_box_detail scan: ${error.code} ${error.message}`);
+        const batch = (data ?? []) as Array<{ base_tracking: string | null; box_tracking: string | null }>;
+        for (const b of batch) {
+          const base = str(b.base_tracking);
+          const bt = str(b.box_tracking);
+          if (!base || !bt) continue;
+          // MOMO names box #1 BOTH ways (bare and "-1/N") — normalise to an ordinal so
+          // that naming twin never counts as two boxes.
+          const ord = String(Math.max(suffixOf(bt), 1));
+          const s = boxesByBase.get(base) ?? new Set<string>();
+          s.add(ord);
+          boxesByBase.set(base, s);
+        }
+        if (batch.length < 1000) break;
+      }
+      const out: Array<Record<string, unknown>> = [];
+      for (const [base, rows] of ctx.groups) {
+        const boxes = boxesByBase.get(base);
+        if (!boxes || boxes.size <= rows.length) continue;
+        out.push({
+          base,
+          userid: rows[0].userid,
+          rows: rows.length,
+          boxes: boxes.size,
+          short: boxes.size - rows.length,
+          fstatus: [...new Set(rows.map((r) => r.fstatus))].join("/"),
+        });
+      }
+      out.sort((a, b) => Number(b.short) - Number(a.short));
+      return { count: out.length, sample: cap(out) };
+    },
+  },
+  {
     id: "awaiting_payment_zero_price",
     title: "รอชำระเงิน (5) แต่ราคา ฿0 — เก็บเงินขาด",
     severity: "red",

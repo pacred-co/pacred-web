@@ -213,41 +213,44 @@ export async function fillLiveDataForParcels(
   result.matched = rowsById.size;
 
   // ── FAMILY SIZE from the DATABASE (not from the Live parcels) ──
-  // A split family whose siblings Live doesn't list (advanced off the boards) still
-  // must NEVER get the base aggregate — count the DB's live sibling rows per base.
+  // A split family whose siblings Live does NOT list (they advanced off the boards)
+  // must still never get the base aggregate → count the DB's LIVE sibling rows per
+  // base. Done as ONE bounded paged scan of (ftrackingchn, fstatus) — the same shape
+  // lib/admin/data-health/checks.ts uses. A LIKE/`.or()` prefix filter was rejected:
+  // it needs per-value escaping and can over-match a longer tracking with the same
+  // prefix; an exact in-memory baseTrackingOf() grouping cannot.
+  // FAIL-CLOSED: if the scan errors we mark EVERY base as split (exact-only fill),
+  // because an unknown family size must never enable an aggregate write.
   const familyCount = new Map<string, number>();
   {
-    const bases = Array.from(
-      new Set(
-        Array.from(rowsById.values())
-          .map((r) => baseTrackingOf((r.ftrackingchn ?? "").trim()))
-          .filter(Boolean),
-      ),
-    );
-    const BCHUNK = 50;
-    for (let i = 0; i < bases.length; i += BCHUNK) {
-      const slice = bases.slice(i, i + BCHUNK);
-      const orExpr = slice.map((b) => `ftrackingchn.like.${b}%`).join(",");
+    let scanFailed = false;
+    for (let from = 0; ; from += 1000) {
       const { data, error } = await admin
         .from("tb_forwarder")
         .select("ftrackingchn, fstatus")
-        .or(orExpr);
+        .range(from, from + 999);
       if (error) {
-        console.error("[fillLiveData] family-count lookup failed", { code: error.code, message: error.message });
+        console.error("[fillLiveData] family-count scan failed", { code: error.code, message: error.message });
         result.errors.push({ scope: "family-count", message: `${error.code} ${error.message}` });
-        // fail CLOSED for the affected bases: treat them as split families (exact-only
-        // fill) — an unknown family size must never enable an aggregate write.
-        for (const b of slice) familyCount.set(b, 2);
-        continue;
+        scanFailed = true;
+        break;
       }
-      for (const r of (data ?? []) as Array<{ ftrackingchn: string | null; fstatus: string | null }>) {
+      const batch = (data ?? []) as Array<{ ftrackingchn: string | null; fstatus: string | null }>;
+      for (const r of batch) {
         const t = (r.ftrackingchn ?? "").trim();
         if (!t) continue;
         const st = (r.fstatus ?? "").trim();
         if (st === "" || st === "0" || st === "99") continue; // dead rows don't count
         const b = baseTrackingOf(t);
-        if (!slice.includes(b)) continue; // LIKE prefix over-match (different tracking)
         familyCount.set(b, (familyCount.get(b) ?? 0) + 1);
+      }
+      if (batch.length < 1000) break;
+    }
+    if (scanFailed) {
+      familyCount.clear();
+      for (const r of rowsById.values()) {
+        const b = baseTrackingOf((r.ftrackingchn ?? "").trim());
+        if (b) familyCount.set(b, 2); // ≥2 ⇒ treated as split ⇒ exact-only fill
       }
     }
   }

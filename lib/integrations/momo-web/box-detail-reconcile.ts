@@ -57,6 +57,8 @@ export type BoxDetailReconcileResult = {
   repriced: number;
   /** Leftover aggregate bare bases zeroed. */
   baresZeroed: number;
+  /** Display-only famount repairs ("0 ลัง" rows) — money-neutral. */
+  countFixed: number;
   /** Rows the plan REFUSED to auto-heal, counted by reason (money-sensitive / momo-suspect). */
   reviews: Partial<Record<ReconcileReviewKind, number>>;
   /** Per-item errors. Best-effort: an error never aborts the whole run. */
@@ -70,6 +72,7 @@ export function emptyBoxDetailReconcileResult(): BoxDetailReconcileResult {
     detailFixed: 0,
     repriced: 0,
     baresZeroed: 0,
+    countFixed: 0,
     reviews: {},
     errors: [],
   };
@@ -222,7 +225,7 @@ export async function reconcileMomoBoxDetailRows(
       for (const rev of plan.reviews) {
         result.reviews[rev.kind] = (result.reviews[rev.kind] ?? 0) + 1;
       }
-      if (plan.detailFixes.length === 0 && plan.bareZeroes.length === 0) continue;
+      if (plan.detailFixes.length === 0 && plan.bareZeroes.length === 0 && plan.countFixes.length === 0) continue;
 
       let touchedGroup = false;
 
@@ -277,6 +280,31 @@ export async function reconcileMomoBoxDetailRows(
             });
           }
         }
+      }
+
+      // ── 2a½. COUNT fixes — display-only famount repair ("0 ลัง" on screen) ──
+      // The money basis already matches the box truth; only the count is short. The
+      // plan emits these ONLY for famountcount='1' rows (fvolume is the row total →
+      // famount multiplies nothing) so this is provably money-neutral. Extra WHERE
+      // belt: re-assert famountcount='1' + unbilled at write time.
+      for (const cf of plan.countFixes) {
+        const { data: cRows, error: cErr } = await admin
+          .from("tb_forwarder")
+          .update({ famount: cf.famount })
+          .eq("id", cf.id)
+          .eq("famountcount", "1")
+          .in("fstatus", FILLABLE_FSTATUS)
+          .select("id");
+        if (cErr) {
+          console.error("[reconcileMomoBoxDetail] count-fix update failed", {
+            code: cErr.code, message: cErr.message, id: cf.id, base,
+          });
+          result.errors.push({ scope: `count:${cf.id}`, message: `${cErr.code} ${cErr.message}` });
+          continue;
+        }
+        if (!cRows || cRows.length === 0) continue; // raced (billed / convention changed)
+        result.countFixed = (result.countFixed ?? 0) + 1;
+        touchedGroup = true;
       }
 
       // ── 2b. BARE zeroes — a redundant aggregate header (metrics → 0) ──

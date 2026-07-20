@@ -147,6 +147,17 @@ export type TrueBoxTotals = {
   undecided: number;
 };
 
+/** A DISPLAY-ONLY box-count repair: the row's money basis already matches its box
+ *  truth, but famount is 0/short so every cargo screen shows "0 ลัง".
+ *  Emitted ONLY for famountcount='1' rows, where famount multiplies nothing
+ *  (fvolume is the row total) ⇒ provably money-neutral. */
+export type CountFix = {
+  id: number;
+  tracking: string;
+  /** the box truth's piece count */
+  famount: number;
+};
+
 /** A redundant aggregate BARE base to ZERO (famount/fweight/fvolume → 0). */
 export type BareZero = {
   id: number;
@@ -175,6 +186,8 @@ export type ReconcileReviewKind =
 
 export type BoxDetailReconcilePlan = {
   detailFixes: DetailFix[];
+  /** display-only famount repairs (money-neutral · famountcount='1' rows only). */
+  countFixes: CountFix[];
   bareZeroes: BareZero[];
   reviews: ReconcileReview[];
 };
@@ -265,6 +278,7 @@ export function planBoxDetailReconcile(
 ): BoxDetailReconcilePlan {
   const TOL = opts.relTolerance ?? 0.02;
   const detailFixes: DetailFix[] = [];
+  const countFixes: CountFix[] = [];
   const bareZeroes: BareZero[] = [];
   const reviews: ReconcileReview[] = [];
 
@@ -283,17 +297,23 @@ export function planBoxDetailReconcile(
 
   // ── PROPER-SPLIT shape (owner rule 2026-07-18: "กล่อง 1 อยู่บน bare เสมอ · sibling
   //    เริ่ม -2/n") — box_detail carries a REAL box row for the base itself (decided
-  //    basis · real weight) → the bare is BOX #1, not an aggregate header. The
-  //    suffix-only `totals` drops that box, so the whole-shipment Σ = totalsAll.
-  //    2026-07-20 PR179 incident: fillLiveDataForParcels (pre-fix) fanned the
-  //    whole-shipment Σ onto EVERY row of such a family — this shape lets the heal
-  //    converge it: each row (incl. the bare) → its OWN box truth. Never zeroed. ──
+  //    basis · real weight) → that box is BOX #1, not an aggregate header. The
+  //    suffix-only `totals` drops it, so the whole-shipment Σ = totalsAll*.
+  //    2026-07-20 fanout incidents: fillLiveDataForParcels (pre-fix) wrote the
+  //    whole-shipment Σ onto rows of such a family — EVERY row (PR179 1783582423,
+  //    all 22 were weightless) or just ONE (PR208 1784190161-4 · the fill-when-empty
+  //    guard meant only the row that happened to be empty got it, and that family
+  //    has NO tb_forwarder bare row at all). Both must heal → the whole-shipment
+  //    corroboration below is deliberately BARE-INDEPENDENT. ──
   const bareBox = boxes.find((b) => suffixOf(b.boxTracking) <= 0) ?? null;
   const bareBasis = bareBox ? resolveMomoBoxBasis(bareBox) : null;
-  const properSplit =
-    bare != null && bareBasis != null && bareBasis.decided && bareBasis.totalWeightKg > 0;
-  const totalsAllWeight = properSplit && bareBasis ? r2(totals.fweight + bareBasis.totalWeightKg) : totals.fweight;
-  const totalsAllFamount = properSplit && bareBasis ? totals.famount + bareBasis.pieces : totals.famount;
+  /** box_detail proves a real box #1 exists for this base (regardless of whether a
+   *  tb_forwarder row was ever created for it). */
+  const hasBareBox = bareBasis != null && bareBasis.decided && bareBasis.totalWeightKg > 0;
+  const totalsAllWeight = hasBareBox && bareBasis ? r2(totals.fweight + bareBasis.totalWeightKg) : totals.fweight;
+  const totalsAllFamount = hasBareBox && bareBasis ? totals.famount + bareBasis.pieces : totals.famount;
+  /** The (c) branch below converges the BARE ROW itself — that needs the row to exist. */
+  const properSplit = bare != null && hasBareBox;
 
   // ── (b) CORRUPT "-N/M" DETAIL rows — converge to their own momo box truth ──
   for (const row of group) {
@@ -325,42 +345,54 @@ export function planBoxDetailReconcile(
     // correct famount is NOT this shape → it is the MOMO-มั่ว weight case → refuse.
     const amountInflated = curAmount !== truth.famount && curAmount > truth.famount;
     if (!amountInflated) {
-      if (
-        relDiff(num(row.fweight), truth.fweight) > TOL ||
-        relDiff(num(row.fvolume), truth.fvolume) > TOL
-      ) {
-        // weight/คิว disagree but famount is right → MOMO's weight_kg is suspect
-        // (per-piece-vs-total ambiguity · a ×N tonnage). NEVER auto-apply — refuse.
-        reviews.push({ kind: "weight_vol_only_momo_suspect", id: row.id, tracking: row.ftrackingchn });
+      const weightOk = relDiff(num(row.fweight), truth.fweight) <= TOL;
+      const volOk = relDiff(num(row.fvolume), truth.fvolume) <= TOL;
+      if (weightOk && volOk) {
+        // The money basis is ALREADY right — only the DISPLAY count is short/zero
+        // ("0 ลัง" on every cargo screen · prod 2026-07-20: 29 rows). Repairing it is
+        // provably money-NEUTRAL *only* under famountcount='1' (fvolume is the row
+        // TOTAL, so famount multiplies nothing). Under the per-box convention famount
+        // IS a multiplier (totalCbmOf) → never touch it here.
+        const foldedTotal = String(row.famountcount ?? "").trim() === "1";
+        if (foldedTotal && curAmount < truth.famount) {
+          countFixes.push({ id: row.id, tracking: row.ftrackingchn, famount: truth.famount });
+        }
+        continue;
       }
+      // weight/คิว disagree but famount is right → MOMO's weight_kg is suspect
+      // (per-piece-vs-total ambiguity · a ×N tonnage). NEVER auto-apply — refuse.
+      reviews.push({ kind: "weight_vol_only_momo_suspect", id: row.id, tracking: row.ftrackingchn });
       continue;
     }
 
-    if (!bare) {
-      reviews.push({ kind: "aggregate_on_detail_no_bare", id: row.id, tracking: row.ftrackingchn });
-      continue;
-    }
     if (bareIsPricedAnchor) {
       // PRICED-ANCHOR model: the bare carries money → the "-N/M" rows are botched
       // duplicates whose correct resolution is a DELETE + a money decision. Never here.
       reviews.push({ kind: "priced_anchor_bare", id: row.id, tracking: row.ftrackingchn });
       continue;
     }
-    // corroboration 1: the detail row COPIED the bare's aggregate (famount + weight + คิว)
-    // — OR (proper-split fanout · 2026-07-20 PR179) it copied the WHOLE-SHIPMENT Σ
-    // (exact famount match + weight within TOL). The second form is bare-independent,
-    // so a partially-healed family (bare already converged) still heals its siblings.
+    // corroboration 1 — TWO accepted signatures:
+    //   (i)  the detail row COPIED the bare row's aggregate (famount + weight + คิว), or
+    //   (ii) it carries the WHOLE-SHIPMENT Σ (exact famount + weight within TOL) —
+    //        the 2026-07-20 Live-fanout shape. (ii) is BARE-INDEPENDENT on purpose:
+    //        a family whose bare was already healed — or that never had a bare row at
+    //        all (PR208 1784190161) — must still converge its corrupt siblings.
     const copiesAggregate =
+      bare != null &&
       curAmount === Math.round(num(bare.famount)) &&
       relDiff(num(row.fweight), num(bare.fweight)) <= TOL &&
       relDiff(num(row.fvolume), num(bare.fvolume)) <= TOL;
     const copiesWholeShipment =
-      properSplit &&
+      hasBareBox &&
       totals.count > 1 &&
       curAmount === totalsAllFamount &&
       relDiff(num(row.fweight), totalsAllWeight) <= TOL;
     if (!copiesAggregate && !copiesWholeShipment) {
-      reviews.push({ kind: "amount_inflated_not_bare_aggregate", id: row.id, tracking: row.ftrackingchn });
+      reviews.push({
+        kind: bare ? "amount_inflated_not_bare_aggregate" : "aggregate_on_detail_no_bare",
+        id: row.id,
+        tracking: row.ftrackingchn,
+      });
       continue;
     }
     // corroboration 2: momo RECONCILES the aggregate (bare.fweight ≈ Σ momo per-box).
@@ -372,8 +404,8 @@ export function planBoxDetailReconcile(
     const momoReconciles =
       totals.count > 1 &&
       totals.undecided === 0 &&
-      (relDiff(num(bare.fweight), totals.fweight) <= TOL ||
-        (properSplit && relDiff(num(row.fweight), totalsAllWeight) <= TOL));
+      ((bare != null && relDiff(num(bare.fweight), totals.fweight) <= TOL) ||
+        (hasBareBox && relDiff(num(row.fweight), totalsAllWeight) <= TOL));
     if (!momoReconciles) {
       reviews.push({ kind: "momo_does_not_reconcile_aggregate", id: row.id, tracking: row.ftrackingchn });
       continue;
@@ -482,5 +514,5 @@ export function planBoxDetailReconcile(
     }
   }
 
-  return { detailFixes, bareZeroes, reviews };
+  return { detailFixes, countFixes, bareZeroes, reviews };
 }
