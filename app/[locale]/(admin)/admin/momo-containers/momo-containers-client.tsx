@@ -11,6 +11,8 @@
 
 import { Fragment, useMemo, useState, useTransition, type ReactNode } from "react";
 import { ALL_WORKBOOK_CARRIER_OPTIONS } from "@/lib/cart/ship-by-eligibility";
+import { baseTracking } from "@/lib/admin/momo-bill-header";
+import { cgMatchesQty } from "@/lib/forwarder/cg-range";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
@@ -231,6 +233,10 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
   const [copied, setCopied] = useState(false);
   // ⇅ sort + ⋮⋮ reorderable columns (ไอแต้ม-style · re-added on ปอน table 2026-07-14)
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" } | null>(null);
+  // ── shipment dropdown (owner 2026-07-19 "ทำเป็นดรอปดาว เรียงตามชิปเม้น · กดค่อยแสดงแทรค") ──
+  const [openFams, setOpenFams] = useState<Set<string>>(new Set());
+  const toggleFam = (base: string) =>
+    setOpenFams((prev) => { const nx = new Set(prev); if (nx.has(base)) nx.delete(base); else nx.add(base); return nx; });
   const [dragKey, setDragKey] = useState<string | null>(null);
   const { order: colOrder, move: moveCol, reset: resetCols } = useColumnOrder(DATA_KEYS);
   // ✎ inline-edit น้ำหนัก/คิว/จำนวน (pending only · updateMomoImportTrackFields · แก้ก่อนนำเข้า)
@@ -286,13 +292,100 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     });
     return arr;
   }, [filtered, sort]);
+
+  // ── SHIPMENT (family) grouping — owner 2026-07-19 "จับคู่แล้วกรุ๊ปไม่ถูก ตั้งแต่ต้นน้ำ" ──
+  // MOMO's feed sends EVERY box-group as its own staging row (base + -2..-N), and the
+  // table rendered each as an independent header each nesting the WHOLE family's
+  // box_detail → an 18-box shipment painted 18×18 rows. Group by BASE tracking:
+  // the first row (bare, else lowest suffix) = the shipment header; the rest render
+  // as indented MEMBER rows (checkbox/commit per row unchanged — display only).
+  const families = useMemo(() => {
+    const byBase = new Map<string, typeof sorted>();
+    const order: string[] = [];
+    for (const t of sorted) {
+      const b = (t.tracking ? baseTracking(t.tracking) : null) ?? `__solo_${t.id}`;
+      if (!byBase.has(b)) { byBase.set(b, []); order.push(b); }
+      byBase.get(b)!.push(t);
+    }
+    return order.map((b) => {
+      const fam = [...byBase.get(b)!];
+      fam.sort((x, y) =>
+        x.tracking === b ? -1 : y.tracking === b ? 1 :
+        String(x.tracking ?? "").localeCompare(String(y.tracking ?? ""), undefined, { numeric: true }));
+      return fam;
+    });
+  }, [sorted]);
+
+  // ── shipment aggregates (countable-members rule + Live complement) — ONE brain
+  //    for family headers AND the ตู้/กระสอบ tier rows (no drift). ──
+  const famAgg = (fam: (typeof families)[number]) => {
+    const base = baseTracking(fam[0].tracking ?? "") ?? (fam[0].tracking ?? "");
+    const hasBareMember = fam.some((x) => (x.tracking ?? "") === base);
+    const hasSuffixMembers = fam.some((x) => (x.tracking ?? "") !== base);
+    const countable = hasBareMember && hasSuffixMembers ? fam.filter((x) => (x.tracking ?? "") !== base) : fam;
+    const memberTrackings = new Set(fam.map((x) => (x.tracking ?? "").trim()).filter(Boolean));
+    const extraBoxes = hasSuffixMembers
+      ? (fam[0].boxes ?? []).filter((b) => b.tracking && !memberTrackings.has(b.tracking.trim()))
+      : [];
+    return {
+      base,
+      hasSuffixMembers,
+      countable,
+      extraBoxes,
+      qty: countable.reduce((sm, x) => sm + (x.qty ?? 0), 0) + extraBoxes.reduce((sm, b) => sm + (b.qty || 0), 0),
+      wt: countable.reduce((sm, x) => sm + (x.weightKg || 0), 0) + extraBoxes.reduce((sm, b) => sm + (b.weight || 0), 0),
+      cbm: countable.reduce((sm, x) => sm + (x.cbm || 0), 0) + extraBoxes.reduce((sm, b) => sm + (b.cbm || 0), 0),
+    };
+  };
+
+  // ── ตู้ → กระสอบ tier (owner 2026-07-20 "กระสอบต้องอยู่ในตู้อีกที ไม่ใช่ tier เดียวกับตู้ ·
+  //    ในกระสอบต้องแจงว่ามีแทรคกิ้งไหน") — the physical hierarchy:
+  //    ตู้ (container) ⊃ กระสอบ (sack) ⊃ ชิปเม้น (base) ⊃ แทรคกิ้ง (-N/M) ⊃ กล่อง (CG).
+  //    Families group under their sack, sacks under their container; shipments whose
+  //    container isn't known yet sit under the "ยังไม่เข้าตู้ปิด" section. First-seen
+  //    order (follows the current sort — pending/newest naturally floats up). ──
+  const tierGroups = useMemo(() => {
+    type Fam = (typeof families)[number];
+    type SackGroup = { sack: string | null; fams: Fam[] };
+    type ContainerGroup = { container: string | null; sacks: SackGroup[] };
+    const groups: ContainerGroup[] = [];
+    const byContainer = new Map<string, ContainerGroup>();
+    for (const fam of families) {
+      const container = fam.map((x) => x.container).find((v): v is string => !!v) ?? null;
+      const sack = fam.map((x) => x.sack).find((v): v is string => !!v) ?? null;
+      const cKey = container ?? "__pending__";
+      let cg = byContainer.get(cKey);
+      if (!cg) { cg = { container, sacks: [] }; byContainer.set(cKey, cg); groups.push(cg); }
+      let sg = cg.sacks.find((s) => (s.sack ?? "") === (sack ?? ""));
+      if (!sg) { sg = { sack, fams: [] }; cg.sacks.push(sg); }
+      sg.fams.push(fam);
+    }
+    // within a container: sack-less shipments first, then sacks by name
+    for (const cg of groups) {
+      cg.sacks.sort((a, b) => (a.sack === null ? -1 : b.sack === null ? 1 : a.sack.localeCompare(b.sack)));
+    }
+    return groups;
+  }, [families]);
   const toggleSort = (key: string) =>
     setSort((s) => (s?.key === key ? (s.dir === "asc" ? { key, dir: "desc" } : null) : { key, dir: "asc" }));
   const sortIcon = (key: string) => (sort?.key === key ? (sort.dir === "asc" ? "↑" : "↓") : "⇅");
 
   // ── ติ๊กเลือก — เลือกได้เฉพาะแถวที่ "ยังไม่เข้าระบบ" และอยู่ในผลกรองปัจจุบัน ──
   const allPendingIds = useMemo(
-    () => filtered.filter((t) => !t.committed && !rowResult[t.id]?.ok).map((t) => t.id),
+    () => {
+      const pending = filtered.filter((t) => !t.committed && !rowResult[t.id]?.ok);
+      // a family must commit ONE shape (the box rows OR the bare aggregate — the
+      // commit chokepoint refuses the other anyway). Select-all prefers the box
+      // rows (real per-box dims) → skip the bare when pending box siblings exist.
+      const suffixBases = new Set(
+        pending
+          .filter((t) => t.tracking && baseTracking(t.tracking) !== t.tracking)
+          .map((t) => baseTracking(t.tracking!) ?? ""),
+      );
+      return pending
+        .filter((t) => !(t.tracking && baseTracking(t.tracking) === t.tracking && suffixBases.has(t.tracking)))
+        .map((t) => t.id);
+    },
     [filtered, rowResult],
   );
   const selectedTracks = useMemo(() => tracks.filter((t) => sel.has(t.id) && !t.committed), [tracks, sel]);
@@ -613,12 +706,17 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           {t.sack && <div className="text-[11px] text-muted">กระสอบ: {t.sack}</div>}
           {t.momoGarbage && (
             <div className="mt-0.5 inline-flex items-center gap-0.5 rounded bg-red-600 px-1 py-0.5 text-[11px] font-bold text-white"
-              title={`MOMO มั่ว — box_detail ${t.momoGarbage.boxCount} กล่อง รวม${
+              title={`ตัวเลข MOMO ขัดกันเอง — กล่องย่อย (box_detail) ${t.momoGarbage.boxCount} กล่อง รวม${
                 t.momoGarbage.reason === "weight"
                   ? `น้ำหนัก ${n2(t.momoGarbage.boxWeightSum)} กก. เกินก้อนรวม ${n2(t.momoGarbage.aggWeight)} กก.`
                   : `คิว ${n6(t.momoGarbage.boxCbmSum)} เกินก้อนรวม ${n6(t.momoGarbage.aggCbm)}`
               } · ขนาดกล่องก็เช็คไม่ได้ → แตกกล่องอัตโนมัติไม่ได้ · ต้องอัพ packing list แต้ม`}>
-              🚩 MOMO มั่ว
+              🚩 ข้อมูล MOMO ขัดกันเอง
+            </div>
+          )}
+          {t.momoGarbage && (
+            <div className="mt-0.5 text-[10px] leading-tight text-red-600">
+              นำเข้าระบบได้ปกติ · ระบบจะยังไม่แตกกล่อง/ไม่เชื่อตัวเลขชุดนี้ จนกว่าอัพ packing list ยืนยัน
             </div>
           )}
         </>
@@ -626,7 +724,9 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     },
     trans: { label: "Trans", tdClass: "px-2 py-1.5 text-center whitespace-nowrap", td: (t) => (t.transport && TRANSPORT_TH[t.transport]) || DASH },
     smDate: { label: "SM Date", sortKey: "smDate", tdClass: "px-2 py-1.5 text-center tabular-nums whitespace-nowrap", tdTitle: (t) => t.smDate ?? "", td: (t) => dateOnly(t.smDate) ?? DASH },
-    smNumber: { label: "SM Number", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
+    // SM Number — MOMO API ไม่ส่ง (ตรวจ raw ครบทุก status 2026-07-19: ไม่มี field นี้) →
+    // owner: ใช้เลขหัวบิล/ชิปเม้น (base tracking) เป็นเลขออเดอร์ในช่องนี้แทน.
+    smNumber: { label: "SM Number", tdClass: "px-2 py-1.5 font-mono whitespace-nowrap", td: (t) => baseTracking(t.tracking ?? "") ?? DASH },
     branch: { label: "Branch", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
     product: { label: "Product", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
     dum: { label: "Dum", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
@@ -702,7 +802,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           <button type="button" onClick={() => setTab("garbage")}
             className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${tab === "garbage" ? "bg-red-600 text-white" : "bg-red-100 text-red-700 hover:bg-red-200"}`}
             title="MOMO ส่งน้ำหนัก/คิว ต่อกล่อง ขัดกับก้อนรวม (แถวย่อยหนักเกินก้อนรวม) · ระบบแตกกล่องอัตโนมัติไม่ได้ → ต้องอัพ packing list แต้ม">
-            🚩 MOMO มั่ว {counts.garbage}
+            🚩 ข้อมูล MOMO ขัดกัน {counts.garbage}
           </button>
         )}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหา แทรคกิ้ง / PR / เลขตู้…"
@@ -822,13 +922,120 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
             {sorted.length === 0 && (
               <tr><td colSpan={1 + colOrder.length} className="px-3 py-6 text-center text-xs text-muted">ไม่มีรายการตามเงื่อนไข</td></tr>
             )}
-            {sorted.map((t, i) => {
+            {(() => { let n = 0; let famSeq = 0;
+            const renderFam = (fam: (typeof families)[number]) => {
+              const famIdx = famSeq++;
+              // ── SHIPMENT header (owner 2026-07-19 · pattern: base = ชิปเม้น = ออเดอร์ = หัวบิล) ──
+              // Any family with a -N/M member gets a synthetic header row showing the
+              // STRIPPED base number (Σ กล่อง/นน./คิว) — clickable into the order once any
+              // member is committed. Every staging tracking then nests as an ↳ member.
+              // A shipment is collapsible when it has ANY per-box detail to show —
+              // every shipment renders the SAME dropdown, no two looks.
+              // Σ = countable-members rule + Live complement (famAgg — ONE brain shared
+              // with the ตู้/กระสอบ tier rows).
+              const { base, hasSuffixMembers, countable, extraBoxes, qty: famQty, wt: famWt, cbm: famCbm } = famAgg(fam);
+              const grouped = fam.length > 1 || fam.some((x) => (x.tracking ?? "") !== base)
+                || (fam.length === 1 && fam[0].boxes.length > 0);
+              const famFid = fam.map((x) => x.committedForwarderId).find((v) => v != null) ?? null;
+              // header checkbox = เลือกทั้งชิปเม้น (the selectable members · bare excluded —
+              // the box rows are the commit shape; the chokepoint guards the rest)
+              const famSelectableIds = fam
+                .filter((x) => !x.committed && !rowResult[x.id]?.ok && !(hasSuffixMembers && (x.tracking ?? "") === base))
+                .map((x) => x.id);
+              const famAllSel = famSelectableIds.length > 0 && famSelectableIds.every((id) => sel.has(id));
+              const isOpen = !grouped || openFams.has(base);
+              // CG box-number consistency (owner 2026-07-19 · เลขกล่อง): the CG range's
+              // box count must equal the tracking's Total Parcel — flag any mismatch.
+              const famCgMismatch = fam.some((x) => cgMatchesQty(x.cgNo, x.qty) === false);
+              return (
+                <Fragment key={`fam-${base}-${famIdx}`}>
+                {grouped && (
+                  <tr
+                    className="cursor-pointer border-t-2 border-slate-300 bg-slate-100/70 align-top hover:bg-slate-200/60"
+                    title="กดเพื่อกาง/พับรายละเอียดแทรคกิ้งของชิปเม้นนี้"
+                    onClick={(e) => { if ((e.target as HTMLElement).closest("a,button,input,select,textarea")) return; toggleFam(base); }}
+                  >
+                    <td className="px-2 py-1.5 text-center">
+                      {famFid ? (
+                        <Link href={`/admin/forwarders/${famFid}`} title={`เปิดชิปเม้น/ออเดอร์ #${famFid}`}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-primary-700 hover:underline">
+                          #{famFid}
+                        </Link>
+                      ) : famSelectableIds.length > 0 ? (
+                        <input type="checkbox" className="h-4 w-4 cursor-pointer accent-primary-600"
+                          title="เลือกทั้งชิปเม้น (ทุกแทรคกิ้งพร้อมนำเข้า)"
+                          checked={famAllSel}
+                          onChange={() => setSel((prev) => {
+                            const nx = new Set(prev);
+                            if (famAllSel) famSelectableIds.forEach((id) => nx.delete(id));
+                            else famSelectableIds.forEach((id) => nx.add(id));
+                            return nx;
+                          })}
+                        />
+                      ) : (
+                        <span className="text-[13px]" title="ชิปเม้นนี้ยังไม่นำเข้าระบบ">📦</span>
+                      )}
+                    </td>
+                    {colOrder.map((key) => {
+                      const c = colDefs[key];
+                      let node: ReactNode = null;
+                      switch (key) {
+                        case "tracking":
+                          // owner 2026-07-19: the header's Tracking cell stays EMPTY —
+                          // tracking belongs to the member rows; the shipment identity
+                          // lives in SM Number (= เลขออเดอร์/ชิปเม้น/หัวบิล).
+                          node = null;
+                          break;
+                        case "smNumber":
+                          node = (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="text-[11px] text-slate-500">{isOpen ? "▾" : "▸"}</span>
+                              {famFid ? (
+                                <Link href={`/admin/forwarders/${famFid}`} title="เปิดชิปเม้น/ออเดอร์นี้"
+                                  className="font-mono text-[13px] font-bold text-primary-700 hover:underline">{base}</Link>
+                              ) : (
+                                <span className="font-mono text-[13px] font-bold text-foreground">{base}</span>
+                              )}
+                              <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-600">
+                                {famQty > 0 ? `${famQty} กล่อง` : fam.length > 1 ? `${fam.length} แทรค` : `${fam[0].boxes.length} กล่อง`}
+                              </span>
+                              {famCgMismatch && (
+                                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10.5px] font-bold text-amber-700"
+                                  title="ช่วงเลขกล่อง CG ของบางแทรคไม่ตรงกับจำนวนกล่อง (Total Parcel) — ข้อมูล MOMO ขัดกันเอง ตรวจสอบ">
+                                  ⚠ CG≠กล่อง
+                                </span>
+                              )}
+                            </span>
+                          );
+                          break;
+                        case "totalParcel": node = <span className="font-bold">Σ {famQty}</span>; break;
+                        case "wt": case "totalWt":
+                          node = <span className="font-mono font-bold">Σ {famWt.toLocaleString("en-US", { maximumFractionDigits: 2 })}</span>; break;
+                        case "vol": case "totalVol":
+                          node = <span className="font-bold">Σ {famCbm.toLocaleString("en-US", { maximumFractionDigits: 6 })}</span>; break;
+                        // shared per-shipment fields — render from the first member
+                        case "status":
+                          // the bare aggregate's status is often STALE ("รอต้นทางส่งเข้าโกดัง"
+                          // while the box rows already say "ปิดรอบรถแล้ว") — show the box rows'
+                          node = c ? c.td(countable[0] ?? fam[0]) : null; break;
+                        case "image": case "container": case "trans": case "smDate": case "type":
+                        case "code": case "etd": case "eta":
+                          node = c ? c.td(fam[0]) : null; break;
+                        default: node = null;
+                      }
+                      return <td key={key} className={c?.tdClass ?? "px-2 py-1.5"}>{node}</td>;
+                    })}
+                  </tr>
+                )}
+                {isOpen && fam.filter((t) => !(hasSuffixMembers && (t.tracking ?? "") === base)).map((t) => {
+              const i = n++;
               const rr = rowResult[t.id];
               const done = t.committed || rr?.ok;
               const fid = t.committedForwarderId ?? rr?.fid ?? null;
+              const isMember = grouped; // every tracking of the shipment nests under its header
               return (
                 <Fragment key={t.id}>
-                <tr className={`align-top ${done ? "bg-emerald-50/40" : sel.has(t.id) ? "bg-primary-50/60" : t.momoGarbage ? "bg-red-50" : t.userIdValid === false ? "bg-red-50/30" : ""}`}>
+                <tr className={`align-top ${isMember ? "border-l-4 border-sky-200 " : ""}${done ? "bg-emerald-50/40" : sel.has(t.id) ? "bg-primary-50/60" : t.momoGarbage ? "bg-red-50" : isMember ? "bg-sky-50/30" : t.userIdValid === false ? "bg-red-50/30" : ""}`}>
                   {/* ติ๊กเลือก + เลขแถว · แถวที่เข้าระบบแล้ว = ลิงก์ไปใบนำเข้า (ย้ายมาจากคอลัมน์
                       "นำเข้าระบบ" ที่ owner ให้เอาออก — ข้อมูลไม่หาย) */}
                   <td className="px-2 py-1.5 text-center">
@@ -856,11 +1063,29 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                   {colOrder.map((key) => {
                     const c = colDefs[key];
                     if (!c) return null;
-                    return <td key={key} className={c.tdClass} title={c.tdTitle?.(t)}>{c.td(t)}</td>;
+                    return (
+                      <td key={key} className={c.tdClass} title={c.tdTitle?.(t)}>
+                        {isMember && key === "tracking" ? (
+                          <span className="inline-flex items-center gap-1 pl-2">
+                            <span className="text-sky-500">↳</span>{c.td(t)}
+                            {grouped && (t.tracking ?? "") === base && hasSuffixMembers && (
+                              <span className="rounded bg-slate-200 px-1 py-0.5 text-[10px] font-semibold text-slate-500"
+                                title="แถวรวมของ MOMO (ยอดทั้งชิปเม้น) — Σ หัวชิปเม้นไม่นับแถวนี้ซ้ำ · กดนำเข้าได้อย่างใดอย่างหนึ่ง (ระบบกันเบิ้ลให้)">
+                                แถวรวม
+                              </span>
+                            )}
+                          </span>
+                        ) : isMember && key === "smNumber" ? (
+                          DASH /* เลขออเดอร์อยู่ที่หัวชิปเม้นแล้ว — แถวลูก = แทรคกิ้ง */
+                        ) : c.td(t)}
+                      </td>
+                    );
                   })}
                 </tr>
-                {/* กล่องย่อยของ MOMO (แตกกล่อง >1) — กางออกเป็นแถวจริงใต้แถวหลัก · ตรง MOMO Live 1:1 */}
-                {t.boxes.map((box, bi) => (
+                {/* กล่องย่อยของ MOMO (box_detail) — โชว์เฉพาะเมื่อชิปเม้นมี staging แถวเดียว
+                    (แถวรวมที่กล่องแตกอยู่ใน box_detail) · ครอบครัวที่มีแถว -N อยู่แล้ว = แถวลูก
+                    ด้านบนคือกล่องตัวจริง → ไม่ nest ซ้ำ (เคย 18 หัว × 18 กล่อง = เบิ้ลมโหฬาร) */}
+                {!hasSuffixMembers && isOpen && t.boxes.map((box, bi) => (
                   <tr key={`${t.id}-b${bi}`} className="bg-sky-50/40 text-[11px]">
                     <td className="px-2 py-1 text-center text-muted" title="กล่องย่อยจาก MOMO (box_detail)">📦</td>
                     {colOrder.map((key) => {
@@ -872,6 +1097,89 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                 </Fragment>
               );
             })}
+                {/* กล่องที่ Live รู้แต่ feed ไม่ส่งมาเป็นแถว (complement) — โชว์ให้ครบชิปเม้น */}
+                {isOpen && extraBoxes.map((box, bi) => (
+                  <tr key={`extra-${base}-${bi}`} className="bg-sky-50/40 text-[11px]">
+                    <td className="px-2 py-1 text-center text-muted" title="กล่องจาก MOMO Live (box_detail) ที่ feed ยังไม่ส่งมาเป็นแถว — นับรวมใน Σ หัวชิปเม้นแล้ว">📦</td>
+                    {colOrder.map((key) => {
+                      const c = colDefs[key];
+                      return <td key={key} className={c?.tdClass ?? "px-2 py-1"}>{boxCell(box, key)}</td>;
+                    })}
+                  </tr>
+                ))}
+                </Fragment>
+              );
+            };
+            // ── the ตู้ → กระสอบ → ชิปเม้น tier render (owner 2026-07-20) ──
+            return tierGroups.map((cg, cgi) => {
+              const allFams = cg.sacks.flatMap((s) => s.fams);
+              const gAgg = allFams.map(famAgg);
+              const gQty = gAgg.reduce((s, a) => s + a.qty, 0);
+              const gWt = gAgg.reduce((s, a) => s + a.wt, 0);
+              const gCbm = gAgg.reduce((s, a) => s + a.cbm, 0);
+              const first = allFams[0]?.[0];
+              const transTh = first?.transport ? TRANSPORT_TH[first.transport] ?? null : null;
+              return (
+                <Fragment key={`cab-${cg.container ?? "pending"}-${cgi}`}>
+                  {/* ตู้ tier — the container section header */}
+                  <tr className="border-t-4 border-slate-400 bg-slate-300/60">
+                    <td colSpan={1 + colOrder.length} className="px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+                        {cg.container ? (
+                          <>
+                            <span title="ตู้ (container) — ชั้นบนสุดของงาน: ตู้ ⊃ กระสอบ ⊃ ชิปเม้น ⊃ แทรคกิ้ง ⊃ กล่อง">🚢</span>
+                            <Link href={`/admin/momo-containers/${encodeURIComponent(cg.container)}`}
+                              className="font-mono text-[14px] font-extrabold text-slate-800 hover:underline"
+                              title="เปิดรายละเอียดตู้นี้">
+                              ตู้ {cg.container}
+                            </Link>
+                            {transTh && <span className="rounded bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-300">{transTh}</span>}
+                          </>
+                        ) : (
+                          <span className="font-bold text-amber-700"
+                            title="ชิปเม้นกลุ่มนี้ยังไม่ถูกปิดเข้าตู้ — MOMO จะผูกเลขตู้จริงให้เมื่อปิดตู้ (ระหว่างนี้ของอยู่ในกระสอบ/รอบแพค)">
+                            ⏳ ยังไม่เข้าตู้ปิด — รอ MOMO ปิดตู้/ผูกเลขตู้
+                          </span>
+                        )}
+                        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-300">
+                          {allFams.length} ชิปเม้น
+                        </span>
+                        <span className="text-[11.5px] font-semibold text-slate-700">
+                          Σ {gQty} กล่อง · {gWt.toLocaleString("en-US", { maximumFractionDigits: 2 })} กก. · {gCbm.toLocaleString("en-US", { maximumFractionDigits: 6 })} คิว
+                        </span>
+                        {(first?.etd || first?.eta) && (
+                          <span className="text-[11px] text-slate-500">ETD {first?.etd ?? "—"} · ETA {first?.eta ?? "—"}</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {cg.sacks.map((sg, sgi) => {
+                    const sAgg = sg.fams.map(famAgg);
+                    const sQty = sAgg.reduce((s, a) => s + a.qty, 0);
+                    return (
+                      <Fragment key={`sack-${cg.container ?? "p"}-${sg.sack ?? "none"}-${sgi}`}>
+                        {/* กระสอบ tier — nested INSIDE its ตู้ (never a peer of the container) */}
+                        {sg.sack && (
+                          <tr className="border-t border-amber-300 bg-amber-100/70">
+                            <td colSpan={1 + colOrder.length} className="px-3 py-1.5">
+                              <div className="flex flex-wrap items-center gap-2 pl-5 text-[12px]">
+                                <span title="กระสอบ (sack) — ถุงรวมของชิ้นเล็ก อยู่ภายในตู้อีกชั้น">🧺</span>
+                                <span className="font-mono font-bold text-amber-800">กระสอบ {sg.sack}</span>
+                                <span className="rounded-full bg-white px-1.5 py-0.5 text-[10.5px] font-semibold text-amber-700 ring-1 ring-amber-300">
+                                  {sg.fams.length} ชิปเม้น · Σ {sQty} กล่อง
+                                </span>
+                                <span className="text-[10.5px] text-amber-700/80">แทรคกิ้งในกระสอบนี้แจงเป็นชิปเม้นด้านล่าง</span>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        {sg.fams.map((fam) => renderFam(fam))}
+                      </Fragment>
+                    );
+                  })}
+                </Fragment>
+              );
+            }); })()}
           </tbody>
         </table>
       </div>

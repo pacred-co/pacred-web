@@ -29,6 +29,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { baseOf, suffixOf } from "@/lib/integrations/momo-web/split-box-rows-plan";
 import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
+import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
+import { isMomoRoutingPlaceholder } from "@/lib/admin/momo-container-resolve";
 
 export type HealthSeverity = "red" | "warn" | "info";
 
@@ -212,6 +214,34 @@ const CHECKS: CheckDef[] = [
         const cabs = [...new Set(rows.map((r) => r.fcabinetnumber).filter(Boolean))];
         if (cabs.length > 1) out.push({ base, userid: rows[0].userid, cabs, ids: rows.map((r) => r.id) });
       }
+      return { count: out.length, sample: cap(out) };
+    },
+  },
+  {
+    id: "cabinet_not_real_container",
+    title: "ช่องเลขตู้ถือเลขกระสอบ/placeholder ค้าง (ไม่ใช่ตู้จริง)",
+    severity: "red",
+    why:
+      "tier ต้องเป็น ตู้ ⊃ กระสอบ ⊃ ชิปเม้น — เลขกระสอบ (CBX…) หรือ placeholder รอบจัดส่งของ MOMO " +
+      "(PR/MO/PCS+วันที่) ค้างในช่องตู้ = รายงานตู้โชว์ค่าที่ไม่ใช่ตู้. หมายเหตุ owner 2026-07-20: " +
+      "เลขตู้ TTW/อี้อู (SEA0625-8211YW · 0717-7072 YW SEA) = ตู้จริง ใช้ตามที่ TTW ส่งมา ไม่นับเป็นปัญหา",
+    action:
+      "แก้ fcabinetnumber เป็นเลขตู้จริง (GZS/GZE/YW…/เลขตามใบปิดตู้ TTW) — ดูจาก MOMO Live/box_detail/packing · " +
+      "write-guard (cabinet-class.ts) กันขาเข้าแล้ว แถวที่โผล่ที่นี่ = ของค้างก่อน guard หรือ placeholder ที่ MOMO ไม่เคยปิดตู้",
+    run: async (_admin, ctx) => {
+      // Calibrated on prod 2026-07-20: a MOMO ROUTING placeholder (PR/MO/PCS+date)
+      // is ⏳-by-design while in transit (report-cnt shows "รอ MOMO ผูกเลขตู้จริง" ·
+      // propagate cron heals it) → red only once arrived (fstatus>=4) with the
+      // placeholder still there = the excuse expired. Sack (CBX…)/packing labels
+      // (SEA0625-…) are ALWAYS red — those are human-keyed wrong-tier ids.
+      const out = ctx.fwd
+        .filter((r) => {
+          if (r.fstatus === "99") return false; // cancelled — report-cnt excludes it (mig 0190)
+          if (!isNonContainerCabinetId(r.fcabinetnumber)) return false;
+          if (!isMomoRoutingPlaceholder(r.fcabinetnumber)) return true;
+          return Number(r.fstatus) >= 4;
+        })
+        .map((r) => ({ id: r.id, tracking: r.ftrackingchn, userid: r.userid, cabinet: r.fcabinetnumber, fstatus: r.fstatus }));
       return { count: out.length, sample: cap(out) };
     },
   },

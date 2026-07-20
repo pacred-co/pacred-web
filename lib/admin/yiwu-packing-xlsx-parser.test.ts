@@ -104,4 +104,62 @@ ok("dispatcher routes a MOMO file to the MOMO parser (not falsely 'yiwu')", () =
   assert.strictEqual(parsePackingXlsx(momoBuf).container, "GZS260617-1"); // MOMO fixture container
 });
 
+// ── ใบปิดตู้ TTW (owner 2026-07-20 · "เอาตามแพทเทิน อี้อู ที่ TTW ส่งมา") ─────────
+// Synthetic workbook mirroring the real ใบปิดตู้ example: title "รายการปิดตู้" +
+// "เลขที่ตู้ 0717-7072 YW SEA  อี้อู" in-sheet + the 单号/唛头/件数/单件数/单件重/总重量/
+// 长/宽/高/材积/品名/备注 header. The เลขตู้ must come out VERBATIM (TTW's own pattern).
+{
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const XLSX = require("xlsx") as typeof import("xlsx");
+  const aoa: (string | number | null)[][] = [
+    ["รายการปิดตู้"],
+    ["เลขที่ตู้ 0717-7072 YW SEA  อี้อู"],
+    [],
+    ["单号", "唛头", "件数", "单件数", "单件重", "总重量", "长", "宽", "高", "材积", "品名", "备注", "订单号/其他单号"],
+    ["X9002853", "PR107/SEA", 5, 10, 40, 200, 37, 86, 196, 3.1184, "ลำตัวหลังคา", "PH", null],
+    ["X9002853", "PR107/SEA", 3, 10, 40, 120, 81, 30, 199, 1.4507, "ลำตัวหลังคา", "PH", null],
+    ["X9002853", "PR107/SEA", 1, 10, 40, 40, 125, 30, 43, 0.1613, "ลำตัวหลังคา", "PH", null],
+    ["X9002853", "PR107/SEA", 1, 10, 40, 40, 124, 44, 43, 0.2346, "ลำตัวหลังคา", "PH", null],
+    ["X9002853", "PR107/SEA", 1, 10, 40, 40, 44, 43, 130, 0.246, "ลำตัวหลังคา", "PH", null],
+    ["X9002853", "PR107/SEA", 1, 10, 40, 40, 44, 130, 31, 0.1773, "ลำตัวหลังคา", "PH", null],
+    ["X9002856", "PR289/SEA", 1, 1, 460, 460, 204, 94, 103, 1.9751, "ชั้นวางของ", "PH", null],
+    ["X9002856", "PR289/SEA", 1, 1, 50, 50, 309, 8, 6, 0.0148, "ชั้นวางของ", "PH", null],
+    ["ประมาณการตู้เข้า 04 - 10 สิงหาคม 2569"],
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Sheet1");
+  const closeBuf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+  const C = parseYiwuPackingXlsx(closeBuf);
+
+  ok("ใบปิดตู้: เลขตู้ from the 'เลขที่ตู้ …' title VERBATIM (TTW pattern)", () => {
+    assert.strictEqual(C.container, "0717-7072 YW SEA");
+  });
+  ok("ใบปิดตู้: transport hint SEA from the TTW container name", () => {
+    assert.strictEqual(C.transportHint, "SEA");
+  });
+  ok("ใบปิดตู้: aggregates per 单号 (X9002853 = 6 rows → 12 กล่อง · 480kg · 5.3883 cbm)", () => {
+    const a = C.aggregated.find((x) => x.baseTracking === "X9002853");
+    assert.ok(a, "X9002853 not aggregated");
+    assert.strictEqual(a!.parcelCount, 12);
+    assert.ok(near(a!.totalWeight, 480, 1e-6), `wt=${a!.totalWeight}`);
+    assert.ok(near(a!.totalCbm, 5.3883, 1e-6), `cbm=${a!.totalCbm}`);
+    assert.strictEqual(a!.code, "PR107/SEA");
+  });
+  ok("ใบปิดตู้: second base (X9002856 = 2 กล่อง · 510kg · 1.9899 cbm)", () => {
+    const b = C.aggregated.find((x) => x.baseTracking === "X9002856");
+    assert.ok(b, "X9002856 not aggregated");
+    assert.strictEqual(b!.parcelCount, 2);
+    assert.ok(near(b!.totalWeight, 510, 1e-6), `wt=${b!.totalWeight}`);
+    assert.ok(near(b!.totalCbm, 1.9899, 1e-6), `cbm=${b!.totalCbm}`);
+  });
+  ok("ใบปิดตู้: footer/title rows never leak into rows[]", () => {
+    assert.strictEqual(C.rows.length, 8);
+    assert.ok(C.rows.every((r) => r.tracking.startsWith("X900")));
+  });
+  ok("ใบปิดตู้: dispatcher detects it as 'yiwu'", () => {
+    assert.strictEqual(isYiwuPackingWorkbook(closeBuf), true);
+    assert.strictEqual(detectPackingFormat(closeBuf), "yiwu");
+  });
+}
+
 console.log(`\n✅ yiwu-packing-xlsx-parser: ${passed} passed`);

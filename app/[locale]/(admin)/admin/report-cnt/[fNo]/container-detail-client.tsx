@@ -665,14 +665,19 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
             ).sort((a2, b2) => b2.invoiceId - a2.invoiceId);
             return gb.length > 0 ? (
               <div className="mt-1 space-y-0.5">
+                {/* owner 2026-07-19 "หัวบิลก็คือชิปเม้น...เบิ้ลไปหมด" — a shipment often
+                    carries cancel + re-bill HISTORY (e.g. 00069/00070 cancelled →
+                    00075 paid). Rendering all three identically read as "3 open
+                    bills". Live docs render normally; cancelled ones grey +
+                    strike-through so ONE shipment reads as ONE live bill. */}
                 {gb.map((b) => (
                   <Link
                     key={b.invoiceId}
                     href={`/admin/billing-run/${b.invoiceId}`}
                     title={`ใบวางบิล ${b.docNo} · สถานะ ${b.status}`}
-                    className="block text-[11px] text-primary-600 hover:underline"
+                    className={`block text-[11px] hover:underline ${b.status === "cancelled" ? "text-muted-foreground/60 line-through" : "text-primary-600"}`}
                   >
-                    🧾 {b.docNo}
+                    🧾 {b.docNo}{b.status === "cancelled" ? " (ยกเลิก)" : b.status === "paid" ? " · จ่ายแล้ว" : ""}
                   </Link>
                 ))}
               </div>
@@ -1205,9 +1210,9 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                             key={b.invoiceId}
                             href={`/admin/billing-run/${b.invoiceId}`}
                             title={`ใบวางบิล ${b.docNo} · สถานะ ${b.status}`}
-                            className="block text-[11px] text-primary-600 hover:underline"
+                            className={`block text-[11px] hover:underline ${b.status === "cancelled" ? "text-muted-foreground/60 line-through" : "text-primary-600"}`}
                           >
-                            🧾 {b.docNo}
+                            🧾 {b.docNo}{b.status === "cancelled" ? " (ยกเลิก)" : b.status === "paid" ? " · จ่ายแล้ว" : ""}
                           </Link>
                         ))}
                       </div>
@@ -1576,7 +1581,12 @@ function fmtN(n: number | null | undefined): string {
 /** owner 2026-07-18 รอบ2 — กล่อง/ลัง display: "เดี๋ยว -/1 เดี๋ยว 0/1 ให้ใช้ 0/1 เหมือนกันหมด".
  *  A not-yet-scanned side renders 0, never "-". */
 function fmtBox(got: number | null | undefined, exp: number | null | undefined): string {
-  return `${got ?? 0}/${exp ?? 0}`;
+  const g = got ?? 0, e = exp ?? 0;
+  // over-received (โกดังยิงเกินที่ MOMO แจ้ง เช่น 6/1) — say so explicitly instead of a
+  // bare "6/1" that reads as garbage (owner 2026-07-19 "จำนวนกล่องไม่ถูก"). The scans
+  // are the warehouse's physical count; the expected is MOMO's declared quantity —
+  // a mismatch = a real MOMO-vs-physical conflict for staff to reconcile.
+  return g > e && e > 0 ? `${g}/${e} · เกิน +${g - e}` : `${g}/${e}`;
 }
 
 function productTypeLabel(t: string | null): string {

@@ -1,0 +1,65 @@
+[
+  {
+    "id": "52177",
+    "ftrackingchn": "X9002653-1",
+    "fcabinetnumber": "SEA0625-8211YW",
+    "fstatus": "4",
+    "fcabinet_locked": true,
+    "fwarehousename": "9",
+    "adminidupdate": "admin_keet"
+  },
+  {
+    "id": "52178",
+    "ftrackingchn": "X9002653-2",
+    "fcabinetnumber": "SEA0625-8211YW",
+    "fstatus": "4",
+    "fcabinet_locked": true,
+    "fwarehousename": "9",
+    "adminidupdate": "admin_keet"
+  },
+  {
+    "id": "52179",
+    "ftrackingchn": "X9002653-3",
+    "fcabinetnumber": "SEA0625-8211YW",
+    "fstatus": "3",
+    "fcabinet_locked": true,
+    "fwarehousename": "9",
+    "adminidupdate": "admin_keet"
+  },
+  {
+    "id": "52180",
+    "ftrackingchn": "X9002653-4",
+    "fcabinetnumber": "SEA0625-8211YW",
+    "fstatus": "4",
+    "fcabinet_locked": true,
+    "fwarehousename": "9",
+    "adminidupdate": "admin_keet"
+  },
+  {
+    "id": "52181",
+    "ftrackingchn": "X9002661-1",
+    "fcabinetnumber": "SEA0625-8211YW",
+    "fstatus": "4",
+    "fcabinet_locked": true,
+    "fwarehousename": "9",
+    "adminidupdate": "admin_keet"
+  },
+  {
+    "id": "52182",
+    "ftrackingchn": "X9002661-2",
+    "fcabinetnumber": "SEA0625-8211YW",
+    "fstatus": "5",
+    "fcabinet_locked": true,
+    "fwarehousename": "9",
+    "adminidupdate": "admin_pop"
+  },
+  {
+    "id": "52183",
+    "ftrackingchn": "X9002661-3",
+    "fcabinetnumber": "SEA0625-8211YW",
+    "fstatus": "5",
+    "fcabinet_locked": true,
+    "fwarehousename": "9",
+    "adminidupdate": "admin_pop"
+  }
+]

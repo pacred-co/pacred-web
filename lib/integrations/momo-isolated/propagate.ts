@@ -51,6 +51,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { advanceLinkedShopOrder } from "@/lib/admin/advance-linked-shop-order";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
+import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
 import type { MomoInternalAdminRecord, MomoShipmentStatus } from "./types";
 
 /**
@@ -343,8 +344,11 @@ export async function propagateMomoToForwarders(
       // skip + count it so staff can audit lock impact.
       const current = f.fcabinetnumber?.trim() ?? "";
       const isEmpty = current === "";
-      const isStaleRouting = isMomoRoutingBatch(current);
-      if (realCabinet && realCabinet !== current && (isEmpty || isStaleRouting)) {
+      // stale = legacy routing batch OR any sack/batch-shaped id (cabinet-class SOT ·
+      // owner 2026-07-20) — the cron HEALS a กระสอบ/รอบแพค-stamped cabinet once the
+      // real ตู้ is known. The incoming value must itself be a real container.
+      const isStaleRouting = isMomoRoutingBatch(current) || isNonContainerCabinetId(current);
+      if (realCabinet && !isNonContainerCabinetId(realCabinet) && realCabinet !== current && (isEmpty || isStaleRouting)) {
         if (f.fcabinet_locked === true) {
           // Locked — skip the cabinet write. Other column writes below
           // still apply because the lock is cabinet-only.

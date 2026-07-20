@@ -46,6 +46,7 @@ import {
   extractWarehouseDatesFromMomoRaw,
   extractCrateFromMomoRaw,
   extractCoverFromMomoRaw,
+  extractCgFromMomoRaw,
 } from "@/lib/admin/momo-raw-helpers";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { splitAggregatedMomoBoxRows } from "@/lib/integrations/momo-web/split-box-rows";
@@ -57,6 +58,7 @@ import {
 } from "@/lib/integrations/momo-web/split-box-rows-plan";
 import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
+import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
 import { ADDRESSES } from "@/components/seo/site";
 
 // ────────────────────────────────────────────────────────────
@@ -411,7 +413,11 @@ export async function commitMomoRowCore(
   // status from MOMO's real signal — no phantom cabinet, no over-advance. (containerNo below
   // still keeps momo_container_no separately for the momo_container_no column; and transport-mode
   // derivation already reads container_batch_no only, so no mode regression.)
-  const cabinetForDisplay = srcRow.container_batch_no ?? "";
+  // Tier guard (owner 2026-07-20 · cabinet-class SOT): container_batch_no must be a
+  // ตู้. If upstream ever hands a sack (CBX…)/routing-placeholder instead, keep
+  // fcabinetnumber EMPTY — propagate fills the real ตู้ later. กระสอบ ≠ ตู้.
+  const rawCabinetBatch = (srcRow.container_batch_no ?? "").trim();
+  const cabinetForDisplay = isNonContainerCabinetId(rawCabinetBatch) ? "" : rawCabinetBatch;
   const containerNo = srcRow.momo_container_no ?? "";
   // ภูม 2026-07-13 (MONEY · ~5× under-bill fix) — value the row from the momo_import_tracks
   // AGGREGATE columns (weight_kg/cbm/quantity = Σ of all the shipment's boxes, set by the
@@ -446,6 +452,9 @@ export async function commitMomoRowCore(
   // through unchanged so forwarder-check / report-cnt render them directly.
   // DEFAULT-SAFE: no images → "" (no regression). Display/data only.
   const momoCover = extractCoverFromMomoRaw(srcRow.raw);
+  // CG box numbers (owner 2026-07-19 "เลขกล่อง") — carry them into tb_forwarder.fbox_mark
+  // so the physical box identity survives the commit (was dropped · display/data only).
+  const momoCg = extractCgFromMomoRaw(srcRow.raw);
   // ── Transport type (รถ EK "1" / เรือ SEA "2") — พี่ป๊อป flag 2026-06-11 ──
   // Priority:
   //   1. d.fTransportType        — explicit admin override (review form) wins.
@@ -728,6 +737,7 @@ export async function commitMomoRowCore(
       fnoteuser:             "0",
       fnoteuserread:         "0",
       fcover:                momoCover,
+      fbox_mark:             momoCg,
       fphotoend:             "",
       fcostrefrate:          0,
       fpriceupdate:          0,

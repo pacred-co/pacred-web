@@ -34,7 +34,7 @@ export function ContainerDetailClient({ d }: { d: MomoContainerDetail }) {
           )}
           {d.garbageCount > 0 && (
             <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white" title="ตัวเลข MOMO ขัดกันเอง (แถวย่อยหนักเกินก้อนรวม) — ระบบแตกกล่องอัตโนมัติไม่ได้ · ต้องอัพ packing list แต้ม">
-              🚩 MOMO มั่ว {d.garbageCount}
+              🚩 ข้อมูล MOMO ขัดกัน {d.garbageCount}
             </span>
           )}
         </div>
@@ -133,7 +133,7 @@ export function ContainerDetailClient({ d }: { d: MomoContainerDetail }) {
                     {it.garbage && (
                       <span
                         className="mr-1 cursor-help"
-                        title={`🚩 MOMO มั่ว — box_detail ${it.garbage.boxCount} กล่อง รวม${
+                        title={`🚩 ตัวเลข MOMO ขัดกันเอง — กล่องย่อย (box_detail) ${it.garbage.boxCount} กล่อง รวม${
                           it.garbage.reason === "weight"
                             ? `น้ำหนัก ${n2(it.garbage.boxWeightSum)} กก. เกินก้อนรวม ${n2(it.garbage.aggWeight)} กก.`
                             : `คิว ${n3(it.garbage.boxCbmSum)} เกินก้อนรวม ${n3(it.garbage.aggCbm)}`

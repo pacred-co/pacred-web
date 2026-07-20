@@ -22,6 +22,7 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { parseYiwuPackingXlsx } from "@/lib/admin/yiwu-packing-xlsx-parser";
 import { planYiwuReconcile, type YiwuSibling } from "@/lib/admin/yiwu-packing-match";
 import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
+import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
 
 const YIWU_ROLES = ["super", "ops", "warehouse", "accounting"] as const;
 
@@ -74,6 +75,19 @@ async function reconcileYiwuImpl(
     return { ok: false, error: parse.warnings[0] ?? "อ่านไฟล์ packing list (อี้อู) ไม่สำเร็จ — ตรวจรูปแบบไฟล์" };
   }
   const container = (parse.container ?? "").trim();
+
+  // 🔒 cabinet tier guard (owner 2026-07-20) — TTW container ids are used AS-SENT
+  // (SEA0625-8211YW · 0717-7072 YW SEA = ตู้จริง). Refuse only a sack (CBX…) or a
+  // MOMO routing placeholder — those are not a ตู้ at any tier.
+  if (container && isNonContainerCabinetId(container)) {
+    return {
+      ok: false,
+      error:
+        `เลขตู้ "${container}" เป็นเลขกระสอบ/รหัสรอบของระบบ ไม่ใช่เลขตู้จริง — ` +
+        `ใช้เลขตู้ตามใบปิดตู้ของ TTW (เช่น SEA0625-8211YW · 0717-7072 YW SEA · GZS…/YW…)`,
+    };
+  }
+
   const admin = createAdminClient();
   const today = todayIsoDate();
 
