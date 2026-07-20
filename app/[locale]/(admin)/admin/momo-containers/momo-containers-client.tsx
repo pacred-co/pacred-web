@@ -655,7 +655,9 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     },
     trans: { label: "Trans", tdClass: "px-2 py-1.5 text-center whitespace-nowrap", td: (t) => (t.transport && TRANSPORT_TH[t.transport]) || DASH },
     smDate: { label: "SM Date", sortKey: "smDate", tdClass: "px-2 py-1.5 text-center tabular-nums whitespace-nowrap", tdTitle: (t) => t.smDate ?? "", td: (t) => dateOnly(t.smDate) ?? DASH },
-    smNumber: { label: "SM Number", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
+    // SM Number — MOMO API ไม่ส่ง (ตรวจ raw ครบทุก status 2026-07-19: ไม่มี field นี้) →
+    // owner: ใช้เลขหัวบิล/ชิปเม้น (base tracking) เป็นเลขออเดอร์ในช่องนี้แทน.
+    smNumber: { label: "SM Number", tdClass: "px-2 py-1.5 font-mono whitespace-nowrap", td: (t) => baseTracking(t.tracking ?? "") ?? DASH },
     branch: { label: "Branch", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
     product: { label: "Product", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
     dum: { label: "Dum", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
@@ -894,6 +896,12 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                       let node: ReactNode = null;
                       switch (key) {
                         case "tracking":
+                          // owner 2026-07-19: the header's Tracking cell stays EMPTY —
+                          // tracking belongs to the member rows; the shipment identity
+                          // lives in SM Number (= เลขออเดอร์/ชิปเม้น/หัวบิล).
+                          node = null;
+                          break;
+                        case "smNumber":
                           node = (
                             <span className="inline-flex items-center gap-1.5">
                               <span className="text-[11px] text-slate-500">{isOpen ? "▾" : "▸"}</span>
@@ -970,6 +978,8 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                       <td key={key} className={c.tdClass} title={c.tdTitle?.(t)}>
                         {isMember && key === "tracking" ? (
                           <span className="inline-flex items-center gap-1 pl-2"><span className="text-sky-500">↳</span>{c.td(t)}</span>
+                        ) : isMember && key === "smNumber" ? (
+                          DASH /* เลขออเดอร์อยู่ที่หัวชิปเม้นแล้ว — แถวลูก = แทรคกิ้ง */
                         ) : c.td(t)}
                       </td>
                     );
