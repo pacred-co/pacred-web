@@ -67,6 +67,31 @@ prod rows printed `22 reviews / 0 fixes` and named the refusal reason.
 3. **sweep** — a plan-driven script (same brain as the cron) healed the 22 rows.
 4. **standing check** — `aggregate_fanout_siblings` in data-health, calibrated on prod.
 
+## Part 2 — the INVERSE class the same day (2026-07-20 evening): "a stamp is a claim"
+
+The prod sweep after the fanout fix found the OPPOSITE failure: **boxes that vanished
+= under-billing**. The backlink sweep (built that morning to clear "ยังไม่เข้าระบบ"
+spam) stamped genuinely-uncommitted staging boxes onto existing family rows via its
+anchor/bare→box fallbacks. Its rationale — *"the commit chokepoint refuses those
+anyway; box-split will fan them out"* — held only for AGGREGATE anchors. For a
+proper-split family (each row carries only its own box) the stamp made the box's
+weight disappear from the pipeline forever: 7 families short one box each, one row
+carrying a wrong family value, one row **over-priced ×4** (fvolume was a total but
+`famountcount` was NULL → the pricer multiplied by famount again — caught unbilled).
+
+> **A stamp/ack on a queue item is a CLAIM that its value is represented in the
+> system. Any code that marks work "done" without proving the value landed will
+> eventually destroy exactly the items that most needed processing.**
+
+Fix mirrors the morning's: the backlink now PROVES family value coverage
+(`Σ live fweight ≥ Σ staging weight`, with the aggregate-header discriminator —
+a staged bare ≈ Σ suffixed is a header, not an extra box) before rules 2/3 may
+stamp; short families stay visible (`uncovered`). The data-health check
+`shipment_short_a_box` watches the same invariant **by value, not by row-count**
+(row-count flagged fully-valued unsplit lumps as false positives — calibration on
+prod caught that, twice: first the count version, then the naive staging Σ that
+double-counts absorbed families at exactly 2×).
+
 ## Transferable rules
 
 - **When a data model gains cardinality (1 row → N rows), grep every consumer that

@@ -30,8 +30,9 @@ import { baseOf, suffixOf } from "@/lib/integrations/momo-web/split-box-rows-pla
 import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
-import { planStagingBacklinks } from "@/lib/admin/backlink-staging-committed";
+import { planStagingBacklinks, stagingFamilyWeights } from "@/lib/admin/backlink-staging-committed";
 import { isMomoRoutingPlaceholder } from "@/lib/admin/momo-container-resolve";
+import { resolveMomoBoxBasis } from "@/lib/integrations/momo-web/box-detail-basis";
 
 export type HealthSeverity = "red" | "warn" | "info";
 
@@ -257,23 +258,33 @@ const CHECKS: CheckDef[] = [
       "sync pass 3.55 (backlinkStagingCommitted) จะประทับให้เองภายใน ~5 นาที — ถ้าค้างข้ามชั่วโมง = " +
       "heal พัง (ดู log scope staging_backlink) หรือ tracking ซ้ำหลายแถว (ดู check dup_exact_tracking)",
     run: async (admin, ctx) => {
-      const staging: Array<{ id: string; tracking: string }> = [];
+      // ALL staging rows — committed ones feed the family value-coverage Σ
+      // (the 2026-07-20 "กล่องหาย" guard) but are never re-matched.
+      const staging: Array<{ id: string; tracking: string; weightKg: number; committed: boolean }> = [];
       for (let from = 0; ; from += 1000) {
         const { data, error } = await admin
           .from("momo_import_tracks")
-          .select("id, momo_tracking_no")
-          .is("committed_at", null)
+          .select("id, momo_tracking_no, weight_kg, committed_at")
           .range(from, from + 999);
         if (error) throw new Error(`${error.code} ${error.message}`);
-        for (const r of (data ?? []) as Array<{ id: string; momo_tracking_no: string | null }>) {
-          if (r.momo_tracking_no) staging.push({ id: String(r.id), tracking: String(r.momo_tracking_no) });
+        for (const r of (data ?? []) as Array<{ id: string; momo_tracking_no: string | null; weight_kg: number | string | null; committed_at: string | null }>) {
+          if (r.momo_tracking_no) {
+            staging.push({
+              id: String(r.id),
+              tracking: String(r.momo_tracking_no),
+              weightKg: num(r.weight_kg),
+              committed: r.committed_at != null,
+            });
+          }
         }
         if ((data ?? []).length < 1000) break;
       }
       const plan = planStagingBacklinks(
         staging,
-        ctx.fwd.map((r) => ({ id: r.id, tracking: r.ftrackingchn, fstatus: r.fstatus, userid: r.userid })),
+        ctx.fwd.map((r) => ({ id: r.id, tracking: r.ftrackingchn, fstatus: r.fstatus, userid: r.userid, fweight: r.fweight })),
       );
+      // uncovered = the live family is SHORT this box's value — those belong to the
+      // shipment_short_a_box red check, not here (this check tracks stamp-lag only).
       const out = plan.matches.map((m) => ({ staging: m.stagingId, tracking: m.tracking, fid: m.fid, kind: m.kind }));
       return { count: out.length, sample: cap(out) };
     },
@@ -312,50 +323,104 @@ const CHECKS: CheckDef[] = [
   },
   {
     id: "shipment_short_a_box",
-    title: "ชิปเม้นมีแถวน้อยกว่ากล่องจริง (กล่องหาย = เก็บเงินขาด)",
+    title: "ชิปเม้นถือน้ำหนักน้อยกว่า staging (กล่องหาย = เก็บเงินขาด)",
     severity: "red",
     why:
-      "2026-07-20 — staging 2 แถว (กล่องคนละใบ) ถูก commit รวมเป็น tb_forwarder แถวเดียว → กล่องที่เหลือไม่มีแถว " +
-      "= ไม่ถูกคิดเงิน (PR208 1784190161 ขาด 38.5 กก. · PR179 1784432869 · PR079 ×2 …). ตรงข้ามกับ fanout: อันนั้นเบิ้ล อันนี้ขาด",
+      "2026-07-20 — backlink sweep (ก่อน value-guard) ประทับกล่องที่ยังไม่เข้าระบบใส่แถวอื่น → กล่องหายจากคิวนำเข้า " +
+      "ไม่เคยถูกคิดเงิน (PR208 1784190161 ขาด 38.5 กก. · 7 ครอบครัว · heal แล้วโดย scripts/heal-short-box-2026-07-20.ts). " +
+      "ตรงข้ามกับ fanout: อันนั้นเบิ้ล อันนี้ขาด. วัดที่ VALUE (Σ น้ำหนัก) ไม่ใช่จำนวนแถว — แถวรวมที่ถือของครบไม่ใช่ปัญหา",
     action:
-      "เพิ่มรายการที่ขาดผ่าน /admin/momo-containers (ปุ่มเพิ่มรายการที่ขาด · audited create path) — ห้าม auto-create จาก cron · " +
-      "แถว billed (5/6/7) = บัญชีเคาะ",
+      "เพิ่มรายการที่ขาดผ่าน /admin/momo-containers (audited create path) หรือ heal-short-box pattern (dry-run ก่อน) — " +
+      "ห้าม auto-create จาก cron · แถว billed (5/6/7) = บัญชีเคาะ",
     run: async (admin, ctx) => {
-      const boxesByBase = new Map<string, Set<string>>();
+      // staging Σ weight per base — the value truth the live family must carry.
+      // stagingFamilyWeights applies the AGGREGATE-HEADER rule (a staged bare that
+      // ≈ Σ suffixed is a header, not an extra box) — else absorbed/box-split
+      // families (519218029029 · JYM800120650588 · LJ20503022) false-flag at
+      // exactly 2× (calibrated on prod 2026-07-20).
+      const stagingRows: Array<{ tracking: string; weightKg: number }> = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await admin
+          .from("momo_import_tracks")
+          .select("momo_tracking_no, weight_kg")
+          .range(from, from + 999);
+        if (error) throw new Error(`momo_import_tracks scan: ${error.code} ${error.message}`);
+        const batch = (data ?? []) as Array<{ momo_tracking_no: string | null; weight_kg: number | string | null }>;
+        for (const s of batch) {
+          const t = str(s.momo_tracking_no);
+          if (t) stagingRows.push({ tracking: t, weightKg: num(s.weight_kg) });
+        }
+        if (batch.length < 1000) break;
+      }
+      const stagingWt = stagingFamilyWeights(stagingRows);
+      const out: Array<Record<string, unknown>> = [];
+      for (const [base, rows] of ctx.groups) {
+        const truth = stagingWt.get(base) ?? 0;
+        if (truth <= 0) continue; // no staging signal → nothing provable
+        const liveWt = rows.reduce((s, r) => s + r.fweight, 0);
+        const shortBy = truth - liveWt;
+        if (shortBy <= Math.max(0.5, truth * 0.02)) continue;
+        out.push({
+          base,
+          userid: rows[0].userid,
+          liveKg: Number(liveWt.toFixed(2)),
+          stagingKg: Number(truth.toFixed(2)),
+          shortKg: Number(shortBy.toFixed(2)),
+          fstatus: [...new Set(rows.map((r) => r.fstatus))].join("/"),
+        });
+      }
+      out.sort((a, b) => Number(b.shortKg) - Number(a.shortKg));
+      return { count: out.length, sample: cap(out) };
+    },
+  },
+  {
+    id: "perbox_cbm_under_total_flag",
+    title: "คิวต่อกล่องถูกเก็บใต้ธงยอดรวม (ต้นทุนตู้ต่ำกว่าจริง)",
+    severity: "warn",
+    why:
+      "2026-07-20 — 3 แถว (52154/52422/52184) เก็บ fvolume = คิวต่อกล่อง แต่ famountcount='1' บอกว่าเป็นยอดรวม → " +
+      "คิวรวมหาย ×famount → ต้นทุนตู้ต่ำกว่าจริง ≈฿8,064 (ขายคิดตามน้ำหนัก ลูกค้าไม่กระทบ · กำไรรายงานเกินจริง)",
+    action:
+      "fvolume → คิวรวมจริง (ต่อกล่อง×famount ยืนยันกับ box_detail dims) + recompute cost — " +
+      "แถว unbilled แก้ได้เลย · แถว billed = ตาม fix-perbox-cbm-cost pattern (SELL ต้องไม่ขยับ · dry-run ก่อน)",
+    run: async (admin, ctx) => {
+      // box_detail per-box truth, keyed by the exact box tracking.
+      const boxByTrack = new Map<string, { qty: number; perbox: number; total: number }>();
       for (let from = 0; ; from += 1000) {
         const { data, error } = await admin
           .from("momo_box_detail")
-          .select("base_tracking, box_tracking")
+          .select("box_tracking, width, length, height, weight_kg, cbm, quantity")
           .range(from, from + 999);
         if (error) throw new Error(`momo_box_detail scan: ${error.code} ${error.message}`);
-        const batch = (data ?? []) as Array<{ base_tracking: string | null; box_tracking: string | null }>;
+        const batch = (data ?? []) as Array<Record<string, unknown>>;
         for (const b of batch) {
-          const base = str(b.base_tracking);
-          const bt = str(b.box_tracking);
-          if (!base || !bt) continue;
-          // MOMO names box #1 BOTH ways (bare and "-1/N") — normalise to an ordinal so
-          // that naming twin never counts as two boxes.
-          const ord = String(Math.max(suffixOf(bt), 1));
-          const s = boxesByBase.get(base) ?? new Set<string>();
-          s.add(ord);
-          boxesByBase.set(base, s);
+          const t = str(b.box_tracking);
+          if (!t) continue;
+          const basis = resolveMomoBoxBasis({
+            width: num(b.width), length: num(b.length), height: num(b.height),
+            weightKg: num(b.weight_kg), cbm: num(b.cbm), quantity: num(b.quantity),
+          });
+          if (!basis.decided || basis.pieces <= 0 || basis.totalCbm <= 0) continue;
+          boxByTrack.set(t, { qty: basis.pieces, perbox: basis.totalCbm / basis.pieces, total: basis.totalCbm });
         }
         if (batch.length < 1000) break;
       }
       const out: Array<Record<string, unknown>> = [];
-      for (const [base, rows] of ctx.groups) {
-        const boxes = boxesByBase.get(base);
-        if (!boxes || boxes.size <= rows.length) continue;
-        out.push({
-          base,
-          userid: rows[0].userid,
-          rows: rows.length,
-          boxes: boxes.size,
-          short: boxes.size - rows.length,
-          fstatus: [...new Set(rows.map((r) => r.fstatus))].join("/"),
-        });
+      for (const rows of ctx.groups.values()) {
+        for (const r of rows) {
+          if (r.famountcount !== "1" || r.famount <= 1 || r.fvolume <= 0) continue;
+          const box = boxByTrack.get(r.ftrackingchn);
+          if (!box || box.qty !== r.famount) continue;
+          const looksPerBox = Math.abs(r.fvolume - box.perbox) <= Math.max(0.0005, box.perbox * 0.02);
+          const clearlyUnderTotal = r.fvolume < box.total * 0.9;
+          if (looksPerBox && clearlyUnderTotal) {
+            out.push({
+              id: r.id, tracking: r.ftrackingchn, userid: r.userid, fstatus: r.fstatus,
+              fvolume: r.fvolume, trueTotal: Number(box.total.toFixed(6)), famount: r.famount,
+            });
+          }
+        }
       }
-      out.sort((a, b) => Number(b.short) - Number(a.short));
       return { count: out.length, sample: cap(out) };
     },
   },
