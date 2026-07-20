@@ -345,6 +345,33 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     };
   };
 
+  // ── container TRUTH (UNFILTERED · owner 2026-07-20 "GZE260714-1 ของข้างในหายไปเยอะ") ──
+  // The tier header summed only the FILTERED families → on the "ยังไม่เข้าระบบ" tab a
+  // 16-shipment container read "1 ชิปเม้น Σ 1 กล่อง" = looked like lost cargo (verified
+  // prod: nothing missing — all 16 staged + live). The header now states the WHOLE
+  // container regardless of the active tab; the filtered view adds "แสดง n/N".
+  const containerTruthOf = () => {
+    const byBase = new Map<string, typeof tracks>();
+    const order: string[] = [];
+    for (const t of tracks) {
+      const b = (t.tracking ? baseTracking(t.tracking) : null) ?? `__solo_${t.id}`;
+      if (!byBase.has(b)) { byBase.set(b, []); order.push(b); }
+      byBase.get(b)!.push(t);
+    }
+    const truth = new Map<string, { ships: number; qty: number; wt: number; cbm: number }>();
+    for (const b of order) {
+      const fam = byBase.get(b)!;
+      const container = fam.map((x) => x.container).find((v): v is string => !!v) ?? null;
+      const key = container ?? "__pending__";
+      const agg = famAgg(fam);
+      const cur = truth.get(key) ?? { ships: 0, qty: 0, wt: 0, cbm: 0 };
+      cur.ships += 1; cur.qty += agg.qty; cur.wt += agg.wt; cur.cbm += agg.cbm;
+      truth.set(key, cur);
+    }
+    return truth;
+  };
+  const containerTruth = containerTruthOf();
+
   // ── ตู้ → กระสอบ tier (owner 2026-07-20 "กระสอบต้องอยู่ในตู้อีกที ไม่ใช่ tier เดียวกับตู้ ·
   //    ในกระสอบต้องแจงว่ามีแทรคกิ้งไหน") — the physical hierarchy:
   //    ตู้ (container) ⊃ กระสอบ (sack) ⊃ ชิปเม้น (base) ⊃ แทรคกิ้ง (-N/M) ⊃ กล่อง (CG).
@@ -1123,10 +1150,12 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
             // ── the ตู้ → กระสอบ → ชิปเม้น tier render (owner 2026-07-20) ──
             return tierGroups.map((cg, cgi) => {
               const allFams = cg.sacks.flatMap((s) => s.fams);
-              const gAgg = allFams.map(famAgg);
-              const gQty = gAgg.reduce((s, a) => s + a.qty, 0);
-              const gWt = gAgg.reduce((s, a) => s + a.wt, 0);
-              const gCbm = gAgg.reduce((s, a) => s + a.cbm, 0);
+              // header Σ = the WHOLE container (unfiltered truth) — never the filtered subset
+              const truth = containerTruth.get(cg.container ?? "__pending__");
+              const gQty = truth?.qty ?? 0;
+              const gWt = truth?.wt ?? 0;
+              const gCbm = truth?.cbm ?? 0;
+              const truthShips = truth?.ships ?? allFams.length;
               const first = allFams[0]?.[0];
               const transTh = first?.transport ? TRANSPORT_TH[first.transport] ?? null : null;
               return (
@@ -1152,8 +1181,14 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                           </span>
                         )}
                         <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-300">
-                          {allFams.length} ชิปเม้น
+                          {truthShips} ชิปเม้น
                         </span>
+                        {allFams.length < truthShips && (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-300"
+                            title="ตัวกรอง/แท็บที่เลือกซ่อนชิปเม้นที่เหลือของตู้นี้ไว้ — ของไม่หาย · กดแท็บ 'ทั้งหมด' เพื่อดูครบ">
+                            แสดง {allFams.length}/{truthShips} ตามตัวกรอง
+                          </span>
+                        )}
                         <span className="text-[11.5px] font-semibold text-slate-700">
                           Σ {gQty} กล่อง · {gWt.toLocaleString("en-US", { maximumFractionDigits: 2 })} กก. · {gCbm.toLocaleString("en-US", { maximumFractionDigits: 6 })} คิว
                         </span>

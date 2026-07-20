@@ -3366,6 +3366,7 @@
       "title": "Update import entries",
       "momo": "MOMO",
       "momoContainers": "MOMO Container Verify",
+      "momoPacking": "MOMO Packing List Upload",
       "momoLive": "MOMO (Live)",
       "momoDiscovery": "Found on MOMO Live (queue)",
       "yiwu": "Yiwu (delivery note)",

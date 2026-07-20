@@ -23,11 +23,12 @@ import { MomoGuideButton } from "./momo-guide-button";
 
 export const dynamic = "force-dynamic";
 
+// owner 2026-07-20 "ยุบให้เหลือ hub + แพคกิ้งลิส" — drift (iTAM ตาย) + review (ซ้ำ
+// กับ hub นี้) ถูก retire เป็น redirect แล้ว; เหลือเครื่องมือที่ใช้จริง 3 ปุ่ม.
 const HUB_LINKS: { href: string; label: string }[] = [
   { href: "/admin/api-forwarder-momo/sync", label: "📥 Sync จาก MOMO API" },
-  { href: "/admin/api-forwarder-momo/packing-upload", label: "📦 อัพ packing list" },
-  { href: "/admin/api-forwarder-momo/drift", label: "🔴 คิว drift (แทร็กหาย)" },
-  { href: "/admin/api-forwarder-momo/review", label: "✅ review / commit (เดิม)" },
+  { href: "/admin/api-forwarder-momo/packing-upload", label: "📦 อัพ packing list (จาก MOMO)" },
+  { href: "/admin/api-forwarder-momo/manual", label: "✍️ เพิ่มงานเอง (manual)" },
 ];
 
 /** momo_box_detail rows → the display box sub-rows (sorted by box number · per-box TOTAL
