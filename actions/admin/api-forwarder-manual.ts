@@ -30,6 +30,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { ADDRESSES } from "@/components/seo/site";
 import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
@@ -298,6 +299,9 @@ export async function adminApiForwarderManualInsert(
       if (manifestDateParsed) {
         fDateToThai = addDays(manifestDateParsed, d.transport_code === "EK" ? 7 : 14);
         fDateContainerClose = manifestDateParsed;
+        // 🔒 cabinet tier guard (owner 2026-07-20) — refuse sack/batch labels as ตู้
+        const cabGuard = cabinetWriteGuard({ next: d.container_code.trim() });
+        if (!cabGuard.ok) return { ok: false, error: cabGuard.reason };
         fCabinetNumber = d.container_code;
       }
       const fDateStatus3 = manifestDateParsed ?? "";

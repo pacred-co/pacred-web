@@ -37,6 +37,7 @@ import { fetchContainerBoxBreakdown } from "@/actions/admin/cnt-box-breakdown";
 import type { BoxDimGroup } from "@/lib/warehouse/container-box-breakdown";
 import type { MomoContainerInfo } from "@/lib/admin/momo-container-resolve";
 import { isMomoRoutingPlaceholder } from "@/lib/admin/momo-container-resolve";
+import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
 
 // ─────────────────────────────────────────────────────────────────────
 // Row shape (mirrors `Grouped` in page.tsx — kept independent so
@@ -795,6 +796,21 @@ export function CntListTable({
                             {r.fcabinetnumber}
                           </Link>
                           <span className="text-[11px] text-amber-600">⏳ รอ MOMO ผูกเลขตู้จริง</span>
+                        </span>
+                      ) : isNonContainerCabinetId(r.fcabinetnumber) ? (
+                        // owner 2026-07-20 — เลขกระสอบ (CBX…)/รอบแพค (SEA0625-…) หลุดมา
+                        // อยู่ tier ตู้: กระสอบต้องอยู่ "ในตู้" อีกชั้น ไม่ใช่เป็นตู้เอง.
+                        // write-guard (cabinet-class.ts) กันขาเข้าแล้ว — แถวนี้ = ข้อมูลค้าง
+                        // ที่ต้องแก้เป็นเลขตู้จริง (data-health จะแดงจนกว่าจะเคลียร์).
+                        <span className="flex flex-col leading-tight">
+                          <Link
+                            href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
+                            className="font-semibold text-[#1e9ff2] hover:underline"
+                            title="ค่านี้เป็นเลขกระสอบ/รอบแพค (ป้ายบนกล่อง) ไม่ใช่เลขตู้จริง — แก้เลขตู้ที่หน้ารายการนำเข้า"
+                          >
+                            {r.fcabinetnumber}
+                          </Link>
+                          <span className="text-[11px] font-semibold text-red-600">⚠ เลขกระสอบ/รอบแพค — ไม่ใช่เลขตู้จริง (ต้องแก้)</span>
                         </span>
                       ) : (
                         <Link

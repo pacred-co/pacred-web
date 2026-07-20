@@ -58,6 +58,7 @@ import {
 } from "@/lib/integrations/momo-web/split-box-rows-plan";
 import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
+import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
 import { ADDRESSES } from "@/components/seo/site";
 
 // ────────────────────────────────────────────────────────────
@@ -412,7 +413,11 @@ export async function commitMomoRowCore(
   // status from MOMO's real signal — no phantom cabinet, no over-advance. (containerNo below
   // still keeps momo_container_no separately for the momo_container_no column; and transport-mode
   // derivation already reads container_batch_no only, so no mode regression.)
-  const cabinetForDisplay = srcRow.container_batch_no ?? "";
+  // Tier guard (owner 2026-07-20 · cabinet-class SOT): container_batch_no must be a
+  // ตู้ (GZS/GZE/…). If upstream ever hands a sack (CBX…)/batch label instead, keep
+  // fcabinetnumber EMPTY — propagate fills the real ตู้ later. กระสอบ ≠ ตู้.
+  const rawCabinetBatch = (srcRow.container_batch_no ?? "").trim();
+  const cabinetForDisplay = isNonContainerCabinetId(rawCabinetBatch) ? "" : rawCabinetBatch;
   const containerNo = srcRow.momo_container_no ?? "";
   // ภูม 2026-07-13 (MONEY · ~5× under-bill fix) — value the row from the momo_import_tracks
   // AGGREGATE columns (weight_kg/cbm/quantity = Σ of all the shipment's boxes, set by the

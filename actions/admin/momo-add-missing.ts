@@ -48,6 +48,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import {
   deriveTransportTypeFromCabinet,
   baseTrackingOf,
@@ -144,6 +145,11 @@ export async function createMissingMomoForwarderRow(
       const base    = baseTrackingOf(d.tracking);
       const cabinet = d.cabinet.trim();
       const userID  = d.memberCode.toUpperCase();
+
+      // 🔒 cabinet tier guard (owner 2026-07-20) — เลขตู้ต้องเป็นตู้จริง ไม่ใช่
+      // เลขกระสอบ (CBX…)/รอบแพค (Packing ID บนกล่อง)
+      const cabGuard = cabinetWriteGuard({ next: cabinet });
+      if (!cabGuard.ok) return { ok: false, error: cabGuard.reason };
 
       // ── GUARD 1 — dedup (read-then-insert, base-tracking keyed) ──────────
       // tb_forwarder.ftrackingchn stores the BARE base ("KY982669997") for some

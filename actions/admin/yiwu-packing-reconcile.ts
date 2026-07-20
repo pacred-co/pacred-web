@@ -22,6 +22,7 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { parseYiwuPackingXlsx } from "@/lib/admin/yiwu-packing-xlsx-parser";
 import { planYiwuReconcile, type YiwuSibling } from "@/lib/admin/yiwu-packing-match";
 import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
+import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
 
 const YIWU_ROLES = ["super", "ops", "warehouse", "accounting"] as const;
 
@@ -74,6 +75,19 @@ async function reconcileYiwuImpl(
     return { ok: false, error: parse.warnings[0] ?? "อ่านไฟล์ packing list (อี้อู) ไม่สำเร็จ — ตรวจรูปแบบไฟล์" };
   }
   const container = (parse.container ?? "").trim();
+
+  // 🔒 cabinet tier guard (owner 2026-07-20) — early TTW files were named with the
+  // PACKING-BATCH label (e.g. "SEA0625-8211YW"), not a ตู้. Re-applying such a file
+  // would re-introduce a batch id at the container tier → refuse with instructions.
+  if (container && isNonContainerCabinetId(container)) {
+    return {
+      ok: false,
+      error:
+        `เลขตู้จากชื่อไฟล์ "${container}" เป็นเลขกระสอบ/รอบแพค ไม่ใช่เลขตู้จริง — ` +
+        `เปลี่ยนชื่อไฟล์เป็นเลขตู้จริง (GZS…/YWS…/YWE…) ก่อนอัพโหลด`,
+    };
+  }
+
   const admin = createAdminClient();
   const today = todayIsoDate();
 

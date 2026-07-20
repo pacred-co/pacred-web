@@ -88,6 +88,8 @@ import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shippin
 import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
 import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
 import { canonicalProvince } from "@/lib/forwarder/carrier-province-coverage";
+import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
+import { isGodRole } from "@/lib/admin/god-role";
 
 /** Pacred's own delivery family (รับเองโกดัง / เหมาๆ / ด่วน) — works any province. */
 const PCS_FAMILY = new Set(["PCS", "PCSF", "PCSE"]);
@@ -1633,15 +1635,15 @@ export async function adminUpdateForwarderCabinet(
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
 
-  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
+  return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId, roles }) => {
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
 
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, fcabinetnumber")
+      .select("id, fcabinetnumber, fcabinet_locked")
       .eq("id", d.fId)
-      .maybeSingle<{ id: number; fcabinetnumber: string | null }>();
+      .maybeSingle<{ id: number; fcabinetnumber: string | null; fcabinet_locked: boolean | null }>();
     if (fwdErr) {
       console.error(`[adminUpdateForwarderCabinet read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
       return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
@@ -1650,6 +1652,18 @@ export async function adminUpdateForwarderCabinet(
     if ((fwd.fcabinetnumber ?? "").trim() === d.cabinet) {
       return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (เลขตู้เดิม)" };
     }
+
+    // 🔒 cabinet tier guard (owner 2026-07-20) — THIS action re-stamped 7 LOCKED
+    // rows with the box-label batch id "SEA0625-8211YW" (it checked neither the
+    // mig-0150 lock nor the id shape). sack/batch ids are refused for everyone;
+    // the lock is overridable by god roles only.
+    const guard = cabinetWriteGuard({
+      next: d.cabinet,
+      current: fwd.fcabinetnumber,
+      locked: fwd.fcabinet_locked,
+      isGod: isGodRole(roles),
+    });
+    if (!guard.ok) return { ok: false, error: guard.reason };
 
     const { error: updErr } = await admin
       .from("tb_forwarder")

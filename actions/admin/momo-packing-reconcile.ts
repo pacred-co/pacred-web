@@ -45,6 +45,7 @@ import { parseYiwuPackingXlsx } from "@/lib/admin/yiwu-packing-xlsx-parser";
 import { detectPackingFormat, type PackingFormat } from "@/lib/admin/packing-xlsx-dispatch";
 import { baseTrackingOf } from "@/lib/admin/momo-raw-helpers";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
+import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { createMissingMomoForwarderRow } from "./momo-add-missing";
 
@@ -381,7 +382,9 @@ export async function applyMomoPacking(input: unknown): Promise<AdminActionResul
       if (r.packingWidth != null)  updates.fwidth  = r.packingWidth;
       if (r.packingLength != null) updates.flength = r.packingLength;
       if (r.packingHeight != null) updates.fheight = r.packingHeight;
-      if (r.container) updates.fcabinetnumber = r.container;
+      // 🔒 cabinet tier guard (owner 2026-07-20) — a sack (CBX…)/packing-batch
+      // (SEA0625-…) label in the file must never land at the ตู้ tier.
+      if (r.container && !isNonContainerCabinetId(r.container)) updates.fcabinetnumber = r.container;
       if (transport) updates.ftransporttype = transport;
 
       // TOCTOU: re-assert non-billed in the WHERE so a row billed between preview and
