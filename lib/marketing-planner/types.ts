@@ -203,12 +203,40 @@ export function serviceIdsOf(c: Pick<ContentItem, "serviceIds" | "serviceId">): 
 // ── The whole persisted blob ──
 export const PLANNER_SCHEMA_VERSION = 2;
 
-/** Monthly production quota (ปอน 2026-07-01): clips per pillar/total + daily baseline for บทความ/โพสต์. */
+/** Monthly production quota — คลิปยาว/สั้น รวมทั้งเดือน · บทความ ต่อวัน.
+ *  โพสต์ ถูกเอาออกจากแผนการผลิต (owner 2026-07-20 "ลบโพสต์ออก") — ประเภท
+ *  "โพสต์" ยังใช้กับคอนเทนต์ได้ตามปกติ แค่ไม่มีโควต้าให้วางแผนแล้ว. */
 export type ProductionTargets = {
-  longByPillar: Record<string, number>; // pillarId → จำนวนคลิปยาว/เดือน
+  /** จำนวนคลิปยาว/เดือน — ตัวเลขเดียว (owner 2026-07-20 "ย่อคลิปยาวให้เป็นแค่คลิปยาว
+   *  ไม่ต้องมีคอนเทนต์ให้เลือก มันเข้าใจยาก"). */
+  longTotal?: number;
+  /** LEGACY — เคยแตกโควต้าคลิปยาวตามเสาหลัก. ยังอ่านอยู่เพื่อไม่ให้แผนเดิมหาย:
+   *  ถ้าไม่มี longTotal จะรวมค่าในนี้มาใช้แทน (longTotalOf). */
+  longByPillar: Record<string, number>;
   shortTotal: number; // จำนวนคลิปสั้น/เดือน (รวม)
   articlePerDay?: number; // บทความ ยืนพื้น/วัน (default 3 · แก้ได้)
-  postPerDay?: number; // โพสต์ ยืนพื้น/วัน (default 3 · แก้ได้)
+};
+
+/** โควต้าคลิปยาว/เดือน — ตัวเลขเดียว โดยยังรับข้อมูลเก่าที่แตกตามเสาหลักได้. */
+export function longTotalOf(t: Pick<ProductionTargets, "longTotal" | "longByPillar">): number {
+  if (typeof t.longTotal === "number") return Math.max(0, t.longTotal);
+  return Object.values(t.longByPillar ?? {}).reduce((s, n) => s + (n > 0 ? n : 0), 0);
+}
+
+/**
+ * แผนการผลิตที่เซฟไว้ใช้ซ้ำ (owner 2026-07-20 "วางแผนเสร็จ ทำให้สามารถเซฟเป็น preset ได้").
+ * เก็บทั้งโควต้า + วันที่เลือก + ค่าที่กำหนดเองรายวัน — กดใช้แล้วได้แผนเดิมทั้งชุด
+ * ไม่ต้องตั้งใหม่ทุกเดือน. วันเก็บเป็น "วันที่ 1..31" ไม่ผูกเดือน จึงใช้ข้ามเดือนได้
+ * (วันที่เกินจำนวนวันของเดือนนั้นจะถูกตัดทิ้งตอนใช้).
+ */
+export type PlanPreset = {
+  id: string;
+  name: string;
+  targets: ProductionTargets;
+  selectedDays: number[];
+  /** day (1..31) → ค่าที่ pin ไว้ต่อประเภท */
+  overrides: Record<number, { long?: number; short?: number; article?: number; post?: number }>;
+  createdAt: string;
 };
 
 // ── Job board (สั่งงาน/รับงาน · ปอน 2026-07-01) ──
@@ -237,6 +265,33 @@ export type JobOrder = {
 
 // ── Keyword planner (Keyword บริการ · ปอน 2026-07-01) ──
 export type KeywordTier = "primary" | "secondary" | "longtail";
+/**
+ * แพลตฟอร์มที่ "คนค้นหา" คีย์เวิร์ดนั้น (owner 2026-07-20 "ทำให้ keyword แยกแพลตฟอร์มด้วย").
+ * คนละชุดกับ SettingGroup "platform" ของคอนเทนต์ ตั้งใจแยก — อันนั้นคือ "ที่เราโพสต์"
+ * (LINE OA · Shopee · เว็บ) ซึ่งไม่มี Google เพราะเราไม่ได้โพสต์ลง Google.
+ *
+ * `google_youtube` = ค่าตั้งต้นของข้อมูลเดิม: Keyword Planner ให้ volume ที่ครอบทั้ง
+ * Google Search + YouTube มาในไฟล์เดียว แยกไม่ได้ตั้งแต่ต้นทาง.
+ */
+export const KEYWORD_PLATFORMS = [
+  { id: "google_youtube", name: "Google / YouTube" },
+  { id: "google", name: "Google" },
+  { id: "youtube", name: "YouTube" },
+  { id: "tiktok", name: "TikTok" },
+  { id: "facebook", name: "Facebook" },
+  { id: "shopee", name: "Shopee" },
+  { id: "lazada", name: "Lazada" },
+] as const;
+export type KeywordPlatformId = (typeof KEYWORD_PLATFORMS)[number]["id"];
+
+/** แพลตฟอร์มของคีย์เวิร์ด — ว่าง = ข้อมูลเดิมจาก Keyword Planner (Google/YouTube). */
+export function keywordPlatformOf(k: Pick<KeywordItem, "platform">): KeywordPlatformId {
+  return (k.platform as KeywordPlatformId) || "google_youtube";
+}
+export function keywordPlatformLabel(id: string): string {
+  return KEYWORD_PLATFORMS.find((p) => p.id === id)?.name ?? id;
+}
+
 export type KeywordItem = {
   id: string;
   service: string; // บริการที่ผูกกับคีย์เวิร์ด (group)
@@ -246,6 +301,8 @@ export type KeywordItem = {
   cpc?: number; // ฿/คลิก ("แพงไหม")
   difficulty?: number; // 0-100 (การแข่งขัน)
   intent?: string; // ความตั้งใจค้นหา (optional)
+  /** แพลตฟอร์มที่คนค้นคำนี้ — ว่าง = ข้อมูลเดิม (Google/YouTube). */
+  platform?: string;
   note?: string;
 };
 
@@ -254,6 +311,7 @@ export type PlannerData = {
   settings: SettingItem[];
   contents: ContentItem[];
   targets?: ProductionTargets;
+  presets?: PlanPreset[];
   jobs?: JobOrder[];
   keywords?: KeywordItem[];
 };

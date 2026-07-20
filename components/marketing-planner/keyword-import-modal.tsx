@@ -13,7 +13,7 @@
  */
 import { useMemo, useState } from "react";
 import { CheckCircle2, FileUp, Loader2, Upload } from "lucide-react";
-import type { KeywordItem } from "@/lib/marketing-planner/types";
+import { KEYWORD_PLATFORMS, type KeywordItem } from "@/lib/marketing-planner/types";
 import { usePlanner } from "@/lib/marketing-planner/store";
 import { parseKeywordCsv, tierFromVolume, type ParsedKeywordRow } from "@/lib/marketing-planner/keyword-csv";
 import { fmtMoney, fmtNum } from "@/lib/marketing-planner/util";
@@ -37,6 +37,8 @@ export function KeywordImportModal({ onClose }: { onClose: () => void }) {
   const serviceOptions = byGroup("service");
 
   const [service, setService] = useState("");
+  // แพลตฟอร์มของทั้งไฟล์ — Keyword Planner ให้ Google/YouTube รวมกันมา จึงเป็นค่าตั้งต้น
+  const [platform, setPlatform] = useState<string>("google_youtube");
   const [fileName, setFileName] = useState("");
   const [rows, setRows] = useState<ParsedKeywordRow[] | null>(null);
   const [err, setErr] = useState("");
@@ -64,18 +66,19 @@ export function KeywordImportModal({ onClose }: { onClose: () => void }) {
   // Nothing is skipped or duplicated: an existing keyword is UPDATED, not re-added.
   const { plan, addCount, updateCount } = useMemo(() => {
     if (!rows || !service) return { plan: [] as Array<{ r: ParsedKeywordRow; isUpdate: boolean }>, addCount: 0, updateCount: 0 };
-    const existing = new Set(keywords.filter((k) => k.service === service).map((k) => k.keyword.trim().toLowerCase()));
+    const existing = new Set(keywords.filter((k) => k.service === service && (k.platform || "google_youtube") === platform).map((k) => k.keyword.trim().toLowerCase()));
     const byKw = new Map<string, ParsedKeywordRow>();
     for (const r of rows) byKw.set(r.keyword.trim().toLowerCase(), r); // in-file dup → last wins
     const plan = [...byKw].map(([k, r]) => ({ r, isUpdate: existing.has(k) }));
     return { plan, addCount: plan.filter((p) => !p.isUpdate).length, updateCount: plan.filter((p) => p.isUpdate).length };
-  }, [rows, service, keywords]);
+  }, [rows, service, platform, keywords]);
 
   const doImport = () => {
     if (!service || plan.length === 0) return;
     setBusy(true);
     const items: Omit<KeywordItem, "id">[] = plan.map(({ r }) => ({
       service,
+      platform,
       tier: tierFromVolume(r.volume),
       keyword: r.keyword,
       volume: r.volume,
@@ -121,6 +124,11 @@ export function KeywordImportModal({ onClose }: { onClose: () => void }) {
       ) : (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="แพลตฟอร์มของไฟล์นี้" hint="คำเดียวกันคนละแพลตฟอร์มเก็บแยกแถว (volume/CPC ไม่เท่ากัน)">
+              <select className={inputCls} value={platform} onChange={(e) => setPlatform(e.target.value)} aria-label="แพลตฟอร์มคีย์เวิร์ด">
+                {KEYWORD_PLATFORMS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </Field>
             <Field label="บริการที่จะผูกคีย์เวิร์ด" required hint="เลือกบริการเดียว — คีย์เวิร์ดทั้งไฟล์จะเข้าบริการนี้">
               {serviceOptions.length > 0 ? (
                 <select className={inputCls} value={service} onChange={(e) => setService(e.target.value)}>

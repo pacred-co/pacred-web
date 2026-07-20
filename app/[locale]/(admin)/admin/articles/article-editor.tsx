@@ -15,6 +15,7 @@ import {
 } from "@/actions/admin/cms-articles";
 import {
   CMS_CATEGORIES, CMS_CATEGORY_META, KNOWLEDGE_SUBCATS, NEWS_SUBCATS, CMS_STATUS_LABEL,
+  CASE_FACT_LABELS, slugifyTitle,
   type CmsCategory, type CmsStatus,
 } from "@/lib/validators/cms-article";
 
@@ -33,7 +34,11 @@ const ERR_TH: Record<string, string> = {
   delete_forbidden: "ลบไม่ได้ — ต้องเป็นเจ้าของร่าง หรือ Ultra Admin Z",
   slug_conflict: "สร้าง URL ของบทความไม่สำเร็จ ลองอีกครั้ง",
 };
-const errText = (c: string) => ERR_TH[c] ?? c ?? "เกิดข้อผิดพลาด";
+const errText = (c: string) => {
+  // slug_taken:<slug> — name the URL that's already used so the author can fix it
+  if (c?.startsWith("slug_taken:")) return `URL "${c.slice("slug_taken:".length)}" ถูกใช้ไปแล้ว — เปลี่ยน URL แล้วบันทึกอีกครั้ง`;
+  return ERR_TH[c] ?? c ?? "เกิดข้อผิดพลาด";
+};
 
 export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle | null; canApprove: boolean }) {
   const router = useRouter();
@@ -44,6 +49,11 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
   const [category, setCategory] = useState<CmsCategory>((initial?.category as CmsCategory) ?? "knowledge");
   const [subCategory, setSubCategory] = useState(initial?.subCategory ?? "นำเข้า");
   const [title, setTitle] = useState(initial?.title ?? "");
+  // URL. Untouched → tracks the title live (so a new case gets the same readable
+  // Thai pattern as the seeded ones). Once the author edits it, we stop following
+  // the title so their choice is never silently overwritten.
+  const [slug, setSlug] = useState(initial?.slug ?? "");
+  const [slugTouched, setSlugTouched] = useState(Boolean(initial?.slug));
   const [excerpt, setExcerpt] = useState(initial?.excerpt ?? "");
   const [coverUrl, setCoverUrl] = useState(initial?.coverUrl ?? "");
   const [body, setBody] = useState(initial?.body ?? "");
@@ -58,6 +68,32 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
   const [caseRating, setCaseRating] = useState<number | null>(initial?.caseRating ?? null);
   const [caseRoute, setCaseRoute] = useState(initial?.caseRoute ?? "");
   const [caseFacts, setCaseFacts] = useState<{ label: string; value: string }[]>(initial?.caseFacts ?? []);
+  // ── TH/EN on ONE screen (owner 2026-07-20 "สลับ en แต่หน้าเดียวกัน จะได้ง่ายๆ").
+  // Only language-BEARING fields have an EN twin; รูป/วิดีโอ/เรตดาว/แท็ก/URL are
+  // shared, so one case keeps one URL + one set of ยอดวิว/ถูกใจ/แชร์.
+  // Blank EN = the public page falls back to the Thai (localizeCmsArticle).
+  const [lang, setLang] = useState<"th" | "en">("th");
+  const [en, setEn] = useState({
+    title: initial?.titleEn ?? "",
+    excerpt: initial?.excerptEn ?? "",
+    body: initial?.bodyEn ?? "",
+    metaTitle: initial?.metaTitleEn ?? "",
+    metaDescription: initial?.metaDescriptionEn ?? "",
+    caseRoute: initial?.caseRouteEn ?? "",
+    casePrice: initial?.casePriceEn ?? "",
+  });
+  const [caseFactsEn, setCaseFactsEn] = useState<{ label: string; value: string }[]>(initial?.caseFactsEn ?? []);
+  const isEn = lang === "en";
+  /** Bind one translatable text field to whichever language is on screen. */
+  const bind = (key: keyof typeof en, thVal: string, setTh: (v: string) => void) => ({
+    value: isEn ? en[key] : thVal,
+    onChange: (e: { target: { value: string } }) =>
+      isEn ? setEn((s) => ({ ...s, [key]: e.target.value })) : setTh(e.target.value),
+  });
+  // The fact rows currently on screen (Thai set or English set).
+  const facts = isEn ? caseFactsEn : caseFacts;
+  const setFacts = isEn ? setCaseFactsEn : setCaseFacts;
+
   const [seoOpen, setSeoOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
@@ -76,11 +112,20 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
   const isPublished = status === "published";
   const isPending = status === "pending";
 
+  // What will actually be saved as the URL — mirrors the server's resolveSlug so
+  // the preview under the field is the real thing, not a guess.
+  const effectiveSlug = slugifyTitle(slugTouched ? slug : title);
+  const publicBase = CMS_CATEGORY_META[category].path;
+  // Changing a live URL breaks inbound links AND orphans that article's
+  // views/likes/shares (article_stats is keyed `<category>:<slug>`).
+  const slugChanged = Boolean(initial?.slug) && effectiveSlug !== initial?.slug;
+
   function payload() {
     return {
       id: initial?.id,
       category,
       title: title.trim(),
+      slug: effectiveSlug,
       excerpt: excerpt.trim(),
       coverUrl: coverUrl.trim(),
       body: body.trim(),
@@ -100,6 +145,16 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
       caseRoute: category === "our_work" ? caseRoute.trim() : "",
       caseFacts: category === "our_work"
         ? caseFacts.map((f) => ({ label: f.label.trim(), value: f.value.trim() })).filter((f) => f.label || f.value)
+        : [],
+      titleEn: en.title.trim(),
+      excerptEn: en.excerpt.trim(),
+      bodyEn: en.body.trim(),
+      metaTitleEn: en.metaTitle.trim(),
+      metaDescriptionEn: en.metaDescription.trim(),
+      caseRouteEn: category === "our_work" ? en.caseRoute.trim() : "",
+      casePriceEn: category === "our_work" ? en.casePrice.trim() : "",
+      caseFactsEn: category === "our_work"
+        ? caseFactsEn.map((f) => ({ label: f.label.trim(), value: f.value.trim() })).filter((f) => f.label || f.value)
         : [],
     };
   }
@@ -320,14 +375,74 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
             ) : null}
           </div>
 
+          {/* ── ภาษา — ไทย/อังกฤษ ในหน้าเดียว ── */}
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface-alt/40 p-2">
+            <span className="text-[12px] font-bold text-muted">ภาษาที่กำลังเขียน</span>
+            <div className="inline-flex overflow-hidden rounded-lg border border-border">
+              {(["th", "en"] as const).map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  onClick={() => setLang(l)}
+                  className={`px-3 py-1 text-[12.5px] font-bold transition ${
+                    lang === l ? "bg-primary-600 text-white" : "bg-white text-foreground hover:bg-surface-alt dark:bg-surface"
+                  }`}
+                >
+                  {l === "th" ? "🇹🇭 ไทย" : "🇬🇧 EN"}
+                </button>
+              ))}
+            </div>
+            <span className="text-[11px] text-muted">
+              {isEn
+                ? "เว้นว่างช่องไหน = หน้าเว็บใช้ภาษาไทยของช่องนั้นแทน · รูป/วิดีโอ/แท็ก/URL ใช้ร่วมกัน"
+                : "ไทยคือตัวหลัก · สลับไป EN เพื่อใส่คำแปล (ไม่ใส่ก็ได้)"}
+            </span>
+            {en.title.trim() ? (
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">มีคำแปล EN แล้ว</span>
+            ) : null}
+          </div>
+
           <div>
-            <label className={labelCls}>หัวข้อบทความ</label>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="เช่น นำเข้าของจีนยังไงให้คุ้ม…" className={inputCls} />
+            <label className={labelCls}>หัวข้อบทความ {isEn ? <span className="font-normal text-muted">(EN)</span> : null}</label>
+            <input {...bind("title", title, setTitle)} placeholder={isEn ? "e.g. Shipping & customs clearance…" : "เช่น นำเข้าของจีนยังไงให้คุ้ม…"} className={inputCls} />
+          </div>
+
+          {/* URL (slug) — auto-follows the title until touched, then it's the author's */}
+          <div>
+            <label className={labelCls}>
+              URL ของหน้า <span className="font-normal text-muted">— พิมพ์แก้เองได้ · ปล่อยไว้ = ตั้งตามหัวข้อให้</span>
+            </label>
+            <input
+              value={slugTouched ? slug : effectiveSlug}
+              onChange={(e) => { setSlugTouched(true); setSlug(e.target.value); }}
+              placeholder="ระบบจะตั้งให้อัตโนมัติจากหัวข้อ"
+              className={inputCls}
+              aria-label="URL ของบทความ"
+            />
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 break-all text-[11px] text-muted">
+              <span>
+                ลิงก์จริง: <span className="font-semibold text-foreground">{publicBase}/{effectiveSlug || "…"}</span>
+              </span>
+              {slugTouched ? (
+                <button
+                  type="button"
+                  onClick={() => { setSlugTouched(false); setSlug(""); }}
+                  className="shrink-0 font-semibold text-primary-600 hover:underline"
+                >
+                  ↺ ตั้งใหม่จากหัวข้อ
+                </button>
+              ) : null}
+            </p>
+            {slugChanged ? (
+              <p className="mt-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800">
+                ⚠️ เปลี่ยน URL แล้ว — ลิงก์เดิม ({initial?.slug}) จะเปิดไม่ได้ และยอด วิว/ถูกใจ/แชร์ ของหน้านี้จะเริ่มนับใหม่
+              </p>
+            ) : null}
           </div>
 
           <div>
             <label className={labelCls}>คำโปรย (สรุปสั้นๆ ใต้หัวข้อ)</label>
-            <textarea value={excerpt} onChange={(e) => setExcerpt(e.target.value)} rows={2} placeholder="2–3 บรรทัด สรุปว่าบทความนี้เกี่ยวกับอะไร" className={`${inputCls} resize-y`} />
+            <textarea {...bind("excerpt", excerpt, setExcerpt)} rows={2} placeholder="2–3 บรรทัด สรุปว่าบทความนี้เกี่ยวกับอะไร" className={`${inputCls} resize-y`} />
           </div>
 
           {/* Cover upload */}
@@ -437,7 +552,7 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls}>ราคาเริ่มต้น</label>
-                    <input value={casePrice} onChange={(e) => setCasePrice(e.target.value)} placeholder="เช่น เริ่ม $500" className={inputCls} />
+                    <input {...bind("casePrice", casePrice, setCasePrice)} placeholder="เช่น เริ่ม $500" className={inputCls} />
                     <p className="mt-1 text-[11px] text-muted">โชว์กล่องขวา · ว่าง = “ขอใบเสนอราคาฟรี”</p>
                   </div>
                   <div>
@@ -455,25 +570,44 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
 
                 <div className="mt-3">
                   <label className={labelCls}>เส้นทาง</label>
-                  <input value={caseRoute} onChange={(e) => setCaseRoute(e.target.value)} placeholder="เช่น กวางโจว → แหลมฉบัง" className={inputCls} />
+                  <input {...bind("caseRoute", caseRoute, setCaseRoute)} placeholder="เช่น กวางโจว → แหลมฉบัง" className={inputCls} />
                 </div>
 
                 <div className="mt-3">
                   <label className={labelCls}>ข้อมูลขนส่ง <span className="text-[11px] font-normal text-muted">(หัวข้อ · ค่า)</span></label>
-                  {caseFacts.length > 0 ? (
+                  {/* The case page groups + icons each row BY ITS LABEL, so an
+                      off-pattern label lands in "รายละเอียดเพิ่มเติม" with a
+                      generic icon. Offering the canonical set keeps a new case
+                      looking identical to the existing ones. */}
+                  <datalist id="case-fact-labels">
+                    {CASE_FACT_LABELS.map((l) => <option key={l} value={l} />)}
+                  </datalist>
+                  {facts.length === 0 ? (
+                    <p className="mb-2 text-[11px] text-muted">
+                      แนะนำให้ครบตามแพทเทิร์นหน้าเว็บ:{" "}
+                      <button
+                        type="button"
+                        onClick={() => setFacts(CASE_FACT_LABELS.map((l) => ({ label: l, value: "" })))}
+                        className="font-semibold text-primary-600 hover:underline"
+                      >
+                        เติมหัวข้อมาตรฐาน {CASE_FACT_LABELS.length} แถว
+                      </button>
+                    </p>
+                  ) : null}
+                  {facts.length > 0 ? (
                     <div className="space-y-2">
-                      {caseFacts.map((f, i) => (
+                      {facts.map((f, i) => (
                         <div key={i} className="flex gap-2">
-                          <input value={f.label} onChange={(e) => setCaseFacts((cur) => cur.map((x, idx) => (idx === i ? { ...x, label: e.target.value } : x)))} placeholder="หัวข้อ เช่น บริการ / ช่องทาง" className={`${inputCls} flex-1`} />
-                          <input value={f.value} onChange={(e) => setCaseFacts((cur) => cur.map((x, idx) => (idx === i ? { ...x, value: e.target.value } : x)))} placeholder="ค่า เช่น ทางเรือ · FCL" className={`${inputCls} flex-1`} />
-                          <button type="button" onClick={() => setCaseFacts((cur) => cur.filter((_, idx) => idx !== i))} aria-label={`ลบแถวที่ ${i + 1}`} className="inline-flex shrink-0 items-center rounded-lg border border-border px-2 text-muted hover:bg-surface-alt">
+                          <input list="case-fact-labels" value={f.label} onChange={(e) => setFacts((cur) => cur.map((x, idx) => (idx === i ? { ...x, label: e.target.value } : x)))} placeholder="หัวข้อ เช่น บริการ / ช่องทาง" className={`${inputCls} flex-1`} />
+                          <input value={f.value} onChange={(e) => setFacts((cur) => cur.map((x, idx) => (idx === i ? { ...x, value: e.target.value } : x)))} placeholder="ค่า เช่น ทางเรือ · FCL" className={`${inputCls} flex-1`} />
+                          <button type="button" onClick={() => setFacts((cur) => cur.filter((_, idx) => idx !== i))} aria-label={`ลบแถวที่ ${i + 1}`} className="inline-flex shrink-0 items-center rounded-lg border border-border px-2 text-muted hover:bg-surface-alt">
                             <X className="h-4 w-4" />
                           </button>
                         </div>
                       ))}
                     </div>
                   ) : null}
-                  <button type="button" onClick={() => setCaseFacts((cur) => (cur.length >= 20 ? cur : [...cur, { label: "", value: "" }]))} disabled={caseFacts.length >= 20} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-50">
+                  <button type="button" onClick={() => setFacts((cur) => (cur.length >= 20 ? cur : [...cur, { label: "", value: "" }]))} disabled={facts.length >= 20} className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 disabled:opacity-50">
                     <Plus className="h-3.5 w-3.5" /> เพิ่มแถวข้อมูล
                   </button>
                 </div>
@@ -528,7 +662,7 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
               </div>
             </div>
             <input ref={bodyFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) insertBodyImage(f); if (e.target) e.target.value = ""; }} />
-            <textarea ref={bodyRef} value={body} onChange={(e) => setBody(e.target.value)} rows={16} placeholder={"พิมพ์เนื้อหาได้เลย — ระบบจัดรูปแบบให้อัตโนมัติ\n\nเคล็ดลับจัดรูปแบบ:\n📦 ขึ้นต้นบรรทัดด้วยอิโมจิ = หัวข้อใหญ่\n1. ตัวเลขนำหน้า = ลิสต์เป็นข้อๆ\n- ขีดนำหน้า = bullet\n\"ครอบด้วยอัญประกาศ\" = คำพูดเน้น\nกด \"แทรกรูป\" เพื่อใส่รูปในเนื้อหา"} className={`${inputCls} resize-y font-mono text-[13px] leading-relaxed`} />
+            <textarea ref={bodyRef} {...bind("body", body, setBody)} rows={16} placeholder={"พิมพ์เนื้อหาได้เลย — ระบบจัดรูปแบบให้อัตโนมัติ\n\nเคล็ดลับจัดรูปแบบ:\n📦 ขึ้นต้นบรรทัดด้วยอิโมจิ = หัวข้อใหญ่\n1. ตัวเลขนำหน้า = ลิสต์เป็นข้อๆ\n- ขีดนำหน้า = bullet\n\"ครอบด้วยอัญประกาศ\" = คำพูดเน้น\nกด \"แทรกรูป\" เพื่อใส่รูปในเนื้อหา"} className={`${inputCls} resize-y font-mono text-[13px] leading-relaxed`} />
             <p className="mt-1 text-[11px] text-muted">พิมพ์ข้อความธรรมดา ระบบ render เป็นบทความสวยเอง · กด “แทรกรูป” ใส่ได้หลายรูปในเนื้อหา · กด “ดูตัวอย่าง” เพื่อเช็ค</p>
           </div>
 
@@ -542,12 +676,12 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
               <div className="mt-2 space-y-3">
                 <div>
                   <label className={labelCls}>SEO Title (ชื่อบนแท็บ/Google)</label>
-                  <input value={metaTitle} onChange={(e) => setMetaTitle(e.target.value)} maxLength={200} placeholder="ปล่อยว่าง = ใช้หัวข้อบทความ" className={inputCls} />
+                  <input {...bind("metaTitle", metaTitle, setMetaTitle)} maxLength={200} placeholder="ปล่อยว่าง = ใช้หัวข้อบทความ" className={inputCls} />
                   <p className="mt-1 text-[11px] text-muted">{metaTitle.length}/200 · แนะนำ ~50–60 ตัวอักษร</p>
                 </div>
                 <div>
                   <label className={labelCls}>SEO Description (คำอธิบายใต้ลิงก์ใน Google)</label>
-                  <textarea value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} maxLength={400} rows={2} placeholder="ปล่อยว่าง = ใช้คำโปรย" className={`${inputCls} resize-y`} />
+                  <textarea {...bind("metaDescription", metaDescription, setMetaDescription)} maxLength={400} rows={2} placeholder="ปล่อยว่าง = ใช้คำโปรย" className={`${inputCls} resize-y`} />
                   <p className="mt-1 text-[11px] text-muted">{metaDescription.length}/400 · แนะนำ ~150–160 ตัวอักษร</p>
                 </div>
               </div>
@@ -603,17 +737,18 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
           {preview ? (
             <ArticlePreview
               category={category}
-              title={title}
-              excerpt={excerpt}
+              title={isEn ? en.title || title : title}
+              excerpt={isEn ? en.excerpt || excerpt : excerpt}
               coverUrl={coverUrl}
-              body={body}
+              body={isEn ? en.body || body : body}
               subCategory={subCategory}
               videoUrl={videoUrl}
               galleryImages={galleryImages}
-              casePrice={casePrice}
+              casePrice={isEn ? en.casePrice || casePrice : casePrice}
               caseRating={caseRating}
-              caseRoute={caseRoute}
-              caseFacts={caseFacts}
+              caseRoute={isEn ? en.caseRoute || caseRoute : caseRoute}
+              caseFacts={facts.length ? facts : caseFacts}
+              tags={tags}
             />
           ) : (
             <div className="rounded-2xl border border-dashed border-border bg-surface-alt/40 p-6 text-center text-sm text-muted">

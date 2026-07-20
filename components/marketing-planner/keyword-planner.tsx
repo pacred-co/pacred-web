@@ -6,9 +6,9 @@
  * difficulty. Values are entered by hand (research from external tools) since
  * this is a localStorage prototype, not a live keyword API.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { FileUp, Pencil, Plus, Search, Trash2 } from "lucide-react";
-import type { KeywordItem, KeywordTier } from "@/lib/marketing-planner/types";
+import { KEYWORD_PLATFORMS, keywordPlatformLabel, keywordPlatformOf, type KeywordItem, type KeywordTier } from "@/lib/marketing-planner/types";
 import { usePlanner } from "@/lib/marketing-planner/store";
 import { fmtMoney, fmtNum } from "@/lib/marketing-planner/util";
 import { btnGhost, btnPrimary, cx, EmptyState, Field, inputCls, Modal, Tag, useConfirm } from "./ui";
@@ -132,8 +132,11 @@ export function KeywordPlanner() {
   const [editing, setEditing] = useState<KeywordItem | null>(null);
   const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [tierFilter, setTierFilter] = useState<KeywordTier | "all">("all");
+  const [platformFilter, setPlatformFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  // page เก็บคู่กับ "ชุดตัวกรองที่ใช้ตอนนั้น" — พอเปลี่ยนตัวกรอง key ไม่ตรง จะกลับหน้า 1
+  // เอง โดยไม่ต้อง setState ใน effect (render cascade) และไม่ต้องเขียน ref ตอน render
+  const [pageState, setPageState] = useState({ key: "", page: 1 });
 
   const services = useMemo(() => [...new Set(keywords.map((k) => k.service))], [keywords]);
   // Stable service order (insertion order) → a service's rows stay contiguous in the flat list.
@@ -148,6 +151,7 @@ export function KeywordPlanner() {
     return keywords
       .filter((k) => serviceFilter === "all" || k.service === serviceFilter)
       .filter((k) => tierFilter === "all" || k.tier === tierFilter)
+      .filter((k) => platformFilter === "all" || keywordPlatformOf(k) === platformFilter)
       .filter((k) => !kw || k.keyword.toLowerCase().includes(kw) || (k.intent ?? "").toLowerCase().includes(kw) || k.service.toLowerCase().includes(kw))
       .sort(
         (a, b) =>
@@ -155,13 +159,15 @@ export function KeywordPlanner() {
           TIER_ORDER[a.tier] - TIER_ORDER[b.tier] ||
           (b.volume ?? 0) - (a.volume ?? 0),
       );
-  }, [keywords, serviceFilter, tierFilter, search, serviceRank]);
+  }, [keywords, serviceFilter, tierFilter, platformFilter, search, serviceRank]);
 
-  // Any filter/search change → jump back to page 1 (see fresh matches from the top).
-  useEffect(() => { setPage(1); }, [search, serviceFilter, tierFilter]);
-
+  // Any filter/search change → back to page 1. DERIVED, not an effect: a filter
+  // that shrinks the list past the current page clamps at render instead of
+  // setState-in-effect (render cascade · eslint react-hooks flags it).
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
-  const safePage = Math.min(page, totalPages);
+  const filterKey = `${search}|${serviceFilter}|${tierFilter}|${platformFilter}`;
+  const safePage = pageState.key === filterKey ? Math.min(pageState.page, totalPages) : 1;
+  const setPage = (p: number) => setPageState({ key: filterKey, page: p });
   const pageItems = filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE);
   const from = filtered.length === 0 ? 0 : (safePage - 1) * PER_PAGE + 1;
   const to = Math.min(safePage * PER_PAGE, filtered.length);
@@ -215,6 +221,16 @@ export function KeywordPlanner() {
                   </button>
                 ))}
               </div>
+              {/* แพลตฟอร์มที่คนค้นคำนี้ (owner 2026-07-20) — ข้อมูลเดิมจาก Keyword Planner
+                  นับเป็น Google/YouTube เพราะไฟล์นั้นรวม volume สองที่มาให้ */}
+              <div className="flex flex-wrap gap-1">
+                {[{ id: "all", name: "ทุกแพลตฟอร์ม" }, ...KEYWORD_PLATFORMS].map((p) => (
+                  <button key={p.id} type="button" onClick={() => setPlatformFilter(p.id)}
+                    className={cx("rounded-full border px-2.5 py-1 text-[12px] transition", platformFilter === p.id ? "border-primary-300 bg-primary-50 font-medium text-primary-700" : "border-border text-muted hover:border-primary-200")}>
+                    {p.name}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="flex flex-wrap gap-1.5">
               <button type="button" onClick={() => setServiceFilter("all")}
@@ -248,6 +264,7 @@ export function KeywordPlanner() {
                       {showServiceCol && <th className={TH}>บริการ</th>}
                       <th className={TH}>คีย์เวิร์ด</th>
                       <th className={TH}>ระดับ</th>
+                      <th className={TH}>แพลตฟอร์ม</th>
                       <th className={cx(TH, "text-right")}>Volume</th>
                       <th className={cx(TH, "text-right")}>CPC</th>
                       <th className={TH}>ความยาก</th>
@@ -263,6 +280,7 @@ export function KeywordPlanner() {
                           {showServiceCol && <td className={cx(TD, "text-muted")}>{k.service}</td>}
                           <td className={cx(TD, "font-medium text-foreground")}>{k.keyword}</td>
                           <td className={TD}><Tag color={TIER[k.tier].color} label={TIER[k.tier].label} /></td>
+                          <td className={cx(TD, "text-muted")}>{keywordPlatformLabel(keywordPlatformOf(k))}</td>
                           <td className={cx(TD, "text-right")}>{fmtNum(k.volume)}</td>
                           <td className={cx(TD, "text-right")}>{k.cpc != null ? fmtMoney(k.cpc) : "—"}</td>
                           <td className={TD}><span className="font-medium" style={{ color: dt.color }}>{dt.label}</span></td>

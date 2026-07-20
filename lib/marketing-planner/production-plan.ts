@@ -9,7 +9,7 @@
  *     pool then re-balances onto the other chosen (un-pinned) days. (owner ปอน 2026-07-18)
  * Pure.
  */
-import type { ProductionTargets } from "./types";
+import { longTotalOf, type ProductionTargets } from "./types";
 import { pad2 } from "./util";
 
 export type DaySlot = {
@@ -18,12 +18,11 @@ export type DaySlot = {
   longs: { pillarId: string; count: number }[];
   short: number;
   article: number; // บทความ
-  post: number; // โพสต์
   total: number;
 };
 
 /** ค่าที่ผู้ใช้กำหนดเอง (pin) ต่อวัน ต่อประเภท — undefined = ไม่ pin (เกลี่ยอัตโนมัติ). */
-export type DayOverride = { long?: number; short?: number; article?: number; post?: number };
+export type DayOverride = { long?: number; short?: number; article?: number };
 /** day (1-based) → override. */
 export type PlanOverrides = Map<number, DayOverride>;
 
@@ -112,7 +111,7 @@ export function daysInMonth(year: number, month: number): number {
  * undefined / empty = pure auto-even (unchanged behaviour).
  *
  * Pools: ยาว = Σ pillar quota · สั้น = shortTotal · บท = articlePerDay × วันที่เลือก ·
- * โพ = postPerDay × วันที่เลือก. (บท/โพ เดิม flat/วัน → ตอนนี้ pooled เพื่อเกลี่ย/pin ได้ ·
+ * (บทความ เดิม flat/วัน → ตอนนี้ pooled เพื่อเกลี่ย/pin ได้ ·
  * ไม่มี pin = ผลเท่าเดิม เพราะ pool/วัน = perDay.)
  */
 export function distributeMonth(
@@ -143,23 +142,21 @@ export function distributeMonth(
     return m;
   };
 
-  const pillarEntries = Object.entries(t.longByPillar).filter(([, c]) => c > 0);
-  const longPool = pillarEntries.reduce((s, [, c]) => s + c, 0);
+  // คลิปยาว = ก้อนเดียว ไม่แตกตามเสาหลักแล้ว (owner 2026-07-20) — แผนเก่าที่เคยแตกไว้
+  // ยังนับรวมได้ผ่าน longTotalOf
+  const longPool = longTotalOf(t);
   const longPerDay = spreadWithPins(longPool, days, targetIdx, pinFor("long"));
   const shortPerDay = spreadWithPins(t.shortTotal, days, targetIdx, pinFor("short"));
   const articlePool = Math.max(0, t.articlePerDay ?? 0) * activeDays;
-  const postPool = Math.max(0, t.postPerDay ?? 0) * activeDays;
   const articlePerDay = spreadWithPins(articlePool, days, targetIdx, pinFor("article"));
-  const postPerDay = spreadWithPins(postPool, days, targetIdx, pinFor("post"));
 
   const slots: DaySlot[] = [];
   for (let d = 0; d < days; d += 1) {
-    const longs = splitAcrossPillars(longPerDay[d], pillarEntries);
+    const longs = longPerDay[d] > 0 ? [{ pillarId: "", count: longPerDay[d] }] : [];
     const short = shortPerDay[d];
     const article = articlePerDay[d];
-    const post = postPerDay[d];
     const longTotal = longs.reduce((s, x) => s + x.count, 0);
-    slots.push({ date: `${year}-${pad2(month + 1)}-${pad2(d + 1)}`, day: d + 1, longs, short, article, post, total: longTotal + short + article + post });
+    slots.push({ date: `${year}-${pad2(month + 1)}-${pad2(d + 1)}`, day: d + 1, longs, short, article, total: longTotal + short + article });
   }
   return slots;
 }
@@ -168,9 +165,8 @@ export function distributeMonth(
 export function targetsTotal(
   t: ProductionTargets,
   days = 0,
-): { long: number; short: number; article: number; post: number; total: number } {
-  const long = Object.values(t.longByPillar).reduce((s, n) => s + (n > 0 ? n : 0), 0);
+): { long: number; short: number; article: number; total: number } {
+  const long = longTotalOf(t);
   const article = Math.max(0, t.articlePerDay ?? 0) * days;
-  const post = Math.max(0, t.postPerDay ?? 0) * days;
-  return { long, short: t.shortTotal, article, post, total: long + t.shortTotal + article + post };
+  return { long, short: t.shortTotal, article, total: long + t.shortTotal + article };
 }

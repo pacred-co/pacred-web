@@ -25,6 +25,7 @@ import {
   cmsArticleIdSchema,
   rejectCmsArticleSchema,
   CMS_CATEGORIES,
+  slugifyTitle,
   type CmsStatus,
   type CaseFact,
 } from "@/lib/validators/cms-article";
@@ -58,6 +59,15 @@ export type AdminArticle = {
   caseRating: number | null;
   caseRoute: string;
   caseFacts: CaseFact[];
+  // English translation (mig 0265) — blank falls back to the Thai on the page.
+  titleEn: string;
+  excerptEn: string;
+  bodyEn: string;
+  metaTitleEn: string;
+  metaDescriptionEn: string;
+  caseRouteEn: string;
+  casePriceEn: string;
+  caseFactsEn: CaseFact[];
   status: CmsStatus;
   authorAdminId: string | null;
   approvedBy: string | null;
@@ -71,6 +81,8 @@ const SELECT_COLS =
   "id, category, title, slug, excerpt, cover_url, body, sub_category, status, " +
   "meta_title, meta_description, tags, video_url, gallery_images, " +
   "case_price, case_rating, case_route, case_facts, " +
+  "title_en, excerpt_en, body_en, meta_title_en, meta_description_en, " +
+  "case_route_en, case_price_en, case_facts_en, " +
   "author_admin_id, approved_by, reject_note, published_at, created_at, updated_at";
 
 type Row = {
@@ -91,6 +103,14 @@ type Row = {
   case_rating: number | string | null;
   case_route: string | null;
   case_facts: CaseFact[] | null;
+  title_en: string | null;
+  excerpt_en: string | null;
+  body_en: string | null;
+  meta_title_en: string | null;
+  meta_description_en: string | null;
+  case_route_en: string | null;
+  case_price_en: string | null;
+  case_facts_en: CaseFact[] | null;
   status: string | null;
   author_admin_id: string | null;
   approved_by: string | null;
@@ -119,6 +139,14 @@ function mapRow(r: Row): AdminArticle {
     caseRating: r.case_rating == null ? null : Number(r.case_rating),
     caseRoute: r.case_route ?? "",
     caseFacts: Array.isArray(r.case_facts) ? r.case_facts : [],
+    titleEn: r.title_en ?? "",
+    excerptEn: r.excerpt_en ?? "",
+    bodyEn: r.body_en ?? "",
+    metaTitleEn: r.meta_title_en ?? "",
+    metaDescriptionEn: r.meta_description_en ?? "",
+    caseRouteEn: r.case_route_en ?? "",
+    casePriceEn: r.case_price_en ?? "",
+    caseFactsEn: Array.isArray(r.case_facts_en) ? r.case_facts_en : [],
     status: (r.status as CmsStatus) ?? "draft",
     authorAdminId: r.author_admin_id,
     approvedBy: r.approved_by,
@@ -129,27 +157,38 @@ function mapRow(r: Row): AdminArticle {
   };
 }
 
-/** A url-safe, unique-ish slug. Latin titles → slugified; Thai (no ascii) →
- *  "article-<rand>". The 6-char random keeps it collision-safe; insert retries
- *  once on the UNIQUE index just in case. */
-function genSlug(title: string): string {
-  const base = (title ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 48);
-  const rand = Math.random().toString(36).slice(2, 8);
-  return base ? `${base}-${rand}` : `article-${rand}`;
+/** The slug to save: what the author typed (sanitised) → else derived from the
+ *  title → else a random fallback so a row always has one. `slugifyTitle` keeps
+ *  Thai, so a Thai title now produces a readable URL instead of "article-xxxxxx"
+ *  (owner 2026-07-20). */
+function resolveSlug(typed: string, title: string): string {
+  return slugifyTitle(typed) || slugifyTitle(title) || `article-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Revalidate the public surface for a category + the admin list. */
+/** Nth attempt at a slug — "…-2", "…-3" reads better than a random tail and is
+ *  what a human would pick when the good name is taken. */
+function slugAttempt(base: string, attempt: number): string {
+  return attempt === 0 ? base : `${base}-${attempt + 1}`;
+}
+
+/** Revalidate the public surface for a category + the admin list.
+ *  ⚠️ These MUST be the parameterized route paths, not the browser URL — the
+ *  public pages live under app/[locale]/(public)/… so revalidatePath("/news")
+ *  matches nothing. Every CMS-reading page is force-dynamic today so publishing
+ *  works regardless, but a wrong path here is a landmine for whoever removes a
+ *  force-dynamic later. */
 function revalidateForCategory(category: string): void {
-  revalidatePath("/admin/articles");
-  if (category === "knowledge") revalidatePath("/knowledge");
-  else if (category === "news") revalidatePath("/news");
-  else if (category === "our_work") revalidatePath("/our-work");
+  revalidatePath("/[locale]/(admin)/admin/articles", "page");
+  if (category === "knowledge") {
+    revalidatePath("/[locale]/(public)/knowledge", "page");
+    revalidatePath("/[locale]/(public)/knowledge/[slug]", "page");
+  } else if (category === "news") {
+    revalidatePath("/[locale]/(public)/news", "page");
+    revalidatePath("/[locale]/(public)/news/[slug]", "page");
+  } else if (category === "our_work") {
+    revalidatePath("/[locale]/(public)/our-work", "page");
+    revalidatePath("/[locale]/(public)/our-work/[id]", "page");
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -208,7 +247,8 @@ export async function saveCmsArticle(input: unknown): Promise<AdminActionResult<
     if (d.id) {
       // ── update ──
       const { data: cur, error: curErr } = await admin
-        .from(TABLE).select("status, category").eq("id", d.id).maybeSingle<{ status: string; category: string }>();
+        .from(TABLE).select("status, category, slug").eq("id", d.id)
+        .maybeSingle<{ status: string; category: string; slug: string }>();
       if (curErr) {
         console.error("[cms save:read] failed", { code: curErr.code, message: curErr.message });
         return { ok: false, error: `query_failed: ${curErr.message}` };
@@ -231,13 +271,28 @@ export async function saveCmsArticle(input: unknown): Promise<AdminActionResult<
         case_rating: d.category === "our_work" ? d.caseRating : null,
         case_route: d.category === "our_work" ? d.caseRoute : "",
         case_facts: d.category === "our_work" ? d.caseFacts : [],
+        title_en: d.titleEn,
+        excerpt_en: d.excerptEn,
+        body_en: d.bodyEn,
+        meta_title_en: d.metaTitleEn,
+        meta_description_en: d.metaDescriptionEn,
+        case_route_en: d.category === "our_work" ? d.caseRouteEn : "",
+        case_price_en: d.category === "our_work" ? d.casePriceEn : "",
+        case_facts_en: d.category === "our_work" ? d.caseFactsEn : [],
         updated_at: nowIso,
       };
       // Editing a live article without ultra rights → back to pending review.
       if (cur.status === "published" && !isUltra(roles)) patch.status = "pending";
 
+      // Slug is editable, but only rewritten when it actually changed — leaving
+      // it out of the patch otherwise keeps the URL (and the article_stats key
+      // `<category>:<slug>` that carries views/likes/shares) stable on every save.
+      const nextSlug = resolveSlug(d.slug, d.title);
+      if (nextSlug !== cur.slug) patch.slug = nextSlug;
+
       const { error: updErr } = await admin.from(TABLE).update(patch).eq("id", d.id);
       if (updErr) {
+        if (updErr.code === "23505") return { ok: false, error: `slug_taken:${nextSlug}` };
         console.error("[cms save:update] failed", { code: updErr.code, message: updErr.message });
         return { ok: false, error: `save_failed: ${updErr.message}` };
       }
@@ -247,9 +302,11 @@ export async function saveCmsArticle(input: unknown): Promise<AdminActionResult<
       return { ok: true, data: { id: d.id } };
     }
 
-    // ── create (draft) — generate a unique slug, retry once on the UNIQUE index ──
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const slug = genSlug(d.title);
+    // ── create (draft) — take the author's slug (or derive it), and on a UNIQUE
+    //    collision try "…-2", "…-3" so the readable name survives. ──
+    const slugBase = resolveSlug(d.slug, d.title);
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const slug = slugAttempt(slugBase, attempt);
       const { data, error } = await admin
         .from(TABLE)
         .insert({
@@ -269,6 +326,14 @@ export async function saveCmsArticle(input: unknown): Promise<AdminActionResult<
           case_rating: d.category === "our_work" ? d.caseRating : null,
           case_route: d.category === "our_work" ? d.caseRoute : "",
           case_facts: d.category === "our_work" ? d.caseFacts : [],
+          title_en: d.titleEn,
+          excerpt_en: d.excerptEn,
+          body_en: d.bodyEn,
+          meta_title_en: d.metaTitleEn,
+          meta_description_en: d.metaDescriptionEn,
+          case_route_en: d.category === "our_work" ? d.caseRouteEn : "",
+          case_price_en: d.category === "our_work" ? d.casePriceEn : "",
+          case_facts_en: d.category === "our_work" ? d.caseFactsEn : [],
           status: "draft",
           author_admin_id: adminId,
         })
@@ -283,9 +348,9 @@ export async function saveCmsArticle(input: unknown): Promise<AdminActionResult<
         console.error("[cms save:insert] failed", { code: error.code, message: error.message });
         return { ok: false, error: `save_failed: ${error.message}` };
       }
-      // 23505 (slug collision) → loop retries with a fresh slug
+      // 23505 (slug collision) → loop retries with "…-2", "…-3"
     }
-    return { ok: false, error: "slug_conflict" };
+    return { ok: false, error: `slug_taken:${slugBase}` };
   });
 }
 

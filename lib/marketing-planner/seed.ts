@@ -21,7 +21,6 @@ export const DEFAULT_TARGETS: ProductionTargets = {
   },
   shortTotal: 280,
   articlePerDay: 3,
-  postPerDay: 3,
 };
 
 const PALETTE = [
