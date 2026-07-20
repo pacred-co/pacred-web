@@ -9,6 +9,7 @@ import {
 } from "@/actions/admin/momo-packing-reconcile";
 import { recordMomoPackingUpload } from "@/actions/admin/momo-packing-history";
 import { PackingHistoryPanel } from "./packing-history-panel";
+import { TranslateProvider, AutoTranslateText } from "@/components/translate/auto-translate";
 
 const n3 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 6 }));
 const n2 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 2 }));
@@ -252,6 +253,10 @@ export function MomoPackingUploadClient() {
 
       {/* ── RECONCILE TABLE ────────────────────────────────────────────────────── */}
       {preview && preview.rows.length > 0 && (
+        // owner 2026-07-20 "ตรงชื่อสินค้า ทำให้กดแปลจีนให้ด้วยเลย" — ONE batch
+        // translate for every Chinese product name on the sheet (same in-house
+        // stack as ฝากสั่ง: cache + ไทยก่อน + กดดูต้นฉบับ · display-only).
+        <TranslateProvider texts={preview.rows.map((r) => r.packingProduct)}>
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
           {/* summary strip */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -327,7 +332,10 @@ export function MomoPackingUploadClient() {
                       <td className={tdNoFeed} title={NO_FEED}>—</td>
                       {/* Branch (C) · Product (D) · Dum (E) */}
                       <td className="px-2 py-1.5 text-center text-[11px] whitespace-nowrap">{r.packingBranch ?? DASH}</td>
-                      <td className="px-2 py-1.5 text-center text-[11px] whitespace-nowrap" title={r.packingProduct ?? ""}>{r.packingProduct ?? DASH}</td>
+                      {/* ชื่อสินค้า (จีน) → โชว์ไทยอัตโนมัติ + กดดูต้นฉบับ (owner 2026-07-20) */}
+                      <td className="px-2 py-1.5 text-center text-[11px] whitespace-nowrap" title={r.packingProduct ?? ""}>
+                        {r.packingProduct ? <AutoTranslateText text={r.packingProduct} /> : DASH}
+                      </td>
                       <td className="px-2 py-1.5 text-right text-[11px] tabular-nums">{r.packingDum ?? DASH}</td>
                       {/* Type (F) */}
                       <td className="px-2 py-1.5 text-center text-[11px] leading-snug">{r.productType ?? DASH}</td>
@@ -411,6 +419,7 @@ export function MomoPackingUploadClient() {
             </p>
           )}
         </section>
+        </TranslateProvider>
       )}
 
       {/* ── EXCEL-LIKE RAW PREVIEW (collapsible) ────────────────────────────────── */}
