@@ -22,6 +22,16 @@
 
 ---
 
+# 🔴 2026-07-20 ค่ำ (เดฟ · resume รอบ 3 — กู้ f0475aa จาก disk) — MOMO Live fanout/กล่องหาย ปิดครบ + ยุบ MOMO cluster + packing ingest 9 ตู้ → ALL 4 BRANCHES `52e9dbad` · read FIRST
+
+> **🏁 ALL 4 BRANCHES = `52e9dbad`** (dave-pacred=Poom-pacred=InwPond007=main · Vercel prod). กู้ commit `f0475aa2` จาก worktree `disk-mail-limit-issue-44d3b6` (เมล limit ตอนรอ build) → merge + gate ครบ (tsc 0 · backlink 25/25 · data-health 4/4 · cabinet-class 41/41 · BUILD_EXIT=0). Memory SOT: [[momo-live-fanout-2026-07-20]] + [[cabinet-tier-sot-2026-07-20]]. NEXT FREE mig = **0267** (0265 cms_articles_en + 0266 article_stats_shares ของปอน applied prod).
+>
+> **✅ วันนี้ทั้งวัน (3 sessions ต่อกัน):** (1) **cabinet tier + TTW verbatim pivot** (ดูบล็อกถัดไป). (2) **backlink staging↔live** + แก้กลับด้วย **value-coverage guard** (stamp = claim ว่ามูลค่าอยู่ในระบบ — ต้องพิสูจน์ Σ live ≥ Σ staging · aggregate-header discriminator · uncovered stays visible) — fill 7 families + 52751 reprice ×4 + cost 3 แถว +฿8,064 (data applied prod · [[momo-live-fanout-2026-07-20]]). (3) **MOMO Live fanout root-fix** (family-aware fill · proper-split self-heal · PR179 ฿880k ผี + PR208). (4) **ยุบ MOMO cluster 12→2 หน้า** (hub ตรวจตู้ + packing-upload · retired 8 หน้าเป็น redirect · sidebar 4→2 · iTAM ตาย). (5) **ตรวจตู้ tier ตู้⊃กระสอบ⊃ชิปเม้น** + header = ความจริงทั้งตู้ (GZE260714-1 "ของหาย" = filter-scoped ไม่หายจริง) + transport จากชื่อตู้ + type แยก อย./น้ำยา/ควบคุม (MOMO `special`→tier '3') + Product แปลจีนอัตโนมัติบน packing-upload. (6) **ingest packing 9 ตู้** (`momo-packing-ingest-2026-07-20.mjs` · 229 แถว · Σ นน. −15.9% MOMO เป่าเกิน · gate วางบิลประทับครบ · billed touched 0). (7) shop→import handoff audit: drift 0 · P22370+P22349 รอ CS กดนำเข้า · 4 ราย MOMO ไม่รู้จัก = ตามร้านจีน. (8) #52051 = GZE260707-1 (owner เคาะ) → cabinet checks เขียว.
+>
+> **🔴 CARRYOVER:** (1) ไม่พบ 15 แทรคจาก packing → CS ติ๊ก "สร้าง" บนหน้าแพคกิ้งลิส. (2) 1784165675 (PR126) ข้าม 2 ตู้ → แบ่งมือ. (3) คิวบัญชีเดิม (residue ×2 billed · double_billed FRI13/24 · multi-container ×2 · arrived-stuck ×4 · 83 แถว billed-misprice artifact · 3 แถว per-box cost owner-open). (4) mig 0263/0264 → DEV ตอนตื่น. (5) zero-priced จาก packing ingest — cron เติมเรทเอง (เช็คแล้วไหลลง 118→89 ใน 4 นาที · ฿0-gate กันวางบิล).
+
+---
+
 # 📦 2026-07-20 ปิด session (เดฟ · กู้งาน limit + owner pivot) — CABINET TIER SOT + 🔄 เลขตู้ TTW ใช้ตามแพทเทิร์นเขา VERBATIM (ห้าม relabel) + ใบปิดตู้ parser + prod heal/revert → dave-pacred · read FIRST
 
 > **🏁 SESSION CLOSE (กู้งานจากเมล์ติด limit → ทำต่อจนจบ → owner สั่ง integrate เข้า dave-pacred ปิด session).** **dave-pacred = `681391da`** (FF สะอาด · main ยังไม่ promote). gate: **tsc 0 · BUILD_EXIT=0 · test:unit เต็ม EXIT 0 · cabinet-class 41/41 · yiwu-parser 17/17 · data-health 4/4**. ไม่มี migration ใหม่ (NEXT FREE = 0265 · 0263/0264 ยังค้าง apply DEV ตอนตื่น).
