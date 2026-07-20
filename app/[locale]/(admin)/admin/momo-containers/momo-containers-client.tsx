@@ -11,6 +11,7 @@
 
 import { Fragment, useMemo, useState, useTransition, type ReactNode } from "react";
 import { ALL_WORKBOOK_CARRIER_OPTIONS } from "@/lib/cart/ship-by-eligibility";
+import { baseTracking } from "@/lib/admin/momo-bill-header";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
@@ -286,6 +287,29 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     });
     return arr;
   }, [filtered, sort]);
+
+  // ── SHIPMENT (family) grouping — owner 2026-07-19 "จับคู่แล้วกรุ๊ปไม่ถูก ตั้งแต่ต้นน้ำ" ──
+  // MOMO's feed sends EVERY box-group as its own staging row (base + -2..-N), and the
+  // table rendered each as an independent header each nesting the WHOLE family's
+  // box_detail → an 18-box shipment painted 18×18 rows. Group by BASE tracking:
+  // the first row (bare, else lowest suffix) = the shipment header; the rest render
+  // as indented MEMBER rows (checkbox/commit per row unchanged — display only).
+  const families = useMemo(() => {
+    const byBase = new Map<string, typeof sorted>();
+    const order: string[] = [];
+    for (const t of sorted) {
+      const b = (t.tracking ? baseTracking(t.tracking) : null) ?? `__solo_${t.id}`;
+      if (!byBase.has(b)) { byBase.set(b, []); order.push(b); }
+      byBase.get(b)!.push(t);
+    }
+    return order.map((b) => {
+      const fam = [...byBase.get(b)!];
+      fam.sort((x, y) =>
+        x.tracking === b ? -1 : y.tracking === b ? 1 :
+        String(x.tracking ?? "").localeCompare(String(y.tracking ?? ""), undefined, { numeric: true }));
+      return fam;
+    });
+  }, [sorted]);
   const toggleSort = (key: string) =>
     setSort((s) => (s?.key === key ? (s.dir === "asc" ? { key, dir: "desc" } : null) : { key, dir: "asc" }));
   const sortIcon = (key: string) => (sort?.key === key ? (sort.dir === "asc" ? "↑" : "↓") : "⇅");
@@ -822,13 +846,14 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
             {sorted.length === 0 && (
               <tr><td colSpan={1 + colOrder.length} className="px-3 py-6 text-center text-xs text-muted">ไม่มีรายการตามเงื่อนไข</td></tr>
             )}
-            {sorted.map((t, i) => {
+            {families.flatMap((fam) => fam.map((t, fi) => ({ t, fi, famLen: fam.length }))).map(({ t, fi, famLen }, i) => {
               const rr = rowResult[t.id];
               const done = t.committed || rr?.ok;
               const fid = t.committedForwarderId ?? rr?.fid ?? null;
+              const isMember = fi > 0 && famLen > 1; // a -N sibling under its shipment header
               return (
                 <Fragment key={t.id}>
-                <tr className={`align-top ${done ? "bg-emerald-50/40" : sel.has(t.id) ? "bg-primary-50/60" : t.momoGarbage ? "bg-red-50" : t.userIdValid === false ? "bg-red-50/30" : ""}`}>
+                <tr className={`align-top ${isMember ? "border-l-4 border-sky-200 " : ""}${done ? "bg-emerald-50/40" : sel.has(t.id) ? "bg-primary-50/60" : t.momoGarbage ? "bg-red-50" : isMember ? "bg-sky-50/30" : t.userIdValid === false ? "bg-red-50/30" : ""}`}>
                   {/* ติ๊กเลือก + เลขแถว · แถวที่เข้าระบบแล้ว = ลิงก์ไปใบนำเข้า (ย้ายมาจากคอลัมน์
                       "นำเข้าระบบ" ที่ owner ให้เอาออก — ข้อมูลไม่หาย) */}
                   <td className="px-2 py-1.5 text-center">
@@ -859,8 +884,10 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                     return <td key={key} className={c.tdClass} title={c.tdTitle?.(t)}>{c.td(t)}</td>;
                   })}
                 </tr>
-                {/* กล่องย่อยของ MOMO (แตกกล่อง >1) — กางออกเป็นแถวจริงใต้แถวหลัก · ตรง MOMO Live 1:1 */}
-                {t.boxes.map((box, bi) => (
+                {/* กล่องย่อยของ MOMO (box_detail) — โชว์เฉพาะเมื่อชิปเม้นมี staging แถวเดียว
+                    (แถวรวมที่กล่องแตกอยู่ใน box_detail) · ครอบครัวที่มีแถว -N อยู่แล้ว = แถวลูก
+                    ด้านบนคือกล่องตัวจริง → ไม่ nest ซ้ำ (เคย 18 หัว × 18 กล่อง = เบิ้ลมโหฬาร) */}
+                {famLen === 1 && t.boxes.map((box, bi) => (
                   <tr key={`${t.id}-b${bi}`} className="bg-sky-50/40 text-[11px]">
                     <td className="px-2 py-1 text-center text-muted" title="กล่องย่อยจาก MOMO (box_detail)">📦</td>
                     {colOrder.map((key) => {
