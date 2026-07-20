@@ -12,6 +12,7 @@
 import { Fragment, useMemo, useState, useTransition, type ReactNode } from "react";
 import { ALL_WORKBOOK_CARRIER_OPTIONS } from "@/lib/cart/ship-by-eligibility";
 import { baseTracking } from "@/lib/admin/momo-bill-header";
+import { momoTypeLabel } from "@/lib/admin/momo-live-discovery-plan";
 import { cgMatchesQty } from "@/lib/forwarder/cg-range";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -43,6 +44,7 @@ export type IngestTrack = {
   smDate: string | null;      // C "SM Date"
   userCode: string | null;    // I "Code"
   cgNo: string | null;        // T "CG."
+  momoType: string | null;    // raw MOMO type (general/tis/fda/special/control) — อย. ≠ น้ำยา
   serviceFee: number | null;  // V "Service fee." (= extra_cost ของ MOMO)
   etd: string | null;         // Y — จาก packing list ระดับตู้ (taem_container_etd_eta)
   eta: string | null;         // Z — ↑
@@ -142,6 +144,11 @@ const PRODUCT_TYPE_OPTIONS: { value: "1" | "2" | "3" | "4"; label: string }[] = 
   { value: "4", label: "พิเศษ" },
 ];
 const PRODUCT_TYPE_TH: Record<string, string> = { "1": "ทั่วไป", "2": "มอก.", "3": "อย./น้ำยา", "4": "พิเศษ" };
+// ── ประเภทสินค้า (owner 2026-07-20 "อย ก็ อย น้ำยา ก็ น้ำยา") — ป้ายจาก MOMO's raw
+//    type ตรงๆ (ทั่วไป/มอก./อย./น้ำยา/ควบคุม · momoTypeLabel SOT); PRODUCT_TYPE_TH
+//    ('3' = ป้ายรวม legacy) เหลือเป็น fallback เมื่อไม่มี raw type เท่านั้น. ──
+const typeTh = (t: IngestTrack): string =>
+  t.momoType ? momoTypeLabel(t.momoType) : (PRODUCT_TYPE_TH[t.guessedProductType] ?? "—");
 const TRANSPORT_TH: Record<string, string> = { "1": "🚚 รถ", "2": "🚢 เรือ", "3": "✈️ อากาศ" };
 
 const n2 = (v: number) => (v > 0 ? v.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—");
@@ -190,7 +197,7 @@ const EXPORT_COLS: { label: string; val: (t: IngestTrack) => string | number }[]
   { label: "คิว(Live)", val: (t) => t.liveCbm ?? "" },
   { label: "จำนวน", val: (t) => t.qty ?? "" },
   { label: "ขนาด(กxยxส)", val: (t) => (t.width || t.length || t.height) ? `${t.width}x${t.length}x${t.height}` : "" },
-  { label: "ประเภท", val: (t) => PRODUCT_TYPE_TH[t.guessedProductType] ?? "" },
+  { label: "ประเภท", val: (t) => typeTh(t) },
   { label: "สถานะ MOMO", val: (t) => t.adminStatusText ?? "" },
   { label: "เข้าระบบ", val: (t) => (t.committed ? `#${t.committedForwarderId ?? ""}` : "ยังไม่เข้า") },
 ];
@@ -566,7 +573,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                 <td className="px-2 py-1 text-right font-mono">{n6(t.cbm)}</td>
                 <td className="px-2 py-1 text-right">{t.qty ?? "—"}</td>
                 <td className="px-2 py-1 font-mono">{t.width > 0 || t.length > 0 || t.height > 0 ? `${t.width}×${t.length}×${t.height}` : "—"}</td>
-                <td className="px-2 py-1">{PRODUCT_TYPE_TH[t.guessedProductType] ?? "—"}</td>
+                <td className="px-2 py-1">{typeTh(t)}</td>
                 <td className="max-w-[9rem] truncate px-2 py-1" title={t.adminStatusText ?? ""}>{t.adminStatusText ?? t.phase ?? "—"}</td>
               </tr>
             ))}
@@ -732,7 +739,10 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     dum: { label: "Dum", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
     type: {
       label: "Type", sortKey: "type", tdClass: "px-2 py-1.5 text-center whitespace-nowrap",
-      td: (t) => (<>{PRODUCT_TYPE_TH[t.guessedProductType] ?? "—"}{t.guessedProductType === "3" && <span className="ml-1 rounded bg-amber-100 px-1 text-[11px] font-semibold text-amber-700">อย.</span>}</>),
+      td: (t) => {
+        const label = typeTh(t);
+        return (<span className={label !== "ทั่วไป" ? "font-semibold text-amber-700" : undefined}>{label}</span>);
+      },
     },
     code: {
       label: "Code", sortKey: "pr", tdClass: "px-2 py-1.5 whitespace-nowrap",

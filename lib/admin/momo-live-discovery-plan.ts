@@ -87,6 +87,10 @@ const MOMO_TYPE_TO_PRODUCT: Record<string, "1" | "2" | "3" | "4"> = {
   general: "1",
   tis: "2", // มาตรฐาน มอก.
   fda: "3", // อย.
+  // "special" = น้ำยา/ของเหลว (2026-07-20 · prod มี 18 แถว): เดิมไม่อยู่ใน map →
+  // ตกไป '1' ทั่วไป = ผิดทั้งป้ายทั้ง tier เรทตั้งต้น. legacy tier '3' คือ
+  // "อย./น้ำยา" → น้ำยา price บน tier เดียวกับ อย. (default — admin แก้ได้ที่ review)
+  special: "3",
   control: "4", // สินค้าควบคุม → พิเศษ
 };
 export function momoTypeToProductType(momoType: string | null | undefined): "1" | "2" | "3" | "4" {
@@ -94,10 +98,13 @@ export function momoTypeToProductType(momoType: string | null | undefined): "1" 
 }
 
 /** MOMO product `type` → readable Thai chip label (unknown → the raw string). */
+// owner 2026-07-20 "อย ก็ อย น้ำยา ก็ น้ำยา" — labels stay DISTINCT per MOMO code
+// (the legacy dropdown's lumped "อย./น้ำยา" is only the shared RATE tier, not the label).
 const MOMO_TYPE_LABEL: Record<string, string> = {
   general: "ทั่วไป",
   tis: "มอก.",
   fda: "อย.",
+  special: "น้ำยา",
   control: "ควบคุม",
 };
 export function momoTypeLabel(momoType: string | null | undefined): string {
