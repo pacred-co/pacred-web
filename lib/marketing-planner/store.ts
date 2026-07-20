@@ -12,8 +12,10 @@
  * so there's no hydration mismatch — the app shows a skeleton until `ready`.
  */
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { ContentItem, ContentResult, JobMessageKind, JobOrder, JobStatus, KeywordItem, PlannerData, PlannerUser, ProductionTargets, SettingGroup, SettingItem } from "./types";
-import { PLANNER_SCHEMA_VERSION, platformIdsOf, serviceIdsOf } from "./types";
+import type { ContentItem, ContentResult, JobMessageKind, JobOrder, JobStatus, KeywordItem, PlannerData, PlannerUser, ProductionTargets, SettingGroup, SettingItem,
+  PlanPreset,
+} from "./types";
+import { keywordPlatformOf, PLANNER_SCHEMA_VERSION, platformIdsOf, serviceIdsOf } from "./types";
 import { buildSeed, DEFAULT_KEYWORDS, DEFAULT_TARGETS } from "./seed";
 import { enrichResult } from "./performance";
 import { distributeMonth, type PlanOverrides } from "./production-plan";
@@ -81,16 +83,22 @@ export type PlannerContextValue = {
   setContentDate: (id: string, publishDate: string) => void;
   setContentStatus: (id: string, statusId: string) => void;
   resetAll: () => void;
-  /** Monthly production quota (long per pillar + short total). */
+  /** Monthly production quota (คลิปยาว/สั้น รวมทั้งเดือน · บทความ ต่อวัน). */
   targets: ProductionTargets;
-  setLongTarget: (pillarId: string, n: number) => void;
+  /** โควต้าคลิปยาว/เดือน — ตัวเลขเดียว (ไม่แตกตามเสาหลักแล้ว · owner 2026-07-20). */
+  setLongTotal: (n: number) => void;
+  // ── แผนที่เซฟไว้ใช้ซ้ำ (preset · owner 2026-07-20) ──
+  presets: PlanPreset[];
+  savePreset: (name: string, selectedDays: number[], overrides: Record<number, { long?: number; short?: number; article?: number; post?: number }>) => void;
+  deletePreset: (id: string) => void;
+  /** ใช้แผนที่เซฟไว้ — เขียนโควต้ากลับเข้า targets. */
+  applyPresetTargets: (t: ProductionTargets) => void;
   setShortTarget: (n: number) => void;
   setArticlePerDay: (n: number) => void;
-  setPostPerDay: (n: number) => void;
   /** Generate idea slots for a month from the quota; returns how many were created.
    *  `selectedDays` (1-based day numbers) confines placement to those days; null = every day.
    *  `overrides` (1-based day → per-type pin) makes generation match the manually-pinned plan. */
-  generateFromPlan: (year: number, month: number, opts: { long: boolean; short: boolean; article: boolean; post: boolean }, selectedDays?: number[] | null, overrides?: PlanOverrides | null) => number;
+  generateFromPlan: (year: number, month: number, opts: { long: boolean; short: boolean; article: boolean }, selectedDays?: number[] | null, overrides?: PlanOverrides | null) => number;
   // ── Job board ──
   currentUserId: string;
   jobs: JobOrder[];
@@ -300,10 +308,37 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
   }, []);
 
   const targets = data.targets ?? DEFAULT_TARGETS;
-  const setLongTarget = useCallback<PlannerContextValue["setLongTarget"]>(
-    (pillarId, n) => apply((d) => {
+  const presets = useMemo(() => data.presets ?? [], [data.presets]);
+  const savePreset = useCallback<PlannerContextValue["savePreset"]>(
+    (name, selectedDays, overrides) =>
+      apply((d) => {
+        const p: PlanPreset = {
+          id: `preset-${Date.now().toString(36)}`,
+          name: name.trim() || "แผนไม่มีชื่อ",
+          targets: d.targets ?? DEFAULT_TARGETS,
+          selectedDays: [...selectedDays].sort((a, b) => a - b),
+          overrides,
+          createdAt: new Date().toISOString(),
+        };
+        return { ...d, presets: [...(d.presets ?? []), p] };
+      }),
+    [apply],
+  );
+  const deletePreset = useCallback<PlannerContextValue["deletePreset"]>(
+    (id) => apply((d) => ({ ...d, presets: (d.presets ?? []).filter((p) => p.id !== id) })),
+    [apply],
+  );
+  /** ใช้แผนที่เซฟไว้ — เขียนโควต้ากลับเข้า targets (วัน/pin ให้หน้าจอจัดการเอง). */
+  const applyPresetTargets = useCallback(
+    (t: ProductionTargets) => apply((d) => ({ ...d, targets: t })),
+    [apply],
+  );
+
+  const setLongTotal = useCallback<PlannerContextValue["setLongTotal"]>(
+    (n) => apply((d) => {
       const cur = d.targets ?? DEFAULT_TARGETS;
-      return { ...d, targets: { ...cur, longByPillar: { ...cur.longByPillar, [pillarId]: Math.max(0, Math.round(n)) } } };
+      // เขียน longTotal และล้าง longByPillar ทิ้ง เพื่อไม่ให้เหลือค่าเก่าค้างมาบวกซ้ำ
+      return { ...d, targets: { ...cur, longTotal: Math.max(0, Math.round(n)), longByPillar: {} } };
     }),
     [apply],
   );
@@ -318,13 +353,6 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
     (n) => apply((d) => {
       const cur = d.targets ?? DEFAULT_TARGETS;
       return { ...d, targets: { ...cur, articlePerDay: Math.max(0, Math.round(n)) } };
-    }),
-    [apply],
-  );
-  const setPostPerDay = useCallback<PlannerContextValue["setPostPerDay"]>(
-    (n) => apply((d) => {
-      const cur = d.targets ?? DEFAULT_TARGETS;
-      return { ...d, targets: { ...cur, postPerDay: Math.max(0, Math.round(n)) } };
     }),
     [apply],
   );
@@ -347,7 +375,7 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
       // Running per-type counters → each generated slot gets a distinct, readable
       // name ("บทความ #7") instead of many identical "บทความ" — a placeholder the
       // team renames to the real topic later. Numbered in publish-date order.
-      let nLong = 0, nShort = 0, nArticle = 0, nPost = 0;
+      let nLong = 0, nShort = 0, nArticle = 0;
       const items: ContentItem[] = [];
       for (const slot of slots) {
         if (opts.long) {
@@ -368,12 +396,6 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
           for (let k = 0; k < slot.article; k += 1) {
             nArticle += 1;
             items.push({ id: uid("content"), title: `บทความ #${nArticle}`, statusId: ideaStatus, contentTypeId: "contentType-article", publishDate: slot.date, links: [], coOwnerIds: [], createdAt: ts, updatedAt: ts, archivedAt: null });
-          }
-        }
-        if (opts.post) {
-          for (let k = 0; k < slot.post; k += 1) {
-            nPost += 1;
-            items.push({ id: uid("content"), title: `โพสต์ #${nPost}`, statusId: ideaStatus, contentTypeId: "contentType-post", publishDate: slot.date, links: [], coOwnerIds: [], createdAt: ts, updatedAt: ts, archivedAt: null });
           }
         }
       }
@@ -432,18 +454,21 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
   const addKeyword = useCallback<PlannerContextValue["addKeyword"]>((item) => apply((d) => ({ ...d, keywords: [...(d.keywords ?? []), { ...item, id: uid("kw") }] })), [apply]);
   const importKeywords = useCallback<PlannerContextValue["importKeywords"]>((items) => {
     if (items.length === 0) return { added: 0, updated: 0 };
-    const keyOf = (service: string, keyword: string) => `${service} ${keyword.trim().toLowerCase()}`;
+    // ⚠️ แพลตฟอร์มต้องอยู่ในคีย์ด้วย — คำเดียวกันคนละแพลตฟอร์มมี volume/CPC คนละค่า
+    // ถ้าไม่ใส่ นำเข้าไฟล์ TikTok จะไปทับแถว Google ของคำเดียวกันทิ้ง (owner 2026-07-20)
+    const keyOf = (k: Pick<KeywordItem, "service" | "keyword" | "platform">) =>
+      `${k.service} ${keywordPlatformOf(k)} ${k.keyword.trim().toLowerCase()}`;
     // Dedup the incoming batch (last occurrence wins) so an in-file repeat can't add twice.
     const batch = new Map<string, Omit<KeywordItem, "id">>();
-    for (const it of items) batch.set(keyOf(it.service, it.keyword), it);
+    for (const it of items) batch.set(keyOf(it), it);
     // Count add-vs-update from the CURRENT snapshot (outside the updater → StrictMode-safe).
-    const existingKeys = new Set((data.keywords ?? []).map((k) => keyOf(k.service, k.keyword)));
+    const existingKeys = new Set((data.keywords ?? []).map(keyOf));
     let added = 0, updated = 0;
     for (const key of batch.keys()) (existingKeys.has(key) ? (updated += 1) : (added += 1));
     apply((d) => {
       const rows = (d.keywords ?? []).slice();
       const pos = new Map<string, number>();
-      rows.forEach((k, i) => pos.set(keyOf(k.service, k.keyword), i));
+      rows.forEach((k, i) => pos.set(keyOf(k), i));
       for (const [key, it] of batch) {
         const at = pos.get(key);
         // Overwrite an existing keyword in place (keep its id — no duplicate row); else append.
@@ -469,7 +494,7 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
       addSetting, updateSetting, toggleSetting, deleteSetting,
       addContent, updateContent, deleteContent, deleteContents, duplicateContent, archiveContent, restoreContent,
       setResult, setContentDate, setContentStatus, resetAll,
-      targets, setLongTarget, setShortTarget, setArticlePerDay, setPostPerDay, generateFromPlan,
+      targets, presets, savePreset, deletePreset, applyPresetTargets, setLongTotal, setShortTarget, setArticlePerDay, generateFromPlan,
       currentUserId, jobs, createJob, claimJob, addJobMessage, submitJob, rejectJob, approveJob,
       keywords, addKeyword, importKeywords, updateKeyword, deleteKeyword, loadSampleKeywords,
     }),
@@ -477,7 +502,7 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
       ready, users, userById, userName, userColor, data.settings, data.contents, byGroup, allByGroup, byId, labelOf, colorOf, isSettingInUse,
       addSetting, updateSetting, toggleSetting, deleteSetting, addContent, updateContent, deleteContent, deleteContents,
       duplicateContent, archiveContent, restoreContent, setResult, setContentDate, setContentStatus, resetAll,
-      targets, setLongTarget, setShortTarget, setArticlePerDay, setPostPerDay, generateFromPlan,
+      targets, presets, savePreset, deletePreset, applyPresetTargets, setLongTotal, setShortTarget, setArticlePerDay, generateFromPlan,
       currentUserId, jobs, createJob, claimJob, addJobMessage, submitJob, rejectJob, approveJob,
       keywords, addKeyword, importKeywords, updateKeyword, deleteKeyword, loadSampleKeywords,
     ],

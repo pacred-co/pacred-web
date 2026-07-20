@@ -35,6 +35,8 @@ async function writeAll(admin: Admin, data: PlannerData): Promise<void> {
     upsertRows(admin, "mkt_keywords", data.keywords ?? []),
     upsertRows(admin, "mkt_jobs", data.jobs ?? []),
     admin.from("mkt_targets").upsert({ id: "default", data: data.targets ?? null, updated_at: new Date().toISOString() }, { onConflict: "id" }),
+    // แผนที่เซฟไว้ใช้ซ้ำ — อยู่ตารางเดียวกันคนละแถว (ไม่ต้องมี migration ใหม่)
+    admin.from("mkt_targets").upsert({ id: "presets", data: data.presets ?? [], updated_at: new Date().toISOString() }, { onConflict: "id" }),
   ]);
 }
 
@@ -42,10 +44,11 @@ async function writeAll(admin: Admin, data: PlannerData): Promise<void> {
 export async function loadMarketing(): Promise<PlannerData> {
   await requireAdmin([...ROLES]);
   const admin = createAdminClient();
-  const [s, c, t, j, k] = await Promise.all([
+  const [s, c, t, pre, j, k] = await Promise.all([
     admin.from("mkt_settings").select("data"),
     admin.from("mkt_contents").select("data"),
     admin.from("mkt_targets").select("data").eq("id", "default").maybeSingle(),
+    admin.from("mkt_targets").select("data").eq("id", "presets").maybeSingle(),
     admin.from("mkt_jobs").select("data"),
     admin.from("mkt_keywords").select("data"),
   ]);
@@ -69,7 +72,8 @@ export async function loadMarketing(): Promise<PlannerData> {
     contents: (c.data ?? []).map((r) => r.data),
     // Normalize: บทความ/โพสต์ ยืนพื้น 3/วัน even if an older targets row predates them
     // (a stale client can save the row back without these fields — self-heal on load).
-    targets: { ...loaded, articlePerDay: loaded.articlePerDay ?? 3, postPerDay: loaded.postPerDay ?? 3 },
+    targets: { ...loaded, articlePerDay: loaded.articlePerDay ?? 3 },
+    presets: Array.isArray(pre.data?.data) ? pre.data.data : [],
     jobs: (j.data ?? []).map((r) => r.data),
     keywords: (k.data ?? []).map((r) => r.data),
   };

@@ -11,16 +11,16 @@
  * ประเภท ลงวัน = pin วันนั้น แล้วระบบเกลี่ยจำนวนที่เหลือของประเภทนั้นไปวันที่เลือกอื่นให้.
  */
 import { useMemo, useState } from "react";
-import { CalendarRange, FileText, Film, PenLine, Sparkles } from "lucide-react";
+import { CalendarRange, FileText, Film, Save, Sparkles, Trash2, Video } from "lucide-react";
 import { usePlanner } from "@/lib/marketing-planner/store";
 import { daysInMonth, distributeMonth, targetsTotal, type DayOverride, type DaySlot, type PlanOverrides } from "@/lib/marketing-planner/production-plan";
-import { pad2, TH_MONTHS } from "@/lib/marketing-planner/util";
-import { btnPrimary, cx, inputCls, MetricCard, SectionCard, useConfirm } from "./ui";
+import { pad2, TH_DOW, TH_MONTHS } from "@/lib/marketing-planner/util";
+import { longTotalOf } from "@/lib/marketing-planner/types";
+import { btnPrimary, cx, iconBtn, inputCls, MetricCard, SectionCard, useConfirm } from "./ui";
 
 const LONG_TYPE = "contentType-long";
 const SHORT_TYPE = "contentType-short";
 const ARTICLE_TYPE = "contentType-article";
-const POST_TYPE = "contentType-post";
 
 // Fixed-width numeric input — NOT inputCls: its `w-full` beats an appended `w-16`
 // (Tailwind source-order), so the input blew out to full width and squeezed the
@@ -35,26 +35,32 @@ const CHIP_TYPES: { type: keyof DayOverride; label: string; cls: string }[] = [
   { type: "long", label: "คลิปยาว", cls: "border-primary-300 bg-primary-50 text-primary-700 dark:bg-primary-900/20" },
   { type: "short", label: "คลิปสั้น", cls: "border-sky-300 bg-sky-50 text-sky-700 dark:bg-sky-900/20" },
   { type: "article", label: "บทความ", cls: "border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20" },
-  { type: "post", label: "โพสต์", cls: "border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-900/20" },
 ];
 
 export function ProductionPlan() {
-  const { targets, setLongTarget, setShortTarget, setArticlePerDay, setPostPerDay, generateFromPlan, byGroup, contents, labelOf } = usePlanner();
+  const { targets, presets, savePreset, deletePreset, applyPresetTargets, setLongTotal, setShortTarget, setArticlePerDay, generateFromPlan, contents, labelOf } = usePlanner();
   const confirm = useConfirm();
   const now = new Date();
+  const [presetName, setPresetName] = useState("");
   const [ym, setYm] = useState(`${now.getFullYear()}-${pad2(now.getMonth() + 1)}`);
   const [y, m] = ym.split("-").map(Number);
   const [genLong, setGenLong] = useState(true);
   const [genShort, setGenShort] = useState(true);
   const [genArticle, setGenArticle] = useState(true);
-  const [genPost, setGenPost] = useState(true);
   const [mode, setMode] = useState<DistMode>("auto");
   const [selectedDays, setSelectedDays] = useState<Set<number>>(() => new Set());
   // per-day pins (กำหนดเอง) — local/transient like selectedDays. undefined = auto-spread.
   const [overrides, setOverrides] = useState<PlanOverrides>(() => new Map());
 
-  const pillars = byGroup("contentPillar");
   const days = daysInMonth(y, m - 1);
+  // 0=อาทิตย์ … 6=เสาร์ — how many empty cells before day 1 so the columns line up.
+  const leadingBlanks = new Date(y, m - 1, 1).getDay();
+  const dowOf = (day: number) => new Date(y, m - 1, day).getDay();
+  /** เลื่อนเดือน ±n (ข้ามปีให้เอง) — วางแผนล่วงหน้าได้เรื่อยๆ. */
+  const shiftMonth = (n: number) => {
+    const d = new Date(y, m - 1 + n, 1);
+    setYm(`${d.getFullYear()}-${pad2(d.getMonth() + 1)}`);
+  };
   const isManual = mode === "manual";
   // เปลี่ยนเดือน → รีเซ็ตวันที่เลือก + ที่กำหนดเอง (render-time reset · React-recommended
   // แทน setState-in-effect · เหมือน prevRateKey ใน quote-tab).
@@ -80,27 +86,23 @@ export function ProductionPlan() {
   const createdLong = monthContents.filter((c) => c.contentTypeId === LONG_TYPE).length;
   const createdShort = monthContents.filter((c) => c.contentTypeId === SHORT_TYPE).length;
   const createdArticle = monthContents.filter((c) => c.contentTypeId === ARTICLE_TYPE).length;
-  const createdPost = monthContents.filter((c) => c.contentTypeId === POST_TYPE).length;
-  const createdLongByPillar = (pid: string) => monthContents.filter((c) => c.contentTypeId === LONG_TYPE && c.contentPillarId === pid).length;
 
   // Count exactly what will be placed (mode + day-selection + pins aware) by summing the plan.
   const slotLong = useMemo(() => slots.reduce((a, s) => a + s.longs.reduce((x, l) => x + l.count, 0), 0), [slots]);
   const slotShort = useMemo(() => slots.reduce((a, s) => a + s.short, 0), [slots]);
   const slotArticle = useMemo(() => slots.reduce((a, s) => a + s.article, 0), [slots]);
-  const slotPost = useMemo(() => slots.reduce((a, s) => a + s.post, 0), [slots]);
 
   const genLongN = genLong ? slotLong : 0;
   const genShortN = genShort ? slotShort : 0;
   const genArticleN = genArticle ? slotArticle : 0;
-  const genPostN = genPost ? slotPost : 0;
-  const genTotal = genLongN + genShortN + genArticleN + genPostN;
+  const genTotal = genLongN + genShortN + genArticleN;
 
   // ── per-day pin (กำหนดเอง) ──────────────────────────────────────────────────
   const slotByDay = useMemo(() => new Map(slots.map((s) => [s.day, s])), [slots]);
   const dayValue = (day: number, type: keyof DayOverride): number => {
     const s = slotByDay.get(day);
     if (!s) return 0;
-    return type === "long" ? s.longs.reduce((a, l) => a + l.count, 0) : type === "short" ? s.short : type === "article" ? s.article : s.post;
+    return type === "long" ? s.longs.reduce((a, l) => a + l.count, 0) : type === "short" ? s.short : type === "article" ? s.article : 0;
   };
   const setDayOverride = (day: number, type: keyof DayOverride, value: number | null) =>
     setOverrides((prev) => {
@@ -123,10 +125,9 @@ export function ProductionPlan() {
   const overPinned = useMemo(() => {
     if (!isManual || overrides.size === 0) return false;
     const sum = (k: keyof DayOverride) => [...overrides.values()].reduce((a, o) => a + (o[k] ?? 0), 0);
-    const longPool = Object.values(targets.longByPillar).reduce((a, n) => a + (n > 0 ? n : 0), 0);
+    const longPool = longTotalOf(targets);
     return sum("long") > longPool || sum("short") > targets.shortTotal
-      || sum("article") > (targets.articlePerDay ?? 0) * activeDays
-      || sum("post") > (targets.postPerDay ?? 0) * activeDays;
+      || sum("article") > (targets.articlePerDay ?? 0) * activeDays;
   }, [isManual, overrides, targets, activeDays]);
 
   const toggleDay = (day: number) => {
@@ -150,15 +151,44 @@ export function ProductionPlan() {
     setSelectedDays(s);
   };
 
+  // ── Preset ──
+  const onSavePreset = async () => {
+    const ov: Record<number, { long?: number; short?: number; article?: number; post?: number }> = {};
+    for (const [day, v] of overrides) ov[day] = v;
+    savePreset(presetName, [...selectedDays], ov);
+    setPresetName("");
+  };
+  const onUsePreset = async (p: { name: string; targets: typeof targets; selectedDays: number[]; overrides: Record<number, DayOverride> }) => {
+    const ok = await confirm({
+      title: "ใช้แผนที่เซฟไว้",
+      message: `ใช้ "${p.name}" กับเดือน ${TH_MONTHS[m - 1]} ${y + 543}? โควต้า วันที่เลือก และค่าที่กำหนดเองของเดือนนี้จะถูกแทนที่ (วันที่เกิน ${days} จะถูกตัดทิ้ง)`,
+      confirmText: "ใช้แผนนี้",
+    });
+    if (!ok) return;
+    applyPresetTargets(p.targets);
+    // วันเก็บเป็นเลข 1..31 → เดือนที่สั้นกว่าจะตัดวันที่เกินทิ้ง
+    setSelectedDays(new Set(p.selectedDays.filter((d) => d >= 1 && d <= days)));
+    const m2 = new Map<number, DayOverride>();
+    for (const [k, v] of Object.entries(p.overrides ?? {})) {
+      const d = Number(k);
+      if (d >= 1 && d <= days) m2.set(d, v);
+    }
+    setOverrides(m2);
+    setMode("manual");
+  };
+  const onDeletePreset = async (p: { id: string; name: string }) => {
+    if (await confirm({ title: "ลบแผน", message: `ลบแผน "${p.name}"?`, confirmText: "ลบ", danger: true })) deletePreset(p.id);
+  };
+
   const generate = async () => {
     if (genTotal === 0) return;
     const dayNote = isManual ? ` ใน ${selectedDays.size.toLocaleString("th-TH")} วันที่เลือก` : "";
     const ok = await confirm({
       title: "สร้างคอนเทนต์ตามแผน",
-      message: `จะสร้างสล็อตคอนเทนต์ ${genTotal.toLocaleString("th-TH")} ชิ้น (คลิปยาว ${genLongN} · คลิปสั้น ${genShortN} · บทความ ${genArticleN} · โพสต์ ${genPostN}) ลงปฏิทินเดือน ${TH_MONTHS[m - 1]} ${y + 543}${dayNote} เป็นสถานะ Idea — กดสร้างได้เลย แล้วทยอยเปิดเติมรายละเอียดในแต่ละชิ้น`,
+      message: `จะสร้างสล็อตคอนเทนต์ ${genTotal.toLocaleString("th-TH")} ชิ้น (คลิปยาว ${genLongN} · คลิปสั้น ${genShortN} · บทความ ${genArticleN}) ลงปฏิทินเดือน ${TH_MONTHS[m - 1]} ${y + 543}${dayNote} เป็นสถานะ Idea — กดสร้างได้เลย แล้วทยอยเปิดเติมรายละเอียดในแต่ละชิ้น`,
       confirmText: "สร้างลงปฏิทิน",
     });
-    if (ok) generateFromPlan(y, m - 1, { long: genLong, short: genShort, article: genArticle, post: genPost }, isManual ? [...selectedDays] : null, isManual ? overrides : null);
+    if (ok) generateFromPlan(y, m - 1, { long: genLong, short: genShort, article: genArticle }, isManual ? [...selectedDays] : null, isManual ? overrides : null);
   };
 
   // Heatmap intensity from the VARIABLE load (long+short) — บทความ/โพสต์ are a flat daily baseline.
@@ -181,7 +211,13 @@ export function ProductionPlan() {
         <h2 className="inline-flex items-center gap-2 text-base font-bold text-foreground">
           <CalendarRange className="h-5 w-5 text-primary-600" /> แผนการผลิตเดือน {TH_MONTHS[m - 1]} {y + 543}
         </h2>
-        <input type="month" className={cx(inputCls, "w-auto")} value={ym} onChange={(e) => setYm(e.target.value || ym)} />
+        {/* ◀ ▶ = วางแผนล่วงหน้าหลายเดือนได้โดยไม่ต้องเปิด date-picker ทุกครั้ง */}
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => shiftMonth(-1)} className="rounded-lg border border-border bg-white px-2 py-1 text-sm text-foreground transition hover:bg-primary-50 dark:bg-surface" aria-label="เดือนก่อนหน้า" title="เดือนก่อนหน้า">‹</button>
+          <input type="month" className={cx(inputCls, "w-auto")} value={ym} onChange={(e) => setYm(e.target.value || ym)} />
+          <button type="button" onClick={() => shiftMonth(1)} className="rounded-lg border border-border bg-white px-2 py-1 text-sm text-foreground transition hover:bg-primary-50 dark:bg-surface" aria-label="เดือนถัดไป" title="เดือนถัดไป">›</button>
+          <button type="button" onClick={() => setYm(`${now.getFullYear()}-${pad2(now.getMonth() + 1)}`)} className="rounded-lg border border-border bg-white px-2 py-1 text-[12px] text-muted transition hover:bg-primary-50 hover:text-foreground dark:bg-surface" title="กลับเดือนนี้">เดือนนี้</button>
+        </div>
       </div>
 
       {/* Quota summary */}
@@ -189,7 +225,6 @@ export function ProductionPlan() {
         <MetricCard label="คลิปยาว / เดือน" value={totals.long} sub={`ทำแล้ว ${createdLong}`} accent="#B30000" />
         <MetricCard label="คลิปสั้น / เดือน" value={totals.short} sub={`ทำแล้ว ${createdShort}`} accent="#0ea5e9" />
         <MetricCard label="บทความ / เดือน" value={totals.article} sub={`ทำแล้ว ${createdArticle}`} accent="#16a34a" />
-        <MetricCard label="โพสต์ / เดือน" value={totals.post} sub={`ทำแล้ว ${createdPost}`} accent="#d97706" />
         <MetricCard label="รวมทั้งเดือน" value={totals.total} />
         <MetricCard label="เฉลี่ย / วัน" value={activeDays > 0 ? (totals.total / activeDays).toFixed(1) : "0"} sub={`${activeDays} วัน`} />
       </div>
@@ -197,20 +232,17 @@ export function ProductionPlan() {
       {/* Quota editor */}
       <SectionCard title="โควต้ารายเดือน (แก้ได้)">
         <div className="space-y-2">
-          <p className="text-[12px] font-semibold text-foreground">คลิปยาว — ต่อเสาหลัก</p>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {pillars.map((p) => {
-              const target = targets.longByPillar[p.id] ?? 0;
-              const done = createdLongByPillar(p.id);
-              return (
-                <div key={p.id} className="flex items-center gap-2 rounded-lg border border-border p-2">
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: p.color }} />
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground" title={p.name}>{p.name}</span>
-                  <span className="shrink-0 whitespace-nowrap text-[11px] text-muted">ทำแล้ว {done}</span>
-                  <input type="number" min={0} className={cx(numInput, "w-16")} value={target} onChange={(e) => setLongTarget(p.id, Number(e.target.value))} />
-                </div>
-              );
-            })}
+          {/* คลิปยาว = ตัวเลขเดียว (owner 2026-07-20 "ย่อคลิปยาวให้เป็นแค่คลิปยาว · ไม่ต้อง
+              มีคอนเทนต์ให้เลือกแบบนี้ มันเข้าใจยาก") — เดิมเป็นกริดโควต้าราย "เสาหลัก" 17 ช่อง
+              ซึ่งอ่านเหมือนรายชื่อคอนเทนต์ ไม่ใช่โควต้า. เสาหลักยังเลือกได้ตอนสร้างคอนเทนต์จริง */}
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-primary-50/40 p-2 dark:bg-primary-900/10">
+            <Video className="h-4 w-4 shrink-0 text-primary-600" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-foreground">คลิปยาว</span>
+              <span className="block text-[11px] leading-tight text-muted">YouTube / คลิปยาว · รวมทั้งเดือน</span>
+            </span>
+            <span className="shrink-0 whitespace-nowrap text-[11px] text-muted">ทำแล้ว {createdLong}</span>
+            <input type="number" min={0} className={cx(numInput, "w-20")} value={longTotalOf(targets)} onChange={(e) => setLongTotal(Number(e.target.value))} />
           </div>
           <div className="flex items-center gap-2 rounded-lg border border-border bg-sky-50/40 p-2 dark:bg-sky-900/10">
             <Film className="h-4 w-4 shrink-0 text-sky-600" />
@@ -230,16 +262,40 @@ export function ProductionPlan() {
             <span className="shrink-0 whitespace-nowrap text-[11px] text-muted">ทำแล้ว {createdArticle}</span>
             <input type="number" min={0} className={cx(numInput, "w-16")} value={targets.articlePerDay ?? 0} onChange={(e) => setArticlePerDay(Number(e.target.value))} />
           </div>
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-amber-50/40 p-2 dark:bg-amber-900/10">
-            <PenLine className="h-4 w-4 shrink-0 text-amber-600" />
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold text-foreground">โพสต์</span>
-              <span className="block text-[11px] leading-tight text-muted">ต่อวัน · × {activeDays} = {totals.post}/เดือน</span>
-            </span>
-            <span className="shrink-0 whitespace-nowrap text-[11px] text-muted">ทำแล้ว {createdPost}</span>
-            <input type="number" min={0} className={cx(numInput, "w-16")} value={targets.postPerDay ?? 0} onChange={(e) => setPostPerDay(Number(e.target.value))} />
-          </div>
         </div>
+      </SectionCard>
+
+      {/* แผนที่เซฟไว้ (preset · owner 2026-07-20 "วางแผนเสร็จ เซฟเป็น preset ได้") —
+          เก็บโควต้า + วันที่เลือก + ค่าที่ pin ไว้ทั้งชุด กดใช้ซ้ำเดือนไหนก็ได้ */}
+      <SectionCard title="แผนที่เซฟไว้ (Preset)">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={presetName}
+            onChange={(e) => setPresetName(e.target.value)}
+            placeholder="ตั้งชื่อแผน เช่น แผนเดือนปกติ"
+            className={cx(inputCls, "w-auto min-w-[200px] flex-1")}
+            aria-label="ชื่อแผน"
+          />
+          <button type="button" onClick={onSavePreset} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-[12.5px] font-semibold text-white transition hover:bg-primary-700">
+            <Save className="h-3.5 w-3.5" /> เซฟแผนนี้
+          </button>
+        </div>
+        {presets.length === 0 ? (
+          <p className="mt-2 text-[11.5px] text-muted">ยังไม่มีแผนที่เซฟไว้ — ตั้งโควต้า + เลือกวันให้เรียบร้อย แล้วกด &quot;เซฟแผนนี้&quot;</p>
+        ) : (
+          <div className="mt-2 space-y-1.5">
+            {presets.map((p) => (
+              <div key={p.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2">
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground" title={p.name}>{p.name}</span>
+                <span className="shrink-0 text-[11px] text-muted">
+                  ยาว {longTotalOf(p.targets)} · สั้น {p.targets.shortTotal} · บท {p.targets.articlePerDay ?? 0}/วัน · {p.selectedDays.length || "ทุก"} วัน
+                </span>
+                <button type="button" onClick={() => onUsePreset(p)} className="shrink-0 rounded-md border border-primary-300 bg-primary-50 px-2.5 py-1 text-[11.5px] font-semibold text-primary-700 transition hover:bg-primary-100 dark:bg-primary-900/20">ใช้แผนนี้</button>
+                <button type="button" onClick={() => onDeletePreset(p)} className={cx(iconBtn, "shrink-0 hover:bg-red-50 hover:text-red-600")} title="ลบแผน"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            ))}
+          </div>
+        )}
       </SectionCard>
 
       {/* Distribution preview + mode */}
@@ -275,15 +331,27 @@ export function ProductionPlan() {
             )}
           </>
         )}
+        {/* หัวคอลัมน์วัน + ช่องว่างนำ ให้วันที่ 1 ตกตรงวันจริงของมัน (owner 2026-07-20
+            "ทำให้เห็นว่าวันไหนวันอะไร") — ก่อนหน้านี้กริดเริ่มที่วันที่ 1 เสมอ คอลัมน์เลย
+            ไม่ตรงกับวันในสัปดาห์จริง */}
+        <div className="mb-1 grid grid-cols-7 gap-1">
+          {TH_DOW.map((d, i) => (
+            <div key={d} className={cx("text-center text-[11px] font-bold", i === 0 || i === 6 ? "text-rose-500" : "text-muted")}>{d}</div>
+          ))}
+        </div>
         <div className="grid grid-cols-7 gap-1">
+          {Array.from({ length: leadingBlanks }, (_, i) => <div key={`blank-${i}`} aria-hidden />)}
           {slots.map((s) => {
             const longN = s.longs.reduce((a, l) => a + l.count, 0);
             const load = longN + s.short;
             const intensity = load / maxDayVar;
             const selected = selectedDays.has(s.day);
             const dim = isManual && !selected;
+            const dow = dowOf(s.day);
+            const isWeekend = dow === 0 || dow === 6;
             const cls = cx(
               "rounded-lg border p-1.5 text-center transition",
+              isWeekend && "bg-rose-50/40 dark:bg-rose-900/10",
               isManual && !selected && "cursor-pointer hover:border-primary-300",
               selected ? "border-primary-400 ring-1 ring-primary-300" : "border-border",
               dim && "opacity-40",
@@ -318,7 +386,6 @@ export function ProductionPlan() {
                 <PinInput label="ยาว" color="text-primary-700" value={ov?.long} placeholder={longN} onChange={(v) => setDayOverride(s.day, "long", v)} />
                 <PinInput label="สั้น" color="text-sky-600" value={ov?.short} placeholder={s.short} onChange={(v) => setDayOverride(s.day, "short", v)} />
                 <PinInput label="บท" color="text-emerald-600" value={ov?.article} placeholder={s.article} onChange={(v) => setDayOverride(s.day, "article", v)} />
-                <PinInput label="โพ" color="text-amber-600" value={ov?.post} placeholder={s.post} onChange={(v) => setDayOverride(s.day, "post", v)} />
               </div>
             );
           })}
@@ -347,7 +414,6 @@ export function ProductionPlan() {
             <input type="checkbox" checked={genArticle} onChange={(e) => setGenArticle(e.target.checked)} /> บทความ ({slotArticle})
           </label>
           <label className="inline-flex items-center gap-1.5 text-[13px] text-foreground">
-            <input type="checkbox" checked={genPost} onChange={(e) => setGenPost(e.target.checked)} /> โพสต์ ({slotPost})
           </label>
           <button type="button" className={btnPrimary} onClick={generate} disabled={genTotal === 0}>
             <Sparkles className="h-4 w-4" /> สร้าง {genTotal.toLocaleString("th-TH")} สล็อตลงปฏิทิน
@@ -369,7 +435,7 @@ function ReadonlyDay({ s, longN }: { s: DaySlot; longN: number }) {
       <p className="text-[11px] font-bold text-foreground">{s.day}</p>
       <p className="text-[11px] leading-tight text-primary-700">ยาว {longN}</p>
       <p className="text-[11px] leading-tight text-sky-600">สั้น {s.short}</p>
-      <p className="hidden text-[11px] leading-tight text-muted sm:block">บท {s.article} · โพ {s.post}</p>
+      <p className="hidden text-[11px] leading-tight text-muted sm:block">บท {s.article}</p>
     </>
   );
 }

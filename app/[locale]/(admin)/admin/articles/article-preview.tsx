@@ -19,6 +19,7 @@ import { createPortal } from "react-dom";
 import { BadgeCheck, Star, Calendar, ArrowRight, Monitor, Smartphone } from "lucide-react";
 import { ArticleContent } from "@/components/knowledge/article-content";
 import type { CmsCategory } from "@/lib/validators/cms-article";
+import { CaseArticleBody } from "@/components/our-work/case-article-body";
 
 const MOBILE_W = 390; // iPhone-ish — the Pacred mobile-first reference viewport
 
@@ -51,6 +52,7 @@ export type ArticlePreviewProps = {
   subCategory: string;
   videoUrl: string;
   galleryImages: string[];
+  tags: string[];
   casePrice: string;
   caseRating: number | null;
   caseRoute: string;
@@ -236,101 +238,36 @@ function ArticlePagePreview({ category, title, excerpt, coverUrl, body, subCateg
   );
 }
 
-/** our_work — the public case-study detail look (gallery · rating · price · facts). */
-function OurWorkPreview({ title, excerpt, coverUrl, body, videoUrl, galleryImages, casePrice, caseRating, caseRoute, caseFacts }: ArticlePreviewProps) {
-  const images = [...(coverUrl ? [coverUrl] : []), ...galleryImages];
-  const yt = youTubeId(videoUrl || "");
-  const rating = caseRating ?? 5;
-  const ratingWord = rating >= 4.5 ? "ยอดเยี่ยม" : rating >= 3.5 ? "ดีมาก" : "ดี";
-
+/**
+ * our_work — renders the REAL case body (components/our-work/case-article-body),
+ * the same component /our-work/[id] ships. Not a lookalike: if the live page's
+ * gallery/chips/facts change, this changes with it. `interactive={false}` keeps
+ * tag + CTA links from navigating the preview iframe away.
+ *
+ * Wrapped in the live page's own container (max-w-1140 · px-4) so the column
+ * widths — and therefore the gallery mosaic — break at the same points.
+ */
+function OurWorkPreview({
+  title, excerpt, coverUrl, body, videoUrl, galleryImages, tags, casePrice, caseRating, caseRoute, caseFacts,
+}: ArticlePreviewProps) {
   return (
-    <article className="overflow-hidden rounded-2xl border border-border bg-white dark:bg-surface">
-      {/* Gallery — main image + thumbnail strip */}
-      {images.length > 0 ? (
-        <div>
-          <div className="relative aspect-[16/10] w-full overflow-hidden bg-surface-alt">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={images[0]} alt={title} className="h-full w-full object-cover" />
-          </div>
-          {images.length > 1 ? (
-            <div className="flex gap-1.5 overflow-x-auto p-2">
-              {images.slice(0, 8).map((src, i) => (
-                <div key={`${src}-${i}`} className="relative h-12 w-16 shrink-0 overflow-hidden rounded-md border border-border bg-surface-alt">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={src} alt={`รูปที่ ${i + 1}`} className="h-full w-full object-cover" />
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* Video */}
-      {videoUrl ? (
-        yt ? (
-          <div className="relative w-full" style={{ paddingTop: "56.25%" }}>
-            <iframe src={`https://www.youtube-nocookie.com/embed/${yt}`} className="absolute inset-0 h-full w-full" allowFullScreen title="วิดีโอผลงาน" />
-          </div>
-        ) : (
-          <div className="p-3"><video src={videoUrl} controls preload="metadata" className="w-full rounded-xl" /></div>
-        )
-      ) : null}
-
-      <div className="p-4 md:p-5">
-        <span className="inline-flex items-center gap-1 text-[12px] font-bold text-emerald-600">
-          <BadgeCheck className="h-3.5 w-3.5" strokeWidth={2.6} /> ผลงานจริงของ Pacred
-        </span>
-        <h1 className="mt-2 text-[22px] md:text-[26px] font-black leading-[1.2] tracking-[-0.03em] text-[#111827] dark:text-white">
-          {title || "ชื่อผลงาน"}
-        </h1>
-
-        {/* rating + route */}
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="text-[14px] font-black text-primary-700">{ratingWord}</span>
-            <span className="flex items-center gap-0.5">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Star key={i} className={["h-3.5 w-3.5", i < Math.round(rating) ? "fill-yellow-400 text-yellow-400" : "fill-gray-200 text-gray-300"].join(" ")} strokeWidth={1.8} />
-              ))}
-            </span>
-          </span>
-          {caseRoute ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-alt/60 px-2.5 py-0.5 text-[12px] font-bold text-foreground">{caseRoute}</span>
-          ) : null}
-        </div>
-
-        {excerpt ? <p className="mt-3 text-[14px] leading-relaxed text-muted">{excerpt}</p> : null}
-
-        {/* booking price card */}
-        <div className="mt-4 rounded-2xl border border-border bg-surface-alt/40 p-4">
-          <p className="text-[11.5px] font-bold uppercase tracking-wide text-muted">{casePrice ? "ราคาเริ่มต้น" : "ราคาประเมินตามงาน"}</p>
-          <p className="mt-0.5 text-[24px] font-black leading-tight tracking-[-0.02em] text-primary-600">{casePrice || "ขอใบเสนอราคาฟรี"}</p>
-          <span className="mt-3 inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 text-[13.5px] font-black text-white">
-            ทักไลน์ Pacred <ArrowRight className="h-4 w-4" strokeWidth={3} />
-          </span>
-        </div>
-
-        {/* ข้อมูลขนส่ง — case facts grid */}
-        {caseFacts.length > 0 ? (
-          <div className="mt-5">
-            <h2 className="text-[16px] font-black tracking-[-0.02em] text-foreground">ข้อมูลขนส่ง</h2>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              {caseFacts.map((f, i) => (
-                <div key={i} className="rounded-xl border border-border bg-white p-2.5 dark:bg-surface">
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-muted">{f.label || "—"}</p>
-                  <p className="mt-0.5 text-[13.5px] font-black text-foreground">{f.value || "—"}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {/* Body (optional for our_work) */}
-        {body.trim() ? (
-          <div className="mt-5">
-            <ArticleContent text={body} title={title} />
-          </div>
-        ) : null}
+    <article className="relative pb-8 pt-4">
+      <div className="mx-auto w-full max-w-[1140px] px-4 md:px-6">
+        <CaseArticleBody
+          title={title}
+          excerpt={excerpt}
+          body={body}
+          galleryImages={[...(coverUrl ? [coverUrl] : []), ...galleryImages]}
+          videoUrl={videoUrl}
+          tags={tags}
+          caseRoute={caseRoute}
+          caseFacts={caseFacts}
+          casePrice={casePrice}
+          rating={caseRating ?? 5}
+          ratedCount={0}
+          locale="th"
+          interactive={false}
+        />
       </div>
     </article>
   );

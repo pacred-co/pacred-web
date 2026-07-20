@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Image from "next/image";
 import { X, ChevronLeft, ChevronRight, Play, Camera } from "lucide-react";
 
@@ -12,12 +12,13 @@ function extractYouTubeId(url: string): string | null {
 type Media = { kind: "image"; src: string } | { kind: "video"; src: string; embedId: string | null };
 
 /**
- * Case gallery — Trip.com-style centered carousel (ปอน 2026-07-13):
- * ONE horizontal scroll-snap track where the ACTIVE slide is BIG and centered,
- * with the previous/next slides PEEKING at the edges (รูปกลางใหญ่ · ข้างๆ เล็ก).
- * เลื่อนซ้าย-ขวา · page-dots (1/slide) · ◀▶ arrows · "ดูรูปทั้งหมด N รูป".
- * Any tile → fullscreen lightbox. 16:9 images (654×368). A video (if any) is the
- * first slide with a ▶ badge and plays in the lightbox.
+ * Case gallery — hotel-style photo mosaic (owner 2026-07-20 "จัดรูปแบบนี้"):
+ * รูปใหญ่ซ้าย + กริดรูปเล็กขวา แบบหน้าโรงแรม (Agoda/Booking) แทน carousel เลื่อนข้าง
+ * ของเดิม — เห็นหลายรูปพร้อมกันในตาเดียว ไม่ต้องเลื่อนทีละรูป.
+ *   mobile : hero เต็มกว้าง + แถบ 3 รูปด้านล่าง
+ *   md+    : hero กิน 2 คอลัมน์ × 2 แถว + รูปเล็กอีก 6 รูป (รวม 7 ช่อง)
+ * Any tile → fullscreen lightbox (ลูกศร · ESC · นับหน้า). 16:9 images (654×368).
+ * A video (if any) is the hero with a ▶ badge and plays in the lightbox.
  */
 export function CaseGallery({
   images,
@@ -41,30 +42,6 @@ export function CaseGallery({
   const prevLb = useCallback(() => setIdx((i) => (i - 1 + total) % total), [total]);
   const nextLb = useCallback(() => setIdx((i) => (i + 1) % total), [total]);
 
-  // carousel — the active slide is the one whose center is nearest the viewport center
-  const trackRef = useRef<HTMLDivElement>(null);
-  const [active, setActive] = useState(0);
-  const centerSlide = useCallback((i: number) => {
-    const el = trackRef.current;
-    if (!el) return;
-    const c = el.children[Math.max(0, Math.min(total - 1, i))] as HTMLElement | undefined;
-    if (!c) return;
-    el.scrollTo({ left: c.offsetLeft - (el.clientWidth - c.offsetWidth) / 2, behavior: "smooth" });
-  }, [total]);
-  const onScroll = useCallback(() => {
-    const el = trackRef.current;
-    if (!el) return;
-    const mid = el.scrollLeft + el.clientWidth / 2;
-    let best = 0;
-    let bestDist = Infinity;
-    for (let i = 0; i < el.children.length; i++) {
-      const c = el.children[i] as HTMLElement;
-      const dist = Math.abs(c.offsetLeft + c.offsetWidth / 2 - mid);
-      if (dist < bestDist) { bestDist = dist; best = i; }
-    }
-    setActive(best);
-  }, []);
-
   // lightbox keyboard nav + scroll lock
   useEffect(() => {
     if (!open) return;
@@ -81,21 +58,59 @@ export function CaseGallery({
   if (total === 0) return null;
   const activeMedia = media[Math.min(idx, total - 1)];
 
-  // one 16:9 slide tile (image · or video with a ▶ badge)
-  const tile = (m: Media, i: number, priority = false) => (
+  /* Per-COUNT layout (owner 2026-07-20 "ภาพต้องเปลี่ยน responsive ตามจำนวนภาพ ·
+     ต้องเต็มจอ"). Every variant fills its grid EXACTLY — no holes, no dropped
+     photo — on BOTH breakpoints, and no tile is ever squeezed past the source
+     16:9 so nothing gets cropped:
+       1  → รูปเดียวเต็มกว้าง
+       2  → มือถือซ้อนกัน · จอใหญ่ ครึ่งต่อครึ่ง
+       3  → รูปใหญ่ 2/3 (คร่อม 2 แถว) + 2 รูปซ้อนขวา
+       4  → มือถือ รูปใหญ่ + แถว 3 · จอใหญ่ 2×2 เท่ากัน (ครบทั้ง 4 ไม่ต้องซ่อน)
+       5+ → รูปใหญ่ครึ่งจอ (คร่อม 2 แถว) + 4 รูปขวา · ที่เหลือดูใน "ดูรูปทั้งหมด"
+     A hero that spans 2 rows drops its own aspect box and stretches (md:h-full);
+     one that sits in a single row keeps its 16:9. */
+  const rest = media.slice(1);
+  const L =
+    total === 1
+      ? { shown: 0, grid: "grid-cols-1", hero: "aspect-video" }
+      : total === 2
+        ? { shown: 1, grid: "grid-cols-1 md:grid-cols-2", hero: "aspect-video" }
+        : total === 3
+          ? {
+              shown: 2,
+              grid: "grid-cols-2 md:grid-cols-3 md:grid-rows-2",
+              hero: "col-span-2 aspect-video md:col-span-2 md:row-span-2 md:aspect-auto md:h-full",
+            }
+          : total === 4
+            ? { shown: 3, grid: "grid-cols-3 md:grid-cols-2", hero: "col-span-3 aspect-video md:col-span-1" }
+            : {
+                shown: 4,
+                grid: "grid-cols-3 md:grid-cols-4 md:grid-rows-2",
+                hero: "col-span-3 aspect-video md:col-span-2 md:row-span-2 md:aspect-auto md:h-full",
+              };
+  const shown = rest.slice(0, L.shown);
+  // A phone fits at most a 3-up strip under the hero; only the 5+ layout has a
+  // 4th desktop tile to hide, and hiding it keeps that row full on mobile too.
+  const mobileShown = Math.min(L.shown, 3);
+
+  // one tile (image · or the video hero with a ▶ badge) — the button IS the grid item
+  const tile = (m: Media, i: number, variant: "hero" | "small", extraCls = "") => (
     <button
+      key={`${m.src}-${i}`}
       type="button"
       onClick={() => openAt(i)}
       aria-label={m.kind === "video" ? "วิดีโอ" : `ดูรูปที่ ${i + 1}`}
-      className="group relative block aspect-video w-full overflow-hidden rounded-2xl bg-black/5"
+      className={`group relative overflow-hidden bg-black/5 ${
+        variant === "hero" ? `${L.hero} rounded-lg` : "aspect-video rounded-md"
+      } ${extraCls}`}
     >
       <Image
         src={m.kind === "video" ? (images[0] ?? m.src) : m.src}
         alt={`${alt} — ${i + 1}`}
         fill
-        sizes="(max-width: 768px) 86vw, 62vw"
+        sizes={variant === "hero" ? "(max-width: 768px) 100vw, 42vw" : "(max-width: 768px) 33vw, 21vw"}
         quality={90}
-        priority={priority}
+        priority={variant === "hero"}
         className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
       />
       {m.kind === "video" ? (
@@ -112,51 +127,17 @@ export function CaseGallery({
     <>
       <div className="p-3 md:p-4">
         <div className="relative">
-          {/* track — big centered slide + side peeks · เลื่อนซ้าย-ขวา */}
-          <div
-            ref={trackRef}
-            onScroll={onScroll}
-            className="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          >
-            {media.map((m, i) => (
-              <div key={`${m.src}-${i}`} className="w-[86%] shrink-0 snap-center sm:w-[72%] md:w-[62%]">
-                {tile(m, i, i === 0)}
-              </div>
-            ))}
+          {/* mosaic — hero ซ้าย + กริดรูปเล็กขวา (แบบหน้าโรงแรม) */}
+          <div className={`grid gap-1 ${L.grid}`}>
+            {tile(media[0], 0, "hero")}
+            {shown.map((m, i) => tile(m, i + 1, "small", i >= mobileShown ? "hidden md:block" : ""))}
           </div>
 
-          {/* ◀▶ arrows */}
-          {total > 1 ? (
-            <>
-              <button type="button" aria-label="ก่อนหน้า" onClick={() => centerSlide(active - 1)} disabled={active <= 0} className="absolute left-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-foreground shadow-md transition hover:bg-white disabled:pointer-events-none disabled:opacity-0 md:left-4">
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <button type="button" aria-label="ถัดไป" onClick={() => centerSlide(active + 1)} disabled={active >= total - 1} className="absolute right-2 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-foreground shadow-md transition hover:bg-white disabled:pointer-events-none disabled:opacity-0 md:right-4">
-                <ChevronRight className="h-5 w-5" />
-              </button>
-            </>
-          ) : null}
-
-          {/* ดูรูปทั้งหมด */}
-          <button type="button" onClick={() => openAt(active)} className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-3.5 py-2 text-[12.5px] font-bold text-white backdrop-blur-sm transition hover:bg-black/75">
+          {/* ดูรูปทั้งหมด — nests over the bottom-right tile, same spot as the reference */}
+          <button type="button" onClick={() => openAt(0)} className="absolute bottom-3 right-3 z-10 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-3.5 py-2 text-[12.5px] font-bold text-white backdrop-blur-sm transition hover:bg-black/75">
             <Camera className="h-3.5 w-3.5" strokeWidth={2.6} /> ดูรูปทั้งหมด {total} รูป
           </button>
         </div>
-
-        {/* page dots (1 per slide) */}
-        {total > 1 ? (
-          <div className="mt-2.5 flex items-center justify-center gap-1.5">
-            {media.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                aria-label={`รูปที่ ${i + 1}`}
-                onClick={() => centerSlide(i)}
-                className={`h-1.5 rounded-full transition-all duration-300 ${i === active ? "w-5 bg-primary-600" : "w-1.5 bg-black/20 hover:bg-black/40"}`}
-              />
-            ))}
-          </div>
-        ) : null}
       </div>
 
       {/* Lightbox */}
