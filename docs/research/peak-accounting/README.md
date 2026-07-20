@@ -7,7 +7,7 @@
 > - **PEAK Help Center (เนื้อหาจริง · ทุกบทความ):** https://intercom.help/peak/en/ — บทความ how-to มีขั้นตอน+รูป+ฟิลด์+สถานะ+การลงบัญชี
 > - **เว็บใช้งานจริง:** https://app.peakaccount.com (ภูม login ไว้แล้ว) — เดินดู UI จริงควบคู่
 >
-> **สถานะการเก็บ (2026-07-20):** index + document-model + แผนที่ 68 บทความ = เก็บแล้ว · **[`revenue-documents.md`](revenue-documents.md) = ใบเสนอราคา + ใบแจ้งหนี้ + ใบเสร็จ(สร้าง/ใบกำกับภาษี) เก็บแบบดูรูปจริง 126 รูปแล้ว** · 🔴 เหลือ มัดจำ/ใบแจ้งหนี้-recurring/ใบเสร็จ-วิธีรับเงิน/ใบกำกับภาษี/ลดหนี้/เพิ่มหนี้/ใบวางบิล + ฝั่งจ่ายเงิน(92)+ภาษี(36) = ชนลิมิต session → **เก็บต่อหลัง 15:00 น.** (resume workflow เดิม · 7 batch ที่เสร็จ cache ไว้).
+> **สถานะการเก็บ (2026-07-20):** ✅ **ฝั่งรับเงินเก็บครบ 8 หมวด (image-informed 17 batch)** → [`revenue-documents.md`](revenue-documents.md) (รหัสเอกสาร QO/DR/IV/RE/TIV/CN/DBN/BN + GL accounts จริง + สายเอกสาร + การลงบัญชี Dr/Cr). ✅ ฝั่งจ่ายเงิน map ครบ → [`expense-documents.md`](expense-documents.md) (เนื้อหาเต็ม = กำลัง capture). 🔸 เหลือ ภาษี(36)+การเงินบัญชี(56).
 
 ---
 
