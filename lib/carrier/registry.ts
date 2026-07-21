@@ -98,9 +98,9 @@ export function computeTransportPrice(
   shipBy: string,
   volumeCbm: number,
 ): number {
-  if (shipBy === "PCSE") {
-    const raw = Math.max(0, volumeCbm) * 120;
-    return raw < 50 ? 50 : raw;
+  // owner 2026-07-21 — Pacred Express เลิกคิดขั้นต่ำ ฿50 · ยอด ฿0 ใส่ได้ (คิว 0 = ฿0).
+  if (shipBy === "PCSE" || shipBy === "PRE") {
+    return Math.round(Math.max(0, volumeCbm) * 120 * 100) / 100;
   }
   if (shipBy === "PCSF") return 0;
   return 0;

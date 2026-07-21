@@ -219,6 +219,10 @@ export function isThShippingCostRequired(
   // it would double-bill (฿100 on the anchor + a forced ฿100 in ftransportprice) and
   // false-trip the "ห้ามลืมค่าส่งไทย" gate.
   if (isMaoCarrier(s)) return false;
+  // owner 2026-07-21: "Pacred Express ไม่ต้องคิดขั้นต่ำแล้ว สามารถใส่ค่า 0 ได้เลย" —
+  // ค่าส่งด่วนคำนวณจาก คิว × 120 (ไม่มีขั้นต่ำ ฿50 อีกแล้ว) → คิวน้อย/ยังไม่วัด = ฿0
+  // เป็นค่าที่ถูกต้อง. ถ้ายังบังคับกรอก พนักงานจะใส่ 0 แล้ววางบิลไม่ได้.
+  if (s === "PCSE" || s === "PRE") return false;
   // owner 2026-07-13: ปลายทาง/COD (paymethod '2') — เอกชนเก็บค่าส่งปลายทางกับลูกค้าเอง →
   // Pacred ไม่เก็บค่าส่งไทย → ฿0 ถูกต้อง · ห้าม lock/บังคับกรอก.
   if ((payMethod ?? "").toString().trim() === "2") return false;

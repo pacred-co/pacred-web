@@ -94,6 +94,9 @@ import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { isGodRole } from "@/lib/admin/god-role";
 import { customerAddressSchema, parseCustomerAddressRow, saveCustomerAddress } from "@/lib/admin/customer-address-book";
 
+/** ปัดสตางค์ 2 ตำแหน่ง — ค่าส่งด่วน = คิว × 120 และคิวเก็บ 6 ทศนิยม (mig 0192). */
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 /** Pacred's own delivery family (รับเองโกดัง / เหมาๆ / ด่วน) — works any province.
  *
  *  ⚠️ MUST list BOTH the legacy codes and the D1 rebrand (PCSF→PRF เหมาๆ ·
@@ -140,7 +143,8 @@ function suggestCarrierForAddress(
  *  PCSF→0 · PCSE→max(คิว×120,50) · PCS→0 · external courier → unchanged (return null). */
 function repriceTransportForCarrier(carrier: string, fVolume: number): number | null {
   if (carrier === "PCSF" || carrier === "PCS") return 0;
-  if (carrier === "PCSE") return Math.max(fVolume * 120, 50);
+  // owner 2026-07-21: "Pacred Express ไม่ต้องคิดขั้นต่ำแล้ว · ใส่ค่า 0 ได้เลย"
+  if (carrier === "PCSE" || carrier === "PRE") return round2(fVolume * 120);
   return null; // external courier — leave ftransportprice as-is
 }
 
@@ -889,7 +893,8 @@ export async function adminUpdateForwarderShipBy(
       if (isMaoCarrier(fShipBy)) {
         update.ftransportprice = 0; // เหมาๆ — the ฿100 is the once-per-shipment mao fee
       } else if (isExpressShipBy) {
-        update.ftransportprice = Math.max(fVolume * 120, 50); // ส่งด่วน · floor 50
+        // ส่งด่วน = คิว × 120 · ไม่มีขั้นต่ำแล้ว (owner 2026-07-21 "ใส่ค่า 0 ได้เลย")
+        update.ftransportprice = round2(fVolume * 120);
       } else if (fShipBy === "PCS") {
         update.ftransportprice = 0; // รับเองที่โกดัง
       }

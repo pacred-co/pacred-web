@@ -38,9 +38,12 @@ assertEq("empty → false", isCarrierKey(""), false);
 section("computeTransportPrice");
 assertEq("PCSE 1 CBM → 120", computeTransportPrice("PCSE", 1), 120);
 assertEq("PCSE 0.5 CBM → 60", computeTransportPrice("PCSE", 0.5), 60);
-assertEq("PCSE 0.3 CBM → 50 floor (36 < 50)", computeTransportPrice("PCSE", 0.3), 50);
-assertEq("PCSE 0 CBM → 50 floor", computeTransportPrice("PCSE", 0), 50);
-assertEq("PCSE negative CBM → 50 floor (clamped to 0 first)", computeTransportPrice("PCSE", -5), 50);
+// owner 2026-07-21: *"Pacred Express ไม่ต้องคิดขั้นต่ำแล้วครับ สามารถใส่ค่า 0 ได้เลย"*
+// → ยกเลิกพื้น ฿50 · ราคา = คิว × 120 ตรงๆ (คิว 0 = ฿0 · ติดลบ clamp เป็น 0 ก่อน).
+assertEq("PCSE 0.3 CBM → 36 (ไม่มีขั้นต่ำแล้ว)", computeTransportPrice("PCSE", 0.3), 36);
+assertEq("PCSE 0 CBM → 0 (ใส่ ฿0 ได้)", computeTransportPrice("PCSE", 0), 0);
+assertEq("PCSE negative CBM → 0 (clamp ก่อนคูณ)", computeTransportPrice("PCSE", -5), 0);
+assertEq("PRE (รหัสใหม่) คิดเหมือน PCSE", computeTransportPrice("PRE", 1), 120);
 assertEq("PCSF → 0 (free)", computeTransportPrice("PCSF", 10), 0);
 assertEq("other ship-by → 0 (admin sets later)", computeTransportPrice("PCS", 10), 0);
 assertEq("empty ship-by → 0", computeTransportPrice("", 10), 0);

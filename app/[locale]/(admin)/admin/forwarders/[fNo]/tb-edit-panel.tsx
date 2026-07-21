@@ -59,7 +59,7 @@ const TRANSPORT_OPTIONS: ReadonlyArray<{ v: TransportType; l: string }> = [
 const SHIP_BY_PCS_OPTIONS: ReadonlyArray<{ v: string; l: string }> = [
   { v: "PCS",  l: "รับเองที่โกดัง Pacred (ไม่มีค่าส่ง)" },
   { v: "PCSF", l: "Pacred เหมาๆ · ส่งในเขต ฿100" },
-  { v: "PCSE", l: "Pacred Express · ส่งด่วน (ปริมาตร×120 · ขั้นต่ำ ฿50)" },
+  { v: "PCSE", l: "Pacred Express · ส่งด่วน (ปริมาตร×120 · ไม่มีขั้นต่ำ)" },
 ];
 
 const AMOUNT_COUNT_OPTIONS: ReadonlyArray<{ v: AmountCount; l: string }> = [
