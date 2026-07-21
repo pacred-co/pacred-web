@@ -26,9 +26,8 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from "lucide-react";
-import { adminReportCntAddCheck, adminReportCntBillToCustomer, adminReportCntBillGroupToCustomer } from "@/actions/admin/report-cnt-detail";
+import { adminReportCntAddCheck } from "@/actions/admin/report-cnt-detail";
 import { Link } from "@/i18n/navigation";
-import { confirm } from "@/components/ui/confirm";
 import { SelectedItemsConfirmDialog } from "@/components/admin/selected-items-confirm-dialog";
 import { baseTracking } from "@/lib/admin/momo-bill-header";
 import { ForwarderCostEditButton } from "@/components/admin/forwarder-cost-edit-button";
@@ -668,17 +667,8 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
               ชิปเม้น หายไป"). Only when goods arrived (fstatus 4) + money-tier.
               🔴 owner 2026-07-18 GATE: "ยังยิงกล่องไม่ครบทั้งชิปเม้นก็เลือกวางบิลไม่ได้ เพราะ
               ของลูกค้าในตู้ยังยิงไม่ครบ" — hide the bill button until fully box-scanned. */}
-          {showMoney && a.billableIds.length > 0 && (
-            scanned ? (
-              <div className="mt-1">
-                <GroupCollectButton fIDs={a.billableIds} base={base} userid={a.userid} />
-              </div>
-            ) : (
-              <div className="mt-1 text-[11px] text-red-700" title={`ยิงรับกล่องแล้ว ${fmtN(a.boxGot)}/${fmtN(a.boxExp)} — ต้องครบทั้งชิปเม้นก่อนวางบิล`}>
-                ⛔ ยิงกล่องไม่ครบ ({fmtN(a.boxGot)}/{fmtN(a.boxExp)}) · วางบิลไม่ได้
-              </div>
-            )
-          )}
+          {/* ปุ่ม "แจ้งหนี้ทั้งกลุ่ม" เอาออกจากช่องสถานะ (ภูม 2026-07-21 · ดูเละ) —
+              วางบิลผ่าน ติ๊กเข้ารายการตรวจสอบ → /admin/forwarder-check แทน. */}
           {/* Reverse bill link (read-only) — union of the group members' bills,
               deduped, newest invoice first. Groups collapse by default so surface
               it on the summary row too. */}
@@ -1117,7 +1107,7 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                   <td className="px-2 py-2 text-right">{fmt(r.priceother, 2)}</td>
                   <td className="font-12">
                     {shipByLabel(r.fshipby)}
-                    {r.paymethod === "2" && <span className="bg-danger">ปลายทาง</span>}
+                    {r.paymethod === "2" && <span className="badge badge-danger badge-pill font-10" style={{ marginLeft: ".25rem" }}>ปลายทาง</span>}
                     {r.fshipby !== "PCS" && (r.faddressdistrict || r.faddressprovince) && (
                       <>
                         <br />
@@ -1217,17 +1207,8 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                         🔴 owner 2026-07-18 GATE — also require ยิงกล่องครบ (rowScanned):
                         an arrived-but-partially-boxed row (famountfi<famount) is RED and
                         must NOT be billable until fully scanned. */}
-                    {showMoney && Number(r.fstatus) === 4 && (
-                      rowScanned ? (
-                        <div className="mt-1">
-                          <BillToCustomerButton fID={r.id} />
-                        </div>
-                      ) : (
-                        <div className="mt-1 text-[11px] text-red-700" title={`ยิงรับกล่องแล้ว ${fmtN(r.famountfi)}/${fmtN(r.famount)} — ต้องครบก่อนวางบิล`}>
-                          ⛔ ยิงกล่องไม่ครบ ({fmtN(r.famountfi)}/{fmtN(r.famount)}) · วางบิลไม่ได้
-                        </div>
-                      )
-                    )}
+                    {/* ปุ่ม "แจ้งหนี้ (4→5)" เอาออกจากช่องสถานะ (ภูม 2026-07-21) —
+                        วางบิลผ่าน ติ๊กเข้ารายการตรวจสอบ → /admin/forwarder-check แทน. */}
                     {/* Reverse bill link (read-only) — the ใบวางบิล(s) covering
                         this forwarder. No bill → nothing renders. */}
                     {(billByFid[r.id] ?? []).length > 0 && (
@@ -1368,103 +1349,6 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// Per-row bill-to-customer (4→5) button — calls adminReportCntBillToCustomer.
-// Confirms before billing (money action) + shows the resulting balance.
-// ─────────────────────────────────────────────────────────────────────
-
-function BillToCustomerButton({ fID }: { fID: number }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [done, setDone] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  async function bill() {
-    if (!(await confirm(`แจ้งหนี้ลูกค้า (ย้ายไปสถานะรอชำระเงิน) สำหรับรายการ #${fID}?`))) return;
-    setMsg(null);
-    start(async () => {
-      const res = await adminReportCntBillToCustomer({ fID });
-      if (!res.ok) {
-        setMsg(res.error);
-        return;
-      }
-      setDone(true);
-      const auto = res.data?.autoThShipping;
-      setMsg(
-        res.data?.alreadyBilled
-          ? "รายการนี้แจ้งหนี้ไปแล้ว"
-          : `แจ้งหนี้แล้ว · ยอดค้างชำระ ${(res.data?.pricePay ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บ.${auto ? ` · เพิ่มค่าส่งไทย ${auto.label} อัตโนมัติ` : ""}`,
-      );
-      router.refresh();
-    });
-  }
-
-  if (done) {
-    return <span className="inline-block text-[11px] text-amber-700">{msg}</span>;
-  }
-  return (
-    <>
-      <button
-        type="button"
-        onClick={bill}
-        disabled={pending}
-        className="inline-block rounded-full bg-amber-500 text-amber-50 border border-amber-700 text-[11px] px-1.5 py-0.5 hover:bg-amber-600 disabled:opacity-50"
-      >
-        {pending ? "กำลังแจ้ง…" : "แจ้งหนี้ (4→5)"}
-      </button>
-      {msg && <div className="mt-0.5 text-[11px] text-red-600">{msg}</div>}
-    </>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// Group bill-to-customer — bill an ENTIRE -N split shipment (per-shipment pay)
-// in one click. Loops the same per-row 4→5 writer (adminReportCntBillGroupToCustomer,
-// gated super/ops/accounting, idempotent). Restored 2026-06-19 (owner-flagged
-// the per-shipment pay selection had disappeared from the collapsed group row).
-// ─────────────────────────────────────────────────────────────────────
-function GroupCollectButton({ fIDs, base, userid }: { fIDs: number[]; base: string; userid: string }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const [done, setDone] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  async function bill() {
-    if (!(await confirm(`แจ้งหนี้ลูกค้า ${userid} ทั้งกลุ่มแทรคกิ้ง ${base} (${fIDs.length} ซอย) พร้อมกัน?`))) return;
-    setMsg(null);
-    start(async () => {
-      const res = await adminReportCntBillGroupToCustomer({ fIDs });
-      if (!res.ok) {
-        setMsg(res.error);
-        return;
-      }
-      setDone(true);
-      const d = res.data;
-      setMsg(
-        `แจ้งหนี้ ${d?.billed ?? 0} ซอย · ยอดรวม ${(d?.totalPricePay ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บ.` +
-          (d?.failed ? ` · ผิดพลาด ${d.failed}` : ""),
-      );
-      router.refresh();
-    });
-  }
-
-  if (done) {
-    return <span className="inline-block text-[11px] text-amber-700">{msg}</span>;
-  }
-  return (
-    <>
-      <button
-        type="button"
-        onClick={bill}
-        disabled={pending}
-        className="inline-block rounded-full bg-amber-500 text-amber-50 border border-amber-700 text-[11px] px-1.5 py-0.5 hover:bg-amber-600 disabled:opacity-50"
-      >
-        {pending ? "กำลังแจ้ง…" : `แจ้งหนี้ทั้งกลุ่ม (${fIDs.length} ซอย)`}
-      </button>
-      {msg && <div className="mt-0.5 text-[11px] text-red-600">{msg}</div>}
-    </>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────
 // Helpers

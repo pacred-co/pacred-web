@@ -67,7 +67,7 @@ import { Link } from "@/i18n/navigation";
 import { adminSetForwarderBillToOverride } from "@/actions/admin/forwarders";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { confirm } from "@/components/ui/confirm";
-import { nameShipBy, carrierLabel } from "@/lib/freight/shipping-methods";
+import { carrierLabel } from "@/lib/freight/shipping-methods";
 import {
   THAI_PROVINCES,
   carriersForProvince,
@@ -1381,7 +1381,6 @@ export function EditDeliveryAddressField({
     run(() => adminUpdateForwarderShipBy({ fId, fShipBy: "PCS" }), close);
   }
 
-  const inp = "w-full rounded-lg border border-border bg-white dark:bg-surface px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
   return (
     <div className="mt-1.5">
@@ -1394,7 +1393,7 @@ export function EditDeliveryAddressField({
         <div className="space-y-2 text-left rounded-lg border border-border bg-surface-alt/40 p-2.5">
           {isPcs && (
             <p className="text-[11px] text-amber-700">
-              ℹ️ ตอนนี้เป็น <b>รับเองที่โกดัง</b> — เลือก/พิมพ์ที่อยู่จัดส่งได้เลย ระบบจะเปลี่ยนขนส่งให้อัตโนมัติ
+              ℹ️ ตอนนี้เป็น <b>รับเองที่โกดัง</b> — เลือกที่อยู่จัดส่งได้เลย ระบบจะเปลี่ยนขนส่งให้อัตโนมัติ
             </p>
           )}
           {/* owner 2026-07-21: *"เอากรอบแก้ไขที่อยู่ตรงนี้ออกไปเลย · ต้องกลับไปตั้งในหน้า
@@ -1413,7 +1412,9 @@ export function EditDeliveryAddressField({
                 onPick={onPickApply}
               />
               <p className="text-[11px] text-muted">
-                บริษัทขนส่ง + ค่าส่งในไทย จับตามจังหวัดของที่อยู่ให้อัตโนมัติ (แก้ได้ที่ช่องบริษัทขนส่ง)
+                เลือกจากสมุดที่อยู่ของลูกค้า — เพิ่ม/แก้ที่{" "}
+                <Link href={`/admin/customers/${encodeURIComponent(userid)}`} onClick={(e) => e.stopPropagation()} className="text-sky-600 hover:underline">หน้าโปรไฟล์ลูกค้า</Link>{" "}
+                (linked กัน · ไม่ต้องกรอกซ้ำ) · บริษัทขนส่ง + ค่าส่งในไทย จับตามจังหวัดให้อัตโนมัติ (แก้ได้)
               </p>
             </div>
           ) : (
