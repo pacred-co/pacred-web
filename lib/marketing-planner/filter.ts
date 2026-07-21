@@ -3,7 +3,7 @@
  * (has draft / has final) take a name resolver so this stays store-free.
  */
 import type { ContentItem } from "./types";
-import { platformIdsOf, serviceIdsOf } from "./types";
+import { contentTypeIdsOf, platformIdsOf, serviceIdsOf } from "./types";
 import { isResultEmpty } from "./performance";
 
 export type ContentFilter = {
@@ -77,7 +77,7 @@ export function applyFilter(items: ContentItem[], f: ContentFilter): ContentItem
     if (f.platformId && !platformIdsOf(c).includes(f.platformId)) return false;
     if (f.statusId && c.statusId !== f.statusId) return false;
     if (f.ownerId && c.ownerId !== f.ownerId && !c.coOwnerIds?.includes(f.ownerId)) return false;
-    if (f.contentTypeId && c.contentTypeId !== f.contentTypeId) return false;
+    if (f.contentTypeId && !contentTypeIdsOf(c).includes(f.contentTypeId)) return false;
     if (f.marketingGoalId && c.marketingGoalId !== f.marketingGoalId) return false;
     if (f.contentPillarId && c.contentPillarId !== f.contentPillarId) return false;
     if (f.funnelStageId && c.funnelStageId !== f.funnelStageId) return false;
