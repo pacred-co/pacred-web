@@ -28,6 +28,7 @@ import { resolveMaoAnchorIds } from "@/lib/forwarder/mao-anchor";
 import { computeShopOrderDebitTotal } from "@/lib/service-order/debit-total";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { SHIP_BY_LABEL } from "@/actions/admin/reports-profit-types";
+import { loadCustomerBillingParty } from "@/lib/admin/customer-billing-party";
 
 // ── legacy label maps (function.php · faithful) ──────────────
 /** nameProductsType — fproductstype code → label. */
@@ -132,12 +133,35 @@ async function resolveForwarderDocsByFid(
 // ════════════════════════════════════════════════════════════
 
 export type PayUserPanel = {
-  user: { userid: string; name: string; tel: string | null };
+  /**
+   * The customer as a money-doc PARTY (ผู้รับใบแจ้งหนี้).
+   * 🔴 owner 2026-07-21 "มันไม่มีข้อมูลวิ่งมาอะ": `tax_id`/`address`/`email` were
+   * never carried, so the PayModal rendered them as a hardcoded "—". They come
+   * from `loadCustomerBillingParty` — the SAME resolver the printable ใบแจ้งหนี้
+   * uses — so the modal and the paper can never disagree. DISPLAY-ONLY.
+   */
+  user: {
+    userid: string;
+    name: string;
+    tel: string | null;
+    /** 13-digit corporate tax id; "" when the customer is a person / has none. */
+    tax_id: string;
+    /** Registered company address, else the customer's main address; "" when none. */
+    address: string;
+    email: string;
+  };
   wallet_balance: number;
   cashback: number;
   /** true = a tb_corporate row exists (drives the 1% ≥฿1,000 preview). */
   is_corporate: boolean;
-  /** true = tb_users.userCompany==1 (nิติบุคคล — cannot use wallet on ฝากนำเข้า). */
+  /**
+   * true = tb_users.userCompany==1 (นิติบุคคล — cannot use wallet on ฝากนำเข้า).
+   * ⚠️ MONEY: this NARROW test (userCompany only) feeds the wallet gate + the WHT
+   * preview. `loadCustomerBillingParty().isJuristic` is the WIDER display union
+   * (userCompany OR a corp tax-id) — do NOT swap this to it; that would widen who
+   * gets 1% withheld. The party block above may show the union classification;
+   * this flag stays exactly as it was.
+   */
   is_juristic: boolean;
   /** tb_users.coID — customer tier code (per-customer, NOT on tb_forwarder). */
   coid: string | null;
@@ -174,21 +198,29 @@ async function loadPanel(
     .maybeSingle<{ cbtotal: number | string | null }>();
   if (cbErr && cbErr.code !== "PGRST116") console.error("[pay-user-view loadPanel tb_cash_back] failed", { code: cbErr.code, message: cbErr.message, userid: code });
 
-  const { data: corp, error: corpErr } = await admin
-    .from("tb_corporate").select("id").eq("userid", code).limit(1)
-    .maybeSingle<{ id: number }>();
-  if (corpErr && corpErr.code !== "PGRST116") console.error("[pay-user-view loadPanel tb_corporate] failed", { code: corpErr.code, message: corpErr.message, userid: code });
+  // Party (ชื่อ · เลขที่ภาษี · ที่อยู่ · อีเมล · corp-row existence) via the shared
+  // resolver — the same one the printable ใบแจ้งหนี้ runs, so the modal header and
+  // the paper always show the identical customer block. It re-reads tb_users (a PK
+  // lookup) rather than threading a row through; the query above stays because
+  // coID/adminIDSale are pay-user-panel concerns the party resolver doesn't carry.
+  const party = await loadCustomerBillingParty(admin, code);
 
   return {
     panel: {
       user: {
         userid: u.userID,
-        name: [u.userName, u.userLastName].filter(Boolean).join(" ").trim() || u.userID,
+        // Prefer the resolver's name (a นิติบุคคล shows the COMPANY, not the contact
+        // person); fall back to the person name if the party read soft-failed.
+        name: party?.name || [u.userName, u.userLastName].filter(Boolean).join(" ").trim() || u.userID,
         tel: u.userTel,
+        tax_id: party?.taxId ?? "",
+        address: party?.address ?? "",
+        email: party?.email ?? "",
       },
       wallet_balance: num(w?.wallettotal),
       cashback: num(cb?.cbtotal),
-      is_corporate: corp != null,
+      // UNCHANGED semantics: "a tb_corporate row exists" (NOT the juristic union).
+      is_corporate: party?.hasCorporateRow ?? false,
       is_juristic: String(u.userCompany ?? "") === "1",
       coid: (u.coID ?? "").trim() || null,
       adminid_sale: (u.adminIDSale ?? "").trim() || null,

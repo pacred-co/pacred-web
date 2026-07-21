@@ -35,6 +35,23 @@ import { PACRED_BANK_ACCOUNTS } from "./payment/bank-accounts";
 /** Public path of the static company payment QR (drop the K-Shop image here). */
 export const STATIC_PAYMENT_QR_PATH = "/images/payment/pacred-qr.png";
 
+// ── owner 2026-07-21 ("crop ภาพ qrcode ให้ด้วย") ──────────────────────────────
+// The asset above is the FULL K-Shop poster: portrait, green background, header,
+// card-scheme logos and the มาเนกิเนโกะ mascot — the scannable code is only the
+// middle ~40% of it. On screen that's fine (it reads as the branded card), but on
+// a printed document, where the QR gets a small fixed box, squeezing a portrait
+// poster into it both distorts the image and shrinks the code far below the size
+// a phone can read.
+//
+// So a QR-ONLY crop of the SAME poster lives beside it. It was cut from the
+// original with the quiet zone kept intact (~5 modules of white) and verified by
+// decoding both files: they yield a byte-identical EMVCo payload, i.e. the crop
+// removed branding only — it never touched the code, and it CANNOT change where
+// the money lands.
+export const STATIC_PAYMENT_QR_CROP_PATH = "/images/payment/pacred-qr-crop.png";
+
+type QrVariant = "poster" | "crop";
+
 // ── owner 2026-06-25 (PPAY) — dynamic amount-QR re-enablement, FLAG-GATED ──
 // Company PromptPay = the juristic tax ID `0105564077716` (env-overridable).
 // DYNAMIC stays OFF by default → every surface keeps serving the static QR (zero
@@ -67,23 +84,45 @@ export function isPromptPayConfigured(): boolean {
   return true;
 }
 
-// Cache the data-url so we read the asset off disk only once per server boot.
-let cachedQrDataUrl: string | null = null;
+// Cache the data-urls so we read each asset off disk only once per server boot.
+const cachedQrDataUrl: Partial<Record<QrVariant, string>> = {};
 
-async function loadStaticQrDataUrl(): Promise<string> {
-  if (cachedQrDataUrl !== null) return cachedQrDataUrl;
+async function loadStaticQrDataUrl(variant: QrVariant = "poster"): Promise<string> {
+  const hit = cachedQrDataUrl[variant];
+  if (hit !== undefined) return hit;
+  const file = variant === "crop" ? "pacred-qr-crop.png" : "pacred-qr.png";
+  const publicPath = variant === "crop" ? STATIC_PAYMENT_QR_CROP_PATH : STATIC_PAYMENT_QR_PATH;
   try {
-    const buf = await readFile(join(process.cwd(), "public", "images", "payment", "pacred-qr.png"));
-    cachedQrDataUrl = `data:image/png;base64,${buf.toString("base64")}`;
+    const buf = await readFile(join(process.cwd(), "public", "images", "payment", file));
+    cachedQrDataUrl[variant] = `data:image/png;base64,${buf.toString("base64")}`;
   } catch {
     // Image not placed yet — return the PUBLIC PATH (not "") so: (a) no empty
     // `<img src="">` page-re-download bug (CLAUDE_TECHNICAL.md), (b) the QR
     // appears the instant the owner drops the file (Next serves /public
     // statically — no restart). Until then the path 404s (small placeholder)
     // and the bank-account text beside it carries the payment info.
-    cachedQrDataUrl = STATIC_PAYMENT_QR_PATH;
+    cachedQrDataUrl[variant] = publicPath;
   }
-  return cachedQrDataUrl;
+  return cachedQrDataUrl[variant]!;
+}
+
+/**
+ * Shared body of the two public builders. The DYNAMIC branch is variant-agnostic
+ * — a generated QR is already tight (margin: 1), so only the STATIC fallbacks
+ * differ (branded poster vs QR-only crop). Same account, same payload, either way.
+ */
+async function buildQrDataUrl(amountThb: number | undefined, variant: QrVariant): Promise<string> {
+  // FLAG OFF (default) → static image · zero risk.
+  if (!DYNAMIC_ENABLED) return loadStaticQrDataUrl(variant);
+  // FLAG ON → real amount-encoded PromptPay QR for the company tax-ID.
+  const payload = composePromptPayPayload(PROMPTPAY_ID, amountThb);
+  if (!payload) return loadStaticQrDataUrl(variant); // missing id → degrade to static
+  try {
+    return await QRCode.toDataURL(payload, { errorCorrectionLevel: "M", margin: 1, width: 512 });
+  } catch (err) {
+    console.error("[promptpay] dynamic QR render failed → static fallback", { err: String(err) });
+    return loadStaticQrDataUrl(variant);
+  }
 }
 
 /**
@@ -93,17 +132,21 @@ async function loadStaticQrDataUrl(): Promise<string> {
  * and the customer types the amount. Returns "" if the asset isn't placed yet.
  */
 export async function buildPromptPayQrDataUrl(amountThb?: number): Promise<string> {
-  // FLAG OFF (default) → static image · zero risk.
-  if (!DYNAMIC_ENABLED) return loadStaticQrDataUrl();
-  // FLAG ON → real amount-encoded PromptPay QR for the company tax-ID.
-  const payload = composePromptPayPayload(PROMPTPAY_ID, amountThb);
-  if (!payload) return loadStaticQrDataUrl(); // missing id → degrade to static
-  try {
-    return await QRCode.toDataURL(payload, { errorCorrectionLevel: "M", margin: 1, width: 512 });
-  } catch (err) {
-    console.error("[promptpay] dynamic QR render failed → static fallback", { err: String(err) });
-    return loadStaticQrDataUrl();
-  }
+  return buildQrDataUrl(amountThb, "poster");
+}
+
+/**
+ * Same QR, same destination account — but the QR-ONLY crop instead of the full
+ * K-Shop poster. Use this wherever the code has to sit in a small fixed box and
+ * stay scannable: printed documents, PDFs, compact panels.
+ *
+ * 💰 Identical money routing to `buildPromptPayQrDataUrl` — the two differ only
+ * in how much branding surrounds the code (proven: both files decode to the same
+ * payload). Do NOT reach for `buildServicePromptPayQrDataUrl` as a "smaller QR"
+ * substitute: that one points at a DIFFERENT account (SERVICE 204-1-55856-6).
+ */
+export async function buildCompactPaymentQrDataUrl(amountThb?: number): Promise<string> {
+  return buildQrDataUrl(amountThb, "crop");
 }
 
 /**
