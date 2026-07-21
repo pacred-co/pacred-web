@@ -65,6 +65,7 @@ import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
 import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
 import { ADDRESSES } from "@/components/seo/site";
+import { parseCustomerAddressRow } from "@/lib/admin/customer-address-book";
 
 // ────────────────────────────────────────────────────────────
 // Self-pickup address — Pacred's TH receiving warehouse (สมุทรสาคร,
@@ -95,23 +96,6 @@ export const PCS_PICKUP_ADDRESS: ResolvedAddress = {
   addressdistrict:    ADDRESSES.warehouseTh.district,
   addressprovince:    ADDRESSES.warehouseTh.province,
   addresszipcode:     ADDRESSES.warehouseTh.postcode,
-  addressnote:        "",
-};
-
-// ภูม 2026-06-25 ("ตัดออก") — เมื่อ admin ไม่ได้เลือกขนส่ง (fShipBy ว่าง) และลูกค้า
-// ยังไม่มีที่อยู่จัดส่งที่บันทึกไว้ → เว้นที่อยู่ผู้รับ "ว่าง" แทนที่จะ default ไป
-// "รับที่โกดัง Pacred" (PCS_PICKUP_ADDRESS). เซล/ลูกค้าจะกรอกที่อยู่จัดส่งจริงเอง
-// ภายหลัง (ไม่งั้น MOMO ที่ commit มาจะกลายเป็น "รับเองโกดัง" หมด = เละ).
-export const EMPTY_ADDRESS: ResolvedAddress = {
-  addressname:        "",
-  addresslastname:    "",
-  addresstel:         "",
-  addresstel2:        "",
-  addressno:          "",
-  addresssubdistrict: "",
-  addressdistrict:    "",
-  addressprovince:    "",
-  addresszipcode:     "",
   addressnote:        "",
 };
 
@@ -329,18 +313,9 @@ export async function commitMomoRowCore(
     if (!addrRow) {
       return { ok: false, error: "ไม่พบที่อยู่ของสมาชิก (addressID ไม่ถูกต้อง)" };
     }
-    addr = {
-      addressname:        addrRow.addressname,
-      addresslastname:    addrRow.addresslastname ?? "",
-      addressno:          addrRow.addressno,
-      addresssubdistrict: addrRow.addresssubdistrict,
-      addressdistrict:    addrRow.addressdistrict,
-      addressprovince:    addrRow.addressprovince,
-      addresszipcode:     addrRow.addresszipcode,
-      addressnote:        addrRow.addressnote ?? "",
-      addresstel:         addrRow.addresstel,
-      addresstel2:        addrRow.addresstel2 ?? "",
-    };
+    const usable = parseCustomerAddressRow(addrRow);
+    if (!usable.data) return { ok: false, error: `ที่อยู่ของสมาชิกไม่ครบถ้วน: ${usable.error}` };
+    addr = usable.data;
   } else {
     // Fallback: tb_address_main → tb_address.
     const { data: main, error: mainErr } = await admin
@@ -350,54 +325,47 @@ export async function commitMomoRowCore(
       .maybeSingle<{ addressid: number }>();
     if (mainErr) {
       console.error(`[tb_address_main lookup] failed`, { code: mainErr.code, message: mainErr.message });
+      return { ok: false, error: `db_error:${mainErr.code ?? "unknown"}` };
     }
-    if (main?.addressid) {
-      const { data: addrRow, error: addrRowErr } = await admin
-        .from("tb_address")
-        .select(
-          "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote, addresstel, addresstel2",
-        )
-        .eq("addressid", main.addressid)
-        .eq("userid", customer.userID)
-        .eq("addressstatus", "1")
-        .maybeSingle<{
-          addressname:        string;
-          addresslastname:    string | null;
-          addressno:          string;
-          addresssubdistrict: string;
-          addressdistrict:    string;
-          addressprovince:    string;
-          addresszipcode:     string;
-          addressnote:        string | null;
-          addresstel:         string;
-          addresstel2:        string | null;
-        }>();
-      if (addrRowErr) {
-        console.error(`[tb_address main fallback lookup] failed`, { code: addrRowErr.code, message: addrRowErr.message });
-      }
-      addr = addrRow ? {
-        addressname:        addrRow.addressname,
-        addresslastname:    addrRow.addresslastname ?? "",
-        addressno:          addrRow.addressno,
-        addresssubdistrict: addrRow.addresssubdistrict,
-        addressdistrict:    addrRow.addressdistrict,
-        addressprovince:    addrRow.addressprovince,
-        addresszipcode:     addrRow.addresszipcode,
-        addressnote:        addrRow.addressnote ?? "",
-        addresstel:         addrRow.addresstel,
-        addresstel2:        addrRow.addresstel2 ?? "",
-      } : { ...EMPTY_ADDRESS };
-    } else {
-      // ภูม 2026-06-25 ("ตัดออก") — ไม่มีที่อยู่ลูกค้า → เว้นว่าง (ไม่ default โกดัง).
-      addr = { ...EMPTY_ADDRESS };
+    if (!main?.addressid) {
+      return { ok: false, error: "ลูกค้ายังไม่มีที่อยู่หลัก — บันทึกที่อยู่ก่อนสร้างงานนำเข้า" };
     }
+    const { data: addrRow, error: addrRowErr } = await admin
+      .from("tb_address")
+      .select(
+        "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote, addresstel, addresstel2",
+      )
+      .eq("addressid", main.addressid)
+      .eq("userid", customer.userID)
+      .eq("addressstatus", "1")
+      .maybeSingle<{
+        addressname:        string;
+        addresslastname:    string | null;
+        addressno:          string;
+        addresssubdistrict: string;
+        addressdistrict:    string;
+        addressprovince:    string;
+        addresszipcode:     string;
+        addressnote:        string | null;
+        addresstel:         string;
+        addresstel2:        string | null;
+      }>();
+    if (addrRowErr) {
+      console.error(`[tb_address main fallback lookup] failed`, { code: addrRowErr.code, message: addrRowErr.message });
+      return { ok: false, error: `db_error:${addrRowErr.code ?? "unknown"}` };
+    }
+    if (!addrRow) {
+      return { ok: false, error: "ที่อยู่หลักของลูกค้าไม่พร้อมใช้งาน — กรุณาเลือก/บันทึกใหม่" };
+    }
+    const usable = parseCustomerAddressRow(addrRow);
+    if (!usable.data) return { ok: false, error: `ที่อยู่หลักของลูกค้าไม่ครบถ้วน: ${usable.error}` };
+    addr = usable.data;
   }
 
   // 🔴 CLOSED LIST (owner 2026-07-14) — a ขนส่งเอกชน chosen at commit time must be in the
-  // owner's workbook, and must run in the resolved delivery province. Exempt: an EMPTY
-  // carrier (the ภูม 2026-06-25 default — เซล/ลูกค้ากรอกภายหลัง) and own-fleet PCS/PCSF/PCSE.
-  // With EMPTY_ADDRESS the province is "" → only the closed-list half applies, so a MOMO row
-  // with no address still commits.
+  // owner's workbook, and must run in the resolved delivery province. An empty
+  // carrier is still allowed for later assignment, but a reusable address is no
+  // longer optional: address-less MOMO rows fail before this coverage check.
   {
     const coverage = checkCarrierForProvince(d.fShipBy, addr.addressprovince);
     if (!coverage.ok) return { ok: false, error: coverage.error };

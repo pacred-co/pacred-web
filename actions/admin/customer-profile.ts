@@ -48,6 +48,7 @@ import {
   type CorporateDocType,
   parseCorporateDocs,
 } from "@/lib/admin/corporate-docs";
+import { customerAddressSchema, saveCustomerAddress, setCustomerMainAddress } from "@/lib/admin/customer-address-book";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 // Role gate for every write here (per task brief).
@@ -839,18 +840,7 @@ export async function adminSetCorporateStatus(input: z.infer<typeof statusSchema
 // ────────────────────────────────────────────────────────────
 // Task 5 — Address CRUD (tb_address + tb_address_main)
 // ────────────────────────────────────────────────────────────
-const addressFields = {
-  addressname: z.string().trim().min(1, "กรอกชื่อจริง").max(200),
-  addresslastname: z.string().trim().min(1, "กรอกนามสกุล").max(200),
-  addresstel: z.string().trim().regex(/^\d{9,10}$/, "เบอร์โทร 9-10 หลัก (ไม่มีขีด)"),
-  addresstel2: z.string().trim().regex(/^\d{9,10}$/, "เบอร์สำรอง 9-10 หลัก").or(z.literal("")),
-  addressno: z.string().trim().min(1, "กรอกที่อยู่").max(200),
-  addresssubdistrict: z.string().trim().min(1, "กรอกตำบล/แขวง").max(255),
-  addressdistrict: z.string().trim().min(1, "กรอกอำเภอ/เขต").max(255),
-  addressprovince: z.string().trim().min(1, "กรอกจังหวัด").max(255),
-  addresszipcode: z.string().trim().regex(/^\d{5}$/, "รหัสไปรษณีย์ 5 หลัก"),
-  addressnote: z.string().trim().max(255).optional().default(""),
-};
+const addressFields = customerAddressSchema.shape;
 
 const addAddressSchema = z.object({ userid: useridSchema, ...addressFields });
 
@@ -878,59 +868,24 @@ export async function adminAddAddress(
     }
     if (!cust) return { ok: false, error: "ไม่พบลูกค้า" };
 
-    // INSERT the address. Our migrated schema declares addressnote/adminid/
-    // latitude/longitude NOT NULL → supply explicit fallbacks (the MySQL
-    // original relied on implicit defaults).
-    const { data: inserted, error: insErr } = await admin
-      .from("tb_address")
-      .insert({
-        addressstatus: "1",
-        addressname: d.addressname,
-        addresslastname: d.addresslastname,
-        addresstel: d.addresstel,
-        addresstel2: d.addresstel2 || "",
-        addressno: d.addressno,
-        addresssubdistrict: d.addresssubdistrict,
-        addressdistrict: d.addressdistrict,
-        addressprovince: d.addressprovince,
-        addresszipcode: d.addresszipcode,
-        addressnote: d.addressnote ?? "",
-        userid,
-        adminid: legacyAdminId,
-        latitude: 0,
-        longitude: 0,
-      })
-      .select("addressid")
-      .single<{ addressid: number }>();
-    if (insErr || !inserted) {
-      console.error(`[adminAddAddress insert] failed`, { userid, code: insErr?.code, message: insErr?.message });
-      return { ok: false, error: insErr?.message ?? "insert_failed" };
+    const saved = await saveCustomerAddress(admin, {
+      userid,
+      address: d,
+      adminid: legacyAdminId,
+      forceDefault: false,
+    });
+    if (saved.error || !saved.data) {
+      console.error(`[adminAddAddress save] failed`, { userid, message: saved.error });
+      return { ok: false, error: saved.error ?? "insert_failed" };
     }
 
-    // First-address-auto-main (legacy users.php L277-283): if the customer
-    // has no main-address row yet, point it at this new address.
-    const { data: mainRow, error: mainErr } = await admin
-      .from("tb_address_main")
-      .select("id")
-      .eq("userid", userid)
-      .maybeSingle<{ id: number }>();
-    if (mainErr) {
-      console.error(`[adminAddAddress main read] failed`, { userid, code: mainErr.code, message: mainErr.message });
-      // Non-fatal — the address is saved; main-flag just may not be set.
-    } else if (!mainRow) {
-      const { error: mainInsErr } = await admin
-        .from("tb_address_main")
-        .insert({ addressid: inserted.addressid, userid });
-      if (mainInsErr) {
-        console.error(`[adminAddAddress main insert] failed`, { userid, code: mainInsErr.code, message: mainInsErr.message });
-      }
-    }
-
-    await logAdminAction(adminId, "tb_address.add", "tb_address", `${userid}/${inserted.addressid}`, {
-      addressid: inserted.addressid,
+    await logAdminAction(adminId, "tb_address.save", "tb_address", `${userid}/${saved.data.addressId}`, {
+      addressid: saved.data.addressId,
+      created: saved.data.created,
+      isDefault: saved.data.isDefault,
     });
     revalidatePath(`/admin/customers/${userid}`);
-    return { ok: true, data: { addressid: inserted.addressid } };
+    return { ok: true, data: { addressid: saved.data.addressId } };
   });
 }
 
@@ -1067,49 +1022,10 @@ export async function adminSetMainAddress(
   return withAdmin([...WRITE_ROLES], async ({ adminId }) => {
     const admin = createAdminClient();
 
-    // Verify the target address belongs to this customer.
-    const { data: owner, error: ownerErr } = await admin
-      .from("tb_address")
-      .select("addressid, userid")
-      .eq("addressid", d.addressid)
-      .maybeSingle<{ addressid: number; userid: string }>();
-    if (ownerErr) {
-      console.error(`[adminSetMainAddress owner read] failed`, { addressid: d.addressid, code: ownerErr.code, message: ownerErr.message });
-      return { ok: false, error: ownerErr.message };
-    }
-    if (!owner) return { ok: false, error: "ไม่พบที่อยู่" };
-    if (owner.userid !== userid) return { ok: false, error: "ที่อยู่นี้ไม่ใช่ของลูกค้ารายนี้" };
-
-    // UPSERT tb_address_main (legacy setMainAddress.php UPDATEs; if no row
-    // exists yet we INSERT — covers the legacy case where the main row was
-    // never created).
-    const { data: mainRow, error: mainErr } = await admin
-      .from("tb_address_main")
-      .select("id")
-      .eq("userid", userid)
-      .maybeSingle<{ id: number }>();
-    if (mainErr) {
-      console.error(`[adminSetMainAddress main read] failed`, { userid, code: mainErr.code, message: mainErr.message });
-      return { ok: false, error: mainErr.message };
-    }
-
-    if (mainRow) {
-      const { error } = await admin
-        .from("tb_address_main")
-        .update({ addressid: d.addressid })
-        .eq("id", mainRow.id);
-      if (error) {
-        console.error(`[adminSetMainAddress update] failed`, { userid, code: error.code, message: error.message });
-        return { ok: false, error: error.message };
-      }
-    } else {
-      const { error } = await admin
-        .from("tb_address_main")
-        .insert({ addressid: d.addressid, userid });
-      if (error) {
-        console.error(`[adminSetMainAddress insert] failed`, { userid, code: error.code, message: error.message });
-        return { ok: false, error: error.message };
-      }
+    const selected = await setCustomerMainAddress(admin, userid, d.addressid);
+    if (selected.error) {
+      console.error(`[adminSetMainAddress] failed`, { userid, addressid: d.addressid, message: selected.error });
+      return { ok: false, error: selected.error };
     }
 
     await logAdminAction(adminId, "tb_address.set_main", "tb_address_main", `${userid}/${d.addressid}`, {

@@ -33,6 +33,7 @@ import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
 import { planStagingBacklinks, stagingFamilyWeights } from "@/lib/admin/backlink-staging-committed";
 import { isMomoRoutingPlaceholder } from "@/lib/admin/momo-container-resolve";
 import { resolveMomoBoxBasis } from "@/lib/integrations/momo-web/box-detail-basis";
+import { parseCustomerAddressRow } from "@/lib/admin/customer-address-book";
 
 export type HealthSeverity = "red" | "warn" | "info";
 
@@ -70,6 +71,15 @@ type FwdRow = {
   ftransporttype: string;
   fdatetothai: string;
   userid: string;
+  fshipby: string;
+  faddressname: string;
+  faddresslastname: string;
+  faddressno: string;
+  faddresssubdistrict: string;
+  faddressdistrict: string;
+  faddressprovince: string;
+  faddresszipcode: string;
+  faddresstel: string;
 };
 
 type HealthContext = {
@@ -91,7 +101,7 @@ async function loadContext(admin: SupabaseClient): Promise<HealthContext> {
     const { data, error } = await admin
       .from("tb_forwarder")
       .select(
-        "id, ftrackingchn, fstatus, paydeposit, fcredit, famount, famountcount, fweight, fvolume, ftotalprice, fcosttotalprice, fcabinetnumber, ftransporttype, fdatetothai, userid",
+        "id, ftrackingchn, fstatus, paydeposit, fcredit, famount, famountcount, fweight, fvolume, ftotalprice, fcosttotalprice, fcabinetnumber, ftransporttype, fdatetothai, userid, fshipby, faddressname, faddresslastname, faddressno, faddresssubdistrict, faddressdistrict, faddressprovince, faddresszipcode, faddresstel",
       )
       .range(from, from + 999);
     if (error) throw new Error(`tb_forwarder scan: ${error.code} ${error.message}`);
@@ -112,6 +122,15 @@ async function loadContext(admin: SupabaseClient): Promise<HealthContext> {
         ftransporttype: str(r.ftransporttype),
         fdatetothai: str(r.fdatetothai),
         userid: str(r.userid),
+        fshipby: str(r.fshipby),
+        faddressname: str(r.faddressname),
+        faddresslastname: str(r.faddresslastname),
+        faddressno: str(r.faddressno),
+        faddresssubdistrict: str(r.faddresssubdistrict),
+        faddressdistrict: str(r.faddressdistrict),
+        faddressprovince: str(r.faddressprovince),
+        faddresszipcode: str(r.faddresszipcode),
+        faddresstel: str(r.faddresstel),
       });
     }
     if ((data ?? []).length < 1000) break;
@@ -781,6 +800,117 @@ const CHECKS: CheckDef[] = [
           out.push({ base, userid: bare.userid, bareId: bare.id, sufs: sufs.length });
         }
       }
+      return { count: out.length, sample: cap(out) };
+    },
+  },
+  {
+    id: "customer_main_address_invalid",
+    title: "ที่อยู่หลักลูกค้าซ้ำ/หาย/ชี้ที่อยู่ที่ใช้ไม่ได้",
+    severity: "red",
+    why:
+      "staff เคยแก้เฉพาะ snapshot บนงาน แต่ tb_address_main ไม่มี unique/ownership guard → " +
+      "MOMO/ตะกร้าครั้งถัดไปอ่านไม่เจอหรืออ่านคนละแถว แล้วสร้างงานที่อยู่ไม่ครบ",
+    action:
+      "ใช้ migration 0270 หลังดู repair preview; ถ้ายังแดงหลัง apply ให้เปิด sample ตรวจ customer/addressid " +
+      "และห้ามสร้างงานนำเข้าใหม่จนกว่าจะตั้ง active address เป็นค่าเริ่มต้น",
+    run: async (admin) => {
+      const usableById = new Map<string, string>();
+      const usersWithUsableAddress = new Set<string>();
+      const unusableByUser = new Map<string, string[]>();
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await admin
+          .from("tb_address")
+          .select("addressid, userid, addressname, addresslastname, addresstel, addresstel2, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote")
+          .eq("addressstatus", "1")
+          .range(from, from + 999);
+        if (error) throw new Error(`tb_address scan: ${error.code} ${error.message}`);
+        for (const r of (data ?? []) as Array<Record<string, unknown> & { addressid: number | string; userid: string }>) {
+          const userid = str(r.userid);
+          const usable = parseCustomerAddressRow(r);
+          if (usable.data) {
+            usableById.set(String(r.addressid), userid);
+            if (userid) usersWithUsableAddress.add(userid);
+          } else {
+            unusableByUser.set(userid, [...(unusableByUser.get(userid) ?? []), String(r.addressid)]);
+          }
+        }
+        if ((data ?? []).length < 1000) break;
+      }
+
+      const mainsByUser = new Map<string, Array<{ id: number; addressid: string }>>();
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await admin
+          .from("tb_address_main")
+          .select("id, addressid, userid")
+          .range(from, from + 999);
+        if (error) throw new Error(`tb_address_main scan: ${error.code} ${error.message}`);
+        for (const r of (data ?? []) as Array<{ id: number; addressid: number | string; userid: string }>) {
+          const userid = str(r.userid);
+          mainsByUser.set(userid, [
+            ...(mainsByUser.get(userid) ?? []),
+            { id: Number(r.id), addressid: String(r.addressid) },
+          ]);
+        }
+        if ((data ?? []).length < 1000) break;
+      }
+
+      const badUsers = new Set<string>();
+      const sample: Array<Record<string, unknown>> = [];
+      for (const [userid, addressids] of unusableByUser) {
+        badUsers.add(userid);
+        sample.push({ userid, reasons: [`active-address-incomplete:${addressids.join(",")}`] });
+      }
+      for (const [userid, rows] of mainsByUser) {
+        const reasons: string[] = [];
+        if (rows.length > 1) reasons.push(`duplicate:${rows.length}`);
+        const invalid = rows.filter((row) => usableById.get(row.addressid) !== userid);
+        if (invalid.length > 0) reasons.push(`incomplete/inactive/missing/cross-user:${invalid.map((r) => r.addressid).join(",")}`);
+        if (reasons.length > 0) {
+          badUsers.add(userid);
+          sample.push({ userid, reasons, rows });
+        }
+      }
+      for (const userid of usersWithUsableAddress) {
+        if ((mainsByUser.get(userid) ?? []).length > 0) continue;
+        badUsers.add(userid);
+        sample.push({ userid, reasons: ["active-address-without-main"] });
+      }
+      return { count: badUsers.size, sample: cap(sample) };
+    },
+  },
+  {
+    id: "live_forwarder_missing_delivery",
+    title: "งานนำเข้าที่ยังเดินอยู่มีข้อมูลผู้รับไม่ครบ",
+    severity: "red",
+    why:
+      "MOMO/manual commit เคยยอมใช้ EMPTY_ADDRESS หรือ fallback โกดัง แม้ไม่ได้เลือกรับเอง → " +
+      "งานไหลถึงคิวคิดเงิน/จัดส่งโดยไม่มีชื่อ โทรศัพท์ หรือปลายทางจริง และต้องไล่แก้ PROD ทีละแถว",
+    action:
+      "เปิด sample แล้วแก้ที่หน้า forwarder (การแก้จะบันทึกกลับสมุดที่อยู่ด้วย); PCS รับเองได้รับการยกเว้น. " +
+      "ขาเข้าใหม่ถูก fail-closed แล้ว ถ้าจำนวนเพิ่มให้ตรวจ commit path ที่เลี่ยง chokepoint",
+    run: async (_admin, ctx) => {
+      const required: Array<keyof Pick<FwdRow,
+        "faddressname" | "faddresslastname" | "faddressno" | "faddresssubdistrict" |
+        "faddressdistrict" | "faddressprovince" | "faddresszipcode" | "faddresstel"
+      >> = [
+        "faddressname", "faddresslastname", "faddressno", "faddresssubdistrict",
+        "faddressdistrict", "faddressprovince", "faddresszipcode", "faddresstel",
+      ];
+      const out = ctx.fwd
+        .filter((r) => Number(r.fstatus) >= 1 && Number(r.fstatus) <= 6 && r.fshipby !== "PCS")
+        .map((r) => ({
+          row: r,
+          missing: required.filter((field) => r[field] === ""),
+        }))
+        .filter((entry) => entry.missing.length > 0)
+        .map(({ row, missing }) => ({
+          id: row.id,
+          tracking: row.ftrackingchn,
+          userid: row.userid,
+          fstatus: row.fstatus,
+          fshipby: row.fshipby,
+          missing,
+        }));
       return { count: out.length, sample: cap(out) };
     },
   },

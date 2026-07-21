@@ -34,6 +34,7 @@ import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { ADDRESSES } from "@/components/seo/site";
 import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
+import { parseCustomerAddressRow } from "@/lib/admin/customer-address-book";
 
 // ────────────────────────────────────────────────────────────
 // Carrier discriminator. Both MOMO + CargoCenter use the same legacy
@@ -353,18 +354,9 @@ export async function adminApiForwarderManualInsert(
         if (!addrRow) {
           return { ok: false, error: "ไม่พบที่อยู่ของสมาชิก (addressID ไม่ถูกต้อง)" };
         }
-        addr = {
-          addressname:        addrRow.addressname,
-          addresslastname:    addrRow.addresslastname ?? "",
-          addressno:          addrRow.addressno,
-          addresssubdistrict: addrRow.addresssubdistrict,
-          addressdistrict:    addrRow.addressdistrict,
-          addressprovince:    addrRow.addressprovince,
-          addresszipcode:     addrRow.addresszipcode,
-          addressnote:        addrRow.addressnote ?? "",
-          addresstel:         addrRow.addresstel,
-          addresstel2:        addrRow.addresstel2 ?? "",
-        };
+        const usable = parseCustomerAddressRow(addrRow);
+        if (!usable.data) return { ok: false, error: `ที่อยู่ของสมาชิกไม่ครบถ้วน: ${usable.error}` };
+        addr = usable.data;
       } else {
         // Fallback to tb_address_main if not explicitly picked.
         const { data: main, error: mainErr } = await admin
@@ -374,47 +366,41 @@ export async function adminApiForwarderManualInsert(
           .maybeSingle<{ addressid: number }>();
         if (mainErr) {
           console.error(`[tb_address_main list] failed`, { code: mainErr.code, message: mainErr.message });
+          return { ok: false, error: `db_error:${mainErr.code ?? "unknown"}` };
         }
-        if (main?.addressid) {
-          const { data: addrRow, error: addrRowErr } = await admin
-            .from("tb_address")
-            .select(
-              "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote, addresstel, addresstel2",
-            )
-            .eq("addressid", main.addressid)
-            .eq("userid", customer.userID)
-            .eq("addressstatus", "1")
-            .maybeSingle<{
-              addressname:        string;
-              addresslastname:    string | null;
-              addressno:          string;
-              addresssubdistrict: string;
-              addressdistrict:    string;
-              addressprovince:    string;
-              addresszipcode:     string;
-              addressnote:        string | null;
-              addresstel:         string;
-              addresstel2:        string | null;
-            }>();
-          if (addrRowErr) {
-            console.error(`[tb_address list] failed`, { code: addrRowErr.code, message: addrRowErr.message });
-          }
-          addr = addrRow ? {
-            addressname:        addrRow.addressname,
-            addresslastname:    addrRow.addresslastname ?? "",
-            addressno:          addrRow.addressno,
-            addresssubdistrict: addrRow.addresssubdistrict,
-            addressdistrict:    addrRow.addressdistrict,
-            addressprovince:    addrRow.addressprovince,
-            addresszipcode:     addrRow.addresszipcode,
-            addressnote:        addrRow.addressnote ?? "",
-            addresstel:         addrRow.addresstel,
-            addresstel2:        addrRow.addresstel2 ?? "",
-          } : { ...PCS_PICKUP_ADDRESS };
-        } else {
-          // No address at all — fallback to PCS pickup (legacy behaviour L117-130).
-          addr = { ...PCS_PICKUP_ADDRESS };
+        if (!main?.addressid) {
+          return { ok: false, error: "ลูกค้ายังไม่มีที่อยู่หลัก — บันทึกที่อยู่ก่อนสร้างงานนำเข้า" };
         }
+        const { data: addrRow, error: addrRowErr } = await admin
+          .from("tb_address")
+          .select(
+            "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote, addresstel, addresstel2",
+          )
+          .eq("addressid", main.addressid)
+          .eq("userid", customer.userID)
+          .eq("addressstatus", "1")
+          .maybeSingle<{
+            addressname:        string;
+            addresslastname:    string | null;
+            addressno:          string;
+            addresssubdistrict: string;
+            addressdistrict:    string;
+            addressprovince:    string;
+            addresszipcode:     string;
+            addressnote:        string | null;
+            addresstel:         string;
+            addresstel2:        string | null;
+          }>();
+        if (addrRowErr) {
+          console.error(`[tb_address list] failed`, { code: addrRowErr.code, message: addrRowErr.message });
+          return { ok: false, error: `db_error:${addrRowErr.code ?? "unknown"}` };
+        }
+        if (!addrRow) {
+          return { ok: false, error: "ที่อยู่หลักของลูกค้าไม่พร้อมใช้งาน — กรุณาเลือก/บันทึกใหม่" };
+        }
+        const usable = parseCustomerAddressRow(addrRow);
+        if (!usable.data) return { ok: false, error: `ที่อยู่หลักของลูกค้าไม่ครบถ้วน: ${usable.error}` };
+        addr = usable.data;
       }
 
       // 🔴 CLOSED LIST (owner 2026-07-14) — the ขนส่งเอกชน must be in the owner's workbook

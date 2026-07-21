@@ -5,7 +5,11 @@
 
 ---
 
-## 🔢 NEXT FREE NUMBER = **0269**
+## 🔢 NEXT FREE NUMBER = **0271**
+
+> ⏳ **2026-07-21 (Codex · customer address continuity): 0270** = `customer_address_main_guard` — repairs duplicate/dangling `tb_address_main` pointers, guarantees one complete+active+owned default per customer, backfills a default from usable existing addresses, and keeps `tb_users.userAddressID` aligned when the default changes. Adds a NOT VALID completeness constraint (historical dirty rows remain visible for correction; new/updated active rows must have required receiver fields), guarded triggers so a main cannot point across customers/to deleted/incomplete data, first usable address becomes default, and a main address cannot be hard/soft-deleted behind the pointer. **BRANCH ONLY · NOT APPLIED DEV/PROD** — Dave review + duplicate/repair/incomplete-address preview required before apply. No order/money/status mutation.
+
+> ✅ **2026-07-21 (ปอน · customer rate history): 0269** = `customer_rate_history` — append-only per-customer/package/quotation rate history. **✅ APPLIED + VERIFIED PROD** (13 columns · 3 indexes · RLS on · 0 rows at verification) per Dave `4c66ca9e`; DEV state remains as recorded in the Dave save-point. Read/audit only; live pricing still reads `tb_rate_custom_*`.
 
 > ⚠️ **2026-07-21 (เดฟ · MOMO invoice provenance): 0267** = `momo_invoice_line` — append-only invoice-line provenance used to show cabinet billing coverage without changing money/status. **✅ APPLIED + VERIFIED PROD** (table + 3 indexes + RLS; 0 rows at verification) · **⏸ DEV PAUSED** per Dave save-point, to be reconciled with the other pending DEV migrations. This number is occupied and must not be reused.
 

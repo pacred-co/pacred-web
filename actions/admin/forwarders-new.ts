@@ -45,6 +45,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { parseCustomerAddressRow } from "@/lib/admin/customer-address-book";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
@@ -530,18 +531,9 @@ export async function adminCreateForwarder(
         if (addrErr || !addrRow) {
           return { ok: false, error: "ไม่พบที่อยู่ของสมาชิก (addressID ไม่ถูกต้อง)" };
         }
-        addr = {
-          addressname:        addrRow.addressname,
-          addresslastname:    addrRow.addresslastname,
-          addressno:          addrRow.addressno,
-          addresssubdistrict: addrRow.addresssubdistrict,
-          addressdistrict:    addrRow.addressdistrict,
-          addressprovince:    addrRow.addressprovince,
-          addresszipcode:     addrRow.addresszipcode,
-          addressnote:        addrRow.addressnote ?? "",
-          addresstel:         addrRow.addresstel,
-          addresstel2:        addrRow.addresstel2 ?? "",
-        };
+        const usable = parseCustomerAddressRow(addrRow);
+        if (!usable.data) return { ok: false, error: `ที่อยู่ของสมาชิกไม่ครบถ้วน: ${usable.error}` };
+        addr = usable.data;
       }
 
       // 🔴 CLOSED LIST (owner 2026-07-14) — the ขนส่งเอกชน must be in the owner's workbook

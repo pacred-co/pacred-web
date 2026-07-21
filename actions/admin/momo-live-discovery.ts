@@ -60,7 +60,8 @@ const commitItemSchema = z.object({
   fShipBy: z.string().trim().max(10).optional().default(""),
   fProductsType: z.enum(["1", "2", "3", "4"]).optional().default("1"),
   // ที่อยู่จัดส่ง (owner/ภูม 2026-07-03): the customer's saved address the admin picked.
-  // null/omitted → the commit core's tb_address_main fallback (or EMPTY_ADDRESS).
+  // null/omitted → the commit core's guarded tb_address_main fallback; no usable
+  // default means the commit is refused (explicit PCS self-pickup remains valid).
   addressID: z.number().int().positive().nullable().optional(),
   // payMethod — '1'=ต้นทาง · '2'=ปลายทาง (COD). DERIVED server-side from the carrier
   // below (derivePayMethod) so the money rule (upcountry → COD) can't be free-typed.

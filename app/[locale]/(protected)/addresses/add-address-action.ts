@@ -1,10 +1,9 @@
 "use server";
 
 /**
- * Server Action for the `address.php` add-address form — a FAITHFUL 1:1
- * TRANSCRIPTION of the legacy PCS Cargo POST handler (D1 / ADR-0017 ·
- * faithful-port workstream · runbook
- * `docs/runbook/faithful-port-transcription.md`).
+ * Server Action for the `address.php` add-address form. Field mapping and UI
+ * behaviour remain the faithful PCS port; the persistence step is intentionally
+ * hardened to save-or-reuse + atomically-safe default selection (ADR-0270).
  *
  * Transcribed verbatim from `member/address.php` lines 5-77 — the
  * `if( isset($_POST["add"]) )` branch:
@@ -12,14 +11,13 @@
  *   1. Required-field check (addressName / addressLastname / addressTel /
  *      addressNo / district / amphoe / province / zipcode). On a missing
  *      field the legacy echoes `alert("กรุณากรอกข้อมูลให้ครบ")`.
- *   2. INSERT INTO tb_address (addressName, addressLastname, addressTel,
+ *   2. Save/reuse tb_address (addressName, addressLastname, addressTel,
  *      addressTel2, addressNo, addressSubDistrict, addressDistrict,
  *      addressProvince, addressZIPCode, addressNote, latitude, longitude,
  *      userID).
- *   3. SELECT addressID FROM tb_address WHERE userID=… ORDER BY addressID
- *      DESC  — grab the just-inserted row id.
- *   4. SELECT ID FROM tb_address_main WHERE userID=…  — if the customer
- *      has NO main address yet, INSERT the new row as their main address.
+ *   3. Use the addressid returned by that write (never SELECT-latest).
+ *   4. If the customer has no valid main address, select this address and align
+ *      tb_users.userAddressID for the next checkout.
  *
  * The legacy POSTs back to `address.php` itself and on success shows a
  * SweetAlert ("เพิ่มข้อมูลสำเร็จ"); on failure `errorSave`. Here the
@@ -31,7 +29,7 @@
  * (the customer's "PR<n>" code). The legacy `mysqli_real_escape_string`
  * is unnecessary — the Supabase client parameterises every value.
  *
- * NOTE — this matches the legacy faithfully: `tb_address` carries NO
+ * NOTE — schema parity remains: `tb_address` carries NO
  * created_at / updated_at columns, so none are written. The migrated
  * `tb_address` row shape is exactly the legacy MySQL shape.
  */
@@ -40,6 +38,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { saveCustomerAddress, setCustomerMainAddress } from "@/lib/admin/customer-address-book";
 
 export async function addAddressAction(formData: FormData): Promise<void> {
   const data = await getCurrentUserWithProfile();
@@ -78,67 +77,31 @@ export async function addAddressAction(formData: FormData): Promise<void> {
 
   const admin = createAdminClient();
 
-  // address.php L31-58 — INSERT INTO tb_address.
-  const { error: insertError } = await admin.from("tb_address").insert({
-    addressname:        addressName,
-    addresslastname:    addressLastname,
-    addresstel:         addressTel,
-    addresstel2:        addressTel2,
-    addressno:          addressNo,
-    addresssubdistrict: addressSubDistrict,
-    addressdistrict:    addressDistrict,
-    addressprovince:    addressProvince,
-    addresszipcode:     addressZIPCode,
-    addressnote:        addressNote,
-    latitude:           latitudeRaw === "" ? 0 : Number(latitudeRaw),
-    longitude:          longitudeRaw === "" ? 0 : Number(longitudeRaw),
-    userid:             userID,
-    // tb_address.adminid is varchar(30) NOT NULL with NO column default in the
-    // migrated schema. A customer-added address has no admin, so write the
-    // empty string — legacy MySQL stored '' for this case (PHP NULL → '' on
-    // string interpolation · see docs/learnings/php-port-patterns.md). OMITTING
-    // it → "null value in column adminid violates not-null constraint" → the
-    // INSERT fails → redirect ?error=save → the new address never appears in
-    // the list. This was THE bug ปอน hit 2026-05-30 ("กดเพิ่มแล้วข้อมูลไม่เข้า").
-    adminid:            "",
+  // Save-or-reuse and make the first address the default in the same flow.
+  // This removes the legacy INSERT → SELECT latest race where two concurrent
+  // submissions could attach the wrong addressid as the customer's main row.
+  const saved = await saveCustomerAddress(admin, {
+    userid: userID,
+    address: {
+      addressname: addressName,
+      addresslastname: addressLastname,
+      addresstel: addressTel,
+      addresstel2: addressTel2,
+      addressno: addressNo,
+      addresssubdistrict: addressSubDistrict,
+      addressdistrict: addressDistrict,
+      addressprovince: addressProvince,
+      addresszipcode: addressZIPCode,
+      addressnote: addressNote,
+    },
+    adminid: "",
+    forceDefault: false,
+    latitude: latitudeRaw === "" ? 0 : Number(latitudeRaw),
+    longitude: longitudeRaw === "" ? 0 : Number(longitudeRaw),
   });
-
-  if (insertError) {
-    // Legacy: $sweetalert = 'errorSave'.
+  if (saved.error || !saved.data) {
+    console.error(`[addAddressAction save] failed`, { userID, message: saved.error });
     redirect("/addresses?error=save");
-  }
-
-  // address.php L63-66 — SELECT the just-inserted addressID
-  // (ORDER BY addressID DESC LIMIT 1).
-  const { data: lastRow, error: lastRowErr } = await admin
-    .from("tb_address")
-    .select("addressid")
-    .eq("userid", userID)
-    .order("addressid", { ascending: false })
-    .limit(1)
-    .maybeSingle<{ addressid: number }>();
-  if (lastRowErr) {
-    console.error(`[tb_address list] failed`, { code: lastRowErr.code, message: lastRowErr.message });
-  }
-
-  // address.php L67-73 — if the customer has no main address, set this
-  // new row as the main address.
-  if (lastRow?.addressid != null) {
-    const { data: mainRow, error: mainRowErr } = await admin
-      .from("tb_address_main")
-      .select("id")
-      .eq("userid", userID)
-      .limit(1)
-      .maybeSingle<{ id: number }>();
-    if (mainRowErr) {
-      console.error(`[tb_address_main list] failed`, { code: mainRowErr.code, message: mainRowErr.message });
-    }
-
-    if (!mainRow) {
-      await admin
-        .from("tb_address_main")
-        .insert({ addressid: lastRow.addressid, userid: userID });
-    }
   }
 
   // Legacy: $sweetalert = 'successSave' then re-renders the page.
@@ -290,6 +253,9 @@ export async function deleteAddressAction(formData: FormData): Promise<void> {
     .from("tb_address_main")
     .select("addressid")
     .eq("userid", userID)
+    .eq("addressid", addressId)
+    .order("id", { ascending: true })
+    .limit(1)
     .maybeSingle<{ addressid: number }>();
   if (mainErr) {
     console.error(`[tb_address_main main-check] failed`, { code: mainErr.code, message: mainErr.message });
@@ -343,34 +309,10 @@ export async function setMainAddressAction(formData: FormData): Promise<void> {
 
   const admin = createAdminClient();
 
-  // Ownership — the address must be this customer's own row.
-  const { data: owned, error: ownErr } = await admin
-    .from("tb_address")
-    .select("addressid")
-    .eq("addressid", addressId)
-    .eq("userid", userID)
-    .maybeSingle<{ addressid: number }>();
-  if (ownErr) {
-    console.error(`[tb_address own-check] failed`, { code: ownErr.code, message: ownErr.message });
+  const selected = await setCustomerMainAddress(admin, userID, addressId);
+  if (selected.error) {
+    console.error(`[setMainAddressAction] failed`, { userID, addressId, message: selected.error });
     redirect("/addresses?error=save");
-  }
-  if (!owned) redirect("/addresses?error=save");
-
-  // Upsert the single main-pointer row for this user (UPDATE if exists, else INSERT).
-  const { data: mainRow, error: mainErr } = await admin
-    .from("tb_address_main")
-    .select("id")
-    .eq("userid", userID)
-    .limit(1)
-    .maybeSingle<{ id: number }>();
-  if (mainErr) {
-    console.error(`[tb_address_main list] failed`, { code: mainErr.code, message: mainErr.message });
-  }
-
-  if (mainRow) {
-    await admin.from("tb_address_main").update({ addressid: addressId }).eq("id", mainRow.id);
-  } else {
-    await admin.from("tb_address_main").insert({ addressid: addressId, userid: userID });
   }
 
   revalidatePath("/addresses");

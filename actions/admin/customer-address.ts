@@ -3,7 +3,7 @@
 /**
  * adminAddCustomerAddress — add a delivery address ON BEHALF OF a customer, from
  * any admin surface that has a <CustomerAddressPicker> (forwarder detail + the
- * billing-run document). INSERT-only into tb_address (the customer's own address
+ * billing-run document). Save-or-reuse into tb_address (the customer's own address
  * book) so the new row is reusable everywhere the customer's addresses are read.
  *
  * Mirrors the customer own-add INSERT shape (app/[locale]/(protected)/addresses/
@@ -15,27 +15,20 @@
  * on each surface only ever passes THIS surface's customer's userid.
  *
  * NO money / status / tb_forwarder / tb_forwarder_invoice write — pure address-book
- * insert. Returns the new addressID so the picker can auto-select it.
+ * save-or-reuse. Returns the addressID so the picker can auto-select it.
  */
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { customerAddressSchema, saveCustomerAddress } from "@/lib/admin/customer-address-book";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
-const schema = z.object({
-  userid:             z.string().trim().min(1),
-  addressname:        z.string().trim().min(1, "กรุณากรอกชื่อ"),
-  addresslastname:    z.string().trim().min(1, "กรุณากรอกนามสกุล"),
-  addresstel:         z.string().trim().min(1, "กรุณากรอกเบอร์โทร"),
-  addresstel2:        z.string().trim().optional().default(""),
-  addressno:          z.string().trim().min(1, "กรุณากรอกที่อยู่/บ้านเลขที่"),
-  addresssubdistrict: z.string().trim().min(1, "กรุณากรอกตำบล/แขวง"),
-  addressdistrict:    z.string().trim().min(1, "กรุณากรอกอำเภอ/เขต"),
-  addressprovince:    z.string().trim().min(1, "กรุณากรอกจังหวัด"),
-  addresszipcode:     z.string().trim().min(1, "กรุณากรอกรหัสไปรษณีย์"),
-  addressnote:        z.string().trim().optional().default(""),
+const schema = customerAddressSchema.extend({
+  userid:             z.string().trim().min(1).max(10).transform((value) => value.toUpperCase()),
+  /** Forwarder correction can explicitly make the saved row the next-use default. */
+  makeDefault:        z.boolean().optional().default(false),
   /** which surface to revalidate after the insert (optional). */
   revalidate:         z.string().trim().optional(),
 });
@@ -58,12 +51,12 @@ async function resolveLegacyAdminId(): Promise<string> {
 
 export async function adminAddCustomerAddress(
   rawInput: AdminAddCustomerAddressInput,
-): Promise<AdminActionResult<{ addressId: number }>> {
+): Promise<AdminActionResult<{ addressId: number; created: boolean; isDefault: boolean }>> {
   const parsed = schema.safeParse(rawInput);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
 
-  return withAdmin<{ addressId: number }>(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
+  return withAdmin<{ addressId: number; created: boolean; isDefault: boolean }>(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
 
     // Ownership guard — the customer must exist (mirror adminPickForwarderAddress's
@@ -79,40 +72,25 @@ export async function adminAddCustomerAddress(
 
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 30);
 
-    // INSERT — mirror the customer own-add shape (add-address-action.ts) + the
-    // NOT-NULL defaults (adminid varchar(30) NOT NULL · addressstatus written '1').
-    const { data: inserted, error: insErr } = await admin
-      .from("tb_address")
-      .insert({
-        addressname:        d.addressname,
-        addresslastname:    d.addresslastname,
-        addresstel:         d.addresstel,
-        addresstel2:        d.addresstel2,
-        addressno:          d.addressno,
-        addresssubdistrict: d.addresssubdistrict,
-        addressdistrict:    d.addressdistrict,
-        addressprovince:    d.addressprovince,
-        addresszipcode:     d.addresszipcode,
-        addressnote:        d.addressnote,
-        addressstatus:      "1",
-        latitude:           0,
-        longitude:          0,
-        userid:             d.userid,
-        adminid:            legacyAdminId,
-      })
-      .select("addressid")
-      .maybeSingle<{ addressid: number }>();
-    if (insErr || !inserted) {
-      console.error(`[adminAddCustomerAddress insert] failed`, { code: insErr?.code, message: insErr?.message, userid: d.userid });
-      return { ok: false, error: `บันทึกที่อยู่ไม่สำเร็จ: ${insErr?.message ?? "unknown"}` };
+    const saved = await saveCustomerAddress(admin, {
+      userid: d.userid,
+      address: d,
+      adminid: legacyAdminId,
+      forceDefault: d.makeDefault,
+    });
+    if (saved.error || !saved.data) {
+      console.error(`[adminAddCustomerAddress save] failed`, { message: saved.error, userid: d.userid });
+      return { ok: false, error: saved.error ?? "บันทึกที่อยู่ไม่สำเร็จ" };
     }
 
-    await logAdminAction(adminId, "tb_address.admin_add", "tb_address", String(inserted.addressid), {
+    await logAdminAction(adminId, "tb_address.admin_save", "tb_address", String(saved.data.addressId), {
       userid:   d.userid,
       province: d.addressprovince,
+      created: saved.data.created,
+      isDefault: saved.data.isDefault,
     });
 
     if (d.revalidate) revalidatePath(d.revalidate);
-    return { ok: true, data: { addressId: Number(inserted.addressid) } };
+    return { ok: true, data: saved.data };
   });
 }
