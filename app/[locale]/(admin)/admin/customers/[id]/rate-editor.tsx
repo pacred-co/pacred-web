@@ -11,32 +11,23 @@
  * doesn't touch existing orders" explainer (legacy tab 3).
  */
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Settings, Save, AlertTriangle, X, BadgeCheck, Scale, Trash2, History } from "lucide-react";
+import { Settings, Save, AlertTriangle, X, BadgeCheck, Scale, Trash2, History, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
-import { adminSaveCustomerRate } from "@/actions/admin/customer-rate";
 import { adminSetUserComparison, adminRemoveUserComparison } from "@/actions/admin/users-pricing";
 import { adminUpdateSellFloorCbm, adminUpdateSellFloorKg } from "@/actions/admin/sell-floor";
-import {
-  DEFAULT_START,
-  PRODUCTS,
-  TRANSPORTS,
-  WAREHOUSES,
-  type CustomerRateMatrix,
-  type RateMatrix,
-} from "@/lib/admin/customer-rate-tables";
-import type { ProductId, TransportId, WarehouseId } from "@/lib/admin/customer-rate-tables";
+import { verifyRateSettingsPin } from "@/actions/admin/rate-settings-pin";
+import { TRANSPORTS, WAREHOUSES, type CustomerRateMatrix } from "@/lib/admin/customer-rate-tables";
+import type { TransportId, WarehouseId } from "@/lib/admin/customer-rate-tables";
 import type { QuoteDefaultGrid } from "@/lib/admin/quote-default-rates-shared";
 import type { QuotePackage } from "@/lib/quote/quote-packages-shared";
 import type { SellFloorCbmConfig, SellFloorKgConfig } from "@/lib/admin/sell-floor-config";
 import { DEFAULT_COMPARISON } from "@/lib/quote/cargo-promo-packages";
 import { QuoteTab } from "./quote-tab";
 import { QuoteHistoryTab } from "./quote-history-tab";
-
-type Measure = "kg" | "cbm";
 
 // Bounds for an ultra floor edit — mirror lib/admin/sell-floor-config.ts (kept
 // as literals here because that module is server-only · cannot import into a
@@ -45,30 +36,6 @@ const FLOOR_MIN = 1000;
 const FLOOR_MAX = 99999;
 const KG_FLOOR_MIN = 1;
 const KG_FLOOR_MAX = 999;
-
-/**
- * Project the resolved flat CBM floor (sellFloorCbm) + the resolved flat KG
- * floor (sellFloorKg · per-transport, shared both warehouses) into the full
- * `COST_FLOOR`-shaped matrix the grid/InfoTab/belowFloor code reads. Both
- * sources swap to the resolved config || constant. Mirrors buildResolvedFloor()
- * in the server resolver.
- */
-function buildFloorMatrix(
-  cbm: SellFloorCbmConfig,
-  kg: SellFloorKgConfig,
-): Record<WarehouseId, RateMatrix> {
-  const flat = (v: number): Record<ProductId, number | null> => ({ "1": v, "2": v, "3": v, "4": v });
-  const kgMatrix: RateMatrix["kg"] = { "1": flat(kg["1"]), "2": flat(kg["2"]) };
-  const forWh = (wh: WarehouseId): RateMatrix => ({
-    kg: kgMatrix,
-    cbm: { "1": flat(cbm[wh]["1"]), "2": flat(cbm[wh]["2"]) },
-  });
-  return { "1": forWh("1"), "2": forWh("2") };
-}
-
-function vKey(wh: WarehouseId, m: Measure, t: TransportId, p: ProductId) {
-  return `${wh}-${m}-${t}-${p}`;
-}
 
 export function CustomerRateEditor({
   userid,
@@ -116,124 +83,26 @@ export function CustomerRateEditor({
   // Resolved floor matrix — CBM + KG from the props (config || constant). ALL
   // floor reads (grid "ขั้นต่ำ" labels · belowFloor block · InfoTab table) go
   // through this, NOT the raw COST_FLOOR constant.
-  const floorMatrix = useMemo(() => buildFloorMatrix(sellFloorCbm, sellFloorKg), [sellFloorCbm, sellFloorKg]);
   const tCmp = useTranslations("customerRateComparison");
-  const [pending, startTransition] = useTransition();
   // Top bar = 2 tabs (owner ปอน 2026-07-03): ใบเสนอราคา (default) + ประวัติใบเสนอราคา.
-  // The rate-setting screens (2 warehouse grids · ค่าเทียบ · ราคาขั้นต่ำ+คำอธิบาย) are
-  // collapsed into a "ตั้งค่าเรทลูกค้า" accordion INSIDE the ใบเสนอราคา tab, driven by
-  // `rateTab` — so the quote is front-and-center + rate settings stay one click away.
+  // เรทขายตั้งที่ใบเสนอราคาแล้ว (owner 2026-07-21) — accordion ด้านล่างเหลือแค่
+  // ค่าเทียบ + ราคาขั้นต่ำ ซึ่งใบเสนอราคาแทนไม่ได้แต่ยังคิดเงินอยู่.
   const [tab, setTab] = useState<"quote" | "history">("quote");
-  const [rateTab, setRateTab] = useState<WarehouseId | "cmp" | "info">("1");
+  // เหลือ 2 แท็บหลังถอดตารางเรทออก (2026-07-21) — ค่าเทียบ + ราคาขั้นต่ำ
+  const [rateTab, setRateTab] = useState<"cmp" | "info">("cmp");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [confirmWh, setConfirmWh] = useState<WarehouseId | null>(null);
+  // ด่านรหัสของกล่อง "ค่าเทียบ · ราคาขั้นต่ำ" — state อยู่ใน modal นี้เท่านั้น
+  // → ปิด popup แล้วเปิดใหม่ = ล็อกใหม่ (ตรงกับที่ owner สั่ง "กดแล้วให้ใส่รหัส")
+  const [rateUnlocked, setRateUnlocked] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pinErr, setPinErr] = useState<string | null>(null);
+  const [pinPending, startPin] = useTransition();
   // 2026-06-12 (owner: "เป็น pop up ทั้งก้อนเลย ไม่ต้องมีแถบล่าง") — the editor is
   // now a MODAL (legacy #rate-settings), opened from the gear in the profile
   // header. No inline bottom panel. `open` controls the modal.
   const [open, setOpen] = useState(false);
 
-  // Seed inputs: current live value, else the legacy default-start for that wh.
-  const seeded = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const wh of ["1", "2"] as const) {
-      for (const meas of ["kg", "cbm"] as const) {
-        for (const t of TRANSPORTS) {
-          for (const p of PRODUCTS) {
-            const live = matrix.byWarehouse[wh][meas][t.id][p.id];
-            const fallback = DEFAULT_START[wh][meas][t.id][p.id];
-            m.set(vKey(wh, meas, t.id, p.id), String(live ?? fallback ?? ""));
-          }
-        }
-      }
-    }
-    return m;
-  }, [matrix]);
-
-  const [values, setValues] = useState<Map<string, string>>(() => new Map(seeded));
-  function setVal(k: string, v: string) {
-    setValues((prev) => {
-      const n = new Map(prev);
-      n.set(k, v);
-      return n;
-    });
-  }
-
-  // Which warehouses already have a custom (SVIP) rate set?
-  const whHasCustom = (wh: WarehouseId) =>
-    PRODUCTS.some((p) => TRANSPORTS.some((t) => matrix.byWarehouse[wh].cbm[t.id][p.id] != null));
-
-  function num(raw: string): number {
-    const n = parseFloat(raw.trim().replace(/,/g, ""));
-    return Number.isFinite(n) ? n : NaN;
-  }
-
-  function collectCells(wh: WarehouseId) {
-    return TRANSPORTS.flatMap((t) =>
-      PRODUCTS.map((p) => ({
-        t: t.id,
-        p: p.id,
-        rkg: num(values.get(vKey(wh, "kg", t.id, p.id)) ?? ""),
-        rcbm: num(values.get(vKey(wh, "cbm", t.id, p.id)) ?? ""),
-      })),
-    );
-  }
-
-  // NEW below-floor cells (changed from the loaded value AND below the per-
-  // warehouse ราคาขั้นต่ำ). Grandfathers untouched legacy below-floor data so an
-  // unrelated edit isn't blocked — mirrors the server (ภูม 2026-06-19 hard floor).
-  function belowFloor(wh: WarehouseId) {
-    const out: string[] = [];
-    const seedNum = (m: Measure, t: TransportId, p: ProductId) =>
-      parseFloat((seeded.get(vKey(wh, m, t, p)) ?? "").replace(/,/g, ""));
-    for (const c of collectCells(wh)) {
-      const kgF = floorMatrix[wh].kg[c.t][c.p];
-      const cbmF = floorMatrix[wh].cbm[c.t][c.p];
-      const tS = TRANSPORTS.find((x) => x.id === c.t)?.short;
-      const pL = PRODUCTS.find((x) => x.id === c.p)?.label;
-      const kgSeed = seedNum("kg", c.t, c.p);
-      const cbmSeed = seedNum("cbm", c.t, c.p);
-      if (Number.isFinite(c.rkg) && c.rkg > 0 && kgF != null && c.rkg < kgF && c.rkg !== kgSeed) out.push(`KG ${tS}/${pL} (ขั้นต่ำ ฿${kgF})`);
-      if (Number.isFinite(c.rcbm) && c.rcbm > 0 && cbmF != null && c.rcbm < cbmF && c.rcbm !== cbmSeed) out.push(`CBM ${tS}/${pL} (ขั้นต่ำ ฿${cbmF})`);
-    }
-    return out;
-  }
-
-  function doSave(wh: WarehouseId) {
-    setError(null);
-    setSuccess(null);
-    setConfirmWh(null);
-    const cells = collectCells(wh);
-    for (const c of cells) {
-      if (!Number.isFinite(c.rkg) || c.rkg < 0 || !Number.isFinite(c.rcbm) || c.rcbm < 0) {
-        setError("กรอกเรททุกช่องให้เป็นตัวเลข (0 = ไม่คิดตามหน่วยนี้)");
-        return;
-      }
-    }
-    // HARD floor (ภูม 2026-06-19 "ห้ามขายต่ำกว่าราคาขั้นต่ำ แม้ VIP") — block a
-    // newly-set below-floor rate client-side too (the server also rejects it).
-    const newBelow = belowFloor(wh);
-    if (newBelow.length > 0) {
-      setError(`ห้ามตั้งเรทขายต่ำกว่าราคาขั้นต่ำ: ${newBelow.join(" · ")} — ปรับขึ้นก่อนบันทึก`);
-      return;
-    }
-    startTransition(async () => {
-      const res = await adminSaveCustomerRate({ userid, sourceWarehouse: wh, cells });
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      const whShort = WAREHOUSES.find((w) => w.id === wh)?.short;
-      const repricedNote = res.data?.repriced ? ` · คิดราคาใหม่ให้ออเดอร์ที่ยังไม่วางบิล ${res.data.repriced} รายการ` : "";
-      setSuccess(
-        (res.data?.created
-          ? `สร้างเรทเฉพาะตัว สำหรับโกดัง${whShort} แล้ว — ${res.data.changed} ช่องเปลี่ยน`
-          : `บันทึกเรทโกดัง${whShort} แล้ว — ${res.data?.changed ?? 0} ช่องเปลี่ยน`) + repricedNote,
-      );
-      router.refresh();
-      setTimeout(() => setSuccess(null), 6000);
-    });
-  }
 
   return (
     <>
@@ -328,13 +197,53 @@ export function CustomerRateEditor({
             {/* Rate-setting screens collapsed into the ใบเสนอราคา tab (owner ปอน 2026-07-03) */}
             <details className="rounded-lg border border-border bg-surface-alt/20">
               <summary className="flex cursor-pointer items-center gap-1.5 px-3 py-2 text-[13px] font-semibold text-foreground">
-                <Settings className="w-3.5 h-3.5 text-primary-600" /> ตั้งค่าเรทลูกค้า (โกดัง · ค่าเทียบ · ราคาขั้นต่ำ)
+                <Settings className="w-3.5 h-3.5 text-primary-600" /> ค่าเทียบ · ราคาขั้นต่ำ
+                {!rateUnlocked && <Lock className="w-3 h-3 text-muted" aria-label="ล็อกอยู่" />}
                 {matrix.isSvip ? (
                   <span className="ml-1 inline-flex items-center gap-0.5 rounded-full bg-primary-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
                     <BadgeCheck className="w-2.5 h-2.5" /> เรทเฉพาะตัว
                   </span>
                 ) : null}
               </summary>
+              {/* ด่านรหัส (owner 2026-07-21 "ล็อคไว้นะ กดแล้วให้ใส่รหัส") — 2 ค่านี้เป็น
+                  ตัวคูณเงินทั้งระบบ กดพลาดกระทบทุกงานของลูกค้ารายนั้น. ตรวจรหัสฝั่ง
+                  server (verifyRateSettingsPin) รหัสจึงไม่ติดไปกับ client bundle.
+                  ล็อกใหม่ทุกครั้งที่ปิด popup — state อยู่ใน memory ของ modal. */}
+              {!rateUnlocked ? (
+                <div className="border-t border-border p-4">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setPinErr(null);
+                      startPin(async () => {
+                        const res = await verifyRateSettingsPin(pin);
+                        if (res.ok) { setRateUnlocked(true); setPin(""); }
+                        else setPinErr("รหัสไม่ถูกต้อง");
+                      });
+                    }}
+                    className="mx-auto flex max-w-sm flex-col items-center gap-2 text-center"
+                  >
+                    <Lock className="h-5 w-5 text-muted" />
+                    <p className="text-[12.5px] font-semibold text-foreground">ส่วนนี้ล็อกไว้</p>
+                    <p className="text-[11.5px] text-muted">
+                      ค่าเทียบ + ราคาขั้นต่ำ เป็นตัวคูณเงินทั้งระบบ — ใส่รหัสเพื่อเปิดแก้ไข
+                    </p>
+                    <input
+                      type="password"
+                      value={pin}
+                      onChange={(e) => { setPin(e.target.value); setPinErr(null); }}
+                      placeholder="รหัสผ่าน"
+                      autoComplete="off"
+                      aria-label="รหัสผ่านสำหรับแก้ค่าเทียบ/ราคาขั้นต่ำ"
+                      className="w-48 rounded-lg border border-border bg-white px-3 py-1.5 text-center text-[13px] tracking-widest outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100 dark:bg-surface"
+                    />
+                    {pinErr && <p className="text-[11.5px] font-medium text-red-600">{pinErr}</p>}
+                    <Button type="submit" size="sm" disabled={pinPending || !pin.trim()}>
+                      {pinPending ? "กำลังตรวจ…" : "ปลดล็อก"}
+                    </Button>
+                  </form>
+                </div>
+              ) : (
               <div className="space-y-3 border-t border-border p-3">
                 {error && (
                   <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex items-start gap-2">
@@ -345,21 +254,13 @@ export function CustomerRateEditor({
                   <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">✓ {success}</div>
                 )}
 
-                {/* Rate sub-tabs (โกดัง · ค่าเทียบ · ราคาขั้นต่ำ+คำอธิบาย) */}
+                {/* ตารางเรทรายโกดังถูกถอดออก 2026-07-21 (owner "ลบอันนี้ออกไปเลย แล้วอิงเรท
+                    ตามใบเสนอราคา") — เรทขายตั้งที่ปุ่ม "บันทึกเรทเทียบราคา" ในใบเสนอราคา
+                    ด้านบน ซึ่งเขียน tb_rate_custom_* + re-price ออเดอร์ที่ยังไม่ปิด ให้อยู่แล้ว.
+                    เหลือไว้เฉพาะ 2 ตัวที่ใบเสนอราคา **แทนไม่ได้** และยังคิดเงินอยู่:
+                    ค่าเทียบ (tb_users.userComparisonValue → คิดตาม กก. หรือ คิว) และ
+                    ราคาขั้นต่ำ (ด่านกันตั้งเรทต่ำกว่าทุน · ultra เท่านั้น). */}
                 <div className="flex flex-wrap gap-x-1 border-b border-border text-[13px]">
-                  {WAREHOUSES.map((w) => (
-                    <button
-                      key={w.id}
-                      type="button"
-                      onClick={() => setRateTab(w.id)}
-                      className={`px-3 py-2 font-medium transition-colors border-b-2 -mb-px ${
-                        rateTab === w.id ? "border-primary-600 text-primary-700" : "border-transparent text-muted hover:text-foreground"
-                      }`}
-                    >
-                      {w.label}
-                      {whHasCustom(w.id) ? <span className="ml-1 text-primary-500">●</span> : null}
-                    </button>
-                  ))}
                   <button
                     type="button"
                     onClick={() => setRateTab("cmp")}
@@ -380,30 +281,6 @@ export function CustomerRateEditor({
                     คำอธิบาย + ราคาขั้นต่ำ
                   </button>
                 </div>
-
-                {/* Warehouse rate grids */}
-                {(["1", "2"] as const).map((wh) =>
-                  rateTab === wh ? (
-                    <div key={wh} className="space-y-3">
-                      {!whHasCustom(wh) && (
-                        <p className="text-[11.5px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                          ลูกค้ายังไม่มีเรทเฉพาะตัวสำหรับโกดังนี้ (ใช้เรท default) — กดบันทึกจะ
-                          <strong> สร้างเรทเฉพาะตัว</strong> ให้ลูกค้ารายนี้
-                        </p>
-                      )}
-                      <RateGrid wh={wh} values={values} setVal={setVal} pending={pending} floorMatrix={floorMatrix} />
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <p className="text-[11px] text-muted">
-                          ตัวเลขสีแดง = ต่ำกว่าราคาขั้นต่ำ · เรทนี้ใช้กับ
-                          <strong> ออเดอร์ใหม่</strong>เท่านั้น (ออเดอร์เดิมไม่เปลี่ยน)
-                        </p>
-                        <Button type="button" size="sm" disabled={pending} onClick={() => setConfirmWh(wh)}>
-                          <Save className="size-4" /> {pending ? "กำลังบันทึก..." : `บันทึกเรทโกดัง${WAREHOUSES.find((w) => w.id === wh)?.short}`}
-                        </Button>
-                      </div>
-                    </div>
-                  ) : null,
-                )}
 
                 {/* ค่าเทียบ (CPS) — set/clear in the same modal as the sell rate */}
                 {rateTab === "cmp" && (
@@ -437,6 +314,7 @@ export function CustomerRateEditor({
                   />
                 )}
               </div>
+              )}
             </details>
           </div>
         )}
@@ -446,100 +324,9 @@ export function CustomerRateEditor({
       </div>
           </div>
 
-          {/* Confirm dialog (nested · higher z than the rate modal) */}
-          {confirmWh && (
-            <ConfirmSave
-              wh={confirmWh}
-              cells={collectCells(confirmWh)}
-              below={belowFloor(confirmWh)}
-              customerName={customerName}
-              onCancel={() => setConfirmWh(null)}
-              onConfirm={() => doSave(confirmWh)}
-              pending={pending}
-            />
-          )}
         </div>
       )}
     </>
-  );
-}
-
-// ── rate grid for one warehouse ───────────────────────────────────────────
-// Product-type rows grouped into 2 (owner 2026-07-10): each pair shares ONE rate.
-//   • ทั่วไป + มอก. (products 1·2) — an edit mirrors into both columns.
-//   • อย. + พิเศษ (products 3·4) — an edit mirrors into both columns.
-// Display-only + non-destructive: the DB still stores all 4 per-product columns and
-// the resolver reads per-product, so the 2nd column of each pair (มอก.=2 · พิเศษ=4)
-// keeps its loaded value until the merged row is edited, at which point the edit
-// writes the SAME rate to both products in the pair. ราคาขั้นต่ำ is identical for
-// every product → one floor per cell.
-const RATE_ROWS: { label: string; products: ProductId[] }[] = [
-  { label: "ทั่วไป · มอก.", products: ["1", "2"] },
-  { label: "อย. · พิเศษ", products: ["3", "4"] },
-];
-
-function RateGrid({
-  wh, values, setVal, pending, floorMatrix,
-}: {
-  wh: WarehouseId;
-  values: Map<string, string>;
-  setVal: (k: string, v: string) => void;
-  pending: boolean;
-  /** Resolved floor (config || constant) — drives the "ขั้นต่ำ" labels + red. */
-  floorMatrix: Record<WarehouseId, RateMatrix>;
-}) {
-  return (
-    <div className="overflow-x-auto rounded-xl border border-border">
-      <table className="w-full text-sm min-w-[560px]">
-        <thead className="bg-surface-alt/60 text-[11px] uppercase text-muted">
-          <tr>
-            <th className="px-3 py-2 text-left">ประเภทสินค้า</th>
-            <th className="px-3 py-2 text-right">KG · รถ</th>
-            <th className="px-3 py-2 text-right">KG · เรือ</th>
-            <th className="px-3 py-2 text-right">CBM · รถ</th>
-            <th className="px-3 py-2 text-right">CBM · เรือ</th>
-          </tr>
-        </thead>
-        <tbody>
-          {RATE_ROWS.map((row) => {
-            const rep = row.products[0]; // representative column (ทั่วไป) drives the display
-            return (
-              <tr key={rep} className="border-t border-border">
-                <td className="px-3 py-2 font-medium">{row.label}</td>
-                {(["kg", "cbm"] as const).flatMap((meas) =>
-                  (["1", "2"] as TransportId[]).map((t) => {
-                    const k = vKey(wh, meas, t, rep);
-                    const raw = values.get(k) ?? "";
-                    const floor = floorMatrix[wh][meas][t][rep];
-                    const n = parseFloat(raw.replace(/,/g, ""));
-                    const isBelow = Number.isFinite(n) && n > 0 && floor != null && n < floor;
-                    return (
-                      <td key={k} className="px-2 py-1.5 text-right">
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={raw}
-                          disabled={pending}
-                          // Mirror the edit into every product column in this group
-                          // (both products in the pair share one rate).
-                          onChange={(e) => row.products.forEach((p) => setVal(vKey(wh, meas, t, p), e.target.value))}
-                          className={`w-20 rounded-md border px-2 py-1 text-sm text-right font-mono focus:outline-none focus:ring-2 ${
-                            isBelow
-                              ? "border-red-400 text-red-600 bg-red-50 focus:ring-red-400/40"
-                              : "border-border focus:ring-primary-500/40 focus:border-primary-500"
-                          }`}
-                        />
-                        <span className="block text-[11px] text-muted mt-0.5">ขั้นต่ำ {floor}</span>
-                      </td>
-                    );
-                  }),
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
   );
 }
 
@@ -905,72 +692,3 @@ function InfoTab({
   );
 }
 
-// ── confirm-save dialog ───────────────────────────────────────────────────
-function ConfirmSave({
-  wh, cells, below, customerName, onCancel, onConfirm, pending,
-}: {
-  wh: WarehouseId;
-  cells: { t: TransportId; p: ProductId; rkg: number; rcbm: number }[];
-  below: string[];
-  customerName: string;
-  onCancel: () => void;
-  onConfirm: () => void;
-  pending: boolean;
-}) {
-  const whLabel = WAREHOUSES.find((w) => w.id === wh)?.label;
-  return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4">
-      <div className="rounded-2xl bg-white dark:bg-surface shadow-2xl max-w-lg w-full p-5 space-y-3 max-h-[85vh] overflow-y-auto">
-        <div className="flex items-start justify-between">
-          <h3 className="font-bold text-lg">ยืนยันบันทึกเรท {whLabel}?</h3>
-          <button type="button" onClick={onCancel} className="text-muted hover:text-foreground" aria-label="ปิด">
-            <X className="size-5" />
-          </button>
-        </div>
-        <p className="text-sm text-muted">
-          ลูกค้า <span className="font-medium text-foreground">{customerName}</span> · เขียนเรทเฉพาะตัว (live)
-          + เก็บประวัติ
-        </p>
-
-        {below.length > 0 && (
-          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
-            <strong>⚠ มี {below.length} ช่องต่ำกว่าราคาขั้นต่ำ:</strong> {below.join(" · ")}
-            <br />ระบบจะบันทึกให้ — แต่โปรดตรวจสอบว่าตั้งใจตั้งต่ำกว่าทุนจริง
-          </div>
-        )}
-
-        <div className="rounded-lg border border-border max-h-64 overflow-y-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-surface-alt/60 sticky top-0">
-              <tr>
-                <th className="px-2 py-1.5 text-left">สินค้า · ขนส่ง</th>
-                <th className="px-2 py-1.5 text-right">KG</th>
-                <th className="px-2 py-1.5 text-right">CBM</th>
-              </tr>
-            </thead>
-            <tbody>
-              {cells.map((c) => (
-                <tr key={`${c.t}|${c.p}`} className="border-t border-border">
-                  <td className="px-2 py-1">
-                    {PRODUCTS.find((x) => x.id === c.p)?.label} · {TRANSPORTS.find((x) => x.id === c.t)?.short}
-                  </td>
-                  <td className="px-2 py-1 text-right font-mono">{Number.isFinite(c.rkg) ? c.rkg : "—"}</td>
-                  <td className="px-2 py-1 text-right font-mono">{Number.isFinite(c.rcbm) ? c.rcbm : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex gap-2 justify-end pt-1">
-          <Button type="button" variant="outline" size="sm" onClick={onCancel} disabled={pending}>
-            กลับไปแก้
-          </Button>
-          <Button type="button" size="sm" onClick={onConfirm} disabled={pending}>
-            <Save className="size-4" /> ยืนยันบันทึก
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
