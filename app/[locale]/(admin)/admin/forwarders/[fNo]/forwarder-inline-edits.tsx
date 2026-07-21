@@ -62,7 +62,6 @@ import {
   adminRemoveForwarderImage,
   adminUpdateForwarderTaxDocMode,
   adminPickForwarderAddress,
-  adminUpdateForwarderAddressDetails,
 } from "@/actions/admin/forwarders-field-edits";
 import { Link } from "@/i18n/navigation";
 import { adminSetForwarderBillToOverride } from "@/actions/admin/forwarders";
@@ -1349,33 +1348,20 @@ function carrierProvinceNoteOf(carriers: CarrierPick[], code: string): string {
  * Confirm-before-mutate (§0f). The address SNAPSHOT changes only; the carrier stays as its
  * own edit (บริษัทขนส่ง แก้ไข) — pick a matching carrier separately if the province changed.
  */
-type DeliveryAddr = {
-  name: string; lastname: string; addressno: string; subdistrict: string;
-  district: string; province: string; zipcode: string; tel: string; tel2: string; note: string;
-};
-
 export function EditDeliveryAddressField({
   fId,
   userid,
   fshipby,
   addresses,
-  current,
 }: {
   fId: number;
   userid: string;
   fshipby: string | null;
   addresses: CustomerAddressRow[];
-  /** the order's CURRENT snapshot address (tb_forwarder.fAddress*) — seeds the inline editor. */
-  current: DeliveryAddr;
 }) {
   const { pending, err, run } = useEditor();
   const [editing, setEditing] = useState(false);
-  // mode: 'pick' = เลือกจากที่อยู่ลูกค้า · 'manual' = แก้ไขเอง (พิมพ์)
-  const [mode, setMode] = useState<"pick" | "manual">(addresses.length > 0 ? "pick" : "manual");
-  const [form, setForm] = useState<DeliveryAddr>(current);
   const isPcs = (fshipby ?? "").trim() === "PCS";
-  const set = (k: keyof DeliveryAddr) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
 
   // onPick from the reusable <CustomerAddressPicker> — confirm + snapshot via the
   // existing adminPickForwarderAddress (ownership+active-guarded · no new write path).
@@ -1387,12 +1373,6 @@ export function EditDeliveryAddressField({
       `เปลี่ยนที่อยู่จัดส่งเป็น ?\n\n${label}\n\n• ดึงที่อยู่ลูกค้ามาใส่ออเดอร์นี้\n• บริษัทขนส่ง + ค่าส่งในไทย จะจับตามจังหวัดให้อัตโนมัติ (แก้ได้)`,
     ))) return;
     run(() => adminPickForwarderAddress({ fId, addressId }), () => setEditing(false));
-  }
-  async function onManualSave(close: () => void) {
-    if (!(await confirm(
-      `บันทึกที่อยู่จัดส่งที่แก้ไข ?\n\n${form.name} ${form.lastname} · ${form.province} ${form.zipcode}\n\n★ เก็บ/อัปเดตในสมุดที่อยู่ลูกค้า\n★ จำเป็นค่าเริ่มต้นสำหรับครั้งถัดไป\n• บริษัทขนส่ง + ค่าส่งในไทย จะจับตามจังหวัดให้อัตโนมัติ (แก้ได้)`,
-    ))) return;
-    run(() => adminUpdateForwarderAddressDetails({ fId, ...form }), close);
   }
   async function onWarehouse(close: () => void) {
     if (!(await confirm(
@@ -1417,57 +1397,37 @@ export function EditDeliveryAddressField({
               ℹ️ ตอนนี้เป็น <b>รับเองที่โกดัง</b> — เลือก/พิมพ์ที่อยู่จัดส่งได้เลย ระบบจะเปลี่ยนขนส่งให้อัตโนมัติ
             </p>
           )}
-          {/* mode toggle */}
-          <div className="flex gap-1 text-xs">
-            {addresses.length > 0 && (
-              <button type="button" onClick={() => setMode("pick")}
-                className={`rounded-md px-2.5 py-1 font-medium ${mode === "pick" ? "bg-primary-500 text-white" : "border border-border hover:bg-surface"}`}>
-                เลือกจากที่อยู่ลูกค้า ({addresses.length})
-              </button>
-            )}
-            <button type="button" onClick={() => setMode("manual")}
-              className={`rounded-md px-2.5 py-1 font-medium ${mode === "manual" ? "bg-primary-500 text-white" : "border border-border hover:bg-surface"}`}>
-              แก้ไขเอง (พิมพ์)
-            </button>
-          </div>
-
-          {mode === "pick" && addresses.length > 0 ? (
+          {/* owner 2026-07-21: *"เอากรอบแก้ไขที่อยู่ตรงนี้ออกไปเลย · ต้องกลับไปตั้งในหน้า
+              profile ลูกค้าเอง · ตรงนี้มีแค่เอาไว้เลือกที่อยู่สำรอง กรณีมีมากกว่า 1 ที่อยู่"* —
+              พิมพ์แก้ที่อยู่ตรงนี้ถูกถอดออกแล้ว. สมุดที่อยู่ในโปรไฟล์ลูกค้า = แหล่งเดียว
+              (พิมพ์ 2 ที่ = ต้องไล่ตามให้ตรงกันตลอด). ที่นี่ทำได้แค่ "เลือก" ที่อยู่ที่ลูกค้ามีอยู่. */}
+          {addresses.length > 0 ? (
             <div className="space-y-1.5">
               <CustomerAddressPicker
                 userid={userid}
                 addresses={addresses}
                 busy={pending}
                 revalidate={`/admin/forwarders/${fId}`}
-                makeNewAddressDefault
                 applyLabel="ใช้ที่อยู่นี้กับออเดอร์"
+                selectOnly
                 onPick={onPickApply}
               />
-              <p className="text-[11px] text-muted">บริษัทขนส่ง + ค่าส่งในไทย จับตามจังหวัดของที่อยู่ให้อัตโนมัติ (แก้ได้ที่ช่องบริษัทขนส่ง)</p>
+              <p className="text-[11px] text-muted">
+                บริษัทขนส่ง + ค่าส่งในไทย จับตามจังหวัดของที่อยู่ให้อัตโนมัติ (แก้ได้ที่ช่องบริษัทขนส่ง)
+              </p>
             </div>
           ) : (
-            <div className="space-y-1.5">
-              <div className="grid grid-cols-2 gap-1.5">
-                <input className={inp} placeholder="ชื่อ" value={form.name} onChange={set("name")} />
-                <input className={inp} placeholder="นามสกุล" value={form.lastname} onChange={set("lastname")} />
-              </div>
-              <input className={inp} placeholder="บ้านเลขที่ / ที่อยู่" value={form.addressno} onChange={set("addressno")} />
-              <div className="grid grid-cols-2 gap-1.5">
-                <input className={inp} placeholder="ตำบล/แขวง" value={form.subdistrict} onChange={set("subdistrict")} />
-                <input className={inp} placeholder="อำเภอ/เขต" value={form.district} onChange={set("district")} />
-              </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                <input className={inp} placeholder="จังหวัด" value={form.province} onChange={set("province")} />
-                <input className={inp} placeholder="ไปรษณีย์" value={form.zipcode} onChange={set("zipcode")} inputMode="numeric" maxLength={5} />
-              </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                <input className={inp} placeholder="เบอร์โทร" value={form.tel} onChange={set("tel")} inputMode="numeric" maxLength={10} />
-                <input className={inp} placeholder="เบอร์สำรอง" value={form.tel2} onChange={set("tel2")} inputMode="numeric" maxLength={10} />
-              </div>
-              <input className={inp} placeholder="หมายเหตุ" value={form.note} onChange={set("note")} />
-              <p className="text-[11px] text-muted">พิมพ์แก้ที่อยู่ได้ตรงนี้ · ระบบเก็บ/อัปเดตในสมุดที่อยู่และจำเป็นค่าเริ่มต้นครั้งถัดไป · บริษัทขนส่ง + ค่าส่ง จับตามจังหวัดให้อัตโนมัติ (แก้ได้)</p>
-              <button type="button" disabled={pending} className={btnSave} onClick={() => onManualSave(() => setEditing(false))}>บันทึกที่อยู่</button>
-            </div>
+            <p className="text-[11px] text-amber-700">
+              ลูกค้ารายนี้ยังไม่มีที่อยู่ในระบบ — ไปเพิ่มที่หน้าโปรไฟล์ลูกค้าก่อน แล้วกลับมาเลือกที่นี่
+            </p>
           )}
+          {/* ทางเดียวในการ "แก้/เพิ่ม" ที่อยู่ = โปรไฟล์ลูกค้า (แหล่งเดียว · ไม่ต้องกรอกซ้ำ) */}
+          <Link
+            href={`/admin/customers/${encodeURIComponent(userid)}`}
+            className="inline-block text-[11px] font-medium text-sky-600 hover:underline"
+          >
+            ✎ แก้ไข / เพิ่มที่อยู่ของลูกค้า → หน้าโปรไฟล์ลูกค้า
+          </Link>
 
           <div className="flex items-center gap-2 border-t border-border pt-2">
             <button type="button" disabled={pending || isPcs} className="rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"

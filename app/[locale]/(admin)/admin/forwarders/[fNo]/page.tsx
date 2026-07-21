@@ -1142,13 +1142,6 @@ async function tryRenderTbForwarder(
                 userid={r.userid}
                 fshipby={r.fshipby}
                 addresses={savedAddresses}
-                current={{
-                  name: r.faddressname ?? "", lastname: r.faddresslastname ?? "",
-                  addressno: r.faddressno ?? "", subdistrict: r.faddresssubdistrict ?? "",
-                  district: r.faddressdistrict ?? "", province: r.faddressprovince ?? "",
-                  zipcode: r.faddresszipcode ?? "", tel: r.faddresstel ?? "",
-                  tel2: r.faddresstel2 ?? "", note: r.faddressnote ?? "",
-                }}
               />
               {deliveryHistory.length > 0 && (
                 <details className="mt-1 text-[11px] text-muted">

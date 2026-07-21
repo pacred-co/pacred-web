@@ -45,6 +45,14 @@ export function CustomerAddressPicker({
   /** Forwarder correction: remember a newly keyed address for the next order too. */
   makeNewAddressDefault = false,
   applyLabel = "ใช้ที่อยู่นี้",
+  /**
+   * owner 2026-07-21 — *"ตรงนี้มีแค่เอาไว้ให้เลือกที่อยู่สำรอง กรณีมีมากกว่า 1 ที่อยู่ ·
+   * ถ้าจะแก้ต้องกลับไปแก้หน้า profile ลูกค้า"*. On a surface that only CONSUMES an
+   * address (the forwarder order), the "+ เพิ่มที่อยู่" form is hidden so the address
+   * book has exactly ONE place it is written — the customer profile. Surfaces that
+   * legitimately create an address (billing-run) leave this false.
+   */
+  selectOnly = false,
 }: {
   userid: string;
   addresses: CustomerAddressRow[];
@@ -54,6 +62,7 @@ export function CustomerAddressPicker({
   revalidate?: string;
   makeNewAddressDefault?: boolean;
   applyLabel?: string;
+  selectOnly?: boolean;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<CustomerAddressRow[]>(addresses);
@@ -115,7 +124,10 @@ export function CustomerAddressPicker({
   return (
     <div className="space-y-2">
       {rows.length === 0 && !adding && (
-        <p className="text-[11px] text-muted">ลูกค้ายังไม่มีที่อยู่บันทึกไว้ — กด “+ เพิ่มที่อยู่ให้ลูกค้า”</p>
+        <p className="text-[11px] text-muted">
+          {selectOnly
+            ? "ลูกค้ายังไม่มีที่อยู่บันทึกไว้ — เพิ่มที่หน้าโปรไฟล์ลูกค้าก่อน"
+            : "ลูกค้ายังไม่มีที่อยู่บันทึกไว้ — กด “+ เพิ่มที่อยู่ให้ลูกค้า”"}</p>
       )}
       {rows.length > 0 && (
         <ul className="space-y-1.5">
@@ -158,7 +170,7 @@ export function CustomerAddressPicker({
       )}
 
       {/* + add address for this customer */}
-      {!adding ? (
+      {selectOnly ? null : !adding ? (
         <button type="button" onClick={() => setAdding(true)} className="block text-xs font-medium text-sky-600 hover:underline">
           + เพิ่มที่อยู่ให้ลูกค้า
         </button>
