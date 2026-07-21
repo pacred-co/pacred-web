@@ -23,7 +23,7 @@ import { Phone, Mail, Globe, User } from "lucide-react";
 import { round2, type QuoteTotals } from "@/lib/quote/cargo-quote-calc";
 import { readThaiBaht } from "@/lib/utils/thai-number";
 import {
-  CUSTOMS_ADDON, QUOTE_HEADER, QUOTE_HOW_TO, FDA_SPECIAL_RATE, type PackageRate,
+  CUSTOMS_ADDON, QUOTE_HEADER, QUOTE_HOW_TO, type PackageRate,
 } from "@/lib/quote/cargo-promo-packages";
 
 export const QUOTE_LOGO = "/images/pacred-logo-red.png";
@@ -53,25 +53,19 @@ export type CompareRow = {
 };
 
 /**
- * อย.·พิเศษ = เรทเหมา FDA ล็อกทั้งระบบ (owner ปอน 2026-07-18) — 7,600 ฿/คิว·45 ฿/กก. (รถ) ·
- * 6,600 ฿/คิว·35 ฿/กก. (เรือ) · ทุกโกดัง/แพ็ก/ลูกค้า · override SVIP/ทั่วไป · ทั้งใบเก่า+ใหม่.
- * บังคับที่ทั้ง seed (ใบใหม่) และ render/serialize (ใบที่บันทึกไว้แล้ว) → ไม่ต้องแก้ DB.
+ * ⚠️ ถอด `lockFdaCompareRows` / `isFdaLockRow` ออกแล้ว (owner 2026-07-21
+ * "ทำให้สามารถแก้ราคาที่ล็อคไว้ได้ ก็คือแก้เรท อย. กับ พิเศษได้ แบบ ทั่วไป กับ มอก. เลย")
+ * — supersedes ปอน 2026-07-18 ที่บังคับ อย.·พิเศษ = 7,600/6,600 ทับทุกชั้น
+ * (SVIP/แพ็ก/เรททั่วไป) ทั้งตอน seed และตอน render/พิมพ์.
+ *
+ * ตอนนี้ อย.·พิเศษ เดินตาม waterfall เดียวกับ ทั่วไป·มอก.:
+ *   SVIP (tb_rate_custom_*) ▸ แพ็กเกจ ▸ เรททั่วไป (tb_rate_g_*) ▸ FDA_SPECIAL_RATE
+ * ค่าเริ่มต้นใหม่ = 7,500 ฿/คิว (รถ) · 6,500 ฿/คิว (เรือ) · ฿/กก. คงเดิม 45/35.
+ *
+ * 🔴 ผลข้างเคียงที่ตั้งใจ: ใบเสนอราคาที่ **บันทึกไว้ก่อนหน้า** จะกลับไปแสดงเรทที่เก็บไว้
+ * ใน payload จริงๆ แทนที่จะถูกบังคับเป็น 7,600/6,600 ตอนเปิดดู — ซึ่งตรงกับความจริง
+ * ของเอกสารมากกว่า (ใบเสนอราคา = หลักฐาน ณ วันที่ออก ไม่ควรถูกเขียนทับตอนแสดงผล).
  */
-export const FDA_LOCK_CATEGORY = "อย. · พิเศษ";
-export function isFdaLockRow(r: { category?: string }): boolean {
-  return (r.category ?? "").replace(/\s+/g, "") === FDA_LOCK_CATEGORY.replace(/\s+/g, "");
-}
-export function lockFdaCompareRows(rows: CompareRow[]): CompareRow[] {
-  return rows.map((r) =>
-    isFdaLockRow(r)
-      ? {
-          ...r,
-          truck: { ...r.truck, cbm: FDA_SPECIAL_RATE.truck.cbm, kg: FDA_SPECIAL_RATE.truck.kg },
-          ship: { ...r.ship, cbm: FDA_SPECIAL_RATE.ship.cbm, kg: FDA_SPECIAL_RATE.ship.kg },
-        }
-      : r,
-  );
-}
 
 /**
  * The complete render model — serialized into `customer_quotations.payload`.
@@ -225,10 +219,9 @@ function CompareTable({ model }: { model: QuoteModel }) {
           <tr><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">โกดัง</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ประเภทสินค้า</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ทางรถ 🚛</th><th className="px-2 sm:px-3 py-1.5 text-left font-semibold">ทางเรือ 🚢</th></tr>
         </thead>
         <tbody>
-          {lockFdaCompareRows(model.compareRows).map((r, i, arr) => {
+          {model.compareRows.map((r, i, arr) => {
             // Show the warehouse name only on the first row of each warehouse group
             // (the 2 category rows share it) — cleaner than repeating it.
-            // lockFdaCompareRows: อย.·พิเศษ = เรทเหมา FDA ล็อก (ครอบใบเก่าที่บันทึกไว้ · ปอน 2026-07-18).
             const showWh = i === 0 || arr[i - 1].warehouse !== r.warehouse;
             return (
               <tr key={i} className="border-t border-slate-100 align-top">
@@ -411,7 +404,7 @@ export function buildQuoteText(m: QuoteModel): string {
   L.push("");
   if (m.view === "compare") {
     L.push("เทียบราคา (บาท/คิว · บาท/กก. · ระยะเวลา):");
-    lockFdaCompareRows(m.compareRows).forEach((r) => {
+    m.compareRows.forEach((r) => {
       L.push(` • ${r.warehouse}${r.category ? ` · ${r.category}` : ""} · รถ ฿${BAHT(r.truck.cbm)}/คิว ฿${BAHT(r.truck.kg)}/กก. (${r.truck.days})`);
       L.push(`            เรือ ฿${BAHT(r.ship.cbm)}/คิว ฿${BAHT(r.ship.kg)}/กก. (${r.ship.days})`);
     });
@@ -453,7 +446,7 @@ export function buildPrintHtml(m: QuoteModel): string {
 
   let body = "";
   if (m.view === "compare") {
-    const rows = lockFdaCompareRows(m.compareRows)
+    const rows = m.compareRows
       .map((r, i, arr) => {
         const showWh = i === 0 || arr[i - 1].warehouse !== r.warehouse;
         return `<tr><td class="b">${showWh ? esc(r.warehouse) : ""}</td><td class="mut">${esc(r.category ?? "")}</td>

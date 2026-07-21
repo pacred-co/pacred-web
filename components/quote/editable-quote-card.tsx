@@ -23,7 +23,7 @@ import { CONTACT, ADDRESSES, BANK, SITE_LEGAL_NAME_TH, TAX_ID } from "@/componen
 import { round2, type QuoteTotals } from "@/lib/quote/cargo-quote-calc";
 import { readThaiBaht } from "@/lib/utils/thai-number";
 import { CUSTOMS_ADDON, QUOTE_HOW_TO } from "@/lib/quote/cargo-promo-packages";
-import { QUOTE_LOGO, isFdaLockRow, type QuoteModel, type DisplayLine, type CompareRow } from "./quote-paper";
+import { QUOTE_LOGO, type QuoteModel, type DisplayLine, type CompareRow } from "./quote-paper";
 
 const SELLER = {
   nameTh: SITE_LEGAL_NAME_TH,
@@ -423,7 +423,7 @@ function CompareEditor({ model, onChange, onSaveToRates, saveToRatesLabel, savin
           </thead>
           <tbody>
             {rows.map((r, i) => {
-              const locked = isFdaLockRow(r); // อย.·พิเศษ = เรทเหมา FDA ล็อก · แก้ไม่ได้ (ปอน 2026-07-18)
+              // อย.·พิเศษ แก้ได้แล้วเหมือน ทั่วไป·มอก. (owner 2026-07-21 · ปลดล็อกของ ปอน 2026-07-18)
               return (
               <tr key={i} className="border-t border-slate-100 align-top">
                 <td className="px-2 sm:px-3 py-2 font-semibold">
@@ -431,10 +431,10 @@ function CompareEditor({ model, onChange, onSaveToRates, saveToRatesLabel, savin
                 </td>
                 {/* ประเภท — read-only (it maps to the product columns for the write-back) */}
                 <td className="px-2 sm:px-3 py-2 text-[11px] font-medium text-slate-600 whitespace-nowrap">{r.category ?? "—"}</td>
-                <td className="px-2 sm:px-3 py-2">{locked ? <RateCellLocked r={r.truck} /> : <RateCellEdit r={r.truck} onChange={(c) => patchRate(i, "truck", c)} />}</td>
-                <td className="px-2 sm:px-3 py-2">{locked ? <RateCellLocked r={r.ship} /> : <RateCellEdit r={r.ship} onChange={(c) => patchRate(i, "ship", c)} />}</td>
+                <td className="px-2 sm:px-3 py-2"><RateCellEdit r={r.truck} onChange={(c) => patchRate(i, "truck", c)} /></td>
+                <td className="px-2 sm:px-3 py-2"><RateCellEdit r={r.ship} onChange={(c) => patchRate(i, "ship", c)} /></td>
                 <td className="px-1 py-2 text-center">
-                  {!locked && <button type="button" onClick={() => removeRow(i)} className="rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-500" title="ลบแถว"><Trash2 className="h-3.5 w-3.5" /></button>}
+                  <button type="button" onClick={() => removeRow(i)} className="rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-500" title="ลบแถว"><Trash2 className="h-3.5 w-3.5" /></button>
                 </td>
               </tr>
               );
@@ -482,19 +482,6 @@ function RateCellEdit({ r, onChange }: { r: CompareRow["truck"]; onChange: (c: P
         {/* fixed-width wrapper — TextInput is w-full, so this caps the days field */}
         <span className="inline-block w-[76px] shrink-0"><TextInput value={r.days} onChange={(v) => onChange({ days: v })} placeholder="ระยะเวลา" /></span>
       </span>
-    </div>
-  );
-}
-
-// อย.·พิเศษ = เรทเหมา FDA ล็อกทั้งระบบ (owner ปอน 2026-07-18) — read-only · แก้ไม่ได้.
-function RateCellLocked({ r }: { r: CompareRow["truck"] }) {
-  const b = (n: number) => n.toLocaleString("th-TH");
-  return (
-    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] leading-tight" title="เรท อย.·พิเศษ ล็อกทั้งระบบ · แก้ไม่ได้">
-      <span className="inline-flex items-center whitespace-nowrap font-mono font-bold" style={{ color: ACCENT }}>฿{b(r.cbm)}<span className="text-[10px] font-normal text-slate-400">/คิว</span></span>
-      <span className="inline-flex items-center whitespace-nowrap font-mono text-slate-600">฿{b(r.kg)}<span className="text-[10px] text-slate-400">/กก.</span></span>
-      <span className="text-[10px] text-slate-400">{r.days}</span>
-      <span className="text-[10px] text-slate-400" aria-label="ล็อก">🔒</span>
     </div>
   );
 }
