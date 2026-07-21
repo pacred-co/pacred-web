@@ -62,13 +62,12 @@ import {
   adminRemoveForwarderImage,
   adminUpdateForwarderTaxDocMode,
   adminPickForwarderAddress,
-  adminUpdateForwarderAddressDetails,
 } from "@/actions/admin/forwarders-field-edits";
 import { Link } from "@/i18n/navigation";
 import { adminSetForwarderBillToOverride } from "@/actions/admin/forwarders";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { confirm } from "@/components/ui/confirm";
-import { nameShipBy, carrierLabel } from "@/lib/freight/shipping-methods";
+import { carrierLabel } from "@/lib/freight/shipping-methods";
 import {
   THAI_PROVINCES,
   carriersForProvince,
@@ -1359,23 +1358,18 @@ export function EditDeliveryAddressField({
   userid,
   fshipby,
   addresses,
-  current,
 }: {
   fId: number;
   userid: string;
   fshipby: string | null;
   addresses: CustomerAddressRow[];
-  /** the order's CURRENT snapshot address (tb_forwarder.fAddress*) — seeds the inline editor. */
-  current: DeliveryAddr;
+  /** kept for caller compat; the inline free-text editor was removed 2026-07-21 (ภูม) —
+   *  addresses now come ONLY from the customer's linked address book (tb_address). */
+  current?: DeliveryAddr;
 }) {
   const { pending, err, run } = useEditor();
   const [editing, setEditing] = useState(false);
-  // mode: 'pick' = เลือกจากที่อยู่ลูกค้า · 'manual' = แก้ไขเอง (พิมพ์)
-  const [mode, setMode] = useState<"pick" | "manual">(addresses.length > 0 ? "pick" : "manual");
-  const [form, setForm] = useState<DeliveryAddr>(current);
   const isPcs = (fshipby ?? "").trim() === "PCS";
-  const set = (k: keyof DeliveryAddr) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
 
   // onPick from the reusable <CustomerAddressPicker> — confirm + snapshot via the
   // existing adminPickForwarderAddress (ownership+active-guarded · no new write path).
@@ -1388,12 +1382,6 @@ export function EditDeliveryAddressField({
     ))) return;
     run(() => adminPickForwarderAddress({ fId, addressId }), () => setEditing(false));
   }
-  async function onManualSave(close: () => void) {
-    if (!(await confirm(
-      `บันทึกที่อยู่จัดส่งที่แก้ไข ?\n\n${form.name} ${form.lastname} · ${form.province} ${form.zipcode}\n\n★ เก็บ/อัปเดตในสมุดที่อยู่ลูกค้า\n★ จำเป็นค่าเริ่มต้นสำหรับครั้งถัดไป\n• บริษัทขนส่ง + ค่าส่งในไทย จะจับตามจังหวัดให้อัตโนมัติ (แก้ได้)`,
-    ))) return;
-    run(() => adminUpdateForwarderAddressDetails({ fId, ...form }), close);
-  }
   async function onWarehouse(close: () => void) {
     if (!(await confirm(
       `เปลี่ยนเป็น "รับเองที่โกดัง Pacred" ?\n\n• บริษัทขนส่ง → รับเองโกดัง · ค่าส่งในไทย = ฿0\n• ที่อยู่จัดส่งจะเป็นที่อยู่โกดัง Pacred`,
@@ -1401,7 +1389,6 @@ export function EditDeliveryAddressField({
     run(() => adminUpdateForwarderShipBy({ fId, fShipBy: "PCS" }), close);
   }
 
-  const inp = "w-full rounded-lg border border-border bg-white dark:bg-surface px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
   return (
     <div className="mt-1.5">
@@ -1414,60 +1401,28 @@ export function EditDeliveryAddressField({
         <div className="space-y-2 text-left rounded-lg border border-border bg-surface-alt/40 p-2.5">
           {isPcs && (
             <p className="text-[11px] text-amber-700">
-              ℹ️ ตอนนี้เป็น <b>รับเองที่โกดัง</b> — เลือก/พิมพ์ที่อยู่จัดส่งได้เลย ระบบจะเปลี่ยนขนส่งให้อัตโนมัติ
+              ℹ️ ตอนนี้เป็น <b>รับเองที่โกดัง</b> — เลือกที่อยู่จัดส่งได้เลย ระบบจะเปลี่ยนขนส่งให้อัตโนมัติ
             </p>
           )}
-          {/* mode toggle */}
-          <div className="flex gap-1 text-xs">
-            {addresses.length > 0 && (
-              <button type="button" onClick={() => setMode("pick")}
-                className={`rounded-md px-2.5 py-1 font-medium ${mode === "pick" ? "bg-primary-500 text-white" : "border border-border hover:bg-surface"}`}>
-                เลือกจากที่อยู่ลูกค้า ({addresses.length})
-              </button>
-            )}
-            <button type="button" onClick={() => setMode("manual")}
-              className={`rounded-md px-2.5 py-1 font-medium ${mode === "manual" ? "bg-primary-500 text-white" : "border border-border hover:bg-surface"}`}>
-              แก้ไขเอง (พิมพ์)
-            </button>
+          {/* ที่อยู่จัดส่ง = จากสมุดที่อยู่ลูกค้าเท่านั้น (ภูม 2026-07-21 · ลบช่อง "แก้ไขเอง (พิมพ์)"
+              → ทุกที่อยู่ผ่าน tb_address = linked กับโปรไฟล์). เพิ่มใหม่ผ่าน "+ เพิ่มที่อยู่ให้ลูกค้า"
+              ในตัวเลือก หรือหน้าโปรไฟล์ลูกค้า. */}
+          <div className="space-y-1.5">
+            <CustomerAddressPicker
+              userid={userid}
+              addresses={addresses}
+              busy={pending}
+              revalidate={`/admin/forwarders/${fId}`}
+              makeNewAddressDefault
+              applyLabel="ใช้ที่อยู่นี้กับออเดอร์"
+              onPick={onPickApply}
+            />
+            <p className="text-[11px] text-muted">
+              เลือกจากสมุดที่อยู่ลูกค้า หรือกด <b>+ เพิ่มที่อยู่ให้ลูกค้า</b> ด้านบน (เพิ่ม/แก้ที่{" "}
+              <Link href={`/admin/customers/${encodeURIComponent(userid)}`} onClick={(e) => e.stopPropagation()} className="text-sky-600 hover:underline">หน้าโปรไฟล์ลูกค้า</Link>{" "}
+              ก็ได้ · linked กัน) · บริษัทขนส่ง + ค่าส่งในไทย จับตามจังหวัดให้อัตโนมัติ (แก้ได้)
+            </p>
           </div>
-
-          {mode === "pick" && addresses.length > 0 ? (
-            <div className="space-y-1.5">
-              <CustomerAddressPicker
-                userid={userid}
-                addresses={addresses}
-                busy={pending}
-                revalidate={`/admin/forwarders/${fId}`}
-                makeNewAddressDefault
-                applyLabel="ใช้ที่อยู่นี้กับออเดอร์"
-                onPick={onPickApply}
-              />
-              <p className="text-[11px] text-muted">บริษัทขนส่ง + ค่าส่งในไทย จับตามจังหวัดของที่อยู่ให้อัตโนมัติ (แก้ได้ที่ช่องบริษัทขนส่ง)</p>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <div className="grid grid-cols-2 gap-1.5">
-                <input className={inp} placeholder="ชื่อ" value={form.name} onChange={set("name")} />
-                <input className={inp} placeholder="นามสกุล" value={form.lastname} onChange={set("lastname")} />
-              </div>
-              <input className={inp} placeholder="บ้านเลขที่ / ที่อยู่" value={form.addressno} onChange={set("addressno")} />
-              <div className="grid grid-cols-2 gap-1.5">
-                <input className={inp} placeholder="ตำบล/แขวง" value={form.subdistrict} onChange={set("subdistrict")} />
-                <input className={inp} placeholder="อำเภอ/เขต" value={form.district} onChange={set("district")} />
-              </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                <input className={inp} placeholder="จังหวัด" value={form.province} onChange={set("province")} />
-                <input className={inp} placeholder="ไปรษณีย์" value={form.zipcode} onChange={set("zipcode")} inputMode="numeric" maxLength={5} />
-              </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                <input className={inp} placeholder="เบอร์โทร" value={form.tel} onChange={set("tel")} inputMode="numeric" maxLength={10} />
-                <input className={inp} placeholder="เบอร์สำรอง" value={form.tel2} onChange={set("tel2")} inputMode="numeric" maxLength={10} />
-              </div>
-              <input className={inp} placeholder="หมายเหตุ" value={form.note} onChange={set("note")} />
-              <p className="text-[11px] text-muted">พิมพ์แก้ที่อยู่ได้ตรงนี้ · ระบบเก็บ/อัปเดตในสมุดที่อยู่และจำเป็นค่าเริ่มต้นครั้งถัดไป · บริษัทขนส่ง + ค่าส่ง จับตามจังหวัดให้อัตโนมัติ (แก้ได้)</p>
-              <button type="button" disabled={pending} className={btnSave} onClick={() => onManualSave(() => setEditing(false))}>บันทึกที่อยู่</button>
-            </div>
-          )}
 
           <div className="flex items-center gap-2 border-t border-border pt-2">
             <button type="button" disabled={pending || isPcs} className="rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
