@@ -7,6 +7,8 @@
 
 ## 🔢 NEXT FREE NUMBER = **0269**
 
+> ⚠️ **2026-07-21 (เดฟ · MOMO invoice provenance): 0267** = `momo_invoice_line` — append-only invoice-line provenance used to show cabinet billing coverage without changing money/status. **✅ APPLIED + VERIFIED PROD** (table + 3 indexes + RLS; 0 rows at verification) · **⏸ DEV PAUSED** per Dave save-point, to be reconciled with the other pending DEV migrations. This number is occupied and must not be reused.
+
 > ⏳ **2026-07-21 (Codex · ฝากสั่งซื้อ→ฝากนำเข้า single spine): 0268** = `shop_order_import_single_spine` — renumbered after Dave landed/applied `0267_momo_invoice_line`; consolidates the drifted 0259/0264 shop-status rules into `derive_shop_order_status` + one guarded writer; tokenises comma tracking bags, matches every active MOMO `-N[/M]` box by same-user base, excludes cancelled rows, handles rollback/delete/relink, removes the duplicate tb_order trigger, stamps `hdate5`, and adds the canonical `get_linked_shop_forwarders(hno)` read function used by member/admin. **BRANCH ONLY · NOT APPLIED DEV/PROD** — Dave must review then apply migration before/with the code deployment. STATUS/LINK ONLY; no money mutation.
 
 > ✅ **2026-06-23 (เดฟ-on-InwPond007 · CMS tags): 0206** = `cms_articles_tags` — additive `tags text[] not null default '{}'` + GIN index. Free-form tags (HS code · product category) → on /our-work a clickable tag filter bar (`?tag=…` · `tags @> {tag}`). **✅ dev applied · ⏳ PROD owner-apply** (with 0204/0205). Idempotent. Code degrades gracefully (mapRow defaults to []).

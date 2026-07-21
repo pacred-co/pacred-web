@@ -2,7 +2,7 @@
 
 วันที่ตรวจ: 2026-07-21  
 ผู้ตรวจ/ผู้แก้: Codex (`codex`)  
-ฐานงานเริ่มต้น: `84bc38e2` ซึ่งตรงกับ `origin/dave-pacred` ตอนเริ่มตรวจ  
+ฐานงานเริ่มต้น: `84bc38e2` ซึ่งตรงกับ `origin/dave-pacred` ตอนเริ่มตรวจ; ก่อนปิดงาน sync และ merge ฐานล่าสุดของ Dave ที่ `33b30dd1` แล้ว
 ขอบเขต: member checkout → admin ตั้งราคา/รับชำระ/สั่งร้าน → สร้างงานฝากนำเข้า → จีนรับเข้า/ผูกตู้/ถึงไทย → member/admin อ่านสถานะและข้อมูลชุดเดียวกัน
 
 ## Executive result
@@ -86,8 +86,8 @@ admin ตั้งราคา       2 รอชำระ
 
 ผ่าน:
 
-- `pnpm test:shop-order-spine` — 40 admin workflow checks + status/migration/handoff/payment suites ผ่านทั้งหมด
-- `pnpm test:unit` — ชุด unit ทั้งโปรเจกต์ผ่าน (exit 0)
+- `pnpm test:shop-order-spine` — 41 admin workflow checks + status/migration/handoff/payment suites ผ่านทั้งหมดบนฐาน Dave ล่าสุด
+- `pnpm test:unit` — ชุด unit ทั้งโปรเจกต์ รวม `cabinet-billing-coverage` ที่มากับ Dave ล่าสุด ผ่าน (exit 0)
 - `pnpm typecheck` — ผ่าน (exit 0)
 - ESLint เฉพาะไฟล์ที่เปลี่ยน — 0 errors, 0 warnings
 - `git diff --check` — ผ่าน
@@ -123,3 +123,10 @@ admin ตั้งราคา       2 รอชำระ
 3. Deploy application commit จาก `codex` เข้า integration branch ตามขั้นตอนทีม
 4. ตรวจ data-health สำหรับ header 4/40/5 ที่ derive ไม่ตรง แล้วแก้เฉพาะ anomaly ที่ owner อนุมัติ
 5. ยังไม่ merge/push `main` จนกว่าจะได้รับ Confirm
+
+## Branch handoff
+
+- งานทั้งหมดอยู่บน `codex` และ sync `origin/dave-pacred@33b30dd1` แล้ว
+- `main` และ `dave-pacred` ไม่ถูก push/เขียนทับ
+- `0267_momo_invoice_line` ของ Dave: applied/verified PROD, DEV paused ตาม save-point
+- `0268_shop_order_import_single_spine`: branch-only, ยังไม่ apply DEV/PROD; next free migration = `0269`
