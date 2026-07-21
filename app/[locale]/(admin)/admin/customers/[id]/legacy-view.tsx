@@ -851,13 +851,13 @@ export async function renderLegacyCustomerView(
                     <div className="flex flex-col gap-1">
                       <Link
                         href={`/admin/service-orders/${encodeURIComponent(r.hno ?? String(r.id))}`}
-                        className="inline-block rounded-md border border-green-200 text-green-700 px-2.5 py-1 text-[11px] hover:bg-green-50 text-center"
+                        className="inline-block rounded-md bg-green-600 text-white border border-green-700 px-2.5 py-1 text-[11px] font-semibold hover:bg-green-700 text-center"
                       >
                         ดูรายละเอียด
                       </Link>
                       <Link
                         href={`/admin/service-orders/${encodeURIComponent(r.hno ?? String(r.id))}`}
-                        className="inline-block rounded-md bg-amber-400 text-white px-2.5 py-1 text-[11px] hover:bg-amber-500 text-center"
+                        className="inline-block rounded-md bg-amber-500 text-white border border-amber-600 px-2.5 py-1 text-[11px] font-semibold hover:bg-amber-600 text-center"
                       >
                         อัปเดตรายการ
                       </Link>
@@ -984,13 +984,13 @@ export async function renderLegacyCustomerView(
                       <div className="flex flex-col gap-1">
                         <Link
                           href={`/admin/forwarders/${r.id}`}
-                          className="inline-block rounded-md border border-green-200 text-green-700 px-2.5 py-1 text-[11px] hover:bg-green-50 text-center"
+                          className="inline-block rounded-md bg-green-600 text-white border border-green-700 px-2.5 py-1 text-[11px] font-semibold hover:bg-green-700 text-center"
                         >
                           ดูรายละเอียด
                         </Link>
                         <Link
                           href={`/admin/forwarders/${r.id}`}
-                          className="inline-block rounded-md bg-amber-400 text-white px-2.5 py-1 text-[11px] hover:bg-amber-500 text-center"
+                          className="inline-block rounded-md bg-amber-500 text-white border border-amber-600 px-2.5 py-1 text-[11px] font-semibold hover:bg-amber-600 text-center"
                         >
                           อัปเดตรายการ
                         </Link>
@@ -1054,7 +1054,7 @@ export async function renderLegacyCustomerView(
                   <Td>
                     <Link
                       href={`/admin/yuan-payments/${r.id}`}
-                      className="inline-block rounded-md bg-amber-400 text-white px-2.5 py-1 text-[11px] hover:bg-amber-500"
+                      className="inline-block rounded-md bg-amber-500 text-white border border-amber-600 px-2.5 py-1 text-[11px] font-semibold hover:bg-amber-600"
                     >
                       แก้ไข/ดูรายละเอียด
                     </Link>
