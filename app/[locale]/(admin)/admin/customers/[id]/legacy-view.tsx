@@ -45,6 +45,8 @@ import { getCustomerMarginSummary } from "@/actions/admin/customer-margin";
 // Legacy status vocabularies (D1 faithful-port SOT) — Thai labels for the
 // single-char tb_* status codes the order tables show.
 import { legacyOrderStatusThai, legacyForwarderStatusThai } from "@/lib/legacy-status-map";
+import { carrierLabel } from "@/lib/freight/shipping-methods";
+import { fstatusBadge } from "@/lib/admin/forwarder-status";
 import { CustomerRateEditor } from "./rate-editor";
 import { CustomerMarginPanel } from "./customer-margin-panel";
 import { HardDeletePanel } from "./hard-delete-panel";
@@ -247,9 +249,6 @@ function whsStatusTone(code: string | null): PillTone {
 }
 function orderStatusTone(code: string | null): PillTone {
   return code === "5" ? "green" : code === "6" ? "red" : code === "2" ? "amber" : "blue";
-}
-function forwarderStatusTone(code: string | null): PillTone {
-  return code === "7" ? "green" : code === "5" ? "amber" : "blue";
 }
 
 export async function renderLegacyCustomerView(
@@ -959,12 +958,21 @@ export async function renderLegacyCustomerView(
                       <div className="text-[11px] text-muted">{r.famount ?? 0} กล่อง</div>
                     </Td>
                     <Td>
-                      {r.fshipby ? <div className="text-[11px]">{r.fshipby}</div> : null}
+                      {r.fshipby ? <div className="text-[11px]">{carrierLabel(r.fshipby)}</div> : null}
                       {r.ftrackingth ? <div className="font-mono text-[11px]">{r.ftrackingth}</div> : null}
                       {addr ? <div className="text-[11px] text-muted max-w-[200px] break-words">{addr}</div> : null}
                     </Td>
                     <Td>
-                      <StatusPill label={legacyForwarderStatusThai(r.fstatus) || "-"} tone={forwarderStatusTone(r.fstatus)} />
+                      {/* สถานะ — platform SOT chip (สีต่อสถานะชัด: เหลือง/ฟ้า/ชมพู/น้ำตาล/แดง/
+                          น้ำเงิน/เขียว) เหมือนหน้ารายงานตู้ · เดิมฟ้าเหมาโหล (ภูม 2026-07-21). */}
+                      {(() => {
+                        const b = fstatusBadge(r.fstatus ?? "");
+                        return (
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] ${b.chip}`}>
+                            {legacyForwarderStatusThai(r.fstatus) || b.label || "-"}
+                          </span>
+                        );
+                      })()}
                     </Td>
                     <Td>
                       <div className="text-[11px] text-muted whitespace-nowrap">
