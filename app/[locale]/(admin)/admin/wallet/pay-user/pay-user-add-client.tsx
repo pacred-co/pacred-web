@@ -65,6 +65,11 @@ function thb(n: number): string {
   })}`;
 }
 
+/** ขนาดกล่อง กว้าง×ยาว×สูง (ซม.) — "—" when no dimension is set (owner ปอน 2026-07-22). */
+function dimsLabel(w: number, l: number, h: number): string {
+  return w > 0 || l > 0 || h > 0 ? `${w}×${l}×${h}` : "—";
+}
+
 type KeyType = "1" | "2"; // 1 = ฝากสั่งซื้อ · 2 = ฝากนำเข้า (default)
 
 type PayResultBanner =
@@ -1361,7 +1366,7 @@ function PayModal({
         </p>
         {/* ตาราง — จอคอม (lg+) */}
         <div className="hidden overflow-x-auto scrollbar-x-visible lg:block">
-          <table className="w-full min-w-[720px] border-collapse text-[12px] [&_td]:border [&_td]:border-gray-200 [&_th]:border [&_th]:border-gray-200">
+          <table className="w-full min-w-[1020px] border-collapse text-[12px] [&_td]:border [&_td]:border-gray-200 [&_th]:border [&_th]:border-gray-200">
             <thead>
               <tr className="bg-gray-100 text-[11px] font-semibold text-gray-700">
                 <th className="px-2 py-2">ลำดับ</th>
@@ -1369,9 +1374,13 @@ function PayModal({
                 {keyType === "2" ? (
                   <>
                     <th className="px-2 py-2">เลขแทรกกิ้ง</th>
-                    <th className="px-2 py-2">ประเภท</th>
+                    <th className="px-2 py-2">เลขตู้</th>
+                    <th className="px-2 py-2">ขนส่ง</th>
                     <th className="px-2 py-2">จำนวน</th>
-                    <th className="px-2 py-2">น้ำหนัก / CBM</th>
+                    <th className="px-2 py-2">น้ำหนัก (กก.)</th>
+                    <th className="px-2 py-2">ปริมาตร (CBM)</th>
+                    <th className="px-2 py-2">ขนาด (ก×ย×ส ซม.)</th>
+                    <th className="px-2 py-2">ประเภท</th>
                     <th className="px-2 py-2 text-right">ค่านำส่ง</th>
                     <th className="px-2 py-2 text-right">ค่าส่งเหมาๆ</th>
                     <th className="px-2 py-2 text-right">อื่นๆ</th>
@@ -1389,12 +1398,13 @@ function PayModal({
                       <td className="px-2 py-1.5 text-center text-gray-500">{i + 1}</td>
                       <td className="px-2 py-1.5 font-mono font-semibold text-gray-900">{r.fid}</td>
                       <td className="px-2 py-1.5 font-mono text-[11px] text-gray-600">{r.ftrackingchn ?? "—"}</td>
+                      <td className="px-2 py-1.5 font-mono text-[11px] text-gray-700">{r.fcabinetnumber ?? "—"}</td>
                       <td className="px-2 py-1.5 text-center">{r.transport_label || "—"}</td>
                       <td className="px-2 py-1.5 text-center">{r.boxes > 0 ? r.boxes : "—"}</td>
-                      <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">
-                        {r.weight > 0 ? `${r.weight} กก.` : "—"}
-                        {r.cbm > 0 ? ` / ${r.cbm}` : ""}
-                      </td>
+                      <td className="px-2 py-1.5 text-center font-mono text-[11px] text-gray-600 tabular-nums">{r.weight > 0 ? r.weight : "—"}</td>
+                      <td className="px-2 py-1.5 text-center font-mono text-[11px] text-gray-600 tabular-nums">{r.cbm > 0 ? r.cbm : "—"}</td>
+                      <td className="px-2 py-1.5 text-center font-mono text-[11px] text-gray-600">{dimsLabel(r.fwidth, r.flength, r.fheight)}</td>
+                      <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">{r.products_type_label || "—"}</td>
                       <td className="px-2 py-1.5 text-right font-mono tabular-nums">{fmt2(r.breakdown.freight)}</td>
                       <td className="px-2 py-1.5 text-right font-mono tabular-nums text-sky-600">{fmt2(r.breakdown.maoFee)}</td>
                       <td className="px-2 py-1.5 text-right font-mono tabular-nums">{fmt2(r.breakdown.otherCharges)}</td>
@@ -1430,9 +1440,24 @@ function PayModal({
                             Tracking <span className="font-mono">{r.ftrackingchn}</span>
                           </div>
                         )}
+                        {r.fcabinetnumber && (
+                          <div className="text-[11px] text-gray-500">
+                            เลขตู้ <span className="font-mono text-gray-700">{r.fcabinetnumber}</span>
+                          </div>
+                        )}
+                        {(r.fwidth > 0 || r.flength > 0 || r.fheight > 0) && (
+                          <div className="text-[11px] text-gray-500">
+                            ขนาด <span className="font-mono">{dimsLabel(r.fwidth, r.flength, r.fheight)}</span> ซม.
+                          </div>
+                        )}
                         {r.transport_label && (
                           <span className="mt-0.5 inline-block rounded bg-teal-500 px-1.5 py-0.5 text-[10px] font-medium text-white">
                             {r.transport_label}
+                          </span>
+                        )}
+                        {r.products_type_label && (
+                          <span className="mt-0.5 ml-1 inline-block rounded bg-slate-400 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                            {r.products_type_label}
                           </span>
                         )}
                       </div>

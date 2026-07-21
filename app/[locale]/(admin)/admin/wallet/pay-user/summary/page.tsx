@@ -88,6 +88,10 @@ type FwRow = {
   fvolume: number | string | null;
   fweight: number | string | null;
   ftrackingchn: string | null;
+  fcabinetnumber: string | null;
+  fwidth: number | string | null;
+  flength: number | string | null;
+  fheight: number | string | null;
   userid: string | null;
   fproductstype: string | null;
   fwarehousechina: string | null;
@@ -142,7 +146,7 @@ export default async function PaymentSummaryPage({
   const { data: fwData, error: fwErr } = await admin
     .from("tb_forwarder")
     .select(
-      "id, paymethod, fpriceupdate, fshippingservice, ftransportpricechnthb, pricecrate, priceother, fdiscount, ftotalprice, ftransportprice, fshipby, famount, fvolume, fweight, ftrackingchn, userid, fproductstype, fwarehousechina, ftransporttype, frefrate",
+      "id, paymethod, fpriceupdate, fshippingservice, ftransportpricechnthb, pricecrate, priceother, fdiscount, ftotalprice, ftransportprice, fshipby, famount, fvolume, fweight, ftrackingchn, fcabinetnumber, fwidth, flength, fheight, userid, fproductstype, fwarehousechina, ftransporttype, frefrate",
     )
     .in("id", fids);
   if (fwErr) {
@@ -210,11 +214,15 @@ export default async function PaymentSummaryPage({
     no: idx + 1,
     orderNo: String(r.id),
     tracking: (r.ftrackingchn ?? "").slice(0, 30),
+    cabinet: (r.fcabinetnumber ?? "").trim(),
     transport: TRANSPORT_LABEL[String(r.ftransporttype ?? "")] ?? "-",
     fromCity: CITY_LABEL[String(r.fwarehousechina ?? "")] ?? "-",
     boxes: num(r.famount),
     weight: num(r.fweight),
     volume: num(r.fvolume),
+    width: num(r.fwidth),
+    length: num(r.flength),
+    height: num(r.fheight),
     productType: PRODUCT_TYPE_LABEL[String(r.fproductstype ?? "")] ?? "-",
     rate: num(r.frefrate),
     amount: num(r.ftotalprice),
