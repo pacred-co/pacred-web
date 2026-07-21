@@ -545,7 +545,33 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
       const res = await propagateMomoLiveStatusNow();
       if (res.ok && res.data) {
         const s = res.data;
-        setLiveMsg(`✅ ดึง Live สำเร็จ · อัปเดตสถานะ ${s.summary.advanced} · เติมข้อมูล(เข้าระบบแล้ว) ${s.data.filled} · เติมข้อมูล(ยังไม่นำเข้า) ${s.staging.filled} · เลขตู้ ${s.cabinet.filled} · แตกกล่อง ${s.boxSplit.split}`);
+        // owner 2026-07-21 "สรุปมันได้หรือไม่ได้ครับ เข้าหรือไม่เข้า" — ข้อความเดิมโชว์
+        // แต่ตัวเลข "เติม N" ล้วนๆ → พอ MOMO ยังไม่มีข้อมูลให้เติม (พัสดุยังไม่ถึงโกดังจีน)
+        // มันขึ้น 0 ทุกช่อง อ่านแล้วเหมือน "ดึงไม่ติด" ทั้งที่ login+scrape สำเร็จ.
+        // §0g: ต้องพิสูจน์ตัวเองได้ → โชว์ boardsFetched/parcelsSeen (= หลักฐานว่าเข้า
+        // เว็บ MOMO ได้จริงและอ่านมากี่รายการ) + อธิบายเหตุผลของ 0 + จำนวน error.
+        const touched =
+          s.summary.advanced + s.data.filled + s.staging.filled + s.cabinet.filled + s.boxSplit.split;
+        const proof = `อ่านจาก MOMO ${s.summary.parcelsSeen} รายการ (${s.summary.boardsFetched} บอร์ด) · จับคู่กับระบบเรา ${s.summary.matched}`;
+        const detail = `อัปเดตสถานะ ${s.summary.advanced} · เติมข้อมูล(เข้าระบบแล้ว) ${s.data.filled} · เติมข้อมูล(ยังไม่นำเข้า) ${s.staging.filled} · เลขตู้ ${s.cabinet.filled} · แตกกล่อง ${s.boxSplit.split}`;
+        const errN = s.summary.errors.length;
+        if (s.summary.parcelsSeen === 0) {
+          // scrape ไม่ได้ข้อมูลเลย = ผิดปกติจริง (login พัง / บอร์ดว่าง / MOMO เปลี่ยนหน้า)
+          setLiveMsg(
+            `⚠️ ดึง Live แล้ว แต่ MOMO ไม่ส่งรายการกลับมาเลย (0 รายการ / ${s.summary.boardsFetched} บอร์ด)` +
+            `${errN > 0 ? ` · error ${errN} จุด` : ""} — เช็ค MOMO_WEB_USER/PASS หรือลองเปิดเว็บ MOMO ดูว่าล็อกอินได้ไหม`,
+          );
+        } else if (touched === 0) {
+          // scrape ได้จริง แต่ไม่มีอะไรให้เขียน = ปกติ (ข้อมูลตรงกันแล้ว หรือ MOMO เองยังไม่มีค่า)
+          setLiveMsg(
+            `✅ ดึง Live สำเร็จ · ${proof} — แต่ยังไม่มีอะไรให้อัปเดต (0 รายการ): ` +
+            `ข้อมูลตรงกับ MOMO อยู่แล้ว หรือ MOMO เองยังไม่ได้ชั่ง/วัด/ผูกตู้ให้ ` +
+            `(พัสดุที่สถานะ "รอต้นทางส่งเข้าโกดัง" MOMO ยังไม่มีน้ำหนัก-คิว จึงเติมไม่ได้ ต้องรอ MOMO รับของเข้าโกดังก่อน)` +
+            `${errN > 0 ? ` · ⚠️ error ${errN} จุด` : ""}`,
+          );
+        } else {
+          setLiveMsg(`✅ ดึง Live สำเร็จ · ${proof} → ${detail}${errN > 0 ? ` · ⚠️ error ${errN} จุด` : ""}`);
+        }
         startTransition(() => router.refresh());
       } else {
         setLiveMsg(res.ok ? "ดึง Live เสร็จ" : `⚠️ ดึง Live ไม่สำเร็จ: ${res.error}`);
@@ -1457,6 +1483,21 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                   <div>
                     <div className="mb-1 text-[11px] font-semibold text-amber-700">📋 รายการที่ข้อมูลยังไม่ครบ (Live จะเติมให้ถ้า MOMO มี) — {incompleteRows.length} รายการ:</div>
                     {previewTable(incompleteRows)}
+                    {/* owner 2026-07-21 "สรุปมันได้หรือไม่ได้" — แถวที่ MOMO ยังไม่รับของเข้า
+                        โกดัง (รอต้นทางส่ง / รอเข้าโกดัง) MOMO ยังไม่ได้ชั่ง-วัด → กด Live กี่ครั้ง
+                        ก็เติมไม่ได้ ไม่ใช่ระบบพัง. บอกล่วงหน้าตรงนี้ ก่อนพนักงานกดแล้วงงว่าทำไม 0. */}
+                    {(() => {
+                      const notYetAtWarehouse = incompleteRows.filter((r) =>
+                        /รอต้นทาง|รอเข้าโกดัง|ยังไม่เข้าโกดัง/.test(r.adminStatusText ?? ""),
+                      ).length;
+                      if (notYetAtWarehouse === 0) return null;
+                      return (
+                        <div className="mt-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-700">
+                          ℹ️ ใน {incompleteRows.length} รายการนี้ มี <b>{notYetAtWarehouse} รายการที่ MOMO ยังไม่รับของเข้าโกดัง</b> —
+                          MOMO ยังไม่ได้ชั่งน้ำหนัก/วัดคิว กด Live ตอนนี้จะยังเติมไม่ได้ (ไม่ใช่ระบบพัง) ต้องรอ MOMO รับของก่อน
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
                 <div className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-800">กดยืนยัน → login เว็บ MOMO สด → อัปเดตสถานะ + เติม น้ำหนัก/คิว/จำนวน ที่ยังว่าง ทั้งแถวที่เข้าระบบแล้ว (tb_forwarder) และยังไม่นำเข้า (staging · ข้ามบิลแล้ว · ไม่ทับค่าที่มี). ใช้เวลาสักครู่.</div>
