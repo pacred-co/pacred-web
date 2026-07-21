@@ -589,6 +589,133 @@ const CHECKS: CheckDef[] = [
     },
   },
   {
+    id: "priced_not_queued",
+    title: "ถึงไทย+ตั้งราคาแล้ว แต่ไม่เข้าคิวตรวจสอบ/ยังไม่ออกบิล เกิน 3 วัน (เงินค้างมองไม่เห็น)",
+    severity: "warn",
+    why:
+      "แถว fstatus=4 (ถึงไทยแล้ว) ที่มีราคาแล้ว (ftotalprice>0) แต่ไม่มีใครกด 'เพิ่มในรายการตรวจสอบ' " +
+      "ที่ report-cnt → ไม่เข้าคิวตรวจสอบ + ยังไม่ออกใบวางบิล = รายได้ที่ค้างอยู่แต่มองไม่เห็น " +
+      "(arrived_status_stuck จับแค่สถานะ 1-3 · ตัวนี้อุดช่วง 4-ที่ราคาพร้อมเก็บแล้ว). แยก 2 สาเหตุ 2 งาน คนละคน: " +
+      "(ก) มีที่อยู่แล้ว รอคนติ๊กเข้าคิว · (ข) ยังไม่มีที่อยู่จัดส่ง → address gate บล็อกเข้าคิว",
+    action:
+      "(ก) 'รอคนติ๊กเข้าคิวตรวจสอบ' → บัญชี/CS กด 'เพิ่มในรายการตรวจสอบ' ที่ /admin/report-cnt แล้วเก็บเงินตาม loop · " +
+      "(ข) 'ยังไม่มีที่อยู่จัดส่ง' → โกดัง/CS ตั้งที่อยู่จัดส่ง/เลือกขนส่ง ที่หน้ารายละเอียดออเดอร์ก่อน (กันค่าส่งไทยตกตอนวางบิล)",
+    run: async (admin) => {
+      // Self-contained — needs fdatestatus4 / faddress / fshipby that the shared
+      // scan doesn't carry, and the fstatus=4 set is tiny (~100 rows).
+      const rows4: Array<{
+        id: number; fidorco: string; userid: string; ftotalprice: number;
+        fdatestatus4: string; faddressprovince: string; faddresszipcode: string; fshipby: string;
+      }> = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await admin
+          .from("tb_forwarder")
+          .select("id, fidorco, userid, ftotalprice, fdatestatus4, faddressprovince, faddresszipcode, fshipby")
+          .eq("fstatus", "4")
+          .range(from, from + 999);
+        if (error) throw new Error(`tb_forwarder fstatus=4 scan: ${error.code} ${error.message}`);
+        for (const r of (data ?? []) as Array<Record<string, unknown>>) {
+          rows4.push({
+            id: Number(r.id), fidorco: str(r.fidorco), userid: str(r.userid),
+            ftotalprice: num(r.ftotalprice), fdatestatus4: str(r.fdatestatus4),
+            faddressprovince: str(r.faddressprovince), faddresszipcode: str(r.faddresszipcode),
+            fshipby: str(r.fshipby),
+          });
+        }
+        if ((data ?? []).length < 1000) break;
+      }
+      const priced = rows4.filter((r) => r.ftotalprice > 0);
+      if (priced.length === 0) return { count: 0, sample: [] };
+      // (1) already on the ตรวจตู้ check-queue?
+      const queued = new Set<number>();
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await admin.from("tb_check_forwarder").select("fID").range(from, from + 999);
+        if (error) throw new Error(`tb_check_forwarder scan: ${error.code} ${error.message}`);
+        for (const r of (data ?? []) as Array<{ fID: number }>) queued.add(Number(r.fID));
+        if ((data ?? []).length < 1000) break;
+      }
+      // (2) already on a non-cancelled invoice? (defensive — a 4-row shouldn't be)
+      const candIds = priced.map((r) => r.id);
+      const billed = new Set<number>();
+      for (let i = 0; i < candIds.length; i += 200) {
+        const { data: items, error } = await admin
+          .from("tb_forwarder_invoice_item")
+          .select("forwarder_id, invoice_id")
+          .in("forwarder_id", candIds.slice(i, i + 200));
+        if (error) throw new Error(`tb_forwarder_invoice_item: ${error.code} ${error.message}`);
+        const invIds = [...new Set((items ?? []).map((x) => (x as { invoice_id: number }).invoice_id))];
+        const active = new Set<number>();
+        for (let j = 0; j < invIds.length; j += 200) {
+          const { data: invs, error: e2 } = await admin
+            .from("tb_forwarder_invoice").select("id, status").in("id", invIds.slice(j, j + 200));
+          if (e2) throw new Error(`tb_forwarder_invoice: ${e2.code} ${e2.message}`);
+          for (const v of (invs ?? []) as Array<{ id: number; status: string | null }>) {
+            if (str(v.status) !== "cancelled") active.add(v.id);
+          }
+        }
+        for (const it of (items ?? []) as Array<{ forwarder_id: number; invoice_id: number }>) {
+          if (active.has(it.invoice_id)) billed.add(it.forwarder_id);
+        }
+      }
+      // aged ≥3 days on the fstatus-4 stamp (same date-slice idiom as arrived_status_stuck).
+      const cutoff = new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+      const out: Array<Record<string, unknown>> = [];
+      for (const r of priced) {
+        if (queued.has(r.id) || billed.has(r.id)) continue;
+        const d = r.fdatestatus4;
+        if (!d || d === "0000-00-00" || d.slice(0, 10) > cutoff) continue; // not yet aged
+        // self-pickup (fshipby='PCS') has no domestic leg → counts as "has address"
+        // (mirrors the report-cnt address gate exemption exactly).
+        const hasAddr = r.fshipby === "PCS" || r.faddressprovince !== "" || r.faddresszipcode !== "";
+        out.push({
+          id: r.id, fidorco: r.fidorco || `#${r.id}`, userid: r.userid,
+          price: r.ftotalprice, arrived: d,
+          reason: hasAddr ? "รอคนติ๊กเข้าคิวตรวจสอบ" : "ยังไม่มีที่อยู่จัดส่ง (address gate บล็อก)",
+        });
+      }
+      out.sort((a, b) => String(a.arrived).localeCompare(String(b.arrived))); // oldest first
+      return { count: out.length, sample: cap(out) };
+    },
+  },
+  {
+    id: "ttw_staged_uncommitted",
+    title: "TTW/อี้อู แพคกิ้งค้าง staging ยังไม่ทำเป็นรายการเก็บเงิน (งานค้าง owner เคาะ)",
+    severity: "info",
+    why:
+      "ttw_packing_line staged จากใบแพคกิ้ง TTW/อี้อู แต่ยังไม่ commit เป็นแถว tb_forwarder ที่ billable " +
+      "(committed_forwarder_id ยังว่าง) → ชิปเม้น TTW-only ที่ถึงไทยจะไม่โผล่ใน loop เก็บเงินเลย. " +
+      "ยังไม่มี TTW→tb_forwarder committer โดยตั้งใจ (owner 2026-07-18 'เดี๋ยวไปกรุ๊ปรวมอีกที' · money/identity-heavy) " +
+      "= งานค้างที่รู้อยู่แล้ว ไม่ใช่ระบบพัง (จึงเป็น info ไม่ใช่ red)",
+    action:
+      "CS จับกลุ่มตามตู้ + ใส่ PR ที่ /admin/api-forwarder-ttw → แล้ว commit เป็นแถว billable (ขั้น owner-gated · " +
+      "ห้าม cron สร้างเอง) — check นี้แค่โชว์ขนาดงานค้างไว้ให้ไม่หลุด (นับแถวที่ยังไม่ commit · แจกแจงตามตู้)",
+    run: async (admin) => {
+      const byCab = new Map<string, { lines: number; assigned: number }>();
+      let uncommitted = 0;
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await admin
+          .from("ttw_packing_line")
+          .select("container_no, member_code")
+          .is("committed_forwarder_id", null)
+          .range(from, from + 999);
+        if (error) throw new Error(`ttw_packing_line scan: ${error.code} ${error.message}`);
+        for (const r of (data ?? []) as Array<{ container_no: string | null; member_code: string | null }>) {
+          uncommitted++;
+          const c = str(r.container_no) || "—";
+          const cur = byCab.get(c) ?? { lines: 0, assigned: 0 };
+          cur.lines += 1;
+          if (str(r.member_code) !== "") cur.assigned += 1; // มี PR แล้ว รอ commit
+          byCab.set(c, cur);
+        }
+        if ((data ?? []).length < 1000) break;
+      }
+      const sample = [...byCab.entries()]
+        .sort((a, b) => b[1].lines - a[1].lines)
+        .map(([container, v]) => ({ container, stagedLines: v.lines, prAssigned: v.assigned }));
+      return { count: uncommitted, sample: cap(sample) };
+    },
+  },
+  {
     id: "dispatch_blocked_g6",
     title: "เตรียมส่ง (6) + paydeposit=1 → หายจากคิวมอบงานคนขับ (G6)",
     severity: "info",

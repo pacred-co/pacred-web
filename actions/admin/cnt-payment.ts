@@ -55,6 +55,28 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { loadCabinetBillingCoverage, buildCoverageAdvisory } from "@/lib/admin/cabinet-billing-coverage";
+
+/**
+ * ADVISORY ครบ-gate (owner 2026-07-21 · MOMO bills PER TRACKING in rounds, we pay per
+ * CONTAINER once). Compute how much MOMO has ACTUALLY billed this ตู้ vs the stored cost
+ * (which may include estimates) and, when a container is not yet fully billed, return the
+ * once-only-payment warning. NON-BLOCKING — accounting decides; this never blocks the
+ * write, never touches the UNIQUE/dup-guard, never changes an amount. Fail-soft: any error
+ * → no advisory (an advisory read must never break a payment).
+ */
+async function computeCoverageAdvisory(
+  admin: ReturnType<typeof createAdminClient>,
+  cabinetNumbers: string[],
+): Promise<string | null> {
+  try {
+    const cov = await loadCabinetBillingCoverage(admin, cabinetNumbers);
+    return buildCoverageAdvisory(cabinetNumbers.map((c) => cov[c]).filter((c) => !!c));
+  } catch (e) {
+    console.error("[cnt_payment coverage advisory] failed", { error: (e as Error)?.message });
+    return null;
+  }
+}
 
 // ────────────────────────────────────────────────────────────
 // Zod schema — kept in-file because the worktree spec restricts
@@ -171,6 +193,9 @@ export async function adminCreateCntPayment(
     cntId: number;
     cabinetNumbers: string[];
     filePath: string | null;
+    /** ADVISORY: non-null when MOMO hasn't billed a registered ตู้ in full (partial round).
+     *  The client MAY show it; it never blocked this write. */
+    coverageAdvisory: string | null;
   }>
 > {
   const parsed = createCntPaymentSchema.safeParse(input);
@@ -201,6 +226,7 @@ export async function adminCreateCntPayment(
     cntId: number;
     cabinetNumbers: string[];
     filePath: string | null;
+    coverageAdvisory: string | null;
   }>(["super", "ops", "accounting"], async ({ adminId }) => {
     const admin = createAdminClient();
 
@@ -420,6 +446,10 @@ export async function adminCreateCntPayment(
       return { ok: false, error: itemErr.message };
     }
 
+    // ADVISORY ครบ-gate — record (non-blocking) whether MOMO had billed these ตู้ in full
+    // at pay time, so there is a permanent money-trail of "registered while partial".
+    const coverageAdvisory = await computeCoverageAdvisory(admin, cabinetNumbers);
+
     await logAdminAction(adminId, "cnt_payment.create", "tb_cnt", String(cntId), {
       legacy_admin_id: legacyAdminId,
       cabinet_numbers: cabinetNumbers,
@@ -428,6 +458,7 @@ export async function adminCreateCntPayment(
       bank_no:         noBlank,
       account_name:    nameAccount,
       file_path:       filePath,
+      coverage_advisory: coverageAdvisory, // null = every ตู้ fully billed (or no invoice data)
     });
 
     revalidatePath("/admin/report-cnt");
@@ -437,7 +468,7 @@ export async function adminCreateCntPayment(
     bustAdminChrome();
     return {
       ok:   true,
-      data: { cntId, cabinetNumbers, filePath },
+      data: { cntId, cabinetNumbers, filePath, coverageAdvisory },
     };
   });
 }
@@ -506,7 +537,7 @@ export type CreateCntPaymentSingleInput = z.input<typeof createCntPaymentSingleS
 export async function adminCreateCntPaymentSingle(
   input: CreateCntPaymentSingleInput,
   slip: File | null,
-): Promise<AdminActionResult<{ cntId: number; cabinetNumber: string; slipPath: string | null }>> {
+): Promise<AdminActionResult<{ cntId: number; cabinetNumber: string; slipPath: string | null; coverageAdvisory: string | null }>> {
   const parsed = createCntPaymentSingleSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -521,7 +552,7 @@ export async function adminCreateCntPaymentSingle(
     return { ok: false, error: "ไฟล์รูปไม่ถูกต้อง (รับเฉพาะ PNG/JPEG)" };
   }
 
-  return withAdmin<{ cntId: number; cabinetNumber: string; slipPath: string | null }>(
+  return withAdmin<{ cntId: number; cabinetNumber: string; slipPath: string | null; coverageAdvisory: string | null }>(
     ["super", "ops", "accounting"],
     async ({ adminId }) => {
       const admin = createAdminClient();
@@ -640,11 +671,15 @@ export async function adminCreateCntPaymentSingle(
         return { ok: false, error: itemErr.message };
       }
 
+      // ADVISORY ครบ-gate (non-blocking · money-trail) — see computeCoverageAdvisory.
+      const coverageAdvisory = await computeCoverageAdvisory(admin, [cabinetNumber]);
+
       await logAdminAction(adminId, "cnt_payment.single.create", "tb_cnt", String(cntId), {
         legacy_admin_id: legacyAdminId,
         cabinet:         cabinetNumber,
         cnt_amount:      cntAmount,
         slip_path:       slipPath,
+        coverage_advisory: coverageAdvisory,
       });
 
       revalidatePath(`/admin/report-cnt/${cabinetNumber}`);
@@ -653,7 +688,7 @@ export async function adminCreateCntPaymentSingle(
       // New tb_cnt row created (cntStatus='1') → the "ค่าตู้รออนุมัติ" (cntUnpaid)
       // sidebar badge grew; refresh the admin chrome.
       bustAdminChrome();
-      return { ok: true, data: { cntId, cabinetNumber, slipPath } };
+      return { ok: true, data: { cntId, cabinetNumber, slipPath, coverageAdvisory } };
     },
   );
 }

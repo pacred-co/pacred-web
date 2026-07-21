@@ -7,6 +7,11 @@ import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { parsePage } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CntHsTable, type CntHsRow } from "./cnt-hs-table";
+import {
+  loadCabinetBillingCoverage,
+  rollupCabinetCoverages,
+  type CabinetBillingCoverage,
+} from "@/lib/admin/cabinet-billing-coverage";
 import { PageHeader } from "@/components/admin/page-header";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportCntHsAll } from "@/actions/admin/export/cnt-hs";
@@ -169,7 +174,9 @@ export default async function CntHsPage({
   // `tb_cnt.cntname` CSV when the fan-out is empty (legacy data often
   // wrote the CSV but never populated tb_cnt_item — would show "—" if we
   // relied on fan-out only).
-  const tableRows: CntHsRow[] = rows.map((row) => {
+  // Pre-coverage shape — the ครบ-gate chip fields (coverageState/coverageLabel) are added
+  // below in tableRowsWithCoverage once the invoice-line coverage is resolved.
+  const tableRows: Array<Omit<CntHsRow, "coverageState" | "coverageLabel">> = rows.map((row) => {
     const fanOut = arrItem.get(row.ID) ?? [];
     const cabinets =
       fanOut.length > 0
@@ -192,6 +199,39 @@ export default async function CntHsPage({
       nameAccount: row.nameAccount ?? "",
       cabinets,
     };
+  });
+
+  // ครบ-gate coverage chip per row (owner 2026-07-21 · MOMO bills per tracking, we pay per
+  // ตู้). CHEAP + bounded: first probe the small cabinet-indexed momo_invoice_line to find
+  // which of this page's ตู้ have ANY invoice line; only THOSE need the fuller coverage read
+  // (the rest short-circuit to "ยังไม่มีข้อมูลใบ" with zero extra queries). Skipped on a
+  // pathological mega-page (legacy CSV can hold 90+ ตู้/row) to protect the list query.
+  const allCabs = Array.from(new Set(tableRows.flatMap((r) => r.cabinets))).filter(Boolean);
+  let covByCab: Record<string, CabinetBillingCoverage> = {};
+  if (allCabs.length > 0 && allCabs.length <= 1000) {
+    const { data: lineCabs, error: lineErr } = await admin
+      .from("momo_invoice_line")
+      .select("fcabinetnumber")
+      .in("fcabinetnumber", allCabs)
+      .limit(50_000); // explicit — a silent default truncation could miss a cabinet's lines
+    if (lineErr) {
+      // most common during rollout: mig 0267 not applied yet → no chips (safe).
+      console.warn("[cnt-hs coverage probe] failed", { code: lineErr.code, message: lineErr.message });
+    }
+    const cabsWithLines = Array.from(
+      new Set((lineCabs ?? []).map((r) => ((r as { fcabinetnumber: string | null }).fcabinetnumber ?? "").trim()).filter(Boolean)),
+    );
+    if (cabsWithLines.length > 0) {
+      covByCab = await loadCabinetBillingCoverage(admin, cabsWithLines);
+    }
+  }
+  const noData = (c: string): CabinetBillingCoverage => ({
+    cabinet: c, totalRows: 0, billedRows: 0, billedForRealThb: 0, storedCostThb: 0,
+    state: "no_invoice_data", chipLabel: "ยังไม่มีข้อมูลใบ", remainingRows: 0,
+  });
+  const tableRowsWithCoverage: CntHsRow[] = tableRows.map((r) => {
+    const roll = rollupCabinetCoverages(r.cabinets.map((c) => covByCab[c] ?? noData(c)));
+    return { ...r, coverageState: roll.state, coverageLabel: roll.chipLabel };
   });
 
   // CSV rows for the on-screen "⬇ CSV หน้านี้" (identical keys to the export-all
@@ -327,7 +367,7 @@ export default async function CntHsPage({
             <p className="p-12 text-center text-sm text-muted">ไม่พบรายการจ่ายเงินตู้</p>
           ) : (
             <>
-              <CntHsTable rows={tableRows} />
+              <CntHsTable rows={tableRowsWithCoverage} />
               <Pagination
                 page={page}
                 pageSize={PAGE_SIZE}

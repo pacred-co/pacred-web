@@ -1851,6 +1851,28 @@ async function createBillingRunInvoiceImpl(
           : {}),
       });
 
+      // B3 (2026-07-21 · flow-gap sweep) — this bill LIFTED its arrival rows 4→5
+      // (a1 above) + committed the invoice, so any tb_check_forwarder (ตรวจตู้) queue
+      // rows for the billed fids are now stale — the row is billed, but the queue still
+      // holds it → it re-surfaces in the ตรวจสอบ list (a leaked row). Mirror the delete
+      // in adminCallPriceUser (the ONLY path that used to clear the queue). BEST-EFFORT:
+      // the invoice is already committed — a queue-delete failure must NEVER fail or roll
+      // back the (successful) bill; log + continue. Never touches fstatus/money.
+      if (billForwarderIds.length > 0) {
+        const { error: cqDelErr } = await admin
+          .from("tb_check_forwarder")
+          .delete()
+          .in("fID", billForwarderIds);
+        if (cqDelErr) {
+          logger.error(
+            "billing-run.queue-cleanup",
+            "tb_check_forwarder delete failed AFTER billing (non-fatal)",
+            cqDelErr,
+            { invoiceId, billForwarderIds },
+          );
+        }
+      }
+
       revalidatePath("/[locale]/(admin)/admin/billing-run", "page");
       revalidatePath("/[locale]/(admin)/admin/billing-run/[id]", "page");
 

@@ -83,6 +83,21 @@ export async function adminDeleteForwarder(
       // (best-effort · money-safe: reject เฉพาะ status='1' = เงินยังไม่เข้า/ออก).
       await rejectPendingSlipsForCancelledOrder(admin, id, adminId);
 
+      // B3 (2026-07-21 · flow-gap sweep) — the tb_forwarder row is gone, so its
+      // tb_check_forwarder (ตรวจตู้) queue row is now an ORPHAN pointing at a deleted
+      // fid (prod had qid 41544 → deleted fid 52505). Clear it so the ตรวจสอบ list
+      // doesn't hold a dangling row. BEST-EFFORT: the delete already committed — a
+      // queue-cleanup failure must NEVER surface as a failed delete; log + continue.
+      const { error: cqDelErr } = await admin
+        .from("tb_check_forwarder")
+        .delete()
+        .eq("fID", id);
+      if (cqDelErr) {
+        console.error("[forwarder.delete] tb_check_forwarder cleanup failed (delete OK, non-fatal)", {
+          id, code: cqDelErr.code, message: cqDelErr.message,
+        });
+      }
+
       // 🔗 STATUS-SYNC (owner 2026-07-13): ลบ forwarder แล้ว ออเดอร์ฝากสั่งซื้อที่
       // ผูกไว้ต้อง "ถอยสถานะ" ตาม flow — ถ้า forwarder ตัวนี้เคยดันออเดอร์ขึ้น
       // "ถึงโกดังจีน(40)" แล้วถูกลบ (เป็นตัวสุดท้ายที่ถึง) ออเดอร์ต้องกลับเป็น

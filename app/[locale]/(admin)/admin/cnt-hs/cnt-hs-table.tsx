@@ -32,6 +32,8 @@ import { Link } from "@/i18n/navigation";
 import { ArrowUpDown } from "lucide-react";
 import { CNTHS_ROW_TINT, CNTSTATUS_CFG } from "@/lib/admin/forwarder-status";
 import { CabinetListCell } from "./cabinet-list-cell";
+import { CabinetBillingCoverageChip } from "@/components/admin/cabinet-billing-coverage";
+import type { CabinetBillingState } from "@/lib/admin/cabinet-billing-coverage";
 
 // ─────────────────────────────────────────────────────────────────────
 // Row shape — JSON-serializable subset passed from server page.tsx
@@ -50,6 +52,10 @@ export type CntHsRow = {
   noBlank: string;
   nameAccount: string;
   cabinets: string[]; // pre-resolved (fan-out OR cntName CSV) from server
+  /** ครบ-gate coverage rolled up over this payment's ตู้ (MOMO bills per tracking, we pay
+   *  per ตู้). Computed server-side; "no_invoice_data" = legacy/pre-tracking cost. */
+  coverageState: CabinetBillingState;
+  coverageLabel: string;
 };
 
 type SortKey =
@@ -254,9 +260,16 @@ export function CntHsTable({ rows }: { rows: CntHsRow[] }) {
                   <td className="px-4 py-3 text-xs whitespace-nowrap">
                     {formatDate(row.date)}
                   </td>
-                  {/* 3 — หมายเลขตู้ */}
+                  {/* 3 — หมายเลขตู้ + ความครบใบ MOMO (ครบ/ขาด/ยังไม่มีข้อมูลใบ) */}
                   <td className="px-4 py-3 text-xs max-w-[280px] align-top">
                     <CabinetListCell cntId={row.ID} cabinets={row.cabinets} />
+                    <div className="mt-1">
+                      <CabinetBillingCoverageChip
+                        state={row.coverageState}
+                        label={row.coverageLabel}
+                        title="ใบแจ้งหนี้ MOMO ครบทุกแทรคกิ้งของตู้นี้หรือยัง (MOMO บิลเป็นแทรคกิ้ง · จ่ายเป็นตู้)"
+                      />
+                    </div>
                   </td>
                   {/* 4 — จำนวนเงิน */}
                   <td className="px-4 py-3 text-right font-mono text-xs">

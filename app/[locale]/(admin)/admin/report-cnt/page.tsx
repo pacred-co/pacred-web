@@ -63,6 +63,11 @@ import {
   resolveMomoContainerInfo,
   type MomoContainerInfo,
 } from "@/lib/admin/momo-container-resolve";
+import {
+  loadCabinetBillingCoverage,
+  type CabinetBillingCoverage,
+} from "@/lib/admin/cabinet-billing-coverage";
+import { CabinetBillingCoverageStrip } from "@/components/admin/cabinet-billing-coverage";
 
 export const dynamic = "force-dynamic";
 
@@ -472,6 +477,18 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
   const packingByCab: Record<string, boolean> = {};
   for (const cab of packingConfirmed) packingByCab[cab] = true;
 
+  // ครบ-GATE coverage (owner 2026-07-21 · "MOMO เก็บเราเป็น tracking · จะมาคอยตัดทั้งตู้
+  // ว่าครบแล้วยังไง") — when the accountant arrives via the MOMO invoice→pay bridge
+  // (?cabinet=…&invoice=…), show BEFORE they คตัดจ่าย how completely MOMO has billed each
+  // preselected ตู้, so they don't over-pay a partial round. Read-only, fail-soft.
+  let coverageStrip: CabinetBillingCoverage[] = [];
+  if (preselectCabinets.length > 0) {
+    const cov = await loadCabinetBillingCoverage(admin, preselectCabinets);
+    coverageStrip = preselectCabinets
+      .map((c) => cov[c])
+      .filter((c): c is CabinetBillingCoverage => !!c);
+  }
+
   // Wave 17 ux-fix: totals computation moved to <CntListTable> client
   // component (alongside rendering) — keeps the server query minimal.
 
@@ -621,6 +638,12 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
           <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             โหลดข้อมูลไม่สำเร็จ — ทั้ง RPC <code>get_container_summary</code> และ fallback ดึงตู้ไม่ได้
           </div>
+        )}
+
+        {/* ครบ-gate strip — shown at the actionPay context (arrived from the MOMO
+            invoice→pay bridge) so staff see MOMO's billing completeness BEFORE ตัดจ่าย. */}
+        {coverageStrip.length > 0 && (
+          <CabinetBillingCoverageStrip coverages={coverageStrip} showMoney={showMoney} />
         )}
 
         {grouped.length === 0 ? (

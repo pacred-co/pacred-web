@@ -33,7 +33,8 @@
 import { useMemo, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { ArrowUpDown } from "lucide-react";
+import { ArrowUpDown, Search } from "lucide-react";
+import { flashRemoteAreaBadge } from "@/lib/forwarder/flash-remote-area";
 import {
   adminCallPriceUser,
   adminRemoveFromCheckQueue,
@@ -63,7 +64,8 @@ export type ForwarderCheckRow = {
   amount_count: string | null;         // famountcount — '1' = "รวม" pinned row marker
   volume_cbm: number;
   weight_kg: number;
-  products_type: string;               // ftransporttype labels
+  products_type: string;               // fproductstype labels (ประเภทหลัก)
+  products_type2: string;              // A6 · fproductstype2 (ประเภทรอง · cost cell · gated)
   transport_type: string;              // '1' = รถ · '2' = เรือ · '3' = เครื่องบิน
   ref_rate: number;                    // fRefRate (kg/cbm reference rate)
   ref_price: string;                   // fRefPrice — '1' = น้ำหนัก · '0' = ปริมาตร
@@ -88,12 +90,14 @@ export type ForwarderCheckRow = {
   profit_item: number;                 // outstanding − cost (money col)
   // status
   status: string;                      // fStatus '1'..'7' · '99'
-  promo_id: number | null;             // tb_promotion link
   ship_service_fee: number;            // fShippingService — Thai-side delivery fee
   // queue meta
   check_added_by: string | null;       // tb_check_forwarder.adminID (who added)
   check_added_at: string | null;       // tb_check_forwarder.date
   note: string | null;                 // fNote
+  detail: string | null;               // A1 · fDetail — รายละเอียดสินค้า
+  has_custom_rate: boolean;            // A8 · has a tb_rate_custom_* row → "เรทเฉพาะตัว"
+  has_comparison: boolean;             // legacy CPS · tb_users.userComparison='1' → "ค่าเทียบ"
   // image
   cover_url: string | null;            // signed legacy storage URL
   // thumbnail link target
@@ -253,17 +257,56 @@ export function ForwarderCheckTable({
     if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(k); setSortDir("desc"); }
   };
+
+  // A2 (fidelity · 2026-07-21) — global search box. Legacy uses DataTables
+  // `dom:'Bfrtip'` (forwarder-check.php L583) = a filter box that searches every
+  // column. We mirror it client-side across the operationally-searched fields:
+  // tracking / รหัสลูกค้า / ชื่อลูกค้า / เลขตู้ / รายละเอียดสินค้า.
+  const [query, setQuery] = useState("");
+  const filteredRows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) =>
+      [
+        r.tracking_chn,
+        r.userid,
+        r.customer_name,
+        r.cabinet_number,
+        r.detail,
+        r.fno_cargo,
+        String(r.id),
+      ]
+        .filter(Boolean)
+        .some((f) => (f as string).toLowerCase().includes(q)),
+    );
+  }, [rows, query]);
+
   const viewRows = useMemo(() => {
-    if (!sortKey) return rows;
+    if (!sortKey) return filteredRows;
     const dir = sortDir === "asc" ? 1 : -1;
-    return [...rows].sort((a, b) => {
+    return [...filteredRows].sort((a, b) => {
       const av = fwckSortValue(a, sortKey);
       const bv = fwckSortValue(b, sortKey);
       if (av < bv) return -1 * dir;
       if (av > bv) return 1 * dir;
       return 0;
     });
-  }, [rows, sortKey, sortDir]);
+  }, [filteredRows, sortKey, sortDir]);
+
+  // Selection safety (money path) — the ONLY selection any action / count / Σ
+  // uses is the intersection with the currently-VISIBLE (filtered) rows. Derived
+  // at read time (no state mutation), so it's structurally impossible to bill or
+  // count a row the user cannot see: hide a selected row via search and it drops
+  // out of the bottom bar, the Σ footer, the confirm dialog, AND the bill call.
+  // Chosen over "clear the hidden selection" (the other option in the brief)
+  // because it's the safer of the two — the raw checkbox state is untouched, so
+  // clearing the search brings a cross-filter selection back intact (no data
+  // loss) while an off-screen row can never be silently billed.
+  const visibleSelectedIds = useMemo(() => {
+    const out = new Set<number>();
+    for (const r of filteredRows) if (selected.has(r.id)) out.add(r.id);
+    return out;
+  }, [filteredRows, selected]);
 
   const toggleRow = (id: number) =>
     setSelected((prev) => {
@@ -273,23 +316,33 @@ export function ForwarderCheckTable({
       return next;
     });
 
+  // "เลือกทั้งหมด" toggles only the currently-visible (filtered) rows — a
+  // search-hidden selection is never touched (union on check · remove on uncheck).
   const toggleAll = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) setSelected(new Set(rows.map((r) => r.id)));
-    else setSelected(new Set());
+    const on = e.target.checked;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const r of filteredRows) {
+        if (on) next.add(r.id);
+        else next.delete(r.id);
+      }
+      return next;
+    });
   };
 
   // Selection summary — total outstanding + distinct customers — for the
-  // confirm modal AND the fixed-bottom bar live count.
+  // confirm modal AND the fixed-bottom bar live count. Restricted to the
+  // VISIBLE selection so the bar never counts a search-hidden row.
   const summary = useMemo(() => {
     let total = 0;
     const userSet = new Set<string>();
-    for (const r of rows) {
-      if (!selected.has(r.id)) continue;
+    for (const r of filteredRows) {
+      if (!visibleSelectedIds.has(r.id)) continue;
       total += r.outstanding_thb;
       userSet.add(r.userid);
     }
-    return { total, customerCount: userSet.size, rowCount: selected.size };
-  }, [rows, selected]);
+    return { total, customerCount: userSet.size, rowCount: visibleSelectedIds.size };
+  }, [filteredRows, visibleSelectedIds]);
 
   // G3 reachability (§0d · 2026-07-08) — when the current selection is a SINGLE
   // credit/นิติ customer, offer a direct jump to ออกใบวางบิล for them. The billing-run
@@ -297,21 +350,23 @@ export function ForwarderCheckTable({
   // selection carries straight into the ใบวางบิล (a credit/นิติ order bills via a
   // ใบวางบิล, not the SMS-pay flow). Only shown for a juristic/credit single customer.
   const billingRunTarget = useMemo(() => {
-    const picked = rows.filter((r) => selected.has(r.id));
+    const picked = filteredRows.filter((r) => visibleSelectedIds.has(r.id));
     const uids = new Set(picked.map((r) => r.userid));
     if (uids.size !== 1) return null;
     const uid = [...uids][0];
     const eligible = picked.some((r) => r.customer_company === 1 || r.user_credit === "1");
     return eligible ? uid : null;
-  }, [rows, selected]);
+  }, [filteredRows, visibleSelectedIds]);
 
-  const allChecked = rows.length > 0 && selected.size === rows.length;
-  const someChecked = selected.size > 0 && selected.size < rows.length;
+  // Header checkbox reflects the VISIBLE rows only ("select all [visible]").
+  const allChecked = filteredRows.length > 0 && filteredRows.every((r) => selected.has(r.id));
+  const someChecked = visibleSelectedIds.size > 0 && !allChecked;
 
   function runBill() {
     setResultBanner(null);
     setFailures([]);
-    const fids = Array.from(selected);
+    // Bill only the VISIBLE selection — a search-hidden row can never be billed.
+    const fids = Array.from(visibleSelectedIds);
     if (fids.length === 0) return;
     startTransition(async () => {
       const res = await adminCallPriceUser({ fids });
@@ -354,7 +409,7 @@ export function ForwarderCheckTable({
 
   async function runRemoveFromQueue() {
     setResultBanner(null);
-    const fids = Array.from(selected);
+    const fids = Array.from(visibleSelectedIds);
     if (fids.length === 0) return;
     if (!(await confirm(`ลบ ${fids.length} รายการออกจากคิว? (ไม่แจ้งชำระเงิน · forwarder ยังคงอยู่ที่สถานะ 4)`))) return;
     startTransition(async () => {
@@ -381,9 +436,11 @@ export function ForwarderCheckTable({
   // double the parcel's boxes (header 6 + 6 boxes = 12). The money/weight/CBM
   // sums stay over ALL rows (the header is weight/price 0, so they're already
   // correct, and the billing acts per-row on outstanding — not on this Σ).
+  // Σ footer sums over the FILTERED set so the totals never lie about what the
+  // search shows (A2 — "matches the Σ footer to the filtered set").
   const countableRows = useMemo(
     () =>
-      filterCountableForwarderRows(rows, {
+      filterCountableForwarderRows(filteredRows, {
         tracking: (r) => r.tracking_chn,
         weight: (r) => r.weight_kg,
         userid: (r) => r.userid,
@@ -392,20 +449,20 @@ export function ForwarderCheckTable({
         // countableRows so the "N/M กล่อง" count no longer includes the หัวบิล.
         money: (r) => r.total_price,
       }),
-    [rows],
+    [filteredRows],
   );
   const datasetSummary = useMemo(() => {
     return {
       amount:               countableRows.reduce((s, r) => s + r.amount, 0),
       amountFi:             countableRows.reduce((s, r) => s + r.amount_fi, 0),
-      volumeCbm:            rows.reduce((s, r) => s + r.volume_cbm, 0),
-      weightKg:             rows.reduce((s, r) => s + r.weight_kg, 0),
-      transportPrice:       rows.reduce((s, r) => s + r.transport_price, 0),
-      outstanding:          rows.reduce((s, r) => s + r.outstanding_thb, 0),
-      onePercent:           rows.reduce((s, r) => s + r.one_percent, 0),
-      profit:               rows.reduce((s, r) => s + r.profit_item, 0),
+      volumeCbm:            filteredRows.reduce((s, r) => s + r.volume_cbm, 0),
+      weightKg:             filteredRows.reduce((s, r) => s + r.weight_kg, 0),
+      transportPrice:       filteredRows.reduce((s, r) => s + r.transport_price, 0),
+      outstanding:          filteredRows.reduce((s, r) => s + r.outstanding_thb, 0),
+      onePercent:           filteredRows.reduce((s, r) => s + r.one_percent, 0),
+      profit:               filteredRows.reduce((s, r) => s + r.profit_item, 0),
     };
-  }, [rows, countableRows]);
+  }, [filteredRows, countableRows]);
 
   return (
     <div className="space-y-3">
@@ -480,6 +537,40 @@ export function ForwarderCheckTable({
               );
             })}
           </ul>
+        </div>
+      )}
+
+      {/* A2 (fidelity) — global search box (legacy DataTables Bfrtip filter).
+          Searches ทุกคอลัมน์หลัก: tracking / รหัสลูกค้า / ชื่อ / เลขตู้ / รายละเอียด. */}
+      {rows.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[220px] max-w-md">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" aria-hidden />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="ค้นหา แทรคกิ้ง · รหัสลูกค้า · ชื่อ · เลขตู้ · รายละเอียด"
+              className="w-full rounded-md border border-border bg-white dark:bg-surface pl-8 pr-8 py-1.5 text-sm focus:border-primary-400 focus:outline-none focus:ring-1 focus:ring-primary-300"
+              aria-label="ค้นหาในตาราง"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted hover:text-foreground text-sm"
+                aria-label="ล้างการค้นหา"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          {query.trim() && (
+            <span className="text-xs text-muted">
+              พบ <b className="text-foreground">{filteredRows.length}</b> รายการ
+              <span className="text-muted/70"> / {rows.length}</span>
+            </span>
+          )}
         </div>
       )}
 
@@ -564,6 +655,16 @@ export function ForwarderCheckTable({
               </tbody>
 
               <tbody>
+                {viewRows.length === 0 && query.trim() && (
+                  <tr>
+                    <td colSpan={20} className="px-3 py-8 text-center text-sm text-muted">
+                      ไม่พบรายการที่ตรงกับ &quot;{query.trim()}&quot; —{" "}
+                      <button type="button" onClick={() => setQuery("")} className="text-primary-600 hover:underline">
+                        ล้างการค้นหา
+                      </button>
+                    </td>
+                  </tr>
+                )}
                 {viewRows.map((r) => {
                   const isOn = selected.has(r.id);
                   const statusCls = STATUS_BADGE[r.status] ?? "bg-gray-50 text-gray-600 border-gray-200";
@@ -621,12 +722,32 @@ export function ForwarderCheckTable({
                       </td>
 
                       <td className="px-2 py-2.5">
-                        <Link
-                          href={`/admin/customers/${r.userid}`}
-                          className="font-mono font-semibold text-primary-600 hover:underline"
-                        >
-                          {r.userid}
-                        </Link>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <Link
+                            href={`/admin/customers/${r.userid}`}
+                            className="font-mono font-semibold text-primary-600 hover:underline"
+                          >
+                            {r.userid}
+                          </Link>
+                          {/* A8 · เรทเฉพาะตัว (legacy badgeVIP2 SVIP · owner killed the VIP tier 2026-07-10) */}
+                          {r.has_custom_rate && (
+                            <span
+                              className="rounded-full bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200 px-1.5 py-0.5 text-[11px] font-medium"
+                              title="ลูกค้าคิดราคาแบบเรทเฉพาะตัว (tb_rate_custom)"
+                            >
+                              เรทเฉพาะตัว
+                            </span>
+                          )}
+                          {/* legacy badgeVIP2 CPS — คิดราคาตามค่าเทียบ (tb_users.userComparison='1' · ยัง live ใน resolve-rate) */}
+                          {r.has_comparison && (
+                            <span
+                              className="rounded-full bg-sky-50 text-sky-700 border border-sky-200 px-1.5 py-0.5 text-[11px] font-medium"
+                              title="ลูกค้าคิดราคาตามค่าเทียบ (userComparison)"
+                            >
+                              ค่าเทียบ
+                            </span>
+                          )}
+                        </div>
                         <div className="truncate max-w-[140px] text-[11px]" title={r.customer_name}>
                           {r.customer_name || "—"}
                         </div>
@@ -683,6 +804,15 @@ export function ForwarderCheckTable({
                                 </span>
                               </div>
                             )}
+                            {/* A1 · รายละเอียดสินค้า (legacy short-text max-w · forwarder-check.php L419) */}
+                            {r.detail && r.detail.trim() && (
+                              <p
+                                className="mt-1 text-[11px] text-foreground/80 line-clamp-2 break-words"
+                                title={r.detail}
+                              >
+                                {r.detail}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -724,6 +854,10 @@ export function ForwarderCheckTable({
 
                       <td className="px-2 py-2.5">
                         <div className="text-[11px] font-medium">{r.ship_by_label || r.ship_by || "—"}</div>
+                        {/* A3 · ค่าขนส่งไทย ฿ รายแถว (legacy col "ค่าขนส่งไทย" L453 · = the sort key) */}
+                        <div className="text-[11px] font-mono font-semibold text-foreground mt-0.5">
+                          ฿{thb(r.transport_price)}
+                        </div>
                         {r.pay_method === "2" && (
                           <div className="text-[11px] bg-red-100 text-red-700 px-1 rounded inline-block mt-0.5">ปลายทาง</div>
                         )}
@@ -732,6 +866,17 @@ export function ForwarderCheckTable({
                             {r.address_district} · จ.{r.address_province}
                           </div>
                         )}
+                        {/* A5 · flashRemoteArea warning (legacy L449 · only for non-PCS delivery) */}
+                        {r.ship_by && r.ship_by !== "PCS" && (() => {
+                          const badge = flashRemoteAreaBadge(r.address_zipcode);
+                          return badge ? (
+                            <div className="mt-0.5">
+                              <span className="inline-block rounded bg-red-600 text-white px-1.5 py-0.5 text-[11px] font-medium">
+                                {badge.label}
+                              </span>
+                            </div>
+                          ) : null;
+                        })()}
                         {r.ship_service_fee > 0 && (
                           <div className="text-[11px] text-amber-700 mt-0.5">
                             ค่าบริการ: ฿{thb(r.ship_service_fee)}
@@ -766,6 +911,12 @@ export function ForwarderCheckTable({
                             {r.cost_total_price_sheet > 0 && (
                               <div className="text-[11px] text-muted" title="ต้นทุน แสง">
                                 S: {thb(r.cost_total_price_sheet)}
+                              </div>
+                            )}
+                            {/* A6 · ประเภทสินค้ารอง (legacy nameProductsType(fProductsType2) · L471) */}
+                            {r.products_type2 && r.products_type2 !== "0" && (
+                              <div className="text-[11px] text-muted" title="ประเภทสินค้ารอง">
+                                รอง: {PRODUCTS_TYPE_LABEL[r.products_type2] ?? "ไม่พบข้อมูล" /* legacy nameProductsType default */}
                               </div>
                             )}
                             {r.cost_total_price === 0 && (
@@ -813,7 +964,7 @@ export function ForwarderCheckTable({
           Mirrors the legacy fixed-position button (forwarder-check.php L509)
           + adds a "ลบออกจากคิว" escape hatch operators asked for during the
           Wave 8 bulk-approve rollout. */}
-      {selected.size > 0 && (
+      {visibleSelectedIds.size > 0 && (
         <div
           role="region"
           aria-label="บาร์แจ้งชำระเงินกลุ่ม"
@@ -877,15 +1028,15 @@ export function ForwarderCheckTable({
           + SMS/LINE/Email channel notice is carried in `note`. */}
       <SelectedItemsConfirmDialog
         open={confirmingBill}
-        title={`รายการที่เลือก ${summary.rowCount}/${rows.length} รายการ`}
+        title={`รายการที่เลือก ${summary.rowCount}/${filteredRows.length} รายการ`}
         note={
           <>
             การกระทำนี้จะเปลี่ยนสถานะเป็น <b>5 · รอชำระเงิน</b> · ส่ง SMS / LINE OA / Email
             แจ้งลูกค้าทันที ({summary.customerCount} ลูกค้า) · เมื่อแจ้งแล้วจะลบออกจากคิวตรวจสอบอัตโนมัติ
           </>
         }
-        rows={rows
-          .filter((r) => selected.has(r.id))
+        rows={filteredRows
+          .filter((r) => visibleSelectedIds.has(r.id))
           .map((r) => ({
             orderNo: `#${r.id}`,
             tracking: r.tracking_chn ?? "-",

@@ -603,6 +603,41 @@ export async function applyMomoInvoiceCost(input: unknown): Promise<AdminActionR
       }
       applied += 1;
     }
+
+    // 🧾 PROVENANCE (mig 0267 · momo_invoice_line) — record that a REAL MOMO invoice line
+    // billed each POSITIVELY-IDENTIFIED row (matched · ตู้ตรง · not shared), regardless of
+    // whether the cost write above ran (a re-apply where cost already equals, or a paid
+    // container, is still real provenance). This is the ONE new write here — additive,
+    // idempotent (UNIQUE invoice_no,ftrackingchn → re-apply DO-NOTHING), and it NEVER
+    // changes the fcosttotalprice write or any amount. Best-effort: if it fails (e.g. the
+    // 0267 table isn't migrated yet), the cost writes still stand and coverage degrades to
+    // "ยังไม่มีข้อมูลใบ" (never a false "ครบ"). Powers lib/admin/cabinet-billing-coverage.
+    const provenanceRows = preview.rows
+      .filter((r) => r.matched && r.fid != null && !r.cabinetConflict && !r.duplicateFid)
+      .map((r) => ({
+        fid: r.fid as number,
+        ftrackingchn: r.tracking, // the tracking AS MOMO PRINTED IT (may be "<base>-1/N")
+        fcabinetnumber: r.fcabinetnumber,
+        invoice_no: preview.invoiceNo ?? "",
+        amount: r.invoiceCost,
+        source,
+        applied_by: adminId,
+      }));
+    let provenanceWritten = 0;
+    if (provenanceRows.length > 0) {
+      const { error: provErr } = await admin
+        .from("momo_invoice_line")
+        .upsert(provenanceRows, { onConflict: "invoice_no,ftrackingchn", ignoreDuplicates: true });
+      if (provErr) {
+        console.error(`[momo-ingest provenance] failed`, { code: provErr.code, message: provErr.message });
+        await logAdminAction(adminId, "momo_invoice.provenance_failed", "momo_invoice_line", preview.invoiceNo ?? "", {
+          invoiceNo: preview.invoiceNo, source, lines: provenanceRows.length, error: provErr.message,
+        });
+      } else {
+        provenanceWritten = provenanceRows.length;
+      }
+    }
+
     await logAdminAction(adminId, "momo_invoice.ingest_cost", "tb_forwarder", preview.invoiceNo ?? "", {
       invoiceNo: preview.invoiceNo,
       source,
@@ -611,6 +646,7 @@ export async function applyMomoInvoiceCost(input: unknown): Promise<AdminActionR
       unmatched: preview.summary.unmatched,
       cabinetConflicts: preview.summary.cabinetConflicts,
       matchedViaBase: preview.summary.matchedViaBase,
+      provenanceRows: provenanceWritten,
       linesTotal: preview.linesTotal,
       subTotal: preview.subTotal,
       cbmBasis: preview.cbmBasis,

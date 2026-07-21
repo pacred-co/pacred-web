@@ -43,6 +43,11 @@ import { CntSlipUploadForm } from "./slip-upload-form";
 import { CntCostEditor, type CntCostRow } from "./cnt-cost-editor";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
 import { fetchCorporateNameMap, resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
+import {
+  computeCabinetBillingCoverage,
+  type CabinetBillingCoverage,
+} from "@/lib/admin/cabinet-billing-coverage";
+import { CabinetBillingCoverageStrip } from "@/components/admin/cabinet-billing-coverage";
 
 export const dynamic = "force-dynamic";
 
@@ -260,6 +265,37 @@ export default async function CntHsDetailPage({
   const cntAmountNum = Number(cnt.cntAmount ?? 0);
   const costVsPaid = Math.round((linkedCostTotal - cntAmountNum) * 100) / 100;
 
+  // ครบ-gate coverage (owner 2026-07-21) — how completely MOMO has billed each ตู้ in this
+  // payment (real invoice lines · mig 0267), so an accountant can confirm the paid amount
+  // matched MOMO's real invoice(s) rather than an estimated container total. Reuses the
+  // ALREADY-FETCHED `forwarders` array (no redundant tb_forwarder re-query on a mega-cnt) +
+  // ONE momo_invoice_line read. Fail-soft (missing table → "ยังไม่มีข้อมูลใบ").
+  const covFids = forwarders.map((f) => f.id);
+  const linesByFid = new Map<number, Array<{ fid: number; amount: number }>>();
+  if (covFids.length > 0) {
+    const { data: lineRows, error: lineErr } = await admin
+      .from("momo_invoice_line")
+      .select("fid, amount")
+      .in("fid", covFids)
+      .limit(50_000);
+    if (lineErr) {
+      console.warn(`[cnt-hs/${cntId} coverage] momo_invoice_line read failed`, { code: lineErr.code, message: lineErr.message });
+    }
+    for (const l of (lineRows ?? []) as Array<{ fid: number; amount: number | null }>) {
+      const fid = Number(l.fid);
+      let bucket = linesByFid.get(fid);
+      if (!bucket) { bucket = []; linesByFid.set(fid, bucket); }
+      bucket.push({ fid, amount: Number(l.amount ?? 0) });
+    }
+  }
+  const coverageStrip: CabinetBillingCoverage[] = cabinetNumbers.map((cab) => {
+    const rows = forwarders
+      .filter((f) => f.fcabinetnumber === cab)
+      .map((f) => ({ fid: f.id, storedCost: Number(f.fcosttotalprice ?? 0) }));
+    const lines = rows.flatMap((r) => linesByFid.get(r.fid) ?? []);
+    return computeCabinetBillingCoverage({ cabinet: cab, rows, lines });
+  });
+
   return (
     <main className="p-6 lg:p-8 space-y-5">
       {/* Header */}
@@ -404,6 +440,11 @@ export default async function CntHsDetailPage({
         <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
           คุณไม่มีสิทธิ์ approve/reject (ต้องเป็น super หรือ accounting)
         </div>
+      )}
+
+      {/* ครบ-gate — MOMO billing completeness per ตู้ (bills per tracking, we pay per ตู้). */}
+      {coverageStrip.length > 0 && (
+        <CabinetBillingCoverageStrip coverages={coverageStrip} showMoney={canViewMoney} />
       )}
 
       {/* Cabinets table */}
