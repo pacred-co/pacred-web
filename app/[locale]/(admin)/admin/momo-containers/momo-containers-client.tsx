@@ -223,7 +223,11 @@ const DATA_KEYS = [
   "serviceFee", "status", "return", "etd", "eta",
 ];
 
-type Tab = "pending" | "committed" | "all" | "mismatch" | "garbage";
+// owner 2026-07-21 — "MOMO ไม่ส่ง PR คือ ตีเป็น NO CODE เลยครับ แบ่งอีก tab เป็น NO CODE
+// ให้ CS มาคอยตรวจเทียบกับทางโกดังจีน หรือเอารูป กับ แทรคกิ้ง ไปคอยถามหาลูกค้า
+// หรือตอนลูกค้าตามของมา". NO CODE = พัสดุที่ MOMO ไม่ได้แนบรหัสลูกค้ามาให้ = ของไม่มี
+// เจ้าของในระบบ → ถ้าไม่ตามหา มันจะค้างในตู้ ไม่มีใครถูกเก็บเงิน (รายได้หาย + ของค้างโกดัง).
+type Tab = "pending" | "committed" | "all" | "mismatch" | "garbage" | "nocode";
 
 export function MomoIngestClient({ tracks, missing, loadError }: { tracks: IngestTrack[]; missing: MissingParcel[]; loadError: string | null }) {
   const router = useRouter();
@@ -267,6 +271,9 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     committed: tracks.filter((t) => t.committed).length,
     mismatch: tracks.filter((t) => pkWtDiff(t) || pkVolDiff(t) || liveWtDiff(t) || liveVolDiff(t)).length,
     garbage: tracks.filter((t) => t.momoGarbage).length,
+    // NO CODE (owner 2026-07-21) — MOMO ไม่แนบรหัสลูกค้า = ของไม่มีเจ้าของในระบบ.
+    // นับเฉพาะที่ยังไม่ commit (แถวที่ commit แล้ว = CS หาเจ้าของเจอแล้วตอนนำเข้า).
+    nocode: tracks.filter((t) => !t.committed && (t.guessedUserId ?? "").trim() === "").length,
   }), [tracks]);
   const invalidPr = useMemo(() => tracks.filter((t) => !t.committed && t.userIdValid === false).length, [tracks]);
 
@@ -276,6 +283,9 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     else if (tab === "committed") list = list.filter((t) => t.committed);
     else if (tab === "mismatch") list = list.filter((t) => pkWtDiff(t) || pkVolDiff(t) || liveWtDiff(t) || liveVolDiff(t));
     else if (tab === "garbage") list = list.filter((t) => t.momoGarbage);
+    // NO CODE = ยังไม่นำเข้า + MOMO ไม่ส่ง PR — คิว CS ตามหาเจ้าของ (owner 2026-07-21)
+    else if (tab === "nocode")
+      list = list.filter((t) => !t.committed && (t.guessedUserId ?? "").trim() === "");
     const term = q.trim().toLowerCase();
     if (term)
       list = list.filter((t) =>
@@ -850,7 +860,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     <div className="space-y-3">
       {/* tabs + search */}
       <div className="flex flex-wrap items-center gap-2">
-        {([["pending", "🟡 ยังไม่เข้าระบบ"], ["committed", "✅ เข้าระบบแล้ว"], ["mismatch", "❗ ไม่ตรง (Packing/Live)"], ["all", "ทั้งหมด"]] as [Tab, string][]).map(([k, label]) => (
+        {([["pending", "🟡 ยังไม่เข้าระบบ"], ["committed", "✅ เข้าระบบแล้ว"], ["nocode", "❓ NO CODE (ไม่รู้เจ้าของ)"], ["mismatch", "❗ ไม่ตรง (Packing/Live)"], ["all", "ทั้งหมด"]] as [Tab, string][]).map(([k, label]) => (
           <button key={k} type="button" onClick={() => setTab(k)}
             className={`rounded-full px-3 py-1 text-xs font-medium ${tab === k ? "bg-primary-600 text-white" : "bg-surface-alt text-muted hover:bg-surface-alt/70"}`}>
             {label} <span className="opacity-70">{counts[k]}</span>
@@ -885,6 +895,50 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
         <button type="button" onClick={resetCols} title="รีเซ็ตลำดับคอลัมน์กลับค่าเริ่มต้น"
           className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt">↺ คอลัมน์</button>
       </div>
+
+      {/* 🔄 ระบบซิงค์เองอัตโนมัติ (owner 2026-07-21 "ให้ระบบรันได้โดยไม่ต้องมานั่งแก้ใน code") —
+          cron ดึง MOMO API + Live scrape ทุก 5 นาทีอยู่แล้ว; แถบนี้พิสูจน์ว่ามันเดินอยู่จริง
+          (เวลาซิงค์ล่าสุดจากข้อมูลจริง) + เปลี่ยนสีเตือนเมื่อเงียบผิดปกติ → พนักงานไม่ต้อง
+          เดาว่า "ต้องกดเองไหม" และรู้ทันทีเมื่อ cron/login ตาย (คู่กับ data-health check). */}
+      {(() => {
+        let newest = 0;
+        for (const t of tracks) {
+          const ts = t.lastSyncedAt ? Date.parse(t.lastSyncedAt) : NaN;
+          if (Number.isFinite(ts) && ts > newest) newest = ts;
+        }
+        if (newest === 0) return null;
+        const ageMin = Math.max(0, Math.round((Date.now() - newest) / 60000));
+        const ageText = ageMin < 1 ? "เมื่อครู่นี้" : ageMin < 60 ? `${ageMin} นาทีที่แล้ว` : `${Math.floor(ageMin / 60)} ชม. ${ageMin % 60} นาทีที่แล้ว`;
+        const tone =
+          ageMin <= 30
+            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+            : ageMin <= 120
+              ? "border-amber-300 bg-amber-50 text-amber-700"
+              : "border-red-300 bg-red-50 text-red-700";
+        return (
+          <div className={`rounded-lg border px-3 py-1.5 text-[11px] ${tone}`}>
+            🔄 ระบบซิงค์ MOMO อัตโนมัติทุก 5 นาที (API + Live) — ซิงค์ล่าสุด <b>{ageText}</b>
+            {ageMin > 30 && (
+              <> · ⚠️ เงียบนานผิดปกติ — cron/login MOMO อาจมีปัญหา ลองกด &quot;ดึง Live เดี๋ยวนี้&quot; ถ้าอ่านได้ 0 รายการ = แจ้งทีม dev</>
+            )}
+            {ageMin <= 30 && <> · ปุ่ม &quot;ดึง Live เดี๋ยวนี้&quot; ใช้เฉพาะตอนอยากได้ข้อมูลสดทันที ไม่กดระบบก็ดึงเองอยู่แล้ว</>}
+          </div>
+        );
+      })()}
+
+      {/* ❓ NO CODE — คิว CS ตามหาเจ้าของ (owner 2026-07-21 "MOMO ไม่ส่ง PR ตีเป็น NO CODE
+          ให้ CS ตรวจเทียบกับโกดังจีน หรือเอารูป+แทรคกิ้งไปถามลูกค้า หรือตอนลูกค้าตามของมา") */}
+      {tab === "nocode" && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
+          <div className="font-bold">❓ NO CODE = พัสดุที่ MOMO ไม่แนบรหัสลูกค้า (PR) มา — ของยังไม่มีเจ้าของในระบบ ถ้าไม่ตามหา ของจะค้างโกดัง + ไม่มีใครถูกเก็บเงิน</div>
+          <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
+            <li><b>เทียบกับโกดังจีน:</b> กด <b>📋 Copy</b> / <b>⬇ Excel</b> ด้านบน — จะได้เฉพาะรายการในแท็บนี้ ส่งให้โกดังจีน/MOMO ช่วยเช็คว่าของใคร</li>
+            <li><b>ถามลูกค้า:</b> คลิก<b>รูปสินค้า</b>เปิดภาพเต็ม แล้วเอารูป + เลขแทรคกิ้ง ส่ง LINE ถามลูกค้าที่น่าจะใช่</li>
+            <li><b>ตอนลูกค้าตามของ:</b> ลูกค้าทักมาว่าของไม่ถึง → เอาเลขแทรคกิ้งลูกค้ามาค้นในช่อง<b>ค้นหา</b>บนแท็บนี้ ถ้าเจอ = ของอยู่นี่แค่ไม่มี PR</li>
+            <li><b>เจอเจ้าของแล้ว:</b> กด ✎ ที่ช่อง <b>ลูกค้า (PR)</b> ของแถวนั้น → พิมพ์รหัส PR → บันทึก แล้วติ๊กนำเข้าระบบได้ทันที</li>
+          </ul>
+        </div>
+      )}
 
       {loadError && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">โหลดข้อมูลไม่สำเร็จ: {loadError}</div>

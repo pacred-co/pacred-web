@@ -678,6 +678,43 @@ const CHECKS: CheckDef[] = [
     },
   },
   {
+    id: "momo_sync_stale",
+    title: "MOMO sync/Live เงียบนานผิดปกติ (cron ตาย/login พัง = ของใหม่ไม่ไหลเข้าระบบ)",
+    severity: "red",
+    why:
+      "cron momo-sync (ทุก 5 นาที) upsert momo_import_tracks + re-stamp last_synced_at ทุกครั้งที่ดึงได้จริง. " +
+      "ถ้า login MOMO พัง / cron หยุด มันจะตายแบบเงียบสนิท — ไม่มีของใหม่เข้า ตรวจตู้ไม่ขยับ สถานะลูกค้าค้าง " +
+      "และไม่มีใครรู้จนลูกค้าทวง (owner 2026-07-21 'ให้ระบบรันได้โดยไม่ต้องมานั่งแก้ใน code'). " +
+      "check นี้คือ watchdog: max(last_synced_at) เก่ากว่า 60 นาที = แดง (เพดาน = พลาด 12 รอบติด).",
+    action:
+      "เปิด /admin/momo-containers กด 'ดึง Live เดี๋ยวนี้' — ถ้าอ่านได้ 0 รายการ = login/scrape พังจริง → " +
+      "เช็ค MOMO_WEB_USER/PASS ใน Vercel env + vercel.json cron /api/cron/momo-sync + ลอง login เว็บ MOMO มือ. " +
+      "ถ้ากดมือแล้วได้ข้อมูล = cron schedule/CRON_SECRET มีปัญหา.",
+    run: async (admin) => {
+      const { data, error } = await admin
+        .from("momo_import_tracks")
+        .select("momo_tracking_no, last_synced_at")
+        .order("last_synced_at", { ascending: false })
+        .limit(1);
+      if (error) throw new Error(`momo_import_tracks newest: ${error.code} ${error.message}`);
+      const newest = (data ?? [])[0] as { momo_tracking_no: string | null; last_synced_at: string | null } | undefined;
+      // ตารางว่าง = ยังไม่เคย sync เลย (env ใหม่) — นับเป็นปัญหาให้เห็น ไม่เงียบ
+      if (!newest?.last_synced_at) {
+        return { count: 1, sample: [{ note: "momo_import_tracks ว่าง/ไม่มี last_synced_at — sync ไม่เคยเดิน" }] };
+      }
+      const ageMin = Math.round((Date.now() - Date.parse(newest.last_synced_at)) / 60000);
+      if (ageMin <= 60) return { count: 0, sample: [] };
+      return {
+        count: 1,
+        sample: [{
+          lastSyncedAt: newest.last_synced_at,
+          ageMinutes: ageMin,
+          newestTracking: newest.momo_tracking_no,
+        }],
+      };
+    },
+  },
+  {
     id: "ttw_staged_uncommitted",
     title: "TTW/อี้อู แพคกิ้งค้าง staging ยังไม่ทำเป็นรายการเก็บเงิน (งานค้าง owner เคาะ)",
     severity: "info",
