@@ -5,6 +5,7 @@ import {
   type AutoThShippingFill,
 } from "@/lib/forwarder/domestic-shipping";
 import { isMaoCarrier } from "@/lib/forwarder/mao-fee";
+import { isOwnFleetCarrier } from "@/lib/forwarder/carrier-coverage-guard";
 
 /**
  * autoFillThShippingForForwarder — พี่ป๊อป spec #7 (owner 2026-07-08 · "ต้อง auto").
@@ -40,7 +41,7 @@ export async function autoFillThShippingForForwarder(
   const { data: row, error } = await admin
     .from("tb_forwarder")
     .select(
-      "id, userid, fcabinetnumber, fshipby, ftransportprice, faddresszipcode, faddressprovince, faddressdistrict, fweight, fwidth, flength, fheight",
+      "id, userid, fcabinetnumber, fshipby, paymethod, ftransportprice, faddresszipcode, faddressprovince, faddressdistrict, fweight, fwidth, flength, fheight",
     )
     .eq("id", fId)
     .maybeSingle<{
@@ -48,6 +49,7 @@ export async function autoFillThShippingForForwarder(
       userid: string | null;
       fcabinetnumber: string | null;
       fshipby: string | null;
+      paymethod: string | null;
       ftransportprice: number | string | null;
       faddresszipcode: string | null;
       faddressprovince: string | null;
@@ -77,6 +79,15 @@ export async function autoFillThShippingForForwarder(
     shipmentIsMao = !!(sib && sib.length > 0);
   }
   if (shipmentIsMao) return null; // เหมาๆ = ฿100 flat only · never a per-tracking domestic leg
+
+  // 🔒 COD LOCK (owner 2026-07-21 "พอเลือกชำระปลายทาง ก็ต้องไม่ใส่ ค่าขนส่งไทย · ควรเป็น 0")
+  // A ปลายทาง row is collected by the courier at the door — Pacred must store NO domestic
+  // charge on it, so there is nothing to auto-fill. Two ways a row is COD: its stored
+  // paymethod is already '2', or its carrier is a private courier (which this rule now
+  // forces to '2' anyway · lib/forwarder/pay-method.ts enforceCodDomesticZero).
+  const storedPayMethod = String(row.paymethod ?? "").trim();
+  const carrierIsPrivate = (row.fshipby ?? "").trim() !== "" && !isOwnFleetCarrier(row.fshipby);
+  if (storedPayMethod === "2" || carrierIsPrivate) return null;
 
   // girth (w+l+h, cm) — Flash prices by max(kg, size); pass it so a light/bulky
   // parcel isn't under-quoted. 0 when dims are unknown (weight-only path is safe).

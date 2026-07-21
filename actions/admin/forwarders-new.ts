@@ -44,6 +44,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { derivePayMethod } from "@/lib/forwarder/pay-method";
 import { z } from "zod";
 import { parseCustomerAddressRow } from "@/lib/admin/customer-address-book";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -636,7 +637,8 @@ export async function adminCreateForwarder(
           fsendsms1day:          "0",
           fsendsms3day:          "0",
           fsendsms3eday:         "0",
-          paymethod:             "1",
+          // 🔒 COD LOCK (owner 2026-07-21) — ขนส่งเอกชน = ปลายทาง (COD) เสมอ.
+          paymethod:             derivePayMethod(d.shipBy),
           crate:                 "2",      // default = ไม่ตี (admin edit later)
           pricecrate:            0,
           fqc:                   "0",

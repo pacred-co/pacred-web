@@ -293,17 +293,22 @@ export default async function AdminReportCntDetailPage({
 
   // ── 5) tb_users for usernames + coID ──
   const userIds = Array.from(new Set(cntRows.map((r) => r.userid).filter(Boolean) as string[]));
-  const userMap = new Map<string, { username: string | null; coid: string | null }>();
+  // custJuristic — the CUSTOMER's canonical นิติ/บุคคล flag (tb_users.userCompany="1").
+  // The per-row tb_forwarder.fusercompany is under-populated (prod: 350 rows / 37
+  // juristic customers have fusercompany≠1 while the customer IS juristic), so the
+  // นิติ/บุคคล badge must read the customer here — not the row snapshot — or it lies
+  // "บุคคล" for real juristic customers (ภูม 2026-07-21 · §0f badge ต้องเป๊ะ).
+  const userMap = new Map<string, { username: string | null; coid: string | null; juristic: boolean }>();
   if (userIds.length > 0) {
     const { data: users, error: usersErr } = await admin
       .from("tb_users")
-      .select("userID, userName, coID")
+      .select("userID, userName, coID, userCompany")
       .in("userID", userIds);
     if (usersErr) {
       console.error(`[tb_users list] failed`, { code: usersErr.code, message: usersErr.message });
     }
-    for (const u of (users ?? []) as Array<{ userID: string; userName: string | null; coID: string | null }>) {
-      userMap.set(u.userID, { username: u.userName, coid: u.coID });
+    for (const u of (users ?? []) as Array<{ userID: string; userName: string | null; coID: string | null; userCompany: string | null }>) {
+      userMap.set(u.userID, { username: u.userName, coid: u.coID, juristic: (u.userCompany ?? "").trim() === "1" });
     }
   }
 
@@ -529,6 +534,9 @@ export default async function AdminReportCntDetailPage({
       userid: String(r.userid ?? ""),
       username: u?.username ?? null,
       usercompany: typeof r.fusercompany === "string" ? r.fusercompany : r.fusercompany == null ? null : String(r.fusercompany),
+      // นิติ/บุคคล badge source = the CUSTOMER's canonical flag (tb_users.userCompany),
+      // NOT the under-populated per-row fusercompany above (which stays for the WHT 1%).
+      custJuristic: u?.juristic ?? false,
       fdetail: r.fdetail,
       detailDisplay,
       fcover: r.fcover,

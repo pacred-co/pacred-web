@@ -51,6 +51,8 @@ export type DetailRow = {
   userid: string;
   username: string | null;
   usercompany: string | null;
+  custJuristic: boolean;   // customer's canonical นิติ flag (tb_users.userCompany) — drives the badge
+
   fdetail: string | null;
   /** resolved product-detail to render (fdetail → item productname → null) */
   detailDisplay: string | null;
@@ -448,6 +450,12 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
       .filter((r) => !r.inCheckQueue && isRowEligibleForAddCheck(r.fstatus) && hasDeliveryAddress(r))
       .map((r) => r.id);
     const groupSel = eligibleIds.length > 0 && eligibleIds.every((id) => selected.has(id));
+    // How many of the shipment's แทรค are already in the check queue. A multi-แทรค
+    // header must state its check state like a single row — ภูม 2026-07-21: a fully-in-check
+    // shipment showed a disabled EMPTY checkbox with a FALSE "รอของถึงโกดัง" reason instead
+    // of "✓ อยู่ในรายการ". shipmentInCheck = in the queue with nothing left to add.
+    const inCheckCount = g.filter((r) => r.inCheckQueue).length;
+    const shipmentInCheck = inCheckCount > 0 && eligibleIds.length === 0;
     const statusBadge = a.status != null ? fstatusBadge(a.status) : null;
     return (
       <tr
@@ -457,29 +465,46 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
            single-แทรค row → it behaves IDENTICALLY: RED (ยังยิงกล่องไม่ครบ) / WHITE (ครบ) by
            scan, and EMERALD when ticked (pcs-row-selected · same as a single row · "พอติ๊ก
            สีต้องเปลี่ยนเหมือนรายการเพื่อนๆ"). Only extra = the chevron dropdown for its แทรค. */
-        className={`${groupSel ? "pcs-row-selected" : scanned ? "pcs-row-scan-ok" : "pcs-row-scan-wait"} cursor-pointer`}
+        className={`${groupSel ? "pcs-row-selected" : shipmentInCheck ? "pcs-row-check" : scanned ? "pcs-row-scan-ok" : "pcs-row-scan-wait"} cursor-pointer`}
       >
         {checkColumn && (
-          <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
-            {/* owner 2026-07-18 — ALWAYS show the tick (like a single row · "ยังไม่มี action
-                ให้ติ๊ก"), disabled-with-reason when not arrived / not fully scanned / cnt-paid. */}
-            <input
-              type="checkbox"
-              checked={groupSel}
-              onChange={() => toggleGroupSelect(eligibleIds)}
-              disabled={!checkInteractive || eligibleIds.length === 0 || !scanned}
-              title={
-                !checkInteractive
-                  ? "ตู้นี้จ่ายค่าตู้แล้ว · แก้ผ่านบิลจ่ายเงินตู้"
-                  : eligibleIds.length === 0
-                    ? "รอของถึงโกดังก่อน (ยังไม่ถึงไทย)"
-                    : !scanned
-                      ? `ยิงกล่องไม่ครบ (${fmtN(a.boxGot)}/${fmtN(a.boxExp)}) · เลือกวางบิลไม่ได้จนกว่าจะยิงครบทั้งชิปเม้น`
-                      : `เลือกทั้งชิปเม้น (${eligibleIds.length} แทรคที่ถึงไทยแล้ว)`
-              }
-              aria-label={`เลือกชิปเม้น ${base}`}
-            />
-          </td>
+          shipmentInCheck ? (
+            /* ภูม 2026-07-21 — the shipment's แทรค are already in the check queue → state it
+               like a single row's "✓ อยู่ในรายการ", never a disabled empty box with a false
+               "รอของถึงโกดัง" reason. */
+            <td className="px-2 py-2 text-center align-middle" onClick={(e) => e.stopPropagation()}>
+              <span
+                className="block text-[11px] text-emerald-600"
+                title={inCheckCount === g.length ? "ทุกแทรคอยู่ในรายการตรวจสอบแล้ว" : `${inCheckCount}/${g.length} แทรคอยู่ในรายการตรวจสอบแล้ว`}
+              >
+                ✓ อยู่ในรายการ{inCheckCount === g.length ? "" : ` ${inCheckCount}/${g.length}`}
+              </span>
+            </td>
+          ) : (
+            <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+              {/* owner 2026-07-18 — ALWAYS show the tick (like a single row), disabled-with-the-REAL-reason. */}
+              <input
+                type="checkbox"
+                checked={groupSel}
+                onChange={() => toggleGroupSelect(eligibleIds)}
+                disabled={!checkInteractive || eligibleIds.length === 0 || !scanned}
+                title={
+                  !checkInteractive
+                    ? "ตู้นี้จ่ายค่าตู้แล้ว · แก้ผ่านบิลจ่ายเงินตู้"
+                    : g.every((r) => (parseInt(r.fstatus || "0", 10) || 0) >= 5)
+                      ? "ออกบิลแล้ว · แก้ผ่านบิล"
+                      : g.some((r) => isRowEligibleForAddCheck(r.fstatus) && !hasDeliveryAddress(r))
+                        ? "ยังไม่ตั้งที่อยู่จัดส่ง"
+                        : eligibleIds.length === 0
+                          ? "รอของถึงโกดังก่อน (ยังไม่ถึงไทย)"
+                          : !scanned
+                            ? `ยิงกล่องไม่ครบ (${fmtN(a.boxGot)}/${fmtN(a.boxExp)}) · เลือกวางบิลไม่ได้จนกว่าจะยิงครบทั้งชิปเม้น`
+                            : `เลือกทั้งชิปเม้น (${eligibleIds.length} แทรคที่ถึงไทยแล้ว)`
+                }
+                aria-label={`เลือกชิปเม้น ${base}`}
+              />
+            </td>
+          )
         )}
         {/* ID/CO */}
         <td className="px-2 py-2 font-mono text-[11px]">{a.fidorco || "—"}</td>
@@ -619,16 +644,14 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
               {FSTATUS_CFG[a.status as keyof typeof FSTATUS_CFG].act ? "🔔 " : ""}{FSTATUS_CFG[a.status as keyof typeof FSTATUS_CFG].next}
             </div>
           )}
-          {(a.fcredit || a.isJuristic) && (
-            <div className="mt-1 flex flex-wrap justify-center gap-1">
-              {a.isJuristic && <span className="badge badge-vip badge-pill font-10">นิติ</span>}
-              {a.fcredit && (
-                <Link href={`/admin/forwarders/${g[0].id}`} onClick={(e) => e.stopPropagation()} className="badge badge-success badge-pill font-10">
-                  เครดิตได้
-                </Link>
-              )}
-            </div>
-          )}
+          <div className="mt-1 flex flex-wrap justify-center gap-1">
+            <EntityBadge juristic={a.isJuristic} />
+            {a.fcredit && (
+              <Link href={`/admin/forwarders/${g[0].id}`} onClick={(e) => e.stopPropagation()} className="badge badge-success badge-pill font-10">
+                เครดิตได้
+              </Link>
+            )}
+          </div>
           {/* Per-SHIPMENT pay: bill the whole -N split at once (restored 2026-06-19
               — was lost when the collapsible grouping landed; owner: "เลือกชำระราย
               ชิปเม้น หายไป"). Only when goods arrived (fstatus 4) + money-tier.
@@ -1003,11 +1026,9 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                     >
                       {r.userid}
                     </Link>
-                    {/* legacy badgeVIP2 นิติ pill (SVIP/VIP-tier pills need extra
-                        server fields → follow-up · นิติ is available from usercompany). */}
-                    {r.usercompany === "1" && (
-                      <> <span className="badge badge-vip badge-pill" title="ลูกค้านิติบุคคล">นิติ</span></>
-                    )}
+                    {/* นิติ / บุคคล — always shown so every row states the buyer's
+                        entity type (ภูม 2026-07-21). Source = customer's canonical flag. */}
+                    <> <EntityBadge juristic={r.custJuristic} /></>
                   </td>
                   <td className="max-w-[220px]">
                     {/* legacy: image float-right + short-text detail (fdetail →
@@ -1507,7 +1528,7 @@ function aggregateGroup(g: DetailRow[]) {
     // owner 2026-07-18 รอบ3 — the header must carry the SAME detail as a single row:
     // credit/นิติ badges · COD · the delivery address · the next-action hint.
     fcredit:               g.some((r) => (r.fcredit ?? "").trim() === "1"),
-    isJuristic:            g.some((r) => (r.usercompany ?? "").trim() === "1"),
+    isJuristic:            g.some((r) => r.custJuristic),
     paymethod:             uniq((r) => (r.paymethod ?? "").trim()),
     addressDistrict:       uniq((r) => (r.faddressdistrict ?? "").trim() || null),
     addressProvince:       uniq((r) => (r.faddressprovince ?? "").trim() || null),
@@ -1570,6 +1591,21 @@ function productTypeLabel(t: string | null): string {
 // show a raw "13" for ธนามัย ขนส่งด่วน (ภูม 2026-07-21). Full legacy nameShipBy faithful.
 function shipByLabel(s: string | null): string {
   return carrierLabel(s);
+}
+
+// นิติ / บุคคล pill — EVERY row shows the buyer's entity type (ภูม 2026-07-21:
+// "ขึ้นไปเลยว่าเป็นนิติ หรือ บุคคล · ทุกแถว"). tb_forwarder.fusercompany="1" = นิติบุคคล,
+// else = บุคคลธรรมดา. นิติ = highlighted (badge-vip), บุคคล = neutral (badge-secondary)
+// so the juristic customers stand out at a glance (self-explaining row · §0g).
+function EntityBadge({ juristic }: { juristic: boolean }) {
+  return (
+    <span
+      className={`badge badge-pill font-10 ${juristic ? "badge-vip" : "badge-secondary"}`}
+      title={juristic ? "ลูกค้านิติบุคคล" : "ลูกค้าบุคคลธรรมดา"}
+    >
+      {juristic ? "นิติ" : "บุคคล"}
+    </span>
+  );
 }
 
 // Legacy report-cnt "สถานะสินค้า" badge colour by fstatus — 1:1 with the legacy

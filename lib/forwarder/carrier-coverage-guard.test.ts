@@ -9,6 +9,7 @@
  * Run:  npx tsx lib/forwarder/carrier-coverage-guard.test.ts   (wired into pnpm test:unit)
  */
 
+import { EXTRA_CARRIER_COVERAGE } from "./carrier-extra";
 import {
   OWN_FLEET_SHIPBY,
   WORKBOOK_CARRIER_CODES,
@@ -104,7 +105,16 @@ assertEq("REFUSE  นิ่มซี่เส็ง (21) → 'จ.ปัตต�
 // ─────────────────────────────────────────────────────────────
 section("lookups + the throwing variant");
 // ─────────────────────────────────────────────────────────────
-assertEq("the workbook holds 28 codes", WORKBOOK_CARRIER_CODES.size, 28);
+// 28 from the workbook + owner-added carriers (lib/forwarder/carrier-extra.ts) — the
+// guard's closed list must contain BOTH, else a carrier the owner just added is refused.
+assertEq(
+  "the closed list = workbook 28 + owner-added extras",
+  WORKBOOK_CARRIER_CODES.size,
+  28 + EXTRA_CARRIER_COVERAGE.length,
+);
+for (const c of EXTRA_CARRIER_COVERAGE) {
+  assertTrue(`owner-added carrier ${c.code} (${c.name}) passes the guard`, WORKBOOK_CARRIER_CODES.has(c.code));
+}
 assertEq("findWorkbookCarrier('13').name", findWorkbookCarrier("13")?.name, "ธนามัย ขนส่งด่วน");
 assertEq("findWorkbookCarrier('สมใจสาย4') → null", findWorkbookCarrier("สมใจสาย4"), null);
 {

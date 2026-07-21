@@ -17,6 +17,10 @@ import {
   isMaomaoEligibleForAddress,
 } from "./ship-by-eligibility";
 import { carriersForProvince } from "@/lib/forwarder/carrier-province-coverage";
+import { EXTRA_CARRIER_COVERAGE } from "@/lib/forwarder/carrier-extra";
+
+/** Carriers the owner added ahead of the workbook (all-province by default). */
+const EXTRA_CODES: string[] = EXTRA_CARRIER_COVERAGE.map((c) => c.code);
 
 let pass = 0;
 let fail = 0;
@@ -74,19 +78,24 @@ for (const prov of ["สุรินทร์", "เชียงใหม่", "
 }
 
 // Spot-check the actual carrier sets against the workbook (owner-readable).
+// NB: the owner may add a carrier that serves ALL provinces before it reaches the
+// workbook xlsx (lib/forwarder/carrier-extra.ts · e.g. "48" อ่าวไทยทรานสปอรต added
+// 2026-07-21). Those show up in EVERY province by design, so the per-province
+// spot-checks assert the workbook set is PRESENT (superset), and the extras are
+// asserted separately below.
 assertEq(
   "สุรินทร์ → Flash · J&T · ธนามัย · จันทร์สว่าง · บุญอนันต์ · พี.เจ.",
-  ids(getPrivateCarrierOptionsForProvince("สุรินทร์")).sort(),
+  ids(getPrivateCarrierOptionsForProvince("สุรินทร์")).filter((c) => !EXTRA_CODES.includes(c)).sort(),
   ["12", "13", "14", "15", "2", "24"].sort(),
 );
 assertEq(
   "เชียงใหม่ → Flash · J&T · SB สมใจ · นิ่มซี่เส็ง",
-  ids(getPrivateCarrierOptionsForProvince("เชียงใหม่")).sort(),
+  ids(getPrivateCarrierOptionsForProvince("เชียงใหม่")).filter((c) => !EXTRA_CODES.includes(c)).sort(),
   ["2", "21", "24", "7"].sort(),
 );
 assertEq(
   "ปัตตานี → Flash · J&T · ทรัพย์ปรีชา · พัฒนา · หาดใหญ่ทัวร์ · แพปลา",
-  ids(getPrivateCarrierOptionsForProvince("ปัตตานี")).sort(),
+  ids(getPrivateCarrierOptionsForProvince("ปัตตานี")).filter((c) => !EXTRA_CODES.includes(c)).sort(),
   ["2", "24", "27", "28", "29", "33"].sort(),
 );
 assertTrue(
@@ -114,7 +123,15 @@ section("RETIRED couriers are offered NOWHERE (all 77 provinces)");
 {
   const offenders = ids(ALL_WORKBOOK_CARRIER_OPTIONS).filter((c) => RETIRED_CODES.includes(c));
   assertEq("ALL_WORKBOOK_CARRIER_OPTIONS holds no retired code", offenders, []);
-  assertEq("the workbook is 28 couriers", ALL_WORKBOOK_CARRIER_OPTIONS.length, 28);
+  assertEq(
+    "the workbook is 28 couriers (+ owner-added extras)",
+    ALL_WORKBOOK_CARRIER_OPTIONS.filter((o) => !EXTRA_CODES.includes(o.id)).length,
+    28,
+  );
+  // Every owner-added carrier IS offered — and in all 77 provinces while unrestricted.
+  for (const code of EXTRA_CODES) {
+    assertTrue(`extra carrier ${code} is in the closed list`, ids(ALL_WORKBOOK_CARRIER_OPTIONS).includes(code));
+  }
 }
 {
   // The cart path (getShipByOptionsForAddress) must not leak one either.
@@ -197,7 +214,11 @@ const fam = getShipByOptionsForAddress({ userID: "PCSFAM", zip: "10110", provinc
 assertTrue("PCSFAM in BKK bypasses the Flash-only quirk (sees the real list)", fam.length > 1);
 assertEq("PCSFAM offers no retired code", ids(fam).filter((c) => RETIRED_CODES.includes(c)), []);
 const famNoProv = getShipByOptionsForAddress({ userID: "PCSFAM", zip: "", province: "", amphoe: "" });
-assertEq("PCSFAM with no province → the whole workbook (28)", famNoProv.length, 28);
+assertEq(
+  "PCSFAM with no province → the whole workbook (28 + extras)",
+  famNoProv.filter((o) => !EXTRA_CODES.includes(o.id)).length,
+  28,
+);
 
 // maomao gate (checkPCSMaoMao.php) — untouched.
 assertEq("warehouse pickup (addressID='PCS') → not maomao-eligible", isMaomaoEligibleForAddress({ addressID: "PCS", zip: "10110" }), false);

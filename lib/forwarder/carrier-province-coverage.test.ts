@@ -12,6 +12,7 @@
  * Run:  pnpm tsx lib/forwarder/carrier-province-coverage.test.ts  (wired into test:unit)
  */
 
+import { EXTRA_CARRIER_COVERAGE } from "./carrier-extra";
 import {
   CARRIER_PROVINCE_COVERAGE,
   ISAAN_PROVINCES,
@@ -36,7 +37,13 @@ const sorted = (a: readonly string[]) => [...a].sort();
 
 // ── the workbook parsed into 28 carriers ──
 section("shape");
-assertEq("28 carriers", CARRIER_PROVINCE_COVERAGE.length, 28);
+// The workbook parses to 28; owner-added carriers (lib/forwarder/carrier-extra.ts —
+// e.g. "48" อ่าวไทยทรานสปอรต, 2026-07-21) are appended and counted separately so a new
+// owner request never breaks this assertion.
+const EXTRA_CODES: string[] = EXTRA_CARRIER_COVERAGE.map((c) => c.code);
+const workbookOnly = CARRIER_PROVINCE_COVERAGE.filter((c) => !EXTRA_CODES.includes(c.code));
+assertEq("28 carriers from the workbook", workbookOnly.length, 28);
+assertEq("owner-added carriers are appended too", CARRIER_PROVINCE_COVERAGE.length, 28 + EXTRA_CODES.length);
 assertTrue(
   "every carrier has a legacy fshipby code (no migration needed)",
   CARRIER_PROVINCE_COVERAGE.every((c) => c.code !== ""),
@@ -117,11 +124,11 @@ assertTrue("สุรินทร์ → ธนามัย (13)", surin.include
 assertTrue("สุรินทร์ → จันทร์สว่าง (12)", surin.includes("12"));
 assertTrue("สุรินทร์ → บุญอนันต์ (14)", surin.includes("14"));
 assertTrue("สุรินทร์ → พี.เจ. (15)", surin.includes("15"));
-assertEq("สุรินทร์ = exactly 6 carriers", surin.length, 6);
+assertEq("สุรินทร์ = exactly 6 workbook carriers", surin.filter((c: string) => !EXTRA_CODES.includes(c)).length, 6);
 assertEq("สุรินทร์ does NOT get a southern carrier (สี่สหาย 32)", surin.includes("32"), false);
 // the province the LEGACY table could never match (typo "ศรีสระเกษ")
 const sisaket = carriersForProvince("ศรีสะเกษ").map((c) => c.code);
-assertEq("ศรีสะเกษ = 6 carriers (legacy typo made these unreachable)", sisaket.length, 6);
+assertEq("ศรีสะเกษ = 6 workbook carriers (legacy typo made these unreachable)", sisaket.filter((c: string) => !EXTRA_CODES.includes(c)).length, 6);
 assertTrue("ศรีสะเกษ → พี.เจ. (15)", sisaket.includes("15"));
 assertEq("lookup by alias works (โคราช)", carriersForProvince("โคราช").length, carriersForProvince("นครราชสีมา").length);
 assertEq("unknown province → []", carriersForProvince("ไม่มีจังหวัดนี้"), []);

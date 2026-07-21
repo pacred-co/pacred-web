@@ -426,7 +426,11 @@ export async function updateLegacyForwarderShipBy(
   const paymethod = derivePayMethodForDelivery(fShipBy, { addressID: null, zip: null });
 
   // forwarder.php L1593 — base UPDATE with ownership.
-  const baseUpdate: Record<string, string> = { fshipby: fShipBy, paymethod };
+  const baseUpdate: Record<string, string | number> = { fshipby: fShipBy, paymethod };
+  // 🔒 COD LOCK (owner 2026-07-21 "พอเลือกชำระปลายทาง ก็ต้องไม่ใส่ ค่าขนส่งไทย · ควรเป็น 0")
+  // — ลูกค้าเปลี่ยนเป็นขนส่งเอกชนเอง = เก็บปลายทาง → ล้างค่าส่งไทยที่ค้างจากขนส่งเจ้าเดิม
+  // ทิ้ง ไม่งั้นเลขเก่ายังนั่งอยู่บนแถวและกลายเป็นยอดเก็บทันทีที่มีอะไรพลิกกลับเป็นต้นทาง.
+  if (paymethod === "2") baseUpdate.ftransportprice = 0;
 
   const { error: updErr } = await admin
     .from("tb_forwarder")
