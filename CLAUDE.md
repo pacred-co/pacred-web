@@ -11,7 +11,9 @@
 >
 > **❓ NO CODE tab (owner "MOMO ไม่ส่ง PR ตีเป็น NO CODE ให้ CS ตรวจ"):** แท็บใหม่บน hub ตรวจตู้ = แถวไม่ commit + ไม่มี PR (prod 4 แถว) + banner 4 ทางทำงาน (Copy/Excel→ถามโกดังจีน · รูป+แทรค→ถามลูกค้า · ค้นตอนลูกค้าตามของ · ✎ ใส่ PR→นำเข้า). **🔄 MOMO Live self-running:** พิสูจน์แล้ว automation มีครบ (cron momo-sync ทุก 5 นาที รัน propagate Live ทุก pass) → เพิ่มแถบอายุซิงค์ (เขียว≤30น./เหลือง≤2ชม./แดง) + data-health **`momo_sync_stale`** (แดงเมื่อ >60 นาที · calibrated prod 2.7 นาที=เขียว) + ผลปุ่ม "ดึง Live" พิสูจน์ตัวเอง (boardsFetched/parcelsSeen · แยก "MOMO ยังไม่ชั่ง" ออกจาก "ดึงพัง") — จบเคส owner "สรุปมันได้หรือไม่ได้" (1784597733 = MOMO ยังไม่ชั่งจริง ไม่ใช่ระบบพัง).
 >
-> **🔴 CARRYOVER:** mig 0263/0264/0267/0268 → DEV · Codex GAP P0 4 ข้อ (atomicity checkout/spawn/settlement — ออกแบบร่วมก่อนลงมือ) · คิวบัญชีเดิม (83 billed-misprice · residue ×2 · double_billed FRI13/24 · 3 per-box cost) · 15 แทรค packing → CS ติ๊กสร้าง.
+> **🔴 AUTOCOMMIT เหมาๆ BUG (เจอตอนไล่ว่าทำไม cron ไม่ commit 908 เอง · `07e6c0b1`):** `resolveAutoCommitDelivery` เช็ค saved carrier กับ **ลิสต์เอกชน** (getShipByOptionsForAddress — own-fleet ไม่อยู่ในนั้น by design) → **ลูกค้าที่ตั้งเหมาๆ (PRF/PCSF) ทุกพัสดุถูก cron ข้ามไป /review ตลอดกาล** (PR9820: PRF + กทม.10240 = โซนเหมาๆ จริงแต่โดน skip). FIX: เหมาๆ → validate ด้วย `isMaomaoEligibleForAddress` (checkPCSMaoMao.php SOT เดียวกับ cart) · PCS/express ยัง skip (no auto-assign · โซน express = owner-input) · เอกชน = ลิสต์เดิม. วิธีไล่: ยิง cron เอง `curl -H "Authorization: Bearer $CRON_SECRET" https://pacred.co.th/api/cron/momo-sync` (⚠️ pacred.co redirect ข้ามโดเมน → curl ตัด Authorization → ต้องยิงโดเมนตรง) + replay evaluate() pure predicates กับ prod = ชี้ด่านที่ skip ได้แม่น.
+>
+> **🔴 CARRYOVER:** mig 0263/0264/0267/0268 → DEV · Codex GAP P0 4 ข้อ (atomicity checkout/spawn/settlement — ออกแบบร่วมก่อนลงมือ) · คิวบัญชีเดิม (83 billed-misprice · residue ×2 · double_billed FRI13/24 · 3 per-box cost) · 15 แทรค packing → CS ติ๊กสร้าง · โซน express (PCSE/PRE) สำหรับ autocommit = owner เคาะ.
 
 ---
 
