@@ -364,7 +364,10 @@
       "Bash(cd /d/Dev/pacred-web *)",
       "Bash(sed -n '70,95p' components/sections/protected-sidebar.tsx)",
       "Bash(node -e \"const m=require\\('./messages/th.json'\\); const s=m.protectedSidebar||m.sidebar||{}; console.log\\(JSON.stringify\\({serviceOrderAdd:s.serviceOrderAdd, serviceOrder:s.serviceOrder},null,2\\)\\)\")",
-      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('dev:', p.scripts.dev\\); console.log\\('build:', p.scripts.build\\); console.log\\('start:', p.scripts.start\\); console.log\\('packageManager:', p.packageManager\\)\")"
+      "Bash(node -e \"const p=require\\('./package.json'\\); console.log\\('dev:', p.scripts.dev\\); console.log\\('build:', p.scripts.build\\); console.log\\('start:', p.scripts.start\\); console.log\\('packageManager:', p.packageManager\\)\")",
+      "Bash(ls node_modules/.bin/tsx 2>/dev/null && echo HAS_NM || echo NO_NM; ls .env.local 2>/dev/null && echo HAS_ENV || echo NO_ENV; ls ../../../.env.local 2>/dev/null && echo MAIN_HAS_ENV || echo MAIN_NO_ENV)",
+      "Bash(cp ../../../.env.local .env.local && echo ENV_COPIED; ls ../../../node_modules/.bin/tsx 2>/dev/null && echo MAIN_HAS_NM || echo MAIN_NO_NM; git merge origin/codex --no-edit 2>&1 | tail -5; git log --oneline -3)",
+      "Bash(grep -rn \"\\\\-\\\\\\\\\\\\\\\\d+\\(?:\\\\\\\\\\\\\\\\/\\\\\\\\\\\\\\\\d+\\)?\\\\$\\\\|/-\\(\\\\\\\\\\\\\\\\d+\\)\\\\|baseOf\" --include=\"*.ts\" lib/forwarder lib/admin)"
     ]
   }
 }

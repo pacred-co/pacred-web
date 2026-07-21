@@ -3,6 +3,24 @@
 
 ---
 
+# 🤝 2026-07-21 สาย (เดฟ · integrate Codex รอบแรก) — รีวิว+รวมงาน Codex (ฝากสั่งซื้อ→ฝากนำเข้า single spine · mig 0268 owner-gated) + สถานะตู้บนหน้าตรวจสอบ → all 4 branches · read FIRST
+
+> **🏁 dave-pacred = Poom-pacred = InwPond007 = codex = `7f8d16a7`** (main รอ owner สั่ง). gate: **tsc 0 · test:unit เขียว · BUILD_EXIT=0**. **mig 0268 = BRANCH ONLY · ยังไม่ apply DEV/PROD (owner เคาะ) · NEXT FREE = 0269.**
+>
+> **🤖 CODEX รอบแรก = ผ่านรีวิว (คุณภาพสูงจริง · ไม่หลุดสโคป).** งาน = ไล่ flow ฝากสั่งซื้อ→ฝากนำเข้า ทั้งเส้น → **19 fix + บอก gap ที่ยังไม่ปิด 11 ข้อตรงๆ ไม่ซ่อน** ([`docs/research/shop-order-import-flow-audit-2026-07-21.md`](docs/research/shop-order-import-flow-audit-2026-07-21.md)). แกนหลัก: ย้ายการ derive สถานะ 40/5 จาก "ปุ่ม/page logic กด" → **DB trigger ตัวเดียวตัดสิน** (mig 0268 `derive_shop_order_status` + writer เดียว + `get_linked_shop_forwarders` RPC) · tokenise comma tracking bag (`,`/`，`) · match กล่อง MOMO `-N[/M]` ด้วย base+userid · ตัด fstatus=99 · รองรับ rollback/delete/relink · ลบ trigger ซ้ำบน tb_order.
+> **สิ่งที่ผม verify เอง (ไม่เชื่อรายงาน):** (1) คอลัมน์ที่ 0268 อ่าน/เขียน **มีจริงบน prod ครบทุกตัว** (tb_header_order/tb_order/tb_forwarder) — จุดที่เมลก่อนทำค้าง (2) **prod มี trigger ซ้ำบน tb_order จริง 2 ตัว** (`trg_advance_shop_on_order_link` + `trg_advance_shop_on_tracking_keyed`) = ยืนยัน FIX-01 (3) เทสไม่ได้ถูกลบทิ้ง — **เขียนใหม่ให้ตรงโมเดล** (531→452 บรรทัด · ตัดเทส "4→5 header update" ที่ย้ายเป็น trigger · เพิ่มเทส `40` + comma bag) (4) `get_linked_shop_forwarders` ยังไม่มีบน prod แต่โค้ดมี **exact fallback** → deploy โค้ดก่อน migration ได้ไม่พัง.
+> **🔴 owner เคาะ:** apply mig 0268 (status/link only · ไม่แตะเงิน) — ก่อน apply ระบบใช้ fallback เดิม ทำงานได้ปกติ.
+>
+> **➕ สถานะตู้บน /admin/forwarder-check (`7f8d16a7`):** PCS มีคอลัมน์ "สถานะตู้" — ของเรามีครบทุกหัวข้ออื่นแล้ว (3 แท็บ ทั้งหมด/เครดิต/ปกติ · ID/ตู้ · รหัส · รายละเอียด · ปริมาณ · ประเภท · ค่านำเข้า/อัปเดต · ตีลัง/จีน+/อื่นๆ · ขนส่งไทย · ส่วนลด · รวมขาย · 1% · ต้นทุน/กำไร · สถานะ · ตรวจโดย · หมายเหตุ) ขาดตัวเดียว = **ขา COST ของตู้** → badge `💰 จ่ายค่าตู้แล้ว` / `⏳ ยังไม่จ่ายค่าตู้` (ลิงก์ /admin/cnt-hs · ADVISORY ไม่บล็อกแจ้งชำระ). prod `tb_cnt`/`tb_cnt_item` = **0 แถว** → ทุกตู้ขึ้น "ยังไม่จ่าย" = ความจริง (ยังไม่เคยใช้ระบบตัดจ่ายเลย) = คิวงานบัญชีจริง.
+>
+> **💰 จ่ายต้นทุนตู้ — ตอบ owner "MOMO เก็บเราเป็น tracking จะตัดทั้งตู้ว่าครบยังไง":** MOMO วางบิล **per-tracking เป็นรอบ** · เราตัดจ่าย **per-ตู้ ครั้งเดียว**. สะพาน = **mig 0267 `momo_invoice_line`** (append-only เก็บบรรทัดใบแจ้งหนี้ MOMO ต่อ tracking) → **`lib/admin/cabinet-billing-coverage.ts`** ม้วนขึ้นเป็นต่อตู้ → บอก **ครบ/ขาด X/Y/ยังไม่มีข้อมูลใบ** (ตู้ก่อนมีระบบห้าม fake-ขาด · ตัวหารกรองหัวบิล) → กดจ่ายที่ **/admin/cnt-hs** (`tb_cnt`+`tb_cnt_item` · partial-UNIQUE บน fCabinetNumber = จ่ายซ้ำไม่ได้เชิงโครงสร้าง). advisory ครบ-gate เตือนแต่ไม่บล็อก. prod มี **6 ตู้ partial จริง**.
+>
+> **⚠️ บทเรียน token (owner "ทำไม token ไหลเยอะขนาดนั้น"):** รอบนี้ผมเผา ~1.4M token ไปฟรีกับ workflow 5-agent ที่ติด limit พร้อมกัน (ได้ 0 ผลลัพธ์) **และ** ทำงานซ้ำที่เมลอื่นกู้ไปแล้ว (commit ผมกับ `3ead6393` เหมือนกันบรรทัดต่อบรรทัด). **กติกาใหม่: (1) เปิด session → `git log dave-pacred` + `git worktree list` ก่อนแตะโค้ดเสมอ (2) ห้ามยิง workflow หลาย agent ตอน session ใกล้ limit — ทำเองตรงๆ ถูกกว่าและได้ของ.**
+>
+> **🔴 CARRYOVER:** mig 0263/0264/0267 → DEV · mig 0268 → owner เคาะ · Codex GAP-01..11 (P0 4 ข้อ = transaction/atomicity ของ checkout·spawn·payment settlement · ต้องออกแบบร่วมกันก่อนลงมือ) · คิวบัญชีเดิม (83 แถว billed-misprice · residue ×2 · double_billed FRI13/24 · 3 แถว per-box cost) · 15 แทรคจาก packing ที่ CS ต้องติ๊กสร้าง.
+
+---
+
 # 🧾 2026-07-21 เช้า (เดฟ · กู้งาน 2 เมลติด limit + ปิด flow-audit) — [fNo] editor identity/crate/totals + forwarder-check fidelity + flow-gap plug + 💰 จ่ายต้นทุนตู้: momo_invoice_line provenance/coverage → dave-pacred · read FIRST
 
 > **🏁 dave-pacred = `<HEAD>`** (กู้ `3ead6393` จาก gifted-snyder + `c51b24d4` flow-audit fixes → merge เข้า dave-pacred). gate: **tsc 0 · BUILD_EXIT=0 · coverage/bill-header/data-health tests เขียว · 3-lens adversarial review (money-isolation/correctness/fidelity) = SHIP ทั้งหมด · 0 blocker**. **mig 0267 `momo_invoice_line` APPLIED PROD (verified live: table+3 idx+RLS · 0 rows) · DEV ยัง PAUSED → ค้างพร้อม 0263/0264 ตอนตื่น · NEXT FREE = 0268.**
