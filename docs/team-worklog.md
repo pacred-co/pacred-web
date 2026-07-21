@@ -21,7 +21,7 @@
 ## 🟢 ACTIVE — being worked on now
 | Dev | Feature | Key files / tables / migration# | Branch | Started | Notes |
 |---|---|---|---|---|---|
-| _(none claimed — add your row before starting)_ | | | | | |
+| **Codex** | **End-to-end ฝากสั่งซื้อ bug hunt** — member → admin → shop order → China tracking → import/forwarder handoff; source trace, status/data-flow audit, regression tests, and report | `actions/cart.ts` · `actions/service-order.ts` · `actions/admin/service-orders-spawn.ts` · `lib/admin/shop-order-*` · linked member/admin routes · `lib/admin/commit-momo-row-core.ts`; migration **0268 reserved** (`shop_order_import_single_spine`) | `codex` | 2026-07-21 | Owner-requested first Codex task. Renumbered after Dave landed/applied 0267; 0268 is branch-only/not applied; Dave review+apply required before deployment. |
 
 ## ✅ RECENTLY DONE (keep ~2 weeks, then prune)
 | Dev | Feature | Key files / migration# | Merged to | When |

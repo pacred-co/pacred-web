@@ -45,6 +45,7 @@ import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard"
 import { sendNotification } from "@/lib/notifications";
 import { logger, redactId } from "@/lib/logger";
 import { maybeCompleteShopOrder } from "@/lib/admin/maybe-complete-shop-order";
+import { buildShopForwarderHandoff } from "@/lib/admin/shop-forwarder-handoff";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — clip to 10 chars (tb_forwarder.adminid* is varchar(10)).
@@ -93,7 +94,7 @@ const trackingEntrySchema = z.object({
 
 const spawnSchema = z.object({
   hNo:        z.string().trim().min(1, "missing hNo").max(30),
-  trackings:  z.array(trackingEntrySchema).min(1, "ต้องมีอย่างน้อย 1 tracking").max(50),
+  trackings:  z.array(trackingEntrySchema).min(1, "ต้องมีอย่างน้อย 1 tracking").max(10_000),
 });
 export type SpawnForwardersInput = z.infer<typeof spawnSchema>;
 
@@ -101,11 +102,10 @@ type SpawnResult = {
   spawnedFNos: number[];
   skipped: number;
   created: number;
-  // 2026-06-29 (owner: per-shop incremental spawn) — the legacy all-shops-done
-  // completion gate ran AFTER this spawn. `statusCompleted` = this call flipped
-  // the shop order 4→5 (the LAST shop's tracking just landed). false = the order
-  // legitimately STAYS at 4 so the remaining shops can still get tracking +
-  // spawned (the fix for "ใส่ tracking ร้านแรกแล้ว อีก 9 ร้านใส่ไม่ได้").
+  promoRowsCarried: number;
+  // True only when the canonical post-spawn re-derive actually moved the order
+  // to 5 because every active import family was already done. Creating a new
+  // fstatus=1 row by itself never advances/completes the shop order.
   statusCompleted: boolean;
 };
 
@@ -121,6 +121,11 @@ type HeaderRow = {
   hfreeshipping: string | null;
   hpriceupdate: number | null;
   hrate: number | null;
+  hstatus: string | null;
+  hwarehousechina: string | null;
+  tax_doc_pref: string | null;
+  tax_doc_tax_id: string | null;
+  tax_doc_address: string | null;
   haddressname: string | null;
   haddresslastname: string | null;
   haddressno: string | null;
@@ -149,7 +154,7 @@ export async function spawnForwardersFromShopOrder(
   const d = parsed.data;
 
   return withAdmin<SpawnResult>(
-    ["ops", "sales_admin", "accounting"],
+    ["super", "ops", "sales_admin", "accounting"],
     async ({ adminId }) => {
       const admin            = createAdminClient();
       const legacyAdminIdRaw = await resolveLegacyAdminId();
@@ -160,7 +165,7 @@ export async function spawnForwardersFromShopOrder(
       const { data: header, error: headerErr } = await admin
         .from("tb_header_order")
         .select(
-          "hno,userid,htitle,hcover,htransporttype,hshipby,hshippingservice,hfreeshipping,hpriceupdate,hrate,haddressname,haddresslastname,haddressno,haddresssubdistrict,haddressdistrict,haddressprovince,haddresszipcode,haddressnote,haddresstel,haddresstel2,crate,pricecrate",
+          "hno,userid,hstatus,htitle,hcover,htransporttype,hshipby,hshippingservice,hfreeshipping,hpriceupdate,hrate,hwarehousechina,tax_doc_pref,tax_doc_tax_id,tax_doc_address,haddressname,haddresslastname,haddressno,haddresssubdistrict,haddressdistrict,haddressprovince,haddresszipcode,haddressnote,haddresstel,haddresstel2,crate,pricecrate",
         )
         .eq("hno", d.hNo)
         .maybeSingle<HeaderRow>();
@@ -173,9 +178,16 @@ export async function spawnForwardersFromShopOrder(
       if (!header) {
         return { ok: false, error: "ไม่พบออเดอร์ฝากสั่งซื้อ (hNo ไม่ตรง)" };
       }
+      if (header.hstatus !== "4" && header.hstatus !== "40") {
+        return {
+          ok: false,
+          error: `สร้างงานฝากนำเข้าได้เฉพาะออเดอร์รอร้านจีนจัดส่ง/ถึงโกดังจีน (4/40) · สถานะปัจจุบัน=${header.hstatus ?? "?"}`,
+        };
+      }
 
       const nowIso = new Date().toISOString();
       const spawnedFNos: number[] = [];
+      const createdFNos: number[] = [];
       let created = 0;
       let skipped = 0;
 
@@ -194,6 +206,7 @@ export async function spawnForwardersFromShopOrder(
           .select("id")
           .eq("reforder", d.hNo)
           .eq("ftrackingchn", fTrackingCHN)
+          .neq("fstatus", "99")
           .limit(1)
           .maybeSingle<{ id: number }>();
         if (existingErr) {
@@ -231,7 +244,15 @@ export async function spawnForwardersFromShopOrder(
         // fPriceUpdate — legacy shops.php L1658: round_up(cPriceUpdate * hRate, 2).
         // Per-tracking override is in THB already (caller computes); we don't
         // re-multiply by hRate (Pacred form posts pre-converted value).
-        const fPriceUpdate = t.fPriceUpdate ?? 0;
+        const handoff = buildShopForwarderHandoff({
+          fShipBy,
+          headerWarehouse: header.hwarehousechina,
+          taxDocPref: header.tax_doc_pref,
+          taxDocTaxId: header.tax_doc_tax_id,
+          taxDocAddress: header.tax_doc_address,
+          headerPriceUpdate: header.hpriceupdate,
+        });
+        const fPriceUpdate = t.fPriceUpdate ?? handoff.fallbackPriceUpdate;
         const fDetail      = (t.fDetail ?? header.htitle ?? "").slice(0, 500);
         const fCover       = (header.hcover ?? "").slice(0, 500);
         // 2026-06-29 (fix #3) — carry the header's crate flag + price into the
@@ -272,7 +293,7 @@ export async function spawnForwardersFromShopOrder(
             //     or empty strings for unset fields) ───
             fstatus:               "1",   // รอเข้าโกดังจีน
             paydeposit:            "0",
-            fwarehousechina:       "1",   // กวางโจว default
+            fwarehousechina:       handoff.fwarehousechina,
             // 2026-06-05 (ภูม flag — "spawn ขึ้นโกดัง แสง อัตโนมัติ"): the
             // shop-order auto-spawn doesn't know which China partner
             // warehouse the goods will arrive at (1=แสง 2=CTT 3=MK 4=MX
@@ -318,7 +339,10 @@ export async function spawnForwardersFromShopOrder(
             fsendsms1day:          "0",
             fsendsms3day:          "0",
             fsendsms3eday:         "0",
-            paymethod:             "1",
+            paymethod:             handoff.paymethod,
+            tax_doc_pref:          handoff.tax_doc_pref,
+            tax_doc_tax_id:        handoff.tax_doc_tax_id,
+            tax_doc_address:       handoff.tax_doc_address,
             crate:                 fCrate,        // carried from header (fix #3)
             pricecrate:            fPriceCrate,   // carried from header (fix #3)
             fqc:                   "0",
@@ -352,10 +376,48 @@ export async function spawnForwardersFromShopOrder(
         }
 
         spawnedFNos.push(row.id);
+        createdFNos.push(row.id);
         created++;
       }
 
-      // 3) Audit log — record what spawned vs skipped (idempotent re-runs).
+      // 3) Carry order promotions here (the single spawn SOT), so both the
+      // per-tracking button and the bulk wrapper produce identical imports.
+      // Also repairs a previously-spawned row on an idempotent re-run.
+      let promoRowsCarried = 0;
+      const { data: sourcePromos, error: sourcePromosErr } = await admin
+        .from("tb_promotion")
+        .select("promoid")
+        .eq("hno", d.hNo);
+      if (sourcePromosErr) {
+        logger.warn("service_order.spawn_forwarders", "promotion source read failed", {
+          h_no: d.hNo,
+          error: sourcePromosErr.message,
+        });
+      } else {
+        const promoIds = Array.from(new Set((sourcePromos ?? []).map((row) => row.promoid)));
+        for (const promoid of promoIds) {
+          for (const fid of spawnedFNos) {
+            const { data: existingPromo, error: promoCheckErr } = await admin
+              .from("tb_promotion")
+              .select("id")
+              .eq("promoid", promoid)
+              .eq("fid", fid)
+              .eq("hno", d.hNo)
+              .limit(1)
+              .maybeSingle<{ id: number }>();
+            if (promoCheckErr || existingPromo) continue;
+            const { error: promoInsertErr } = await admin.from("tb_promotion").insert({
+              date: nowIso,
+              promoid,
+              fid,
+              hno: d.hNo,
+            });
+            if (!promoInsertErr) promoRowsCarried += 1;
+          }
+        }
+      }
+
+      // 4) Audit log — record what spawned vs skipped (idempotent re-runs).
       await logAdminAction(adminId, "service_order.spawn_forwarders", "tb_header_order", d.hNo, {
         h_no:       d.hNo,
         admin_id:   legacyAdminId,
@@ -363,9 +425,10 @@ export async function spawnForwardersFromShopOrder(
         skipped:    skipped,
         f_nos:      spawnedFNos,
         tracking_count: d.trackings.length,
+        promo_rows_carried: promoRowsCarried,
       });
 
-      // 4) Customer notification — mirror legacy shops.php L1715 + L1720.
+      // 5) Customer notification — mirror legacy shops.php L1715 + L1720.
       //    One notification per spawn (not per skipped); message says
       //    "รายการอัตโนมัติจากออเดอร์ฝากสั่งซื้อ #<hNo>" so the customer
       //    understands the link to their shop order.
@@ -376,7 +439,7 @@ export async function spawnForwardersFromShopOrder(
           if (profileId) {
             // Aggregate notification — one push per spawn batch (a single
             // admin submit). Avoids 10× spam if the operator bulk-spawns.
-            const fNosLabel = spawnedFNos.slice(-created).map((id) => `#${id}`).join(", ");
+            const fNosLabel = createdFNos.map((id) => `#${id}`).join(", ");
             await sendNotification(profileId, {
               category:       "forwarder",
               severity:       "success",
@@ -403,14 +466,11 @@ export async function spawnForwardersFromShopOrder(
         }
       }
 
-      // 5) Legacy all-shops-done completion gate (shops.php L1525-1580). The
-      //    spawned forwarders sit at fstatus='1', so the mig-0215/0216 DB
-      //    trigger does NOT auto-complete (it only fires at fstatus≥2 / เลขตู้).
-      //    THIS gate is the legacy "every shop sub-order now has a tracking"
-      //    milestone: flip 4→5 ONLY when count(slots)===count(trackings). When
-      //    it does not fire, the order STAYS at 4 so the remaining shops can
-      //    still get tracking entered + spawned (per-shop incremental loop).
-      //    Best-effort — never roll back the spawn on a gate failure.
+      // 6) Re-derive from the canonical arrival rule. A freshly-created
+      //    fstatus=1 row does not advance the shop order: 4→40 requires every
+      //    parcel to arrive China, and →5 requires every parcel to be
+      //    containered/at Thailand. Best-effort — the 0268 DB triggers remain
+      //    the systemic writer and also handle rollback/delete.
       let statusCompleted = false;
       try {
         const gate = await maybeCompleteShopOrder(admin, d.hNo, {
@@ -428,7 +488,7 @@ export async function spawnForwardersFromShopOrder(
       revalidatePath(`/admin/service-orders/${d.hNo}`);
       revalidatePath("/admin/service-orders");
       revalidatePath("/admin/forwarders");
-      return { ok: true, data: { spawnedFNos, created, skipped, statusCompleted } };
+      return { ok: true, data: { spawnedFNos, created, skipped, promoRowsCarried, statusCompleted } };
     },
   );
 }

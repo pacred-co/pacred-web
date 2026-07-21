@@ -558,7 +558,8 @@ export async function adminUpdateCartItemCTracking(
       const { data: fwdRows, error: fwdLookupErr } = await admin
         .from("tb_forwarder")
         .select("id, fcover")
-        .eq("ftrackingchn", d.c_tracking_number_old) as unknown as {
+        .eq("ftrackingchn", d.c_tracking_number_old)
+        .eq("userid", header.userid) as unknown as {
           data: Array<{ id: number; fcover: string | null }> | null;
           error: { code?: string; message?: string } | null;
         };
@@ -577,6 +578,7 @@ export async function adminUpdateCartItemCTracking(
       let tbForwarderRowsTouched = 0;
       let fcoverBackfilled = false;
       if (fwdRows && fwdRows.length > 0) {
+        const linkedForwarderIds = fwdRows.map((row) => row.id);
         // Decide if we should backfill fcover: legacy condition
         // (L805-806) is `fcover==''` + a cimages exists. We test
         // emptiness across the whole result set — if ANY row has empty
@@ -590,7 +592,9 @@ export async function adminUpdateCartItemCTracking(
           const { error: renameErr, count: renameCount } = await admin
             .from("tb_forwarder")
             .update({ ftrackingchn: d.c_tracking_number_new }, { count: "exact" })
-            .eq("ftrackingchn", d.c_tracking_number_old) as unknown as {
+            .in("id", linkedForwarderIds)
+            .eq("ftrackingchn", d.c_tracking_number_old)
+            .eq("userid", header.userid) as unknown as {
               error: { code?: string; message?: string } | null;
               count: number | null;
             };
@@ -612,7 +616,8 @@ export async function adminUpdateCartItemCTracking(
           const { error: backfillErr } = await admin
             .from("tb_forwarder")
             .update({ fcover: firstCImages })
-            .eq("ftrackingchn", d.c_tracking_number_new)
+            .in("id", linkedForwarderIds)
+            .eq("userid", header.userid)
             .or("fcover.is.null,fcover.eq.");
           if (backfillErr) {
             console.error(`[tb_forwarder fcover backfill] failed`, {
@@ -632,7 +637,9 @@ export async function adminUpdateCartItemCTracking(
           const { error: renameErr, count: renameCount } = await admin
             .from("tb_forwarder")
             .update({ ftrackingchn: d.c_tracking_number_new }, { count: "exact" })
-            .eq("ftrackingchn", d.c_tracking_number_old) as unknown as {
+            .in("id", linkedForwarderIds)
+            .eq("ftrackingchn", d.c_tracking_number_old)
+            .eq("userid", header.userid) as unknown as {
               error: { code?: string; message?: string } | null;
               count: number | null;
             };

@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { countShopArrivals, deriveShopStatus } from "./shop-order-arrivals";
+import { splitShopTrackingTokens } from "./shop-order-status-rule";
 
 /**
  * 3-stage RE-DERIVE gate for ฝากสั่งซื้อ multi-shop orders (2026-06-30 · the
@@ -20,7 +21,7 @@ import { countShopArrivals, deriveShopStatus } from "./shop-order-arrivals";
  *   '4'  รอร้านจีนจัดส่ง   ← otherwise (a shop not shipped / not arrived)
  *   '40' ถึงโกดังจีน        ← ทุกร้านถึงโกดังจีน (fstatus≥2) แต่ยังมีร้านไม่ได้เลขตู้
  *   '5'  สำเร็จ            ← ทุกร้านได้เลขตู้ (fcabinetnumber) / ถึงไทย (fstatus≥4)
- * `deriveShopStatus(summary)` is the SOT (see shop-order-arrivals.ts).
+ * `deriveShopStatus(summary)` is the SOT (see shop-order-status-rule.ts).
  *
  * RE-DERIVE (two-way inside {4,40}) instead of advance-only:
  *   - current ∈ {4,40} → write deriveShopStatus(summary) if it differs (incl.
@@ -36,7 +37,7 @@ import { countShopArrivals, deriveShopStatus } from "./shop-order-arrivals";
  *
  * STATUS-ONLY · no money. On the '→5' branch ONLY, the legacy re-stamps
  * hTotalPriceUser from the SAME sell formula (no driver change · shops.php
- * L1562-1565) when recomputeSell:true. The DB trigger (mig 0234/0235) is the
+ * L1562-1565) when recomputeSell:true. The DB trigger (mig 0268) is the
  * systemic SOT that fires from EVERY forwarder write; this TS mirror keeps the
  * in-action result + audit consistent (the trigger corrects any stale read).
  *
@@ -58,7 +59,7 @@ export async function maybeCompleteShopOrder(
     .from("tb_order")
     .select("cshippingnumber, ctrackingnumber")
     .eq("hno", hno)
-    .limit(500);
+    .limit(10_000);
   if (rowsErr) {
     console.error("[maybeCompleteShopOrder] tb_order list failed", {
       hno, code: rowsErr.code, message: rowsErr.message,
@@ -66,17 +67,11 @@ export async function maybeCompleteShopOrder(
     return { completed: false, slotCount: 0, trackingCount: 0 };
   }
 
-  const splitTokens = (v: string | null | undefined): string[] =>
-    (v ?? "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-
   let slotCount = 0;     // arrID  — shop sub-order slots
   let trackingCount = 0; // arrID2 — trackings entered
   for (const r of rows ?? []) {
-    slotCount += splitTokens(r.cshippingnumber).length;
-    trackingCount += splitTokens(r.ctrackingnumber).length;
+    slotCount += splitShopTrackingTokens(r.cshippingnumber).length;
+    trackingCount += splitShopTrackingTokens(r.ctrackingnumber).length;
   }
 
   // 2. Re-derive the order's status as a PURE FUNCTION of the per-shop arrival

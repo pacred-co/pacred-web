@@ -13,6 +13,7 @@ import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { computeShopOrderDebitTotal } from "@/lib/service-order/debit-total";
+import { computeShopOrderTransferAmount } from "@/lib/service-order/payment-amount";
 import { BANK } from "@/components/seo/site";
 import { validateStoredFile } from "@/lib/file-validation";
 import { spendCashbackAtCheckout, refundCashbackOnReject } from "@/actions/admin/wallet-hs";
@@ -677,6 +678,10 @@ const PAYMETHOD_TO_LEGACY: Record<string, string> = {
   origin:      "1",
   destination: "2",
 };
+const WAREHOUSE_TO_HEADER_LEGACY: Record<string, string> = {
+  yiwu: "1",
+  guangzhou: "2",
+};
 
 export async function placeServiceOrder(
   input: PlaceOrderInput,
@@ -721,8 +726,10 @@ export async function placeServiceOrder(
     addressID: "INLINE",
     hShipBy: d.ship_by ?? null,
     payMethod: PAYMETHOD_TO_LEGACY[d.pay_method] ?? "1",
+    hWarehouseChina: WAREHOUSE_TO_HEADER_LEGACY[d.warehouse_china] ?? "2",
     pro,
     hNote: d.note_user ?? null,
+    addressNote: d.ship_note ?? null,
     addressSnapshot: {
       addressName:        d.ship_first_name,
       addressLastname:    d.ship_last_name,
@@ -1352,7 +1359,7 @@ export async function submitShopOrderSlipPayment(
   // Load the order (ownership-gated) — same shape as payServiceOrderFromWallet.
   const { data: header, error: headerErr } = await admin
     .from("tb_header_order")
-    .select("id,hno,userid,hstatus,htotalpriceuser,htotalpricechn,hshippingchn,hshippingservice,hrate")
+    .select("id,hno,userid,hstatus,htotalpriceuser,htotalpricechn,hshippingchn,hshippingservice,hrate,tax_doc_pref")
     .eq("hno", hNo)
     .eq("userid", memberCode)
     .maybeSingle<{
@@ -1360,6 +1367,7 @@ export async function submitShopOrderSlipPayment(
       htotalpriceuser: number | string | null; htotalpricechn: number | string | null;
       hshippingchn: number | string | null; hshippingservice: number | string | null;
       hrate: number | string | null;
+      tax_doc_pref: string | null;
     }>();
   if (headerErr) {
     console.error(`[submitShopOrderSlipPayment header] failed`, { code: headerErr.code, message: headerErr.message, hNo });
@@ -1402,7 +1410,10 @@ export async function submitShopOrderSlipPayment(
   // pay loop. The slip ALWAYS covers the FULL bill (no wallet-discount, no
   // debit-at-submit, no refund-on-reject). The slip row is type='8' → approve
   // does delta=0 (never touches tb_wallet).
-  const slipAmount = priceToPay;
+  const slipAmount = computeShopOrderTransferAmount(priceToPay, header.tax_doc_pref);
+  if (!Number.isFinite(slipAmount) || slipAmount <= 0) {
+    return { ok: false, error: "transfer_total_invalid" };
+  }
 
   // INSERT the PENDING shop-slip row. type='8' → approve does delta=0 (no
   // wallet move). status='1' → admin verifies the slip, then flips the order.

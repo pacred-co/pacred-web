@@ -843,41 +843,11 @@ export async function commitMomoRowCore(
     );
   }
 
-  // ── 6b. Advance the linked ฝากสั่งซื้อ order → "40 ถึงโกดังจีน" ──────
-  // LANE B step 3 (owner 2026-06-16): when a forwarder linked to a shop order
-  // (reforder → tb_header_order.hno) reaches the china warehouse (fStatusNew
-  // >= "2" = "ถึงโกดังจีน" or later), advance the order's hstatus 4→40 so the
-  // customer + admin see "ถึงโกดังจีน" instead of a stuck "รอร้านจีนจัดส่ง".
-  //
-  // FORWARD-ONLY + idempotent: the UPDATE WHERE folds `.eq("hstatus","4")`, so
-  // it only fires from "4 รอร้านจีนจัดส่ง"; it can NEVER regress "5 สำเร็จ" /
-  // "6 ยกเลิก" / an already-"40" row (0-row no-op). BEST-EFFORT: a miss here
-  // must NEVER fail the MOMO commit — the forwarder row + customer notify are
-  // already done. (No-op for MOMO-only parcels where reforderValue === "".)
-  // fStatusNew is always a single digit ("2" at-china-warehouse / "3"
-  // in-transit) — a numeric compare is correct for the >= "2" arrival gate.
-  if (reforderValue && Number(fStatusNew) >= 2) {
-    try {
-      const { data: advanced, error: advErr } = await admin
-        .from("tb_header_order")
-        .update({ hstatus: "40", hdateupdate: nowIso })
-        .eq("hno", reforderValue)
-        .eq("hstatus", "4")            // forward-only from รอร้านจีนจัดส่ง
-        .select("id");
-      if (advErr) {
-        console.error(
-          `[momo commit: order-advance] tb_header_order update failed (hno=${reforderValue})`,
-          { code: advErr.code, message: advErr.message },
-        );
-      } else if (advanced && advanced.length > 0) {
-        console.info(
-          `[momo commit: order-advance] hno=${reforderValue} → hstatus 4→40 (ถึงโกดังจีน)`,
-        );
-      }
-    } catch (e) {
-      console.error(`[momo commit: order-advance] threw (hno=${reforderValue})`, e);
-    }
-  }
+  // ── 6b. Shop-order status is intentionally NOT written here ──────────────
+  // The tb_forwarder INSERT already fires the canonical aggregate trigger
+  // (migration 0268). The old direct 4→40 write advanced the WHOLE order when
+  // only one shop arrived, bypassing the every-shop/every-token rule (P22328).
+  // All writers now converge through derive_shop_order_status instead.
 
   // ── 7. Audit log + revalidate ──────────────────────────────
   // admin_audit_log.admin_id is `uuid NOT NULL references profiles(id)` —

@@ -12,6 +12,7 @@ import { ShopOrderPayButton } from "./shop-order-pay-modal";
 import { ShopOrderEditShipByForm } from "./shop-order-edit-ship-by-form";
 import { ShopOrderEditAddressForm } from "./shop-order-edit-address-form";
 import { ProductDetailLines } from "@/components/shop/product-detail-lines";
+import { loadLinkedShopForwarders } from "@/lib/admin/shop-order-linked-forwarders";
 
 // Badge colours keyed by the legacy tb_header_order.hstatus code
 // ('1'-'6' + '40' ถึงโกดังจีน · owner 2026-06-16 MOMO arrival).
@@ -161,34 +162,7 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
   let linkedImports: LinkedImport[] = [];
   const linkedImportHno = o.h_no ?? hNo;
   if (linkedImportHno && memberCode) {
-    // This order's recorded China trackings (for the tracking-based link).
-    const { data: orderTracks, error: orderTracksErr } = await admin
-      .from("tb_order")
-      .select("ctrackingnumber")
-      .eq("hno", linkedImportHno);
-    if (orderTracksErr) {
-      console.error(`[service-order/[hNo] order tracks] failed`, { code: orderTracksErr.code, message: orderTracksErr.message });
-    }
-    const trackings = Array.from(
-      new Set(((orderTracks ?? []) as Array<{ ctrackingnumber: string | null }>)
-        .map((t) => (t.ctrackingnumber ?? "").trim())
-        .filter((t) => t.length > 0)),
-    );
-    // OR-match reforder / tracking via a single PostgREST .or() filter.
-    const orParts = [`reforder.eq.${linkedImportHno}`];
-    if (trackings.length > 0) orParts.push(`ftrackingchn.in.(${trackings.join(",")})`);
-    const { data: imports, error: importsErr } = await admin
-      .from("tb_forwarder")
-      .select("id, ftrackingchn, fstatus, fcabinetnumber")
-      .eq("userid", memberCode)
-      .or(orParts.join(","))
-      .neq("fstatus", "99")
-      .order("id", { ascending: false });
-    if (importsErr) {
-      console.error(`[service-order/[hNo] linked imports] failed`, { code: importsErr.code, message: importsErr.message });
-    }
-    const seen = new Set<number>();
-    linkedImports = ((imports ?? []) as LinkedImport[]).filter((r) => !seen.has(r.id) && seen.add(r.id));
+    linkedImports = await loadLinkedShopForwarders(admin, linkedImportHno);
   }
 
   return (

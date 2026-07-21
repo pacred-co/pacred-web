@@ -56,6 +56,8 @@ import { ShopItemsEditor, type EditorItem } from "../items-editor";
 import { ShopFieldsBoard, type TrackingGroup } from "../shop-fields-board";
 import { CratePriceBox } from "../crate-price-box";
 import { countShopArrivals } from "@/lib/admin/shop-order-arrivals";
+import { loadLinkedShopForwarders } from "@/lib/admin/shop-order-linked-forwarders";
+import { shopTrackingBase, splitShopTrackingTokens } from "@/lib/admin/shop-order-status-rule";
 import { buildTrackingGroups } from "@/lib/admin/shop-order-tracking-groups";
 import { AdminSpawnToCompletedButton } from "../mark-ordered-form";
 import { AdminRefundItemPanel } from "../refund-item-form";
@@ -407,29 +409,11 @@ export default async function AdminServiceOrderEditPage({
   // refOrder=hNo AND fTrackingCHN=<token> → badge "ตรวจสอบสถานะนำเข้า #ID").
   // Linked by reforder=hno OR forwarder.ftrackingchn = a recorded China tracking
   // (MOMO-created rows have reforder=""). §0c — destructure error.
-  const trackingTokens = Array.from(new Set(
-    items
-      .flatMap((it) => (it.ctrackingnumber ?? "").split(","))
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0),
-  ));
   const spawnedByTracking = new Map<string, { id: number; fstatus: string | null }>();
   {
-    const orParts = [`reforder.eq.${r.hno}`];
-    if (trackingTokens.length > 0) orParts.push(`ftrackingchn.in.(${trackingTokens.join(",")})`);
-    const { data: imps, error: impErr } = await admin
-      .from("tb_forwarder")
-      .select("id,ftrackingchn,fstatus")
-      .eq("userid", r.userid)
-      .or(orParts.join(","))
-      .neq("fstatus", "99")
-      .order("id", { ascending: false })
-      .limit(500);
-    if (impErr) {
-      console.error(`[service-order edit linked imports] failed`, { code: impErr.code, message: impErr.message });
-    }
-    for (const f of (imps ?? []) as Array<{ id: number; ftrackingchn: string | null; fstatus: string | null }>) {
-      const key = (f.ftrackingchn ?? "").trim();
+    const imps = await loadLinkedShopForwarders(admin, r.hno);
+    for (const f of imps) {
+      const key = shopTrackingBase(f.ftrackingchn);
       if (key && !spawnedByTracking.has(key)) spawnedByTracking.set(key, { id: f.id, fstatus: f.fstatus });
     }
   }
@@ -438,9 +422,9 @@ export default async function AdminServiceOrderEditPage({
   // still waiting. A shop is "done" when it has ≥1 tracking AND every tracking
   // token resolved to a forwarder.
   const shopSpawnSummary = shopFields.map((s) => {
-    const toks = (s.ctrackingnumber ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+    const toks = splitShopTrackingTokens(s.ctrackingnumber);
     const resolved = toks.map((tok) => {
-      const f = spawnedByTracking.get(tok);
+      const f = spawnedByTracking.get(shopTrackingBase(tok));
       const badge = f ? fstatusBadge(f.fstatus ?? "") : null;
       return { tracking: tok, fNo: f?.id ?? null, statusLabel: badge?.label ?? null, statusChip: badge?.chip ?? null };
     });
@@ -887,6 +871,7 @@ export default async function AdminServiceOrderEditPage({
             <div className="p-4">
               <SpawnForwarderForm
                 hNo={r.hno}
+                currentStatus={status}
                 rows={spawnRows}
                 defaultShipBy={r.hshipby ?? undefined}
                 defaultTransportType={r.htransporttype ?? undefined}

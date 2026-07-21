@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
-import { deriveShopStatus, isRealShopRow, type ShopArrival, type ShopArrivalSummary } from "./shop-order-status-rule";
+import {
+  buildShopArrivalSummary,
+  deriveShopStatus,
+  isRealShopRow,
+  shopTrackingBase,
+  shopTrackingsMatch,
+  splitShopTrackingTokens,
+  type ShopArrival,
+  type ShopArrivalSummary,
+} from "./shop-order-status-rule";
 
 /**
  * The owner's 3-stage ฝากสั่งซื้อ status rule — the ONE rule that mig 0259's
@@ -117,6 +126,67 @@ assert.equal(
   isRealShopRow({ cnameshop: null, ctitle: null, ctrackingnumber: "  1783998478  " }),
   true, "untrimmed tracking still counts → real shop",
 );
+
+// ─── CANONICAL LINK NORMALISATION (migration 0268 parity) ─────────────────
+assert.deepEqual(
+  splitShopTrackingTokens("T1, T2，T3"),
+  ["T1", "T2", "T3"],
+  "ASCII/Chinese comma bags split into tracking tokens",
+);
+assert.equal(shopTrackingBase("1782113771-1/7"), "1782113771", "-N/M split suffix → base");
+assert.equal(shopTrackingBase("1782113771-3"), "1782113771", "-N split suffix → base");
+assert.equal(shopTrackingBase("CBX260620-SEA07"), "CBX260620-SEA07", "non-numeric suffix is identity");
+assert.equal(shopTrackingsMatch("1782113771", "1782113771-2/7"), true, "base matches split child");
+
+// One shop with two parcel tokens is not arrived/done until BOTH parcels reach
+// the stage. Cancelled rows and another customer's reused tracking never count.
+{
+  const orderRows = [{
+    id: 10,
+    userid: "PR001",
+    cnameshop: "shopA",
+    ctitle: "two parcels",
+    ctrackingnumber: "BASE,T2",
+    cimages: "a.jpg,b.jpg",
+  }];
+  const oneArrived = buildShopArrivalSummary(orderRows, [
+    { userid: "PR001", ftrackingchn: "BASE-1/2", fstatus: "2", fcabinetnumber: "" },
+    { userid: "PR001", ftrackingchn: "T2", fstatus: "1", fcabinetnumber: "" },
+    { userid: "PR999", ftrackingchn: "T2", fstatus: "7", fcabinetnumber: "CROSS-USER" },
+    { userid: "", ftrackingchn: "T2", fstatus: "7", fcabinetnumber: "OWNERLESS" },
+    { userid: "PR001", ftrackingchn: "T2", fstatus: "99", fcabinetnumber: "STALE" },
+  ]);
+  assert.equal(oneArrived.allArrived, false, "one of two parcels pending → shop stays at 4");
+  assert.equal(oneArrived.allDone, false, "cancelled/cross-user rows do not complete the shop");
+  assert.equal(deriveShopStatus(oneArrived), "4");
+
+  const bothArrived = buildShopArrivalSummary(orderRows, [
+    { userid: "PR001", ftrackingchn: "BASE-1/2", fstatus: "2", fcabinetnumber: "" },
+    { userid: "PR001", ftrackingchn: "BASE-2/2", fstatus: "2", fcabinetnumber: "" },
+    { userid: "PR001", ftrackingchn: "T2", fstatus: "3", fcabinetnumber: "" },
+  ]);
+  assert.equal(deriveShopStatus(bothArrived), "40", "every token arrived, not done → 40");
+
+  const bothDone = buildShopArrivalSummary(orderRows, [
+    { userid: "PR001", ftrackingchn: "BASE-1/2", fstatus: "2", fcabinetnumber: "CNT-1" },
+    { userid: "PR001", ftrackingchn: "BASE-2/2", fstatus: "4", fcabinetnumber: "" },
+    { userid: "PR001", ftrackingchn: "T2", fstatus: "4", fcabinetnumber: "" },
+  ]);
+  assert.equal(deriveShopStatus(bothDone), "5", "every token containered/at Thailand → 5");
+
+  const missingSplitChild = buildShopArrivalSummary(orderRows, [
+    { userid: "PR001", ftrackingchn: "BASE-1/3", fstatus: "4", fcabinetnumber: "CNT-1" },
+    { userid: "PR001", ftrackingchn: "T2", fstatus: "4", fcabinetnumber: "CNT-2" },
+  ]);
+  assert.equal(deriveShopStatus(missingSplitChild), "4", "BASE-1/3 alone cannot represent all three boxes");
+
+  const pendingFamilyChild = buildShopArrivalSummary(orderRows, [
+    { userid: "PR001", ftrackingchn: "BASE-1/2", fstatus: "4", fcabinetnumber: "CNT-1" },
+    { userid: "PR001", ftrackingchn: "BASE-2/2", fstatus: "1", fcabinetnumber: "" },
+    { userid: "PR001", ftrackingchn: "T2", fstatus: "4", fcabinetnumber: "CNT-2" },
+  ]);
+  assert.equal(deriveShopStatus(pendingFamilyChild), "4", "one pending child holds the whole tracking family at 4");
+}
 
 // ── the reforder-empty / ctrackingnumber-fallback shape (P22332 / MOMO) ──────
 // A MOMO-created forwarder carries reforder='' — the link resolves via

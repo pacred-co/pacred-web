@@ -13,7 +13,7 @@
  *   - per-tracking spawn (Tab-4) via `spawnForwardersFromShopOrder`
  *     (service-orders-spawn.ts)
  * So an order could not be QUOTED (1→2) nor ORDERED (3→4) nor
- * AUTO-SPAWNED + FLIPPED-TO-COMPLETED (4→5) without falling back to legacy PHP.
+ * AUTO-SPAWNED into the linked import flow without falling back to legacy PHP.
  *
  * Why a NEW file (not appended to service-orders.ts):
  *   service-orders.ts already has 1× state-transition (general update +
@@ -27,7 +27,7 @@
  *   - 4→5 + tb_promotion carry — pcs-admin/shops.php L1514-1523 + L1675-1721
  *
  * Column-citation map for tb_header_order (per 0081_pcs_legacy_schema.sql):
- *   L2508  hstatus            varchar(1)   — '1'..'6'
+ *   L2508  hstatus            varchar(2)   — '1'..'6' + '40'
  *   L2511  hno                varchar(30)  — natural key
  *   L2521  hdatepayment       timestamp    — quote deadline ("กรุณาชำระก่อน X")
  *   L2516-2519 hdate2..hdate5 timestamp    — per-status stamp
@@ -104,6 +104,7 @@ import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver"
 import { spawnForwardersFromShopOrder } from "./service-orders-spawn";
 import { roundUp } from "@/lib/admin/shop-disbursement-calc";
 import { logger, redactId } from "@/lib/logger";
+import { splitShopTrackingTokens } from "@/lib/admin/shop-order-status-rule";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — same shape as service-orders.ts L29
@@ -145,7 +146,7 @@ async function resolveLegacyAdminId(): Promise<string> {
  * Status-transition guard. Each handler accepts ONE specific from-status:
  *   quote   accepts only '1'  (pending → quoted)
  *   ordered accepts only '3'  (paid    → ordered)
- *   spawn   accepts only '4'  (ordered → completed)
+ *   spawn   accepts '4'/'40'  (ordered/arrived → linked import rows)
  *
  * Terminal/cancelled = explicit error so admin doesn't double-fire.
  */
@@ -173,7 +174,7 @@ function spawnGuard(status: string | null | undefined): { ok: true } | { ok: fal
   const s = (status ?? "").trim();
   if (s === "6") return { ok: false, error: "ออเดอร์ยกเลิกแล้ว — ส่งเข้าโกดังไม่ได้" };
   if (s === "5") return { ok: false, error: "ออเดอร์เสร็จสมบูรณ์แล้ว — ไม่ต้องส่งเข้าโกดังซ้ำ" };
-  if (s !== "4") return { ok: false, error: `สถานะ ${s || "?"} ต้องเป็น "รอจีนจัดส่ง" (4) ก่อนจึงส่งเข้าโกดังได้` };
+  if (s !== "4" && s !== "40") return { ok: false, error: `สถานะ ${s || "?"} ต้องเป็น "รอจีนจัดส่ง" (4) หรือ "ถึงโกดังจีน" (40) ก่อนจึงส่งเข้าโกดังได้` };
   return { ok: true };
 }
 
@@ -214,7 +215,6 @@ export async function adminQuoteShopOrder(
   return withAdmin<QuoteData>(["super", "ops", "sales_admin"], async ({ adminId }) => {
     const admin         = createAdminClient();
     const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 10);
-
     // 1. Load + guard.
     const { data: header, error: headerErr } = await admin
       .from("tb_header_order")
@@ -252,16 +252,21 @@ export async function adminQuoteShopOrder(
       update.hnotedate = nowIso;
     }
 
-    const { error: updErr } = await admin
+    const { data: updatedHeader, error: updErr } = await admin
       .from("tb_header_order")
       .update(update)
-      .eq("id", header.id);
+      .eq("id", header.id)
+      .eq("hstatus", header.hstatus)
+      .select("id");
     if (updErr) {
       console.error(`[tb_header_order quote update] failed`, {
         code: updErr.code, message: updErr.message, hint: updErr.hint,
         hNo: d.hNo,
       });
       return { ok: false, error: updErr.message };
+    }
+    if (!updatedHeader || updatedHeader.length === 0) {
+      return { ok: false, error: "สถานะออเดอร์เปลี่ยนไปแล้ว — โหลดใหม่ก่อนตั้งราคาซ้ำ" };
     }
 
     // 3. Audit.
@@ -525,7 +530,7 @@ export async function adminSaveShopOrderItemsAndQuote(
     const deadline    = defaultQuoteDeadline();
     const deadlineIso = deadline.toISOString();
 
-    const { error: hdrErr } = await admin
+    const { data: savedHeader, error: hdrErr } = await admin
       .from("tb_header_order")
       .update({
         hcostallth:      hCostAllTh,
@@ -550,7 +555,9 @@ export async function adminSaveShopOrderItemsAndQuote(
         // editor redisplays it exactly (no 2dp-hrate round-trip drift). DISPLAY-only.
         ...(d.husdRate && d.husdRate > 0 ? { husdrate: d.husdRate } : {}),
       })
-      .eq("id", header.id);
+      .eq("id", header.id)
+      .eq("hstatus", header.hstatus)
+      .select("id");
     if (hdrErr) {
       console.error(`[tb_header_order save-items header update] failed`, {
         code: hdrErr.code, message: hdrErr.message, hNo: d.hNo,
@@ -558,6 +565,12 @@ export async function adminSaveShopOrderItemsAndQuote(
       return {
         ok: false,
         error: `บันทึกรายการสินค้าสำเร็จ (${rowsUpdated} แถว) แต่อัพเดท header ล้มเหลว: ${hdrErr.message}`,
+      };
+    }
+    if (!savedHeader || savedHeader.length === 0) {
+      return {
+        ok: false,
+        error: `รายการสินค้าถูกบันทึก ${rowsUpdated} แถว แต่สถานะออเดอร์เปลี่ยนไประหว่างบันทึก — ห้ามกดซ้ำ โปรดโหลดหน้าและตรวจสอบ`,
       };
     }
 
@@ -679,6 +692,36 @@ export async function adminMarkShopOrderOrdered(
     const guard = orderedGuard(header.hstatus);
     if (!guard.ok) return { ok: false, error: guard.error };
 
+    // Validate the COMPLETE shop set before mutating any line. A partial/typo
+    // payload must never flip a 10-shop order to status 4.
+    const { data: actualRows, error: actualRowsErr } = await admin
+      .from("tb_order")
+      .select("id, cnameshop")
+      .eq("hno", header.hno)
+      .limit(10_000);
+    if (actualRowsErr) return { ok: false, error: `db_error:${actualRowsErr.code ?? "unknown"}` };
+    const actualShopIds = new Map<string, number[]>();
+    for (const row of actualRows ?? []) {
+      const shop = (row.cnameshop ?? "").trim();
+      if (!shop) continue;
+      const ids = actualShopIds.get(shop) ?? [];
+      ids.push(row.id);
+      actualShopIds.set(shop, ids);
+    }
+    const actualShops = new Set(actualShopIds.keys());
+    if (actualShops.size === 0) return { ok: false, error: "ออเดอร์นี้ไม่มีร้านค้าให้บันทึก" };
+    if (d.shops && d.shops.length > 0) {
+      const submittedShops = new Set(d.shops.map((shop) => shop.cnameshop));
+      const missing = [...actualShops].filter((shop) => !submittedShops.has(shop));
+      const unknown = [...submittedShops].filter((shop) => !actualShops.has(shop));
+      if (missing.length > 0 || unknown.length > 0 || submittedShops.size !== d.shops.length) {
+        return {
+          ok: false,
+          error: `รายชื่อร้านไม่ครบหรือซ้ำ (ขาด: ${missing.join(", ") || "-"} · เกิน: ${unknown.join(", ") || "-"})`,
+        };
+      }
+    }
+
     // 2. Stamp `cshippingnumber` per-shop on tb_order (legacy update3.php
     //    L1075-1080 · for($count) { UPDATE tb_order ... WHERE hNo + cNameShop }).
     //    Two paths:
@@ -691,21 +734,26 @@ export async function adminMarkShopOrderOrdered(
     if (d.shops && d.shops.length > 0) {
       // Per-shop update: loop the array · WHERE hno + cnameshop
       for (const sh of d.shops) {
+        const shopIds = actualShopIds.get(sh.cnameshop) ?? [];
         const { error: shErr, count } = await admin
           .from("tb_order")
           .update({ cshippingnumber: sh.cshippingnumber }, { count: "exact" })
           .eq("hno", header.hno)
-          .eq("cnameshop", sh.cnameshop);
+          .in("id", shopIds);
         if (shErr) {
           console.error(`[tb_order per-shop ordered update] failed`, {
             code: shErr.code, message: shErr.message, shop: sh.cnameshop,
           });
           return { ok: false, error: `db_error:${shErr.code ?? "unknown"}` };
         }
-        if ((count ?? 0) > 0) {
-          rowsUpdated += count ?? 0;
-          shopsUpdated += 1;
+        if ((count ?? 0) !== shopIds.length) {
+          return {
+            ok: false,
+            error: `บันทึกร้าน ${sh.cnameshop} ไม่ครบ (${count ?? 0}/${shopIds.length} แถว) — ยังไม่เลื่อนสถานะ`,
+          };
         }
+        rowsUpdated += count ?? 0;
+        shopsUpdated += 1;
       }
       trackingSummary = d.shops.map((s) => `${s.cnameshop}: ${s.cshippingnumber}`).join(" · ");
     } else if (d.cshippingnumber) {
@@ -714,7 +762,7 @@ export async function adminMarkShopOrderOrdered(
         .from("tb_order")
         .select("id, cnameshop")
         .eq("hno", header.hno)
-        .limit(500);
+        .limit(10_000);
       if (itemsErr) {
         console.error(`[tb_order ordered list] failed`, {
           code: itemsErr.code, message: itemsErr.message,
@@ -722,7 +770,9 @@ export async function adminMarkShopOrderOrdered(
         return { ok: false, error: `db_error:${itemsErr.code ?? "unknown"}` };
       }
       const itemIds = (items ?? []).map((r) => r.id);
-      const distinctShops = new Set((items ?? []).map((r) => r.cnameshop));
+      const distinctShops = new Set(
+        (items ?? []).map((r) => (r.cnameshop ?? "").trim()).filter(Boolean),
+      );
       if (itemIds.length > 0) {
         const { error: itemUpdErr, count } = await admin
           .from("tb_order")
@@ -734,10 +784,22 @@ export async function adminMarkShopOrderOrdered(
           });
           return { ok: false, error: itemUpdErr.message };
         }
-        rowsUpdated = count ?? itemIds.length;
+        if ((count ?? 0) !== itemIds.length) {
+          return {
+            ok: false,
+            error: `บันทึกเลขออเดอร์ร้านไม่ครบ (${count ?? 0}/${itemIds.length} แถว) — ยังไม่เลื่อนสถานะ`,
+          };
+        }
+        rowsUpdated = count ?? 0;
         shopsUpdated = distinctShops.size;
       }
       trackingSummary = d.cshippingnumber;
+    }
+    if (rowsUpdated === 0 || shopsUpdated !== actualShops.size) {
+      return {
+        ok: false,
+        error: `บันทึกเลขออเดอร์ร้านไม่ครบ (${shopsUpdated}/${actualShops.size} ร้าน) — ยังไม่เลื่อนสถานะ`,
+      };
     }
 
     // 3. Header flip 3 → 4 + stamp hdate4.
@@ -752,7 +814,7 @@ export async function adminMarkShopOrderOrdered(
         ? `${trackingTag} · ${d.hnotechn}`
         : trackingTag;
 
-    const { error: hdrErr } = await admin
+    const { data: orderedHeader, error: hdrErr } = await admin
       .from("tb_header_order")
       .update({
         hstatus:       "4",
@@ -762,7 +824,9 @@ export async function adminMarkShopOrderOrdered(
         hnote:         (header.hnote ? `${header.hnote}\n` : "") + headerNote,
         hnotedate:     nowIso,
       })
-      .eq("id", header.id);
+      .eq("id", header.id)
+      .eq("hstatus", "3")
+      .select("id");
     if (hdrErr) {
       console.error(`[tb_header_order ordered header update] failed`, {
         code: hdrErr.code, message: hdrErr.message,
@@ -771,6 +835,9 @@ export async function adminMarkShopOrderOrdered(
         ok: false,
         error: `อัพเดทรายการ tb_order สำเร็จ (${rowsUpdated} แถว) แต่ flip header status ล้มเหลว: ${hdrErr.message}`,
       };
+    }
+    if (!orderedHeader || orderedHeader.length === 0) {
+      return { ok: false, error: "สถานะออเดอร์เปลี่ยนไปแล้ว — โหลดใหม่และตรวจรายการร้านก่อนกดซ้ำ" };
     }
 
     // 4. Audit.
@@ -840,14 +907,14 @@ type ShopTrackingData = {
 /**
  * Per-shop `cTrackingNumber` update on tb_order (legacy update4.php
  * L1366-1371). Used at hstatus=4 (รอร้านจีนจัดส่ง) — admin types the
- * tracking the seller gave them, per shop. NOT a status flip — that
- * happens later via `adminSpawnForwarderFromShopOrder` (4→5).
+ * tracking the seller gave them, per shop. The DB re-derives status from
+ * linked import arrivals; merely entering/spawning a tracking is not completion.
  *
  * Allowed at hstatus = '4'. Empty tracking clears the field (legacy
  * accepts that too — used when retyping).
  *
  * STATUS: do NOT re-derive here. Writing `ctrackingnumber` fires the DB trigger
- * `trg_advance_shop_on_order_link` (mig 0259), which applies the ONE rule
+ * `trg_advance_shop_on_order_link` (mig 0268), which applies the ONE rule
  * (`derive_shop_order_status`) — the same rule the tb_forwarder side uses. This
  * closes the owner's recurring "มีแทรคกิ้งหมดแล้ว แต่สถานะยังไม่เดิน" (P22332):
  * when the goods arrive BEFORE the tracking is keyed in, the tb_forwarder
@@ -880,8 +947,8 @@ export async function adminUpdateShopTracking(
     }
     if (!header) return { ok: false, error: "ไม่พบออเดอร์ฝากสั่งซื้อ (hNo ไม่ตรง)" };
     // 2026-06-29 (owner P22328 · multi-shop): allow tracking entry at 4 AND 40
-    // (ถึงโกดังจีน). For a 10-shop order, the FIRST shop arriving flips the order
-    // 4→40, but the remaining shops still need their tracking entered later.
+    // (ถึงโกดังจีน). Status 40 means every known shop has arrived, but tracking
+    // corrections/additional parcel links must remain editable until completion.
     if (header.hstatus !== "4" && header.hstatus !== "40") {
       return { ok: false, error: `กรอกเลข Tracking ได้เฉพาะออเดอร์สถานะ "รอร้านจีนจัดส่ง" (4) หรือ "ถึงโกดังจีน" (40) · สถานะปัจจุบัน = ${header.hstatus}` };
     }
@@ -935,7 +1002,7 @@ export async function adminUpdateShopTracking(
 }
 
 // ────────────────────────────────────────────────────────────
-// 3. adminSpawnForwarderFromShopOrder — 4 → 5 + spawn tb_forwarder + carry promo
+// 3. adminSpawnForwarderFromShopOrder — 4/40 → linked tb_forwarder rows + promo
 // ────────────────────────────────────────────────────────────
 
 const spawnAllSchema = z.object({
@@ -963,7 +1030,6 @@ export async function adminSpawnForwarderFromShopOrder(
 
   return withAdmin<SpawnAllData>(["super", "ops", "sales_admin"], async ({ adminId }) => {
     const admin         = createAdminClient();
-    const legacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 10);
 
     // 1. Load + guard.
     const { data: header, error: headerErr } = await admin
@@ -990,7 +1056,7 @@ export async function adminSpawnForwarderFromShopOrder(
       .from("tb_order")
       .select("cnameshop, cshippingnumber, ctrackingnumber")
       .eq("hno", header.hno)
-      .limit(500);
+      .limit(10_000);
     if (itemsErr) {
       console.error(`[tb_order spawn-all list] failed`, {
         code: itemsErr.code, message: itemsErr.message,
@@ -1004,14 +1070,8 @@ export async function adminSpawnForwarderFromShopOrder(
     const trackings: { cTrackingNumber: string; cShippingNumber: string }[] = [];
     const seen = new Set<string>();
     for (const r of (orderItems ?? [])) {
-      const ships = (r.cshippingnumber ?? "")
-        .split(",")
-        .map((s: string) => s.trim())
-        .filter(Boolean);
-      const tracks = (r.ctrackingnumber ?? "")
-        .split(",")
-        .map((s: string) => s.trim())
-        .filter(Boolean);
+      const ships = splitShopTrackingTokens(r.cshippingnumber);
+      const tracks = splitShopTrackingTokens(r.ctrackingnumber);
       const max = Math.max(tracks.length, 1);
       for (let i = 0; i < max; i++) {
         const tracking = tracks[i] ?? "";
@@ -1041,72 +1101,17 @@ export async function adminSpawnForwarderFromShopOrder(
     if (!spawnResult.ok) {
       return { ok: false, error: `spawn failed: ${spawnResult.error}` };
     }
-    const { spawnedFNos, created, skipped, statusCompleted } = spawnResult.data ?? {
-      spawnedFNos: [], created: 0, skipped: 0, statusCompleted: false,
+    const { spawnedFNos, created, skipped, promoRowsCarried, statusCompleted } = spawnResult.data ?? {
+      spawnedFNos: [], created: 0, skipped: 0, promoRowsCarried: 0, statusCompleted: false,
     };
 
-    // 4. tb_promotion carry — for every existing tb_promotion row pointing
-    //    at this hNo, INSERT a new row per spawned fNo (legacy shops.php
-    //    L1514-1523: "carry the promo into every freshly-spawned tb_forwarder
-    //    by writing a new tb_promotion row with fid=newFno, hno=origHno").
-    //    Idempotent: pre-SELECT (promoid, fid, hno) before re-insert.
-    let promoRowsCarried = 0;
-    const { data: existingPromos, error: promoErr } = await admin
-      .from("tb_promotion")
-      .select("promoid")
-      .eq("hno", header.hno);
-    if (promoErr) {
-      console.error(`[tb_promotion carry SELECT] failed`, {
-        code: promoErr.code, message: promoErr.message,
-      });
-    }
-    if (existingPromos && existingPromos.length > 0 && spawnedFNos.length > 0) {
-      const nowIso = new Date().toISOString();
-      for (const p of existingPromos) {
-        const promoid = p.promoid;
-        for (const fid of spawnedFNos) {
-          // Idempotency check — already carried for this (promoid, fid, hno)?
-          const { data: dup, error: dupErr } = await admin
-            .from("tb_promotion")
-            .select("id")
-            .eq("promoid", promoid)
-            .eq("fid", fid)
-            .eq("hno", header.hno)
-            .limit(1)
-            .maybeSingle<{ id: number }>();
-          if (dupErr) {
-            console.error(`[tb_promotion idempotency check] failed`, {
-              code: dupErr.code, message: dupErr.message,
-            });
-            continue;
-          }
-          if (dup) continue;
-          const { error: insErr } = await admin
-            .from("tb_promotion")
-            .insert({
-              date:    nowIso,
-              promoid,
-              fid,
-              hno:     header.hno,
-            });
-          if (insErr) {
-            console.error(`[tb_promotion carry insert] failed`, {
-              code: insErr.code, message: insErr.message, promoid, fid, hno: header.hno,
-            });
-            continue;
-          }
-          promoRowsCarried++;
-        }
-      }
-    }
+    // 4. Promotion carry already ran inside spawnForwardersFromShopOrder, the
+    // single spawn SOT shared by the per-row and bulk buttons.
 
-    // 5. Status flip is decided by the legacy all-shops-done completion gate,
-    //    which already ran INSIDE spawnForwardersFromShopOrder (shops.php
-    //    L1525-1580): it flips 4 → 5 ONLY when every shop sub-order slot now
-    //    has a tracking (count(slots)===count(trackings)). If not all shops are
-    //    done, the order legitimately STAYS at 4 so the remaining shops can
-    //    still get tracking entered + spawned — the fix for the owner's
-    //    "ใส่ tracking ร้านแรกแล้ว อีก 9 ร้านใส่ไม่ได้". So we DO NOT flip here.
+    // 5. The shared spawn SOT re-derived the canonical arrival state. Merely
+    //    creating an fstatus=1 import never completes the shop order; only all
+    //    arrived parcels produce 40 and all containered/Thailand parcels
+    //    produce 5.
     const statusFlipped = statusCompleted;
 
     // 6. Audit.
@@ -1123,7 +1128,7 @@ export async function adminSpawnForwarderFromShopOrder(
         skipped,
         promo_rows_carried:  promoRowsCarried,
         before_status:       header.hstatus,
-        after_status:        statusFlipped ? "5" : "4",
+        after_status:        statusFlipped ? "5" : header.hstatus,
         status_completed:    statusFlipped,
       },
     );

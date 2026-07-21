@@ -48,6 +48,8 @@ import { fstatusBadge } from "@/lib/admin/forwarder-status";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
 import { getShopOrderDocuments } from "@/lib/admin/order-documents";
 import { countShopArrivals } from "@/lib/admin/shop-order-arrivals";
+import { loadLinkedShopForwarders } from "@/lib/admin/shop-order-linked-forwarders";
+import { shopTrackingBase } from "@/lib/admin/shop-order-status-rule";
 import { buildTrackingGroups } from "@/lib/admin/shop-order-tracking-groups";
 import { OrderDocumentsPanel } from "@/components/admin/order-documents-panel";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
@@ -264,21 +266,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
   type AdminLinkedImport = { id: number; ftrackingchn: string | null; fstatus: string | null };
   let linkedImports: AdminLinkedImport[] = [];
   {
-    const trackings = Array.from(new Set(
-      ((itemsRaw ?? []) as Array<{ ctrackingnumber: string | null }>)
-        .map((t) => (t.ctrackingnumber ?? "").trim()).filter((t) => t.length > 0)));
-    const orParts = [`reforder.eq.${r.hno}`];
-    if (trackings.length > 0) orParts.push(`ftrackingchn.in.(${trackings.join(",")})`);
-    const { data: imports, error: impErr } = await admin
-      .from("tb_forwarder")
-      .select("id, ftrackingchn, fstatus")
-      .eq("userid", r.userid)
-      .or(orParts.join(","))
-      .neq("fstatus", "99")
-      .order("id", { ascending: false });
-    if (impErr) console.error(`[admin service-order linked imports] failed`, { code: impErr.code, message: impErr.message });
-    const seen = new Set<number>();
-    linkedImports = ((imports ?? []) as AdminLinkedImport[]).filter((x) => !seen.has(x.id) && seen.add(x.id));
+    linkedImports = await loadLinkedShopForwarders(admin, r.hno);
   }
 
   // ภูม 2026-06-30 — per-shop arrival breakdown (ร้านมาถึงโกดังจีนกี่ร้าน · แทรคกิ้ง
@@ -293,7 +281,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
   items.forEach((it, i) => shopCoverUrlById.set(it.id, coverUrls[i] ?? null));
   const shopSpawnedByTracking = new Map<string, { id: number; fstatus: string | null }>();
   for (const f of linkedImports) {
-    const key = (f.ftrackingchn ?? "").trim();
+    const key = shopTrackingBase(f.ftrackingchn);
     if (key && !shopSpawnedByTracking.has(key)) shopSpawnedByTracking.set(key, { id: f.id, fstatus: f.fstatus });
   }
   const shopTrackingGroups = buildTrackingGroups({

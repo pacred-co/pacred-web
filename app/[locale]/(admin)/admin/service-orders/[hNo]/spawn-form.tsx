@@ -35,6 +35,7 @@ export type TrackingRow = {
 
 export type SpawnFormProps = {
   hNo:                   string;
+  currentStatus:         string;
   rows:                  TrackingRow[];
   defaultShipBy?:        string;  // header.hshipby fallback
   defaultTransportType?: string;  // header.htransporttype fallback
@@ -51,6 +52,7 @@ type RowState = {
 
 export default function SpawnForwarderForm({
   hNo,
+  currentStatus,
   rows,
   defaultShipBy,
   defaultTransportType,
@@ -116,7 +118,9 @@ export default function SpawnForwarderForm({
         `${spawnedFNos.map((id) => `#${id}`).join(", ")}` +
         (statusCompleted
           ? " · ครบทุกร้านแล้ว → ปิดออเดอร์เป็น “สำเร็จ”"
-          : " · ออเดอร์ยังอยู่ “รอร้านจีนจัดส่ง” (กรอก tracking ร้านที่เหลือต่อได้)"),
+          : currentStatus === "40"
+            ? " · ออเดอร์ยังอยู่ “ถึงโกดังจีน”"
+            : " · ออเดอร์ยังอยู่ “รอร้านจีนจัดส่ง” (กรอก tracking ร้านที่เหลือต่อได้)"),
     );
     // Mark each input row done with assigned fNo (best-effort match by order).
     setState((s) =>

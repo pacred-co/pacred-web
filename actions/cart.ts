@@ -100,6 +100,7 @@ export async function calculateCartTotal(
   // calculateCart.php L6-12 — SELECT rsDefault FROM tb_settings WHERE ID=1;
   //                            if pro==19 → 5.10 override.
   const admin = createAdminClient();
+
   const { data: settingsRow, error: settingsRowErr } = await admin
     .from("tb_settings")
     .select("rsdefault")
@@ -257,9 +258,11 @@ type SubmitCartOrderInput = {
   addressID: string;                      // tb_address.addressID or 'PCS' (self-pickup)
   hShipBy?: string | null;                // forwarder picker (custom shipper) — null when PCS
   payMethod?: string | null;              // payment-method picker
+  hWarehouseChina?: string | null;        // header legacy: 1=Yiwu, 2=Guangzhou
   pro?: string | null;                    // 'f' = PCSF promo (+50฿ shipping)
   pro2?: string | null;                   // '77' = 3.3 date-window promo
   hNote?: string | null;                  // free-text note
+  addressNote?: string | null;            // delivery-address note (separate from order note)
   // P1 (เดฟ 2026-05-30 · 3-mode 2026-06-04) — tax-doc selector at /cart.
   // Persisted on tb_header_order so the billing/payment-land flow can issue
   // the right doc. Validated server-side: 'tax_invoice' (ใบกำกับ) + 'customs'
@@ -333,6 +336,29 @@ async function submitCartOrderImpl(
 
   const admin = createAdminClient();
 
+  // Canonical applied promotion lives server-side, keyed by the authenticated
+  // member. The old checkout trusted only transient form flags, so a typed code
+  // could visibly discount the cart yet disappear from the order.
+  const { data: promoSelection, error: promoSelectionErr } = await admin
+    .from("tb_pro_valentine")
+    .select("message")
+    .eq("userid", userID)
+    .order("date", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ message: string | null }>();
+  if (promoSelectionErr) {
+    console.error("[submitCartOrder promo selection] failed", {
+      code: promoSelectionErr.code,
+      message: promoSelectionErr.message,
+      userID,
+    });
+  }
+  const selectedPromo = resolveLegacyPromoCode(promoSelection?.message ?? "");
+  const appliedPromo = selectedPromo && isActive(new Date(), selectedPromo)
+    ? selectedPromo
+    : null;
+  const usesMaoPromo = input.pro === "f" || appliedPromo?.id === -1;
+
   // shops.php L3-9 — generate hNo = 'P' + (max(tb_header_order.ID) + 1).
   // The legacy uses a MySQL AUTO_INCREMENT next-value race; here we
   // SELECT the current max + 1. Race-rare for a single customer flow,
@@ -357,7 +383,7 @@ async function submitCartOrderImpl(
   // (฿100 · was a stale ฿50 here).
   let fShippingService = 0;
   let hShipBy: string | null = null;
-  if (input.pro === "f") {
+  if (usesMaoPromo) {
     fShippingService = MAO_FLAT_FEE;
     hShipBy = MAO_CARRIER_CODE; // preliminary · re-checked post-address
   } else if (input.addressID === "PCS") {
@@ -377,7 +403,7 @@ async function submitCartOrderImpl(
       await admin.from("tb_promotion").insert({
         date: now.toISOString(),
         promoid: "77",
-        fid: "",
+        fid: 0, // Postgres bigint sentinel for an order-level promotion
         hno: hNo,
       });
     }
@@ -396,7 +422,7 @@ async function submitCartOrderImpl(
     addressDistrict: "" as string,
     addressProvince: "" as string,
     addressZIPCode: "" as string,
-    addressNote: input.hNote ?? "",
+    addressNote: input.addressNote ?? input.hNote ?? "",
   };
   if (hShipBy === "PCS") {
     // "รับที่โกดัง" (pick-up at warehouse) — wired to Pacred's TH receiving
@@ -414,7 +440,7 @@ async function submitCartOrderImpl(
       addressDistrict: ADDRESSES.warehouseTh.district,
       addressProvince: ADDRESSES.warehouseTh.province,
       addressZIPCode: ADDRESSES.warehouseTh.postcode,
-      addressNote: input.hNote ?? "",
+      addressNote: input.addressNote ?? input.hNote ?? "",
     };
   } else if (input.addressID === "INLINE" && input.addressSnapshot) {
     // P0-3/4/5 — typed-in-form delivery address (the /service-order/cart
@@ -430,7 +456,7 @@ async function submitCartOrderImpl(
       addressDistrict: input.addressSnapshot.addressDistrict,
       addressProvince: input.addressSnapshot.addressProvince,
       addressZIPCode: input.addressSnapshot.addressZIPCode,
-      addressNote: input.hNote ?? "",
+      addressNote: input.addressNote ?? input.hNote ?? "",
     };
   } else {
     const { data: addrRow, error: addrRowErr } = await admin
@@ -468,7 +494,7 @@ async function submitCartOrderImpl(
       addressDistrict: addrRow.addressdistrict ?? "",
       addressProvince: addrRow.addressprovince ?? "",
       addressZIPCode: addrRow.addresszipcode ?? "",
-      addressNote: input.hNote ?? addrRow.addressnote ?? "",
+      addressNote: input.addressNote ?? addrRow.addressnote ?? "",
     };
   }
 
@@ -476,7 +502,7 @@ async function submitCartOrderImpl(
   // faithful checkFreeArea): out-of-zone → drop the promo to the customer's picked carrier
   // (no fee · → derivePayMethod = '2' ปลายทาง); ticked-only-เหมาๆ with no carrier → reject
   // with the zone message. Self-pickup (PCS) is exempt (no delivery zip).
-  if (input.pro === "f" && input.addressID !== "PCS") {
+  if (usesMaoPromo && input.addressID !== "PCS") {
     const mao = resolveMaomaoCarrier({
       pro: "f", addressID: input.addressID, zip: addr.addressZIPCode, pickedCarrier: input.hShipBy,
     });
@@ -569,7 +595,7 @@ async function submitCartOrderImpl(
         ? `${taxDocBillingName} · ${taxDocAddress}`
         : null,
       hdate: new Date().toISOString(),
-      hfreeshipping: input.pro === "f" ? "1" : "",
+      hfreeshipping: usesMaoPromo ? "1" : "",
       htransporttype: input.hTransportType,
       hshipby: hShipBy ?? "",
       haddressname: addr.addressName,
@@ -583,6 +609,7 @@ async function submitCartOrderImpl(
       haddresstel: addr.addressTel,
       haddresstel2: addr.addressTel2,
       hstatus: "1",
+      hwarehousechina: input.hWarehouseChina ?? null,
       // ── MySQL-implicit NOT-NULL defaults (Postgres needs them explicit) ──
       htitle: "",            // back-filled by rollup UPDATE below
       hcover: "",            // back-filled by rollup UPDATE below
@@ -727,7 +754,7 @@ async function submitCartOrderImpl(
   if (settingsRowErr) {
     console.error(`[tb_settings list] failed`, { code: settingsRowErr.code, message: settingsRowErr.message });
   }
-  const rsDefault = Number(settingsRow?.rsdefault ?? 5.0);
+  const rsDefault = Number(appliedPromo?.rate ?? settingsRow?.rsdefault ?? 5.0);
   const sumTotalCHN = orderRowsPayload.reduce(
     (s, r) => s + r.cprice * r.camount,
     0,
@@ -768,6 +795,38 @@ async function submitCartOrderImpl(
       // Non-fatal: order is placed; a leftover cart row is a minor annoyance, not
       // data loss. Don't fail the action (would risk a re-order). Log for Sentry.
       console.error(`[submitCartOrder tb_cart cleanup] failed — order placed but cart not cleared`, { code: cartDeleteErr.code, message: cartDeleteErr.message, userID });
+    }
+  }
+
+  // Persist the promotion on the order only AFTER header+lines exist. This is
+  // the linkage the spawn handoff carries to tb_forwarder. Clear the cart-level
+  // selection only after recording it, so a failed checkout remains retryable.
+  if (appliedPromo && appliedPromo.id > 0) {
+    const { error: promoOrderErr } = await admin.from("tb_promotion").insert({
+      date: new Date().toISOString(),
+      promoid: appliedPromo.id,
+      fid: 0, // order-level row; real fNo rows are carried during spawn
+      hno: hNo,
+    });
+    if (promoOrderErr) {
+      console.error("[submitCartOrder promotion linkage] failed", {
+        code: promoOrderErr.code,
+        message: promoOrderErr.message,
+        hNo,
+        promoId: appliedPromo.id,
+      });
+    } else {
+      await admin
+        .from("tb_pro_valentine")
+        .delete()
+        .eq("userid", userID)
+        .eq("message", promoSelection?.message ?? "");
+      if (appliedPromo.id === 77) {
+        await admin
+          .from("tb_promotion33")
+          .update({ statuspro: "2" })
+          .eq("userid", userID);
+      }
     }
   }
 

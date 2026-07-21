@@ -167,7 +167,7 @@ type HeaderOrderRow = {
   hnote: string | null;
 };
 
-// 7-tab definition for the status filter strip. Display labels resolved via i18n.
+// Status-filter strip, including the 3-stage handoff status 40 (ถึงโกดังจีน).
 type Tab = { key: string; activeCls: string };
 const TABS: readonly Tab[] = [
   { key: "",  activeCls: "bg-primary-600 text-white border-primary-600" },
@@ -175,6 +175,7 @@ const TABS: readonly Tab[] = [
   { key: "2", activeCls: "bg-rose-600 text-white border-rose-600"       },
   { key: "3", activeCls: "bg-sky-600 text-white border-sky-600"         },
   { key: "4", activeCls: "bg-blue-600 text-white border-blue-600"       },
+  { key: "40", activeCls: "bg-teal-600 text-white border-teal-600"     },
   { key: "5", activeCls: "bg-emerald-600 text-white border-emerald-600" },
   { key: "6", activeCls: "bg-neutral-600 text-white border-neutral-600" },
 ] as const;
@@ -223,12 +224,13 @@ export default async function ServiceOrderPage({
     if (status) qb = qb.eq("hstatus", status);
     return qb;
   };
-  const [cAll, cF1, cF2, cF3, cF4, cF5, cF6] = await Promise.all([
+  const [cAll, cF1, cF2, cF3, cF4, cF40, cF5, cF6] = await Promise.all([
     countQuery(),
     countQuery("1"),
     countQuery("2"),
     countQuery("3"),
     countQuery("4"),
+    countQuery("40"),
     countQuery("5"),
     countQuery("6"),
   ]);
@@ -238,11 +240,11 @@ export default async function ServiceOrderPage({
     "2": cF2.count  ?? 0,
     "3": cF3.count  ?? 0,
     "4": cF4.count  ?? 0,
+    "40": cF40.count ?? 0,
     "5": cF5.count  ?? 0,
     "6": cF6.count  ?? 0,
   };
   const countAll = counts[""];
-  const countShops2 = counts["2"];
 
   // ── Pagination — server-side window via ?page=N (PERF 2026-06-03).
   // Was unbounded — a long-time customer with hundreds of orders rendered
@@ -260,7 +262,7 @@ export default async function ServiceOrderPage({
     )
     .eq("userid", userID)
     .order("hdate", { ascending: false });
-  if (["1", "2", "3", "4", "5", "6"].includes(q)) {
+  if (["1", "2", "3", "4", "40", "5", "6"].includes(q)) {
     listQuery = listQuery.eq("hstatus", q);
   }
   listQuery = listQuery.range(rowFrom, rowTo);

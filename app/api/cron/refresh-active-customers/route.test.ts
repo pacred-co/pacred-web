@@ -10,7 +10,7 @@
  *   reported "scanned 0 / flipped 0" — silent dead-write.
  *
  * THE FIX:
- *   Read tb_header_order (hstatus IN '3','4','5') + tb_forwarder (fstatus
+ *   Read tb_header_order (hstatus IN '3','4','40','5') + tb_forwarder (fstatus
  *   IN '6','7','8','9') + tb_payment (paystatus='2'), collect userIDs, then
  *   UPDATE tb_users.userActive='1' for those userIDs.
  *
@@ -18,7 +18,7 @@
  *   A. Source table CONTRACT — the route's three SELECT calls hit exactly
  *      tb_header_order, tb_forwarder, tb_payment (NOT the rebuilt names).
  *   B. Filter CONTRACT — each SELECT applies the legacy filter:
- *         tb_header_order  hstatus IN ('3','4','5')   (legacy hStatus>2 AND hStatus<>6)
+ *         tb_header_order  hstatus IN ('3','4','40','5')
  *         tb_forwarder     fstatus IN ('6','7','8','9') (legacy fStatus>5)
  *         tb_payment       paystatus = '2'             (legacy payStatus=2)
  *   C. Target table + value CONTRACT — the UPDATE call hits tb_users with
@@ -162,7 +162,7 @@ async function runRouteLogic(supabase: MockClient): Promise<{
   const { data: orderRows, error: orderErr } = await supabase
     .from("tb_header_order")
     .select("userid")
-    .in("hstatus", ["3", "4", "5"]);
+    .in("hstatus", ["3", "4", "40", "5"]);
   if (orderErr) return { ok: false, scanned: 0, flipped: 0, stage: "tb_header_order", error: orderErr.message };
   for (const row of (orderRows ?? []) as Array<{ userid?: string }>) {
     if (row.userid) userIds.add(row.userid);
@@ -245,8 +245,8 @@ function findCall(calls: Call[], pred: (c: Call) => boolean): Call | undefined {
 const hstatusFilter = findCall(mockA.calls, (c) => c.kind === "in" && c.col === "hstatus") as
   | (Call & { kind: "in"; col: "hstatus" })
   | undefined;
-assertEq("tb_header_order has .in('hstatus', ['3','4','5'])",
-  hstatusFilter?.values, ["3", "4", "5"]);
+assertEq("tb_header_order includes the live status-40 bridge",
+  hstatusFilter?.values, ["3", "4", "40", "5"]);
 
 const fstatusFilter = findCall(mockA.calls, (c) => c.kind === "in" && c.col === "fstatus") as
   | (Call & { kind: "in"; col: "fstatus" })

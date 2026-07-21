@@ -23,6 +23,7 @@ import {
 } from "@/actions/service-order";
 import { resolvePaymentAccount, OUTPUT_VAT_RATE } from "@/lib/payment/bank-accounts";
 import { modeFromPref } from "@/lib/tax/tax-doc-mode";
+import { computeShopOrderTransferAmount } from "@/lib/service-order/payment-amount";
 import { PayDestination } from "@/components/payment/pay-destination";
 
 const fmt = (n: number) =>
@@ -50,9 +51,7 @@ export function ShopOrderPayButton({
   const account = resolvePaymentAccount({ issuesTaxInvoice });
   // TRADING lane charges the customer output VAT 7% on top of the bill; SERVICE
   // collects the base total. This VAT-inclusive amount is what's shown + QR-encoded.
-  const payAmount = issuesTaxInvoice
-    ? Math.round(totalThb * (1 + OUTPUT_VAT_RATE) * 100) / 100
-    : totalThb;
+  const payAmount = computeShopOrderTransferAmount(totalThb, taxDocPref);
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [qr, setQr] = useState<{ dataUrl: string; promptPayId: string } | null>(null);

@@ -119,9 +119,8 @@ export const placeOrderSchema = z.object({
   // string (1..n digits) so placeServiceOrder can map it → number for the
   // faithful submitCartOrder delegation.
   cart_item_ids:    z.array(z.string().regex(/^\d+$/, "รหัสสินค้าไม่ถูกต้อง")).min(1, "เลือกอย่างน้อย 1 รายการ"),
-  // warehouse_china kept in the schema (the cart UI still sends it) but the
-  // legacy order-create flow does NOT set hwarehousechina — admin assigns the
-  // China warehouse when goods arrive. placeServiceOrder ignores this field.
+  // Customer-selected China warehouse. The two legacy tables use inverse codes;
+  // placeServiceOrder stores the header code and the spawn handoff maps it.
   warehouse_china:  z.enum(["guangzhou", "yiwu"]),
   transport_type:   z.enum(["truck", "ship", "air"]).default("truck"),
   ship_by:          z.string().trim().max(50).optional().or(z.literal("").transform(() => undefined)),
@@ -132,8 +131,8 @@ export const placeOrderSchema = z.object({
   ship_first_name:    z.string().trim().min(1).max(200),
   ship_last_name:     z.string().trim().min(1).max(200),
   ship_phone:         z.string().trim().regex(/^0\d{8,9}$/, "เบอร์โทรต้องขึ้นต้น 0"),
-  ship_phone2:        z.string().trim().optional().or(z.literal("").transform(() => undefined)),
-  ship_address_line:  z.string().trim().min(1).max(500),
+  ship_phone2:        z.string().trim().max(10).optional().or(z.literal("").transform(() => undefined)),
+  ship_address_line:  z.string().trim().min(1).max(255),
   ship_sub_district:  z.string().trim().min(1).max(255),
   ship_district:      z.string().trim().min(1).max(255),
   ship_province:      z.string().trim().min(1).max(255),

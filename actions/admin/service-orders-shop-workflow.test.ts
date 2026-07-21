@@ -19,8 +19,7 @@
  *   D. Ordered UPDATE payload shape — tb_order.cshippingnumber across
  *      lines + tb_header_order.hstatus=4 stamp.
  *   E. Spawn-row shape — the spawn handler's tracking-expansion (parallel
- *      lists of cshippingnumber/ctrackingnumber inside one tb_order row)
- *      and 4→5 header update.
+ *      lists of cshippingnumber/ctrackingnumber inside one tb_order row).
  *
  * Pattern matches actions/admin/wallet-hs.test.ts (pass/fail counts,
  * tsx-only runner, ESM `export {}` at the end).
@@ -52,7 +51,7 @@ function spawnGuard(status: string | null | undefined): { ok: true } | { ok: fal
   const s = (status ?? "").trim();
   if (s === "6") return { ok: false, error: "cancelled" };
   if (s === "5") return { ok: false, error: "already" };
-  if (s !== "4") return { ok: false, error: `bad:${s || "?"}` };
+  if (s !== "4" && s !== "40") return { ok: false, error: `bad:${s || "?"}` };
   return { ok: true };
 }
 function defaultQuoteDeadline(now: Date = new Date()): Date {
@@ -114,8 +113,9 @@ assertEq("status '5' → reject (completed)", orderedGuard("5").ok, false);
 assertEq("status '6' → reject (cancelled)", orderedGuard("6").ok, false);
 assertEq("status null → reject", orderedGuard(null).ok, false);
 
-section("C. spawnGuard (4 → 5)");
+section("C. spawnGuard (4/40 → linked import)");
 assertEq("status '4' → ok",      spawnGuard("4"),       { ok: true });
+assertEq("status '40' → ok",     spawnGuard("40"),      { ok: true });
 assertEq("status '1' → reject", spawnGuard("1").ok,    false);
 assertEq("status '2' → reject", spawnGuard("2").ok,    false);
 assertEq("status '3' → reject", spawnGuard("3").ok,    false);
@@ -315,11 +315,11 @@ function expandTrackings(rows: OrderRow[]): SpawnEntry[] {
   const seen = new Set<string>();
   for (const r of rows) {
     const ships = (r.cshippingnumber ?? "")
-      .split(",")
+      .split(/[,，]/)
       .map((s) => s.trim())
       .filter(Boolean);
     const tracks = ((r.ctrackingnumber ?? "") ?? "")
-      .split(",")
+      .split(/[,，]/)
       .map((s) => s.trim())
       .filter(Boolean);
     const max = Math.max(tracks.length, 1);
@@ -357,6 +357,15 @@ assertEq("1 row · 1 ship · 1 track → 1 entry",
 assertEq("1 row · 2 ships, 2 tracks (parallel)",
   expandTrackings([
     { cnameshop: "shopA", cshippingnumber: "S1,S2", ctrackingnumber: "T1,T2" },
+  ]),
+  [
+    { cTrackingNumber: "T1", cShippingNumber: "S1" },
+    { cTrackingNumber: "T2", cShippingNumber: "S2" },
+  ],
+);
+assertEq("Chinese comma bags expand in parallel",
+  expandTrackings([
+    { cnameshop: "shopA", cshippingnumber: "S1，S2", ctrackingnumber: "T1，T2" },
   ]),
   [
     { cTrackingNumber: "T1", cShippingNumber: "S1" },
@@ -431,94 +440,6 @@ assertEq("promo carry row writes (date, promoid, fid, hno)",
     fid:     51999,
     hno:     "P20260601",
   },
-);
-
-// ────────────────────────────────────────────────────────────
-// I. Spawn header 4→5 flip payload — lock-down mirror
-// ────────────────────────────────────────────────────────────
-
-function buildSpawnHeaderFlip(legacyAdminId: string, now: Date): Record<string, unknown> {
-  const nowIso = now.toISOString();
-  return {
-    hstatus:       "5",
-    hdate5:        nowIso,
-    hdateupdate:   nowIso,
-    adminidupdate: legacyAdminId,
-  };
-}
-
-section("I. Spawn header flip payload (4 → 5)");
-assertEq("4→5 stamps hstatus + hdate5 + hdateupdate + adminidupdate",
-  buildSpawnHeaderFlip("ภูม", NOW),
-  {
-    hstatus:       "5",
-    hdate5:        "2026-06-01T00:00:00.000Z",
-    hdateupdate:   "2026-06-01T00:00:00.000Z",
-    adminidupdate: "ภูม",
-  },
-);
-
-// ────────────────────────────────────────────────────────────
-// J. All-shops-done completion gate (2026-06-29 · fix #1)
-// ────────────────────────────────────────────────────────────
-// Legacy shops.php L1525-1580: flip 4→5 ONLY when count(cShippingNumber
-// slots) === count(non-empty cTrackingNumber tokens). Mirrors the pure
-// counting in lib/admin/maybe-complete-shop-order.ts. THE bug fix: a
-// single-shop tracking entry must NOT complete a 10-shop order.
-
-function gateDecision(rows: { cshippingnumber: string | null; ctrackingnumber: string | null }[]): {
-  slotCount: number; trackingCount: number; completes: boolean;
-} {
-  const tok = (v: string | null | undefined) =>
-    (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  let slotCount = 0;
-  let trackingCount = 0;
-  for (const r of rows) {
-    slotCount += tok(r.cshippingnumber).length;
-    trackingCount += tok(r.ctrackingnumber).length;
-  }
-  return { slotCount, trackingCount, completes: slotCount > 0 && slotCount === trackingCount };
-}
-
-section("J. all-shops-done completion gate (fix #1)");
-assertEq("10 shops · only 1 has tracking → STAYS at 4 (the bug)",
-  gateDecision([
-    { cshippingnumber: "S1", ctrackingnumber: "T1" },
-    ...Array.from({ length: 9 }, (_, i) => ({ cshippingnumber: `S${i + 2}`, ctrackingnumber: "" })),
-  ]).completes,
-  false,
-);
-assertEq("10 shops · all have tracking → completes (4→5)",
-  gateDecision(
-    Array.from({ length: 10 }, (_, i) => ({ cshippingnumber: `S${i + 1}`, ctrackingnumber: `T${i + 1}` })),
-  ).completes,
-  true,
-);
-assertEq("single shop · tracking present → completes",
-  gateDecision([{ cshippingnumber: "S1", ctrackingnumber: "T1" }]).completes,
-  true,
-);
-assertEq("no slots at all → never completes (guard)",
-  gateDecision([{ cshippingnumber: "", ctrackingnumber: "" }]).completes,
-  false,
-);
-assertEq("multi-parcel shop · 3 ship slots, only 2 tracks → STAYS at 4",
-  gateDecision([{ cshippingnumber: "S1,S2,S3", ctrackingnumber: "T1,T2" }]).completes,
-  false,
-);
-assertEq("multi-parcel shop · 3 ship slots, 3 tracks → completes",
-  gateDecision([{ cshippingnumber: "S1,S2,S3", ctrackingnumber: "T1,T2,T3" }]).completes,
-  true,
-);
-assertEq("counts are reported (slots=10, tracks=1)",
-  (() => {
-    const g = gateDecision([
-      { cshippingnumber: "S1", ctrackingnumber: "T1" },
-      ...Array.from({ length: 9 }, (_, i) => ({ cshippingnumber: `S${i + 2}`, ctrackingnumber: "" })),
-    ]);
-    return [g.slotCount, g.trackingCount];
-  })(),
-  [10, 1],
 );
 
 // ────────────────────────────────────────────────────────────

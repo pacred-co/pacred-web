@@ -1,4 +1,5 @@
 import type { ShopArrivalSummary } from "./shop-order-arrivals";
+import { shopTrackingBase, splitShopTrackingTokens } from "./shop-order-status-rule";
 
 /**
  * "จัดกลุ่มตามแทรคกิ้ง" — collapse a ฝากสั่งซื้อ order's items (tb_order rows) into
@@ -134,7 +135,13 @@ export function buildTrackingGroups(input: {
   const out: TrackingGroup[] = [];
   for (const [tracking, g] of groupMap.entries()) {
     const arr = tracking ? arrivalByTracking.get(tracking) : undefined;
-    const spawned = tracking ? spawnedByTracking.get(tracking) : undefined;
+    const trackingTokens = splitShopTrackingTokens(tracking);
+    // A single saved base can resolve a MOMO split child (`BASE-1/2`). A
+    // multi-token bag can have several fNos, so keep its aggregate arrival
+    // state but do not lie by choosing one arbitrary deep link.
+    const spawned = trackingTokens.length === 1
+      ? spawnedByTracking.get(shopTrackingBase(trackingTokens[0]))
+      : undefined;
     out.push({
       tracking,
       itemCount: g.items.length,

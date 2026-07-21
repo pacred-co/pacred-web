@@ -46,12 +46,12 @@ export async function GET(request: Request) {
 
       console.log("[cron.refresh-active-customers] start");
 
-      // Stream 1 — service-order activity (legacy: hStatus>2 AND hStatus<>6)
-      // hstatus is varchar(1), so quote the literals.
+      // Stream 1 — service-order activity. Status 40 is the live bridge between
+      // 4 and 5, so those customers must not disappear from the active set.
       const { data: orderRows, error: orderErr } = await supabase
         .from("tb_header_order")
         .select("userid")
-        .in("hstatus", ["3", "4", "5"]);
+        .in("hstatus", ["3", "4", "40", "5"]);
 
       if (orderErr) {
         console.error("[cron.refresh-active-customers] tb_header_order err", orderErr.message);
