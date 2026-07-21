@@ -115,6 +115,9 @@ export const SHIPPING_METHODS: readonly ShippingMethod[] = [
   { code: "45",   name: "MPort Logistics",                nameTh: "บริษัท เอ็มพอร์ท โลจิสติกส์ จำกัด", type: "truck", etaDays: 5, description: "ภาคเหนือ" },
   { code: "46",   name: "C.N. Transport",                 nameTh: "ซี.เอ็น.ทรานสปอร์ต",             type: "truck", etaDays: 4, description: "ชลบุรี · ระยอง" },
   { code: "47",   name: "Phuket Laem Thong Transport",    nameTh: "ภูเก็ตแหลมทองขนส่ง",             type: "truck", etaDays: 5, description: "ภูเก็ต · พังงา" },
+  // owner 2026-07-21 — ขนส่งเอกชนเจ้าใหม่ · ทุกจังหวัด (ยังไม่ล็อกพื้นที่).
+  // พื้นที่ให้บริการอยู่ที่ lib/forwarder/carrier-extra.ts (ยังไม่เข้าไฟล์ Excel).
+  { code: "48",   name: "Ao Thai Transport",              nameTh: "อ่าวไทยทรานสปอรต",               type: "truck", etaDays: 4, description: "ทุกจังหวัด" },
   { code: "PCS",  name: "Pacred Warehouse Pickup",        nameTh: "รับเองโกดัง Pacred (สมุทรสาคร)", type: "truck", etaDays: 1, description: "รับด้วยตนเองที่โกดัง Pacred สมุทรสาคร" },
   { code: "F",    name: "Auto-assigned by Pacred",        nameTh: "บริษัทจัดหาให้อัตโนมัติ",        type: "truck", etaDays: 4 },
   { code: "PCSF", name: "Pacred Mao Mao (bulk)",          nameTh: "PRF เหมาๆ",                      type: "truck", etaDays: 3, description: "Pacred เหมาส่งทั้งคันรถ (PRF)" },

@@ -351,7 +351,7 @@ export async function adminUpdateForwarderDimensions(
           // ── pricing-context columns (legacy update_data reads these) ──
           "fwarehousechina, ftransporttype, famount, famountcount, reforder, " +
           "customrate, customratekg, customratecbm, fdiscount, " +
-          "ftotalprice, ftransportprice, fshippingservice, ftransportpricechnthb, " +
+          "ftotalprice, ftransportprice, fshippingservice, ftransportpricechnthb, paymethod, " +
           "pricecrate, priceother, fpriceupdate, frefrate, " +
           // ── per-order ค่าเทียบ override (0187 · durable persistence) ──
           "custom_comparison, custom_comparison_value, " +
@@ -394,6 +394,7 @@ export async function adminUpdateForwarderDimensions(
         fdiscount: number | string | null;
         ftotalprice: number | string | null;
         ftransportprice: number | string | null;
+        paymethod: string | null;
         fshippingservice: number | string | null;
         ftransportpricechnthb: number | string | null;
         pricecrate: number | string | null;
@@ -868,7 +869,12 @@ export async function adminUpdateForwarderDimensions(
             ...(d.fDiscount             !== undefined ? { fdiscount:             d.fDiscount } : {}),
             ...(d.fTransportPriceChnThb !== undefined ? { ftransportpricechnthb: d.fTransportPriceChnThb } : {}),
             ...(d.priceOther            !== undefined ? { priceother:            d.priceOther } : {}),
-            ...(d.fTransportPrice       !== undefined ? { ftransportprice:       d.fTransportPrice } : {}),
+            // 🔒 COD LOCK (owner 2026-07-21 "พอเลือกชำระปลายทาง ค่าขนส่งไทยควรเป็น 0"):
+            // a ปลายทาง row stores NO domestic charge — the courier collects it at the
+            // door. Keeps the typed value on a ต้นทาง row exactly as before.
+            ...(d.fTransportPrice       !== undefined
+              ? { ftransportprice: String(before.paymethod ?? "").trim() === "2" ? 0 : d.fTransportPrice }
+              : {}),
             ...(d.fShippingService      !== undefined ? { fshippingservice:      d.fShippingService } : {}),
             ...(d.fWarehouseChina       !== undefined ? { fwarehousechina:       d.fWarehouseChina } : {}),
             ...(d.fWarehouseName        !== undefined ? { fwarehousename:        d.fWarehouseName } : {}),

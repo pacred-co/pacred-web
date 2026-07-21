@@ -223,14 +223,19 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
     const fill = resolveAutoThShippingFill({ fshipby: "2", ftransportprice: 0, zip: "50000", weightKg: 13, sizeCm: 180, province: "เชียงใหม่" });
     assert.ok(fill, "upcountry external ฿0 + measured (kg+dims) → auto-fills (Flash + margin)");
     assert.equal(fill!.carrier, "2", "upcountry external → Flash carrier '2'");
-    // owner 2026-07-18 — ANY ขนส่งเอกชน → ปลายทาง '2' COD (supersedes the 2026-07-09
-    // ต้นทาง default; the quoted rate is RECORDED in ftransportprice · the COD gate
-    // keeps it off the Pacred bill while paymethod stays '2').
+    // owner 2026-07-18 — ANY ขนส่งเอกชน → ปลายทาง '2' COD.
     assert.equal(fill!.payMethod, "2", "owner 2026-07-18: ขนส่งเอกชน → ปลายทาง '2' (COD)");
     assert.equal(fill!.zone, "upcountry");
-    assert.ok(fill!.cost > MAO_FLAT_FEE, "13kg/180cm upcountry Flash+margin > ฿100");
-    assert.equal(fill!.cost, resolveThShippingAutoPrice({ zip: "50000", kg: 13, sizeCm: 180 }),
-      "fill cost == the Flash+margin helper");
+    // 🔒 owner 2026-07-21 — "พอเลือกชำระปลายทาง ก็ต้องไม่ใส่ ค่าขนส่งไทย · ควรเป็น 0":
+    // a COD fill STORES ฿0 (the courier collects at the door). The Flash estimate is
+    // still shown to staff in the label, it just isn't written as a charge.
+    assert.equal(fill!.cost, 0, "owner 2026-07-21: ปลายทาง (COD) → เก็บค่าส่งไทย ฿0");
+    const quoted = resolveThShippingAutoPrice({ zip: "50000", kg: 13, sizeCm: 180 })!;
+    assert.ok(quoted > MAO_FLAT_FEE, "13kg/180cm upcountry Flash+margin > ฿100 (ยังประเมินได้)");
+    assert.ok(
+      fill!.label.includes(quoted.toLocaleString("th-TH")),
+      "ป้ายกำกับยังบอกยอดประเมินให้พนักงานเห็น",
+    );
   }
   // owner 2026-07-13: weight-only (no dims measured) → NO fake fill — force measurement.
   assert.equal(

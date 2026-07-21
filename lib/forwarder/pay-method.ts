@@ -70,3 +70,60 @@ export function derivePayMethodForDelivery(
   if (c === "") return "1"; // no carrier chosen → ต้นทาง default (no COD yet)
   return isOwnFleetCarrier(c) ? "1" : "2";
 }
+
+/**
+ * 🔒 THE COD LOCK (owner 2026-07-21, verbatim) ────────────────────────────────
+ *   *"ถ้าเรื่องขนส่งเอกชน ต้องตีเป็นชำระปลายทางทั้งหมดนะครับ แล้วพอเลือกชำระ
+ *   ปลายทาง ก็ต้องไม่ใส่ ค่าขนส่งไทย ค่าขนส่งไทยก็ควรเป็น 0 ด้วยนะครับ
+ *   ถ้าเก็บปลายทาง"*
+ *
+ * TWO rules, one helper, so no write path can hold a contradictory pair:
+ *   1. ขนส่งเอกชน (not own-fleet) ⇒ paymethod ALWAYS '2' ปลายทาง — an admin can no
+ *      longer flip a private-courier row to ต้นทาง (that was the loophole that let a
+ *      COD row keep billing the domestic leg).
+ *   2. paymethod '2' ⇒ ftransportprice = 0 — the courier collects at the door, so
+ *      Pacred stores no domestic charge at all.
+ *
+ * Rule 2 is MONEY-NEUTRAL on today's bills: every money reader already drops the leg
+ * for COD (`domesticLeg = paymethod === 2 ? 0 : ftransportprice` — outstanding.ts ·
+ * forwarder-debit-total.ts · forwarder-collect-total.ts · auto-issue-receipt). What it
+ * fixes is the STORED contradiction: a COD row carrying a live ฿311 quote reads as a
+ * charge on every screen, and the moment anything flips it back to '1' that stale
+ * number silently becomes billable.
+ *
+ * PURE — decide here, write at the caller. Returns the corrected pair + whether it
+ * changed anything (so a caller can log/telemetry the correction).
+ */
+export function enforceCodDomesticZero(input: {
+  fShipBy: string | null | undefined;
+  /** the paymethod the caller WANTED to store ('' / null = derive from the carrier) */
+  payMethod?: string | null;
+  /** the ค่าส่งไทย the caller wanted to store */
+  transportPrice?: number | string | null;
+}): { payMethod: "1" | "2"; transportPrice: number; changed: boolean } {
+  const carrier = (input.fShipBy ?? "").trim();
+  const wanted = String(input.payMethod ?? "").trim();
+  const rawPrice = Number(input.transportPrice ?? 0);
+  const price = Number.isFinite(rawPrice) ? rawPrice : 0;
+
+  // Rule 1 — a private courier is ALWAYS ปลายทาง. An own-fleet row keeps whatever the
+  // caller chose (both are legitimate there: PCS/เหมาๆ prepay '1'; an admin may still
+  // mark an own-fleet leg COD '2' by hand).
+  let payMethod: "1" | "2";
+  if (carrier !== "" && !isOwnFleetCarrier(carrier)) {
+    payMethod = "2";
+  } else if (wanted === "1" || wanted === "2") {
+    payMethod = wanted;
+  } else {
+    payMethod = derivePayMethodForDelivery(carrier, { addressID: null, zip: null });
+  }
+
+  // Rule 2 — ปลายทาง stores no ค่าส่งไทย.
+  const transportPrice = payMethod === "2" ? 0 : price;
+
+  return {
+    payMethod,
+    transportPrice,
+    changed: (wanted !== "" && wanted !== payMethod) || transportPrice !== price,
+  };
+}

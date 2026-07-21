@@ -29,6 +29,7 @@
  * template if Flash changes it (the ORDER + meaning are what Flash imports).
  */
 
+import { resolveThShippingAutoPrice } from "@/lib/forwarder/domestic-shipping";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "@/actions/admin/export-log";
@@ -56,6 +57,9 @@ type FlashFwdRow = {
   faddresszipcode: string | null;
   faddressnote: string | null;
   ftrackingchn: string | null;
+  fwidth: number | string | null;
+  flength: number | string | null;
+  fheight: number | string | null;
   // pricing components for computeForwarderCollectTotal (COD amount)
   ftotalprice: number | string | null;
   ftransportprice: number | string | null;
@@ -119,6 +123,7 @@ export async function exportFlashPickupCsv(input: {
         "faddresstel, faddresstel2, faddressno, faddresssubdistrict, faddressdistrict, " +
         "faddressprovince, faddresszipcode, faddressnote, ftrackingchn, ftotalprice, " +
         "ftransportprice, fpriceupdate, fshippingservice, pricecrate, " +
+        "fwidth, flength, fheight, " +
         "ftransportpricechnthb, priceother, fdiscount",
     )
     .in("id", boundedIds);
@@ -142,10 +147,27 @@ export async function exportFlashPickupCsv(input: {
     // in-Thailand delivery fee. If ftransportprice is ฿0 (manual carrier's cost not
     // entered — should be blocked at bill time by the ค่าส่งไทย gate) → BLANK, never
     // 0/freight+fees. Prepaid (ต้นทาง) → blank (no phantom COD on an already-paid parcel).
+    // 🔒 owner 2026-07-21 — a COD row now STORES ค่าส่งไทย ฿0 (Pacred ไม่เก็บค่าส่งไทย
+    // ในบิลเมื่อเก็บปลายทาง · lib/forwarder/pay-method.ts). But the courier still has to
+    // be told WHAT to collect at the door, so the COD column falls back to the SAME live
+    // Flash quote the auto-fill uses (zip + kg + girth) when the stored charge is ฿0.
+    // Behaviour at the door is therefore UNCHANGED by the zeroing; only Pacred's stored
+    // charge moved. A row we cannot quote (unmeasured) stays BLANK — never a fake 0.
     let cod = "";
     if (isCod) {
-      const door = Math.round(toNum(r.ftransportprice));
-      cod = door > 0 ? String(door) : "";
+      const stored = Math.round(toNum(r.ftransportprice));
+      if (stored > 0) {
+        cod = String(stored);
+      } else {
+        const sizeCm =
+          (toNum(r.fwidth) || 0) + (toNum(r.flength) || 0) + (toNum(r.fheight) || 0);
+        const quoted = resolveThShippingAutoPrice({
+          zip: r.faddresszipcode,
+          kg: toNum(r.fweight),
+          sizeCm,
+        });
+        cod = quoted != null && quoted > 0 ? String(Math.round(quoted)) : "";
+      }
     }
 
     const recipient = `${r.faddressname ?? ""} ${r.faddresslastname ?? ""}`.trim();
