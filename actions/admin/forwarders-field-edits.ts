@@ -87,7 +87,8 @@ import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shipping";
 import { propagateShipmentEdit } from "@/lib/admin/forwarder-siblings";
 import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
-import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
+import { checkCarrierForProvince, isOwnFleetCarrier } from "@/lib/forwarder/carrier-coverage-guard";
+import { isMaoCarrier } from "@/lib/forwarder/mao-fee";
 import { canonicalProvince } from "@/lib/forwarder/carrier-province-coverage";
 import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { isGodRole } from "@/lib/admin/god-role";
@@ -270,7 +271,7 @@ export async function adminPickForwarderAddress(
           ...(carrierWritable ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: addr.addresszipcode }) } : {}),
           // ONLY flat own-fleet (เหมาๆ/รับเอง = ฿0 · fee is the once-per-shipment mao anchor)
           // gets its per-box price zeroed on siblings; PCSE/private prices stay per-box.
-          ...(carrierWritable && ["PCS", "PCSF", "PRF"].includes(carrier) ? { ftransportprice: 0 } : {}),
+          ...(carrierWritable && (isMaoCarrier(carrier) || carrier === "PCS") ? { ftransportprice: 0 } : {}),
         },
       },
       legacyAdminId,
@@ -380,7 +381,7 @@ export async function adminUpdateForwarderAddressDetails(
         },
         money: {
           ...(carrierWritable ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: d.zipcode }) } : {}),
-          ...(carrierWritable && ["PCS", "PCSF", "PRF"].includes(carrier) ? { ftransportprice: 0 } : {}),
+          ...(carrierWritable && (isMaoCarrier(carrier) || carrier === "PCS") ? { ftransportprice: 0 } : {}),
         },
       },
       legacyAdminId,
@@ -803,10 +804,15 @@ export async function adminUpdateForwarderShipBy(
     };
 
     // Legacy L1595: only re-price while still pre-payment (fStatus<=5).
+    // ⚠️ Match the D1 rebrand too (PCSF→PRF เหมาๆ · PCSE→PRE ด่วน · L-MIG-04) — the
+    // legacy-only literals meant picking "PRF" (what the cart writes today) left a
+    // stale private-courier quote on a เหมาๆ row: billed that quote instead of the
+    // ฿100 flat (เดฟ 2026-07-21 integration review · same class as PCS_FAMILY above).
+    const isExpressShipBy = fShipBy === "PCSE" || fShipBy === "PRE";
     if (fStatusInt <= 5) {
-      if (fShipBy === "PCSF") {
-        update.ftransportprice = 0; // ส่งฟรี
-      } else if (fShipBy === "PCSE") {
+      if (isMaoCarrier(fShipBy)) {
+        update.ftransportprice = 0; // เหมาๆ — the ฿100 is the once-per-shipment mao fee
+      } else if (isExpressShipBy) {
         update.ftransportprice = Math.max(fVolume * 120, 50); // ส่งด่วน · floor 50
       } else if (fShipBy === "PCS") {
         update.ftransportprice = 0; // รับเองที่โกดัง
@@ -820,7 +826,7 @@ export async function adminUpdateForwarderShipBy(
     // differs from what's stored (own-fleet PCS/PCSF/PCSE need none; 'PCS' already rewrote the
     // depot province above). This "remembers" the province so the บิล/เอกสาร province is right +
     // next time the picker/guard work straight off faddressprovince. Already coverage-verified.
-    const isOwnFleetShipBy = ["PCS", "PCSF", "PCSE"].includes(fShipBy);
+    const isOwnFleetShipBy = isOwnFleetCarrier(fShipBy); // SOT — incl. the PRF/PRE rebrand
     const persistedProvince =
       !isOwnFleetShipBy && pickedProvince && pickedProvince !== storedProvince
         ? pickedProvince
@@ -849,7 +855,7 @@ export async function adminUpdateForwarderShipBy(
     // address (if PCS) + province → all siblings; ftransportprice zeroed on siblings ONLY for
     // flat own-fleet (เหมาๆ/รับเอง · fee is the once-per-shipment anchor) — PCSE/private stay per-box.
     {
-      const isFlatOwnFleet = ["PCS", "PCSF", "PRF"].includes(fShipBy);
+      const isFlatOwnFleet = isMaoCarrier(fShipBy) || fShipBy === "PCS"; // flat ฿0 legs (เหมาๆ/รับเอง) · express keeps its per-box price
       const addressProp: Record<string, string | number> = {};
       const moneyProp: Record<string, string | number> = {};
       for (const [k, v] of Object.entries(update)) {
