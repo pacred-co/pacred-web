@@ -66,6 +66,7 @@ import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard"
 import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
 import { ADDRESSES } from "@/components/seo/site";
 import { parseCustomerAddressRow } from "@/lib/admin/customer-address-book";
+import { resolveLastUsedCarrier } from "@/lib/forwarder/last-used-carrier";
 
 // ────────────────────────────────────────────────────────────
 // Self-pickup address — Pacred's TH receiving warehouse (สมุทรสาคร,
@@ -281,9 +282,24 @@ export async function commitMomoRowCore(
     return { ok: false, error: "ไม่พบสมาชิก (userID ไม่ตรงกับ tb_users)" };
   }
 
+  // ── 2b. ขนส่ง: ว่าง → ยึดตามงานล่าสุดของลูกค้าคนนั้น (owner 2026-07-21) ──────
+  // *"หลังจากนี้ ก็ยึดตามงานล่าสุดของ PR นั้น ๆ ไปเลยครับ ว่าเขาเลือกส่งแบบไหน"* —
+  // งาน MOMO ที่คีย์เข้ามาโดยยังไม่เลือกขนส่ง เคยลงเป็นค่าว่างแล้วค้างอย่างนั้น
+  // (prod 2026-07-21: 263 แถวค้าง). ลูกค้าเก่าส่วนใหญ่ส่งแบบเดิมทุกครั้ง → หยิบของ
+  // ล่าสุดมาตั้งให้ · ลูกค้าใหม่ที่ไม่มีประวัติ = คืน null → ปล่อยว่างให้ CS/ลูกค้าเลือก
+  // (ห้ามเดา — เดาผิดคือของไปผิดบ้าน). แก้ทีหลังได้ทุกเมื่อที่หน้างาน.
+  const fShipByResolved =
+    (d.fShipBy ?? "").trim() !== ""
+      ? d.fShipBy
+      : (await resolveLastUsedCarrier(admin, customer.userID)) ?? "";
+  if (fShipByResolved !== (d.fShipBy ?? "")) {
+    console.log(`[commit-momo] carrier ว่าง → ใช้ของงานล่าสุด: ${customer.userID} → ${fShipByResolved}`);
+  }
+  const dShip = { ...d, fShipBy: fShipByResolved };
+
   // ── 3. Resolve address ────────────────────────────────────
   let addr: ResolvedAddress;
-  if (d.fShipBy === "PCS") {
+  if (dShip.fShipBy === "PCS") {
     addr = { ...PCS_PICKUP_ADDRESS };
   } else if (d.addressID) {
     const { data: addrRow, error: addrErr } = await admin
@@ -367,7 +383,7 @@ export async function commitMomoRowCore(
   // carrier is still allowed for later assignment, but a reusable address is no
   // longer optional: address-less MOMO rows fail before this coverage check.
   {
-    const coverage = checkCarrierForProvince(d.fShipBy, addr.addressprovince);
+    const coverage = checkCarrierForProvince(dShip.fShipBy, addr.addressprovince);
     if (!coverage.ok) return { ok: false, error: coverage.error };
   }
 
@@ -681,7 +697,7 @@ export async function commitMomoRowCore(
       famount:               metrics.qty,
       fdate:                 nowIso,
       userid:                customer.userID,
-      fshipby:               d.fShipBy,
+      fshipby:               dShip.fShipBy,
       ftransporttype:        fTransportType,
       adminidcreator:        legacyAdminId,
       subuserid:             d.subUserID ?? "",
@@ -689,7 +705,7 @@ export async function commitMomoRowCore(
       // MOMO cron supplies d.payMethod (zone-aware). Admin /review omits it → derive
       // zone-aware from carrier+address zip (external courier upcountry → COD;
       // self-pickup 'PCS'/own-fleet → ต้นทาง via the own-fleet guard).
-      paymethod:             d.payMethod ?? derivePayMethodForDelivery(d.fShipBy, { addressID: null, zip: addr.addresszipcode }),
+      paymethod:             d.payMethod ?? derivePayMethodForDelivery(dShip.fShipBy, { addressID: null, zip: addr.addresszipcode }),
       fusercompany:          fUserCompany,
       priceother:            0,
       // fwarehousename: "8" = MOMO (per WAREHOUSE_LABEL in /admin/report-cnt/
@@ -890,7 +906,7 @@ export async function commitMomoRowCore(
         container_batch_no: srcRow.container_batch_no,  // real cabinet from container_closed.cid
         momo_sack_no:       srcRow.momo_sack_no,
         userid:             customer.userID,
-        ship_by:            d.fShipBy,
+        ship_by:            dShip.fShipBy,
         fStatusNew,
         fIDorCO,
         stamp_failed:       stampErr != null,
