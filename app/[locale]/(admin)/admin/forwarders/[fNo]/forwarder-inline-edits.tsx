@@ -1390,7 +1390,7 @@ export function EditDeliveryAddressField({
   }
   async function onManualSave(close: () => void) {
     if (!(await confirm(
-      `บันทึกที่อยู่จัดส่งที่แก้ไข ?\n\n${form.name} ${form.lastname} · ${form.province} ${form.zipcode}\n\n(บริษัทขนส่ง + ค่าส่งในไทย จะจับตามจังหวัดให้อัตโนมัติ · แก้ได้)`,
+      `บันทึกที่อยู่จัดส่งที่แก้ไข ?\n\n${form.name} ${form.lastname} · ${form.province} ${form.zipcode}\n\n★ เก็บ/อัปเดตในสมุดที่อยู่ลูกค้า\n★ จำเป็นค่าเริ่มต้นสำหรับครั้งถัดไป\n• บริษัทขนส่ง + ค่าส่งในไทย จะจับตามจังหวัดให้อัตโนมัติ (แก้ได้)`,
     ))) return;
     run(() => adminUpdateForwarderAddressDetails({ fId, ...form }), close);
   }
@@ -1438,6 +1438,7 @@ export function EditDeliveryAddressField({
                 addresses={addresses}
                 busy={pending}
                 revalidate={`/admin/forwarders/${fId}`}
+                makeNewAddressDefault
                 applyLabel="ใช้ที่อยู่นี้กับออเดอร์"
                 onPick={onPickApply}
               />
@@ -1456,14 +1457,14 @@ export function EditDeliveryAddressField({
               </div>
               <div className="grid grid-cols-2 gap-1.5">
                 <input className={inp} placeholder="จังหวัด" value={form.province} onChange={set("province")} />
-                <input className={inp} placeholder="ไปรษณีย์" value={form.zipcode} onChange={set("zipcode")} maxLength={10} />
+                <input className={inp} placeholder="ไปรษณีย์" value={form.zipcode} onChange={set("zipcode")} inputMode="numeric" maxLength={5} />
               </div>
               <div className="grid grid-cols-2 gap-1.5">
-                <input className={inp} placeholder="เบอร์โทร" value={form.tel} onChange={set("tel")} maxLength={10} />
-                <input className={inp} placeholder="เบอร์สำรอง" value={form.tel2} onChange={set("tel2")} />
+                <input className={inp} placeholder="เบอร์โทร" value={form.tel} onChange={set("tel")} inputMode="numeric" maxLength={10} />
+                <input className={inp} placeholder="เบอร์สำรอง" value={form.tel2} onChange={set("tel2")} inputMode="numeric" maxLength={10} />
               </div>
               <input className={inp} placeholder="หมายเหตุ" value={form.note} onChange={set("note")} />
-              <p className="text-[11px] text-muted">พิมพ์แก้ที่อยู่ได้ตรงนี้ · บริษัทขนส่ง + ค่าส่ง จับตามจังหวัดให้อัตโนมัติ (แก้ได้)</p>
+              <p className="text-[11px] text-muted">พิมพ์แก้ที่อยู่ได้ตรงนี้ · ระบบเก็บ/อัปเดตในสมุดที่อยู่และจำเป็นค่าเริ่มต้นครั้งถัดไป · บริษัทขนส่ง + ค่าส่ง จับตามจังหวัดให้อัตโนมัติ (แก้ได้)</p>
               <button type="button" disabled={pending} className={btnSave} onClick={() => onManualSave(() => setEditing(false))}>บันทึกที่อยู่</button>
             </div>
           )}

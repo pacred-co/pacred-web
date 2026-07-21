@@ -153,8 +153,8 @@ async function scrapeDiscoveryBoards(
 // For each customer surface: their saved delivery addresses (a picker the admin
 // can view/edit) + a suggested {address, carrier, payMethod} pre-resolved the same
 // way resolveAutoCommitDelivery does (saved carrier ∘ default-address ∘ province
-// eligibility ∘ derivePayMethod). fail-soft: no saved address → empty list + blank
-// suggestion → the commit core writes EMPTY_ADDRESS; the admin fills it later.
+// eligibility ∘ derivePayMethod). fail-soft read: no saved address → empty list +
+// blank suggestion; the write chokepoint then fails closed until an address is saved.
 // ════════════════════════════════════════════════════════════
 
 const BLANK_DELIVERY: DiscoveryDelivery = {

@@ -42,6 +42,8 @@ export function CustomerAddressPicker({
   busy = false,
   /** which surface path to revalidate after an add (optional). */
   revalidate,
+  /** Forwarder correction: remember a newly keyed address for the next order too. */
+  makeNewAddressDefault = false,
   applyLabel = "ใช้ที่อยู่นี้",
 }: {
   userid: string;
@@ -50,6 +52,7 @@ export function CustomerAddressPicker({
   onPick: (addressID: number) => void;
   busy?: boolean;
   revalidate?: string;
+  makeNewAddressDefault?: boolean;
   applyLabel?: string;
 }) {
   const router = useRouter();
@@ -78,21 +81,27 @@ export function CustomerAddressPicker({
       return;
     }
     if (!(await confirm(
-      `เพิ่มที่อยู่ให้ลูกค้า ${userid} ?\n\n${form.addressname} ${form.addresslastname}\n${form.addressno} ${form.addresssubdistrict} ${form.addressdistrict} ${form.addressprovince} ${form.addresszipcode}\nโทร. ${form.addresstel}`,
+      `เพิ่มที่อยู่ให้ลูกค้า ${userid} ?\n\n${form.addressname} ${form.addresslastname}\n${form.addressno} ${form.addresssubdistrict} ${form.addressdistrict} ${form.addressprovince} ${form.addresszipcode}\nโทร. ${form.addresstel}${makeNewAddressDefault ? "\n\n★ บันทึกเป็นค่าเริ่มต้นสำหรับครั้งถัดไป" : ""}`,
     ))) return;
     startTransition(async () => {
-      const res = await adminAddCustomerAddress({ userid, ...form, revalidate });
+      const res = await adminAddCustomerAddress({ userid, ...form, makeDefault: makeNewAddressDefault, revalidate });
       if (!res.ok) { setAddErr(res.error ?? "บันทึกไม่สำเร็จ"); return; }
       const newId = res.data!.addressId;
+      const isDefault = res.data!.isDefault;
       const newRow: CustomerAddressRow = {
         addressID: newId,
         name: form.addressname.trim(), lastname: form.addresslastname.trim(),
         addressno: form.addressno.trim(), subdistrict: form.addresssubdistrict.trim(),
         district: form.addressdistrict.trim(), province: form.addressprovince.trim(),
         zipcode: form.addresszipcode.trim(), tel: form.addresstel.trim(),
-        tel2: form.addresstel2.trim(), note: form.addressnote.trim(), isDefault: false,
+        tel2: form.addresstel2.trim(), note: form.addressnote.trim(), isDefault,
       };
-      setRows((rs) => [...rs, newRow]);
+      setRows((rs) => {
+        const withoutStaleDefault = isDefault ? rs.map((row) => ({ ...row, isDefault: false })) : rs;
+        const existing = withoutStaleDefault.findIndex((row) => row.addressID === newId);
+        if (existing < 0) return [...withoutStaleDefault, newRow];
+        return withoutStaleDefault.map((row, index) => index === existing ? newRow : row);
+      });
       setSelected(newId);
       setForm(blank);
       setAdding(false);
@@ -167,13 +176,16 @@ export function CustomerAddressPicker({
           </div>
           <div className="grid grid-cols-2 gap-1.5">
             <input className={inp} placeholder="จังหวัด" value={form.addressprovince} onChange={set("addressprovince")} />
-            <input className={inp} placeholder="ไปรษณีย์" value={form.addresszipcode} onChange={set("addresszipcode")} maxLength={10} />
+            <input className={inp} placeholder="ไปรษณีย์" value={form.addresszipcode} onChange={set("addresszipcode")} inputMode="numeric" maxLength={5} />
           </div>
           <div className="grid grid-cols-2 gap-1.5">
-            <input className={inp} placeholder="เบอร์โทร" value={form.addresstel} onChange={set("addresstel")} maxLength={10} />
-            <input className={inp} placeholder="เบอร์สำรอง" value={form.addresstel2} onChange={set("addresstel2")} />
+            <input className={inp} placeholder="เบอร์โทร" value={form.addresstel} onChange={set("addresstel")} inputMode="numeric" maxLength={10} />
+            <input className={inp} placeholder="เบอร์สำรอง" value={form.addresstel2} onChange={set("addresstel2")} inputMode="numeric" maxLength={10} />
           </div>
           <input className={inp} placeholder="หมายเหตุ" value={form.addressnote} onChange={set("addressnote")} />
+          {makeNewAddressDefault && (
+            <p className="text-[11px] font-medium text-amber-700">★ ที่อยู่นี้จะถูกจำเป็นค่าเริ่มต้นสำหรับออเดอร์ครั้งถัดไป</p>
+          )}
           <div className="flex gap-2">
             <button type="button" disabled={disabled} className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50" onClick={submitAdd}>
               {pending ? "กำลังเพิ่ม…" : "บันทึกที่อยู่ใหม่"}
