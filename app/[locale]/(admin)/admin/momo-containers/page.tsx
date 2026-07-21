@@ -25,10 +25,16 @@ export const dynamic = "force-dynamic";
 
 // owner 2026-07-20 "ยุบให้เหลือ hub + แพคกิ้งลิส" — drift (iTAM ตาย) + review (ซ้ำ
 // กับ hub นี้) ถูก retire เป็น redirect แล้ว; เหลือเครื่องมือที่ใช้จริง 3 ปุ่ม.
-const HUB_LINKS: { href: string; label: string }[] = [
+// owner 2026-07-21 "ทำปุ่มทางเข้าไปหน้า MOMO Live ให้ที · อยู่ในหน้าเดียวของเรานั่นแหละ
+// แค่เพิ่มปุ่มทางเข้า" — MOMO Live = เว็บของ MOMO เอง (momocargo.com) ที่พนักงานเปิดไป
+// ดู/ชั่งของจริงฝั่งจีน. หน้า /admin/api-forwarder-momo/live ภายในถูกยุบเข้า hub นี้แล้ว
+// (2026-07-20) จึงลิงก์ออกเว็บนอกตรงๆ · เปิดแท็บใหม่ (พนักงานไม่เสียหน้าตรวจตู้ที่ค้างอยู่).
+const MOMO_LIVE_URL = "https://www.momocargo.com/";
+const HUB_LINKS: { href: string; label: string; external?: boolean }[] = [
   { href: "/admin/api-forwarder-momo/sync", label: "📥 Sync จาก MOMO API" },
   { href: "/admin/api-forwarder-momo/packing-upload", label: "📦 อัพ packing list (จาก MOMO)" },
   { href: "/admin/api-forwarder-momo/manual", label: "✍️ เพิ่มงานเอง (manual)" },
+  { href: MOMO_LIVE_URL, label: "🌐 เปิด MOMO Live (เว็บ MOMO)", external: true },
 ];
 
 /** momo_box_detail rows → the display box sub-rows (sorted by box number · per-box TOTAL
@@ -391,12 +397,23 @@ export default async function MomoContainersPage() {
           {" "}กดเลขตู้เพื่อดูรายละเอียดทั้งตู้.
         </p>
         <div className="flex flex-wrap gap-2 pt-1">
-          {HUB_LINKS.map((l) => (
-            <Link key={l.href} href={l.href}
-              className="rounded-full border border-border bg-white dark:bg-surface px-3 py-1.5 text-xs font-medium shadow-sm hover:bg-surface-alt">
-              {l.label}
-            </Link>
-          ))}
+          {HUB_LINKS.map((l) =>
+            // external (MOMO's own site) → plain <a target=_blank>; the i18n <Link>
+            // would prefix the locale onto an absolute URL. rel=noreferrer keeps our
+            // admin URL out of their referer log.
+            l.external ? (
+              <a key={l.href} href={l.href} target="_blank" rel="noopener noreferrer"
+                title="เปิดเว็บ MOMO (ดู/ชั่งของจริงฝั่งจีน) ในแท็บใหม่ — หน้าตรวจตู้ที่ค้างอยู่ไม่หาย"
+                className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 shadow-sm hover:bg-sky-100">
+                {l.label} ↗
+              </a>
+            ) : (
+              <Link key={l.href} href={l.href}
+                className="rounded-full border border-border bg-white dark:bg-surface px-3 py-1.5 text-xs font-medium shadow-sm hover:bg-surface-alt">
+                {l.label}
+              </Link>
+            ),
+          )}
           <MomoGuideButton />
         </div>
       </header>

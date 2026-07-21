@@ -390,17 +390,28 @@ export async function adminResetForwarderFamilyFromSource(
       // Packing existed but couldn't be applied per-row (split family) — Σ-verify
       // so a MOMO-vs-packing drift is loud, not silent.
       if (packRow) {
-        const { data: after } = await admin
+        const { data: after, error: afterErr } = await admin
           .from("tb_forwarder")
           .select("ftrackingchn, fweight, userid")
           .eq("userid", anchor.userid)
           .ilike("ftrackingchn", `${base}%`)
           .limit(200);
+        // §0c — a silent read failure here would make the Σ-verify compare against
+        // an empty set and emit a FALSE "ไม่ตรงแพคกิ้งลิส" warning. Surface it as an
+        // explicit "ตรวจ Σ ไม่ได้" note instead of fabricating a drift.
+        if (afterErr) {
+          console.error(`[resetFamilyFromSource Σ-verify]`, {
+            code: afterErr.code, message: afterErr.message, base,
+          });
+          warnings.push("ตรวจ Σ น้ำหนักเทียบแพคกิ้งลิสไม่สำเร็จ — อ่านข้อมูลหลัง reset ไม่ได้");
+        }
         const sumW = ((after ?? []) as { ftrackingchn: string | null; fweight: number | string | null }[])
           .filter((r) => baseTracking(r.ftrackingchn) === base)
           .reduce((s, r) => s + num(r.fweight), 0);
         const packW = num(packRow.weight);
-        if (packW > 0 && Math.abs(sumW - packW) > Math.max(0.5, packW * 0.02)) {
+        // afterErr → sumW is 0 from an EMPTY read, not from a real drift; don't
+        // fabricate a mismatch warning on top of the read-failure note above.
+        if (!afterErr && packW > 0 && Math.abs(sumW - packW) > Math.max(0.5, packW * 0.02)) {
           warnings.push(
             `Σ น้ำหนักหลัง reset (${sumW.toFixed(2)} kg) ไม่ตรงแพคกิ้งลิส (${packW.toFixed(2)} kg) — ตรวจมือ/อัพแพคกิ้งลิสซ้ำ`,
           );
