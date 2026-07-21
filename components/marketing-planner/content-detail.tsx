@@ -3,7 +3,7 @@
 /** Read-only detail of a content item (owner brief §2.3 "เปิดรายละเอียด"). */
 import { BarChart3, CalendarClock, Pencil } from "lucide-react";
 import type { ContentItem } from "@/lib/marketing-planner/types";
-import { platformIdsOf, serviceIdsOf } from "@/lib/marketing-planner/types";
+import { contentTypeIdsOf, platformIdsOf, serviceIdsOf } from "@/lib/marketing-planner/types";
 import { usePlanner } from "@/lib/marketing-planner/store";
 import { RESULT_STATUS_COLOR, RESULT_STATUS_LABEL, isResultEmpty } from "@/lib/marketing-planner/performance";
 import { fmtMoney, fmtNum, fmtThaiDateTime } from "@/lib/marketing-planner/util";
@@ -70,7 +70,11 @@ export function ContentDetail({ id, onClose, onEdit, onResult }: { id?: string; 
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <Attr label="ผู้รับผิดชอบ"><OwnerBadge ownerId={c.ownerId} /></Attr>
-            <Attr label="ประเภท"><SettingTag id={c.contentTypeId} /></Attr>
+            <Attr label="ประเภท">
+              {contentTypeIdsOf(c).length ? (
+                <span className="flex flex-wrap gap-1">{contentTypeIdsOf(c).map((id) => <SettingTag key={id} id={id} />)}</span>
+              ) : <span className="text-[11px] text-muted">—</span>}
+            </Attr>
             <Attr label="Pillar"><SettingTag id={c.contentPillarId} /></Attr>
             <Attr label="บริการ">
               {serviceIdsOf(c).length ? (

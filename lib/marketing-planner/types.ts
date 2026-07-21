@@ -134,7 +134,10 @@ export type ContentItem = {
   topic?: string;
   brief?: string;
   marketingGoalId?: string;
+  /** Legacy single content type — kept for generated slots and back-compat reads. */
   contentTypeId?: string;
+  /** Content formats produced by this item (multi-select). */
+  contentTypeIds?: string[];
   contentPillarId?: string;
   funnelStageId?: string;
   customerStageId?: string;
@@ -145,6 +148,9 @@ export type ContentItem = {
   /** ชื่อ/แคปชั่นดราฟต์แยกต่อแพลตฟอร์ม (platformId → ชื่อ · owner ปอน 2026-07-18) —
    *  เก็บใน JSON blob (mkt_contents.data · ไม่ต้อง migration). ว่าง = ใช้ `title` หลัก. */
   platformTitles?: Record<string, string>;
+  /** Content formats published on each selected platform (platformId → contentTypeIds).
+   *  Stored inside the existing mkt_contents JSON blob; no DB migration required. */
+  platformContentTypeIds?: Record<string, string[]>;
   /** Legacy single service — kept for back-compat reads; canonical is serviceIds. */
   serviceId?: string;
   /** Services this content relates to (multi-select). */
@@ -191,6 +197,25 @@ export type ContentItem = {
 export function platformIdsOf(c: Pick<ContentItem, "platformIds" | "platformId">): string[] {
   if (c.platformIds && c.platformIds.length > 0) return c.platformIds;
   return c.platformId ? [c.platformId] : [];
+}
+
+/** All content type ids on a content — multi-select with legacy single-value fallback. */
+export function contentTypeIdsOf(c: Pick<ContentItem, "contentTypeIds" | "contentTypeId">): string[] {
+  if (c.contentTypeIds && c.contentTypeIds.length > 0) return c.contentTypeIds;
+  return c.contentTypeId ? [c.contentTypeId] : [];
+}
+
+/** Content types assigned to one platform. Old records (and platforms without an
+ *  explicit override) inherit the content-level selection. An explicit empty array
+ *  means that platform has not been assigned a format yet. */
+export function platformContentTypeIdsOf(
+  c: Pick<ContentItem, "contentTypeIds" | "contentTypeId" | "platformContentTypeIds">,
+  platformId: string,
+): string[] {
+  if (c.platformContentTypeIds && Object.prototype.hasOwnProperty.call(c.platformContentTypeIds, platformId)) {
+    return c.platformContentTypeIds[platformId] ?? [];
+  }
+  return contentTypeIdsOf(c);
 }
 
 /** All service ids on a content — multi-select `serviceIds`, back-compat with the

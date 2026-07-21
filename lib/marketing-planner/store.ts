@@ -15,7 +15,7 @@ import { createContext, createElement, useCallback, useContext, useEffect, useMe
 import type { ContentItem, ContentResult, JobMessageKind, JobOrder, JobStatus, KeywordItem, PlannerData, PlannerUser, ProductionTargets, SettingGroup, SettingItem,
   PlanPreset,
 } from "./types";
-import { keywordPlatformOf, PLANNER_SCHEMA_VERSION, platformIdsOf, serviceIdsOf } from "./types";
+import { contentTypeIdsOf, keywordPlatformOf, PLANNER_SCHEMA_VERSION, platformIdsOf, serviceIdsOf } from "./types";
 import { buildSeed, DEFAULT_KEYWORDS, DEFAULT_TARGETS } from "./seed";
 import { enrichResult } from "./performance";
 import { distributeMonth, type PlanOverrides } from "./production-plan";
@@ -41,11 +41,12 @@ function hashUserColor(id: string): string {
 function isSettingReferenced(contents: ContentItem[], id: string): boolean {
   return contents.some(
     (c) =>
-      c.marketingGoalId === id || c.contentTypeId === id || c.contentPillarId === id ||
+      c.marketingGoalId === id || contentTypeIdsOf(c).includes(id) || c.contentPillarId === id ||
       c.funnelStageId === id || c.customerStageId === id || platformIdsOf(c).includes(id) ||
       serviceIdsOf(c).includes(id) || c.campaignId === id || c.formatId === id || c.toneId === id ||
       c.priorityId === id || c.statusId === id || c.ownerId === id ||
-      !!c.coOwnerIds?.includes(id) || c.links.some((l) => l.linkTypeId === id),
+      !!c.coOwnerIds?.includes(id) || Object.values(c.platformContentTypeIds ?? {}).some((ids) => ids.includes(id)) ||
+      c.links.some((l) => l.linkTypeId === id),
   );
 }
 
