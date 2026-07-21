@@ -34,6 +34,7 @@ import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { ADDRESSES } from "@/components/seo/site";
 import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
+import { derivePayMethod } from "@/lib/forwarder/pay-method";
 
 // ────────────────────────────────────────────────────────────
 // Carrier discriminator. Both MOMO + CargoCenter use the same legacy
@@ -496,7 +497,10 @@ export async function adminApiForwarderManualInsert(
           ftransporttype:        fTransportType,
           adminidcreator:        legacyAdminId,
           subuserid:             d.subUserID ?? "",
-          paymethod:             "1",       // resolved by setPayMethodShip — '1' is the most common default
+          // 🔒 COD LOCK (owner 2026-07-21) — ขนส่งเอกชน = ปลายทาง (COD) เสมอ · own-fleet = ต้นทาง.
+          // เดิม hardcode "1" ทุกแถว → งานเอกชนถูกสร้างมาเป็นต้นทางแล้วเก็บค่าส่งไทยซ้ำกับที่
+          // ขนส่งเก็บปลายทาง.
+          paymethod:             derivePayMethod(d.fShipBy),
           fusercompany:          fUserCompany,
           priceother:            0,
           fwarehousename:        carrierCfg.fWarehouseName,

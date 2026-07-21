@@ -68,7 +68,7 @@ import { Link } from "@/i18n/navigation";
 import { adminSetForwarderBillToOverride } from "@/actions/admin/forwarders";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { confirm } from "@/components/ui/confirm";
-import { nameShipBy } from "@/lib/freight/shipping-methods";
+import { nameShipBy, carrierLabel } from "@/lib/freight/shipping-methods";
 import {
   THAI_PROVINCES,
   carriersForProvince,
@@ -204,27 +204,10 @@ const AMOUNT_COUNT_LABEL: Record<string, string> = { "1": "รวมกล่อ
 // consumed by the pricing engine — DO NOT rename the codes, only the labels;
 // scrubbing the codes/API is gated on ก๊อต's switchover · AGENTS.md §3).
 const SHIPBY_PRESETS = ["PCS", "PCSF", "PCSE"] as const;
-// 2026-06-10 (ปอน) — what the operator SEES: Pacred-branded names, never the
-// raw PCS* code (mirrors the customer page label map).
-const SHIPBY_LABEL: Record<string, string> = {
-  PCS:  "รับเองโกดัง Pacred (สมุทรสาคร)",
-  PCSF: "PRF เหมาๆ (ส่งฟรีในเขต)",
-  PCSE: "PRE Express (ส่งด่วน)",
-};
-
-/**
- * Friendly carrier label for a stored fshipby (owner/ภูม 2026-07-03: "ทำไมขึ้นเลข 2").
- * A numeric external-courier code (e.g. "2" = Flash) must show its NAME, not the raw code.
- * Order: the PCS-family rebrand labels → the full legacy nameShipBy() map (1-47) → the raw
- * value (a custom carrier name the admin typed · nameShipBy returns "ไม่พบข้อมูล" there).
- */
-function carrierLabel(code: string | null | undefined): string {
-  const c = (code ?? "").trim();
-  if (!c) return "—";
-  if (SHIPBY_LABEL[c]) return SHIPBY_LABEL[c];
-  const n = nameShipBy(c);
-  return n === "ไม่พบข้อมูล" ? c : n;
-}
+// carrierLabel (Pacred rebrand → full legacy nameShipBy → raw) now lives in
+// lib/freight/shipping-methods.ts as the SINGLE display SOT shared with the
+// report-cnt container detail (ภูม 2026-07-21: they disagreed — report-cnt showed
+// a raw "13" for ธนามัย ขนส่งด่วน). Imported above.
 
 type Props = {
   fId:            number;            // tb_forwarder.id — primary key for all writers

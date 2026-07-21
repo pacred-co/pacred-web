@@ -515,14 +515,15 @@ export function resolveAutoThShippingFill(args: {
   if (cost == null) return null;
   return {
     carrier: "2", // Flash Express (the auto-quoted external courier)
-    cost,
-    // 🔴 owner 2026-07-18: ANY ขนส่งเอกชน → ปลายทาง '2' (COD) — the courier collects
-    // the real rate at the door (supersedes the 2026-07-09 ต้นทาง default here; same
-    // rule as lib/forwarder/pay-method.ts). The quoted cost is still RECORDED in
-    // ftransportprice (เก็บตามจริง · display + the basis if admin flips to ต้นทาง);
-    // the COD gate keeps it OFF the Pacred bill while paymethod stays '2'.
+    // 🔒 owner 2026-07-21: "พอเลือกชำระปลายทาง ก็ต้องไม่ใส่ ค่าขนส่งไทย · ควรเป็น 0".
+    // A ปลายทาง row stores NO domestic charge — the courier collects the real rate at
+    // the door. (Until now the quote was still WRITTEN into ftransportprice "for display",
+    // which is exactly the stale number that becomes billable the moment anything flips
+    // the row back to ต้นทาง.) The quoted amount stays in `label` so staff still SEE the
+    // estimate; it just isn't stored as a charge.
+    cost: 0,
     payMethod: "2",
     zone,
-    label: `Flash ${DOMESTIC_ZONE_LABEL[zone]} · ฿${cost.toLocaleString("th-TH")} (ปลายทาง COD)`,
+    label: `Flash ${DOMESTIC_ZONE_LABEL[zone]} · ประมาณ ฿${cost.toLocaleString("th-TH")} — เก็บปลายทาง (COD) ไม่คิดในบิล`,
   };
 }

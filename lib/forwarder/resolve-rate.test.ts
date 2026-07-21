@@ -28,10 +28,17 @@ function cand(over: Partial<ResolveRateCandidates> = {}): ResolveRateCandidates 
     ...over,
   };
 }
+/**
+ * Default the LEGACY selectors ON for the historical cases below (ratio when
+ * ค่าเทียบ ติ๊ก · ยึดตามคิว when not) by pinning `chargeHigherBasis: false`.
+ * The 2026-07-21 owner policy (charge the higher basis) is exercised in its own
+ * block at the end — so BOTH behaviours stay proven and the revert is safe.
+ */
 function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
   return {
     weightKg: 0, volumeCbm: 0,
     comparisonEnabled: false, comparisonValue: null,
+    chargeHigherBasis: false,
     ...over,
   };
 }
@@ -422,6 +429,74 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
   );
   near("both: manual kgRate=18", both.kgRate ?? -1, 18);
   near("both: manual cbmRate=3700 (no doc discount on manual)", both.cbmRate ?? -1, 3700);
+}
+
+// ── 🔴 CHARGE THE HIGHER BASIS (owner 2026-07-21 · "เลือกค่าที่แพงกว่าไปเก็บลูกค้า") ──
+// The policy runs BEFORE both legacy selectors. `chargeHigherBasis` is omitted here on
+// purpose so these cases assert the SHIPPED const (CHARGE_HIGHER_BASIS = true).
+{
+  const hi = (over: Partial<ResolveRateInput> = {}): ResolveRateInput => ({
+    weightKg: 0, volumeCbm: 0, comparisonEnabled: false, comparisonValue: null, ...over,
+  });
+  // rate card: KG 10 ฿/กก · CBM 2,000 ฿/คิว (flat across tiers so the tier lookup
+  // never confuses the basis comparison).
+  const CARD = {
+    generalKg:  { tier1: 10,   tier2: 10,   tier3: 10 } as const,
+    generalCbm: { tier1: 2000, tier2: 2000, tier3: 2000 } as const,
+  };
+  const c = cand({ ...CARD });
+
+  // 1. Light shipment (100 kg · 1 คิว): KG 1,000 vs CBM 2,000 → CBM wins. Same as the
+  //    old ยึดตามคิว default → no change for the common case.
+  const light = resolveForwarderRate(c, hi({ weightKg: 100, volumeCbm: 1 }));
+  eq("higher: light → cbm", light.basis, "cbm");
+  near("higher: light subtotal=2000", light.transportSubtotal, 2000);
+  eq("higher: light refPrice=2", light.refPrice, 2);
+
+  // 2. DENSE shipment (300 kg · 1 คิว): KG 3,000 vs CBM 2,000 → KG wins. The old
+  //    default billed 2,000 (ยึดตามคิว) = the undercharge the owner reported.
+  const dense = resolveForwarderRate(c, hi({ weightKg: 300, volumeCbm: 1 }));
+  eq("higher: dense → kg", dense.basis, "kg");
+  near("higher: dense subtotal=3000 (was 2000)", dense.transportSubtotal, 3000);
+  eq("higher: dense refPrice=1", dense.refPrice, 1);
+
+  // 3. ค่าเทียบ ติ๊ก can no longer land on the cheaper side: ratio 300 > 250 → the
+  //    legacy rule says KG (3,000) and here KG is also the higher → same answer …
+  const tickDense = resolveForwarderRate(c, hi({ weightKg: 300, volumeCbm: 1, comparisonEnabled: true, comparisonValue: 250 }));
+  eq("higher: ticked dense → kg", tickDense.basis, "kg");
+  //    … but a LIGHT ticked order (ratio 100 < 250 → legacy CBM 2,000) now compares:
+  //    KG 1,000 < CBM 2,000 → still CBM. The policy never charges LESS than either rule.
+  const tickLight = resolveForwarderRate(c, hi({ weightKg: 100, volumeCbm: 1, comparisonEnabled: true, comparisonValue: 250 }));
+  eq("higher: ticked light → cbm", tickLight.basis, "cbm");
+  near("higher: ticked light subtotal=2000", tickLight.transportSubtotal, 2000);
+
+  // 4. A PINNED basis (estimator "ถ้าคิดตามกิโล ได้เท่าไร") is NOT overridden.
+  const pinned = resolveForwarderRate(
+    c,
+    hi({ weightKg: 100, volumeCbm: 1, comparisonEnabled: true, comparisonValue: 0, basisPinned: true }),
+  );
+  eq("higher: pinned kg stays kg (estimator)", pinned.basis, "kg");
+  near("higher: pinned kg subtotal=1000", pinned.transportSubtotal, 1000);
+
+  // 5. Doc-tier discount still lowers the CBM candidate BEFORE the comparison —
+  //    and when the discounted CBM is still the higher side it wins WITH the discount.
+  const docWins = resolveForwarderRate(
+    cand({ ...CARD, generalCbm: { tier1: 4000, tier2: 4000, tier3: 4000 } }),
+    hi({ weightKg: 100, volumeCbm: 1, docTierEligible: true, docTierDiscountCbm: 800 }),
+  );
+  eq("higher: doc-tier cbm still wins", docWins.basis, "cbm");
+  near("higher: doc-tier subtotal=3200 (4000-800)", docWins.transportSubtotal, 3200);
+  near("higher: doc-tier discount recorded", docWins.docDiscountApplied, 800);
+
+  // 6. No CBM card at all → KG is the only price and wins (never a silent ฿0).
+  const kgOnly = resolveForwarderRate(cand({ ...CARD, generalCbm: null }), hi({ weightKg: 100, volumeCbm: 1 }));
+  eq("higher: no cbm card → kg", kgOnly.basis, "kg");
+  eq("higher: no cbm card → not flagged missing", kgOnly.rateMissing, false);
+
+  // 7. No card at all → ฿0 + rateMissing (the caller's hard flag survives the policy).
+  const noCard = resolveForwarderRate(cand(), hi({ weightKg: 100, volumeCbm: 1 }));
+  eq("higher: no card → rateMissing", noCard.rateMissing, true);
+  near("higher: no card → 0", noCard.transportSubtotal, 0);
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);

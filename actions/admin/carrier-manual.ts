@@ -34,6 +34,7 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { derivePayMethod } from "@/lib/forwarder/pay-method";
 import { z } from "zod";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -339,7 +340,8 @@ export async function adminCarrierManualInsert(
           fsendsms1day:          "0",
           fsendsms3day:          "0",
           fsendsms3eday:         "0",
-          paymethod:             "1",
+          // 🔒 COD LOCK (owner 2026-07-21) — ขนส่งเอกชน = ปลายทาง (COD) เสมอ.
+          paymethod:             derivePayMethod(d.shipBy),
           crate:                 "2",      // default = ไม่ตีลังไม้ (header convention · function.php L1691 · admin edits later)
           pricecrate:            0,
           fqc:                   "0",

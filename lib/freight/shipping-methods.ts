@@ -115,6 +115,9 @@ export const SHIPPING_METHODS: readonly ShippingMethod[] = [
   { code: "45",   name: "MPort Logistics",                nameTh: "บริษัท เอ็มพอร์ท โลจิสติกส์ จำกัด", type: "truck", etaDays: 5, description: "ภาคเหนือ" },
   { code: "46",   name: "C.N. Transport",                 nameTh: "ซี.เอ็น.ทรานสปอร์ต",             type: "truck", etaDays: 4, description: "ชลบุรี · ระยอง" },
   { code: "47",   name: "Phuket Laem Thong Transport",    nameTh: "ภูเก็ตแหลมทองขนส่ง",             type: "truck", etaDays: 5, description: "ภูเก็ต · พังงา" },
+  // owner 2026-07-21 — ขนส่งเอกชนเจ้าใหม่ · ทุกจังหวัด (ยังไม่ล็อกพื้นที่).
+  // พื้นที่ให้บริการอยู่ที่ lib/forwarder/carrier-extra.ts (ยังไม่เข้าไฟล์ Excel).
+  { code: "48",   name: "Ao Thai Transport",              nameTh: "อ่าวไทยทรานสปอรต",               type: "truck", etaDays: 4, description: "ทุกจังหวัด" },
   { code: "PCS",  name: "Pacred Warehouse Pickup",        nameTh: "รับเองโกดัง Pacred (สมุทรสาคร)", type: "truck", etaDays: 1, description: "รับด้วยตนเองที่โกดัง Pacred สมุทรสาคร" },
   { code: "F",    name: "Auto-assigned by Pacred",        nameTh: "บริษัทจัดหาให้อัตโนมัติ",        type: "truck", etaDays: 4 },
   { code: "PCSF", name: "Pacred Mao Mao (bulk)",          nameTh: "PRF เหมาๆ",                      type: "truck", etaDays: 3, description: "Pacred เหมาส่งทั้งคันรถ (PRF)" },
@@ -167,6 +170,37 @@ export function getShippingMethodByCode(code: string): ShippingMethod | null {
 export function nameShipBy(code: string | null | undefined): string {
   if (!code) return "ไม่พบข้อมูล";
   return SHIPPING_METHOD_INDEX.get(code)?.nameTh ?? "ไม่พบข้อมูล";
+}
+
+/**
+ * Pacred own-fleet (rebrand) labels — the D1 codes PCSF→PRF (เหมาๆ) and PCSE→PRE
+ * (express) plus PCS (รับเองโกดัง). SHIPPING_METHOD_INDEX only carries the legacy
+ * PCS/PCSF/PCSE, NOT the rebranded PRF/PRE — so these must be resolved here.
+ */
+const SHIPBY_REBRAND_LABEL: Record<string, string> = {
+  PCS:  "รับเองโกดัง Pacred (สมุทรสาคร)",
+  PRF:  "Pacred เหมาๆ (PRF)",
+  PCSF: "Pacred เหมาๆ (PRF)",
+  PRE:  "PRE Express",
+  PCSE: "PRE Express",
+};
+
+/**
+ * The SINGLE display SOT for a stored `fshipby` — used by BOTH the forwarder
+ * detail page AND the report-cnt container detail (ภูม 2026-07-21: report-cnt
+ * showed a raw "13" while the detail page resolved it to "ธนามัย ขนส่งด่วน" —
+ * two label maps disagreed). Resolution order, faithful to legacy nameShipBy():
+ *   1. the Pacred own-fleet rebrand labels (PCS pickup · PRF เหมาๆ · PRE express)
+ *   2. the full legacy nameShipBy() map (numeric external couriers "1".."47")
+ *   3. the raw value verbatim (a custom carrier name an admin typed).
+ * Empty → "—".
+ */
+export function carrierLabel(code: string | null | undefined): string {
+  const c = (code ?? "").trim();
+  if (!c) return "—";
+  if (SHIPBY_REBRAND_LABEL[c]) return SHIPBY_REBRAND_LABEL[c];
+  const n = nameShipBy(c);
+  return n === "ไม่พบข้อมูล" ? c : n;
 }
 
 // ════════════════════════════════════════════════════════════════════════
