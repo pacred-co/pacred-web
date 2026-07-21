@@ -33,7 +33,7 @@ import { SelectedItemsConfirmDialog } from "@/components/admin/selected-items-co
 import { baseTracking } from "@/lib/admin/momo-bill-header";
 import { ForwarderCostEditButton } from "@/components/admin/forwarder-cost-edit-button";
 import { fstatusBadge, CNTSTATUS_CFG, FSTATUS_CFG } from "@/lib/admin/forwarder-status";
-import { SHIP_BY_LABEL } from "@/actions/admin/reports-profit-types";
+import { carrierLabel } from "@/lib/freight/shipping-methods";
 import {
   isRowEligibleForAddCheck,
   FSTATUS_LABEL,
@@ -1564,12 +1564,12 @@ function productTypeLabel(t: string | null): string {
   }
 }
 
-// Carrier name — reuse the platform SOT (SHIP_BY_LABEL · actions/admin/
-// reports-profit-types) so external carriers (Flash/J&T/Nim/ไปรษณีย์ ฯลฯ) render
-// their name instead of a raw numeric code (legacy nameShipBy faithful).
+// Carrier name — the SHARED platform SOT (carrierLabel · lib/freight/shipping-methods),
+// identical to the forwarder detail page. External couriers (Flash/J&T/ธนามัย ฯลฯ)
+// render their NAME, never a raw numeric code — the partial SHIP_BY_LABEL map used to
+// show a raw "13" for ธนามัย ขนส่งด่วน (ภูม 2026-07-21). Full legacy nameShipBy faithful.
 function shipByLabel(s: string | null): string {
-  const k = (s ?? "").trim();
-  return SHIP_BY_LABEL[k] ?? (k || "-");
+  return carrierLabel(s);
 }
 
 // Legacy report-cnt "สถานะสินค้า" badge colour by fstatus — 1:1 with the legacy
