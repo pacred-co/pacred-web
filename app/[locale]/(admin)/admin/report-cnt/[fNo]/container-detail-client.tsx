@@ -456,6 +456,11 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
     // of "✓ อยู่ในรายการ". shipmentInCheck = in the queue with nothing left to add.
     const inCheckCount = g.filter((r) => r.inCheckQueue).length;
     const shipmentInCheck = inCheckCount > 0 && eligibleIds.length === 0;
+    // ออกบิลแล้ว — ทุกแทรค fstatus≥5 (รอชำระ/เตรียมส่ง/…) · ไม่มีในคิว · ไม่มีอะไรให้เพิ่ม.
+    // ติ๊กไม่ได้เพราะผ่านขั้นตอนตรวจ→วางบิลไปแล้ว (ภูม 2026-07-21) → โชว์ให้ชัด ไม่ใช่ box ว่าง.
+    const shipmentBilled =
+      eligibleIds.length === 0 && inCheckCount === 0 &&
+      g.every((r) => (parseInt(r.fstatus ?? "0", 10) || 0) >= 5);
     const statusBadge = a.status != null ? fstatusBadge(a.status) : null;
     return (
       <tr
@@ -479,6 +484,11 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
               >
                 ✓ อยู่ในรายการ{inCheckCount === g.length ? "" : ` ${inCheckCount}/${g.length}`}
               </span>
+            </td>
+          ) : shipmentBilled ? (
+            /* ออกบิลไปแล้ว → โชว์ให้ชัด แทน checkbox ว่างๆ ที่ติ๊กไม่ได้ (ภูม 2026-07-21). */
+            <td className="px-2 py-2 text-center align-middle" onClick={(e) => e.stopPropagation()}>
+              <span className="block text-[11px] text-muted" title="ออกบิลแล้ว · แก้ผ่านบิลจ่ายเงิน">ออกบิลแล้ว</span>
             </td>
           ) : (
             <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
@@ -971,6 +981,10 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                         <span className="block text-[11px] text-emerald-600" title={`เพิ่มแล้วโดย ${r.checkAdminId ?? "-"}`}>
                           ✓ อยู่ในรายการ
                         </span>
+                      ) : (parseInt(r.fstatus ?? "0", 10) || 0) >= 5 ? (
+                        /* ออกบิลไปแล้ว (รอชำระ/เตรียมส่ง/…) → โชว์ให้ชัด แทน checkbox ที่ติ๊กไม่ได้
+                           (ภูม 2026-07-21). แก้ต่อผ่านบิลจ่ายเงิน. */
+                        <span className="block text-[11px] text-muted" title="ออกบิลแล้ว · แก้ผ่านบิลจ่ายเงิน">ออกบิลแล้ว</span>
                       ) : (() => {
                         const eligible = isRowEligibleForAddCheck(r.fstatus);
                         const currentLabel =
