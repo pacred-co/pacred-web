@@ -486,9 +486,10 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
               </span>
             </td>
           ) : shipmentBilled ? (
-            /* ออกบิลไปแล้ว → โชว์ให้ชัด แทน checkbox ว่างๆ ที่ติ๊กไม่ได้ (ภูม 2026-07-21). */
+            /* ตรวจ+ออกบิลไปแล้ว → ✓ ตรวจสอบแล้ว (เขียว · ดูจบงาน ไม่ใช่บั๊ก · ภูม 2026-07-21).
+               ออกบิลแล้ว = ผ่านการตรวจไปแล้ว. แก้ต่อผ่านบิลจ่ายเงิน. */
             <td className="px-2 py-2 text-center align-middle" onClick={(e) => e.stopPropagation()}>
-              <span className="block text-[11px] text-muted" title="ออกบิลแล้ว · แก้ผ่านบิลจ่ายเงิน">ออกบิลแล้ว</span>
+              <span className="block text-[11px] text-emerald-600" title="ตรวจสอบ + ออกบิลแล้ว · แก้ผ่านบิลจ่ายเงิน">✓ ตรวจสอบแล้ว</span>
             </td>
           ) : (
             <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
@@ -982,9 +983,9 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                           ✓ อยู่ในรายการ
                         </span>
                       ) : (parseInt(r.fstatus ?? "0", 10) || 0) >= 5 ? (
-                        /* ออกบิลไปแล้ว (รอชำระ/เตรียมส่ง/…) → โชว์ให้ชัด แทน checkbox ที่ติ๊กไม่ได้
-                           (ภูม 2026-07-21). แก้ต่อผ่านบิลจ่ายเงิน. */
-                        <span className="block text-[11px] text-muted" title="ออกบิลแล้ว · แก้ผ่านบิลจ่ายเงิน">ออกบิลแล้ว</span>
+                        /* ตรวจ+ออกบิลไปแล้ว (รอชำระ/เตรียมส่ง/…) → ✓ ตรวจสอบแล้ว (เขียว · ดูจบงาน
+                           ไม่ใช่บั๊ก · ภูม 2026-07-21). แก้ต่อผ่านบิลจ่ายเงิน. */
+                        <span className="block text-[11px] text-emerald-600" title="ตรวจสอบ + ออกบิลแล้ว · แก้ผ่านบิลจ่ายเงิน">✓ ตรวจสอบแล้ว</span>
                       ) : (() => {
                         const eligible = isRowEligibleForAddCheck(r.fstatus);
                         const currentLabel =
