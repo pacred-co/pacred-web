@@ -1251,10 +1251,11 @@ function PayModal({
       : 0;
   const discountSum = keyType === "2" ? fwdRows.reduce((s, r) => s + n0(r.breakdown.discount), 0) : 0;
   const whtSum = keyType === "2" ? fwdRows.reduce((s, r) => s + n0(r.breakdown.wht1pct), 0) : 0;
-  // ภาษีมูลค่าเพิ่ม 7% shown INCLUSIVE (already inside `total` — displayed for the
-  // document, NOT added on top). ⚠️ flag: if this service should NOT show VAT for
-  // ไม่รับเอกสาร customers, gate this line on the doc-mode.
-  const vatIncl = Math.round((total - total / 1.07) * 100) / 100;
+  // 🔴 ห้ามใส่บรรทัด VAT 7% กลับมาที่จอนี้ (owner 2026-07-21 "เอา VAT 7 ออก มันไม่ถูกต้อง
+  // แต่ใบที่พิมพ์มาถูกต้องนะ"). ของเดิมถอด 7/107 ออกจาก `total` แบบเหมารวมทุกงาน — ผิด เพราะ
+  // ฝากนำเข้า/บริการ วิ่งเข้าบัญชี SERVICE = ไม่มี VAT (VAT 7% เก็บเฉพาะสาย TRADING ที่ออก
+  // ใบกำกับ). ฝั่งเอกสารที่พิมพ์ตัดสินด้วย doc-mode อยู่แล้ว (lib/tax/tax-doc-mode.ts) = ถูกต้อง
+  // อยู่แล้ว ไม่ต้องแตะ. จอนี้แสดงยอดเก็บเฉยๆ ไม่ต้องแจง VAT.
   const fmt2 = (v: number) =>
     (Number.isFinite(v) ? v : 0).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -1319,7 +1320,10 @@ function PayModal({
             <PartyLine k="ที่อยู่" v={ADDRESSES.office.full} />
             <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
               <ContactLine icon={<Phone className="h-3.5 w-3.5" />} v={CONTACT.phoneCompanyDisplay} />
-              <ContactLine icon={<Mail className="h-3.5 w-3.5" />} v={CONTACT.email} />
+              {/* acc@ ไม่ใช่ sales@ — site.ts: emailAcc = "receipts, transactions,
+                  payments, tax invoice queries · Used on receipt + invoice PDFs".
+                  นี่คือใบแจ้งหนี้ · ตรงกับที่ใบพิมพ์ใช้อยู่แล้ว (2026-07-21). */}
+              <ContactLine icon={<Mail className="h-3.5 w-3.5" />} v={CONTACT.emailAcc} />
               <ContactLine icon={<Globe className="h-3.5 w-3.5" />} v={siteDomain} />
             </div>
           </div>
@@ -1328,16 +1332,23 @@ function PayModal({
             <p className="mb-0.5 text-[11px] font-bold uppercase tracking-wide text-primary-600">ผู้รับใบแจ้งหนี้</p>
             <p className="font-semibold text-gray-900">
               {customerName}
-              <span className="ml-2 font-normal text-gray-500">
-                {panel.user.userid}
-                {panel.is_juristic ? " · นิติบุคคล" : ""}
-              </span>
+              <span className="ml-2 font-normal text-gray-500">{panel.user.userid}</span>
             </p>
-            <PartyLine k="เลขที่ภาษี" v="—" muted />
-            <PartyLine k="ที่อยู่" v="—" muted />
+            {/* 🔴 owner 2026-07-21 "มันไม่มีข้อมูลวิ่งมาอะ" — these were hardcoded "—".
+                Now fed by loadCustomerBillingParty (the same resolver the printable
+                ใบแจ้งหนี้ runs), so modal + paper always show the same party. Still
+                falls back to a muted "—" when the customer genuinely has no value. */}
+            <PartyLine k="เลขที่ภาษี" v={panel.user.tax_id || "—"} muted={!panel.user.tax_id} />
+            <PartyLine k="ที่อยู่" v={panel.user.address || "—"} muted={!panel.user.address} />
+            {/* 🔴 owner 2026-07-21 "ประเภทลูกค้าหายนะ" — ประเภท used to be an inline
+                " · นิติบุคคล" suffix on the PR code that rendered NOTHING for a
+                บุคคลธรรมดา, so the type simply vanished for most customers. It is now
+                its own always-present line, exactly like the printable ใบแจ้งหนี้.
+                (Display flag only — the 1% WHT is decided by the debit SOT, not here.) */}
+            <PartyLine k="ประเภท" v={panel.is_juristic ? "นิติบุคคล" : "บุคคลธรรมดา"} />
             <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
               <ContactLine icon={<Phone className="h-3.5 w-3.5" />} v={panel.user.tel || "-"} />
-              <ContactLine icon={<Mail className="h-3.5 w-3.5" />} v="-" />
+              <ContactLine icon={<Mail className="h-3.5 w-3.5" />} v={panel.user.email || "-"} />
             </div>
           </div>
         </div>
@@ -1563,7 +1574,6 @@ function PayModal({
               {otherSum > 0 && <Row label="ค่าบริการอื่นๆ" value={fmt2(otherSum)} />}
               {discountSum > 0 && <Row label="ส่วนลด" value={`− ${fmt2(discountSum)}`} className="text-emerald-600" />}
               {whtSum > 0 && <Row label="หัก ณ ที่จ่าย 1%" value={`− ${fmt2(whtSum)}`} className="text-orange-600" />}
-              <Row label="ภาษีมูลค่าเพิ่ม 7% (รวมแล้ว)" value={fmt2(vatIncl)} className="text-gray-500" />
               <div className="mt-2 rounded-md bg-red-50 px-3 py-2 text-center">
                 <div className="text-[11px] font-semibold text-red-700">ยอดรวมที่ต้องชำระ</div>
                 <div key={total} className="price-bounce-fx font-mono text-xl font-bold text-red-700">{thb(total)}</div>

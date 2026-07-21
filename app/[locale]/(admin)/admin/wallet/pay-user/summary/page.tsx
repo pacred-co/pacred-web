@@ -22,7 +22,13 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeForwarderDebitBatch, type ForwarderDebitRow } from "@/lib/forwarder/forwarder-debit-total";
 import { computeBillWht } from "@/lib/billing/wht";
-import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
+import { loadCustomerBillingParty } from "@/lib/admin/customer-billing-party";
+// ⚠️ MONEY-ROUTING: buildCompactPaymentQrDataUrl = the SAME QR the PayModal serves
+// via getDepositQr → the static K-Shop QR for LOGISTICS 225-2-91144-0, which is the
+// account this paper prints (serviceAccountFor("import_cargo")) — just cropped to
+// the code alone so it stays scannable in a small printed box. NOT the SERVICE
+// helper — that one points at 204-1-55856-6 (owner 2026-07-21).
+import { buildCompactPaymentQrDataUrl } from "@/lib/promptpay";
 import { PrintButton } from "./print-button";
 import { PaymentSummaryDoc, type SummaryRow } from "./summary-doc";
 
@@ -180,101 +186,24 @@ export default async function PaymentSummaryPage({
     );
   }
 
-  // 2. Customer header — from rows[0].userid.
+  // 2. Customer header — via the SHARED party resolver
+  //    (lib/admin/customer-billing-party). This was ~90 lines of inline
+  //    tb_corporate → resolveBillingIdentity → tb_address_main → tb_address
+  //    fallback; that exact logic MOVED into the resolver so this paper and the
+  //    PayModal's ผู้รับใบแจ้งหนี้ block resolve the customer identically and can
+  //    never drift (owner 2026-07-21 — the modal had been showing a hardcoded
+  //    "—" for เลขที่ภาษี/ที่อยู่ while this paper resolved them properly).
   const userid = rowsFw[0].userid ?? "";
+  const party = userid ? await loadCustomerBillingParty(admin, userid) : null;
 
-  type CorpRow = { corporatename: string | null; corporatenumber: string | null; corporateaddress: string | null };
-  let corp: CorpRow | null = null;
-  type UserRow = { userID: string; userName: string | null; userLastName: string | null; userCompany: string | number | null };
-  let userRow: UserRow | null = null;
-
-  if (userid) {
-    const { data: corpData, error: corpErr } = await admin
-      .from("tb_corporate")
-      .select("corporatename, corporatenumber, corporateaddress")
-      .eq("userid", userid)
-      .maybeSingle<CorpRow>();
-    if (corpErr && corpErr.code !== "PGRST116") {
-      console.error("[pay-user/summary: tb_corporate read] failed", {
-        code: corpErr.code, message: corpErr.message, userid,
-      });
-    }
-    corp = corpData ?? null;
-
-    const { data: uData, error: uErr } = await admin
-      .from("tb_users")
-      .select("userID, userName, userLastName, userCompany")
-      .eq("userID", userid)
-      .maybeSingle<UserRow>();
-    if (uErr && uErr.code !== "PGRST116") {
-      console.error("[pay-user/summary: tb_users read] failed", {
-        code: uErr.code, message: uErr.message, userid,
-      });
-    }
-    userRow = uData ?? null;
-  }
-
-  // name + juristic flag — via the billing-identity SOT (F5 + F6 · 2026-07-15). The old
-  // block keyed juristic ONLY on corporatename presence (missing ~few migrated นิติบุคคล
-  // that carry userCompany='1' with a blank corp name/number) AND prepended the PR code to
-  // the name. resolveBillingIdentity is the union rule (userCompany==='1' OR a corp tax-id)
-  // + a bare name (no PR prefix) — so this ใบสรุป classifies + names the customer EXACTLY
-  // like the ใบวางบิล (billing-run-paper) + ใบเสร็จ (load-receipt-document). The PR code
-  // stays in the อ้างอิง/order column of the table, not the identity line (owner 2026-07-10).
-  const identity = resolveBillingIdentity({
-    userCompany: userRow?.userCompany != null ? String(userRow.userCompany) : null,
-    userName: userRow?.userName ?? null,
-    userLastName: userRow?.userLastName ?? null,
-    corp,
-  });
-  const reCorporate = identity.isJuristic;
-  const customerName = identity.name;
-  const customerTaxId = identity.taxId || "-";
-
-  // address — corporate address, else fall back to the customer's main address.
-  let customerAddress = corp?.corporateaddress || "";
-  if (!customerAddress && userid) {
-    const { data: addrMain, error: amErr } = await admin
-      .from("tb_address_main")
-      .select("addressid")
-      .eq("userid", userid)
-      .maybeSingle<{ addressid: number | null }>();
-    if (amErr && amErr.code !== "PGRST116") {
-      console.error("[pay-user/summary: tb_address_main read] failed", {
-        code: amErr.code, message: amErr.message, userid,
-      });
-    }
-    if (addrMain?.addressid) {
-      const { data: addr, error: aErr } = await admin
-        .from("tb_address")
-        .select("addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode")
-        .eq("addressid", addrMain.addressid)
-        .maybeSingle<{
-          addressno: string | null;
-          addresssubdistrict: string | null;
-          addressdistrict: string | null;
-          addressprovince: string | null;
-          addresszipcode: string | null;
-        }>();
-      if (aErr && aErr.code !== "PGRST116") {
-        console.error("[pay-user/summary: tb_address read] failed", {
-          code: aErr.code, message: aErr.message, userid,
-        });
-      }
-      if (addr) {
-        customerAddress = [
-          addr.addressno ?? "",
-          addr.addresssubdistrict ? `ตำบล/แขวง ${addr.addresssubdistrict}` : "",
-          addr.addressdistrict ? `อำเภอ/เขต ${addr.addressdistrict}` : "",
-          addr.addressprovince ? `จังหวัด ${addr.addressprovince}` : "",
-          addr.addresszipcode ?? "",
-        ]
-          .filter((s) => s && String(s).trim().length > 0)
-          .join(" ")
-          .trim();
-      }
-    }
-  }
+  // ⚠️ MONEY — reCorporate is UNCHANGED: still resolveBillingIdentity's juristic
+  // UNION (userCompany==='1' OR a corp tax-id), which the resolver computes from
+  // the same inputs as before. It feeds computeForwarderDebitBatch({isCorporate})
+  // + computeBillWht below, so it must stay the union, not the narrow test.
+  const reCorporate = party?.isJuristic ?? false;
+  const customerName = party?.name ?? "";
+  const customerTaxId = party?.taxId || "-";
+  const customerAddress = party?.address ?? "";
 
   // 3. Build display rows + grand-total buckets.
   const rows: SummaryRow[] = rowsFw.map((r, idx) => ({
@@ -317,6 +246,17 @@ export default async function PaymentSummaryPage({
   const whtAmount = wht.wht_amount;
   const totalAmount = wht.net_payable;   // net = what the customer pays
 
+  // QR ชำระเงิน — amount = the NET the customer actually transfers (same figure as
+  // "ยอดที่ต้องชำระ" on the paper). Best-effort: a QR failure must never break the
+  // document, so degrade to "" → the doc omits the QR and the bank-account text
+  // beside it still carries the payment info.
+  let payQrDataUrl = "";
+  try {
+    payQrDataUrl = await buildCompactPaymentQrDataUrl(totalAmount);
+  } catch (e) {
+    console.error("[pay-user/summary: payment QR] failed (degrading to bank text)", e);
+  }
+
   const sumTotal = rowsFw.reduce((s, r) => s + num(r.ftotalprice), 0);
   const sumDeliveryChn = rowsFw.reduce((s, r) => s + num(r.ftransportpricechnthb), 0);
   // ค่าส่งในไทย: a COD (ปลายทาง · paymethod='2') row's ftransportprice is collected at the door by
@@ -358,6 +298,7 @@ export default async function PaymentSummaryPage({
         sumDiscount={sumDiscount}
         whtAmount={whtAmount}
         totalAmount={totalAmount}
+        payQrDataUrl={payQrDataUrl}
       />
     </>
   );
