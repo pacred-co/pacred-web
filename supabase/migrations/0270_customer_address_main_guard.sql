@@ -169,17 +169,22 @@ ON CONFLICT (userid) DO NOTHING;
 
 -- Keep an existing, valid last-used address (and the explicit PCS pickup
 -- sentinel). Repair only blank/invalid legacy values to the canonical main.
+-- ⚠️ FIX (เดฟ · integration review 2026-07-21): `tb_users` เป็นตาราง legacy ที่คอลัมน์
+-- เป็น camelCase มี quote จริงใน DB ("userID" · "userAddressID") — เขียน u.userid /
+-- useraddressid แบบไม่ quote จะโดน Postgres fold เป็นตัวเล็กแล้ว error
+-- `column u.userid does not exist` ทั้ง migration (คลาสเดียวกับบั๊ก mig-0113 ที่เคยทำ
+-- ฟอร์มย้ายเซลใช้ไม่ได้ทั้งหน้า). ทุกจุดที่แตะ tb_users ต้องใส่ quote.
 UPDATE public.tb_users u
-SET useraddressid = m.addressid::text
+SET "userAddressID" = m.addressid::text
 FROM public.tb_address_main m
-WHERE m.userid = u.userid
-  AND btrim(COALESCE(u.useraddressid, '')) <> 'PCS'
+WHERE m.userid = u."userID"
+  AND btrim(COALESCE(u."userAddressID", '')) <> 'PCS'
   AND NOT EXISTS (
     SELECT 1
     FROM public.tb_address a
-    WHERE a.userid = u.userid
+    WHERE a.userid = u."userID"
       AND a.addressstatus = '1'
-      AND a.addressid::text = btrim(COALESCE(u.useraddressid, ''))
+      AND a.addressid::text = btrim(COALESCE(u."userAddressID", ''))
       AND public.is_customer_delivery_address_usable(
         a.addressstatus, a.addressname, a.addresslastname, a.addresstel, a.addresstel2,
         a.addressno, a.addresssubdistrict, a.addressdistrict, a.addressprovince, a.addresszipcode
@@ -257,16 +262,16 @@ AS $$
 BEGIN
   IF TG_OP IN ('UPDATE', 'DELETE') THEN
     UPDATE public.tb_users
-    SET useraddressid = ''
-    WHERE userid = OLD.userid
-      AND useraddressid = OLD.addressid::text
+    SET "userAddressID" = ''
+    WHERE "userID" = OLD.userid
+      AND "userAddressID" = OLD.addressid::text
       AND (TG_OP = 'DELETE' OR OLD.userid IS DISTINCT FROM NEW.userid);
   END IF;
 
   IF TG_OP IN ('INSERT', 'UPDATE') THEN
     UPDATE public.tb_users
-    SET useraddressid = NEW.addressid::text
-    WHERE userid = NEW.userid;
+    SET "userAddressID" = NEW.addressid::text
+    WHERE "userID" = NEW.userid;
     RETURN NEW;
   END IF;
   RETURN OLD;
