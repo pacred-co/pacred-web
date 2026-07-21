@@ -31,7 +31,12 @@ test("database enforces one active owned default per customer", () => {
 test("first address and deliberate default changes persist for next checkout", () => {
   assert.match(migration, /CREATE TRIGGER trg_ensure_first_customer_address_is_main/);
   assert.match(migration, /CREATE TRIGGER trg_sync_customer_main_to_last_used/);
-  assert.match(migration, /SET useraddressid = NEW\.addressid::text/);
+  // ⚠️ The identifier MUST stay quoted camelCase — `tb_users."userAddressID"` is a
+  // real quoted column, so an unquoted `useraddressid` gets folded to lower-case by
+  // Postgres and the statement errors (see the 0270 header comment). This assertion
+  // was left on the pre-fix lower-case spelling and so went red the moment the bug
+  // was fixed; keep it matching the quoted form.
+  assert.match(migration, /SET "userAddressID" = NEW\.addressid::text/);
 });
 
 test("forwarder free-text correction saves and defaults the reusable address first", () => {
