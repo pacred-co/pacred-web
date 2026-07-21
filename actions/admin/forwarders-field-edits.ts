@@ -92,8 +92,16 @@ import { canonicalProvince } from "@/lib/forwarder/carrier-province-coverage";
 import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { isGodRole } from "@/lib/admin/god-role";
 
-/** Pacred's own delivery family (รับเองโกดัง / เหมาๆ / ด่วน) — works any province. */
-const PCS_FAMILY = new Set(["PCS", "PCSF", "PCSE"]);
+/** Pacred's own delivery family (รับเองโกดัง / เหมาๆ / ด่วน) — works any province.
+ *
+ *  ⚠️ MUST list BOTH the legacy codes and the D1 rebrand (PCSF→PRF เหมาๆ ·
+ *  PCSE→PRE ด่วน · 2026-06-20 L-MIG-04 "a rebrand must sweep every hardcoded list").
+ *  A missing PRF made suggestCarrierForAddress fall through to a PRIVATE courier on
+ *  every address edit of a เหมาๆ order → the ฿100 เหมาๆ anchor could no longer be
+ *  elected (mao-anchor-plan electMaoCarrier finds no PRF row) and COD dropped the
+ *  domestic leg = money lost. Keep in sync with OWN_FLEET_SHIPBY
+ *  (lib/forwarder/carrier-coverage-guard.ts) + MAO_CARRIER_CODE (lib/forwarder/mao-fee.ts). */
+const PCS_FAMILY = new Set(["PCS", "PCSF", "PCSE", "PRF", "PRE"]);
 
 /**
  * Auto-suggest the carrier for a delivery address (owner/ภูม 2026-07-03 · "จับจากเลขไปรษณีย์

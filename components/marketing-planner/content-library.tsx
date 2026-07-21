@@ -204,11 +204,24 @@ export function ContentLibrary({ items, onOpen, onEdit, onResult }: { items: Con
                     <GroupMultiSelect
                       group="contentType"
                       value={contentTypeIdsOf(c)}
-                      onChange={(ids) => updateContent(c.id, {
-                        contentTypeIds: ids,
-                        contentTypeId: ids[0],
-                        platformContentTypeIds: Object.fromEntries(platformIdsOf(c).map((pid) => [pid, ids])),
-                      })}
+                      onChange={(ids) => {
+                        // เก็บของแพลตฟอร์มที่ผู้ใช้แยกประเภทเองไว้ (ตารางนี้ save ทันที ไม่มี
+                        // undo) — เหมือน setContentTypes ในฟอร์ม: ตามค่าเริ่มต้น → อัปเดต ·
+                        // ตั้งต่างไว้แล้ว → คงเดิม.
+                        const cur = c.platformContentTypeIds ?? {};
+                        const base = contentTypeIdsOf(c);
+                        const same = (a: string[], b: string[]) => a.length === b.length && a.every((v, i) => v === b[i]);
+                        return updateContent(c.id, {
+                          contentTypeIds: ids,
+                          contentTypeId: ids[0],
+                          platformContentTypeIds: Object.fromEntries(
+                            platformIdsOf(c).map((pid) => {
+                              const own = Object.prototype.hasOwnProperty.call(cur, pid) ? cur[pid] ?? [] : null;
+                              return [pid, own == null || same(own, base) ? ids : own];
+                            }),
+                          ),
+                        });
+                      }}
                       placeholder="— เลือกประเภท —"
                       className="min-w-[180px] max-w-[240px] py-1 text-[11px]"
                     />

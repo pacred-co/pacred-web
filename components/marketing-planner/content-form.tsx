@@ -275,11 +275,29 @@ function ContentFormBody({ onClose, editId, defaultDate }: { onClose: () => void
   const [craftOpen, setCraftOpen] = useState(false);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
   const setPlatformTitle = (pid: string, v: string) => setForm((f) => ({ ...f, platformTitles: { ...f.platformTitles, [pid]: v } }));
-  const setContentTypes = (ids: string[]) => setForm((f) => ({
-    ...f,
-    contentTypeIds: ids,
-    platformContentTypeIds: Object.fromEntries(f.platformIds.map((pid) => [pid, ids])),
-  }));
+  // ประเภทด้านบน = ค่าเริ่มต้นของทุกแพลตฟอร์ม — แต่แพลตฟอร์มที่ผู้ใช้ "แยกประเภทเอง"
+  // ไว้แล้ว ต้องไม่ถูกเขียนทับ (เดฟ 2026-07-21 integration review: เดิม force-write ทับ
+  // ทุกแพลตฟอร์ม → ตั้ง FB=อัลบั้ม / TikTok=คลิปสั้น ไว้ แล้วแตะช่องบนอีกครั้ง = หายหมด
+  // เงียบๆ ไม่มี undo). ยึดแพทเทิร์นเดียวกับ setPlatforms + ตอน submit ในไฟล์นี้:
+  // แพลตฟอร์มที่ยัง "ตามค่าเริ่มต้น" (เท่ากับลิสต์บนอันเดิม/ยังไม่เคยตั้ง) จะอัปเดตตาม ·
+  // แพลตฟอร์มที่ตั้งค่าต่างออกไปแล้ว = เก็บของเดิมไว้.
+  const setContentTypes = (ids: string[]) => setForm((f) => {
+    const sameList = (a: string[], b: string[]) =>
+      a.length === b.length && a.every((v, i) => v === b[i]);
+    return {
+      ...f,
+      contentTypeIds: ids,
+      platformContentTypeIds: Object.fromEntries(
+        f.platformIds.map((pid) => {
+          const own = Object.prototype.hasOwnProperty.call(f.platformContentTypeIds, pid)
+            ? f.platformContentTypeIds[pid] ?? []
+            : null;
+          const followsDefault = own == null || sameList(own, f.contentTypeIds);
+          return [pid, followsDefault ? ids : own];
+        }),
+      ),
+    };
+  });
   const setPlatforms = (ids: string[]) => setForm((f) => ({
     ...f,
     platformIds: ids,
