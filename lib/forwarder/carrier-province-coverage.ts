@@ -24,6 +24,9 @@
 // The 77 canonical provinces live in ONE place (docs/conventions §13) —
 // `lib/thai-provinces.ts`; the generator asserts parity with it before emitting.
 import { isThaiProvince, THAI_PROVINCES } from "@/lib/thai-provinces";
+// ขนส่งที่ owner สั่งเพิ่มก่อนเข้าไฟล์ Excel — hand-maintained · ต่อท้ายลิสต์ที่ generate
+// มา (ดู ./carrier-extra.ts). ทำให้ regenerate ใหม่ไม่ลบของที่ owner สั่งเพิ่มไว้.
+import { EXTRA_CARRIER_COVERAGE } from "./carrier-extra";
 
 // Re-export so the carrier pickers (client + server) pull the 77-province list
 // from THIS pure SOT — the same module that holds `carriersForProvince` /
@@ -305,6 +308,12 @@ export const CARRIER_PROVINCE_COVERAGE: CarrierCoverage[] = [
     slug: "TaweeSapRayong",
     provinces: ["ระยอง"],
   },
+  // ── ขนส่งที่ owner สั่งเพิ่มระหว่างทาง (ยังไม่อยู่ในไฟล์ Excel) ──────────────
+  // hand-maintained ที่ ./carrier-extra.ts — ต่อท้ายตรงนี้เพื่อให้ทุก consumer
+  // (picker · guard · provincesForCarrier) เห็นเป็นลิสต์เดียว และรัน generator
+  // ใหม่ก็ไม่หาย (generator เขียนทับเฉพาะบล็อกด้านบน). ย้ายออกเมื่อเจ้านั้นเข้า
+  // ไฟล์ Excel แล้ว. owner 2026-07-21.
+  ...EXTRA_CARRIER_COVERAGE,
 ];
 
 /**

@@ -83,7 +83,7 @@ import { splitAggregatedMomoBoxRows } from "@/lib/integrations/momo-web/split-bo
 import { baseOf as baseOfTracking } from "@/lib/integrations/momo-web/split-box-rows-plan";
 import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
-import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
+import { derivePayMethodForDelivery, enforceCodDomesticZero } from "@/lib/forwarder/pay-method";
 import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shipping";
 import { propagateShipmentEdit } from "@/lib/admin/forwarder-siblings";
 import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
@@ -245,7 +245,13 @@ export async function adminPickForwarderAddress(
         faddresstel:         addr.addresstel ?? "",
         faddresstel2:        addr.addresstel2 ?? "",
         ...(carrierWritable ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: addr.addresszipcode }) } : {}),
-        ...(reprice != null ? { ftransportprice: reprice } : {}),
+        // 🔒 COD LOCK (owner 2026-07-21) — ปลายทาง = ลูกค้าจ่ายขนส่งที่ปลายทาง → เราไม่เก็บ
+        // ค่าส่งไทย. ต้องชนะ reprice เพื่อไม่ให้เรทที่เพิ่งคิดได้ทับกติกานี้.
+        ...(carrierWritable && derivePayMethodForDelivery(carrier, { addressID: null, zip: addr.addresszipcode }) === "2"
+          ? { ftransportprice: 0 }
+          : reprice != null
+            ? { ftransportprice: reprice }
+            : {}),
         adminidupdate:       legacyAdminId,
       })
       .eq("id", d.fId);
@@ -271,7 +277,12 @@ export async function adminPickForwarderAddress(
           ...(carrierWritable ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: addr.addresszipcode }) } : {}),
           // ONLY flat own-fleet (เหมาๆ/รับเอง = ฿0 · fee is the once-per-shipment mao anchor)
           // gets its per-box price zeroed on siblings; PCSE/private prices stay per-box.
-          ...(carrierWritable && (isMaoCarrier(carrier) || carrier === "PCS") ? { ftransportprice: 0 } : {}),
+          // ค่าส่งไทยของกล่องพี่น้อง = ฿0 เมื่อ (ก) เหมาๆ/รับเอง (ค่าเดียว ฿100 อยู่ที่ anchor)
+          // หรือ (ข) ขนส่งเอกชน = ปลายทาง (owner 2026-07-21). PCSE/PRE ด่วน = ของ Pacred
+          // เก็บต้นทาง → ราคาต่อกล่องคงไว้.
+          ...(carrierWritable && (isMaoCarrier(carrier) || carrier === "PCS" || !isOwnFleetCarrier(carrier))
+            ? { ftransportprice: 0 }
+            : {}),
         },
       },
       legacyAdminId,
@@ -359,7 +370,13 @@ export async function adminUpdateForwarderAddressDetails(
         faddresstel2:        d.tel2,
         faddressnote:        d.note,
         ...(carrierWritable ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: d.zipcode }) } : {}),
-        ...(reprice != null ? { ftransportprice: reprice } : {}),
+        // 🔒 COD LOCK (owner 2026-07-21) — ปลายทาง = ลูกค้าจ่ายขนส่งที่ปลายทาง → เราไม่เก็บ
+        // ค่าส่งไทย. ต้องชนะ reprice เพื่อไม่ให้เรทที่เพิ่งคิดได้ทับกติกานี้.
+        ...(carrierWritable && derivePayMethodForDelivery(carrier, { addressID: null, zip: d.zipcode }) === "2"
+          ? { ftransportprice: 0 }
+          : reprice != null
+            ? { ftransportprice: reprice }
+            : {}),
         adminidupdate:       legacyAdminId,
       })
       .eq("id", d.fId);
@@ -381,7 +398,12 @@ export async function adminUpdateForwarderAddressDetails(
         },
         money: {
           ...(carrierWritable ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: d.zipcode }) } : {}),
-          ...(carrierWritable && (isMaoCarrier(carrier) || carrier === "PCS") ? { ftransportprice: 0 } : {}),
+          // ค่าส่งไทยของกล่องพี่น้อง = ฿0 เมื่อ (ก) เหมาๆ/รับเอง (ค่าเดียว ฿100 อยู่ที่ anchor)
+          // หรือ (ข) ขนส่งเอกชน = ปลายทาง (owner 2026-07-21). PCSE/PRE ด่วน = ของ Pacred
+          // เก็บต้นทาง → ราคาต่อกล่องคงไว้.
+          ...(carrierWritable && (isMaoCarrier(carrier) || carrier === "PCS" || !isOwnFleetCarrier(carrier))
+            ? { ftransportprice: 0 }
+            : {}),
         },
       },
       legacyAdminId,
@@ -769,9 +791,9 @@ export async function adminUpdateForwarderShipBy(
     //    + faddressprovince (the CLOSED-LIST province gate, owner 2026-07-14).
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, fstatus, fvolume, fshipby, faddressprovince, userid, ftrackingchn")
+      .select("id, fstatus, fvolume, fshipby, faddressprovince, userid, ftrackingchn, ftransportprice")
       .eq("id", d.fId)
-      .maybeSingle<{ id: number; fstatus: string | null; fvolume: number | string | null; fshipby: string | null; faddressprovince: string | null; userid: string | null; ftrackingchn: string | null }>();
+      .maybeSingle<{ id: number; fstatus: string | null; fvolume: number | string | null; fshipby: string | null; faddressprovince: string | null; userid: string | null; ftrackingchn: string | null; ftransportprice: number | string | null }>();
     if (fwdErr) {
       console.error(`[adminUpdateForwarderShipBy read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
       return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
@@ -838,7 +860,16 @@ export async function adminUpdateForwarderShipBy(
     // (updateLegacyForwarderShipBy) already does; this admin path used to leave it stale.
     // Not on billed rows (>5) — the row's collection state is settled there.
     if (fStatusInt <= 5) {
-      update.paymethod = derivePayMethodForDelivery(fShipBy, { addressID: null, zip: null });
+      // 🔒 COD LOCK (owner 2026-07-21) — เอกชน = ปลายทางเสมอ · ปลายทาง = ค่าส่งไทย 0.
+      // enforceCodDomesticZero ตัดสินคู่นี้ที่เดียว แล้วผลลัพธ์ทับค่าที่คิดไว้ข้างบน
+      // (สูตร express/เหมาๆ ยังใช้ได้เมื่อเป็นต้นทาง).
+      const locked = enforceCodDomesticZero({
+        fShipBy,
+        payMethod: derivePayMethodForDelivery(fShipBy, { addressID: null, zip: null }),
+        transportPrice: update.ftransportprice ?? fwd.ftransportprice ?? 0,
+      });
+      update.paymethod = locked.payMethod;
+      if (locked.payMethod === "2") update.ftransportprice = 0;
     }
 
     const { error: updErr } = await admin
@@ -1249,14 +1280,28 @@ export async function adminUpdateForwarderThShipping(
 
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, ftransportprice")
+      .select("id, ftransportprice, fshipby, paymethod")
       .eq("id", d.fId)
-      .maybeSingle<{ id: number; ftransportprice: number | string | null }>();
+      .maybeSingle<{ id: number; ftransportprice: number | string | null; fshipby: string | null; paymethod: string | null }>();
     if (fwdErr) {
       console.error(`[adminUpdateForwarderThShipping read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
       return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
     }
     if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+
+    // 🔒 COD LOCK (owner 2026-07-21) — งานที่เก็บปลายทาง ห้ามมีค่าส่งไทยในระบบ
+    // (ลูกค้าจ่ายขนส่งเองที่ปลายทาง). บอกเหตุผลตรงๆ แทนที่จะรับตัวเลขแล้วเงียบ.
+    const codLock = enforceCodDomesticZero({
+      fShipBy: fwd.fshipby,
+      payMethod: fwd.paymethod,
+      transportPrice: d.ftransportprice,
+    });
+    if (codLock.payMethod === "2" && d.ftransportprice > 0) {
+      return {
+        ok: false,
+        error: "งานนี้เก็บเงินปลายทาง (COD) — ค่าขนส่งไทยต้องเป็น ฿0 (ขนส่งเก็บกับลูกค้าที่ปลายทาง). ถ้าจะเก็บค่าส่งเอง ให้เปลี่ยนเป็นขนส่งของ Pacred + วิธีเก็บเงินต้นทางก่อน",
+      };
+    }
 
     const before = Number(fwd.ftransportprice ?? 0);
     if (before === d.ftransportprice) {
@@ -1306,21 +1351,41 @@ export async function adminUpdateForwarderPayMethod(
 
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, paymethod, userid, ftrackingchn")
+      .select("id, paymethod, userid, ftrackingchn, fshipby, ftransportprice")
       .eq("id", d.fId)
-      .maybeSingle<{ id: number; paymethod: string | null; userid: string | null; ftrackingchn: string | null }>();
+      .maybeSingle<{ id: number; paymethod: string | null; userid: string | null; ftrackingchn: string | null; fshipby: string | null; ftransportprice: number | string | null }>();
     if (fwdErr) {
       console.error(`[adminUpdateForwarderPayMethod read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
       return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
     }
     if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
-    if ((fwd.paymethod ?? "").trim() === d.paymethod) {
+
+    // 🔒 COD LOCK (owner 2026-07-21) — ขนส่งเอกชน = ปลายทางเสมอ · ปลายทาง = ค่าส่งไทย 0.
+    // REFUSE loudly instead of silently correcting: the admin picked ต้นทาง on purpose,
+    // so tell them why it can't be (the ตัวเลือก in the UI is disabled for the same reason).
+    const locked = enforceCodDomesticZero({
+      fShipBy: fwd.fshipby,
+      payMethod: d.paymethod,
+      transportPrice: fwd.ftransportprice,
+    });
+    if (locked.payMethod !== d.paymethod) {
+      return {
+        ok: false,
+        error: "ขนส่งเอกชนต้องเก็บเงินปลายทาง (COD) เท่านั้น — ถ้าจะเก็บต้นทาง ให้เปลี่ยนเป็นขนส่งของ Pacred (รับเองโกดัง / เหมาๆ / ด่วน) ก่อน",
+      };
+    }
+    if ((fwd.paymethod ?? "").trim() === d.paymethod && Number(fwd.ftransportprice ?? 0) === locked.transportPrice) {
       return { ok: false, error: "ไม่มีการเปลี่ยนแปลง (วิธีเก็บเงินเดิม)" };
     }
 
     const { error: updErr } = await admin
       .from("tb_forwarder")
-      .update({ paymethod: d.paymethod, adminidupdate: legacyAdminId })
+      .update({
+        paymethod: locked.payMethod,
+        // ปลายทาง = ลูกค้าจ่ายขนส่งที่ปลายทาง → เราไม่เก็บค่าส่งไทยในบิล (owner 2026-07-21)
+        ftransportprice: locked.transportPrice,
+        adminidupdate: legacyAdminId,
+      })
       .eq("id", d.fId);
     if (updErr) {
       console.error(`[adminUpdateForwarderPayMethod update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
@@ -1331,7 +1396,7 @@ export async function adminUpdateForwarderPayMethod(
     await propagateShipmentEdit(
       admin,
       { id: d.fId, ftrackingchn: fwd.ftrackingchn, userid: fwd.userid },
-      { money: { paymethod: d.paymethod } },
+      { money: { paymethod: locked.payMethod, ftransportprice: locked.transportPrice } },
       legacyAdminId,
     );
 
