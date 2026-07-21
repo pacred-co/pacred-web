@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { ADDRESSES } from "@/components/seo/site";
+import { isPayAtOriginCarrier } from "@/lib/forwarder/pay-method";
 
 /**
  * Legacy `tb_header_order` writers for the CUSTOMER shop-order detail page —
@@ -98,9 +99,13 @@ export async function updateLegacyShopOrderShipBy(
     return { ok: false, error: "shipping_locked — ออเดอร์นี้สำเร็จ/ยกเลิกแล้ว ไม่สามารถเปลี่ยนบริษัทขนส่งได้" };
   }
 
-  // shops.php L1480-1482 — in-origin carriers force payMethod='1' (เก็บต้นทาง).
-  const inOrigin = hShipBy === "PCS" || hShipBy === "PCSF" || hShipBy === "PCSE"
-    || hShipBy === "24" || hShipBy === "2";
+  // shops.php L1480-1482 — pay-at-origin carriers force payMethod='1' (เก็บต้นทาง).
+  // Route through the SOT (owner พี่ป๊อป 2026-07-21) so shop-EDIT matches shop-CREATE
+  // (cart.ts uses derivePayMethod) + the forwarder lock: own-fleet + Flash/J&T/ไปรษณีย์
+  // → ต้นทาง (the old hardcode missed the PRF/PRE rebrand + ไปรษณีย์ "11"). Only ever
+  // FORCES '1' here (never '2') — legacy never set COD on shop-edit, and the shop-billing
+  // COD-'2' behavior is unverified → ปลายทาง carriers leave paymethod untouched (carryover).
+  const inOrigin = isPayAtOriginCarrier(hShipBy);
 
   // shops.php L1483 — UPDATE hShipBy [+ payMethod], ownership-scoped.
   const baseUpdate: Record<string, string> = { hshipby: hShipBy };

@@ -648,7 +648,7 @@ export default async function AdminForwarderEditPage({
           <EditCrateField fId={r.id} crate={r.crate} pricecrate={r.pricecrate} />
 
           {/* การเก็บเงินค่าขนส่งในไทย — inline edit */}
-          <EditPayMethodField fId={r.id} paymethod={r.paymethod} />
+          <EditPayMethodField fId={r.id} paymethod={r.paymethod} fshipby={r.fshipby} />
 
           {/* บริษัทขนส่ง — inline edit (Pacred preset + ขนส่งเอกชนตามจังหวัดปลายทาง + free-text).
               owner 2026-07-14: the private-courier list is filtered to the couriers that

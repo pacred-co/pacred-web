@@ -83,7 +83,7 @@ import { splitAggregatedMomoBoxRows } from "@/lib/integrations/momo-web/split-bo
 import { baseOf as baseOfTracking } from "@/lib/integrations/momo-web/split-box-rows-plan";
 import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
-import { derivePayMethodForDelivery, enforceCodDomesticZero } from "@/lib/forwarder/pay-method";
+import { derivePayMethodForDelivery, enforceCodDomesticZero, isPayAtOriginCarrier } from "@/lib/forwarder/pay-method";
 import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shipping";
 import { propagateShipmentEdit } from "@/lib/admin/forwarder-siblings";
 import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
@@ -279,12 +279,10 @@ export async function adminPickForwarderAddress(
         },
         money: {
           ...(carrierWritable ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: address.addresszipcode }) } : {}),
-          // ONLY flat own-fleet (เหมาๆ/รับเอง = ฿0 · fee is the once-per-shipment mao anchor)
-          // gets its per-box price zeroed on siblings; PCSE/private prices stay per-box.
           // ค่าส่งไทยของกล่องพี่น้อง = ฿0 เมื่อ (ก) เหมาๆ/รับเอง (ค่าเดียว ฿100 อยู่ที่ anchor)
-          // หรือ (ข) ขนส่งเอกชน = ปลายทาง (owner 2026-07-21). PCSE/PRE ด่วน = ของ Pacred
-          // เก็บต้นทาง → ราคาต่อกล่องคงไว้.
-          ...(carrierWritable && (isMaoCarrier(carrier) || carrier === "PCS" || !isOwnFleetCarrier(carrier))
+          // หรือ (ข) ไม่ใช่ pay-at-origin = ปลายทาง COD (owner พี่ป๊อป 2026-07-21). PCSE/PRE
+          // ด่วน + Flash/J&T/ไปรษณีย์ = ต้นทาง (Pacred จ่ายก่อน) → ราคาต่อกล่องคงไว้.
+          ...(carrierWritable && (isMaoCarrier(carrier) || carrier === "PCS" || !isPayAtOriginCarrier(carrier))
             ? { ftransportprice: 0 }
             : {}),
         },
@@ -447,9 +445,9 @@ export async function adminUpdateForwarderAddressDetails(
         money: {
           ...(carrierWritable ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: d.zipcode }) } : {}),
           // ค่าส่งไทยของกล่องพี่น้อง = ฿0 เมื่อ (ก) เหมาๆ/รับเอง (ค่าเดียว ฿100 อยู่ที่ anchor)
-          // หรือ (ข) ขนส่งเอกชน = ปลายทาง (owner 2026-07-21). PCSE/PRE ด่วน = ของ Pacred
-          // เก็บต้นทาง → ราคาต่อกล่องคงไว้.
-          ...(carrierWritable && (isMaoCarrier(carrier) || carrier === "PCS" || !isOwnFleetCarrier(carrier))
+          // หรือ (ข) ไม่ใช่ pay-at-origin = ปลายทาง COD (owner พี่ป๊อป 2026-07-21). PCSE/PRE
+          // ด่วน + Flash/J&T/ไปรษณีย์ = ต้นทาง (Pacred จ่ายก่อน) → ราคาต่อกล่องคงไว้.
+          ...(carrierWritable && (isMaoCarrier(carrier) || carrier === "PCS" || !isPayAtOriginCarrier(carrier))
             ? { ftransportprice: 0 }
             : {}),
         },
