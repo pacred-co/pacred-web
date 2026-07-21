@@ -11,7 +11,7 @@
 
 import { Fragment, useMemo, useState, useTransition, type ReactNode } from "react";
 import { ALL_WORKBOOK_CARRIER_OPTIONS } from "@/lib/cart/ship-by-eligibility";
-import { baseTracking } from "@/lib/admin/momo-bill-header";
+import { baseTracking, isAdditiveLotBare } from "@/lib/admin/momo-bill-header";
 import { momoTypeLabel } from "@/lib/admin/momo-live-discovery-plan";
 import { cgMatchesQty } from "@/lib/forwarder/cg-range";
 import { createPortal } from "react-dom";
@@ -339,7 +339,24 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     const base = baseTracking(fam[0].tracking ?? "") ?? (fam[0].tracking ?? "");
     const hasBareMember = fam.some((x) => (x.tracking ?? "") === base);
     const hasSuffixMembers = fam.some((x) => (x.tracking ?? "") !== base);
-    const countable = hasBareMember && hasSuffixMembers ? fam.filter((x) => (x.tracking ?? "") !== base) : fam;
+    // DISJOINT-LOTS (owner+CS 2026-07-21 · 908007350691 = bare 5 กล่อง + "-2" 1 กล่อง
+    // = 6 จริง): a bare that carries its OWN corroborated value (box_detail lists the
+    // bare as its own box line) DISJOINT from Σ siblings is a REAL lot → count it
+    // ALONGSIDE the siblings. Only a bare ≈ Σ siblings (aggregate header) — or an
+    // empty/uncorroborated bare — keeps the legacy drop-the-bare rule.
+    let countable: typeof fam;
+    if (hasBareMember && hasSuffixMembers) {
+      const bareRow = fam.find((x) => (x.tracking ?? "") === base);
+      const sibs = fam.filter((x) => (x.tracking ?? "") !== base);
+      const additive = !!bareRow && isAdditiveLotBare({
+        bareValue: bareRow.weightKg || 0,
+        siblingValueSum: sibs.reduce((sm, x) => sm + (x.weightKg || 0), 0),
+        bareHasOwnBox: (fam[0].boxes ?? []).some((b) => (b.tracking ?? "").trim() === base),
+      });
+      countable = additive ? fam : sibs;
+    } else {
+      countable = fam;
+    }
     const memberTrackings = new Set(fam.map((x) => (x.tracking ?? "").trim()).filter(Boolean));
     const extraBoxes = hasSuffixMembers
       ? (fam[0].boxes ?? []).filter((b) => b.tracking && !memberTrackings.has(b.tracking.trim()))

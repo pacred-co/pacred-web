@@ -21,6 +21,8 @@ import {
   baseTracking,
   trackingSuffix,
   filterCountableForwarderRows,
+  approxEqualValue,
+  isAdditiveLotBare,
   type ForwarderCountAccessors,
 } from "./momo-bill-header";
 
@@ -240,6 +242,54 @@ it("Test 14 — zero-weight classic header still dropped under BOTH accessors", 
   ];
   assert.equal(sumBoxes(rows), 2);      // weight-0 rule drops it
   assert.equal(sumBoxesMoney(rows), 2); // money rule drops it too (price 0)
+});
+
+// ── DISJOINT-LOTS discriminator (owner + CS 2026-07-21 · 908007350691 = 6 กล่อง) ──
+
+it("Test 15 — approxEqualValue: 2% rel + 0.5 abs floor", () => {
+  assert.equal(approxEqualValue(100, 101), true);    // 1% → equal
+  assert.equal(approxEqualValue(100, 103), false);   // 3% → different
+  assert.equal(approxEqualValue(0.3, 0.1), true);    // abs floor (tiny parcels)
+  assert.equal(approxEqualValue(0, 0), true);
+  assert.equal(approxEqualValue(112.5, 10.5), false); // the 908007350691 shape
+});
+
+it("Test 16 — 908007350691: bare 5 กล่อง 112.5kg + live '-2' 10.5kg = ADDITIVE lot", () => {
+  assert.equal(
+    isAdditiveLotBare({ bareValue: 112.5, siblingValueSum: 10.5, bareHasOwnBox: true }),
+    true,
+  );
+});
+
+it("Test 17 — 60527103087 class: bare 624kg lot + '-2' 156kg lot = additive", () => {
+  assert.equal(
+    isAdditiveLotBare({ bareValue: 624, siblingValueSum: 156, bareHasOwnBox: true }),
+    true,
+  );
+});
+
+it("Test 18 — aggregate header (bare ≈ Σ siblings) → NOT additive (PR050 residue class)", () => {
+  // bare = Σ of its boxes (36.5 = 16.5 + 20.0) → the classic double-count header.
+  assert.equal(
+    isAdditiveLotBare({ bareValue: 36.5, siblingValueSum: 36.5, bareHasOwnBox: true }),
+    false,
+  );
+  // within tolerance (2%) still a header
+  assert.equal(
+    isAdditiveLotBare({ bareValue: 36.5, siblingValueSum: 36.0, bareHasOwnBox: true }),
+    false,
+  );
+});
+
+it("Test 19 — fail-closed: empty bare / no own box line → NOT additive", () => {
+  assert.equal(isAdditiveLotBare({ bareValue: 0, siblingValueSum: 10.5, bareHasOwnBox: true }), false);
+  assert.equal(isAdditiveLotBare({ bareValue: 112.5, siblingValueSum: 10.5, bareHasOwnBox: false }), false);
+});
+
+it("Test 20 — unweighed siblings (Σ=0) + no own box = classic split header → NOT additive", () => {
+  // A freshly-split family whose boxes MOMO hasn't weighed yet: bare carries the
+  // aggregate, sibs 0 — bareHasOwnBox=false keeps the proven drop-the-bare rule.
+  assert.equal(isAdditiveLotBare({ bareValue: 249, siblingValueSum: 0, bareHasOwnBox: false }), false);
 });
 
 console.log(`\nMOMO bill-header: ${passed} assertions passed ✅`);

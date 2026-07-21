@@ -290,6 +290,12 @@ export default async function MomoContainersPage() {
       // vs a true 1). Chunked `.or()` keeps each URL bounded.
       const rowCountByBase = new Map<string, number>();
       const bareByBase = new Map<string, { w: number; c: number }>();
+      // A suffixed tracking that exists as its OWN row (staged parcel or live
+      // tb_forwarder) is a SEPARATE lot — its box line must NOT be compared
+      // against the bare's aggregate (owner+CS 2026-07-21 · 908007350691 =
+      // bare 5 กล่อง 112.5kg + "-2" 1 กล่อง 10.5kg = 6 จริง · comparing all 6
+      // boxes vs the bare-lot 112.5 false-flagged "MOMO ขัดกันเอง").
+      const ownRowTrackings = new Set<string>();
       const OR_CHUNK = 40;
       for (let i = 0; i < allBases.length; i += OR_CHUNK) {
         const slice = allBases.slice(i, i + OR_CHUNK);
@@ -303,11 +309,21 @@ export default async function MomoContainersPage() {
           if (!b) continue;
           rowCountByBase.set(b, (rowCountByBase.get(b) ?? 0) + 1);
           if (ftk === b) bareByBase.set(b, { w: num(r.fweight), c: num(r.fvolume) }); // the bare aggregate row
+          else ownRowTrackings.add(ftk); // live suffixed row = its own lot
         }
       }
-      // fallback aggregate for a PENDING base (no tb_forwarder row yet) = the MOMO ingest value.
+      // fallback aggregate for a PENDING base (no tb_forwarder row yet) = the MOMO
+      // ingest value — prefer the BARE staging row (the family aggregate); a
+      // first-seen suffixed row (e.g. "-2" = 10.5kg) is NOT the base's aggregate.
       const momoAggByBase = new Map<string, { w: number; c: number }>();
       for (const r of intermediate) {
+        const t = (r.tracking ?? "").trim();
+        const b = t ? baseTrackingOf(t) : "";
+        if (!b) continue;
+        if (t !== b) ownRowTrackings.add(t); // staged suffixed parcel = its own lot
+        else if (!momoAggByBase.has(b)) momoAggByBase.set(b, { w: r.weightKg, c: r.cbm });
+      }
+      for (const r of intermediate) { // fallback: family staged with no bare row
         const b = r.tracking ? baseTrackingOf(r.tracking) : "";
         if (b && !momoAggByBase.has(b)) momoAggByBase.set(b, { w: r.weightKg, c: r.cbm });
       }
@@ -316,7 +332,11 @@ export default async function MomoContainersPage() {
         if ((rowCountByBase.get(b) ?? 0) > 1) continue; // already split (>1 tb_forwarder row) → skip
         const agg = bareByBase.get(b) ?? momoAggByBase.get(b);
         if (!agg) continue;
-        const v = deriveMomoBoxConsistency({ fweight: agg.w, fvolume: agg.c }, boxes);
+        // Drop the box lines of separate-lot siblings — the bare's aggregate only
+        // covers ITS OWN boxes. ≤1 box left → nothing to cross-check → consistent.
+        const boxesForCheck = boxes.filter((bx) => bx.boxTracking === b || !ownRowTrackings.has(bx.boxTracking));
+        if (boxesForCheck.length <= 1) continue;
+        const v = deriveMomoBoxConsistency({ fweight: agg.w, fvolume: agg.c }, boxesForCheck);
         if (v.garbage && v.reason) {
           garbageByBase.set(b, {
             reason: v.reason, boxCount: v.boxCount,

@@ -3,6 +3,18 @@
 
 ---
 
+# 📦 2026-07-21 บ่าย (เดฟ · owner+CS ยืนยันข้อมูล) — DISJOINT-LOTS: 908007350691 = 6 กล่อง (bare 5 + "-2" 1 · PR9820) + NO CODE tab + MOMO Live self-running/พิสูจน์ตัวเอง → ALL BRANCHES + MAIN · read FIRST
+
+> **🏁 main = dave-pacred = codex = Poom-pacred = InwPond007 = `<HEAD>`** (owner สั่ง "รวมงานทุกคน เข้า main prod ได้เลย"). gate: **tsc 0 · test:unit เต็ม 0 fail (bill-header 26/26) · BUILD_EXIT=0**. **mig 0267+0268 = PROD แล้ว · 0263/0264/0267/0268 → DEV ตอนตื่น · NEXT FREE = 0269.**
+>
+> **📦 DISJOINT-LOTS (owner+CS: "908007350691 สรุปมี 6 กล่อง — bare 5 ชิ้น + -2 1 ชิ้น · ปรับแก้อ่านให้ตรงแพทเทิน · ระวังบัคตอนข้อมูลเข้ามาซ้ำ กลัวเบิ้ลมาก"):** MOMO คีย์ 1 ชิปเม้นเป็น **2 ล็อตจริง** — bare = ล็อตหลายกล่องของตัวเอง (box_detail มีบรรทัดกล่องคีย์ด้วยเลข bare เอง 22.5/ชิ้น×5=112.5 ✓) + "-2" = อีกล็อต (10.5 · #52911) — คลาสเดียวกับ 60527103087. ระบบเดิม hard-code "bare+siblings = หัวบิล" → 3 อาการ: famAgg ตัด bare ทิ้ง (Σ ขาด) · 🚩 "MOMO ขัดกันเอง" ผี (เอากล่องทุกล็อตไปเทียบ aggregate ของล็อต bare) · commit guard case-3 refuse = ล็อต 5 กล่องเข้าระบบไม่ได้ตลอดกาล (**เก็บเงินขาด**). FIX = discriminator เดียว **`isAdditiveLotBare`** (momo-bill-header.ts · bare มีค่าตัวเอง + มีบรรทัดกล่องของตัวเองใน box_detail + ค่า DISJOINT จาก Σ siblings → บวกกัน · ≈Σ siblings = header เดิม → drop/refuse เดิม · fail-CLOSED) ใช้ทั้ง famAgg + garbage check (ตัดกล่องของ sibling ที่เป็นแถวจริง + aggregate fallback ยึดแถว bare) + **commit guard** (ต้อง corroborate `resolveMomoBoxBasis ≈ น้ำหนักเข้า` AND disjoint vs Σ live suffixed — ไม่ผ่าน = refuse เดิมทุกกรณี = PR050 class ยังถูกกันครบ). **กันเบิ้ลตอนเข้าซ้ำ verify ครบ:** exact dedup · residue-absorb ยึด -1/n เท่านั้น · box-split idempotent-skip · pass-6 reconcile no-op (112.5≉123 · 112.5≉10.5) · post-verify ยึด suffix-1 · double_billed calibrated แล้ว (60527103087). **staging bare มี raw_code 9820 → cron 5 นาที commit เองเป็น PR9820 หลัง deploy — ไม่ต้อง data-fix มือ** · Σ family = 6/123.0kg/0.0448 ทุก surface. memory [[disjoint-lots-bare-2026-07-21]] («bare+suffix» มี 4 ทรง: proper-split/aggregate-header/residue/**disjoint-lots**).
+>
+> **❓ NO CODE tab (owner "MOMO ไม่ส่ง PR ตีเป็น NO CODE ให้ CS ตรวจ"):** แท็บใหม่บน hub ตรวจตู้ = แถวไม่ commit + ไม่มี PR (prod 4 แถว) + banner 4 ทางทำงาน (Copy/Excel→ถามโกดังจีน · รูป+แทรค→ถามลูกค้า · ค้นตอนลูกค้าตามของ · ✎ ใส่ PR→นำเข้า). **🔄 MOMO Live self-running:** พิสูจน์แล้ว automation มีครบ (cron momo-sync ทุก 5 นาที รัน propagate Live ทุก pass) → เพิ่มแถบอายุซิงค์ (เขียว≤30น./เหลือง≤2ชม./แดง) + data-health **`momo_sync_stale`** (แดงเมื่อ >60 นาที · calibrated prod 2.7 นาที=เขียว) + ผลปุ่ม "ดึง Live" พิสูจน์ตัวเอง (boardsFetched/parcelsSeen · แยก "MOMO ยังไม่ชั่ง" ออกจาก "ดึงพัง") — จบเคส owner "สรุปมันได้หรือไม่ได้" (1784597733 = MOMO ยังไม่ชั่งจริง ไม่ใช่ระบบพัง).
+>
+> **🔴 CARRYOVER:** mig 0263/0264/0267/0268 → DEV · Codex GAP P0 4 ข้อ (atomicity checkout/spawn/settlement — ออกแบบร่วมก่อนลงมือ) · คิวบัญชีเดิม (83 billed-misprice · residue ×2 · double_billed FRI13/24 · 3 per-box cost) · 15 แทรค packing → CS ติ๊กสร้าง.
+
+---
+
 # 🤝 2026-07-21 สาย (เดฟ · integrate Codex รอบแรก) — รีวิว+รวมงาน Codex (ฝากสั่งซื้อ→ฝากนำเข้า single spine · mig 0268 owner-gated) + สถานะตู้บนหน้าตรวจสอบ → all 4 branches · read FIRST
 
 > **🏁 dave-pacred = Poom-pacred = InwPond007 = codex = `7f8d16a7`** (main รอ owner สั่ง). gate: **tsc 0 · test:unit เขียว · BUILD_EXIT=0**. **mig 0268 = BRANCH ONLY · ยังไม่ apply DEV/PROD (owner เคาะ) · NEXT FREE = 0269.**
