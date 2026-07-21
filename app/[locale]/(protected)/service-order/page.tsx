@@ -29,6 +29,9 @@ import {
   FileText,
   CheckCircle2,
   Eye,
+  Store,
+  Hash,
+  Package as PackageIcon,
   type LucideIcon,
 } from "lucide-react";
 
@@ -293,19 +296,38 @@ export default async function ServiceOrderPage({
   // desktop next to the title (pattern "ชื่อ | url สินค้า"). One query for all
   // rows; non-fatal on error (the link is decorative, never 500 the list).
   const urlMap = new Map<string, string>();
+  // ข้อมูลฝั่งจีนต่อออเดอร์ (owner 2026-07-21 "ทำให้มันมีเลขแทรค ออเดอร์ 1688 เถาเป่า
+  // ชื่อร้านค้าจีน แสดงผลหน่อย ผมว่าเรามีข้อมูลแล้วนะ") — ถูกต้อง ข้อมูลอยู่ใน tb_order
+  // ครบมาตลอด แต่ query นี้ขอมาแค่ curl (เขียนไว้ตอนแรกเพื่อโชว์ลิงก์อย่างเดียว)
+  // → แถวจึงไม่มีอะไรจะโชว์. ขอเพิ่ม 3 ช่องที่ CS/ลูกค้าต้องใช้ตามงาน (§0g).
+  const chinaMap = new Map<string, { shop: string; orderNo: string; track: string }>();
   if (orderHnos.length > 0) {
     const { data: urlRows, error: urlErr } = await admin
       .from("tb_order")
-      .select("hno, curl")
+      .select("hno, curl, cnameshop, cshippingnumber, ctrackingnumber")
       .in("hno", orderHnos);
     if (urlErr) {
-      console.error(`[service-order/page] tb_order curl lookup failed`, {
+      console.error(`[service-order/page] tb_order china-info lookup failed`, {
         code: urlErr.code, message: urlErr.message, orderCount: orderHnos.length,
       });
     }
-    for (const u of (urlRows ?? []) as { hno: string; curl: string }[]) {
-      const c = (u.curl ?? "").trim();
-      if (c !== "" && c !== "-" && c !== "PCS" && !urlMap.has(u.hno)) urlMap.set(u.hno, c);
+    // ค่าที่ไม่มีความหมาย ('-' · 'PCS' · ว่าง) = ยังไม่กรอก → อย่าโชว์เป็นข้อมูล
+    const clean = (v: unknown) => {
+      const s = String(v ?? "").trim();
+      return s === "" || s === "-" || s === "PCS" ? "" : s;
+    };
+    type Row = { hno: string; curl: string; cnameshop: string | null; cshippingnumber: string | null; ctrackingnumber: string | null };
+    for (const u of (urlRows ?? []) as Row[]) {
+      const c = clean(u.curl);
+      if (c && !urlMap.has(u.hno)) urlMap.set(u.hno, c);
+      // 1 ออเดอร์มีได้หลายรายการสินค้า — เก็บค่าแรกที่ "มีจริง" ต่อช่อง แยกกัน
+      // (รายการที่ 1 อาจยังไม่มีแทรค แต่รายการที่ 2 มี → ต้องไม่ตกหล่น)
+      const prev = chinaMap.get(u.hno) ?? { shop: "", orderNo: "", track: "" };
+      chinaMap.set(u.hno, {
+        shop: prev.shop || clean(u.cnameshop),
+        orderNo: prev.orderNo || clean(u.cshippingnumber),
+        track: prev.track || clean(u.ctrackingnumber),
+      });
     }
   }
 
@@ -436,6 +458,7 @@ export default async function ServiceOrderPage({
                       row={row}
                       promoId={promoMap.get(row.hno)}
                       productUrl={urlMap.get(row.hno)}
+                      china={chinaMap.get(row.hno)}
                       isAnchor={!!hNoAnchor && hNoAnchor === row.hno}
                       statusLabel={statusLabel(row.hstatus)}
                       moreItems={
@@ -492,6 +515,7 @@ function OrderCard({
   row,
   promoId,
   productUrl,
+  china,
   isAnchor,
   statusLabel,
   moreItems,
@@ -501,6 +525,9 @@ function OrderCard({
   promoId: number | undefined;
   /** Representative product URL — shown next to the title on desktop. */
   productUrl: string | undefined;
+  /** ข้อมูลฝั่งจีนของออเดอร์ — ร้านค้า · เลขออเดอร์ 1688/เถาเป่า · เลขแทรค.
+   *  ช่องที่ยังไม่มีค่าจะเป็น "" (ผู้เรนเดอร์ซ่อนเฉพาะช่องนั้น ไม่ซ่อนทั้งแถบ). */
+  china: { shop: string; orderNo: string; track: string } | undefined;
   isAnchor: boolean;
   /** Pre-resolved i18n display label for the order's status badge. */
   statusLabel: string;
@@ -593,6 +620,32 @@ function OrderCard({
               </>
             )}
           </div>
+          {/* ข้อมูลฝั่งจีน — ร้านค้า · เลขออเดอร์ 1688/เถาเป่า · เลขแทรค
+              (owner 2026-07-21 "ทำให้มันแสดงผลให้หน่อย · เรามีข้อมูลแล้ว")
+              โชว์ทั้งมือถือและจอใหญ่ · ช่องไหนยังไม่มีค่าก็ซ่อนเฉพาะช่องนั้น
+              ไม่ขึ้น "—" รก · เลขเป็น font-mono + เลือกคัดลอกได้ (CS ต้องก๊อปไปเช็คกับร้านจีน) */}
+          {china && (china.shop || china.orderNo || china.track) && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+              {china.shop && (
+                <span className="inline-flex min-w-0 max-w-full items-center gap-1 text-muted" title={`ร้านค้าจีน: ${china.shop}`}>
+                  <Store className="w-3 h-3 shrink-0" strokeWidth={2} />
+                  <span className="truncate">{china.shop}</span>
+                </span>
+              )}
+              {china.orderNo && (
+                <span className="inline-flex items-center gap-1 text-muted" title="เลขออเดอร์ฝั่งจีน (1688 / เถาเป่า)">
+                  <Hash className="w-3 h-3 shrink-0" strokeWidth={2} />
+                  <span className="font-mono select-all">{china.orderNo}</span>
+                </span>
+              )}
+              {china.track && (
+                <span className="inline-flex items-center gap-1 text-muted" title="เลขแทรคกิ้งจีน">
+                  <PackageIcon className="w-3 h-3 shrink-0" strokeWidth={2} />
+                  <span className="font-mono select-all">{china.track}</span>
+                </span>
+              )}
+            </div>
+          )}
           <div className="mt-1.5 flex items-center gap-3 flex-wrap text-[11px] text-muted">
             <span className="inline-flex items-center gap-1">
               <Calendar className="w-3 h-3" strokeWidth={2} />
