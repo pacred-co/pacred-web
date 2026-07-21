@@ -405,15 +405,6 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
     [filtered],
   );
 
-  // G1 combo-flow (2026-07-08) — the distinct customers among the TICKED rows. The
-  // "→ ออกใบวางบิล" transition only fires for a SINGLE customer (a ใบวางบิล = 1 ใบ/
-  // ลูกค้า) — it carries the exact ticked forwarder ids into the create-form.
-  const selectedUserids = useMemo(() => {
-    const s = new Set<string>();
-    for (const r of rows) if (selected.has(r.id) && r.userid) s.add(r.userid);
-    return Array.from(s);
-  }, [rows, selected]);
-
   function toggleAll() {
     if (selected.size === eligibleFilteredIds.length && eligibleFilteredIds.length > 0) {
       setSelected(new Set());
@@ -1299,32 +1290,6 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                     ? "กำลังเพิ่ม…"
                     : `เพิ่มในรายการตรวจสอบแล้ว${selected.size > 0 ? ` (${selected.size})` : ""}`}
                 </button>
-                {/* G1 combo-flow (2026-07-08) — carry the ตรวจตู้ selection straight to
-                    the create-bill form (ติ๊กให้อัตโนมัติ · SINGLE customer only). */}
-                {selectedUserids.length === 1 ? (
-                  <button
-                    type="button"
-                    disabled={selected.size === 0}
-                    onClick={() =>
-                      router.push(
-                        `/admin/billing-run/add?userid=${encodeURIComponent(selectedUserids[0])}&fids=${Array.from(selected).join(",")}`,
-                      )
-                    }
-                    title="ยกยอดรายการที่เลือกไปออกใบวางบิล (ติ๊กให้อัตโนมัติ) · แนะนำให้กด 'เพิ่มในรายการตรวจสอบแล้ว' ก่อน"
-                    className="btn btn-success"
-                  >
-                    → ออกใบวางบิล
-                  </button>
-                ) : selectedUserids.length > 1 ? (
-                  <button
-                    type="button"
-                    disabled
-                    title="เลือกได้ทีละลูกค้า (ใบวางบิล = 1 ใบ/ลูกค้า)"
-                    className="btn btn-secondary"
-                  >
-                    → ออกใบวางบิล (เลือกทีละลูกค้า)
-                  </button>
-                ) : null}
               </>
             ) : (
               <span className="btn btn-secondary" style={{ cursor: "default" }}>
