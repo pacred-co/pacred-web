@@ -104,6 +104,8 @@ export function ContentCalendar({ items, onOpenContent, onCreateOn }: { items?: 
     for (const [ds, arr] of byDate) if (ds.startsWith(monthPrefix)) for (const c of arr) ids.push(c.id);
     return ids;
   }, [byDate, monthPrefix]);
+  const dayDate = toDateStr(ref);
+  const dayItems = byDate.get(dayDate) ?? [];
 
   const drop = (e: React.DragEvent, date: Date) => {
     e.preventDefault();
@@ -176,7 +178,19 @@ export function ContentCalendar({ items, onOpenContent, onCreateOn }: { items?: 
 
       {view === "month" && <MonthGrid year={year} month={month} byDate={byDate} onOpen={onOpenContent} onCreate={onCreateOn} onDrop={drop} onSeeAll={(d) => { setRef(d); setView("day"); }} />}
       {view === "week" && <DayColumns days={weekDays(ref)} byDate={byDate} onOpen={onOpenContent} onCreate={onCreateOn} onDrop={drop} />}
-      {view === "day" && <DayColumns days={[ref]} byDate={byDate} onOpen={onOpenContent} onCreate={onCreateOn} onDrop={drop} wide />}
+      {view === "day" && (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[12px] text-muted">
+              ตารางวันที่ {ref.getDate()} {TH_MONTHS[ref.getMonth()]} {ref.getFullYear() + 543} — พบ {dayItems.length.toLocaleString("th-TH")} คอนเทนต์
+            </p>
+            <button type="button" className={btnGhost} onClick={() => onCreateOn(dayDate)}>
+              <Plus className="h-3.5 w-3.5" /> สร้างคอนเทนต์วันที่นี้
+            </button>
+          </div>
+          <ContentLibrary items={dayItems} onOpen={onOpenContent} onEdit={onOpenContent} onResult={onOpenContent} />
+        </>
+      )}
       {view === "table" && (
         <>
           <p className="mb-2 text-[12px] text-muted">
