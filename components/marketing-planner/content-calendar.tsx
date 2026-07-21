@@ -8,10 +8,11 @@
  * platform dot, owner, time, and draft/final/result icons per chip.
  */
 import { useMemo, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, FileEdit, CheckCircle2, BarChart3, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, FileEdit, CheckCircle2, BarChart3, Plus, Sparkles, Trash2 } from "lucide-react";
 import type { ContentItem } from "@/lib/marketing-planner/types";
 import { usePlanner } from "@/lib/marketing-planner/store";
 import { ContentLibrary } from "./content-library";
+import { DayPlanTable } from "./day-plan-table";
 import { isResultEmpty } from "@/lib/marketing-planner/performance";
 import { pad2, TH_DAYS, TH_MONTHS, monthMatrix, sameYmd, toDateStr, weekDays } from "@/lib/marketing-planner/util";
 import { btnGhost, cx, useConfirm } from "./ui";
@@ -64,7 +65,7 @@ function Chip({ c, onOpen, draggable = true }: { c: ContentItem; onOpen: (id: st
 }
 
 export function ContentCalendar({ items, onOpenContent, onCreateOn }: { items?: ContentItem[]; onOpenContent: (id: string) => void; onCreateOn: (date: string) => void }) {
-  const { contents, byId, setContentDate, deleteContents } = usePlanner();
+  const { contents, byId, setContentDate, deleteContents, loadDemoContent } = usePlanner();
   const confirm = useConfirm();
   const src = items ?? contents;
   const now = new Date();
@@ -130,6 +131,16 @@ export function ContentCalendar({ items, onOpenContent, onCreateOn }: { items?: 
     setRef(t);
   };
 
+  /** ใส่งานตัวอย่างเต็มระบบลงวันที่ที่ดูอยู่ — §0f ยืนยันก่อน (เขียนข้อมูลจริง)
+   *  + บอกตรงๆ ว่ากดซ้ำแล้วทับตัวเดิม จะได้ไม่กลัวว่าจะงอกเป็นสิบอัน. */
+  const addDemo = async () => {
+    if (await confirm({
+      title: "ใส่งานตัวอย่างเต็มระบบ",
+      message: `เพิ่มแผนคอนเทนต์ตัวอย่างที่กรอกครบทุกช่อง 1 รายการ ลงวันที่ ${ref.getDate()} ${TH_MONTHS[ref.getMonth()]} ${ref.getFullYear() + 543}? (8 แพลตฟอร์ม · 15 ชิ้นงานย่อย · มีผลลัพธ์ครบ) — กดซ้ำจะทับตัวเดิม ไม่เพิ่มใหม่ และลบทิ้งได้ตลอด`,
+      confirmText: "ใส่งานตัวอย่าง",
+    })) loadDemoContent(dayDate);
+  };
+
   const clearMonth = async () => {
     if (monthIds.length === 0) return;
     const n = monthIds.length.toLocaleString("th-TH");
@@ -182,13 +193,18 @@ export function ContentCalendar({ items, onOpenContent, onCreateOn }: { items?: 
         <>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-[12px] text-muted">
-              ตารางวันที่ {ref.getDate()} {TH_MONTHS[ref.getMonth()]} {ref.getFullYear() + 543} — พบ {dayItems.length.toLocaleString("th-TH")} คอนเทนต์
+              ตารางวันที่ {ref.getDate()} {TH_MONTHS[ref.getMonth()]} {ref.getFullYear() + 543} — กดลูกศร ⌄ ท้ายแถว เพื่อกางดูชิ้นงานย่อย
             </p>
-            <button type="button" className={btnGhost} onClick={() => onCreateOn(dayDate)}>
-              <Plus className="h-3.5 w-3.5" /> สร้างคอนเทนต์วันที่นี้
-            </button>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button type="button" className={btnGhost} onClick={addDemo} title="ใส่งานตัวอย่างที่กรอกครบทุกช่อง ลงวันที่นี้ — ไว้ดูว่าหน้าตาเต็มระบบเป็นยังไง">
+                <Sparkles className="h-3.5 w-3.5" /> ใส่งานตัวอย่าง (ครบทุกช่อง)
+              </button>
+              <button type="button" className={btnGhost} onClick={() => onCreateOn(dayDate)}>
+                <Plus className="h-3.5 w-3.5" /> สร้างคอนเทนต์วันที่นี้
+              </button>
+            </div>
           </div>
-          <ContentLibrary items={dayItems} onOpen={onOpenContent} onEdit={onOpenContent} onResult={onOpenContent} />
+          <DayPlanTable items={dayItems} onOpen={onOpenContent} onEdit={onOpenContent} />
         </>
       )}
       {view === "table" && (

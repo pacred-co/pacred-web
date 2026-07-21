@@ -75,6 +75,46 @@ export type ContentLink = {
   createdAt: string;
 };
 
+/**
+ * ชิ้นงานย่อยของแผนคอนเทนต์ 1 ชิ้น (owner 2026-07-21 "กดแล้วสไลด์ดาวน์ลงมา
+ * เห็นรายการชิ้นงานย่อย") — 1 ชิ้น = 1 ประเภทคอนเทนต์ ที่ลงได้หลายช่องทาง.
+ *
+ * ตัวรายการ (ประเภท + ช่องทาง) **ไม่ได้เก็บซ้ำ** — derive จาก `platformContentTypeIds`
+ * ที่มีอยู่แล้ว (ดู `piecesOf`) จึงไม่มีทางหลุดกันระหว่างตารางหลักกับดรอปดาวน์.
+ * ที่เก็บจริงคือเฉพาะฟิลด์ที่พิมพ์เพิ่มต่อชิ้น — เก็บใน mkt_contents.data blob
+ * เดิม (แพทเทิร์นเดียวกับ platformTitles) → ไม่ต้อง migration.
+ */
+export type ContentPieceFields = {
+  detail?: string; // "SEO + Keyword" · "Long Video · 16:9 · 6 นาที"
+  dueDate?: string; // YYYY-MM-DD — ว่าง = ใช้ publishDate ของแผน
+  dueTime?: string; // HH:mm
+  ownerId?: string; // → PlannerUser — ว่าง = ใช้ผู้รับผิดชอบของแผน
+
+  // ── ตัวขับสถานะ (owner 2026-07-21 "สถานะแก้มือไม่ได้ ต้องอัตโนมัติตาม logic") ──
+  // สถานะ = ฟังก์ชันของ 4 ช่องนี้ล้วนๆ ดู lib/marketing-planner/piece-status.ts
+  shootBy?: string; // ผู้ถ่าย (userId)
+  shootDate?: string; // วันถ่าย YYYY-MM-DD → "รอถ่าย"
+  workUrl?: string; // ไฟล์งานที่ทำเสร็จ → "กำลังตรวจสอบ"
+  approvedAt?: string; // ISO — ตรวจผ่านเมื่อไหร่ → "รอเผยแพร่"
+  approvedBy?: string; // ใครตรวจผ่าน (userId)
+  postUrl?: string; // ลิงก์โพสต์จริง → "เผยแพร่" (ไฟนอล)
+  /** ป้ายกำกับ "งานแทรก / บรีฟพิเศษ" — ซ้อนทับสถานะ ไม่ได้แทนที่ (owner เคาะ). */
+  isBrief?: boolean;
+
+  // ── LEGACY — ข้อมูลที่คีย์ไว้ก่อนแยกไฟล์งาน/ลิงก์โพสต์ ยังอ่านได้ ไม่ทิ้ง ──
+  /** @deprecated ใช้ `workUrl` — ตัวอ่านทุกตัว fallback มาที่นี่ให้แล้ว (workUrlOf) */
+  linkUrl?: string;
+  linkLabel?: string;
+  /** @deprecated สถานะคิดอัตโนมัติแล้ว (derivePieceStage) — เก็บไว้ไม่ให้ข้อมูลเก่าหาย */
+  statusId?: string;
+};
+
+/** ชิ้นงานย่อยที่ประกอบเสร็จแล้ว (รายการ derive + ฟิลด์ที่เก็บไว้). */
+export type ContentPiece = ContentPieceFields & {
+  contentTypeId: string;
+  platformIds: string[];
+};
+
 export type ShouldRepeat = "" | "yes" | "no" | "maybe";
 
 export type ResultStatus =
@@ -151,6 +191,16 @@ export type ContentItem = {
   /** Content formats published on each selected platform (platformId → contentTypeIds).
    *  Stored inside the existing mkt_contents JSON blob; no DB migration required. */
   platformContentTypeIds?: Record<string, string[]>;
+  /** ฟิลด์เพิ่มเติมของชิ้นงานย่อย (contentTypeId → ฟิลด์). รายการชิ้นงานเอง derive
+   *  จาก platformContentTypeIds — ตรงนี้เก็บแค่ที่พิมพ์เพิ่ม. ดู `piecesOf`. */
+  pieces?: Record<string, ContentPieceFields>;
+  /**
+   * Backlink — ลิงก์ปลายทางที่ "แปะไว้ในคอนเทนต์" เพื่อดึงคนกลับเข้าเว็บเรา.
+   * **1 คอนเทนต์ = 1 backlink** (owner 2026-07-21 "ทุกแพลทฟอร์ม 1 คอนเทนต์จะยิงเข้า
+   * backlink 1") → เก็บระดับแผน ไม่ใช่รายชิ้นงาน. ต่างจาก `pieces[].postUrl`
+   * ที่เป็นลิงก์โพสต์ของแต่ละชิ้น (มีได้หลายอัน).
+   */
+  backlinkUrl?: string;
   /** Legacy single service — kept for back-compat reads; canonical is serviceIds. */
   serviceId?: string;
   /** Services this content relates to (multi-select). */
@@ -216,6 +266,47 @@ export function platformContentTypeIdsOf(
     return c.platformContentTypeIds[platformId] ?? [];
   }
   return contentTypeIdsOf(c);
+}
+
+/**
+ * ชิ้นงานย่อยทั้งหมดของแผนคอนเทนต์ — 1 ประเภทคอนเทนต์ = 1 ชิ้น, พร้อมช่องทางที่ชิ้นนั้นลง.
+ *
+ * DERIVED จาก `platformContentTypeIds` (platform → ประเภท) โดยกลับด้านเป็น ประเภท →
+ * platforms ไม่ได้เก็บซ้ำที่ไหน จึงไม่มีทางไม่ตรงกับตารางหลัก. เรียงตามลำดับที่ผู้ใช้
+ * เลือกไว้ใน `contentTypeIds` ก่อน แล้วค่อยต่อด้วยประเภทที่โผล่มาจากรายแพลตฟอร์ม.
+ */
+export function piecesOf(c: ContentItem): ContentPiece[] {
+  const byType = new Map<string, string[]>();
+  for (const pid of platformIdsOf(c)) {
+    for (const ctid of platformContentTypeIdsOf(c, pid)) {
+      const arr = byType.get(ctid);
+      if (arr) arr.push(pid);
+      else byType.set(ctid, [pid]);
+    }
+  }
+  // ประเภทที่เลือกไว้ระดับคอนเทนต์แต่ยังไม่ผูกแพลตฟอร์ม = ชิ้นงานที่ "ยังไม่ระบุช่องทาง"
+  // ต้องโชว์ ไม่งั้นงานหายจากดรอปดาวน์ทั้งที่ผู้ใช้เลือกไว้แล้ว
+  for (const ctid of contentTypeIdsOf(c)) if (!byType.has(ctid)) byType.set(ctid, []);
+
+  const order = contentTypeIdsOf(c);
+  const rank = (id: string) => {
+    const i = order.indexOf(id);
+    return i === -1 ? order.length : i;
+  };
+  return [...byType.entries()]
+    .sort((a, b) => rank(a[0]) - rank(b[0]))
+    .map(([contentTypeId, platformIds]) => ({
+      contentTypeId,
+      platformIds,
+      ...(c.pieces?.[contentTypeId] ?? {}),
+    }));
+}
+
+/** ความคืบหน้า "เสร็จ N / ทั้งหมด M ชิ้นงาน".
+ *  `isDone` รับ **ทั้งชิ้นงาน** ไม่ใช่แค่ statusId — เพราะสถานะคิดจากหลายช่องรวมกัน
+ *  แล้ว (ดู piece-status.ts · owner 2026-07-21 "สถานะแก้มือไม่ได้ ต้องอัตโนมัติ"). */
+export function pieceProgress(pieces: ContentPiece[], isDone: (p: ContentPiece) => boolean): { done: number; total: number } {
+  return { done: pieces.filter(isDone).length, total: pieces.length };
 }
 
 /** All service ids on a content — multi-select `serviceIds`, back-compat with the

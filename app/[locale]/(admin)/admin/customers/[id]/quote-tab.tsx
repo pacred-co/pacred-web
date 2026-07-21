@@ -26,7 +26,7 @@ import {
 // Shared render + serializers — the admin card AND the public /q/[token] page
 // render byte-identically from the same QuoteModel (mirrors receipt-paper.tsx).
 import {
-  buildQuoteText, buildPrintHtml, lockFdaCompareRows,
+  buildQuoteText, buildPrintHtml,
   type QuoteModel, type View, type DisplayLine, type CompareRow,
 } from "@/components/quote/quote-paper";
 import { EditableQuoteCard } from "@/components/quote/editable-quote-card";
@@ -182,8 +182,8 @@ export function QuoteTab({
     // from the customer's CONFIGURED rate (matrix) for its representative product,
     // falling back to the selected promo package's rate where none is configured.
     // "days" always comes from the promo package (not stored per-customer).
-    // อย.·พิเศษ = ล็อกเรทเหมา FDA 7,600/6,600 (owner ปอน 2026-07-18) — override SVIP/แพ็ก/ทั่วไป.
-    const compareRows: CompareRow[] = lockFdaCompareRows(WAREHOUSE_KEYS.flatMap((w) => {
+    // อย.·พิเศษ เดินตาม waterfall เดียวกับ ทั่วไป·มอก. แล้ว (owner 2026-07-21 ปลดล็อก).
+    const compareRows: CompareRow[] = WAREHOUSE_KEYS.flatMap((w) => {
       const whId = WH_KEY_TO_ID[w];
       const wh = matrix?.byWarehouse?.[whId];
       const gd = generalDefaults[whId]; // เรท default ใบเสนอราคา (tb_rate_g_* · ต่อทาง '1'รถ/'2'เรือ)
@@ -216,7 +216,7 @@ export function QuoteTab({
           },
         };
       });
-    }));
+    });
 
     const lines: DisplayLine[] = [];
     if (view === "calc" && (num(cbm) > 0 || num(kg) > 0)) {
@@ -324,7 +324,15 @@ export function QuoteTab({
           }
         }
         if (cells.length !== 8) { setRateSaveMsg(`โกดัง${whShortName(wid)}: ตารางไม่ครบ 2 กลุ่มสินค้า — เพิ่มให้ครบก่อนบันทึก`); return false; }
-        const res = await adminSaveCustomerRate({ userid, sourceWarehouse: wid, cells });
+        // แนบ "ที่มา" ของเรทนี้ไปด้วย (owner 2026-07-21) — แพ็กเกจที่เลือก + เลขที่ใบ
+        // เสนอราคา ลงประวัติ `customer_rate_history` เพื่อตอบได้ว่า "ตอนนั้นตกลงเรทเท่าไร
+        // แพ็กไหน ใบไหน" · ไม่กระทบการคิดเงิน (เครื่องคิดเงินยังอ่าน tb_rate_custom_*).
+        const res = await adminSaveCustomerRate({
+          userid, sourceWarehouse: wid, cells,
+          packageId: qpkg.id,
+          packageLabel: qpkg.name,
+          quotationRef: model.refNo || refNoSeed,
+        });
         if (!res.ok) { setRateSaveMsg(`โกดัง${whShortName(wid)}: ${res.error}`); return false; }
         done.push(`${whShortName(wid)} ${res.data?.changed ?? 0} ช่อง${res.data?.created ? " (สร้างเรทเฉพาะตัว)" : ""}${res.data?.repriced ? ` · คิดราคาใหม่ ${res.data.repriced}` : ""}`);
       }
