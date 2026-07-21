@@ -51,6 +51,8 @@ export type DetailRow = {
   userid: string;
   username: string | null;
   usercompany: string | null;
+  custJuristic: boolean;   // customer's canonical นิติ flag (tb_users.userCompany) — drives the badge
+
   fdetail: string | null;
   /** resolved product-detail to render (fdetail → item productname → null) */
   detailDisplay: string | null;
@@ -619,16 +621,14 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
               {FSTATUS_CFG[a.status as keyof typeof FSTATUS_CFG].act ? "🔔 " : ""}{FSTATUS_CFG[a.status as keyof typeof FSTATUS_CFG].next}
             </div>
           )}
-          {(a.fcredit || a.isJuristic) && (
-            <div className="mt-1 flex flex-wrap justify-center gap-1">
-              {a.isJuristic && <span className="badge badge-vip badge-pill font-10">นิติ</span>}
-              {a.fcredit && (
-                <Link href={`/admin/forwarders/${g[0].id}`} onClick={(e) => e.stopPropagation()} className="badge badge-success badge-pill font-10">
-                  เครดิตได้
-                </Link>
-              )}
-            </div>
-          )}
+          <div className="mt-1 flex flex-wrap justify-center gap-1">
+            <EntityBadge juristic={a.isJuristic} />
+            {a.fcredit && (
+              <Link href={`/admin/forwarders/${g[0].id}`} onClick={(e) => e.stopPropagation()} className="badge badge-success badge-pill font-10">
+                เครดิตได้
+              </Link>
+            )}
+          </div>
           {/* Per-SHIPMENT pay: bill the whole -N split at once (restored 2026-06-19
               — was lost when the collapsible grouping landed; owner: "เลือกชำระราย
               ชิปเม้น หายไป"). Only when goods arrived (fstatus 4) + money-tier.
@@ -1003,11 +1003,9 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                     >
                       {r.userid}
                     </Link>
-                    {/* legacy badgeVIP2 นิติ pill (SVIP/VIP-tier pills need extra
-                        server fields → follow-up · นิติ is available from usercompany). */}
-                    {r.usercompany === "1" && (
-                      <> <span className="badge badge-vip badge-pill" title="ลูกค้านิติบุคคล">นิติ</span></>
-                    )}
+                    {/* นิติ / บุคคล — always shown so every row states the buyer's
+                        entity type (ภูม 2026-07-21). Source = customer's canonical flag. */}
+                    <> <EntityBadge juristic={r.custJuristic} /></>
                   </td>
                   <td className="max-w-[220px]">
                     {/* legacy: image float-right + short-text detail (fdetail →
@@ -1507,7 +1505,7 @@ function aggregateGroup(g: DetailRow[]) {
     // owner 2026-07-18 รอบ3 — the header must carry the SAME detail as a single row:
     // credit/นิติ badges · COD · the delivery address · the next-action hint.
     fcredit:               g.some((r) => (r.fcredit ?? "").trim() === "1"),
-    isJuristic:            g.some((r) => (r.usercompany ?? "").trim() === "1"),
+    isJuristic:            g.some((r) => r.custJuristic),
     paymethod:             uniq((r) => (r.paymethod ?? "").trim()),
     addressDistrict:       uniq((r) => (r.faddressdistrict ?? "").trim() || null),
     addressProvince:       uniq((r) => (r.faddressprovince ?? "").trim() || null),
@@ -1570,6 +1568,21 @@ function productTypeLabel(t: string | null): string {
 // show a raw "13" for ธนามัย ขนส่งด่วน (ภูม 2026-07-21). Full legacy nameShipBy faithful.
 function shipByLabel(s: string | null): string {
   return carrierLabel(s);
+}
+
+// นิติ / บุคคล pill — EVERY row shows the buyer's entity type (ภูม 2026-07-21:
+// "ขึ้นไปเลยว่าเป็นนิติ หรือ บุคคล · ทุกแถว"). tb_forwarder.fusercompany="1" = นิติบุคคล,
+// else = บุคคลธรรมดา. นิติ = highlighted (badge-vip), บุคคล = neutral (badge-secondary)
+// so the juristic customers stand out at a glance (self-explaining row · §0g).
+function EntityBadge({ juristic }: { juristic: boolean }) {
+  return (
+    <span
+      className={`badge badge-pill font-10 ${juristic ? "badge-vip" : "badge-secondary"}`}
+      title={juristic ? "ลูกค้านิติบุคคล" : "ลูกค้าบุคคลธรรมดา"}
+    >
+      {juristic ? "นิติ" : "บุคคล"}
+    </span>
+  );
 }
 
 // Legacy report-cnt "สถานะสินค้า" badge colour by fstatus — 1:1 with the legacy
