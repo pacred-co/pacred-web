@@ -120,7 +120,9 @@ import {
   baseOf as momoFamilyBaseOf,
   suffixOf as momoFamilySuffixOf,
 } from "@/lib/integrations/momo-web/split-box-rows-plan";
-import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
+import { getShipByOptionsForAddress, isMaomaoEligibleForAddress } from "@/lib/cart/ship-by-eligibility";
+import { isMaoCarrier } from "@/lib/forwarder/mao-fee";
+import { isOwnFleetCarrier } from "@/lib/forwarder/carrier-coverage-guard";
 import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 
 const SCOPE = "auto-commit-momo";
@@ -325,13 +327,32 @@ async function resolveAutoCommitDelivery(
   const address = await resolveDefaultAddress(admin, userID);
   if (!address) return null;
 
-  const eligible = getShipByOptionsForAddress({
-    zip:      address.zip,
-    province: address.province,
-    amphoe:   address.amphoe,
-    userID,
-  });
-  if (!eligible.some((o) => o.id === carrier)) return null;
+  // Eligibility is TWO separate legacy rules — never cross them (2026-07-21 ·
+  // PR9820/908007350691: saved carrier "PRF" + BKK 10240 was skipped forever):
+  //   - PRIVATE couriers → getShipByOptionsForAddress (api-shipBy.php workbook
+  //     list · own-fleet is NEVER in it BY DESIGN), so checking an own-fleet
+  //     carrier against it always failed → every เหมาๆ-preferring customer's
+  //     parcels skipped autocommit to /review forever.
+  //   - เหมาๆ (PRF/PCSF) → isMaomaoEligibleForAddress (checkPCSMaoMao.php ·
+  //     BKK-metro zip zone) — the same SOT the cart uses.
+  //   - "PCS" self-pickup / PCSE·PRE express stay SKIPPED (no auto-assign — the
+  //     v1 warehouse-guess bug this resolver exists to prevent; express zone =
+  //     owner-input, ห้ามเดา).
+  let eligibleOk: boolean;
+  if (isMaoCarrier(carrier)) {
+    eligibleOk = isMaomaoEligibleForAddress({ addressID: String(address.addressID), zip: address.zip });
+  } else if (isOwnFleetCarrier(carrier)) {
+    return null; // PCS self-pickup / express — no auto-assign
+  } else {
+    const eligible = getShipByOptionsForAddress({
+      zip:      address.zip,
+      province: address.province,
+      amphoe:   address.amphoe,
+      userID,
+    });
+    eligibleOk = eligible.some((o) => o.id === carrier);
+  }
+  if (!eligibleOk) return null;
 
   return {
     fShipBy:   carrier,
