@@ -48,6 +48,7 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { ADDRESSES } from "@/components/seo/site";
 import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
+import { parseCustomerAddressRow } from "@/lib/admin/customer-address-book";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — clip to 10 chars (`tb_forwarder.adminid*` = varchar(10)).
@@ -228,18 +229,9 @@ export async function adminCarrierManualInsert(
         if (addrErr || !addrRow) {
           return { ok: false, error: "ไม่พบที่อยู่ของสมาชิก (addressID ไม่ถูกต้อง)" };
         }
-        addr = {
-          addressname:         addrRow.addressname,
-          addresslastname:     addrRow.addresslastname ?? "",
-          addressno:           addrRow.addressno,
-          addresssubdistrict:  addrRow.addresssubdistrict,
-          addressdistrict:     addrRow.addressdistrict,
-          addressprovince:     addrRow.addressprovince,
-          addresszipcode:      addrRow.addresszipcode,
-          addressnote:         addrRow.addressnote ?? "",
-          addresstel:          addrRow.addresstel,
-          addresstel2:         addrRow.addresstel2 ?? "",
-        };
+        const usable = parseCustomerAddressRow(addrRow);
+        if (!usable.data) return { ok: false, error: `ที่อยู่ของสมาชิกไม่ครบถ้วน: ${usable.error}` };
+        addr = usable.data;
       }
 
       // 🔴 CLOSED LIST (owner 2026-07-14) — the ขนส่งเอกชน must be in the owner's workbook

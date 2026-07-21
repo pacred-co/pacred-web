@@ -92,6 +92,7 @@ import { isMaoCarrier } from "@/lib/forwarder/mao-fee";
 import { canonicalProvince } from "@/lib/forwarder/carrier-province-coverage";
 import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { isGodRole } from "@/lib/admin/god-role";
+import { customerAddressSchema, parseCustomerAddressRow, saveCustomerAddress } from "@/lib/admin/customer-address-book";
 
 /** Pacred's own delivery family (รับเองโกดัง / เหมาๆ / ด่วน) — works any province.
  *
@@ -211,19 +212,22 @@ export async function adminPickForwarderAddress(
       return { ok: false, error: `อ่านที่อยู่ไม่สำเร็จ: ${addrErr.message}` };
     }
     if (!addr) return { ok: false, error: "ไม่พบที่อยู่ของลูกค้ารายนี้ (หรือถูกลบไปแล้ว)" };
+    const usable = parseCustomerAddressRow(addr);
+    if (!usable.data) return { ok: false, error: `ที่อยู่ของลูกค้าไม่ครบถ้วน: ${usable.error}` };
+    const address = usable.data;
 
     // 2b. Auto-resolve the carrier by the NEW address province (owner/ภูม 2026-07-03) + re-price
     //     the domestic leg per that carrier. Both stay staff-editable (<EditShipByField>).
     const carrier = suggestCarrierForAddress((fwd.fshipby ?? "").trim(), {
-      zip:      (addr.addresszipcode ?? "").trim(),
-      province: (addr.addressprovince ?? "").trim(),
-      amphoe:   (addr.addressdistrict ?? "").trim() || null,
+      zip:      address.addresszipcode,
+      province: address.addressprovince,
+      amphoe:   address.addressdistrict || null,
       userID:   fwd.userid,
     });
     // CLOSED-LIST backstop (owner 2026-07-14): never write a carrier the new province
     // cannot back. Blank → leave fshipby untouched; staff picks from <EditShipByField>.
     const carrierWritable =
-      carrier !== "" && checkCarrierForProvince(carrier, addr.addressprovince).ok;
+      carrier !== "" && checkCarrierForProvince(carrier, address.addressprovince).ok;
     const fStatusInt = parseInt(fwd.fstatus ?? "0", 10);
     const reprice =
       carrierWritable && fStatusInt <= 5
@@ -234,20 +238,20 @@ export async function adminPickForwarderAddress(
     const { error: updErr } = await admin
       .from("tb_forwarder")
       .update({
-        faddressname:        addr.addressname ?? "",
-        faddresslastname:    addr.addresslastname ?? "",
-        faddressno:          addr.addressno ?? "",
-        faddresssubdistrict: addr.addresssubdistrict ?? "",
-        faddressdistrict:    addr.addressdistrict ?? "",
-        faddressprovince:    addr.addressprovince ?? "",
-        faddresszipcode:     addr.addresszipcode ?? "",
-        faddressnote:        addr.addressnote ?? "",
-        faddresstel:         addr.addresstel ?? "",
-        faddresstel2:        addr.addresstel2 ?? "",
-        ...(carrierWritable ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: addr.addresszipcode }) } : {}),
+        faddressname:        address.addressname,
+        faddresslastname:    address.addresslastname,
+        faddressno:          address.addressno,
+        faddresssubdistrict: address.addresssubdistrict,
+        faddressdistrict:    address.addressdistrict,
+        faddressprovince:    address.addressprovince,
+        faddresszipcode:     address.addresszipcode,
+        faddressnote:        address.addressnote,
+        faddresstel:         address.addresstel,
+        faddresstel2:        address.addresstel2,
+        ...(carrierWritable ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: address.addresszipcode }) } : {}),
         // 🔒 COD LOCK (owner 2026-07-21) — ปลายทาง = ลูกค้าจ่ายขนส่งที่ปลายทาง → เราไม่เก็บ
         // ค่าส่งไทย. ต้องชนะ reprice เพื่อไม่ให้เรทที่เพิ่งคิดได้ทับกติกานี้.
-        ...(carrierWritable && derivePayMethodForDelivery(carrier, { addressID: null, zip: addr.addresszipcode }) === "2"
+        ...(carrierWritable && derivePayMethodForDelivery(carrier, { addressID: null, zip: address.addresszipcode }) === "2"
           ? { ftransportprice: 0 }
           : reprice != null
             ? { ftransportprice: reprice }
@@ -267,14 +271,14 @@ export async function adminPickForwarderAddress(
       { id: d.fId, ftrackingchn: fwd.ftrackingchn, userid: fwd.userid },
       {
         address: {
-          faddressname: addr.addressname ?? "", faddresslastname: addr.addresslastname ?? "",
-          faddressno: addr.addressno ?? "", faddresssubdistrict: addr.addresssubdistrict ?? "",
-          faddressdistrict: addr.addressdistrict ?? "", faddressprovince: addr.addressprovince ?? "",
-          faddresszipcode: addr.addresszipcode ?? "", faddressnote: addr.addressnote ?? "",
-          faddresstel: addr.addresstel ?? "", faddresstel2: addr.addresstel2 ?? "",
+          faddressname: address.addressname, faddresslastname: address.addresslastname,
+          faddressno: address.addressno, faddresssubdistrict: address.addresssubdistrict,
+          faddressdistrict: address.addressdistrict, faddressprovince: address.addressprovince,
+          faddresszipcode: address.addresszipcode, faddressnote: address.addressnote,
+          faddresstel: address.addresstel, faddresstel2: address.addresstel2,
         },
         money: {
-          ...(carrierWritable ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: addr.addresszipcode }) } : {}),
+          ...(carrierWritable ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: address.addresszipcode }) } : {}),
           // ONLY flat own-fleet (เหมาๆ/รับเอง = ฿0 · fee is the once-per-shipment mao anchor)
           // gets its per-box price zeroed on siblings; PCSE/private prices stay per-box.
           // ค่าส่งไทยของกล่องพี่น้อง = ฿0 เมื่อ (ก) เหมาๆ/รับเอง (ค่าเดียว ฿100 อยู่ที่ anchor)
@@ -291,7 +295,7 @@ export async function adminPickForwarderAddress(
     await logAdminAction(adminId, "tb_forwarder.update_address", "tb_forwarder", String(d.fId), {
       addressId: d.addressId,
       userid:    fwd.userid,
-      to:        `${addr.addressname ?? ""} ${addr.addresslastname ?? ""} · ${addr.addressprovince ?? ""}`,
+      to:        `${address.addressname} ${address.addresslastname} · ${address.addressprovince}`,
       carrier, reprice,
     });
 
@@ -303,9 +307,9 @@ export async function adminPickForwarderAddress(
 
 // ── adminUpdateForwarderAddressDetails — inline free-text edit of the delivery address ──
 // owner/ภูม 2026-07-03: staff must be able to EDIT the address text in-place (ที่อยู่เป็นก้อน
-// เดียวกัน แก้ไม่ได้). Updates ONLY the tb_forwarder.fAddress* snapshot columns from free text,
-// then re-resolves the carrier by the (possibly new) province + re-prices the domestic leg
-// (still editable). No tb_address write (this is the order's own snapshot, not the address book).
+// เดียวกัน แก้ไม่ได้). The corrected address is saved/reused in the customer's address book,
+// made the next-use default, then copied into tb_forwarder.fAddress*. This closes the old split
+// where staff repaired today's snapshot but the next MOMO/import job still had no usable address.
 const addressDetailsSchema = z.object({
   fId:          z.number().int().positive(),
   name:         z.string().trim().max(120).default(""),
@@ -326,7 +330,36 @@ export async function adminUpdateForwarderAddressDetails(
 ): Promise<AdminActionResult> {
   const parsed = addressDetailsSchema.safeParse(rawInput);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
-  const d = parsed.data;
+  const raw = parsed.data;
+  const normalized = customerAddressSchema.safeParse({
+    addressname: raw.name,
+    addresslastname: raw.lastname,
+    addresstel: raw.tel,
+    addresstel2: raw.tel2,
+    addressno: raw.addressno,
+    addresssubdistrict: raw.subdistrict,
+    addressdistrict: raw.district,
+    addressprovince: raw.province,
+    addresszipcode: raw.zipcode,
+    addressnote: raw.note,
+  });
+  if (!normalized.success) {
+    return { ok: false, error: normalized.error.issues[0]?.message ?? "ที่อยู่ไม่ถูกต้อง" };
+  }
+  const address = normalized.data;
+  const d = {
+    ...raw,
+    name: address.addressname,
+    lastname: address.addresslastname,
+    tel: address.addresstel,
+    tel2: address.addresstel2,
+    addressno: address.addressno,
+    subdistrict: address.addresssubdistrict,
+    district: address.addressdistrict,
+    province: address.addressprovince,
+    zipcode: address.addresszipcode,
+    note: address.addressnote,
+  };
 
   return withAdmin(["ops", "accounting", "super", "warehouse"], async ({ adminId }) => {
     const admin = createAdminClient();
@@ -342,6 +375,21 @@ export async function adminUpdateForwarderAddressDetails(
       return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
     }
     if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
+
+    // Persist FIRST. If this fails, do not create another one-off forwarder
+    // snapshot that downstream/next-order flows cannot recover or reuse.
+    const saved = await saveCustomerAddress(admin, {
+      userid: fwd.userid,
+      address,
+      adminid: legacyAdminId,
+      forceDefault: true,
+    });
+    if (saved.error || !saved.data) {
+      console.error(`[adminUpdateForwarderAddressDetails address-book] failed`, {
+        fId: d.fId, userid: fwd.userid, message: saved.error,
+      });
+      return { ok: false, error: saved.error ?? "บันทึกสมุดที่อยู่ไม่สำเร็จ" };
+    }
 
     // Re-resolve the carrier by the (edited) province + re-price the domestic leg (editable).
     const carrier = suggestCarrierForAddress((fwd.fshipby ?? "").trim(), {
@@ -410,7 +458,13 @@ export async function adminUpdateForwarderAddressDetails(
     );
 
     await logAdminAction(adminId, "tb_forwarder.update_address_details", "tb_forwarder", String(d.fId), {
-      userid: fwd.userid, province: d.province, carrier, reprice,
+      userid: fwd.userid,
+      addressId: saved.data.addressId,
+      addressCreated: saved.data.created,
+      rememberedAsDefault: saved.data.isDefault,
+      province: d.province,
+      carrier,
+      reprice,
     });
 
     revalidatePath(`/admin/forwarders/${d.fId}`);

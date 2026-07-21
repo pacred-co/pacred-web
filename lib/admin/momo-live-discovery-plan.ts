@@ -182,7 +182,8 @@ export type DeliveryAddressOption = {
  * Delivery fields added to each discovery row — the customer's saved addresses + the
  * suggested {address, carrier, payMethod} pre-resolved from their SET data (mirrors
  * resolveAutoCommitDelivery). All fail-soft: no saved address → empty list + blank
- * suggestion (the commit core writes EMPTY_ADDRESS, the admin fills later at /review).
+ * suggestion. Commit now fails closed until a reusable address exists (or staff
+ * explicitly chooses PCS self-pickup), so a blank suggestion is not commit-ready.
  */
 export type DiscoveryDelivery = {
   addresses: DeliveryAddressOption[];
