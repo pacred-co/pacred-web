@@ -132,6 +132,57 @@ export function filterCountableForwarderRows<T>(
  * per-cabinet rollup) and want to test a single row against a precomputed
  * "groups that have a box sibling" set.
  */
+/**
+ * ≈-equality for shipment weight/คิว values — the SAME tolerance family the
+ * split/absorb/backlink machinery uses (2% relative · 0.5 absolute floor so
+ * tiny parcels don't false-differ on rounding). Pure.
+ */
+export function approxEqualValue(a: number, b: number, relTol = 0.02, absTol = 0.5): boolean {
+  const av = Number(a) || 0;
+  const bv = Number(b) || 0;
+  const diff = Math.abs(av - bv);
+  if (diff <= absTol) return true;
+  const denom = Math.max(Math.abs(av), Math.abs(bv));
+  return denom > 0 && diff / denom <= relTol;
+}
+
+/**
+ * DISJOINT-LOTS discriminator (owner + CS 2026-07-21 · 908007350691 = 6 กล่อง).
+ *
+ * MOMO sometimes keys ONE shipment as TWO REAL LOTS: the BARE tracking is its own
+ * multi-box lot (e.g. 908007350691 = 5 กล่อง · 112.5kg) and a suffixed sibling is a
+ * SEPARATE lot (908007350691-2 = 1 กล่อง · 10.5kg) → the family truly has
+ * bare.qty + Σ siblings = 6 กล่อง (same class as prod 60527103087: bare 48/624 +
+ * "-2" 12/156 = คนละล็อตจริง). The legacy display rule "bare-with-siblings = หัวบิล
+ * → drop" UNDER-COUNTS this shape (5 หาย → Σ 1), and treating the bare as an
+ * aggregate header would zero real value.
+ *
+ * A bare is an ADDITIVE LOT (count it ALONGSIDE its suffixed siblings) IFF:
+ *   1. it carries its OWN value (bareValue > 0), AND
+ *   2. MOMO's box_detail reports the bare AS ITS OWN BOX LINE (bareHasOwnBox —
+ *      an aggregate header is never listed as a box of itself), AND
+ *   3. its value is DISJOINT from the Σ of its suffixed siblings — NOT ≈ equal
+ *      (a bare ≈ Σ siblings is the classic aggregate/residue header → still drop).
+ *
+ * Fail-CLOSED: any missing signal → false → callers keep the proven drop-the-bare
+ * behaviour, so this can only ever ADD a corroborated real lot, never resurrect a
+ * placeholder. Pure · display/count + commit-guard shared brain.
+ */
+export function isAdditiveLotBare(input: {
+  /** the bare row's own weight (kg) — the staged/stored shipment value */
+  bareValue: number;
+  /** Σ weight of the suffixed sibling ROWS (staged or live) of the same family */
+  siblingValueSum: number;
+  /** momo_box_detail has a box line keyed by the BARE tracking itself */
+  bareHasOwnBox: boolean;
+}): boolean {
+  const bare = Number(input.bareValue) || 0;
+  const sibs = Number(input.siblingValueSum) || 0;
+  if (!(bare > 0)) return false;              // empty header → never additive
+  if (!input.bareHasOwnBox) return false;     // no own box line → can't corroborate
+  return !approxEqualValue(bare, sibs);       // ≈ Σ siblings = aggregate header
+}
+
 export function isMomoBillHeader<T>(
   row: T,
   acc: ForwarderCountAccessors<T>,

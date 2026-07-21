@@ -11,7 +11,7 @@
 
 import { Fragment, useMemo, useState, useTransition, type ReactNode } from "react";
 import { ALL_WORKBOOK_CARRIER_OPTIONS } from "@/lib/cart/ship-by-eligibility";
-import { baseTracking } from "@/lib/admin/momo-bill-header";
+import { baseTracking, isAdditiveLotBare } from "@/lib/admin/momo-bill-header";
 import { momoTypeLabel } from "@/lib/admin/momo-live-discovery-plan";
 import { cgMatchesQty } from "@/lib/forwarder/cg-range";
 import { createPortal } from "react-dom";
@@ -223,7 +223,11 @@ const DATA_KEYS = [
   "serviceFee", "status", "return", "etd", "eta",
 ];
 
-type Tab = "pending" | "committed" | "all" | "mismatch" | "garbage";
+// owner 2026-07-21 — "MOMO ไม่ส่ง PR คือ ตีเป็น NO CODE เลยครับ แบ่งอีก tab เป็น NO CODE
+// ให้ CS มาคอยตรวจเทียบกับทางโกดังจีน หรือเอารูป กับ แทรคกิ้ง ไปคอยถามหาลูกค้า
+// หรือตอนลูกค้าตามของมา". NO CODE = พัสดุที่ MOMO ไม่ได้แนบรหัสลูกค้ามาให้ = ของไม่มี
+// เจ้าของในระบบ → ถ้าไม่ตามหา มันจะค้างในตู้ ไม่มีใครถูกเก็บเงิน (รายได้หาย + ของค้างโกดัง).
+type Tab = "pending" | "committed" | "all" | "mismatch" | "garbage" | "nocode";
 
 export function MomoIngestClient({ tracks, missing, loadError }: { tracks: IngestTrack[]; missing: MissingParcel[]; loadError: string | null }) {
   const router = useRouter();
@@ -267,6 +271,9 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     committed: tracks.filter((t) => t.committed).length,
     mismatch: tracks.filter((t) => pkWtDiff(t) || pkVolDiff(t) || liveWtDiff(t) || liveVolDiff(t)).length,
     garbage: tracks.filter((t) => t.momoGarbage).length,
+    // NO CODE (owner 2026-07-21) — MOMO ไม่แนบรหัสลูกค้า = ของไม่มีเจ้าของในระบบ.
+    // นับเฉพาะที่ยังไม่ commit (แถวที่ commit แล้ว = CS หาเจ้าของเจอแล้วตอนนำเข้า).
+    nocode: tracks.filter((t) => !t.committed && (t.guessedUserId ?? "").trim() === "").length,
   }), [tracks]);
   const invalidPr = useMemo(() => tracks.filter((t) => !t.committed && t.userIdValid === false).length, [tracks]);
 
@@ -276,6 +283,9 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     else if (tab === "committed") list = list.filter((t) => t.committed);
     else if (tab === "mismatch") list = list.filter((t) => pkWtDiff(t) || pkVolDiff(t) || liveWtDiff(t) || liveVolDiff(t));
     else if (tab === "garbage") list = list.filter((t) => t.momoGarbage);
+    // NO CODE = ยังไม่นำเข้า + MOMO ไม่ส่ง PR — คิว CS ตามหาเจ้าของ (owner 2026-07-21)
+    else if (tab === "nocode")
+      list = list.filter((t) => !t.committed && (t.guessedUserId ?? "").trim() === "");
     const term = q.trim().toLowerCase();
     if (term)
       list = list.filter((t) =>
@@ -329,7 +339,24 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     const base = baseTracking(fam[0].tracking ?? "") ?? (fam[0].tracking ?? "");
     const hasBareMember = fam.some((x) => (x.tracking ?? "") === base);
     const hasSuffixMembers = fam.some((x) => (x.tracking ?? "") !== base);
-    const countable = hasBareMember && hasSuffixMembers ? fam.filter((x) => (x.tracking ?? "") !== base) : fam;
+    // DISJOINT-LOTS (owner+CS 2026-07-21 · 908007350691 = bare 5 กล่อง + "-2" 1 กล่อง
+    // = 6 จริง): a bare that carries its OWN corroborated value (box_detail lists the
+    // bare as its own box line) DISJOINT from Σ siblings is a REAL lot → count it
+    // ALONGSIDE the siblings. Only a bare ≈ Σ siblings (aggregate header) — or an
+    // empty/uncorroborated bare — keeps the legacy drop-the-bare rule.
+    let countable: typeof fam;
+    if (hasBareMember && hasSuffixMembers) {
+      const bareRow = fam.find((x) => (x.tracking ?? "") === base);
+      const sibs = fam.filter((x) => (x.tracking ?? "") !== base);
+      const additive = !!bareRow && isAdditiveLotBare({
+        bareValue: bareRow.weightKg || 0,
+        siblingValueSum: sibs.reduce((sm, x) => sm + (x.weightKg || 0), 0),
+        bareHasOwnBox: (fam[0].boxes ?? []).some((b) => (b.tracking ?? "").trim() === base),
+      });
+      countable = additive ? fam : sibs;
+    } else {
+      countable = fam;
+    }
     const memberTrackings = new Set(fam.map((x) => (x.tracking ?? "").trim()).filter(Boolean));
     const extraBoxes = hasSuffixMembers
       ? (fam[0].boxes ?? []).filter((b) => b.tracking && !memberTrackings.has(b.tracking.trim()))
@@ -545,7 +572,33 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
       const res = await propagateMomoLiveStatusNow();
       if (res.ok && res.data) {
         const s = res.data;
-        setLiveMsg(`✅ ดึง Live สำเร็จ · อัปเดตสถานะ ${s.summary.advanced} · เติมข้อมูล(เข้าระบบแล้ว) ${s.data.filled} · เติมข้อมูล(ยังไม่นำเข้า) ${s.staging.filled} · เลขตู้ ${s.cabinet.filled} · แตกกล่อง ${s.boxSplit.split}`);
+        // owner 2026-07-21 "สรุปมันได้หรือไม่ได้ครับ เข้าหรือไม่เข้า" — ข้อความเดิมโชว์
+        // แต่ตัวเลข "เติม N" ล้วนๆ → พอ MOMO ยังไม่มีข้อมูลให้เติม (พัสดุยังไม่ถึงโกดังจีน)
+        // มันขึ้น 0 ทุกช่อง อ่านแล้วเหมือน "ดึงไม่ติด" ทั้งที่ login+scrape สำเร็จ.
+        // §0g: ต้องพิสูจน์ตัวเองได้ → โชว์ boardsFetched/parcelsSeen (= หลักฐานว่าเข้า
+        // เว็บ MOMO ได้จริงและอ่านมากี่รายการ) + อธิบายเหตุผลของ 0 + จำนวน error.
+        const touched =
+          s.summary.advanced + s.data.filled + s.staging.filled + s.cabinet.filled + s.boxSplit.split;
+        const proof = `อ่านจาก MOMO ${s.summary.parcelsSeen} รายการ (${s.summary.boardsFetched} บอร์ด) · จับคู่กับระบบเรา ${s.summary.matched}`;
+        const detail = `อัปเดตสถานะ ${s.summary.advanced} · เติมข้อมูล(เข้าระบบแล้ว) ${s.data.filled} · เติมข้อมูล(ยังไม่นำเข้า) ${s.staging.filled} · เลขตู้ ${s.cabinet.filled} · แตกกล่อง ${s.boxSplit.split}`;
+        const errN = s.summary.errors.length;
+        if (s.summary.parcelsSeen === 0) {
+          // scrape ไม่ได้ข้อมูลเลย = ผิดปกติจริง (login พัง / บอร์ดว่าง / MOMO เปลี่ยนหน้า)
+          setLiveMsg(
+            `⚠️ ดึง Live แล้ว แต่ MOMO ไม่ส่งรายการกลับมาเลย (0 รายการ / ${s.summary.boardsFetched} บอร์ด)` +
+            `${errN > 0 ? ` · error ${errN} จุด` : ""} — เช็ค MOMO_WEB_USER/PASS หรือลองเปิดเว็บ MOMO ดูว่าล็อกอินได้ไหม`,
+          );
+        } else if (touched === 0) {
+          // scrape ได้จริง แต่ไม่มีอะไรให้เขียน = ปกติ (ข้อมูลตรงกันแล้ว หรือ MOMO เองยังไม่มีค่า)
+          setLiveMsg(
+            `✅ ดึง Live สำเร็จ · ${proof} — แต่ยังไม่มีอะไรให้อัปเดต (0 รายการ): ` +
+            `ข้อมูลตรงกับ MOMO อยู่แล้ว หรือ MOMO เองยังไม่ได้ชั่ง/วัด/ผูกตู้ให้ ` +
+            `(พัสดุที่สถานะ "รอต้นทางส่งเข้าโกดัง" MOMO ยังไม่มีน้ำหนัก-คิว จึงเติมไม่ได้ ต้องรอ MOMO รับของเข้าโกดังก่อน)` +
+            `${errN > 0 ? ` · ⚠️ error ${errN} จุด` : ""}`,
+          );
+        } else {
+          setLiveMsg(`✅ ดึง Live สำเร็จ · ${proof} → ${detail}${errN > 0 ? ` · ⚠️ error ${errN} จุด` : ""}`);
+        }
         startTransition(() => router.refresh());
       } else {
         setLiveMsg(res.ok ? "ดึง Live เสร็จ" : `⚠️ ดึง Live ไม่สำเร็จ: ${res.error}`);
@@ -824,7 +877,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     <div className="space-y-3">
       {/* tabs + search */}
       <div className="flex flex-wrap items-center gap-2">
-        {([["pending", "🟡 ยังไม่เข้าระบบ"], ["committed", "✅ เข้าระบบแล้ว"], ["mismatch", "❗ ไม่ตรง (Packing/Live)"], ["all", "ทั้งหมด"]] as [Tab, string][]).map(([k, label]) => (
+        {([["pending", "🟡 ยังไม่เข้าระบบ"], ["committed", "✅ เข้าระบบแล้ว"], ["nocode", "❓ NO CODE (ไม่รู้เจ้าของ)"], ["mismatch", "❗ ไม่ตรง (Packing/Live)"], ["all", "ทั้งหมด"]] as [Tab, string][]).map(([k, label]) => (
           <button key={k} type="button" onClick={() => setTab(k)}
             className={`rounded-full px-3 py-1 text-xs font-medium ${tab === k ? "bg-primary-600 text-white" : "bg-surface-alt text-muted hover:bg-surface-alt/70"}`}>
             {label} <span className="opacity-70">{counts[k]}</span>
@@ -859,6 +912,50 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
         <button type="button" onClick={resetCols} title="รีเซ็ตลำดับคอลัมน์กลับค่าเริ่มต้น"
           className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt">↺ คอลัมน์</button>
       </div>
+
+      {/* 🔄 ระบบซิงค์เองอัตโนมัติ (owner 2026-07-21 "ให้ระบบรันได้โดยไม่ต้องมานั่งแก้ใน code") —
+          cron ดึง MOMO API + Live scrape ทุก 5 นาทีอยู่แล้ว; แถบนี้พิสูจน์ว่ามันเดินอยู่จริง
+          (เวลาซิงค์ล่าสุดจากข้อมูลจริง) + เปลี่ยนสีเตือนเมื่อเงียบผิดปกติ → พนักงานไม่ต้อง
+          เดาว่า "ต้องกดเองไหม" และรู้ทันทีเมื่อ cron/login ตาย (คู่กับ data-health check). */}
+      {(() => {
+        let newest = 0;
+        for (const t of tracks) {
+          const ts = t.lastSyncedAt ? Date.parse(t.lastSyncedAt) : NaN;
+          if (Number.isFinite(ts) && ts > newest) newest = ts;
+        }
+        if (newest === 0) return null;
+        const ageMin = Math.max(0, Math.round((Date.now() - newest) / 60000));
+        const ageText = ageMin < 1 ? "เมื่อครู่นี้" : ageMin < 60 ? `${ageMin} นาทีที่แล้ว` : `${Math.floor(ageMin / 60)} ชม. ${ageMin % 60} นาทีที่แล้ว`;
+        const tone =
+          ageMin <= 30
+            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+            : ageMin <= 120
+              ? "border-amber-300 bg-amber-50 text-amber-700"
+              : "border-red-300 bg-red-50 text-red-700";
+        return (
+          <div className={`rounded-lg border px-3 py-1.5 text-[11px] ${tone}`}>
+            🔄 ระบบซิงค์ MOMO อัตโนมัติทุก 5 นาที (API + Live) — ซิงค์ล่าสุด <b>{ageText}</b>
+            {ageMin > 30 && (
+              <> · ⚠️ เงียบนานผิดปกติ — cron/login MOMO อาจมีปัญหา ลองกด &quot;ดึง Live เดี๋ยวนี้&quot; ถ้าอ่านได้ 0 รายการ = แจ้งทีม dev</>
+            )}
+            {ageMin <= 30 && <> · ปุ่ม &quot;ดึง Live เดี๋ยวนี้&quot; ใช้เฉพาะตอนอยากได้ข้อมูลสดทันที ไม่กดระบบก็ดึงเองอยู่แล้ว</>}
+          </div>
+        );
+      })()}
+
+      {/* ❓ NO CODE — คิว CS ตามหาเจ้าของ (owner 2026-07-21 "MOMO ไม่ส่ง PR ตีเป็น NO CODE
+          ให้ CS ตรวจเทียบกับโกดังจีน หรือเอารูป+แทรคกิ้งไปถามลูกค้า หรือตอนลูกค้าตามของมา") */}
+      {tab === "nocode" && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
+          <div className="font-bold">❓ NO CODE = พัสดุที่ MOMO ไม่แนบรหัสลูกค้า (PR) มา — ของยังไม่มีเจ้าของในระบบ ถ้าไม่ตามหา ของจะค้างโกดัง + ไม่มีใครถูกเก็บเงิน</div>
+          <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
+            <li><b>เทียบกับโกดังจีน:</b> กด <b>📋 Copy</b> / <b>⬇ Excel</b> ด้านบน — จะได้เฉพาะรายการในแท็บนี้ ส่งให้โกดังจีน/MOMO ช่วยเช็คว่าของใคร</li>
+            <li><b>ถามลูกค้า:</b> คลิก<b>รูปสินค้า</b>เปิดภาพเต็ม แล้วเอารูป + เลขแทรคกิ้ง ส่ง LINE ถามลูกค้าที่น่าจะใช่</li>
+            <li><b>ตอนลูกค้าตามของ:</b> ลูกค้าทักมาว่าของไม่ถึง → เอาเลขแทรคกิ้งลูกค้ามาค้นในช่อง<b>ค้นหา</b>บนแท็บนี้ ถ้าเจอ = ของอยู่นี่แค่ไม่มี PR</li>
+            <li><b>เจอเจ้าของแล้ว:</b> กด ✎ ที่ช่อง <b>ลูกค้า (PR)</b> ของแถวนั้น → พิมพ์รหัส PR → บันทึก แล้วติ๊กนำเข้าระบบได้ทันที</li>
+          </ul>
+        </div>
+      )}
 
       {loadError && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">โหลดข้อมูลไม่สำเร็จ: {loadError}</div>
@@ -1457,6 +1554,21 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                   <div>
                     <div className="mb-1 text-[11px] font-semibold text-amber-700">📋 รายการที่ข้อมูลยังไม่ครบ (Live จะเติมให้ถ้า MOMO มี) — {incompleteRows.length} รายการ:</div>
                     {previewTable(incompleteRows)}
+                    {/* owner 2026-07-21 "สรุปมันได้หรือไม่ได้" — แถวที่ MOMO ยังไม่รับของเข้า
+                        โกดัง (รอต้นทางส่ง / รอเข้าโกดัง) MOMO ยังไม่ได้ชั่ง-วัด → กด Live กี่ครั้ง
+                        ก็เติมไม่ได้ ไม่ใช่ระบบพัง. บอกล่วงหน้าตรงนี้ ก่อนพนักงานกดแล้วงงว่าทำไม 0. */}
+                    {(() => {
+                      const notYetAtWarehouse = incompleteRows.filter((r) =>
+                        /รอต้นทาง|รอเข้าโกดัง|ยังไม่เข้าโกดัง/.test(r.adminStatusText ?? ""),
+                      ).length;
+                      if (notYetAtWarehouse === 0) return null;
+                      return (
+                        <div className="mt-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-700">
+                          ℹ️ ใน {incompleteRows.length} รายการนี้ มี <b>{notYetAtWarehouse} รายการที่ MOMO ยังไม่รับของเข้าโกดัง</b> —
+                          MOMO ยังไม่ได้ชั่งน้ำหนัก/วัดคิว กด Live ตอนนี้จะยังเติมไม่ได้ (ไม่ใช่ระบบพัง) ต้องรอ MOMO รับของก่อน
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
                 <div className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-800">กดยืนยัน → login เว็บ MOMO สด → อัปเดตสถานะ + เติม น้ำหนัก/คิว/จำนวน ที่ยังว่าง ทั้งแถวที่เข้าระบบแล้ว (tb_forwarder) และยังไม่นำเข้า (staging · ข้ามบิลแล้ว · ไม่ทับค่าที่มี). ใช้เวลาสักครู่.</div>

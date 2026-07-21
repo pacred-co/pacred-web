@@ -4,10 +4,8 @@ import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
-import { ForwarderStepRevert } from "./forwarder-step-revert";
 import { CreateOrderBillButton } from "./create-order-bill-button";
 import { IssueReceiptButton } from "./issue-receipt-button";
-import { AdvanceBillConfirmButton } from "./advance-bill-confirm-button";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 // 2026-06-18 (ภูม) — ที่อยู่จัดส่งสินค้า: when a delivery carrier (not 'PCS'
 // self-pickup) carries a stale warehouse-default faddress snapshot, fall back to
@@ -780,7 +778,6 @@ async function tryRenderTbForwarder(
   // already เฟิม'd, and whether it's priced (any sibling has freight > 0 = measured).
   const advanceSiblingIds = collectSiblings.map((s) => s.id).filter((n): n is number => Number.isInteger(n) && n > 0);
   const advanceConfirmed = String(r.advance_bill_confirmed ?? "").trim() === "1";
-  const advancePriced = collectSiblings.some((s) => (Number(s.ftotalprice) || 0) > 0);
   // ภูม 2026-07-13 — the header "จำนวน" MUST show the WHOLE shipment's box total
   // (every sibling box), the SAME set the รายการสินค้า table sums. Was showing the
   // single anchor row's famount (e.g. 1) while the table summed all siblings (e.g. 2)
@@ -1390,24 +1387,8 @@ async function tryRenderTbForwarder(
           </details>
         </ForwarderStatusWorkflow>
 
-        {/* ── status-step control (owner 2026-06-19): ถอย/ดัน สถานะทีละขั้น ·
-           money-safe revert (refuses if billed/paid) · ops/super/warehouse. ── */}
-        {canStepStatus && (
-          <div className="mt-3">
-            <ForwarderStepRevert fid={r.id} fstatus={r.fstatus} />
-          </div>
-        )}
-
-        {/* ── สร้างใบวางบิล (owner 2026-06-22 + advance 2026-06-23) — at รอชำระเงิน/
-           เตรียมส่ง (5/6) normally, OR ล่วงหน้าที่ ถึงโกดังจีน/กำลังส่งมาไทย/ถึงไทย (2/3/4)
-           เมื่อเฟิมแล้ว. The "🔒 เฟิม" gate sits above it (วางบิลล่วงหน้าตอน MOMO ยิงของ). ── */}
+        {/* ── สร้างใบวางบิล (owner 2026-06-22) — at รอชำระเงิน/เตรียมส่ง (5/6). ── */}
         <div id="bill-section" className="mt-3 scroll-mt-24 space-y-2">
-          <AdvanceBillConfirmButton
-            fIds={advanceSiblingIds.length > 0 ? advanceSiblingIds : [r.id]}
-            fstatus={r.fstatus}
-            confirmed={advanceConfirmed}
-            priced={advancePriced}
-          />
           <CreateOrderBillButton fId={r.id} fstatus={r.fstatus} advanceConfirmed={advanceConfirmed} />
         </div>
 

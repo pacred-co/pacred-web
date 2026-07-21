@@ -15,7 +15,7 @@ import { CalendarRange, FileText, Film, Save, Sparkles, Trash2, Video } from "lu
 import { usePlanner } from "@/lib/marketing-planner/store";
 import { daysInMonth, distributeMonth, targetsTotal, type DayOverride, type DaySlot, type PlanOverrides } from "@/lib/marketing-planner/production-plan";
 import { pad2, TH_DOW, TH_MONTHS } from "@/lib/marketing-planner/util";
-import { longTotalOf } from "@/lib/marketing-planner/types";
+import { contentTypeIdsOf, longTotalOf } from "@/lib/marketing-planner/types";
 import { btnPrimary, cx, iconBtn, inputCls, MetricCard, SectionCard, useConfirm } from "./ui";
 
 const LONG_TYPE = "contentType-long";
@@ -83,9 +83,13 @@ export function ProductionPlan() {
     () => contents.filter((c) => !c.archivedAt && (c.publishDate ?? "").slice(0, 7) === ym),
     [contents, ym],
   );
-  const createdLong = monthContents.filter((c) => c.contentTypeId === LONG_TYPE).length;
-  const createdShort = monthContents.filter((c) => c.contentTypeId === SHORT_TYPE).length;
-  const createdArticle = monthContents.filter((c) => c.contentTypeId === ARTICLE_TYPE).length;
+  // A content can now carry SEVERAL types (Codex-John 2026-07-21) — the scalar
+  // contentTypeId keeps only ids[0], so counting on it under-reports a คลิปสั้น that
+  // was added as the 2nd type. Count through the same accessor every other surface
+  // uses (contentTypeIdsOf · legacy-scalar-compatible).
+  const createdLong = monthContents.filter((c) => contentTypeIdsOf(c).includes(LONG_TYPE)).length;
+  const createdShort = monthContents.filter((c) => contentTypeIdsOf(c).includes(SHORT_TYPE)).length;
+  const createdArticle = monthContents.filter((c) => contentTypeIdsOf(c).includes(ARTICLE_TYPE)).length;
 
   // Count exactly what will be placed (mode + day-selection + pins aware) by summing the plan.
   const slotLong = useMemo(() => slots.reduce((a, s) => a + s.longs.reduce((x, l) => x + l.count, 0), 0), [slots]);

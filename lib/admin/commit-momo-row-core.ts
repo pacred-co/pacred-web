@@ -56,6 +56,11 @@ import {
   baseOf as momoBaseOf,
   suffixOf as momoSuffixOf,
 } from "@/lib/integrations/momo-web/split-box-rows-plan";
+// Disjoint-lots discriminator (bare = its OWN lot beside suffixed siblings ·
+// 908007350691 = 6 กล่อง) — the SAME brain the ตรวจตู้ display uses, so the
+// commit guard and the family Σ can never disagree on the shape.
+import { approxEqualValue, isAdditiveLotBare } from "@/lib/admin/momo-bill-header";
+import { resolveMomoBoxBasis } from "@/lib/integrations/momo-web/box-detail-basis";
 import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
 import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
@@ -576,7 +581,7 @@ export async function commitMomoRowCore(
   const familyBase = momoBaseOf(trackingNo);
   const { data: dupRows, error: dupErr } = await admin
     .from("tb_forwarder")
-    .select("id, fstatus, ftrackingchn")
+    .select("id, fstatus, ftrackingchn, fweight")
     .or(`ftrackingchn.eq.${familyBase},ftrackingchn.like.${familyBase}-%`)
     .limit(40);
   if (dupErr) {
@@ -586,7 +591,7 @@ export async function commitMomoRowCore(
   }
   // Exact-base filter (the .like can catch a longer tracking sharing the prefix —
   // base "178055573" vs "1780555731") + live-only.
-  const family = ((dupRows ?? []) as Array<{ id: number; fstatus: string | null; ftrackingchn: string | null }>)
+  const family = ((dupRows ?? []) as Array<{ id: number; fstatus: string | null; ftrackingchn: string | null; fweight: number | string | null }>)
     .filter((r) => momoBaseOf(String(r.ftrackingchn ?? "")) === familyBase)
     .filter((r) => r.fstatus != null && r.fstatus !== "0" && r.fstatus !== "");
   const incomingSuffix = momoSuffixOf(trackingNo);
@@ -608,10 +613,60 @@ export async function commitMomoRowCore(
   } else {
     const liveSuffixed = family.filter((r) => momoSuffixOf(String(r.ftrackingchn ?? "")) > 0);
     if (liveSuffixed.length > 0) {
-      return {
-        ok: false,
-        error: `tracking นี้มีแถวกล่อง (-i/n) อยู่แล้ว (${liveSuffixed.map((r) => `#${r.id}`).join(", ")}) — ไม่สร้างแถวรวมซ้อน`,
-      };
+      // ── DISJOINT-LOTS exception (owner + CS 2026-07-21 · 908007350691 = 6 กล่อง) ──
+      // MOMO sometimes keys ONE shipment as TWO REAL LOTS: the BARE tracking is its
+      // own multi-box lot (908007350691 = 5 กล่อง · 112.5kg) beside a live suffixed
+      // lot ("-2" = 1 กล่อง · 10.5kg · already committed). The blanket refusal below
+      // would strand the bare lot forever (5 กล่องไม่มีทางเข้าระบบ = เก็บเงินขาด).
+      // ALLOW the bare commit ONLY when BOTH corroborations hold (fail-CLOSED —
+      // any lookup error / missing signal → the proven refusal stands):
+      //   1. momo_box_detail lists the bare AS ITS OWN BOX LINE whose resolved
+      //      total ≈ the incoming staged weight (the bare carries ITS OWN value —
+      //      an aggregate/re-key header is never listed as a box of itself), AND
+      //   2. the incoming weight is DISJOINT from Σ(live suffixed fweight) — a
+      //      bare ≈ Σ boxes is the late aggregate header → still refused (that is
+      //      the PR050 residue class this guard exists for).
+      // Same discriminator as the display side (isAdditiveLotBare · one brain).
+      let disjointLotOk = false;
+      const liveSuffixSum = liveSuffixed.reduce((s, r) => s + (Number(r.fweight) || 0), 0);
+      const incomingWt = Number(metrics.weight) || 0;
+      if (incomingWt > 0 && !approxEqualValue(incomingWt, liveSuffixSum)) {
+        const { data: bareBoxRows, error: bareBoxErr } = await admin
+          .from("momo_box_detail")
+          .select("box_tracking, width, length, height, weight_kg, cbm, quantity")
+          .eq("base_tracking", familyBase)
+          .eq("box_tracking", trackingNo)
+          .limit(2);
+        if (bareBoxErr) {
+          console.error(`[disjoint-lot bare-box lookup] failed`, { code: bareBoxErr.code, message: bareBoxErr.message });
+        } else {
+          const bb = (bareBoxRows ?? [])[0] as
+            | { width: number | string | null; length: number | string | null; height: number | string | null;
+                weight_kg: number | string | null; cbm: number | string | null; quantity: number | string | null }
+            | undefined;
+          if (bb) {
+            const basis = resolveMomoBoxBasis({
+              width: Number(bb.width) || 0, length: Number(bb.length) || 0, height: Number(bb.height) || 0,
+              weightKg: Number(bb.weight_kg) || 0, cbm: Number(bb.cbm) || 0, quantity: Number(bb.quantity) || 0,
+            });
+            disjointLotOk =
+              basis.totalWeightKg > 0 &&
+              approxEqualValue(basis.totalWeightKg, incomingWt) &&
+              isAdditiveLotBare({ bareValue: incomingWt, siblingValueSum: liveSuffixSum, bareHasOwnBox: true });
+            if (disjointLotOk) {
+              console.log(
+                `[commit-momo] disjoint-lot bare allowed: ${trackingNo} (${incomingWt}kg = own box lot) beside live suffixed Σ${liveSuffixSum}kg (${liveSuffixed.map((r) => `#${r.id}`).join(", ")})`,
+              );
+            }
+          }
+        }
+      }
+      if (!disjointLotOk) {
+        return {
+          ok: false,
+          error: `tracking นี้มีแถวกล่อง (-i/n) อยู่แล้ว (${liveSuffixed.map((r) => `#${r.id}`).join(", ")}) — ไม่สร้างแถวรวมซ้อน`,
+        };
+      }
     }
   }
 

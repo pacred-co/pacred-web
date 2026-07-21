@@ -85,14 +85,24 @@ import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
 import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shipping";
+import { propagateShipmentEdit } from "@/lib/admin/forwarder-siblings";
 import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
-import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
+import { checkCarrierForProvince, isOwnFleetCarrier } from "@/lib/forwarder/carrier-coverage-guard";
+import { isMaoCarrier } from "@/lib/forwarder/mao-fee";
 import { canonicalProvince } from "@/lib/forwarder/carrier-province-coverage";
 import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { isGodRole } from "@/lib/admin/god-role";
 
-/** Pacred's own delivery family (รับเองโกดัง / เหมาๆ / ด่วน) — works any province. */
-const PCS_FAMILY = new Set(["PCS", "PCSF", "PCSE"]);
+/** Pacred's own delivery family (รับเองโกดัง / เหมาๆ / ด่วน) — works any province.
+ *
+ *  ⚠️ MUST list BOTH the legacy codes and the D1 rebrand (PCSF→PRF เหมาๆ ·
+ *  PCSE→PRE ด่วน · 2026-06-20 L-MIG-04 "a rebrand must sweep every hardcoded list").
+ *  A missing PRF made suggestCarrierForAddress fall through to a PRIVATE courier on
+ *  every address edit of a เหมาๆ order → the ฿100 เหมาๆ anchor could no longer be
+ *  elected (mao-anchor-plan electMaoCarrier finds no PRF row) and COD dropped the
+ *  domestic leg = money lost. Keep in sync with OWN_FLEET_SHIPBY
+ *  (lib/forwarder/carrier-coverage-guard.ts) + MAO_CARRIER_CODE (lib/forwarder/mao-fee.ts). */
+const PCS_FAMILY = new Set(["PCS", "PCSF", "PCSE", "PRF", "PRE"]);
 
 /**
  * Auto-suggest the carrier for a delivery address (owner/ภูม 2026-07-03 · "จับจากเลขไปรษณีย์
@@ -170,9 +180,9 @@ export async function adminPickForwarderAddress(
     // 1. Read the forwarder — fshipby (current carrier) + userid (ownership) + fstatus/fvolume (re-price).
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, userid, fshipby, fstatus, fvolume")
+      .select("id, userid, fshipby, fstatus, fvolume, ftrackingchn")
       .eq("id", d.fId)
-      .maybeSingle<{ id: number; userid: string; fshipby: string | null; fstatus: string | null; fvolume: number | string | null }>();
+      .maybeSingle<{ id: number; userid: string; fshipby: string | null; fstatus: string | null; fvolume: number | string | null; ftrackingchn: string | null }>();
     if (fwdErr) {
       console.error(`[adminPickForwarderAddress tb_forwarder] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
       return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
@@ -244,6 +254,29 @@ export async function adminPickForwarderAddress(
       return { ok: false, error: `บันทึกที่อยู่ไม่สำเร็จ: ${updErr.message}` };
     }
 
+    // ── propagate to the shipment's box-split siblings (owner/ภูม 2026-07-21) —
+    // one shipment = one address (ALL boxes) + one carrier/paymethod (unbilled boxes).
+    await propagateShipmentEdit(
+      admin,
+      { id: d.fId, ftrackingchn: fwd.ftrackingchn, userid: fwd.userid },
+      {
+        address: {
+          faddressname: addr.addressname ?? "", faddresslastname: addr.addresslastname ?? "",
+          faddressno: addr.addressno ?? "", faddresssubdistrict: addr.addresssubdistrict ?? "",
+          faddressdistrict: addr.addressdistrict ?? "", faddressprovince: addr.addressprovince ?? "",
+          faddresszipcode: addr.addresszipcode ?? "", faddressnote: addr.addressnote ?? "",
+          faddresstel: addr.addresstel ?? "", faddresstel2: addr.addresstel2 ?? "",
+        },
+        money: {
+          ...(carrierWritable ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: addr.addresszipcode }) } : {}),
+          // ONLY flat own-fleet (เหมาๆ/รับเอง = ฿0 · fee is the once-per-shipment mao anchor)
+          // gets its per-box price zeroed on siblings; PCSE/private prices stay per-box.
+          ...(carrierWritable && (isMaoCarrier(carrier) || carrier === "PCS") ? { ftransportprice: 0 } : {}),
+        },
+      },
+      legacyAdminId,
+    );
+
     await logAdminAction(adminId, "tb_forwarder.update_address", "tb_forwarder", String(d.fId), {
       addressId: d.addressId,
       userid:    fwd.userid,
@@ -290,9 +323,9 @@ export async function adminUpdateForwarderAddressDetails(
 
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, userid, fshipby, fstatus, fvolume")
+      .select("id, userid, fshipby, fstatus, fvolume, ftrackingchn")
       .eq("id", d.fId)
-      .maybeSingle<{ id: number; userid: string; fshipby: string | null; fstatus: string | null; fvolume: number | string | null }>();
+      .maybeSingle<{ id: number; userid: string; fshipby: string | null; fstatus: string | null; fvolume: number | string | null; ftrackingchn: string | null }>();
     if (fwdErr) {
       console.error(`[adminUpdateForwarderAddressDetails read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
       return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
@@ -334,6 +367,25 @@ export async function adminUpdateForwarderAddressDetails(
       console.error(`[adminUpdateForwarderAddressDetails update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
       return { ok: false, error: `บันทึกที่อยู่ไม่สำเร็จ: ${updErr.message}` };
     }
+
+    // ── propagate to box-split siblings (owner/ภูม 2026-07-21) — one shipment,
+    // one address (ALL boxes) + one carrier/paymethod (unbilled boxes only).
+    await propagateShipmentEdit(
+      admin,
+      { id: d.fId, ftrackingchn: fwd.ftrackingchn, userid: fwd.userid },
+      {
+        address: {
+          faddressname: d.name, faddresslastname: d.lastname, faddressno: d.addressno,
+          faddresssubdistrict: d.subdistrict, faddressdistrict: d.district, faddressprovince: d.province,
+          faddresszipcode: d.zipcode, faddresstel: d.tel, faddresstel2: d.tel2, faddressnote: d.note,
+        },
+        money: {
+          ...(carrierWritable ? { fshipby: carrier, paymethod: derivePayMethodForDelivery(carrier, { addressID: null, zip: d.zipcode }) } : {}),
+          ...(carrierWritable && (isMaoCarrier(carrier) || carrier === "PCS") ? { ftransportprice: 0 } : {}),
+        },
+      },
+      legacyAdminId,
+    );
 
     await logAdminAction(adminId, "tb_forwarder.update_address_details", "tb_forwarder", String(d.fId), {
       userid: fwd.userid, province: d.province, carrier, reprice,
@@ -717,9 +769,9 @@ export async function adminUpdateForwarderShipBy(
     //    + faddressprovince (the CLOSED-LIST province gate, owner 2026-07-14).
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, fstatus, fvolume, fshipby, faddressprovince")
+      .select("id, fstatus, fvolume, fshipby, faddressprovince, userid, ftrackingchn")
       .eq("id", d.fId)
-      .maybeSingle<{ id: number; fstatus: string | null; fvolume: number | string | null; fshipby: string | null; faddressprovince: string | null }>();
+      .maybeSingle<{ id: number; fstatus: string | null; fvolume: number | string | null; fshipby: string | null; faddressprovince: string | null; userid: string | null; ftrackingchn: string | null }>();
     if (fwdErr) {
       console.error(`[adminUpdateForwarderShipBy read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
       return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
@@ -752,10 +804,15 @@ export async function adminUpdateForwarderShipBy(
     };
 
     // Legacy L1595: only re-price while still pre-payment (fStatus<=5).
+    // ⚠️ Match the D1 rebrand too (PCSF→PRF เหมาๆ · PCSE→PRE ด่วน · L-MIG-04) — the
+    // legacy-only literals meant picking "PRF" (what the cart writes today) left a
+    // stale private-courier quote on a เหมาๆ row: billed that quote instead of the
+    // ฿100 flat (เดฟ 2026-07-21 integration review · same class as PCS_FAMILY above).
+    const isExpressShipBy = fShipBy === "PCSE" || fShipBy === "PRE";
     if (fStatusInt <= 5) {
-      if (fShipBy === "PCSF") {
-        update.ftransportprice = 0; // ส่งฟรี
-      } else if (fShipBy === "PCSE") {
+      if (isMaoCarrier(fShipBy)) {
+        update.ftransportprice = 0; // เหมาๆ — the ฿100 is the once-per-shipment mao fee
+      } else if (isExpressShipBy) {
         update.ftransportprice = Math.max(fVolume * 120, 50); // ส่งด่วน · floor 50
       } else if (fShipBy === "PCS") {
         update.ftransportprice = 0; // รับเองที่โกดัง
@@ -769,7 +826,7 @@ export async function adminUpdateForwarderShipBy(
     // differs from what's stored (own-fleet PCS/PCSF/PCSE need none; 'PCS' already rewrote the
     // depot province above). This "remembers" the province so the บิล/เอกสาร province is right +
     // next time the picker/guard work straight off faddressprovince. Already coverage-verified.
-    const isOwnFleetShipBy = ["PCS", "PCSF", "PCSE"].includes(fShipBy);
+    const isOwnFleetShipBy = isOwnFleetCarrier(fShipBy); // SOT — incl. the PRF/PRE rebrand
     const persistedProvince =
       !isOwnFleetShipBy && pickedProvince && pickedProvince !== storedProvince
         ? pickedProvince
@@ -791,6 +848,28 @@ export async function adminUpdateForwarderShipBy(
     if (updErr) {
       console.error(`[adminUpdateForwarderShipBy update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
       return { ok: false, error: `บันทึกผู้ขนส่งไม่สำเร็จ: ${updErr.message}` };
+    }
+
+    // ── propagate carrier to box-split siblings (owner/ภูม 2026-07-21) — one shipment,
+    // one carrier (no more "หลายขนส่ง"). fshipby + paymethod → unbilled siblings; the PCS-depot
+    // address (if PCS) + province → all siblings; ftransportprice zeroed on siblings ONLY for
+    // flat own-fleet (เหมาๆ/รับเอง · fee is the once-per-shipment anchor) — PCSE/private stay per-box.
+    {
+      const isFlatOwnFleet = isMaoCarrier(fShipBy) || fShipBy === "PCS"; // flat ฿0 legs (เหมาๆ/รับเอง) · express keeps its per-box price
+      const addressProp: Record<string, string | number> = {};
+      const moneyProp: Record<string, string | number> = {};
+      for (const [k, v] of Object.entries(update)) {
+        if (k === "adminidupdate") continue;
+        if (k.startsWith("faddress")) addressProp[k] = v;
+        else if (k === "ftransportprice") { if (isFlatOwnFleet) moneyProp.ftransportprice = 0; }
+        else moneyProp[k] = v; // fshipby, paymethod
+      }
+      await propagateShipmentEdit(
+        admin,
+        { id: d.fId, ftrackingchn: fwd.ftrackingchn, userid: fwd.userid },
+        { address: addressProp, money: moneyProp },
+        legacyAdminId,
+      );
     }
 
     // owner 2026-07-18 "เรทค่าขนส่งไม่ยอมขึ้น auto · Flash/J&T เก็บตามจริง ไม่ใช่ 50" —
@@ -1227,9 +1306,9 @@ export async function adminUpdateForwarderPayMethod(
 
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, paymethod")
+      .select("id, paymethod, userid, ftrackingchn")
       .eq("id", d.fId)
-      .maybeSingle<{ id: number; paymethod: string | null }>();
+      .maybeSingle<{ id: number; paymethod: string | null; userid: string | null; ftrackingchn: string | null }>();
     if (fwdErr) {
       console.error(`[adminUpdateForwarderPayMethod read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
       return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
@@ -1247,6 +1326,14 @@ export async function adminUpdateForwarderPayMethod(
       console.error(`[adminUpdateForwarderPayMethod update] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
       return { ok: false, error: `บันทึกวิธีเก็บเงินไม่สำเร็จ: ${updErr.message}` };
     }
+
+    // propagate วิธีเก็บเงิน to unbilled box-split siblings (owner/ภูม 2026-07-21 · one shipment).
+    await propagateShipmentEdit(
+      admin,
+      { id: d.fId, ftrackingchn: fwd.ftrackingchn, userid: fwd.userid },
+      { money: { paymethod: d.paymethod } },
+      legacyAdminId,
+    );
 
     await logAdminAction(adminId, "tb_forwarder.update_paymethod", "tb_forwarder", String(d.fId), {
       before: fwd.paymethod, after: d.paymethod,
