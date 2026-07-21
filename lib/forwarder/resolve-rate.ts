@@ -156,6 +156,23 @@ export interface ResolveRateInput {
   hasRefOrder?: boolean;
 
   /**
+   * The caller PINNED a basis on purpose (the estimator / quote tool asking
+   * "ถ้าคิดตามกิโล ได้เท่าไร") — it wants THAT basis' number, not the charge
+   * policy. Set true by actions/forwarder-quote.ts + actions/admin/quote-multimode.ts
+   * when input.basis is 'kg' or 'cbm'. When true, CHARGE_HIGHER_BASIS is skipped.
+   */
+  basisPinned?: boolean;
+
+  /**
+   * Override the CHARGE_HIGHER_BASIS policy for THIS call. Omitted → the policy
+   * const applies (what every production caller does). Tests pass `false` to keep
+   * exercising the legacy ratio / ยึดตามคิว selectors, so the day the owner says
+   * "สถานการณ์ปกติแล้ว" the revert is one const flip and the old behaviour is
+   * already proven green.
+   */
+  chargeHigherBasis?: boolean;
+
+  /**
    * ── OWNER-LOCKED DOC-TIER DISCOUNT (owner 2026-06-16) ──────────────────
    * Pacred-NATIVE conditional discount (NOT in legacy PCS). When true, after
    * the per-basis CBM rate is resolved, subtract a fixed THB/CBM discount
@@ -234,6 +251,36 @@ const round2 = (x: number) => Math.round(x * 100) / 100;
 export const COMPARISON_DEFAULT = 250;
 export const COMPARISON_MIN = 250;
 export const COMPARISON_MAX = 350;
+
+/**
+ * 🔴 CHARGE-THE-HIGHER-BASIS POLICY (owner 2026-07-21 · TEMPORARY) ─────────────
+ *
+ * owner (verbatim): *"สมการค่าเทียบตอนนี้เราว่าแปลกๆ อะ บางงานกำไรน้อย บางงานขาดทุน
+ * บางงานเลือกเกณฑ์ที่ได้กำไรน้อยกว่าหนะครับ ตอนนี้ให้เลือก ค่าที่แพงกว่าไปเก็บลูกค้า
+ * ก่อนเลยครับ จนกว่าสถานะการจะกลับมาปกติ"*
+ *
+ * WHY THE OLD BEHAVIOUR COULD PICK THE CHEAPER SIDE — two selectors, neither
+ * compares MONEY:
+ *   • ค่าเทียบ ติ๊ก → picks by the DENSITY RATIO (kg/คิว > threshold → KG). A dense
+ *     shipment whose KG price happens to be lower than its CBM price still bills KG.
+ *   • ไม่ติ๊ก → since 2026-06-23 it billed CBM ALWAYS ("ยึดตามคิว"), which drops the
+ *     legacy "ราคามากสุด" and undercharges a heavy/dense shipment. (Both quote tools
+ *     still DOCUMENT auto as "ราคามากสุด" — the comment was stale, the money was real.)
+ *
+ * THE POLICY: compute BOTH candidate prices and charge the HIGHER one. A tie keeps
+ * CBM (legacy `priceCBM >= priceKg` → CBM · forwarder.php L1993). The chosen rate,
+ * basis and fRefPrice all follow the winner so the bill/doc stay self-consistent.
+ * The doc-tier ฿/คิว discount still lowers the CBM candidate BEFORE the comparison.
+ *
+ * SCOPE: the SELL basis only. Cost, ค่าส่งไทย, เหมาๆ, crate, discounts, WHT are
+ * untouched, and NOTHING is re-priced retroactively — a stored row only changes when
+ * something already re-prices it (save dimensions / rate-card save), and the billed
+ * guards elsewhere still refuse settled rows.
+ *
+ * ⚠️ TO REVERT when the owner says สถานการณ์ปกติ: flip this to `false` — the ratio
+ * (ค่าเทียบ ติ๊ก) + "ยึดตามคิว" default come back exactly as before. Nothing else to undo.
+ */
+export const CHARGE_HIGHER_BASIS = true;
 export function clampComparison(v: number | string | null | undefined): number {
   const x = n(v);
   if (!(x > 0)) return COMPARISON_DEFAULT;
@@ -365,6 +412,39 @@ export function resolveForwarderRate(
     input.comparisonKgPerCbm > 0
       ? input.comparisonKgPerCbm
       : kgPerCbm;
+
+  // ── 🔴 CHARGE THE HIGHER BASIS (owner 2026-07-21 · see CHARGE_HIGHER_BASIS) ──
+  // Runs BEFORE both selectors, because both of them can land on the cheaper side.
+  // Skipped when the caller pinned a basis (estimator "ถ้าคิดตามกิโล ได้เท่าไร").
+  if ((input.chargeHigherBasis ?? CHARGE_HIGHER_BASIS) && !input.basisPinned) {
+    const kgProbeH = rateForBasis("kg", candidates, weight);
+    const cbmProbeH = rateForBasis("cbm", candidates, cbm);
+    const cbmDiscH = applyDocTierCbmDiscount(cbmProbeH.rate, docEligible, docDiscountCbm);
+    const priceKgH = round2(weight * kgProbeH.rate);
+    const priceCbmH = round2(cbm * cbmDiscH.rate);
+    // Tie → CBM (legacy `priceCBM >= priceKg` · forwarder.php L1993).
+    if (priceCbmH >= priceKgH) {
+      return {
+        rate: cbmDiscH.rate,
+        basis: "cbm",
+        source: cbmProbeH.source,
+        transportSubtotal: priceCbmH,
+        refPrice: 2,
+        // Both sides ฿0 = no usable rate card → the caller's hard flag, same as before.
+        rateMissing: cbmProbeH.rate === 0 && kgProbeH.rate === 0,
+        docDiscountApplied: cbmDiscH.applied,
+      };
+    }
+    return {
+      rate: kgProbeH.rate,
+      basis: "kg",
+      source: kgProbeH.source,
+      transportSubtotal: priceKgH,
+      refPrice: 1,
+      rateMissing: kgProbeH.rate === 0,
+      docDiscountApplied: 0, // the ฿/คิว discount only exists on the CBM side
+    };
+  }
 
   if (comparisonOn) {
     // ── comparison-priced (forwarder.php L1947-1980) ──

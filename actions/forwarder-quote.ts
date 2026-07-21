@@ -163,6 +163,9 @@ export async function getCustomerImportEstimate(
   const pinCbm = input.basis === "cbm";
   const comparisonEnabled = pinKg || pinCbm;
   const comparisonValue = pinKg ? 0 : pinCbm ? 1e9 : 0;
+  // A PIN means the customer asked for THAT basis' number — the charge-the-higher
+  // policy (CHARGE_HIGHER_BASIS · owner 2026-07-21) must not override it. 'auto'
+  // (no pin) now charges the higher of KG/CBM again, as this block always documented.
 
   // Owner-locked doc-tier discount. Condition 2 (โอนหยวน/ฝากนำเข้า) is implicit
   // (this IS the import estimator); condition 1 (ใบกำกับ/ใบขน) is the customer's
@@ -176,6 +179,7 @@ export async function getCustomerImportEstimate(
     const candidates = await readCandidates(admin, { userid, coID, isSvip, wh, tt: T.id, pt });
     const r = resolveForwarderRate(candidates, {
       weightKg, volumeCbm, comparisonEnabled, comparisonValue,
+      basisPinned: comparisonEnabled, // a pinned basis wins over the charge-higher policy
       docTierEligible: docTierApplied,
       docTierDiscountCbm: docDiscountCbm,
     });
