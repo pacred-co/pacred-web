@@ -229,12 +229,18 @@ export function ForwarderCheckTable({
   rows,
   showMoneyColumns,
   packingByCab,
+  cntPaidByCab,
 }: {
   rows: ForwarderCheckRow[];
   showMoneyColumns: boolean;
   /** G1 combo-flow (2026-07-08) — per-container packing-list reconcile flag keyed by
    *  cabinet_number (mig 0245). true = อัพ packing แล้ว. Drives the "📦 packing" badge. */
   packingByCab?: Record<string, boolean>;
+  /** PCS "สถานะตู้" (owner 2026-07-21) — per-container disbursement flag keyed by
+   *  cabinet_number (tb_cnt_item). true = จ่ายค่าตู้ให้ MOMO/TTW แล้ว. Informational
+   *  badge only — it NEVER gates แจ้งชำระเงิน (we bill the customer on the SELL side
+   *  regardless of whether our COST leg has been disbursed yet). */
+  cntPaidByCab?: Record<string, boolean>;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -710,6 +716,26 @@ export function ForwarderCheckTable({
                                 title="ตู้นี้ยังไม่อัพ packing list — คลิกเพื่ออัพ"
                               >
                                 ⏳ ยังไม่อัพ packing
+                              </Link>
+                            )}
+                            {/* PCS "สถานะตู้" (owner 2026-07-21) — จ่ายค่าตู้ให้ MOMO/TTW แล้วยัง.
+                                MOMO วางบิลเราเป็น TRACKING เป็นรอบ · เราตัดจ่ายเป็น ตู้ ครั้งเดียว
+                                (tb_cnt/tb_cnt_item · หน้า /admin/cnt-hs) → badge นี้บอกว่าขาต้นทุน
+                                ของตู้นี้ออกจากบัญชีเราแล้วหรือยัง. ไม่บล็อกการแจ้งชำระ (ขาขายคนละขา). */}
+                            {cntPaidByCab?.[r.cabinet_number] ? (
+                              <span
+                                className="ml-1 inline-block rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] px-1.5 py-0.5 align-middle"
+                                title="จ่ายค่าตู้ให้พาร์ทเนอร์แล้ว (มีรายการใน ตัดจ่ายค่าตู้)"
+                              >
+                                💰 จ่ายค่าตู้แล้ว
+                              </span>
+                            ) : (
+                              <Link
+                                href={`/admin/cnt-hs?q=1&cab=${encodeURIComponent(r.cabinet_number)}`}
+                                className="ml-1 inline-block rounded-full bg-slate-50 text-slate-600 border border-slate-200 text-[11px] px-1.5 py-0.5 align-middle hover:bg-slate-100"
+                                title="ยังไม่มีรายการตัดจ่ายค่าตู้ของตู้นี้ — คลิกไปหน้าจ่ายค่าตู้ (ไม่บล็อกการแจ้งชำระลูกค้า)"
+                              >
+                                ⏳ ยังไม่จ่ายค่าตู้
                               </Link>
                             )}
                           </div>

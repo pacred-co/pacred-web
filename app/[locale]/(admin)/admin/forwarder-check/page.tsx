@@ -478,6 +478,42 @@ export default async function AdminForwarderCheckPage({
     }
   }
 
+  // ── สถานะตู้ = จ่ายค่าตู้ให้ MOMO/TTW แล้วหรือยัง (PCS "สถานะตู้" column ·
+  // owner 2026-07-21 "หัวข้อที่เรายังไม่มีก็ต้องเอามาใส่") ────────────────────
+  // MOMO bills us PER TRACKING in rounds, but we DISBURSE per ตู้ once (tb_cnt /
+  // tb_cnt_item · the /admin/cnt-hs register · partial-UNIQUE on fCabinetNumber
+  // prevents paying the same ตู้ twice). At the collect step staff must be able to
+  // see whether the container's cost已 left our account — a ตู้ we haven't paid yet
+  // is where a cost surprise still hides. READ-ONLY: one scoped .in() lookup, no
+  // money write, no gate — the badge is informational (it never blocks แจ้งชำระ).
+  const cntPaidByCab: Record<string, boolean> = {};
+  {
+    const cabs = Array.from(
+      new Set(rows.map((r) => (r.cabinet_number ?? "").trim()).filter((c) => c !== "" && c !== "0")),
+    );
+    if (cabs.length > 0) {
+      const { data, error } = await admin
+        .from("tb_cnt_item")
+        // prod stores this as the quoted mixed-case column `"fCabinetNumber"`;
+        // PostgREST takes it UNQUOTED here (same shape as the proven read in
+        // actions/admin/cnt-payment.ts — do not "fix" it to a quoted literal).
+        .select("fCabinetNumber")
+        .in("fCabinetNumber", cabs);
+      if (error) {
+        // §0c — never swallow: a failed lookup must be visible in the log, but it
+        // must not break the collect queue (the badge simply renders "ยังไม่จ่าย").
+        console.error(`[forwarder-check: tb_cnt_item cabinet lookup]`, {
+          code: error.code, message: error.message, cabs: cabs.length,
+        });
+      } else {
+        for (const r of (data ?? []) as { fCabinetNumber: string | null }[]) {
+          const cab = (r.fCabinetNumber ?? "").trim();
+          if (cab) cntPaidByCab[cab] = true;
+        }
+      }
+    }
+  }
+
   return (
     <>
       {/* 11-button warehouse/container audit menu — shared with /admin/report-cnt
@@ -601,7 +637,7 @@ export default async function AdminForwarderCheckPage({
           />
         </div>
 
-        <ForwarderCheckTable rows={rows} showMoneyColumns={showMoneyColumns} packingByCab={packingByCab} />
+        <ForwarderCheckTable rows={rows} showMoneyColumns={showMoneyColumns} packingByCab={packingByCab} cntPaidByCab={cntPaidByCab} />
       </main>
     </>
   );
