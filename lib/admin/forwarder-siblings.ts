@@ -97,3 +97,86 @@ export async function fetchCountableForwarderSiblings<
         trackingSuffix(a.ftrackingchn) - trackingSuffix(b.ftrackingchn) || a.id - b.id,
     );
 }
+
+/**
+ * ── SHIPMENT-LEVEL edit propagation (owner/ภูม 2026-07-21) ────────────────────
+ * A MOMO box-split shipment is several tb_forwarder rows (base + `-N/M`) that are
+ * ONE physical shipment — "โต๊ะสนุ๊ก" split into legs + body. Legacy had 1 row per
+ * shipment, so address/carrier/เหมาๆ were naturally one unit; Pacred's N-row split
+ * broke that (edit ONE box → the others kept a stale/different address+carrier →
+ * "หลายขนส่ง" + a shipment billed with 2 addresses).
+ *
+ * This applies a shipment-level edit from the landed row to its SIBLINGS so the
+ * whole shipment stays consistent:
+ *   • `address` fields  → ALL siblings (delivery info · money-neutral · a driver
+ *                          must see one address; issued docs snapshot separately).
+ *   • `money`   fields  → UNBILLED siblings only (fstatus ≤ 5) — carrier / paymethod
+ *                          / re-priced ค่าส่งไทย. Billed rows (≥ 6) are settled; never
+ *                          re-touch their money. The เหมาๆ ฿100 stays charged ONCE
+ *                          per shipment by the mao-anchor (this only makes the rows
+ *                          agree on the carrier so the anchor is unambiguous).
+ *
+ * The landed row itself is excluded (the caller already wrote it). Best-effort:
+ * any db error is logged and swallowed — it must never fail the caller's primary
+ * single-row edit that already succeeded. Returns how many siblings each half hit.
+ */
+export async function propagateShipmentEdit(
+  admin: SupabaseClient,
+  landed: { id: number; ftrackingchn?: string | null; userid?: string | null },
+  fields: {
+    address?: Record<string, string | number>;
+    money?: Record<string, string | number>;
+  },
+  legacyAdminId: string,
+): Promise<{ addressSiblings: number; moneySiblings: number }> {
+  const out = { addressSiblings: 0, moneySiblings: 0 };
+  const base = baseTracking(landed.ftrackingchn);
+  const userid = (landed.userid ?? "").trim();
+  const hasAddress = fields.address && Object.keys(fields.address).length > 0;
+  const hasMoney = fields.money && Object.keys(fields.money).length > 0;
+  if (!base || !userid || (!hasAddress && !hasMoney)) return out;
+
+  try {
+    const { data, error } = await admin
+      .from("tb_forwarder")
+      .select("id, ftrackingchn, fstatus")
+      .eq("userid", userid)
+      .ilike("ftrackingchn", `${base}%`)
+      .neq("id", landed.id)
+      .limit(200);
+    if (error) {
+      console.error("[propagateShipmentEdit read]", { code: error.code, message: error.message, base, userid });
+      return out;
+    }
+    // EXACT base match only — "178055573" must not absorb "1780555731".
+    const siblings = (data ?? []).filter(
+      (r) => baseTracking((r as { ftrackingchn?: string | null }).ftrackingchn) === base,
+    ) as { id: number; fstatus: string | null }[];
+    if (siblings.length === 0) return out;
+
+    const addressIds = siblings.map((s) => s.id);
+    const moneyIds = siblings
+      .filter((s) => (parseInt(s.fstatus ?? "0", 10) || 0) <= 5)
+      .map((s) => s.id);
+
+    if (hasAddress && addressIds.length > 0) {
+      const { error: aErr } = await admin
+        .from("tb_forwarder")
+        .update({ ...fields.address, adminidupdate: legacyAdminId })
+        .in("id", addressIds);
+      if (aErr) console.error("[propagateShipmentEdit address]", { code: aErr.code, message: aErr.message });
+      else out.addressSiblings = addressIds.length;
+    }
+    if (hasMoney && moneyIds.length > 0) {
+      const { error: mErr } = await admin
+        .from("tb_forwarder")
+        .update({ ...fields.money, adminidupdate: legacyAdminId })
+        .in("id", moneyIds);
+      if (mErr) console.error("[propagateShipmentEdit money]", { code: mErr.code, message: mErr.message });
+      else out.moneySiblings = moneyIds.length;
+    }
+  } catch (e) {
+    console.error("[propagateShipmentEdit]", e instanceof Error ? e.message : String(e));
+  }
+  return out;
+}
