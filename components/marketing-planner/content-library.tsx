@@ -22,11 +22,11 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Archive, ArchiveRestore, BarChart3, ChevronDown, ChevronRight, Copy, ExternalLink, Eye, Pencil, Trash2, X } from "lucide-react";
 import type { ContentItem } from "@/lib/marketing-planner/types";
-import { platformIdsOf } from "@/lib/marketing-planner/types";
+import { contentTypeIdsOf, platformContentTypeIdsOf, platformIdsOf } from "@/lib/marketing-planner/types";
 import { usePlanner } from "@/lib/marketing-planner/store";
 import { isResultEmpty, RESULT_STATUS_COLOR } from "@/lib/marketing-planner/performance";
 import { fmtThaiDate } from "@/lib/marketing-planner/util";
-import { cx, EmptyState, iconBtn, SettingTag, useConfirm } from "./ui";
+import { cx, EmptyState, GroupMultiSelect, iconBtn, SettingTag, useConfirm } from "./ui";
 import { EditableDate, EditableSelect, EditableText } from "./content-grid-cells";
 
 function linkBy(c: ContentItem, namer: (id: string) => string, re: RegExp) {
@@ -139,7 +139,7 @@ export function ContentLibrary({ items, onOpen, onEdit, onResult }: { items: Con
               <th className={TH}>วันลง</th>
               <th className={TH}>เวลา</th>
               <th className={TH}>แพลตฟอร์ม</th>
-              <th className={TH}>ประเภท</th>
+              <th className={TH}>ประเภท (หลายแบบ)</th>
               <th className={TH}>เป้าหมาย</th>
               <th className={TH}>สถานะ</th>
               <th className={TH}>ผู้รับผิดชอบ</th>
@@ -200,7 +200,32 @@ export function ContentLibrary({ items, onOpen, onEdit, onResult }: { items: Con
                       </span>
                     </button>
                   </td>
-                  <td className={TD}><EditableSelect value={c.contentTypeId} options={byGroup("contentType")} colorOf={colorOf} onCommit={(v) => updateContent(c.id, { contentTypeId: v })} title="ประเภท" /></td>
+                  <td className={TD}>
+                    <GroupMultiSelect
+                      group="contentType"
+                      value={contentTypeIdsOf(c)}
+                      onChange={(ids) => {
+                        // เก็บของแพลตฟอร์มที่ผู้ใช้แยกประเภทเองไว้ (ตารางนี้ save ทันที ไม่มี
+                        // undo) — เหมือน setContentTypes ในฟอร์ม: ตามค่าเริ่มต้น → อัปเดต ·
+                        // ตั้งต่างไว้แล้ว → คงเดิม.
+                        const cur = c.platformContentTypeIds ?? {};
+                        const base = contentTypeIdsOf(c);
+                        const same = (a: string[], b: string[]) => a.length === b.length && a.every((v, i) => v === b[i]);
+                        return updateContent(c.id, {
+                          contentTypeIds: ids,
+                          contentTypeId: ids[0],
+                          platformContentTypeIds: Object.fromEntries(
+                            platformIdsOf(c).map((pid) => {
+                              const own = Object.prototype.hasOwnProperty.call(cur, pid) ? cur[pid] ?? [] : null;
+                              return [pid, own == null || same(own, base) ? ids : own];
+                            }),
+                          ),
+                        });
+                      }}
+                      placeholder="— เลือกประเภท —"
+                      className="min-w-[180px] max-w-[240px] py-1 text-[11px]"
+                    />
+                  </td>
                   <td className={TD}><EditableSelect value={c.marketingGoalId} options={byGroup("marketingGoal")} colorOf={colorOf} onCommit={(v) => updateContent(c.id, { marketingGoalId: v })} title="เป้าหมาย" /></td>
                   <td className={TD}><EditableSelect value={c.statusId} options={byGroup("status")} colorOf={colorOf} onCommit={(v) => updateContent(c.id, { statusId: v })} title="สถานะ" /></td>
                   <td className={TD}><EditableSelect value={c.ownerId} options={byGroup("owner")} colorOf={colorOf} onCommit={(v) => updateContent(c.id, { ownerId: v })} title="ผู้รับผิดชอบ" /></td>
@@ -231,16 +256,16 @@ export function ContentLibrary({ items, onOpen, onEdit, onResult }: { items: Con
                 {platformsOpen && (
                   <tr className="border-b border-border bg-primary-50/20 dark:bg-primary-900/10">
                     <td className={cx(TD, "w-9 pr-0")} />
-                    <td className={TD} colSpan={13}>
+                    <td className={TD} colSpan={14}>
                       {pids.length === 0 ? (
                         <p className="text-[11.5px] text-muted">ยังไม่ได้เลือกแพลตฟอร์ม — กด ✎ แก้ไข เพื่อเลือกแพลตฟอร์มก่อน</p>
                       ) : (
                         <div className="space-y-1.5 py-1">
-                          <p className="text-[11px] font-bold text-muted">ชื่อ/แคปชั่น แยกตามแพลตฟอร์ม — เว้นว่าง = ใช้ชื่อหลัก &quot;{c.title}&quot;</p>
+                          <p className="text-[11px] font-bold text-muted">ชื่อ/แคปชั่น + ประเภทคอนเทนต์ แยกตามแพลตฟอร์ม — ชื่อว่าง = ใช้ชื่อหลัก &quot;{c.title}&quot;</p>
                           {pids.map((pid) => (
-                            <div key={pid} className="flex items-center gap-2">
+                            <div key={pid} className="grid gap-2 rounded-lg bg-white/70 p-2 dark:bg-surface/70 sm:grid-cols-[112px_minmax(240px,1fr)_minmax(220px,1fr)] sm:items-center">
                               <span className="w-28 shrink-0"><SettingTag id={pid} /></span>
-                              <span className="min-w-0 flex-1">
+                              <span className="min-w-0">
                                 <EditableText
                                   value={c.platformTitles?.[pid] ?? ""}
                                   placeholder={c.title}
@@ -248,6 +273,23 @@ export function ContentLibrary({ items, onOpen, onEdit, onResult }: { items: Con
                                   title={`ชื่อสำหรับ ${labelOf(pid)}`}
                                 />
                               </span>
+                              <GroupMultiSelect
+                                group="contentType"
+                                value={platformContentTypeIdsOf(c, pid)}
+                                onChange={(ids) => {
+                                  const platformContentTypeIds = Object.fromEntries(
+                                    pids.map((platformId) => [platformId, platformId === pid ? ids : platformContentTypeIdsOf(c, platformId)]),
+                                  );
+                                  const contentTypeIds = [...new Set(Object.values(platformContentTypeIds).flat())];
+                                  updateContent(c.id, {
+                                    contentTypeIds,
+                                    contentTypeId: contentTypeIds[0],
+                                    platformContentTypeIds,
+                                  });
+                                }}
+                                placeholder={`— สิ่งที่จะลงใน ${labelOf(pid)} —`}
+                                className="py-1 text-[11px]"
+                              />
                             </div>
                           ))}
                         </div>
