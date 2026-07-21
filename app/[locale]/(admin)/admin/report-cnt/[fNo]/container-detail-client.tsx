@@ -605,7 +605,7 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
         {/* การขนส่ง — + ปลายทาง(COD) + ที่อยู่จัดส่ง เหมือนแถวเดี่ยว (owner 2026-07-18 รอบ3) */}
         <td className="px-2 py-2 text-[11px]">
           {a.shipBy != null ? shipByLabel(a.shipBy) : (g.length > 1 ? "หลายขนส่ง" : "—")}
-          {a.paymethod === "2" && <span className="badge badge-danger font-10" style={{ marginLeft: ".25rem" }}>ปลายทาง</span>}
+          {a.paymethod === "2" && <span className="badge badge-danger badge-pill font-10" style={{ marginLeft: ".25rem" }}>ปลายทาง</span>}
           {a.shipBy !== "PCS" && (a.addressDistrict || a.addressProvince) && (
             <>
               <br />
@@ -1107,7 +1107,7 @@ export function ContainerDetailClient({ rows, showMoney, canCheckFlow, cabinetIs
                   <td className="px-2 py-2 text-right">{fmt(r.priceother, 2)}</td>
                   <td className="font-12">
                     {shipByLabel(r.fshipby)}
-                    {r.paymethod === "2" && <span className="badge badge-danger font-10" style={{ marginLeft: ".25rem" }}>ปลายทาง</span>}
+                    {r.paymethod === "2" && <span className="badge badge-danger badge-pill font-10" style={{ marginLeft: ".25rem" }}>ปลายทาง</span>}
                     {r.fshipby !== "PCS" && (r.faddressdistrict || r.faddressprovince) && (
                       <>
                         <br />
