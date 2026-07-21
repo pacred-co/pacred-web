@@ -224,6 +224,8 @@ export async function getMultiModeQuote(input: MultiModeInput): Promise<MultiMod
   const pinCbm = input.basis === "cbm";
   const comparisonEnabled = pinKg || pinCbm;
   const comparisonValue = pinKg ? 0 : pinCbm ? 1e9 : 0;
+  // 'auto' = no pin → resolveForwarderRate charges the HIGHER of KG/CBM again
+  // (CHARGE_HIGHER_BASIS · owner 2026-07-21). A pin is passed through untouched.
 
   const addonsTotal = round2(
     n(input.addons.crate) +
@@ -251,6 +253,7 @@ export async function getMultiModeQuote(input: MultiModeInput): Promise<MultiMod
       volumeCbm: input.volumeCbm,
       comparisonEnabled,
       comparisonValue,
+      basisPinned: comparisonEnabled, // a pinned basis wins over the charge-higher policy
       docTierEligible: docTierApplied,
       docTierDiscountCbm: docDiscountCbm,
     });

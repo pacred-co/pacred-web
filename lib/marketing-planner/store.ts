@@ -17,6 +17,7 @@ import type { ContentItem, ContentResult, JobMessageKind, JobOrder, JobStatus, K
 } from "./types";
 import { contentTypeIdsOf, keywordPlatformOf, PLANNER_SCHEMA_VERSION, platformIdsOf, serviceIdsOf } from "./types";
 import { buildSeed, DEFAULT_KEYWORDS, DEFAULT_TARGETS } from "./seed";
+import { buildDemoContent, DEMO_CONTENT_ID } from "./demo-content";
 import { enrichResult } from "./performance";
 import { distributeMonth, type PlanOverrides } from "./production-plan";
 import { deleteMarketingRow, resetMarketing as resetMarketingAction, saveMarketing } from "@/actions/admin/marketing-planner";
@@ -119,6 +120,8 @@ export type PlannerContextValue = {
   updateKeyword: (id: string, patch: Partial<KeywordItem>) => void;
   deleteKeyword: (id: string) => void;
   loadSampleKeywords: () => void;
+  /** ใส่งานตัวอย่างกรอกครบทุกช่อง 1 ชิ้น ลงวันที่นั้น → คืน id. กดซ้ำ = ทับตัวเดิม. */
+  loadDemoContent: (publishDate: string) => string;
 };
 
 const PlannerContext = createContext<PlannerContextValue | null>(null);
@@ -484,6 +487,17 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
   const deleteKeyword = useCallback<PlannerContextValue["deleteKeyword"]>((id) => { apply((d) => ({ ...d, keywords: (d.keywords ?? []).filter((k) => k.id !== id) })); void deleteMarketingRow("mkt_keywords", id); }, [apply]);
   const loadSampleKeywords = useCallback<PlannerContextValue["loadSampleKeywords"]>(() => apply((d) => ({ ...d, keywords: [...DEFAULT_KEYWORDS] })), [apply]);
 
+  /** ใส่งานตัวอย่างที่กรอกครบทุกช่อง 1 ชิ้น ลงวันที่ที่เลือก (owner 2026-07-21).
+   *  id คงที่ → กดซ้ำ = ทับตัวเดิม ไม่งอกเป็นสิบอัน. ผู้รับผิดชอบใช้ผู้ใช้ปัจจุบัน
+   *  (หรือคนแรกในทีม) ป้ายชื่อ/รูปถึงจะขึ้นจริง ไม่เป็นช่องว่าง. */
+  const loadDemoContent = useCallback<PlannerContextValue["loadDemoContent"]>((publishDate) => {
+    const owner = users.find((u) => u.id === currentUserId)?.id ?? users[0]?.id;
+    const co = users.filter((u) => u.id !== owner).slice(0, 2).map((u) => u.id);
+    const demo = buildDemoContent(publishDate, owner, co);
+    apply((d) => ({ ...d, contents: [demo, ...d.contents.filter((c) => c.id !== DEMO_CONTENT_ID)] }));
+    return demo.id;
+  }, [apply, users, currentUserId]);
+
   const value = useMemo<PlannerContextValue>(
     () => ({
       ready,
@@ -497,7 +511,7 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
       setResult, setContentDate, setContentStatus, resetAll,
       targets, presets, savePreset, deletePreset, applyPresetTargets, setLongTotal, setShortTarget, setArticlePerDay, generateFromPlan,
       currentUserId, jobs, createJob, claimJob, addJobMessage, submitJob, rejectJob, approveJob,
-      keywords, addKeyword, importKeywords, updateKeyword, deleteKeyword, loadSampleKeywords,
+      keywords, addKeyword, importKeywords, updateKeyword, deleteKeyword, loadSampleKeywords, loadDemoContent,
     }),
     [
       ready, users, userById, userName, userColor, data.settings, data.contents, byGroup, allByGroup, byId, labelOf, colorOf, isSettingInUse,
@@ -505,7 +519,7 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
       duplicateContent, archiveContent, restoreContent, setResult, setContentDate, setContentStatus, resetAll,
       targets, presets, savePreset, deletePreset, applyPresetTargets, setLongTotal, setShortTarget, setArticlePerDay, generateFromPlan,
       currentUserId, jobs, createJob, claimJob, addJobMessage, submitJob, rejectJob, approveJob,
-      keywords, addKeyword, importKeywords, updateKeyword, deleteKeyword, loadSampleKeywords,
+      keywords, addKeyword, importKeywords, updateKeyword, deleteKeyword, loadSampleKeywords, loadDemoContent,
     ],
   );
 

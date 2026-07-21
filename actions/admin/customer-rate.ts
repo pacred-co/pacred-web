@@ -47,6 +47,7 @@ import {
   type WarehouseId,
 } from "@/lib/admin/customer-rate-tables";
 import { getResolvedFloor } from "@/lib/admin/sell-floor-config";
+import { buildRateHistoryRows } from "@/lib/admin/customer-rate-history";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 
 // ── resolveLegacyAdminId (duplicated · see rate-edits.ts note) ───────────
@@ -148,6 +149,11 @@ const saveSchema = z.object({
   userid: z.string().trim().min(1).max(10),
   sourceWarehouse: z.enum(["1", "2"]),
   cells: z.array(cellSchema).length(8),
+  // ── ที่มาของเรทนี้ (owner 2026-07-21 "อยากให้ช่วงวันที่ มันอ้างอิงกันด้วย") ──
+  // ใช้บันทึกประวัติเท่านั้น (customer_rate_history) — ไม่แตะการคิดเงิน. ว่าง = ตั้งมือ.
+  packageId: z.string().trim().max(40).optional(),
+  packageLabel: z.string().trim().max(120).optional(),
+  quotationRef: z.string().trim().max(60).optional(),
 });
 export type SaveCustomerRateInput = z.infer<typeof saveSchema>;
 
@@ -390,18 +396,22 @@ export async function adminSaveCustomerRate(
           const eligibleIds = eligible.map((t) => Number((t as { id: number }).id));
           const onOpenBill = new Set<number>();
           if (eligibleIds.length > 0) {
-            const { data: billItems } = await admin
+            const { data: billItems, error: billErr } = await admin
               .from("tb_forwarder_invoice_item")
               .select("forwarder_id, invoice_id")
               .in("forwarder_id", eligibleIds);
+            // อ่านไม่ได้ = ไม่รู้ว่าออเดอร์ไหนอยู่บนบิลที่เปิดค้าง → ห้ามเดาว่า "ไม่มี"
+            // แล้ว re-price ทับของที่วางบิลไปแล้ว. เงียบไว้ปลอดภัยกว่า (log ไว้สืบ).
+            if (billErr) console.error("[customer-rate re-price] read bill items failed", { userid, wh, code: billErr.code, message: billErr.message });
             const invIds = Array.from(new Set((billItems ?? []).map((b) => Number((b as { invoice_id: number }).invoice_id))));
             if (invIds.length > 0) {
-              const { data: openInvs } = await admin
+              const { data: openInvs, error: openErr } = await admin
                 .from("tb_forwarder_invoice")
                 .select("id")
                 .in("id", invIds)
                 .eq("status", "issued")
                 .is("slip_status", null);
+              if (openErr) console.error("[customer-rate re-price] read open invoices failed", { userid, wh, code: openErr.code, message: openErr.message });
               const openInvSet = new Set((openInvs ?? []).map((v) => Number((v as { id: number }).id)));
               for (const b of billItems ?? []) {
                 const bi = b as { forwarder_id: number; invoice_id: number };
@@ -422,6 +432,27 @@ export async function adminSaveCustomerRate(
         }
       } catch (e) {
         console.error(`[customer-rate re-price block] failed`, { userid, wh, e });
+      }
+
+      // ── ประวัติเรท (owner 2026-07-21) — APPEND-ONLY, ไม่แตะการคิดเงิน ──
+      // เขียน "หลัง" ตั้งเรทสำเร็จแล้วเท่านั้น + best-effort: ประวัติล้ม **ห้าม**
+      // ทำให้การบันทึกเรทล้ม (คนทำงานต้องตั้งเรทได้เสมอ แม้ตาราง 0269 ยังไม่ apply).
+      // ทุกแถวใช้ effective_from เดียวกันเป๊ะ → timeline ต่อช่องไม่เหลื่อมกันเอง.
+      try {
+        const rows = buildRateHistoryRows({
+          userid,
+          sourceWarehouse: wh,
+          cells: d.cells,
+          packageId: d.packageId,
+          packageLabel: d.packageLabel,
+          quotationRef: d.quotationRef,
+          setBy: legacyAdminId || adminId,
+          effectiveFrom: new Date().toISOString(),
+        });
+        const { error: histErr } = await admin.from("customer_rate_history").insert(rows);
+        if (histErr) console.error("[customer-rate history] insert failed", { userid, wh, code: histErr.code, message: histErr.message });
+      } catch (e) {
+        console.error("[customer-rate history] block failed", { userid, wh, e });
       }
 
       await logAdminAction(adminId, "tb_rate_custom.save", "tb_rate_custom", `${userid}/${wh}`, {
