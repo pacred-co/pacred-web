@@ -21,6 +21,10 @@
 import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { adminUpdateForwarderDimensions } from "@/actions/admin/forwarders-edit";
+import {
+  adminRenameForwarderTracking,
+  adminResetForwarderFamilyFromSource,
+} from "@/actions/admin/forwarder-identity";
 import { MAO_FLAT_FEE } from "@/lib/forwarder/mao-fee";
 import { validateComparisonPricePair } from "@/lib/forwarder/comparison-guard";
 import { evaluateRateModeGuard } from "@/lib/forwarder/rate-mode-guard";
@@ -60,6 +64,9 @@ export type PerTrackingRow = {
   fTransportPriceChnThb: number;  // ค่าจีน+ ภายหลัง
   priceOther: number;             // ค่าอื่นๆ
   fShippingService: number;       // ค่าบริการ
+  priceCrate: number;             // ค่าตีลังไม้ (owner 2026-07-21 · PCS "ค่าตีลัง")
+  /** row fstatus — identity fields (แทรคกิ้ง/กล่อง) lock on billed rows (≥6). */
+  fstatus: string;
 };
 
 type Props = {
@@ -204,25 +211,57 @@ export function PerTrackingEditorClient({
 
   // ── per-tracking rows (string-valued for free typing) ──
   type RowState = {
-    id: number; tracking: string; detail: string; boxes: number; volumeIsTotal: boolean;
+    id: number; tracking: string; detail: string; boxes: string; volumeIsTotal: boolean;
     productType: PerTrackingRow["productType"];
     warehouseChina: PerTrackingRow["warehouseChina"];
     warehouseName: PerTrackingRow["warehouseName"];
     weight: string; width: string; length: string; height: string; cbm: string;
     fTransportPrice: string; fDiscount: string; fTransportPriceChnThb: string;
-    priceOther: string; fShippingService: string;
+    priceOther: string; fShippingService: string; priceCrate: string;
+    fstatus: string;
   };
   const [rows, setRows] = useState<RowState[]>(() =>
     rowsInit.map((r) => ({
-      id: r.id, tracking: r.tracking, detail: r.detail, boxes: r.boxes, volumeIsTotal: r.volumeIsTotal,
+      id: r.id, tracking: r.tracking, detail: r.detail, boxes: String(r.boxes), volumeIsTotal: r.volumeIsTotal,
       productType: r.productType, warehouseChina: r.warehouseChina, warehouseName: r.warehouseName,
       weight: String(r.weight), width: String(r.width), length: String(r.length),
       height: String(r.height), cbm: String(r.cbm),
       fTransportPrice: String(r.fTransportPrice), fDiscount: String(r.fDiscount),
       fTransportPriceChnThb: String(r.fTransportPriceChnThb), priceOther: String(r.priceOther),
-      fShippingService: String(r.fShippingService),
+      fShippingService: String(r.fShippingService), priceCrate: String(r.priceCrate),
+      fstatus: r.fstatus,
     })),
   );
+
+  // ── 🔓 IDENTITY unlock (owner 2026-07-21 "แก้ เลขแทรคกิ้ง เลขชิปเม้น จำนวนกล่อง
+  // ได้ · มี action กดก่อน 1 ชั้น กันมือลั่น/แมวเหยียบคีย์บอร์ด") ──
+  // Locked by default: the tracking / เลขชิปเม้น / จำนวนกล่อง fields render read-only
+  // until the staff explicitly unlocks (with a confirm). Billed rows (fstatus ≥ 6)
+  // NEVER unlock (accounting owns them).
+  const [unlocked, setUnlocked] = useState(false);
+  const stripSuffix = (t: string) => t.replace(/-\d+(?:\/\d+)?$/, "");
+  const initialBase = stripSuffix((rowsInit[0]?.tracking ?? "").trim());
+  // per-row original tracking + suffix (for the เลขชิปเม้น base rename compose)
+  const origTrackings = useMemo(() => rowsInit.map((r) => r.tracking.trim()), [rowsInit]);
+  const origBoxes = useMemo(() => rowsInit.map((r) => r.boxes), [rowsInit]);
+  const [baseInput, setBaseInput] = useState(initialBase);
+  const rowIsBilled = (r: RowState) => {
+    const s = parseInt(r.fstatus, 10);
+    return Number.isFinite(s) && s >= 6;
+  };
+  // เลขชิปเม้น (ฐาน) rename — recompose every row's tracking as newBase + its
+  // ORIGINAL suffix ("-2/3" …). Billed rows keep their tracking (server refuses too).
+  function onBaseChange(v: string) {
+    setBaseInput(v);
+    setRows((rs) =>
+      rs.map((r, i) => {
+        if (rowIsBilled(r)) return r;
+        const orig = origTrackings[i] ?? r.tracking;
+        const suffix = orig.startsWith(initialBase) ? orig.slice(initialBase.length) : "";
+        return { ...r, tracking: `${v.trim()}${suffix}` };
+      }),
+    );
+  }
 
   function patch(idx: number, p: Partial<RowState>) {
     setRows((rs) => rs.map((r, i) => (i === idx ? { ...r, ...p } : r)));
@@ -260,19 +299,20 @@ export function PerTrackingEditorClient({
     const comparisonOn = customComparison === "1";
     const threshold = parseFloat(comparisonValue) || 0;
     // ยอดรวมทุกแทค (PCS treats the order as one) — sum weight/cbm/adders.
-    let w = 0, v = 0, chnThb = 0, service = 0, other = 0, thai = 0, discount = 0;
+    let w = 0, v = 0, chnThb = 0, service = 0, other = 0, thai = 0, discount = 0, crate = 0;
     for (const r of rows) {
       w += parseFloat(r.weight) || 0;
       // row-TOTAL CBM (famountcount rule) — the cbm INPUT is per-box on a
       // per-box-convention row; summing it raw made ค่าเทียบ = kg/Σper-box (e.g.
       // 261÷0.704 = 370 > 250) → the save flipped a bulky shipment to WEIGHT
       // pricing every time staff hit บันทึกขนาด (owner 2026-07-19 · the revert engine).
-      v += (parseFloat(r.cbm) || 0) * (r.volumeIsTotal ? 1 : Math.max(r.boxes || 0, 1));
+      v += (parseFloat(r.cbm) || 0) * (r.volumeIsTotal ? 1 : Math.max(parseInt(r.boxes, 10) || 0, 1));
       chnThb += parseFloat(r.fTransportPriceChnThb) || 0;
       service += parseFloat(r.fShippingService) || 0;
       other += parseFloat(r.priceOther) || 0;
       thai += parseFloat(r.fTransportPrice) || 0;
       discount += parseFloat(r.fDiscount) || 0;
+      crate += parseFloat(r.priceCrate) || 0;
     }
     // เหมาๆ (Pacred PRF · owner 2026-06-23): in-Thailand delivery is the flat ฿100 fee.
     // Surface it even when the per-row fTransportPrice hasn't been stamped yet (the
@@ -342,7 +382,7 @@ export function PerTrackingEditorClient({
     // ที่ตอนบันทึกจะเขียน 50 → preview กับยอดที่ save ตรงกัน ไม่งง). floor เฉพาะเมื่อมี
     // ยอดจริง (>0) — ยอด 0 (ยังไม่คำนวณ/ไม่มีเรท) ไม่แตะ.
     if (transport > 0 && transport < 50) transport = 50;
-    const subtotal = transport + chnThb + service + other + thai;
+    const subtotal = transport + chnThb + service + other + thai + crate;
     // หาค่าเทียบ line — the threshold in effect (custom ค่าเทียบ when ticked, else
     // the resolver's threshold = the customer's ค่าเทียบ or the system default 250).
     const compareThreshold = comparisonOn ? threshold : (profileComparisonValue || 250);
@@ -350,7 +390,7 @@ export function PerTrackingEditorClient({
       cr, useProfile, profileRate, profileBasis,
       rateKg, rateCbm, comparisonOn, threshold, compareThreshold, count: rows.length,
       label: rows.length > 1 ? "รวมทุกแทรคกิง" : (rows[0]?.tracking || "—"),
-      w, v, pKg, pCbm, pKgRate, pCbmRate, kgPerCbm, byWeight, transport, chnThb, service, other, thai, discount, net: subtotal - discount,
+      w, v, pKg, pCbm, pKgRate, pCbmRate, kgPerCbm, byWeight, transport, chnThb, service, other, thai, discount, crate, net: subtotal - discount,
     };
   }, [
     rows, isMao, customRate, customRateKg, customRateCbm, customComparison, comparisonValue,
@@ -407,17 +447,56 @@ export function PerTrackingEditorClient({
       return;
     }
 
+    // ── identity edits (unlock-gated · owner 2026-07-21) — collect the renames +
+    // box-count changes so the confirm names them and the save applies them FIRST.
+    const renames = unlocked
+      ? rows
+          .map((r, i) => ({ r, orig: origTrackings[i] ?? r.tracking }))
+          .filter(({ r, orig }) => !rowIsBilled(r) && r.tracking.trim() !== "" && r.tracking.trim() !== orig)
+      : [];
+    const boxChanges = unlocked
+      ? rows.filter((r, i) => !rowIsBilled(r) && (parseInt(r.boxes, 10) || 0) !== (origBoxes[i] ?? 0))
+      : [];
+    if (unlocked) {
+      for (const r of rows) {
+        const b = parseInt(r.boxes, 10);
+        if (!Number.isFinite(b) || b < 0) {
+          setError(`แทค ${r.tracking}: จำนวนกล่องต้องเป็นตัวเลข ≥ 0`);
+          return;
+        }
+      }
+      for (const { r } of renames) {
+        if (r.tracking.trim().length < 3) {
+          setError(`เลขแทรคกิ้ง "${r.tracking}" สั้นเกินไป`);
+          return;
+        }
+      }
+    }
+
     // §0f confirm-before-mutate — both saves get an explicit confirm so no one
     // ลั่นปุ่ม. The two prompts spell out the different consequence (advance vs stay).
+    const identityNote =
+      renames.length > 0 || boxChanges.length > 0
+        ? ` (รวมแก้ข้อมูลหลัก: เปลี่ยนเลขแทรคกิ้ง ${renames.length} แถว · จำนวนกล่อง ${boxChanges.length} แถว)`
+        : "";
     const ok = await confirm(
       advanceToPayment
-        ? `ยืนยันบันทึกขนาด/ราคา ${rows.length} แทรคกิง แล้ว "ส่งไปรอชำระเงิน" (ออเดอร์ที่ตั้งเรทแล้วจะย้ายไปสถานะรอชำระเงิน) ?`
-        : `ยืนยัน "บันทึก" ${rows.length} แทรคกิง — อัพเดตน้ำหนัก/ขนาด/CBM/ราคา (สถานะคงเดิม · การเก็บเงินไปกดที่รายงานตู้) ?`,
+        ? `ยืนยันบันทึกขนาด/ราคา ${rows.length} แทรคกิง แล้ว "ส่งไปรอชำระเงิน" (ออเดอร์ที่ตั้งเรทแล้วจะย้ายไปสถานะรอชำระเงิน) ?${identityNote}`
+        : `ยืนยัน "บันทึก" ${rows.length} แทรคกิง — อัพเดตน้ำหนัก/ขนาด/CBM/ราคา (สถานะคงเดิม · การเก็บเงินไปกดที่รายงานตู้) ?${identityNote}`,
     );
     if (!ok) return;
 
     setResults({});
     startTransition(async () => {
+      // ── 1. identity renames FIRST (per-row action w/ dup-guard) — a failed
+      // rename aborts the whole save so staff resolves the duplicate first.
+      for (const { r, orig } of renames) {
+        const res = await adminRenameForwarderTracking({ fid: r.id, newTracking: r.tracking.trim() });
+        if (!res.ok) {
+          setError(`เปลี่ยนเลขแทรคกิ้ง ${orig} → ${r.tracking.trim()} ไม่สำเร็จ: ${res.error}`);
+          return;
+        }
+      }
       const fails: string[] = [];
       const nextResults: Record<number, RowResult> = {};
       // ภูม 2026-06-25 — trackings whose save did NOT advance to รอชำระเงิน (freight=0).
@@ -451,6 +530,13 @@ export function PerTrackingEditorClient({
           priceOther: parseFloat(r.priceOther) || 0,
           fTransportPrice: parseFloat(r.fTransportPrice) || 0,
           fShippingService: parseFloat(r.fShippingService) || 0,
+          // ค่าตีลังไม้ per row (owner 2026-07-21 · PCS "ค่าตีลัง" column)
+          priceCrate: parseFloat(r.priceCrate) || 0,
+          // จำนวนกล่อง — only when unlocked + actually changed (identity edit);
+          // the action re-prices on the corrected count in the same save.
+          ...(unlocked && boxChanges.some((b) => b.id === r.id)
+            ? { boxCount: parseInt(r.boxes, 10) || 0 }
+            : {}),
           fWarehouseChina: r.warehouseChina,
           fWarehouseName: r.warehouseName,
         });
@@ -468,6 +554,14 @@ export function PerTrackingEditorClient({
       setResults(nextResults);
       if (fails.length > 0) {
         setError(`บันทึกไม่สำเร็จ ${fails.length}/${rows.length} แถว — ${fails[0]}`);
+        return;
+      }
+      // identity renames landed — hard-reload so the page (URL fetch, items table,
+      // header) re-renders on the NEW tracking/base (a router.refresh alone can't
+      // re-seed this client's useState rows).
+      if (renames.length > 0) {
+        setSuccess(`✓ บันทึกแล้ว (เปลี่ยนเลขแทรคกิ้ง ${renames.length} แถว) — กำลังโหลดหน้าใหม่…`);
+        setTimeout(() => window.location.reload(), 900);
         return;
       }
       if (!advanceToPayment) {
@@ -493,6 +587,36 @@ export function PerTrackingEditorClient({
       }
       router.refresh();
       setTimeout(() => setSuccess(null), 8000);
+    });
+  }
+
+  // ── ↺ Reset ค่าเริ่มต้นจากต้นทาง (owner 2026-07-21 "เผื่อพนักงานลั่น แก้จนพัง —
+  // ดึงจาก MOMO Live · ถ้ามีแพคกิ้งลิสก็เชื่อแพคกิ้งลิส") — server action decides the
+  // source (packing snapshot first, else MOMO Live via the audited reconcile brain),
+  // touches UNBILLED rows only, then we hard-reload so every field re-seeds.
+  async function onResetFromSource() {
+    setError(null);
+    setSuccess(null);
+    const ok = await confirm(
+      "↺ ดึงค่าเริ่มต้นจากต้นทาง — จำนวนกล่อง/น้ำหนัก/คิว/ขนาด จะถูกเขียนทับด้วยข้อมูลต้นทาง " +
+      "(มีแพคกิ้งลิส = ใช้แพคกิ้งลิส · ไม่มี = MOMO Live) เฉพาะแถวที่ยังไม่เข้าคิวเก็บเงิน — ยืนยัน?",
+    );
+    if (!ok) return;
+    startTransition(async () => {
+      const res = await adminResetForwarderFamilyFromSource({ fid: rows[0]?.id ?? 0 });
+      if (!res.ok) {
+        setError(`reset ไม่สำเร็จ: ${res.error}`);
+        return;
+      }
+      const d = res.data!;
+      const src = d.source === "packing" ? "แพคกิ้งลิส" : "MOMO Live";
+      setSuccess(
+        `✓ ดึงค่าเริ่มต้นจาก${src}แล้ว — อัพเดต ${d.updated} แถว · re-price ${d.repriced} แถว` +
+        (d.skippedBilled > 0 ? ` · ข้ามแถวที่เข้าคิวเก็บเงิน ${d.skippedBilled} แถว` : "") +
+        (d.warnings.length > 0 ? ` · ⚠ ${d.warnings[0]}` : "") +
+        " — กำลังโหลดหน้าใหม่…",
+      );
+      setTimeout(() => window.location.reload(), 1400);
     });
   }
 
@@ -558,6 +682,52 @@ export function PerTrackingEditorClient({
         )}
       </div>
 
+      {/* ── 🔓 identity unlock + ↺ reset (owner 2026-07-21 · กันมือลั่น/แมวเหยียบคีย์บอร์ด) ── */}
+      <div className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 ${unlocked ? "border-amber-300 bg-amber-50/50" : "border-border bg-surface-alt/30"}`}>
+        {!unlocked ? (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={async () => {
+              const ok = await confirm(
+                "🔓 ปลดล็อกแก้ไขข้อมูลหลัก — เลขแทรคกิ้ง · เลขชิปเม้น · จำนวนกล่อง จะแก้ได้โดยตรง " +
+                "(กันมือลั่น 1 ชั้น) — ยืนยันปลดล็อก?",
+              );
+              if (ok) setUnlocked(true);
+            }}
+            className="rounded-md border border-border bg-white dark:bg-surface px-3 py-1.5 text-xs font-medium hover:bg-surface-alt disabled:opacity-50"
+          >
+            🔒 แก้ไขข้อมูลหลัก (เลขแทรคกิ้ง · เลขชิปเม้น · จำนวนกล่อง)
+          </button>
+        ) : (
+          <>
+            <span className="text-xs font-semibold text-amber-700">🔓 ปลดล็อกแล้ว — แก้ในตารางแล้วกด “บันทึก”</span>
+            <label className="flex items-center gap-1.5 text-xs">
+              <span className="text-muted">เลขชิปเม้น (ฐาน):</span>
+              <input
+                type="text"
+                value={baseInput}
+                onChange={(e) => onBaseChange(e.target.value)}
+                disabled={pending}
+                className="h-8 w-48 rounded-md border border-amber-300 bg-white dark:bg-surface px-2 font-mono text-xs focus:border-amber-500 focus:outline-none"
+              />
+              <span className="text-[11px] text-muted">(เปลี่ยนแล้วเลขแทรคกิ้งทุกกล่องเปลี่ยนตาม -N/M เดิม)</span>
+            </label>
+            <button type="button" disabled={pending} onClick={() => { setUnlocked(false); setBaseInput(initialBase); setRows((rs) => rs.map((r, i) => ({ ...r, tracking: origTrackings[i] ?? r.tracking, boxes: String(origBoxes[i] ?? r.boxes) }))); }}
+              className="rounded-md border border-border px-2.5 py-1 text-[11px] text-muted hover:bg-surface-alt">ยกเลิก/ล็อกคืน</button>
+          </>
+        )}
+        <span className="mx-1 hidden h-5 w-px bg-border sm:block" />
+        <button
+          type="button"
+          disabled={pending}
+          onClick={onResetFromSource}
+          className="rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 hover:bg-sky-100 disabled:opacity-50"
+        >
+          ↺ ดึงค่าเริ่มต้นจากต้นทาง (แพคกิ้งลิสก่อน · ไม่มีใช้ MOMO Live)
+        </button>
+      </div>
+
       {/* ── per-tracking rows ── */}
       <div className="overflow-x-auto scrollbar-x-visible rounded-xl border border-border">
         <table className="w-full text-sm">
@@ -575,6 +745,7 @@ export function PerTrackingEditorClient({
               <th className={`${TH} text-red-600`}>CBM</th>
               <th className={`${TH} text-red-600`}>ค่าขนส่งไทย</th>
               <th className={TH}>ส่วนลด</th>
+              <th className={TH}>ค่าตีลัง</th>
               <th className={TH}>ค่าจีน+</th>
               <th className={TH}>ค่าอื่นๆ</th>
               <th className={TH}>ค่าบริการ</th>
@@ -584,7 +755,17 @@ export function PerTrackingEditorClient({
             {rows.map((r, idx) => (
               <tr key={r.id} className="border-t border-border align-top [&>td]:px-1.5 [&>td]:py-1.5 [&>td]:border-r [&>td]:border-border">
                 <td className="min-w-[170px] max-w-[260px] text-left">
-                  <div className="font-mono text-[11px] font-medium break-words">{r.tracking || "—"}</div>
+                  {unlocked && !rowIsBilled(r) ? (
+                    <input
+                      type="text"
+                      value={r.tracking}
+                      onChange={(e) => patch(idx, { tracking: e.target.value })}
+                      disabled={pending}
+                      className="h-8 w-full rounded-md border border-amber-300 bg-amber-50/50 px-2 font-mono text-[11px] focus:border-amber-500 focus:outline-none"
+                    />
+                  ) : (
+                    <div className="font-mono text-[11px] font-medium break-words">{r.tracking || "—"}{unlocked && rowIsBilled(r) && <span className="ml-1 text-[10px] text-muted">🔒 บิลแล้ว</span>}</div>
+                  )}
                   {r.detail && r.detail !== r.tracking && <div className="text-[11px] text-muted break-words">{r.detail}</div>}
                   {results[r.id] && (
                     <div className="mt-1 inline-flex items-center gap-1 rounded bg-green-100 px-1.5 py-0.5 text-[11px] font-medium text-green-700">
@@ -593,7 +774,21 @@ export function PerTrackingEditorClient({
                     </div>
                   )}
                 </td>
-                <td className="text-center font-mono text-xs text-muted">{r.boxes}</td>
+                <td className="text-center font-mono text-xs text-muted">
+                  {unlocked && !rowIsBilled(r) ? (
+                    <input
+                      type="number"
+                      min={0}
+                      step="1"
+                      value={r.boxes}
+                      onChange={(e) => patch(idx, { boxes: e.target.value })}
+                      disabled={pending}
+                      className="h-8 w-16 rounded-md border border-amber-300 bg-amber-50/50 px-1.5 text-center font-mono text-xs focus:border-amber-500 focus:outline-none"
+                    />
+                  ) : (
+                    r.boxes
+                  )}
+                </td>
                 <td><select value={r.warehouseChina} onChange={(e) => patch(idx, { warehouseChina: e.target.value as RowState["warehouseChina"] })} disabled={pending} className={SEL}>{WAREHOUSE_CHINA.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}</select></td>
                 <td><select value={r.warehouseName} onChange={(e) => patch(idx, { warehouseName: e.target.value as RowState["warehouseName"] })} disabled={pending} className={SEL}>{WAREHOUSE_TH.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}</select></td>
                 <td><select value={r.productType} onChange={(e) => patch(idx, { productType: e.target.value as RowState["productType"] })} disabled={pending} className={SEL}>{PRODUCT_TYPES.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}</select></td>
@@ -604,12 +799,38 @@ export function PerTrackingEditorClient({
                 <td><input type="number" min={0} step="0.00001" value={r.cbm} onChange={(e) => patch(idx, { cbm: e.target.value })} disabled={pending} className={CELL} placeholder="0.00000" /></td>
                 <td><input type="number" min={0} step="0.01" value={r.fTransportPrice} onChange={(e) => patch(idx, { fTransportPrice: e.target.value })} disabled={pending} className={CELL} placeholder="0.00" /></td>
                 <td><input type="number" min={0} step="0.01" value={r.fDiscount} onChange={(e) => patch(idx, { fDiscount: e.target.value })} disabled={pending} className={CELL} placeholder="0.00" /></td>
+                <td><input type="number" min={0} step="0.01" value={r.priceCrate} onChange={(e) => patch(idx, { priceCrate: e.target.value })} disabled={pending} className={CELL} placeholder="0.00" /></td>
                 <td><input type="number" min={0} step="0.01" value={r.fTransportPriceChnThb} onChange={(e) => patch(idx, { fTransportPriceChnThb: e.target.value })} disabled={pending} className={CELL} placeholder="0.00" /></td>
                 <td><input type="number" min={0} step="0.01" value={r.priceOther} onChange={(e) => patch(idx, { priceOther: e.target.value })} disabled={pending} className={CELL} placeholder="0.00" /></td>
                 <td><input type="number" min={0} step="0.01" value={r.fShippingService} onChange={(e) => patch(idx, { fShippingService: e.target.value })} disabled={pending} className={CELL} placeholder="0.00" /></td>
               </tr>
             ))}
           </tbody>
+          {/* ── ยอดสรุปรวมท้ายตาราง (owner 2026-07-21 "ยอดสรุปข้างล่างก็ยังไม่มี" ·
+              PCS report-cnt "รวม" row) — Σ over every editor row, live as staff types. */}
+          <tfoot>
+            <tr className="border-t-2 border-orange-300 bg-orange-50/70 font-semibold [&>td]:px-1.5 [&>td]:py-1.5 [&>td]:border-r [&>td]:border-border text-xs">
+              <td className="text-left text-orange-800">รวม {rows.length} แทรคกิง</td>
+              <td className="text-center font-mono tabular-nums">
+                {rows.reduce((s, r) => s + (parseInt(r.boxes, 10) || 0), 0)}
+              </td>
+              <td colSpan={3} />
+              <td className="text-right font-mono tabular-nums">{nf(calc.w, 2)}</td>
+              <td colSpan={3} />
+              <td className="text-right font-mono tabular-nums text-red-700">{nf(calc.v, 5)}</td>
+              <td className="text-right font-mono tabular-nums">{nf(calc.thai, 2)}</td>
+              <td className="text-right font-mono tabular-nums">{nf(calc.discount, 2)}</td>
+              <td className="text-right font-mono tabular-nums">{nf(calc.crate, 2)}</td>
+              <td className="text-right font-mono tabular-nums">{nf(calc.chnThb, 2)}</td>
+              <td className="text-right font-mono tabular-nums">{nf(calc.other, 2)}</td>
+              <td className="text-right font-mono tabular-nums">{nf(calc.service, 2)}</td>
+            </tr>
+            <tr className="bg-orange-100/70 [&>td]:px-1.5 [&>td]:py-1 text-[11px]">
+              <td colSpan={16} className="text-right text-orange-900">
+                ค่านำเข้าจีน-ไทย {baht(calc.transport)} + ค่าอื่นๆ ทั้งหมด − ส่วนลด = <b className="text-red-700 text-[13px]">รวมขาย {baht(calc.net)}</b>
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 
@@ -664,6 +885,7 @@ export function PerTrackingEditorClient({
           <div className="rounded-lg border border-border bg-white dark:bg-surface p-3 space-y-0.5 text-[11px]">
             <Sum label="ค่านำเข้าจีน-ไทย" value={calc.transport} />
             <Sum label="ค่าขนส่งจีน+" value={calc.chnThb} />
+            <Sum label="ค่าตีลังไม้" value={calc.crate} />
             <Sum label="ค่าบริการ" value={calc.service} />
             <Sum label="ค่าอื่นๆ CO" value={calc.other} />
             {isMao ? (

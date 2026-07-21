@@ -896,6 +896,23 @@ export async function adminReportCntBillToCustomer(
       // Best-effort: a log failure does NOT roll back the flip above.
       await appendStatusLog(admin, fID, fromStatus, "5", adminIdSafe);
 
+      // ── (e2) B3 (2026-07-21 · flow-gap sweep) — the row is now billed (4→5), so its
+      // tb_check_forwarder (ตรวจตู้) queue row is stale and must be cleared or it leaks
+      // into the ตรวจสอบ list. Mirror the delete in adminCallPriceUser. BEST-EFFORT:
+      // the flip already committed — a queue-delete failure NEVER fails/rolls back the
+      // bill; log + continue. Never touches fstatus/money.
+      {
+        const { error: cqDelErr } = await admin
+          .from("tb_check_forwarder")
+          .delete()
+          .eq("fID", fID);
+        if (cqDelErr) {
+          logger.warn("report_cnt.bill_to_customer", "tb_check_forwarder cleanup failed (bill OK)", {
+            fid: fID, code: cqDelErr.code, message: cqDelErr.message,
+          });
+        }
+      }
+
       // ── (f) Notify the customer of the outstanding balance ──
       // Legacy fired SMS + email + LINE-Notify; Pacred uses sendNotification
       // (in-app + LINE OA push + email). Resolve userid → profiles.id; if the

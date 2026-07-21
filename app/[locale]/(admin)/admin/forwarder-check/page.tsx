@@ -100,6 +100,7 @@ type ForwarderRawRow = {
   fweight: number | null;
   ftransporttype: string;
   fproductstype: string | null;
+  fproductstype2: string | null;
   frefrate: number | null;
   frefprice: string;
   fdetail: string | null;
@@ -129,11 +130,8 @@ type UserRawRow = {
   userLastName: string | null;
   userCompany: string | null;
   userCredit: string | null;
-};
-
-type PromoRawRow = {
-  fid: number;
-  id: number;
+  /** legacy CPS badge — comparison-pricing enabled (tb_users.userComparison='1'). */
+  userComparison: string | null;
 };
 
 type ImportRawRow = {
@@ -240,7 +238,7 @@ export default async function AdminForwarderCheckPage({
     .from("tb_forwarder")
     .select(
       "id, fstatus, fidorco, ftrackingchn, fcabinetnumber, userid, " +
-        "famount, famountcount, fvolume, fweight, ftransporttype, fproductstype, frefrate, frefprice, " +
+        "famount, famountcount, fvolume, fweight, ftransporttype, fproductstype, fproductstype2, frefrate, frefprice, " +
         "fdetail, fnote, fcover, " +
         "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
         "pricecrate, ftransportpricechnthb, priceother, fdiscount, " +
@@ -271,7 +269,7 @@ export default async function AdminForwarderCheckPage({
   const uniqueUserIds = Array.from(new Set(forwarders.map((r) => r.userid).filter(Boolean)));
   const userRes = await admin
     .from("tb_users")
-    .select("userID, userName, userLastName, userCompany, userCredit")
+    .select("userID, userName, userLastName, userCompany, userCredit, userComparison")
     .in("userID", uniqueUserIds);
   const usersById = new Map<string, UserRawRow>(
     ((userRes.data ?? []) as unknown as UserRawRow[]).map((u) => [u.userID, u]),
@@ -280,6 +278,24 @@ export default async function AdminForwarderCheckPage({
   // Juristic display-name resolve (2026-07-04) — นิติบุคคล rows must show the
   // registered company name, not the contact person. ONE batched .in() lookup.
   const corpNames = await fetchCorporateNameMap(admin, uniqueUserIds);
+
+  // A8 (fidelity · legacy badgeVIP2 · forwarder-check.php L416) — customers who
+  // have a per-customer custom rate get a marker next to their code. Owner killed
+  // the VIP-tier model on 2026-07-10, so we label it "เรทเฉพาะตัว" (not "SVIP").
+  // TWO batched .in() lookups (never N+1) union the kg + cbm custom-rate tables.
+  const customRateUserIds = new Set<string>();
+  if (uniqueUserIds.length > 0) {
+    const [cbmRes, kgRes] = await Promise.all([
+      admin.from("tb_rate_custom_cbm").select("userid").in("userid", uniqueUserIds),
+      admin.from("tb_rate_custom_kg").select("userid").in("userid", uniqueUserIds),
+    ]);
+    // Fail-soft (a failed read just means no badge, never a false marker) — but LOG it
+    // so a real custom-rate-table outage is observable (§0c: no silent error swallow).
+    if (cbmRes.error) console.error("[forwarder-check · tb_rate_custom_cbm] read failed", cbmRes.error.message);
+    if (kgRes.error) console.error("[forwarder-check · tb_rate_custom_kg] read failed", kgRes.error.message);
+    for (const r of (cbmRes.data ?? []) as { userid: string }[]) if (r.userid) customRateUserIds.add(r.userid);
+    for (const r of (kgRes.data ?? []) as { userid: string }[]) if (r.userid) customRateUserIds.add(r.userid);
+  }
 
   // ── Step 4: Tab counts ──────────────────────────────────────────────────
   // ทุกตัวนับจาก `forwarders` (= แถวที่แจ้งชำระได้จริง) ไม่ใช่คิวดิบ — ทั้ง 3 แท็บ
@@ -318,19 +334,14 @@ export default async function AdminForwarderCheckPage({
     // Table may not exist on all envs; silently fall back.
   }
 
-  // ── Step 6: Promotion link (legacy LEFT JOIN tb_promotion) ──────────────
-  let promoByFid = new Map<number, number>();
-  try {
-    const promoRes = await admin
-      .from("tb_promotion")
-      .select("fid, id")
-      .in("fid", fids);
-    promoByFid = new Map(
-      ((promoRes.data ?? []) as unknown as PromoRawRow[]).map((r) => [r.fid, r.id]),
-    );
-  } catch {
-    // tb_promotion may not be wired — promotion badges are optional.
-  }
+  // ── Step 6: Promotion link — REMOVED (§0e dead-read · 2026-07-21) ───────
+  // Legacy did `LEFT JOIN tb_promotion` + `tagPro($promoID)` for a promo-campaign
+  // badge, but on Pacred prod `tb_promotion` = 0 rows (the tagPro campaigns are
+  // historical PCS 2023-24 promos; Pacred is a new company). Reading an always-
+  // empty table + shaping a badge that can never render = a dead-read. Dropped
+  // rather
+  // than ported. If Pacred ever runs its own promos, re-add a batched lookup here
+  // + a Pacred promo map (do NOT resurrect the 44 legacy tagPro campaign names).
 
   // ── Step 7: Resolve cover thumbnails ────────────────────────────────────
   const coverMap = await resolveLegacyUrlMap(
@@ -352,7 +363,6 @@ export default async function AdminForwarderCheckPage({
       : "";
     const customerCompany = user?.userCompany === "1" ? 1 : 0;
     const fiAmount = importByFid.get(r.id) ?? 0;
-    const promoId = promoByFid.get(r.id) ?? null;
     const outstanding = calcForwarderOutstanding(r);
     // 1% juristic allowance (legacy fUserCompany1Per, applied only when
     // priceGetUserItem >= 1000 AND usercompany='1' — see forwarder-check.php L400)
@@ -392,6 +402,7 @@ export default async function AdminForwarderCheckPage({
       volume_cbm: totalCbmOf(r), // row-TOTAL CBM (famountcount rule)
       weight_kg: Number(r.fweight ?? 0),
       products_type: r.fproductstype ?? "",
+      products_type2: r.fproductstype2 ?? "", // A6 · ประเภทสินค้ารอง (cost cell · gated)
       transport_type: r.ftransporttype,
       ref_rate: Number(r.frefrate ?? 0),
       ref_price: r.frefprice ?? "0",
@@ -414,11 +425,14 @@ export default async function AdminForwarderCheckPage({
       cost_total_price_sheet: Number(r.fcosttotalpricesheet ?? 0),
       profit_item: Math.round(profit * 100) / 100,
       status: r.fstatus,
-      promo_id: promoId,
       ship_service_fee: Number(r.fshippingservice ?? 0),
       check_added_by: queueRow?.adminID ?? null,
       check_added_at: queueRow?.date ?? null,
       note: r.fnote,
+      detail: r.fdetail, // A1 · รายละเอียดสินค้า (legacy short-text max-w cell)
+      has_custom_rate: customRateUserIds.has(r.userid), // A8 · เรทเฉพาะตัว marker
+      // legacy badgeVIP2 CPS marker — comparison-pricing enabled (still live in resolve-rate).
+      has_comparison: (user?.userComparison ?? "") === "1",
       cover_url: coverMap[String(r.id)] ?? null,
       detail_href: `/admin/forwarders/${r.id}`,
     };
