@@ -71,6 +71,8 @@ export type PerTrackingRow = {
 
 type Props = {
   rows: PerTrackingRow[];
+  /** Show the complete calculation while preventing billed-basis mutations. */
+  readOnly?: boolean;
   /** เหมาๆ (Pacred PRF) carrier → in-Thailand delivery is the flat ฿100 fee. */
   isMao?: boolean;
   customRateInit: "0" | "1";
@@ -150,9 +152,13 @@ const TH = "px-2 py-1.5 text-[11px] font-semibold text-muted whitespace-nowrap b
 
 export function PerTrackingEditorClient({
   rows: rowsInit,
+  readOnly = false,
   isMao = false,
-  // customComparisonInit — no longer seeds the checkbox (default UNCHECKED · owner
-  // 2026-07-06 locked-pair). Kept in Props for caller compatibility.
+  customRateInit,
+  customRateKgInit,
+  customRateCbmInit,
+  customComparisonInit,
+  customComparisonValueInit,
   canEditComparison,
   profileRate = 0,
   profileBasis = "cbm",
@@ -189,15 +195,15 @@ export function PerTrackingEditorClient({
   // both-or-neither validation in onSave + server-side). The input fields default
   // to 0 (the seller types only when a box is ticked); the billing D1 guard blocks
   // any ฿0-transport bill so an untyped-but-ticked box can't silently bill 0.
-  const [customRate, setCustomRate] = useState<"0" | "1">("0");
-  const [customRateKg, setCustomRateKg] = useState<string>("0");
-  const [customRateCbm, setCustomRateCbm] = useState<string>("0");
+  const [customRate, setCustomRate] = useState<"0" | "1">(readOnly ? customRateInit : "0");
+  const [customRateKg, setCustomRateKg] = useState<string>(String(readOnly ? customRateKgInit : 0));
+  const [customRateCbm, setCustomRateCbm] = useState<string>(String(readOnly ? customRateCbmInit : 0));
   // ค่าเทียบ — default UNCHECKED too (locked-pair with custom price). Warehouse
   // staff still CANNOT edit it (the input/checkbox stay disabled via
   // !canEditComparison); with the default-off + locked mirror they simply never
   // reach an unpaired custom-price state through the UI.
-  const [customComparison, setCustomComparison] = useState<"0" | "1">("0");
-  const [comparisonValue, setComparisonValue] = useState<string>("0");
+  const [customComparison, setCustomComparison] = useState<"0" | "1">(readOnly ? customComparisonInit : "0");
+  const [comparisonValue, setComparisonValue] = useState<string>(String(readOnly ? customComparisonValueInit : 0));
 
   // owner 2026-07-20 — merged-box auto-tick: typing ANY of the 3 values (เรทกก./
   // เรทCBM/ค่าเทียบ) ticks the box ON; clearing ALL THREE unticks it. Both flags
@@ -650,6 +656,12 @@ export function PerTrackingEditorClient({
 
   return (
     <div className="space-y-3">
+      {readOnly && (
+        <p className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700">
+          🔒 แสดงรายละเอียดเพื่อการตรวจสอบเท่านั้น — ราคาและฐานคำนวณถูกล็อกแล้วในสถานะรอชำระเงิน/เตรียมส่ง
+        </p>
+      )}
+      <fieldset disabled={pending || readOnly} className="space-y-3">
       {/* ── ORDER-level rate toggles (shared · ใช้ทุกแทค) ──
           2026-06-18 (ภูม · พี่ป๊อป "ไม่ยืด/บวม" · PCS รูป2) — compact: narrow
           fixed-width inputs (was CELL = full-width → stretched) + inline flex +
@@ -941,16 +953,21 @@ export function PerTrackingEditorClient({
           จะเก็บเงินไปกดที่ ตรวจรายการตู้ → ตรวจสอบรายการ → แจ้งเก็บเงิน ตาม loop · ลูกค้าไม่จ่าย
           = จ่ายแทนลูกค้า (เงินสด บุคคล/นิติ) · ลูกค้าเครดิต = ออกใบวางบิลตาม flow PCS" —
           the ส่งไปรอชำระ + ไปสร้างใบวางบิล buttons are REMOVED; save = data-only. */}
-      <p className="text-[11px] text-muted">⚠️ กรอกขนาด/ราคาของแต่ละแทรคกิง แล้วกด “บันทึก” — เก็บ/อัพเดตข้อมูลเท่านั้น สถานะคงเดิม (ระบบคำนวณราคาขายใหม่ให้แต่ละแทคตอนบันทึก · ต้นทุน/ค่าเทียบ จาก server) · การเก็บเงิน: รายงานตู้ → เพิ่มรายการตรวจสอบ → แจ้งเก็บเงินลูกค้า</p>
+      {!readOnly && (
+        <p className="text-[11px] text-muted">⚠️ กรอกขนาด/ราคาของแต่ละแทรคกิง แล้วกด “บันทึก” — เก็บ/อัพเดตข้อมูลเท่านั้น สถานะคงเดิม (ระบบคำนวณราคาขายใหม่ให้แต่ละแทคตอนบันทึก · ต้นทุน/ค่าเทียบ จาก server) · การเก็บเงิน: รายงานตู้ → เพิ่มรายการตรวจสอบ → แจ้งเก็บเงินลูกค้า</p>
+      )}
 
       {error && <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">⚠ {error}</div>}
       {success && <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">{success}</div>}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={() => onSave(false)} disabled={pending} className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
-          {pending ? "กำลังบันทึก..." : `💾 บันทึก (${rows.length} แทรคกิง)`}
-        </button>
-      </div>
+      {!readOnly && (
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" onClick={() => onSave(false)} disabled={pending} className="rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            {pending ? "กำลังบันทึก..." : `💾 บันทึก (${rows.length} แทรคกิง)`}
+          </button>
+        </div>
+      )}
+      </fieldset>
       {dialogs}
     </div>
   );

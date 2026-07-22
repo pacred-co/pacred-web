@@ -89,14 +89,6 @@ import { WechatContextPanel } from "./wechat-context-panel";
 // ติดด่าน/PR สลับ), record a note + photo, and resolve it. RECORD-ONLY — the
 // panel/actions write ONLY fexception_* (never money/status/ownership · §0e).
 import { ForwarderExceptionPanel } from "./forwarder-exception-panel";
-// 2026-06-19 (Unit A · owner "แจงค่าหน้าอื่นด้วย") — the same itemized "ยอดเก็บจริง"
-// breakdown the จ่ายแทนลูกค้า page shows, so the order detail's freight-only number
-// (e.g. 45.10) isn't confusing vs the real collect (95.10 = freight + เหมาๆ 100).
-// Uses the canonical money fn — never re-derive money math inline (AGENTS.md money rule).
-import {
-  computeForwarderDebitBatch,
-  type ForwarderDebitRow,
-} from "@/lib/forwarder/forwarder-debit-total";
 import { getTranslations } from "next-intl/server";
 import { TranslateButton } from "@/components/translate/translate-button";
 import {
@@ -708,17 +700,8 @@ async function tryRenderTbForwarder(
   const { missing: rateMissing } = await previewForwarderRateMissing(admin, r.id);
   const tRate = await getTranslations("forwarderInlineRate");
 
-  // ── 2026-06-19 (Unit A) — ยอดเก็บจริง + breakdown (แจงรายละเอียดค่า) ──────────
-  // The header/items show ftotalprice = freight ONLY (e.g. 45.10). The amount the
-  // customer is actually collected at pay-time = freight + เหมาๆ ฿100 (first
-  // PCSF-zero row) − ส่วนลด − หัก ณ ที่จ่าย นิติ 1% (when juristic & batch ≥ ฿1,000).
-  // So a forwarder showing 45.10 collects 95.10 → the owner's confusion. We compute
-  // it with the SAME canonical fn the จ่ายแทนลูกค้า page uses so the two never drift.
-  //
-  // isCorporate: a tb_corporate row exists for this userid OR fusercompany==='1'.
-  // (Single-row batch: the 1% only fires if THIS row's total ≥ ฿1,000, matching
-  // computeForwarderDebitBatch's batch-≥1000 gate — faithful to pay-users.php.)
-  let collectIsCorporate = (r.fusercompany ?? "").trim() === "1";
+  // Corporate identity drives the juristic badge and company-name header.
+  let isCorporateCustomer = (r.fusercompany ?? "").trim() === "1";
   // Also fetch the corp NAME (2026-07-03) so the "จาก :" header shows the
   // COMPANY for a juristic customer (was leaking the contact person). Single
   // maybeSingle keyed by userid — unconditional so a fusercompany='1' row still
@@ -732,10 +715,10 @@ async function tryRenderTbForwarder(
       .limit(1)
       .maybeSingle<{ id: number | string; corporatename: string | null }>();
     if (corpErr) {
-      console.error(`[tb_corporate collect-check] failed`, { code: corpErr.code, message: corpErr.message, userid: r.userid });
+      console.error(`[tb_corporate identity-check] failed`, { code: corpErr.code, message: corpErr.message, userid: r.userid });
     }
     if (corpRow) {
-      collectIsCorporate = true;
+      isCorporateCustomer = true;
       const nm = (corpRow.corporatename ?? "").trim();
       if (nm) corpCompanyName = nm;
     }
@@ -750,12 +733,7 @@ async function tryRenderTbForwarder(
       ? { corporatename: corpCompanyName, corporatenumber: null, corporateaddress: null }
       : null,
   });
-  // ภูม 2026-06-23 — aggregate the WHOLE shipment (all sibling trackings), the
-  // SAME row set the รายการสินค้า table sums, so ยอดเก็บจริง matches it. Was a
-  // money bug: this computed on the ONE landed row (฿410) while the items table
-  // summed all 6 siblings (฿4,424) → staff/customer saw two clashing totals.
-  // computeForwarderDebitBatch is batch-aware (one ฿100 เหมาๆ for the batch + the
-  // นิติ 1% gate on the BATCH total), so passing every sibling is correct.
+  // Aggregate the whole shipment once for box count, document links and advance billing.
   const collectSiblings = await fetchCountableForwarderSiblings(admin, {
     id: r.id, ftrackingchn: r.ftrackingchn, userid: r.userid, fweight: r.fweight,
     famount: r.famount,
@@ -763,15 +741,6 @@ async function tryRenderTbForwarder(
     fshipby: r.fshipby, ftotalprice: r.ftotalprice, ftransportprice: r.ftransportprice,
     fpriceupdate: r.fpriceupdate, fshippingservice: r.fshippingservice, pricecrate: r.pricecrate,
     ftransportpricechnthb: r.ftransportpricechnthb, priceother: r.priceother, fdiscount: r.fdiscount,
-  });
-  const collectRows: ForwarderDebitRow[] = collectSiblings.map((s) => ({
-    id: s.id, fshipby: s.fshipby, ftotalprice: s.ftotalprice, ftransportprice: s.ftransportprice,
-    fpriceupdate: s.fpriceupdate, fshippingservice: s.fshippingservice, pricecrate: s.pricecrate,
-    ftransportpricechnthb: s.ftransportpricechnthb, priceother: s.priceother, fdiscount: s.fdiscount,
-  }));
-  const collectBatch = computeForwarderDebitBatch(collectRows, {
-    userId: r.userid,
-    isCorporate: collectIsCorporate,
   });
   // ── Advance billing (owner 2026-06-23 · วางบิลล่วงหน้าตอน MOMO ยิงของ) ──
   // The whole shipment's sibling ids (เฟิม + advance-bill cover all แทค), whether it's
@@ -785,22 +754,6 @@ async function tryRenderTbForwarder(
   // across siblings; fall back to the anchor's own famount if the fetch was empty.
   const shipmentBoxCount =
     collectSiblings.reduce((sum, s) => sum + (Number(s.famount) || 0), 0) || (r.famount ?? 0);
-  // Collapse the per-line breakdowns into ONE shipment breakdown (same shape the
-  // ยอดเก็บจริง panel renders); the total is the authoritative batch total.
-  const collect =
-    collectBatch.lines.length > 0
-      ? collectBatch.lines.reduce(
-          (acc, l) => ({
-            freight: acc.freight + l.breakdown.freight,
-            otherCharges: acc.otherCharges + l.breakdown.otherCharges,
-            discount: acc.discount + l.breakdown.discount,
-            maoFee: acc.maoFee + l.breakdown.maoFee,
-            wht1pct: acc.wht1pct + l.breakdown.wht1pct,
-            total: collectBatch.total_thb,
-          }),
-          { freight: 0, otherCharges: 0, discount: 0, maoFee: 0, wht1pct: 0, total: collectBatch.total_thb },
-        )
-      : null;
 
   // ── เอกสารของออเดอร์นี้ (owner 2026-07-15 · "เข้าไปดูได้หมด · เชื่อมโยง อ้างอิงถึงกัน" · F9) ──
   // Resolve every document that covers THIS shipment's sibling rows — ใบวางบิล
@@ -869,15 +822,6 @@ async function tryRenderTbForwarder(
   const RECEIPT_STATUS_LABEL: Record<string, string> = { "0": "ร่าง", "1": "ชำระแล้ว", "2": "ยกเลิก", "3": "รอชำระ" };
   const WALLET_HS_STATUS_LABEL: Record<string, string> = { "1": "รอตรวจ", "2": "ชำระแล้ว", "3": "ยกเลิก/ปฏิเสธ" };
 
-  // Show the panel when the row is still collectible (รอชำระเงิน fstatus='5' OR
-  // ติดเครดิต fcredit='1') — i.e. before the ฿50 is persisted, which is exactly
-  // when the freight-only number on the page would mislead.
-  const collectShow =
-    collect != null &&
-    Number.isFinite(collect.total) &&
-    ((r.fstatus ?? "").trim() === "5" || (r.fcredit ?? "").trim() === "1");
-  const baht2 = (n: number) =>
-    `฿${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const rateFallbackDims = {
     fId: r.id,
     weight: pricingInit.weight,
@@ -1077,7 +1021,7 @@ async function tryRenderTbForwarder(
                 )}
               {/* owner 2026-06-24: ต้องบอกชัดทุกลูกค้าว่าเป็นนิติบุคคลหรือบุคคลธรรมดา
                   (ใช้ tb_users.userCompany หรือ tb_corporate ที่ผูกกับ userid) */}
-              {(u?.userCompany === "1" || collectIsCorporate) ? (
+              {(u?.userCompany === "1" || isCorporateCustomer) ? (
                 <span className="ml-1.5 inline-block rounded-full bg-purple-100 text-purple-700 border border-purple-300 text-[11px] font-medium px-2 py-0.5 align-middle">นิติบุคคล</span>
               ) : (
                 <span className="ml-1.5 inline-block rounded-full bg-slate-100 text-slate-600 border border-slate-300 text-[11px] font-medium px-2 py-0.5 align-middle">บุคคลธรรมดา</span>
@@ -1224,60 +1168,6 @@ async function tryRenderTbForwarder(
           </div>
         )}
 
-        {/* ── ยอดเก็บจริง + แจงรายละเอียดค่า (Unit A · owner 2026-06-19 "แจงค่าหน้าอื่นด้วย")
-           — the same breakdown the จ่ายแทนลูกค้า page shows, so the freight-only
-           ftotalprice above (e.g. ฿45.10) isn't confusing vs the real collect
-           (฿95.10 = freight + เหมาๆ ฿100). Shown while still collectible
-           (รอชำระเงิน / ติดเครดิต), before the ฿50 is persisted at pay. ── */}
-        {collectShow && collect && (
-          <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50/40 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <h4 className="text-sm font-bold text-primary-700">ยอดเก็บจริง (แจงรายละเอียดค่า)</h4>
-              <span className="text-lg font-mono font-bold text-red-600">{baht2(collect.total)}</span>
-            </div>
-            <dl className="mt-2 space-y-1 text-sm">
-              <div className="flex items-center justify-between gap-3">
-                <dt className="text-muted">ค่าขนส่งสินค้า</dt>
-                <dd className="font-mono">{baht2(collect.freight)}</dd>
-              </div>
-              {collect.otherCharges > 0 && (
-                <div className="flex items-center justify-between gap-3">
-                  <dt className="text-muted">+ บริการอื่นๆ</dt>
-                  <dd className="font-mono">{baht2(collect.otherCharges)}</dd>
-                </div>
-              )}
-              {collect.maoFee > 0 && (
-                <div className="flex items-center justify-between gap-3">
-                  <dt className="text-sky-600">+ ค่าส่งเหมาๆ</dt>
-                  <dd className="font-mono text-sky-600">{baht2(collect.maoFee)}</dd>
-                </div>
-              )}
-              {collect.discount > 0 && (
-                <div className="flex items-center justify-between gap-3">
-                  <dt className="text-emerald-600">− ส่วนลด</dt>
-                  <dd className="font-mono text-emerald-600">{baht2(collect.discount)}</dd>
-                </div>
-              )}
-              {collect.wht1pct > 0 && (
-                <div className="flex items-center justify-between gap-3">
-                  <dt className="text-orange-600">− หัก ณ ที่จ่าย นิติ 1%</dt>
-                  <dd className="font-mono text-orange-600">{baht2(collect.wht1pct)}</dd>
-                </div>
-              )}
-              <div className="flex items-center justify-between gap-3 border-t border-primary-200 pt-1.5 font-semibold text-foreground">
-                <dt>ยอดเก็บจริง</dt>
-                <dd className="font-mono text-red-600">{baht2(collect.total)}</dd>
-              </div>
-            </dl>
-            {collect.maoFee > 0 && (
-              <p className="mt-2 text-[11px] text-muted">
-                ℹ️ ค่าส่งเหมาๆ ฿100 จะถูกบันทึกลงค่าขนส่งตอนชำระเงิน — ก่อนชำระ
-                ยอดในรายละเอียดสินค้าด้านบนจะแสดงเฉพาะค่าขนส่งสินค้า
-              </p>
-            )}
-          </div>
-        )}
-
         {/* ── อัปเดตสถานะรายการ — STATUS-DRIVEN (legacy update.php). owner 2026-06-11:
            "ยกฟอร์มสถานะขึ้นบนรายการสินค้า · ฟอร์มราคา (pricing@4) ให้ต่อจากรายการสินค้า แยกกัน"
            → <ForwarderStatusWorkflow> รับ รายการสินค้า เป็น children แล้ว render:
@@ -1301,6 +1191,7 @@ async function tryRenderTbForwarder(
           pricingEditor={
             <ForwarderPerTrackingEditor
               r={r}
+              readOnly={["5", "6"].includes((r.fstatus ?? "").trim())}
               customRateInit={pricingInit.customRate}
               customRateKgInit={pricingInit.customRateKg}
               customRateCbmInit={pricingInit.customRateCbm}
