@@ -43,6 +43,9 @@ import { pendingTopupFilter, pendingWithdrawFilter } from "@/lib/wallet/wallet-h
 import { collapseWalletBillingPairs, computeTopupBadge } from "@/lib/admin/topup-slip-dedup";
 import { computeBillWht } from "@/lib/billing/wht";
 import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
+import { resolveViewAsRole } from "@/lib/admin/view-as-role";
+import { isGodRole } from "@/lib/admin/god-role";
+import { canViewCost } from "@/lib/admin/money-visibility";
 import { Link, redirect } from "@/i18n/navigation";
 import { getLocale } from "next-intl/server";
 import { ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon, Users, UserX, XCircle, Eye, LayoutGrid, ArrowRight } from "lucide-react";
@@ -101,8 +104,19 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   // This mirrors legacy `index.php:133` (case 7 → home/Cargo/Warehouse/Driver.php)
   // which sends pure-driver staff straight to their work queue.
   const allRoles = await getAdminRoles();
-  if (allRoles && allRoles.length > 0) {
-    const isDriverOnly = allRoles.every((r) => r === "driver");
+  // 👁 VIEW-AS-ROLE (2026-07-22 · ภูม audit tool) — a real god previewing a role
+  // must LAND where that role really lands, so the preview shows the department's
+  // true first screen (warehouse → /admin/warehouse/home, driver → work queue,
+  // a no-dashboard role → its workspace) instead of the CEO dashboard. `previewRole`
+  // is non-null ONLY for a real god + a valid, money-tier-safe cookie
+  // (resolveViewAsRole); for everyone else `effectiveRoles === allRoles` so the
+  // real-role landing below is byte-for-byte unchanged. The requireAdmin() office
+  // gate further down still reads REAL roles — security never changes; this only
+  // routes a previewing god to a lower role's home.
+  const previewRole = await resolveViewAsRole(allRoles ?? []);
+  const effectiveRoles = previewRole ? [previewRole] : (allRoles ?? []);
+  if (effectiveRoles.length > 0) {
+    const isDriverOnly = effectiveRoles.every((r) => r === "driver");
     if (isDriverOnly) {
       const locale = await getLocale();
       redirect({ href: "/admin/drivers/work", locale });
@@ -117,10 +131,21 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     // 2026-07-18 (owner): the warehouse role now has its OWN handheld home —
     // the faithful PCS warehouse-staff launcher (4 summary cards + bottom
     // tab-bar) at /admin/warehouse/home. Land warehouse-only staff there.
-    const isWarehouseOnly = allRoles.every((r) => r === "warehouse");
+    const isWarehouseOnly = effectiveRoles.every((r) => r === "warehouse");
     if (isWarehouseOnly) {
       const locale = await getLocale();
       redirect({ href: "/admin/warehouse/home", locale });
+    }
+    // 👁 A previewed role with NO CEO-dashboard access (pricing / interpreter /
+    // purchaser* / freight_*) → its faithful home is the universal per-position
+    // workspace (/admin/workspace · gate = any admin). `previewRole`-guarded so a
+    // REAL non-dashboard role never hits this (its pre-existing /admin 404 is out
+    // of scope); super/normies previews stay on /admin (god-nav). The list mirrors
+    // the office requireAdmin([...]) gate below.
+    const DASHBOARD_LANDING = ["ops", "accounting", "sales_admin", "sales", "qa", "manager"];
+    if (previewRole && !DASHBOARD_LANDING.includes(previewRole) && !isGodRole([previewRole])) {
+      const locale = await getLocale();
+      redirect({ href: "/admin/workspace", locale });
     }
   }
 
@@ -291,6 +316,14 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   const rateShop     = Number(settingsRow?.hratecostdefault ?? 5);
   const rateSale     = Number(settingsRow?.rsdefault ?? 5);
   const ratePayment  = Number(settingsRow?.rpdefault ?? 5);
+  // "เรทต้นทุน (ภายใน)" = hratecostdefault = COST-internal → canViewCost only
+  // (money-visibility.ts). Was UNGATED (a real leak: sales/ops/qa/manager saw it).
+  // Gated on EFFECTIVE roles → closes the leak for real non-cost office roles AND
+  // makes the 👁 view-as preview faithful (previewing sales hides it, accounting
+  // shows it). effectiveRoles === real roles for non-previewers; the money-tier
+  // gate guarantees a preview can only DOWNGRADE, never reveal cost above the real
+  // role. SELL/transfer rates below stay visible to all (not money-internal).
+  const showCostRate = canViewCost(effectiveRoles);
 
   // DISTINCT fcabinetnumber count (1 ตู้ = 1 count, many shipments share).
   const activeContainersCount = new Set(
@@ -443,9 +476,11 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
           a rate) was moved OUT of this row into its own stat below. Columns each
           chip reads are UNCHANGED — labels + placement only. */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
-        {/* 3-chip rate row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
-          <RateChip color="cyan"    label="เรทต้นทุน (ภายใน)" value={rateShop.toFixed(2)} />
+        {/* 3-chip rate row — เรทต้นทุน hidden for non-cost roles (see showCostRate) */}
+        <div className={`grid grid-cols-1 gap-3 text-center ${showCostRate ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+          {showCostRate && (
+            <RateChip color="cyan"  label="เรทต้นทุน (ภายใน)" value={rateShop.toFixed(2)} />
+          )}
           <RateChip color="red"     label="เรทฝากสั่ง (ขาย)"  value={rateSale.toFixed(2)} />
           <RateChip color="purple"  label="เรทโอน"            value={ratePayment.toFixed(2)} />
         </div>

@@ -45,7 +45,8 @@ import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { calcForwarderOutstanding, isForwarderPaid } from "@/lib/forwarder/outstanding";
-import { filterCountableForwarderRows } from "@/lib/admin/momo-bill-header";
+import { filterCountableForwarderRows, baseTracking } from "@/lib/admin/momo-bill-header";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { exportForwardersAll } from "@/actions/admin/export/forwarders";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
@@ -452,6 +453,12 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
   // reflect what's on screen · Wave 18-B fidelity backfill).
   const counts = await loadStatusCounts(admin, dateWindow, purchaserScope);
 
+  // ภูม 2026-07-22 — นับ "ชิปเม้น" บนหน้านี้ (baseTracking+userid) ให้ตรงกับ badge ที่นับ
+  // ชิปเม้น · กล่องแตก -N/M นับก้อนเดียว (เช่น 52643 4 แทรค = 1 ชิปเม้น).
+  const pageShipmentCount = new Set(
+    rows.map((r) => `${baseTracking(r.tracking_chn) ?? `_${r.id}`}|${(r.customer?.userid ?? "").trim()}`),
+  ).size;
+
   const filterOpts: { v: string | undefined; l: string; n: number }[] = [
     { v: undefined, l: "ทั้งหมด", n: counts.total },
     { v: "1",   l: STATUS_LABEL["1"]!,   n: counts.s1 },
@@ -492,7 +499,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         title={`รายการนำเข้า${headerSuffix ? ` · ${headerSuffix}` : ""}`}
         subtitle={
           <>
-            <span className="font-semibold text-foreground">{rows.length.toLocaleString("th-TH")}</span> รายการ
+            <span className="font-semibold text-foreground">{pageShipmentCount.toLocaleString("th-TH")}</span> ชิปเม้น
             {" "}(จากทั้งหมด {counts.total.toLocaleString("th-TH")})
             {sp.status && (
               <>
@@ -946,7 +953,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         return (
           <div className="rounded-lg border border-border bg-surface-alt/60 px-4 py-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-sm">
             <span className="font-medium text-muted">
-              รวมหน้านี้ · {rows.length.toLocaleString("th-TH")} รายการ
+              รวมหน้านี้ · {pageShipmentCount.toLocaleString("th-TH")} ชิปเม้น
               {sumBoxes > 0 && (
                 <> · {sumBoxes.toLocaleString("th-TH")} กล่อง</>
               )}
@@ -1581,39 +1588,51 @@ async function loadStatusCounts(
   // owner ④ — when a purchaser scope is set, badge counts reflect ONLY that
   // purchaser's orders (so a scoped viewer's tabs match their scoped list).
   const scope = purchaserScope && purchaserScope !== "" ? purchaserScope : null;
-  // Wave 18-B — scope all count queries to the same date window the data
-  // query uses, so badge numbers match what the user sees on screen. The
-  // purchaser scope is applied on the base builder (before this helper) to keep
-  // the generic constraint narrow (a wide {gte,lte,eq} constraint tripped
-  // TS2589 "excessively deep").
-  // ภูม 2026-07-22 — badge counts นับทั้งหมด (ไม่สนวันที่) · pass-through. date window
-  // ยังใช้กรอง LIST (fetchForwarderList) แต่ไม่ผูกกับ badge → เลข badge นิ่ง + ตรงผลค้นหา
-  // ที่ข้ามกรอบวันได้ (revert Wave 18-B date-scoping ตามที่ owner สั่ง). วันที่ = ไว้กรองหาเอง.
-  function applyDate<T>(builder: T): T {
-    return builder;
-  }
-  function base() {
-    let q = admin.from("tb_forwarder").select("id", { count: "exact", head: true });
+  // ภูม/พี่ป๊อป 2026-07-22 — นับเป็น "ชิปเม้น" ไม่ใช่แทรคกิ้ง (owner "ต้องนับเป็น shipment").
+  // ชิปเม้น = (baseTracking, userid) เดียวกัน → กล่องแตก -N/M นับเป็นก้อนเดียว (เช่น 52643 มี
+  // 4 แทรค = 1 ชิปเม้น). ดึงแถวทั้งหมด (paginated · fetchAllRows กัน cap 1000) แล้วนับ distinct
+  // ชิปเม้นต่อสถานะใน JS (แถวเบา 5 คอลัมน์). badge นับทั้งหมด (ไม่สนวันที่ · date กรองแค่ list).
+  const { data: allRows, error: allErr } = await fetchAllRows<{
+    id: number;
+    ftrackingchn: string | null;
+    userid: string | null;
+    fstatus: string | null;
+    fcredit: string | null;
+  }>(() => {
+    let q = admin
+      .from("tb_forwarder")
+      .select("id, ftrackingchn, userid, fstatus, fcredit")
+      .order("id", { ascending: true });
     if (scope) q = q.eq("adminidpurchaser", scope);
     return q;
+  });
+  if (allErr) {
+    console.error("[forwarders loadStatusCounts fetchAll] failed", {
+      code: allErr.code, message: allErr.message,
+    });
   }
-  async function countFstatus(value: string): Promise<number> {
-    const r = await applyDate(base().eq("fstatus", value));
-    return r.count ?? 0;
+  const shipRows = allRows ?? [];
+  // ชิปเม้นคีย์ = baseTracking (ตัด -N/M) + userid · ไม่มี tracking → ยึด id (ยืนเดี่ยว).
+  const shipKey = (r: { id: number; ftrackingchn: string | null; userid: string | null }) =>
+    `${baseTracking(r.ftrackingchn) ?? `_${r.id}`}|${(r.userid ?? "").trim()}`;
+
+  const perStatus = new Map<string, Set<string>>();
+  const creditSet = new Set<string>();
+  const allSet = new Set<string>();
+  for (const r of shipRows) {
+    const k = shipKey(r);
+    allSet.add(k);
+    const s = String(r.fstatus ?? "").trim();
+    let set = perStatus.get(s);
+    if (!set) { set = new Set<string>(); perStatus.set(s, set); }
+    set.add(k);
+    if (String(r.fcredit ?? "").trim() === "1") creditSet.add(k);
   }
-  async function countCredit(): Promise<number> {
-    const r = await applyDate(base().eq("fcredit", "1"));
-    return r.count ?? 0;
-  }
-  async function countTotal(): Promise<number> {
-    const r = await applyDate(base());
-    return r.count ?? 0;
-  }
-  // S2 (2026-07-07) — real "กำลังจัดส่ง" (6.1) count = fstatus='6' rows that
-  // have an open driver item (fdistatus=''). Same predicate the 6.1 list
-  // filter uses (fstatus='6' ∩ open-driver-item set) so the badge matches
-  // the rows the 6.1 tab shows (§0f). Count-only · no mutation.
-  async function countDriverInProgress6(): Promise<number> {
+  const cnt = (v: string) => perStatus.get(v)?.size ?? 0;
+
+  // "กำลังจัดส่ง" (6.1) = ชิปเม้นสถานะ 6 ที่มีงานคนขับเปิด (fdistatus='') — distinct ชิปเม้น.
+  let s6driver = 0;
+  {
     const { data: di, error: diErr } = await admin
       .from("tb_forwarder_driver_item")
       .select("fid")
@@ -1623,33 +1642,26 @@ async function loadStatusCounts(
         code: diErr.code, message: diErr.message,
       });
     }
-    const fids = Array.from(
-      new Set(
-        (di ?? [])
-          .map((r) => Number((r as { fid: number | string }).fid))
-          .filter((n) => Number.isFinite(n)),
-      ),
+    const openFids = new Set(
+      (di ?? [])
+        .map((r) => Number((r as { fid: number | string }).fid))
+        .filter((n) => Number.isFinite(n)),
     );
-    if (fids.length === 0) return 0;
-    const r = await applyDate(base().eq("fstatus", "6").in("id", fids));
-    return r.count ?? 0;
+    if (openFids.size > 0) {
+      const set6 = new Set<string>();
+      for (const r of shipRows) {
+        if (String(r.fstatus ?? "").trim() === "6" && openFids.has(r.id)) set6.add(shipKey(r));
+      }
+      s6driver = set6.size;
+    }
   }
 
-  const [total, s1, s2, s3, s4, s5, s6, s6driver, s7, credit, special] = await Promise.all([
-    countTotal(),
-    countFstatus("1"),
-    countFstatus("2"),
-    countFstatus("3"),
-    countFstatus("4"),
-    countFstatus("5"),
-    countFstatus("6"),
-    countDriverInProgress6(),
-    countFstatus("7"),
-    countCredit(),
-    countFstatus("99"),
-  ]);
-
-  return { total, s1, s2, s3, s4, s5, s6, s6driver, s7, credit, special };
+  return {
+    total: allSet.size,
+    s1: cnt("1"), s2: cnt("2"), s3: cnt("3"), s4: cnt("4"),
+    s5: cnt("5"), s6: cnt("6"), s6driver, s7: cnt("7"),
+    credit: creditSet.size, special: cnt("99"),
+  };
 }
 
 /** 2026-05-21 ภูม brief — Segmented Control component for service · container
