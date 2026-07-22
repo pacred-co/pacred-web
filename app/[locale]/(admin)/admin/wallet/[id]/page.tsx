@@ -1035,11 +1035,24 @@ export default async function AdminWalletDetail({
 
             {needsRound1 && (
               <ol className="grid grid-cols-1 gap-2 border-t border-border pt-3 sm:grid-cols-3" aria-label="ขั้นตอนตรวจสลิป">
-                {[
-                  { no: 1, label: "ตรวจสลิป · วันโอน · รายการซ้ำ", done: Boolean(reviewedAt) || !isPending },
-                  { no: 2, label: "ตรวจข้อมูลเอกสาร · เลขที่ใบเสร็จ", done: status === "2", active: isPending && Boolean(reviewedAt) },
-                  { no: 3, label: "อนุมัติตัดจ่าย · เปิดใบเสร็จ", done: status === "2", active: status === "2" },
-                ].map((step) => (
+                {/* ONE combo pattern for every lane (owner 2026-07-23 "แพทเทินเดียวกัน
+                    ทั้งหมด") — steps 1/3 identical everywhere; step-2/3 wording is
+                    lane-aware because a ฝากสั่งซื้อ (type-8) slip settles the shop
+                    order WITHOUT minting a tb_receipt (legacy: $actionBillF fires
+                    only on forwarder type-4 children — shop combos flip status
+                    only). Promising "เปิดใบเสร็จ" on a lane that never mints one
+                    is the kind of dead-end the owner flagged. */}
+                {(row.type === "8"
+                  ? [
+                      { no: 1, label: "ตรวจสลิป · วันโอน · รายการซ้ำ", done: Boolean(reviewedAt) || !isPending, active: isPending && !reviewedAt },
+                      { no: 2, label: "ตรวจรายการฝากสั่งซื้อ · ยอดตรงสลิป", done: status === "2", active: isPending && Boolean(reviewedAt) },
+                      { no: 3, label: "อนุมัติตัดจ่าย · ออเดอร์ไปขั้นสั่งสินค้า", done: status === "2", active: status === "2" },
+                    ]
+                  : [
+                      { no: 1, label: "ตรวจสลิป · วันโอน · รายการซ้ำ", done: Boolean(reviewedAt) || !isPending, active: isPending && !reviewedAt },
+                      { no: 2, label: "ตรวจข้อมูลเอกสาร · เลขที่ใบเสร็จ", done: status === "2", active: isPending && Boolean(reviewedAt) },
+                      { no: 3, label: "อนุมัติตัดจ่าย · เปิดใบเสร็จ", done: status === "2", active: status === "2" },
+                    ]).map((step) => (
                   <li
                     key={step.no}
                     className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
