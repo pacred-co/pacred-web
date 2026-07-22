@@ -42,7 +42,7 @@ import {
 } from "@/actions/admin/forwarder-check";
 import { confirm } from "@/components/ui/confirm";
 import { SelectedItemsConfirmDialog } from "@/components/admin/selected-items-confirm-dialog";
-import { filterCountableForwarderRows } from "@/lib/admin/momo-bill-header";
+import { baseTracking, filterCountableForwarderRows } from "@/lib/admin/momo-bill-header";
 
 // ────────────────────────────────────────────────────────────
 // Row type — exported so page.tsx can reuse
@@ -314,11 +314,25 @@ export function ForwarderCheckTable({
     return out;
   }, [filteredRows, selected]);
 
+  // SHIPMENT-ATOMIC toggle (owner 2026-07-22 "แจ้งเก็บเงิน = ทั้งชิปเม้น"): a MOMO
+  // box-split shipment is N queue rows sharing one base tracking (same customer) —
+  // ticking ONE box brings the whole shipment (untick drops it) so the customer is
+  // never billed a partial shipment.
   const toggleRow = (id: number) =>
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      const row = rows.find((r) => r.id === id);
+      const base = row ? baseTracking(row.tracking_chn) : null;
+      const groupIds = base && row
+        ? rows
+            .filter((r) => r.userid === row.userid && baseTracking(r.tracking_chn) === base)
+            .map((r) => r.id)
+        : [id];
+      const adding = !next.has(id);
+      for (const gid of groupIds) {
+        if (adding) next.add(gid);
+        else next.delete(gid);
+      }
       return next;
     });
 

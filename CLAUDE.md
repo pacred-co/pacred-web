@@ -3,6 +3,18 @@
 
 ---
 
+# 💳 2026-07-23 (เดฟ · owner "หลายลอบแล้ว" · ไล่กด legacy ที่ Codex รัน 127.0.0.1:8088) — BILLING-FLOW FIDELITY: 1 การจ่าย = 1 บิล + ยอดตรง 3 จุด + popup→ใบเสร็จ + shipment-atomic → MAIN · read FIRST
+
+> **🎯 owner 4 ข้อ:** (a) ลูกค้าจ่าย/จ่ายแทน ต้องรวมเป็นบิลเดียว ไม่แยกแทรคละกี่บาท+สลิปซ้ำ (b) เข้าทางเลขแทรคต้องกรุ๊ปเป็นชิปเม้น (c) ยอดบิล=ยอดลูกค้าโอน=หน้าตรวจสลิป (d) ตรวจสลิปเสร็จ popup ต้องเด้ง + step-flow นำไปออกใบเสร็จ. Method = อ่าน source served ที่ `/Applications/XAMPP/xamppfiles/htdocs/PCSCODE/...` + คลิก live (login แล้ว admin_tam · MySQL local `pcsc_pcs2/P%F7*bu98NUB@127.0.0.1/pcsc_main`).
+>
+> **🔑 ROOT = PORT MISREAD:** `submitForwarderPayment` (ลูกค้าจ่ายเอง) อ่าน legacy `member/forwarder.php` L292-345 เป็น "one row per id" — ของจริงเขียน **type-1 HEADER 1 แถว (สลิป+ยอดรวม · paydeposit='1') + children type-4 (refOrder2=whID · ไม่มีสลิป) + tb_wallet_paydeposit + flip fstatus 6/paydeposit** (เหมือน pay-users.php admin เป๊ะ). ของเราเขียน N แถวแนบสลิปซ้ำ → ครบ 4 อาการที่ owner ด่า. **prod 45 วัน: 10 payments แบบผิด (แย่สุด 6 แถว/1 สลิป)** — จ่ายแทนลูกค้า (adminPayOrdersWithTopUp) shape ถูกอยู่แล้ว.
+>
+> **✅ FIX (gate: tsc 0 · lint 0 · test:unit เต็ม EXIT 0 · BUILD 0):** (1) `actions/forwarder.ts` เขียน legacy shape ครบ — **amounts จาก `loadLinkedForwarderPaymentBatch` (engine เดียวกับ approve guard — ห้าม allocator ที่สอง ไม่งั้น satang drift → approve refuse)** · header = ยอดสลิปจริง (หัก cashback) · CB tag ย้ายไป header (cascade อ่านจาก header note). (2) `wallet-hs.ts` approve case-B — **ออกใบเสร็จ 1 ใบครอบทุก fid ใต้ whID** (mirror `$actionBillF`→grenrateReceiptF · idempotent · honor overrideRid) + receiptId ใน return · consistency guard บวก [CB:] กลับก่อนเทียบ. (3) `wallet/[id]` receiptContext สำหรับ type-1 linked (paymentTargets) → ReceiptDocNoEditor step-2 โผล่ · `edit-form` **success popup** ✅+🧾 เปิดใบเสร็จ (ไม่ปิดคลิกนอก). (4) **shipment-atomic**: ลูกค้า [fNo] pay seed ทุก sibling จ่ายได้ (กัน "โชว์ยอดทั้งชิปเม้นแต่จ่ายกล่องเดียว" — mismatch ที่เจอจริง) · pay-user + forwarder-check toggle ขยายทั้งชิปเม้น (baseTracking+userid). (5) badge "รอตรวจรวม" ไม่นับ children.
+>
+> **Verified vs legacy LIVE #105410:** 1 payment = 1 record · "จำนวนเงินในสลิป = ยอดที่ต้องชำระ = ยอดรวมทุกรายการ" · step-1 วันโอน+ตรวจซ้ำ → step-2 ใบเสร็จ rIDInput → approve → popup. Queue display: dashboard tab + badge folds แล้ว (pendingTopupFilter) · tx-view reforder2 ledger group · [id] แจง children ผ่าน bridge. **เก่าค้าง 3 แถว pending shape เดิม (105713-105715) ยัง approve ได้ทาง direct type-4 เดิม.** memory [[billing-one-payment-one-bill-2026-07-23]].
+
+---
+
 # 📦 2026-07-21 บ่าย (เดฟ · owner+CS ยืนยันข้อมูล) — DISJOINT-LOTS: 908007350691 = 6 กล่อง (bare 5 + "-2" 1 · PR9820) + NO CODE tab + MOMO Live self-running/พิสูจน์ตัวเอง → ALL BRANCHES + MAIN · read FIRST
 
 > **🏁 main = dave-pacred = codex = Poom-pacred = InwPond007 = `<HEAD>`** (owner สั่ง "รวมงานทุกคน เข้า main prod ได้เลย"). gate: **tsc 0 · test:unit เต็ม 0 fail (bill-header 26/26) · BUILD_EXIT=0**. **mig 0267+0268 = PROD แล้ว · 0263/0264/0267/0268 → DEV ตอนตื่น · NEXT FREE = 0269.**

@@ -17,10 +17,9 @@ import { PACRED_BANK_ACCOUNTS } from "@/lib/payment/bank-accounts";
 import { appendCashbackNoteTag } from "@/lib/cashback/note-tag";
 import {
   computeForwarderCollectTotal,
-  userNotPCS50,
   type ForwarderCollectRow,
 } from "@/lib/forwarder/forwarder-collect-total";
-import { MAO_FLAT_FEE, isMaoCarrier } from "@/lib/forwarder/mao-fee";
+import { loadLinkedForwarderPaymentBatch } from "@/lib/forwarder/linked-payment-batch";
 // F3 — server-side capture rail (see actions/admin/wallet-hs.ts docblock). A
 // "use server" file may only EXPORT async functions, so the throwing payment
 // action delegates to a non-exported *Impl run through withObservability:
@@ -447,44 +446,39 @@ async function submitForwarderPaymentImpl(
     userId: userID,
     userCompany,
   });
-  // The +50 attribution for the per-row tb_wallet_hs split below: it lands on
-  // the surviving PCSF-zero rows (== the helper's countPCSF, post-exemption). We
-  // re-derive the SAME survivor count — reusing the helper's EXPORTED
-  // `userNotPCS50` allowlist (no inline copy → no drift) — so the split's
-  // denominator matches the headline (an exempt หนองแขม PCSF row carries NONE
-  // of the +50).
-  const isAllowlisted50 = userNotPCS50.has(userID);
-  const isExemptPcsfRow = (r: (typeof eligible)[number]) =>
-    isAllowlisted50 && !!r.faddressdistrict && r.faddressdistrict.indexOf("หนองแขม") !== -1;
-  const isCountablePcsfRow = (r: (typeof eligible)[number]) =>
-    isMaoCarrier(r.fshipby) && Number(r.ftransportprice ?? 0) === 0 && !isExemptPcsfRow(r);
-  const countPricePCSF = eligible.filter(isCountablePcsfRow).length;
-
-  // forwarder.php L256-257 — per-row composite total (NO +50/no 1% here; those
-  // are the batch-level adjustments the helper decided). Used only for the
-  // per-row tb_wallet_hs.amount split.
-  const num = (v: number | string | null) => Number(v ?? 0);
-  // COD guard (lockstep with computeForwarderCollectTotal): a ปลายทาง (paymethod='2')
-  // row's ftransportprice is collected at the door, so it is excluded from the upfront
-  // per-row split too — keeping the split's Σ reconciled to collect.total.
-  const perRowTotal = (r: (typeof eligible)[number]) =>
-    num(r.ftotalprice) +
-    (num(r.paymethod) === 2 ? 0 : num(r.ftransportprice)) +
-    num(r.fpriceupdate) +
-    num(r.fshippingservice) +
-    num(r.pricecrate) +
-    num(r.ftransportpricechnthb) +
-    num(r.priceother) -
-    num(r.fdiscount);
-
-  // pricePayAll = the HEADLINE the customer is charged (== the display). The
-  // per-row amounts below are split to reconcile to this single number.
-  let pricePayAll = collect.total;
-  // Whether the +50 PCSF flat fee fired (the split must distribute it).
-  const applied50 = collect.applied50;
   // forwarder.php L268-270 — juristic 1% reduction (owner 2026-07-22: no ฿1,000
   // minimum · decided by the helper off userCompany, NOT tb_corporate — BUG-2b fix).
+  // Used below for the fUserCompany stamp on the forwarder flip.
   const applyNiti = collect.appliedWht;
+
+  // ── ONE ENGINE = ONE NUMBER (owner: "ยอดบิล ≠ ยอดลูกค้าชำระ ≠ หน้าตรวจสลิป") ──
+  // The per-line allocation comes from the SAME authoritative engine the
+  // slip-approve consistency guard replays (loadLinkedForwarderPaymentBatch →
+  // computeForwarderDebitBatch — mao anchored once per shipment · satang-
+  // allocated per line · Σ lines == total exactly). Writing the children from
+  // any OTHER allocator risks a satang drift that hard-blocks the approve.
+  const authoritative = await loadLinkedForwarderPaymentBatch(admin, {
+    userId: userID,
+    forwarderIds: ids,
+  });
+  if (!authoritative.ok) {
+    return { ok: false, error: `คำนวณยอดชำระไม่สำเร็จ (${authoritative.error}) กรุณาลองใหม่` };
+  }
+  if (authoritative.missingIds.length > 0) {
+    return { ok: false, error: `ไม่พบรายการ: ${authoritative.missingIds.join(", ")}` };
+  }
+  const batch = authoritative.batch;
+  // Parity check vs the customer-facing display engine (computeForwarderCollect
+  // Total) — these are tested-equal; a drift here means an engine bug, so log
+  // LOUD (the verify page will also surface it as slip-vs-due mismatch).
+  if (Math.round(batch.total_thb * 100) !== Math.round(collect.total * 100)) {
+    console.error(`[submitForwarderPayment] engine drift collect≠debit`, {
+      userID, ids, collectTotal: collect.total, debitTotal: batch.total_thb,
+    });
+  }
+
+  // pricePayAll = the HEADLINE the customer transfers (the slip amount).
+  let pricePayAll = batch.total_thb;
 
   // ── ADR-0025 — apply-cashback at checkout (getListPayForwarder.php
   //    L188-203 `cashBackKey`). Read the customer's live cashback balance
@@ -528,68 +522,133 @@ async function submitForwarderPaymentImpl(
 
   const datetimeNow = new Date().toISOString();
 
-  // forwarder.php L335-342 — one `tb_wallet_hs` row per forwarder id.
-  // The legacy writes: date, status='1' (pending admin verify), amount
-  // = the per-row total, type='4' (ชำระฝากนำเข้า), userID, refOrder=ID,
-  // typeService='2', typeNew='6'. Wallet stays untouched.
-  //   NOT-NULL columns the legacy lets MySQL default to '' — Postgres
-  //   needs them explicit: whno / wusercredit / adminidcrate / typenew
-  //   / typeservice (the 0081 schema marks these NOT NULL).
-  const hsRows = eligible.map((r, idx) => {
-    let amount = perRowTotal(r);
-    // forwarder.php L316-318 — the +50฿ PCSF flat fee is distributed across the
-    // SURVIVING PCSF-zero rows (post-หนองแขม/userNotPCS50 exemption) so the
-    // per-row sum reconciles to pricePayAll. An exempt หนองแขม PCSF row carries
-    // NONE of the +50 (BUG-2a parity: the headline excludes it, so the split
-    // must too). `countPricePCSF` is the survivor count (== the helper's
-    // countPCSF); `applied50` is the helper's batch decision.
-    if (applied50 && countPricePCSF >= 1 && isCountablePcsfRow(r)) {
-      // 🔴 owner 2026-07-14: distribute the FULL เหมาๆ fee (MAO_FLAT_FEE ฿100), not the
-      // legacy ฿50. The headline (computeForwarderCollectTotal) was raised ฿50→฿100 in
-      // 2026-06-19 but THIS per-row split still hardcoded 50 → the customer paid ฿50 for
-      // the เหมาๆ while the bill/back-end showed ฿100 ("หลังบ้าน 100 เก็บลูกค้า 50").
-      amount += MAO_FLAT_FEE / countPricePCSF;
-    }
-    // forwarder.php L329-331 — juristic 1% reduction applied per row (the
-    // helper decided `applyNiti` off userCompany — BUG-2b fix).
-    if (applyNiti) amount = amount * 0.99;
-    // ADR-0025 D-2a — carry the applied cashback as a note tag on the FIRST
-    // row so the approve cascade settles it exactly once.
-    const note = idx === 0 ? appendCashbackNoteTag("", cashBackApplied) : "";
-    return {
+  // ── ONE BILL PER PAYMENT (owner 2026-07-22 · legacy member/forwarder.php
+  //    L292-345 re-read) ──
+  //
+  // The legacy customer path writes the SAME shape as admin pay-users.php:
+  //   1. ONE type='1' TOPUP HEADER — amount = the TOTAL the customer
+  //      transferred, imagesSlip on THIS row ONLY, paydeposit='1',
+  //      typeNew='6', typeService='2'. This is the row the slip-verify
+  //      queue shows (1 payment = 1 row = 1 slip = 1 total).
+  //   2. N type='4' CHILDREN — refOrder=<fid>, refOrder2=<whID>, NO slip,
+  //      per-row allocation amounts (Σ reconciles to the batch total).
+  //   3. tb_wallet_paydeposit (whID, fid) bridge rows — the approve
+  //      cascade (adminApproveWalletDeposit case-B) walks these.
+  //   4. tb_forwarder → fStatus='6' + paydeposit='1' (pending-verify
+  //      state — G6: paydeposit='1' keeps it OUT of the dispatch queue).
+  //      Approve clears paydeposit + stamps fDateStatus6; reject reverts
+  //      to fStatus='5'.
+  //
+  // The earlier port MISREAD forwarder.php L335-342 as "one row per id"
+  // and dropped the header → N pending rows each re-carrying the slip →
+  // the verify queue showed per-tracking amounts ≠ the slip total, and
+  // the receipt step-flow (which lives on the DEPOSIT detail) never ran.
+
+  // Per-row allocation = the batch engine's own satang-allocated lines
+  // (mao ฿100 anchored once per shipment · juristic 1% · COD leg excluded ·
+  // Σ lines == batch.total_thb exactly — no second allocator, no drift).
+  const priceByFid = new Map(batch.lines.map((l) => [String(l.id), l.price_thb]));
+
+  // 1. TOPUP HEADER — the ONE row the verify queue sees. amount = what the
+  //    customer actually transferred (post-cashback). The ADR-0025 [CB:<amt>]
+  //    tag rides THIS row's note (the deposit approve/reject cascade parses
+  //    the TOPUP row's note — previously the tag sat on a child the cascade
+  //    never read).
+  const { data: topupRow, error: topErr } = await admin
+    .from("tb_wallet_hs")
+    .insert({
       date: datetimeNow,
       dateslip: slipDate ? slipDate : null,
       status: "1",
-      type: "4",
+      type: "1",
       typenew: "6",
       typeservice: "2",
-      amount: Number(amount.toFixed(2)),
+      paydeposit: "1",
+      amount: Number(pricePayAll.toFixed(2)),
       imagesslip: slipPath,
       depositnamebank: `KBANK-${BANK.accountNumber}`,
-      note,
+      note: appendCashbackNoteTag("", cashBackApplied),
       userid: userID,
-      reforder: String(r.id),
+      reforder: "",
       whno: "",
-      wusercredit: r.fcredit === "1" ? "1" : "",
+      wusercredit: "",
       adminidcrate: "",
-    };
-  });
+    })
+    .select("id")
+    .single<{ id: number }>();
+  if (topErr || !topupRow) {
+    return { ok: false, error: `wallet_hs topup insert: ${topErr?.message ?? "no row"}` };
+  }
+  const whID = topupRow.id;
+
+  // 2. CHILDREN — allocation rows under the header. NO slip (the header
+  //    carries it); refOrder2 links each to the header.
+  const hsRows = eligible.map((r) => ({
+    date: datetimeNow,
+    dateslip: slipDate ? slipDate : null,
+    status: "1",
+    type: "4",
+    typenew: "6",
+    typeservice: "2",
+    paydeposit: "1",
+    amount: priceByFid.get(String(r.id)) ?? 0,
+    imagesslip: "",
+    depositnamebank: "",
+    note: "",
+    userid: userID,
+    reforder: String(r.id),
+    reforder2: whID,
+    whno: "",
+    wusercredit: r.fcredit === "1" ? "1" : "",
+    adminidcrate: "",
+  }));
 
   const { error: insErr } = await admin.from("tb_wallet_hs").insert(hsRows);
   if (insErr) {
+    // Roll the header back so a retry doesn't strand a slip-bearing topup
+    // with no children (best-effort — PostgREST has no transaction).
+    await admin.from("tb_wallet_hs").delete().eq("id", whID);
     return { ok: false, error: `wallet_hs insert: ${insErr.message}` };
   }
 
-  // Faithful: do NOT flip tb_forwarder.fstatus (legacy keeps fStatus=5
-  // until the admin verifies the slip) and do NOT mutate tb_wallet
-  // (wallet disabled for this service).
-  //
-  // Wave 29: auto-receipt is NOT triggered here — the wallet_hs rows
-  // we just inserted are status='1' (pending admin verify). The receipt
-  // fires when admin flips them to status='2' via either
-  // `adminApproveWalletHs` (actions/admin/wallet-trans.ts) or
-  // `adminBulkApproveWalletHs` (actions/admin/tb-bulk.ts), both of which
-  // call `autoIssueReceiptOnPaymentLand`.
+  // 3. Bridge rows — the approve/reject cascade walks tb_wallet_paydeposit
+  //    (whid → hno) to settle/revert every parent under this ONE payment.
+  const { error: bridgeErr } = await admin
+    .from("tb_wallet_paydeposit")
+    .insert(eligible.map((r) => ({ whid: whID, hno: String(r.id) })));
+  if (bridgeErr) {
+    // Loud — without bridges the cascade can't settle the children. The
+    // payment record itself is intact; accounting settles via the fallback
+    // (reforder2 linkage) or re-submits.
+    console.error(`[submitForwarderPayment bridge insert] FAILED`, {
+      code: bridgeErr.code, message: bridgeErr.message, whID, userID,
+    });
+  }
+
+  // 4. Flip forwarders to the legacy pending-verify state (forwarder.php
+  //    L343-347): non-credit → fStatus='6' + paydeposit='1' (+fDateStatus6);
+  //    credit → fCredit='' + paydeposit='1' (no fstatus flip). G6: the
+  //    dispatch queue excludes paydeposit='1', so nothing ships until the
+  //    slip is approved. Reject reverts (cascade case-B).
+  const fUserCompanyValue = applyNiti ? "1" : "";
+  for (const r of eligible) {
+    const isCreditRow = r.fcredit === "1";
+    const fwdPatch: Record<string, unknown> = isCreditRow
+      ? { fcredit: "", paydeposit: "1", fdateadminstatus: datetimeNow, fusercompany: fUserCompanyValue }
+      : { fstatus: "6", paydeposit: "1", fdateadminstatus: datetimeNow, fdatestatus6: datetimeNow, fusercompany: fUserCompanyValue };
+    let q = admin.from("tb_forwarder").update(fwdPatch).eq("id", r.id).eq("userid", userID);
+    q = isCreditRow ? q.eq("fcredit", "1") : q.eq("fstatus", "5");
+    const { error: fUpdErr } = await q;
+    if (fUpdErr) {
+      console.error(`[submitForwarderPayment forwarder flip] failed`, {
+        code: fUpdErr.code, message: fUpdErr.message, fid: r.id, whID,
+      });
+    }
+  }
+
+  // The receipt fires at APPROVE (adminApproveWalletDeposit case-B →
+  // autoIssueReceiptOnPaymentLand covering ALL fids under this whID),
+  // mirroring legacy wallet.php $actionBillF → grenrateReceiptF.
 
   revalidatePath("/service-import");
   revalidatePath("/service-import/pending");

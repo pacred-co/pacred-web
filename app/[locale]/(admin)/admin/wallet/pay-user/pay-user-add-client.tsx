@@ -32,6 +32,7 @@ import { Link } from "@/i18n/navigation";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { PacredDialog, useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
+import { baseTracking } from "@/lib/admin/momo-bill-header";
 import { formatThaiDate, formatThaiDateTime, formatThaiTimeWithSeconds } from "@/lib/utils/thai-datetime";
 import { formatEtaWindowThai } from "@/lib/admin/forwarder-eta";
 import { NO_COVER_IMAGE } from "@/lib/legacy-image";
@@ -218,11 +219,24 @@ export function PayUserAddClient() {
   }
 
   // ── selection helpers ──
+  // SHIPMENT-ATOMIC toggle (owner 2026-07-22 "จ่ายแทนลูกค้า ต่อบิล = ทั้งชิปเม้น"):
+  // a MOMO box-split shipment is N tb_forwarder rows sharing one base tracking —
+  // ticking ONE box of it must bring the whole shipment (and unticking drops the
+  // whole shipment), so staff can't accidentally collect a partial shipment.
+  // fwdRows already contains only payable rows (fstatus='5' OR fcredit='1').
   function toggleFwd(fid: string) {
     setSelFwds((prev) => {
       const next = new Set(prev);
-      if (next.has(fid)) next.delete(fid);
-      else next.add(fid);
+      const row = fwdRows.find((r) => r.fid === fid);
+      const base = row ? baseTracking(row.ftrackingchn) : null;
+      const groupFids = base
+        ? fwdRows.filter((r) => baseTracking(r.ftrackingchn) === base).map((r) => r.fid)
+        : [fid];
+      const adding = !next.has(fid);
+      for (const f of groupFids) {
+        if (adding) next.add(f);
+        else next.delete(f);
+      }
       return next;
     });
   }
