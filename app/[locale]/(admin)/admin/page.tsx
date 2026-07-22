@@ -45,6 +45,7 @@ import { computeBillWht } from "@/lib/billing/wht";
 import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
 import { resolveViewAsRole } from "@/lib/admin/view-as-role";
 import { isGodRole } from "@/lib/admin/god-role";
+import { canViewCost } from "@/lib/admin/money-visibility";
 import { Link, redirect } from "@/i18n/navigation";
 import { getLocale } from "next-intl/server";
 import { ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon, Users, UserX, XCircle, Eye, LayoutGrid, ArrowRight } from "lucide-react";
@@ -315,6 +316,14 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   const rateShop     = Number(settingsRow?.hratecostdefault ?? 5);
   const rateSale     = Number(settingsRow?.rsdefault ?? 5);
   const ratePayment  = Number(settingsRow?.rpdefault ?? 5);
+  // "เรทต้นทุน (ภายใน)" = hratecostdefault = COST-internal → canViewCost only
+  // (money-visibility.ts). Was UNGATED (a real leak: sales/ops/qa/manager saw it).
+  // Gated on EFFECTIVE roles → closes the leak for real non-cost office roles AND
+  // makes the 👁 view-as preview faithful (previewing sales hides it, accounting
+  // shows it). effectiveRoles === real roles for non-previewers; the money-tier
+  // gate guarantees a preview can only DOWNGRADE, never reveal cost above the real
+  // role. SELL/transfer rates below stay visible to all (not money-internal).
+  const showCostRate = canViewCost(effectiveRoles);
 
   // DISTINCT fcabinetnumber count (1 ตู้ = 1 count, many shipments share).
   const activeContainersCount = new Set(
@@ -467,9 +476,11 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
           a rate) was moved OUT of this row into its own stat below. Columns each
           chip reads are UNCHANGED — labels + placement only. */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
-        {/* 3-chip rate row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
-          <RateChip color="cyan"    label="เรทต้นทุน (ภายใน)" value={rateShop.toFixed(2)} />
+        {/* 3-chip rate row — เรทต้นทุน hidden for non-cost roles (see showCostRate) */}
+        <div className={`grid grid-cols-1 gap-3 text-center ${showCostRate ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+          {showCostRate && (
+            <RateChip color="cyan"  label="เรทต้นทุน (ภายใน)" value={rateShop.toFixed(2)} />
+          )}
           <RateChip color="red"     label="เรทฝากสั่ง (ขาย)"  value={rateSale.toFixed(2)} />
           <RateChip color="purple"  label="เรทโอน"            value={ratePayment.toFixed(2)} />
         </div>
