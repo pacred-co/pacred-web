@@ -18,6 +18,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
 import { signQuoteToken } from "@/lib/quote/quote-token";
+import { mintQuotationDocNo } from "@/lib/admin/mint-receipt-doc-no";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 // The payload is the serialized QuoteModel (components/quote/quote-paper.tsx).
@@ -95,23 +96,29 @@ export type SaveQuotationInput = z.infer<typeof inputSchema>;
 
 export async function saveQuotationForShare(
   input: unknown,
-): Promise<AdminActionResult<{ token: string; id: number }>> {
+): Promise<AdminActionResult<{ token: string; id: number; refNo: string }>> {
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
   const d = parsed.data;
 
-  return withAdmin<{ token: string; id: number }>(
+  return withAdmin<{ token: string; id: number; refNo: string }>(
     ["super", "ops", "sales_admin", "accounting", "sales"],
     async ({ adminId }) => {
       const admin = createAdminClient();
+      // Mint a SYSTEM-WIDE running number server-side (QT{yyMM}-{NNNNN}) — the client
+      // seed (QT-{userid}-{date}) was NOT running → ทุกใบวันเดียวกันได้เลขซ้ำ (owner
+      // 2026-07-22). Override BOTH the column AND payload.refNo so the stored doc
+      // (public /q/[token]) และ ประวัติ โชว์เลขรันตัวเดียวกัน.
+      const refNo = await mintQuotationDocNo(admin, { userid: d.userid, issueDate: new Date() });
+      const payload = { ...d.payload, refNo };
       const { data, error } = await admin
         .from("customer_quotations")
         .insert({
           userid: d.userid.toUpperCase(),
-          ref_no: d.refNo,
-          payload: d.payload,
+          ref_no: refNo,
+          payload,
           created_by_admin: adminId,
         })
         .select("id")
@@ -128,9 +135,9 @@ export async function saveQuotationForShare(
       const token = signQuoteToken(id);
       await logAdminAction(adminId, "share_quotation", "customer_quotation", String(id), {
         userid: d.userid.toUpperCase(),
-        refNo: d.refNo,
+        refNo,
       });
-      return { ok: true, data: { token, id } };
+      return { ok: true, data: { token, id, refNo } };
     },
   );
 }
@@ -150,6 +157,8 @@ export type QuoteHistoryRow = {
   token: string;
   createdAt: string;
   view: "compare" | "calc";
+  /** true = the payload's นิติบุคคล/WHT-1% toggle was on — restores it on "แก้ไข/ออกใหม่". */
+  juristic: boolean;
   /** Service category (cargo · freight · clearance) — for the ประวัติ filter. */
   service: string;
   buyerName: string;
@@ -194,6 +203,7 @@ export async function listCustomerQuotations(
           token: signQuoteToken(Number(r.id)),
           createdAt: String(r.created_at ?? ""),
           view: p.view === "calc" ? "calc" : "compare",
+          juristic: Boolean(p.juristic),
           // Older payloads have no `service` — every quote before this was cargo.
           service: String(p.service || "cargo"),
           buyerName: String(p.buyerName ?? ""),

@@ -100,6 +100,8 @@ export type PaymentSummaryDocProps = {
   sumTotal: number;
   sumDeliveryChn: number;
   sumDeliveryTh: number;
+  /** ค่าส่งเหมาๆ (PCSF/PRF ฿100) — บรรทัดแยกในสรุป (ตรงกับ PayModal · owner 2026-07-22). */
+  sumMaoFee: number;
   sumOther: number;
   sumDiscount: number;
   whtAmount: number;
@@ -138,11 +140,12 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
     return Math.round(((Number.isFinite(v) ? v : 0) + Number.EPSILON) * 100) / 100;
   };
   const feeChn = r2(p.sumDeliveryChn);
-  const feeThaiShip = r2(p.sumDeliveryTh); // already includes ค่าส่งเหมาๆ (folded upstream)
+  const feeThaiShip = r2(p.sumDeliveryTh);
+  const feeMao = r2(p.sumMaoFee); // ค่าส่งเหมาๆ (PCSF/PRF ฿100) — บรรทัดของตัวเอง (ตรงกับ PayModal)
   const feeOther = r2(p.sumOther);
   const feeDiscount = r2(p.sumDiscount);
   const feeFreight = r2(
-    r2(p.totalPriceAll) - (feeChn + feeThaiShip + feeOther - feeDiscount),
+    r2(p.totalPriceAll) - (feeChn + feeThaiShip + feeMao + feeOther - feeDiscount),
   );
 
   // อ้างอิง — the order numbers this sheet covers (mirrors the ใบวางบิล meta-box).
@@ -268,12 +271,12 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
                   <Th w="9%"  th="เลขตู้"        en="Container" center />
                   <Th w="5%"  th="ขนส่ง"        en="Ship" center />
                   <Th w="11%" th="รหัสพัสดุ"     en="Tracking" left />
+                  <Th w="5%"  th="จำนวน"        en="Box" right />
+                  <Th w="10%" th="ขนาด(ก×ย×ส)"  en="W×L×H·ซม." center />
+                  <Th w="8%"  th="ปริมาตร"      en="CBM" right />
+                  <Th w="7%"  th="น้ำหนัก"       en="Wt·kg" right />
                   <Th w="6%"  th="ประเภท"       en="Type" center />
                   <Th w="7%"  th="เรทราคา"      en="Rate" right />
-                  <Th w="5%"  th="จำนวน"        en="Box" right />
-                  <Th w="7%"  th="น้ำหนัก"       en="Wt·kg" right />
-                  <Th w="8%"  th="ปริมาตร"      en="CBM" right />
-                  <Th w="10%" th="ขนาด(ก×ย×ส)"  en="W×L×H·ซม." center />
                   <Th w="7%"  th="ค่าขนส่ง"      en="Amount" right />
                   <Th w="8%"  th="อื่นๆ"         en="Other" right />
                 </tr>
@@ -295,12 +298,12 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
                         {r.transport || "—"}
                       </td>
                       <td style={tdMono}>{r.tracking || "—"}</td>
+                      <td style={tdNum}>{fmt0(r.boxes)}</td>
+                      <td style={{ ...tdC, fontSize: "8px", color: "#374151", fontFamily: "monospace" }}>{dimsCm(r.width, r.length, r.height)}</td>
+                      <td style={tdNum}>{fmt5(r.volume)}</td>
+                      <td style={tdNum}>{fmt2(r.weight)}</td>
                       <td style={{ ...tdC, fontSize: "8px", color: "#374151" }}>{r.productType || "—"}</td>
                       <td style={tdNum}>{r.rate > 0 ? fmt2(r.rate) : "—"}</td>
-                      <td style={tdNum}>{fmt0(r.boxes)}</td>
-                      <td style={tdNum}>{fmt2(r.weight)}</td>
-                      <td style={tdNum}>{fmt5(r.volume)}</td>
-                      <td style={{ ...tdC, fontSize: "8px", color: "#374151", fontFamily: "monospace" }}>{dimsCm(r.width, r.length, r.height)}</td>
                       <td style={tdNum}>{fmt2(r.amount)}</td>
                       <td style={tdNum}>{r.otherCharges > 0 ? fmt2(r.otherCharges) : "—"}</td>
                     </tr>
@@ -330,6 +333,7 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
                   <div style={{ flex: 1 }}>
                     <SumLine k="ค่าขนส่งสินค้า" v={`${fmt2(feeFreight)} บาท`} />
                     {feeThaiShip > 0 && <SumLine k="+ ค่าขนส่งไทย" v={`${fmt2(feeThaiShip)} บาท`} />}
+                    {feeMao > 0 && <SumLine k="+ ค่าส่งเหมาๆ" v={`${fmt2(feeMao)} บาท`} />}
                     {feeChn > 0 && <SumLine k="+ ค่าขนส่งจีน+" v={`${fmt2(feeChn)} บาท`} />}
                     {feeOther > 0 && <SumLine k="+ ค่าอื่นๆ" v={`${fmt2(feeOther)} บาท`} />}
                     {feeDiscount > 0 && <SumLine k="− ส่วนลด" v={`${fmt2(feeDiscount)} บาท`} red />}
