@@ -5,7 +5,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { isGodRole } from "@/lib/admin/god-role";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDevCockpitAdmin } from "@/lib/admin/dev-cockpit";
-import { VIEW_AS_COOKIE, isPreviewableRole } from "@/lib/admin/view-as-role";
+import { VIEW_AS_COOKIE, isPreviewableRole, wouldGrantMoneyVisibility } from "@/lib/admin/view-as-role";
 
 /**
  * 👁 VIEW-AS-ROLE actions (ภูม 2026-07-22) — set/clear the display-only preview.
@@ -52,6 +52,16 @@ export async function setViewAsRole(
   }
   if (!isPreviewableRole(role)) {
     return { ok: false, error: "role ที่เลือกไม่ถูกต้อง" };
+  }
+  // MONEY-TIER GATE — refuse a target that would reveal COST/PROFIT this god's
+  // REAL roles lack (e.g. a super previewing accounting/pricing). `ultra` passes
+  // every tier, so an ultra operator is never restricted; this future-proofs the
+  // day a super/normies account is allow-listed. See lib/admin/view-as-role.ts.
+  if (wouldGrantMoneyVisibility(role, roles)) {
+    return {
+      ok: false,
+      error: "ดูมุมมอง role นี้ไม่ได้ — จะเห็นข้อมูลต้นทุน/กำไรเกินสิทธิ์จริงของคุณ",
+    };
   }
   const c = await cookies();
   c.set(VIEW_AS_COOKIE, role, COOKIE_OPTS);
