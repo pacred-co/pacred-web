@@ -1788,6 +1788,7 @@ app/[locale]/(protected)/         # หลังบ้าน (ลูกค้า
 | คน | บทบาท | Branch | Release to main |
 |---|---|---|---|
 | **เดฟ** (dave) | Project Lead / Integrator (works on the owner's behalf) | `dave-pacred` (the integration trunk) | ✅ release gate, on owner's go |
+| **Codex** | AI pair ของเดฟ (ทั้ง Mac + คอมทำงาน) — tasking · review · test · helper impl (ดู docs/team.md §0.1) | `codex` → merge เข้า `dave-pacred` ตามลำดับ | ❌ รอเดฟ review + owner confirm |
 | **ภูม** (Poom) | Backend / Admin / Accounting | `Poom-pacred` | ❌ own branch → เดฟ integrates |
 | **ปอน** (podeng) | Frontend / UI / SEO | `InwPond007` | ❌ own branch → เดฟ integrates |
 | **ก๊อต** (got) | Senior Advisor / Production Watcher | `main` review + assigned | ✅ release gate with เดฟ |
