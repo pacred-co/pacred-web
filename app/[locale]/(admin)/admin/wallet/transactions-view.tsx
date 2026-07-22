@@ -25,6 +25,7 @@ import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 import { fetchCorporateNameMap, resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 import { Explain } from "@/components/ui/tooltip";
 import { isWalletCredit } from "@/lib/wallet/wallet-hs";
+import { groupDirectWalletSlips } from "@/lib/admin/wallet-slip-group";
 
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอตรวจสอบ",
@@ -87,6 +88,7 @@ type WhsRow = {
   amount: number | null;
   status: string | null;
   type: string | null;
+  typeservice: string | null;
   imagesslip: string | null;
   depositnamebank: string | null;
   note: string | null;
@@ -162,7 +164,7 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
   let qb = admin
     .from("tb_wallet_hs")
     .select(
-      "id,date,dateslip,amount,status,type,imagesslip,depositnamebank,note,userid,adminid,adminidcrate,reforder2",
+      "id,date,dateslip,amount,status,type,typeservice,imagesslip,depositnamebank,note,userid,adminid,adminidcrate,reforder2",
       { count: "exact" },
     )
     .order(sortColumn, { ascending: sortDir === "asc" })
@@ -221,7 +223,13 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
   // bulk-approve, still inspectable in the expander).
   type GroupedTx =
     | { kind: "single"; row: WhsRow }
-    | { kind: "group"; parent: WhsRow; siblings: WhsRow[] };
+    | { kind: "group"; parent: WhsRow; siblings: WhsRow[]; groupKind: "ledger" | "direct-slip"; totalSatang?: number };
+
+  const directGroups = groupDirectWalletSlips(rows).filter((group) => group.rows.length > 1);
+  const directGroupByRowId = new Map<number, (typeof directGroups)[number]>();
+  for (const group of directGroups) {
+    for (const row of group.rows) directGroupByRowId.set(row.id, group);
+  }
 
   // Map of parent-topup id → its pay siblings present on this page.
   const siblingsByParent = new Map<number, WhsRow[]>();
@@ -241,11 +249,25 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
   for (const r of rows) {
     // Skip rows already absorbed as a sibling of an earlier-rendered parent.
     if (consumedChildIds.has(r.id)) continue;
+    const directGroup = directGroupByRowId.get(r.id);
+    if (directGroup) {
+      if (directGroup.anchor.id !== r.id) continue;
+      const siblings = directGroup.rows.filter((item) => item.id !== r.id);
+      for (const sibling of siblings) consumedChildIds.add(sibling.id);
+      groupedRows.push({
+        kind: "group",
+        parent: r,
+        siblings,
+        groupKind: "direct-slip",
+        totalSatang: directGroup.totalSatang,
+      });
+      continue;
+    }
     const sibs = siblingsByParent.get(r.id);
     if (sibs && sibs.length > 0) {
       // r is a parent top-up that has pay siblings on this page → group.
       for (const s of sibs) consumedChildIds.add(s.id);
-      groupedRows.push({ kind: "group", parent: r, siblings: sibs });
+      groupedRows.push({ kind: "group", parent: r, siblings: sibs, groupKind: "ledger" });
       continue;
     }
     if (r.reforder2 != null && rowById.has(r.reforder2)) {
@@ -414,7 +436,12 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
                       userMap={userMap}
                       corpNames={corpNames}
                       slipUrlMap={slipUrlMap}
-                      groupContext={{ siblings, ledgerCount: 1 + siblings.length }}
+                      groupContext={{
+                        siblings,
+                        ledgerCount: 1 + siblings.length,
+                        groupKind: g.groupKind,
+                        totalSatang: g.totalSatang,
+                      }}
                     />
                   );
                 })}
@@ -479,14 +506,21 @@ function TxRow({
   userMap: Map<string, URow>;
   corpNames: Map<string, string>;
   slipUrlMap: Record<string, string | null>;
-  groupContext?: { siblings: WhsRow[]; ledgerCount: number };
+  groupContext?: {
+    siblings: WhsRow[];
+    ledgerCount: number;
+    groupKind: "ledger" | "direct-slip";
+    totalSatang?: number;
+  };
   /** F4 — >1 when this row shares its slip with other rows (combined payment). */
   sharedSlipCount?: number;
 }) {
   const u = row.userid ? userMap.get(row.userid) : undefined;
   const rowStatus = row.status ?? "1";
   const type = row.type ?? "";
-  const amount = Number(row.amount ?? 0);
+  const amount = groupContext?.groupKind === "direct-slip" && groupContext.totalSatang != null
+    ? groupContext.totalSatang / 100
+    : Number(row.amount ?? 0);
   // Money OUT? Derived from `type` (SOT), NEVER the amount sign — tb_wallet_hs.amount
   // is stored POSITIVE, so `amount < 0` matched nothing and every debit rendered as
   // if it were incoming. Debits (order-payment/withdraw/import/yuan) now show red −.
@@ -519,7 +553,9 @@ function TxRow({
           {isGroup ? (
             <div className="space-y-0.5">
               <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
-                💳 ชำระค่าฝากนำเข้า (รวมเติม+ตัด เป็นรายการเดียว)
+                {groupContext?.groupKind === "direct-slip"
+                  ? `💳 สลิปรวมฝากนำเข้า ${groupContext.ledgerCount} ชิปเมนต์ · ตรวจเป็นรายการเดียว`
+                  : "💳 ชำระค่าฝากนำเข้า (รวมเติม+ตัด เป็นรายการเดียว)"}
               </span>
               {row.note ? (
                 <div className="text-muted text-[11px] line-clamp-2 max-w-[16rem]">{row.note}</div>
@@ -586,7 +622,9 @@ function TxRow({
           <td colSpan={9} className="px-3 pb-3 pt-0">
             <details className="text-xs">
               <summary className="cursor-pointer select-none py-1 text-muted hover:text-foreground">
-                ดูรายการย่อย (เติมเงิน + ตัดชำระ) · {groupContext!.ledgerCount} รายการ
+                {groupContext!.groupKind === "direct-slip"
+                  ? `ดูชิปเมนต์ในสลิปนี้ · ${groupContext!.ledgerCount} รายการ`
+                  : `ดูรายการย่อย (เติมเงิน + ตัดชำระ) · ${groupContext!.ledgerCount} รายการ`}
               </summary>
               <div className="mt-2 overflow-x-auto rounded-lg border border-border bg-white dark:bg-surface">
                 <table className="w-full text-[11px]">

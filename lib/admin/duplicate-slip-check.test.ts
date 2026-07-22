@@ -11,11 +11,17 @@ const ok = (label: string, c: boolean) => { if (c) { pass++; console.log(`  ✓ 
 // Fake admin: .from().select().eq().neq().neq().in().gte().lte() → resolves {data, error}.
 // `eqCalls` records every .eq(col,val) so a test can assert the userid scoping.
 const eqCalls: Array<[string, unknown]> = [];
+const neqCalls: Array<[string, unknown]> = [];
 function fakeAdmin(result: { data: unknown[] | null; error: unknown }) {
   eqCalls.length = 0;
+  neqCalls.length = 0;
   const chain: Record<string, unknown> = {};
   for (const m of ["select", "eq", "neq", "in", "gte", "lte"]) {
-    chain[m] = (...args: unknown[]) => { if (m === "eq") eqCalls.push([args[0] as string, args[1]]); return chain; };
+    chain[m] = (...args: unknown[]) => {
+      if (m === "eq") eqCalls.push([args[0] as string, args[1]]);
+      if (m === "neq") neqCalls.push([args[0] as string, args[1]]);
+      return chain;
+    };
   }
   chain.then = (res: (v: { data: unknown[] | null; error: unknown }) => void) => res(result);
   return { from: () => chain } as unknown as Parameters<typeof findDuplicateSlips>[0];
@@ -51,6 +57,17 @@ console.log("duplicate-slip-check:");
   // 7. userid absent → NO userid filter (back-compat)
   await findDuplicateSlips(fakeAdmin({ data: [], error: null }), { id: 1, amount: 100, dateslip: "2026-06-19T03:00:00Z" });
   ok("userid absent → no .eq('userid')", !eqCalls.some(([c]) => c === "userid"));
+
+  // 8. sibling rows created by the same upload are excluded from fraud matches.
+  await findDuplicateSlips(fakeAdmin({ data: [], error: null }), {
+    id: 1,
+    userid: "PR050",
+    amount: 415.13,
+    dateslip: "2026-07-20T03:07:00Z",
+    imagesslip: "PR050/forwarder_payment/one.jpeg",
+  });
+  ok("same uploaded slip path is excluded from duplicate candidates",
+    neqCalls.some(([c, v]) => c === "imagesslip" && v === "PR050/forwarder_payment/one.jpeg"));
 
   console.log(`\nduplicate-slip-check: ${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);

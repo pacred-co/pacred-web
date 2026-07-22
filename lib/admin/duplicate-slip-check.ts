@@ -29,7 +29,10 @@ export interface DuplicateSlipMatch {
  */
 export async function findDuplicateSlips(
   admin: SupabaseClient,
-  row: { id: number; userid?: string | null; amount: number | string | null; dateslip: string | null },
+  row: {
+    id: number; userid?: string | null; amount: number | string | null;
+    dateslip: string | null; imagesslip?: string | null;
+  },
 ): Promise<DuplicateSlipMatch[]> {
   if (!row.dateslip) return [];
   const slipDate = new Date(row.dateslip);
@@ -54,6 +57,10 @@ export async function findDuplicateSlips(
     .gte("dateslip", dayStart.toISOString())
     .lte("dateslip", dayEnd.toISOString());
   if (row.userid) q = q.eq("userid", row.userid);
+  // Rows created by one multi-shipment checkout intentionally share the exact
+  // uploaded file. They are children of ONE payment, not duplicate payments.
+  // Keep the same-day/same-amount fraud gate for every other slip path.
+  if (row.imagesslip?.trim()) q = q.neq("imagesslip", row.imagesslip.trim());
   const { data, error } = await q;
   if (error) {
     // Fail CLOSED: a money guard we can't complete must hold (surface as "duplicate

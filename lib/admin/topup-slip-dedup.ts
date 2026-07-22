@@ -22,6 +22,7 @@
 
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { pendingTopupFilter } from "@/lib/wallet/wallet-hs";
+import { groupDirectWalletSlips } from "@/lib/admin/wallet-slip-group";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -116,13 +117,23 @@ export async function loadPendingFriForwarderSets(
  * rather than throwing (a badge must never break the sidebar).
  */
 export async function computeTopupBadge(admin: AdminClient): Promise<number> {
-  const [walletCountRes, friSets] = await Promise.all([
+  const [walletRowsRes, friSets] = await Promise.all([
     pendingTopupFilter(
-      admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }),
-    ) as unknown as Promise<{ count: number | null }>,
+      admin.from("tb_wallet_hs").select("id,userid,imagesslip,type,typeservice,reforder,reforder2,amount"),
+    ) as unknown as Promise<{ data: Array<{
+      id: number; userid: string | null; imagesslip: string | null;
+      type: string | null; typeservice: string | null; reforder: string | null;
+      reforder2: string | number | null; amount: number | string | null;
+    }> | null; error: { message?: string } | null }>,
     loadPendingFriForwarderSets(admin),
   ]);
-  const walletCount = walletCountRes.count ?? 0;
+  if (walletRowsRes.error) {
+    console.warn("[computeTopupBadge] wallet rows read failed (soft-fail)", walletRowsRes.error);
+  }
+  const walletRows = walletRowsRes.data ?? [];
+  // One uploaded direct-payment slip can own N shipment ledger rows.  The badge
+  // counts review jobs (slips), not physical ledger rows.
+  const walletCount = groupDirectWalletSlips(walletRows).length;
   const friCount = friSets.length;
 
   const friFids = new Set<number>();
@@ -133,18 +144,11 @@ export async function computeTopupBadge(admin: AdminClient): Promise<number> {
   // that are a DIRECT forwarder-pay (type='4') for a forwarder already on a
   // pending FRI. Same predicate the list uses (only type-4 direct rows carry a
   // reforder=fid; pendingTopupFilter already excludes the type-4 cascade half).
-  const suppressedRes = (await (
-    pendingTopupFilter(
-      admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }),
-    ) as unknown as {
-      eq: (c: string, v: string) => {
-        in: (c: string, v: string[]) => Promise<{ count: number | null }>;
-      };
-    }
-  )
-    .eq("type", "4")
-    .in("reforder", [...friFids].map(String))) as { count: number | null };
-  const suppressed = suppressedRes.count ?? 0;
+  // Suppression also works at logical-group granularity.  A single slip group
+  // is hidden once when any of its covered forwarders belongs to the FRI.
+  const suppressed = groupDirectWalletSlips(walletRows).filter((group) =>
+    group.rows.some((row) => row.reforder && friFids.has(Number(row.reforder))),
+  ).length;
 
   return walletCount - suppressed + friCount;
 }
