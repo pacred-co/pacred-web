@@ -119,7 +119,10 @@ export default async function AdminWalletPage({
     admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).in("type", ["1", "2", "8"]).eq("status", "1"),
     // ADR-0018 P1-25: customer withdraw pending = type='3' (was wrongly '7').
     admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("type", "3").eq("status", "1"),
-    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1"),
+    // 1 การจ่าย = 1 รายการ (owner 2026-07-22): a combined payment's type-4
+    // allocation children (reforder2 → their type-1 header) settle WITH the
+    // header — counting them inflates the "รอตรวจรวม" badge by N per payment.
+    admin.from("tb_wallet_hs").select("id", { count: "exact", head: true }).eq("status", "1").or("type.neq.4,reforder2.is.null"),
     admin.from("tb_wallet").select("userid", { count: "exact", head: true }),
   ]);
 

@@ -1667,7 +1667,13 @@ async function adminApproveWalletDepositImpl(
           .eq("status", "1");
         if (childErr) return { ok: false, error: `db_error:${childErr.code ?? "unknown"}` };
 
-        const consistency = checkLinkedPaymentConsistency(amount, childRows ?? [], authoritative.batch);
+        // ADR-0025: an applied-cashback payment stores the header amount NET of
+        // the cashback (the slip the customer actually transferred = total − CB;
+        // the CB rides the [CB:<amt>] note tag + is debited from tb_cash_back at
+        // approve). Add it back before comparing against the authoritative total.
+        const cbCarried = parseCashbackNoteTag(rowRaw.note);
+        const headerGross = Math.round((amount + cbCarried) * 100) / 100;
+        const consistency = checkLinkedPaymentConsistency(headerGross, childRows ?? [], authoritative.batch);
         if (!consistency.ok) {
           console.error("[wallet approve] linked forwarder amount mismatch", {
             id,
@@ -1813,6 +1819,10 @@ async function adminApproveWalletDepositImpl(
       walletAfter = walletBefore;  // no change on approve when linked
 
       // For each linked parent, dispatch by hno prefix.
+      // Settled forwarder ids feed the ONE receipt minted after the loop
+      // (legacy wallet.php `$actionBillF=1` → grenrateReceiptF — the receipt
+      // covers EVERY forwarder row under this whID · one payment = one receipt).
+      const settledFwdFids: number[] = [];
       for (const link of links) {
         const klass = classifyHnoParent(link.hno);
 
@@ -2026,6 +2036,7 @@ async function adminApproveWalletDepositImpl(
               toStatus: `paydeposit=|fcredit=|fdatestatus6=${nowIso}`,
               note: "approve · wUserCredit branch",
             });
+            settledFwdFids.push(fwdId);
           } else {
             // Non-credit branch: clear paydeposit + set fdatestatus6.
             // Legacy L562.
@@ -2054,6 +2065,7 @@ async function adminApproveWalletDepositImpl(
               toStatus: `paydeposit=|fdatestatus6=${nowIso}`,
               note: "approve · non-credit branch",
             });
+            settledFwdFids.push(fwdId);
           }
         }
       }
@@ -2173,11 +2185,59 @@ async function adminApproveWalletDepositImpl(
         });
       }
 
+      // ──────────────────────────────────────────
+      // (vi) RECEIPT for the settled forwarder batch (owner 2026-07-22 ·
+      //      "ตรวจสลิปเสร็จ step-flow ต้องนำพาไปออกใบเสร็จ").
+      //
+      //   Legacy wallet.php: forwarder parents settled → `$actionBillF=1` →
+      //   grenrateReceiptF({whID, rIDInput}) mints ONE receipt covering
+      //   EVERY forwarder row under this payment. This cascade previously
+      //   issued NO receipt (only the DIRECT type-4 branch did) → combined
+      //   payments (customer slip + จ่ายแทนลูกค้า) ended verify with no
+      //   receipt + no onward step. autoIssueReceiptOnPaymentLand is
+      //   idempotent (skips fids already on a live receipt) + honors the
+      //   STEP-2 hand-picked เลขที่ (overrideRid). BEST-EFFORT — a receipt
+      //   failure never undoes the settle (accounting re-issues via
+      //   "＋ออกใบเสร็จ" on the forwarder detail).
+      // ──────────────────────────────────────────
+      let issuedReceiptId: number | null = null;
+      if (settledFwdFids.length > 0) {
+        try {
+          const rcpt = await autoIssueReceiptOnPaymentLand(admin, {
+            userid,
+            fids: settledFwdFids,
+            dateSlip: rowRaw.dateslip ? new Date(rowRaw.dateslip) : new Date(),
+            source: "wallet_hs.deposit-cascade",
+            overrideRid,
+          });
+          if (rcpt.ok) {
+            issuedReceiptId = rcpt.data.receiptId;
+            revalidatePath(`/admin/accounting/forwarder-invoice/${rcpt.data.receiptId}`);
+            cascadedRows.push({
+              table: "tb_wallet_hs",
+              id: `receipt:${rcpt.data.receiptId}`,
+              fromStatus: null,
+              toStatus: null,
+              note: `ใบเสร็จ ${rcpt.data.rid} ครอบ ${settledFwdFids.length} รายการ`,
+            });
+          } else if (rcpt.error !== "already_issued") {
+            logger.warn("wallet-hs", "deposit-cascade receipt failed (non-fatal · settle stands)", {
+              wallet_hs_id: id, userid, fids: settledFwdFids, error: rcpt.error,
+            });
+          }
+        } catch (e) {
+          logger.warn("wallet-hs", "deposit-cascade receipt threw (non-fatal)", {
+            wallet_hs_id: id, userid, error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
       await logAdminAction(adminId, "tb_wallet_hs.approve_deposit", "tb_wallet_hs", String(id), {
         userid,
         amount,
         hadPaydepositLinks: true,
         linkCount: links.length,
+        receiptId: issuedReceiptId,
         before: { wallettotal: walletBefore },
         after:  { wallettotal: walletAfter },
         cascade: cascadedRows,
@@ -2210,6 +2270,7 @@ async function adminApproveWalletDepositImpl(
           },
           cascadedRows,
           hadPaydepositLinks: true,
+          receiptId: issuedReceiptId,
         },
       };
     },

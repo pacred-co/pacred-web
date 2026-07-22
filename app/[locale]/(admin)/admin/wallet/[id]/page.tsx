@@ -1019,12 +1019,22 @@ export default async function AdminWalletDetail({
                   reviewedAt={reviewedAt}
                   // round-1 status shown in the header above → don't repeat the banner
                   showRound1Banner={false}
-                  // STEP-2 doc-number panel: a ฝากนำเข้า DIRECT slip issues a ใบเสร็จ at
-                  // approve → let accounting see/edit the receipt เลขที่ before it's minted.
+                  // STEP-2 doc-number panel: a receipt-issuing slip → let accounting
+                  // see/edit the receipt เลขที่ before it's minted. Two shapes issue a
+                  // receipt at approve:
+                  //   · DIRECT type-4 slip (reforder = the fid)
+                  //   · type-1 COMBINED payment (ONE slip + total · paydeposit links →
+                  //     forwarder children — legacy "1 การจ่าย = 1 บิล = 1 ใบเสร็จ") —
+                  //     the cascade mints ONE receipt covering EVERY linked fid; the
+                  //     first fid is the representative for the preview/link.
                   receiptContext={
                     isDirectSlip && row.reforder && /^\d+$/.test(String(row.reforder))
                       ? { fid: Number(row.reforder), userid, dateSlipIso: row.dateslip }
-                      : null
+                      : row.type === "1"
+                          && paymentTargets.length > 0
+                          && paymentTargets.every((t) => /^\d+$/.test(t.hno))
+                        ? { fid: Number(paymentTargets[0].hno), userid, dateSlipIso: row.dateslip }
+                        : null
                   }
                 />
               </>

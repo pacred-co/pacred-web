@@ -599,6 +599,10 @@ export function ApproveRejectForm({
   // null = keep the auto-mint suggestion (receipt เลขที่ minted MAX+1 at settle);
   // string = accounting hand-picked the เลขที่ (passed as overrideRid).
   const [overrideRid, setOverrideRid] = useState<string | null>(null);
+  // Post-approve success popup (owner 2026-07-22 "popup ต้องเด้ง หลังตรวจสลิป
+  // เสร็จ + นำพาไปออกใบเสร็จ" — the legacy sweetalert 'sUpdate' step). Set on a
+  // successful verify; carries the minted receipt id(s) for the onward step.
+  const [successInfo, setSuccessInfo] = useState<{ receiptIds: number[] } | null>(null);
 
   const isWithdraw = kind === "withdraw";
   // Round-1 is pending when the row needs it + hasn't been reviewed yet.
@@ -649,21 +653,21 @@ export function ApproveRejectForm({
           router.refresh();
           return;
         }
-        // จบลูป (owner 2026-07-15): a receipt-issuing DIRECT slip → หลังยืนยัน + สร้าง
-        // ใบเสร็จแล้ว พาไปหน้าประวัติใบเสร็จ (ที่ใบเสร็จเพิ่งออกไปอยู่). อื่นๆ (topup /
-        // withdraw · ไม่ออกใบเสร็จ) → refresh อยู่หน้าเดิม แสดงสถานะ "ทำรายการแล้ว".
-        if (!isWithdraw && receiptContext) {
-          const receiptIds = groupIds.length > 1 && "data" in res && res.data && "receiptIds" in res.data
-            ? res.data.receiptIds
-            : groupIds.length === 1 && "data" in res && res.data && "receiptId" in res.data && res.data.receiptId
-              ? [res.data.receiptId]
-              : [];
-          router.push(receiptIds.length === 1
-            ? `/admin/accounting/forwarder-invoice/${receiptIds[0]}`
-            : "/admin/accounting/receipts");
-        } else {
+        if (isWithdraw) {
           router.refresh();
+          return;
         }
+        // จบลูป (owner 2026-07-22 "popup ต้องเด้ง + step-flow นำพาไปออกใบเสร็จ"):
+        // legacy sweetalert 'sUpdate' fires on EVERY verify — mirror it with a
+        // success dialog; when a receipt was minted (DIRECT slip OR the combined
+        // topup-and-pay cascade) the primary action opens it (ตรวจสลิป → ใบเสร็จ).
+        const receiptIds = groupIds.length > 1 && "data" in res && res.data && "receiptIds" in res.data
+          ? res.data.receiptIds
+          : groupIds.length === 1 && "data" in res && res.data && "receiptId" in res.data && res.data.receiptId
+            ? [res.data.receiptId]
+            : [];
+        router.refresh();
+        setSuccessInfo({ receiptIds: receiptIds.filter((n): n is number => typeof n === "number") });
       } else {
         setError(res.error);
       }
@@ -704,6 +708,45 @@ export function ApproveRejectForm({
 
   return (
     <div className="space-y-3">
+      {/* ✅ Post-verify popup (legacy sweetalert 'sUpdate') — must-click, never
+          closes on outside click (task #25 rule). Primary = the onward step
+          (เปิดใบเสร็จ) when one was minted. */}
+      {successInfo && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-sm rounded-2xl border border-emerald-200 bg-white p-5 text-center shadow-2xl dark:bg-surface">
+            <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-emerald-100 text-2xl">✅</div>
+            <p className="text-base font-bold text-foreground">ตรวจสลิปสำเร็จ · ตัดจ่ายเรียบร้อย</p>
+            <p className="mt-1 text-xs text-muted">
+              {successInfo.receiptIds.length > 0
+                ? "ระบบสร้างใบเสร็จรับเงินให้อัตโนมัติแล้ว"
+                : "บันทึกรายการเรียบร้อย"}
+            </p>
+            <div className="mt-4 grid gap-2">
+              {successInfo.receiptIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(successInfo.receiptIds.length === 1
+                      ? `/admin/accounting/forwarder-invoice/${successInfo.receiptIds[0]}`
+                      : "/admin/accounting/receipts")
+                  }
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-emerald-700"
+                >
+                  🧾 เปิดใบเสร็จ
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setSuccessInfo(null)}
+                className="inline-flex items-center justify-center rounded-lg border border-border bg-white px-3 py-2 text-sm font-semibold text-foreground hover:bg-surface-alt dark:bg-transparent"
+              >
+                อยู่หน้านี้ต่อ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isWithdraw && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
           ตรวจบัญชีปลายทาง + จำนวนเงินทางด้านซ้ายก่อน. กด ‘ยืนยันจ่ายเงิน’ เมื่อโอนเข้าบัญชีลูกค้าแล้ว (ยอดถูกหักจากกระเป๋าตั้งแต่ลูกค้ากดถอน) · กด ‘ปฏิเสธ’ เพื่อคืนเงินเข้ากระเป๋า

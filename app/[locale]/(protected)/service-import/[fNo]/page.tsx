@@ -982,6 +982,88 @@ export default async function ServiceImportDetailPage({
   const baht2 = (n: number) =>
     `฿${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+  // ── ONE PAYMENT = THE WHOLE SHIPMENT (owner 2026-07-22 · "เข้าตรงเลขแทรค
+  //    ต้องกรุ๊ปรวมเป็นชิปเม้น") ──
+  // The pay button used to seed the modal with ONLY this box-row while the page
+  // displayed the WHOLE-shipment ยอดเก็บจริง above — a customer opening one box
+  // of a split shipment saw the shipment total but paid a single box. Seed the
+  // modal with EVERY payable sibling (fstatus='5' OR fcredit='1', not on an
+  // open ใบวางบิล) so the pay = the shipment, matching the displayed total.
+  // Fails-soft to [payButtonRow] on any error (never blocks paying this row).
+  let payButtonRows: ForwarderRow[] = [payButtonRow];
+  {
+    const siblingIds = collectSiblings.map((s) => s.id).filter((i) => i !== row.id);
+    if (siblingIds.length > 0) {
+      const { data: sibRaw, error: sibErr } = await admin
+        .from("tb_forwarder")
+        .select(
+          "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftrackingth, ftransporttype, fshipby, fdetail, fcover, famount, fweight, fvolume, ftotalprice, ftransportprice, paymethod, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, fcredit, fcreditdate, fdatestatus5, fdatetothai, fcabinetnumber, fdatecontainerclose, fnote, fnoteuser, reforder, promoid, fproductstype, tax_doc_pref",
+        )
+        .eq("userid", row.userid ?? "")
+        .in("id", siblingIds)
+        .or("fstatus.eq.5,fcredit.eq.1");
+      if (sibErr) {
+        console.error("[fNo payable-siblings] failed", { code: sibErr.code, message: sibErr.message, id: row.id });
+      } else if (sibRaw && sibRaw.length > 0) {
+        // A sibling already on an OPEN ใบวางบิล pays through the bill — exclude
+        // it from the direct-pay seed (S3 rule, same as this row's own guard).
+        const sibOnBill = await resolveOpenBillForwarderIds(
+          admin,
+          sibRaw.map((s) => (s as { id: number }).id),
+        );
+        const num2 = (v: unknown) => {
+          const n = Number(v ?? 0);
+          return Number.isFinite(n) ? n : 0;
+        };
+        type SibRow = Record<string, unknown> & { id: number };
+        const sibRows = (sibRaw as SibRow[])
+          .filter((s) => !sibOnBill.has(s.id))
+          .map((s): ForwarderRow => ({
+            id: s.id,
+            fdate: (s.fdate as string | null) ?? null,
+            fstatus: (s.fstatus as string | null) ?? null,
+            ftrackingchn: (s.ftrackingchn as string | null) ?? null,
+            ftrackingchn2: (s.ftrackingchn2 as string | null) ?? null,
+            ftrackingth: (s.ftrackingth as string | null) ?? null,
+            ftransporttype: (s.ftransporttype as string | null) ?? null,
+            fshipby: (s.fshipby as string | null) ?? null,
+            fdetail: (s.fdetail as string | null) ?? null,
+            fcover: (s.fcover as string | null) ?? null,
+            famount: num2(s.famount),
+            fweight: num2(s.fweight),
+            fvolume: num2(s.fvolume),
+            ftotalprice: num2(s.ftotalprice),
+            ftransportprice: num2(s.ftransportprice),
+            paymethod: (s.paymethod as string | null) ?? null,
+            fpriceupdate: num2(s.fpriceupdate),
+            fdiscount: num2(s.fdiscount),
+            fshippingservice: num2(s.fshippingservice),
+            pricecrate: num2(s.pricecrate),
+            ftransportpricechnthb: num2(s.ftransportpricechnthb),
+            priceother: num2(s.priceother),
+            fusercompany: (s.fusercompany as string | null) ?? null,
+            fcredit: (s.fcredit as string | null) ?? null,
+            fcreditdate: (s.fcreditdate as string | null) ?? null,
+            fdatestatus5: (s.fdatestatus5 as string | null) ?? null,
+            fdatetothai: (s.fdatetothai as string | null) ?? null,
+            fcabinetnumber: (s.fcabinetnumber as string | null) ?? null,
+            fdatecontainerclose: (s.fdatecontainerclose as string | null) ?? null,
+            fnote: (s.fnote as string | null) ?? null,
+            fnoteuser: (s.fnoteuser as string | null) ?? null,
+            reforder: (s.reforder as string | null) ?? null,
+            adminidcreator: null,
+            promoid: s.promoid == null ? null : String(s.promoid),
+            fproductstype: (s.fproductstype as string | null) ?? null,
+            tax_doc_pref: (s.tax_doc_pref as string | null) ?? null,
+            onOpenBill: false,
+          }));
+        if (sibRows.length > 0) {
+          payButtonRows = [payButtonRow, ...sibRows].sort((a, b) => a.id - b.id);
+        }
+      }
+    }
+  }
+
   // forwarder.php L1808-1820 — ETA range.
   const fDateToThai = row.fdatetothai;
   let etaFrom = "";
@@ -1548,7 +1630,7 @@ export default async function ServiceImportDetailPage({
                                     </span>
                                   ) : (
                                     <ServiceImportPayButton
-                                      row={payButtonRow}
+                                      rows={payButtonRows}
                                       isJuristic={fUserCompany === "1"}
                                     />
                                   )}
