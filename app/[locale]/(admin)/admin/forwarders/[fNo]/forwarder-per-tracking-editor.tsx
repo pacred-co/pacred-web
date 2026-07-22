@@ -480,11 +480,34 @@ export async function ForwarderPerTrackingEditor({
   // delivery is the flat MAO_FLAT_FEE. Surface it explicitly (owner 2026-06-23).
   const isMao = rows.some((row) => isMaoCarrier(row.fshipby));
 
+  // 🔴 owner 2026-07-22 — the นิติ 1% must show HERE. codex's "consolidate price detail"
+  // (c82a5744) removed the separate ยอดเก็บจริง card as a duplicate, but that card was the
+  // ONLY place the หัก ณ ที่จ่าย line was rendered — so this surviving summary said
+  // "ราคารวมสุทธิ" while showing the PRE-WHT number (฿22.11 too high on a ฿2,210.88
+  // juristic order). It bites harder now that the ฿1,000 minimum is abolished: EVERY
+  // juristic order carries the 1%.
+  // Juristic = the same SOT the rest of the platform uses: a tb_corporate row OR the
+  // fusercompany='1' stamp (page.tsx:708 · outstanding.ts).
+  let isCorporate = String((r as { fusercompany?: string | null }).fusercompany ?? "").trim() === "1";
+  if (!isCorporate && r.userid) {
+    const { data: corpRow, error: corpErr } = await admin
+      .from("tb_corporate")
+      .select("id")
+      .eq("userid", r.userid)
+      .limit(1)
+      .maybeSingle<{ id: number | string }>();
+    if (corpErr) {
+      console.error(`[ForwarderPerTrackingEditor corporate-check] failed`, { code: corpErr.code, message: corpErr.message, userid: r.userid });
+    }
+    if (corpRow) isCorporate = true;
+  }
+
   return (
     <PerTrackingEditorClient
       rows={editorRows}
       readOnly={readOnly}
       isMao={isMao}
+      isCorporate={isCorporate}
       customRateInit={customRateInit}
       customRateKgInit={customRateKgInit}
       customRateCbmInit={customRateCbmInit}

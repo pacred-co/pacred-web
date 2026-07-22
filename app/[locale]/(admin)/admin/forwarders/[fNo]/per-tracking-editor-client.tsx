@@ -26,6 +26,7 @@ import {
   adminResetForwarderFamilyFromSource,
 } from "@/actions/admin/forwarder-identity";
 import { MAO_FLAT_FEE } from "@/lib/forwarder/mao-fee";
+import { legacyReceiptAmount } from "@/lib/tax/wht";
 import { validateComparisonPricePair } from "@/lib/forwarder/comparison-guard";
 import { evaluateRateModeGuard } from "@/lib/forwarder/rate-mode-guard";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
@@ -75,6 +76,11 @@ type Props = {
   readOnly?: boolean;
   /** เหมาๆ (Pacred PRF) carrier → in-Thailand delivery is the flat ฿100 fee. */
   isMao?: boolean;
+  /**
+   * ลูกค้านิติบุคคล → หัก ณ ที่จ่าย 1%. owner 2026-07-22 abolished the ฿1,000 minimum, so
+   * this fires on ANY positive total. Resolved server-side (tb_corporate OR fusercompany='1').
+   */
+  isCorporate?: boolean;
   customRateInit: "0" | "1";
   customRateKgInit: number;
   customRateCbmInit: number;
@@ -154,6 +160,7 @@ export function PerTrackingEditorClient({
   rows: rowsInit,
   readOnly = false,
   isMao = false,
+  isCorporate = false,
   customRateInit,
   customRateKgInit,
   customRateCbmInit,
@@ -409,6 +416,20 @@ export function PerTrackingEditorClient({
     profileResolved, profileRateMissing, profileRate, profileBasis, profileTransportTotal,
     profileKgAmount, profileCbmAmount, profileKgUnitRate, profileCbmUnitRate, profileComparisonValue,
   ]);
+
+  // ── ยอดเก็บจริง — the amount the customer actually pays ─────────────────────────
+  // owner 2026-07-22 "นิติหัก 1% ไม่ต้องมีขั้นต่ำ": for a juristic customer the collect is
+  // calc.net − 1%. Uses the platform SOT (legacyReceiptAmount) so this number is the SAME
+  // one the bill, the receipt and จ่ายแทนลูกค้า produce — the only way it cannot drift.
+  // DISPLAY-only: nothing here is written.
+  const { whtAmount, collectNet } = useMemo(() => {
+    const gross = Number.isFinite(calc.net) ? calc.net : 0;
+    const receipt = legacyReceiptAmount(gross, isCorporate);
+    return {
+      whtAmount: Math.round((gross - receipt.rAmount) * 100) / 100,
+      collectNet: receipt.rAmount,
+    };
+  }, [calc.net, isCorporate]);
 
   // ภูม 2026-07-01 — ONE save routine, TWO buttons:
   //   • advanceToPayment=true  → "บันทึก + ส่งไปรอชำระเงิน" (the pricer is ready to
@@ -939,11 +960,27 @@ export function PerTrackingEditorClient({
               <Sum label="ค่าจัดส่งในไทย" value={calc.thai} />
             )}
             <Sum label="ส่วนลด" value={calc.discount} negative />
+            {/* 🔴 owner 2026-07-22 — หัก ณ ที่จ่าย นิติ 1%. This line used to live on the
+                separate "ยอดเก็บจริง" card that codex removed as a duplicate (c82a5744);
+                without it this block said "สุทธิ" while showing the PRE-WHT number, i.e.
+                1% HIGHER than what the customer actually pays. Computed with the platform
+                SOT (legacyReceiptAmount · lib/tax/wht.ts) — never a local 0.99 — so this
+                display can never drift from the bill / receipt / จ่ายแทนลูกค้า engines. */}
+            {whtAmount > 0 && (
+              <Sum label="หัก ณ ที่จ่าย นิติบุคคล 1%" value={whtAmount} negative />
+            )}
             <div className="border-t border-border pt-1 mt-1">
               <p className="flex items-baseline justify-between gap-2">
-                <span className="font-semibold text-foreground">ราคารวมสุทธิ :</span>
-                <strong className="text-red-600 text-sm font-mono tabular-nums">{baht(calc.net)}</strong>
+                <span className="font-semibold text-foreground">
+                  {whtAmount > 0 ? "ยอดเก็บจริง :" : "ราคารวมสุทธิ :"}
+                </span>
+                <strong className="text-red-600 text-sm font-mono tabular-nums">{baht(collectNet)}</strong>
               </p>
+              {whtAmount > 0 && (
+                <p className="mt-0.5 text-[11px] text-muted">
+                  ยอดขายก่อนหัก {baht(calc.net)} − 1% = ยอดที่ลูกค้าชำระจริง
+                </p>
+              )}
             </div>
           </div>
         </div>
