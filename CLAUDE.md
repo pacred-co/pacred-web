@@ -265,7 +265,7 @@
 
 ---
 
-# 🧾 2026-07-22 (เดฟ · PC) — 💰 ตัดจ่ายบิล MOMO ครบวงจร (mig 0273 · MCS register) + Claude×Codex flow + integrate ภูม/ปอน/codex → ALL BRANCHES · read FIRST
+# 🧾 2026-07-22 (เดฟ · PC) — 💰 ตัดจ่ายบิล MOMO ครบวงจร (mig 0273 · MCS register) + 💸 WHT นิติ 1% ยกเลิกขั้นต่ำ ฿1,000 + Claude×Codex flow + integrate ภูม/ปอน/codex → ALL BRANCHES · read FIRST
 
 > **🏁 CLOSE (owner: "เอามาเพิ่มในหน้า /admin/momo-containers เป็นเมนู · มี action บันทึกต้นทุน+แสดงผล · ตัดจ่ายตามรายการ/ทั้งบิล · ห้ามใช้คำว่าตัดจ่ายตู้ (บิล MOMO เก็บเป็น tracking ข้ามตู้ได้) · รันเอกสาร+ประวัติ+สลิปย้อนหลัง · ลิงก์กลับชิปเม้น · ก่อนขึ้น main ดูงานน้อง codex").** main = dave-pacred = `<HEAD>` (Vercel prod). NEXT FREE mig = **0274**. gate: tsc 0 · build 0 · tests (settlement-core 30+ · debit 94 · mao 10 · fee 24 · wht 19).
 >
@@ -279,7 +279,13 @@
 >
 > **🔀 integrate รอบนี้:** ภูม 5 (forwarders 3 flag · **ขั้นต่ำ ฿50 ต่อชิปเม้น MONEY** · 3 P1 sweep) · ปอน (ใบแจ้งหนี้ pay-user + เหมาๆ แยกบรรทัดผ่าน resolveMaoAnchorIds — รีวิวแล้วไม่บวกซ้ำ) · **codex #1: WHT satang-allocation ใน computeForwarderDebitBatch** (legacyReceiptAmount SOT → Σ รายบรรทัด == ยอดเอกสารเป๊ะ · รีวิวแล้ว · 94/94).
 >
-> **🔴 CARRYOVER:** (1) dev DB unreachable → reconcile mig 0271-0273 เมื่อกลับมา. (2) settled-chip บน forwarder-cost-section (ตอนนี้อยู่ที่ preview rows + history เท่านั้น — ทางเลือกที่ agent จงใจไม่แตะ panel เงิน). (3) WORK ORDER เดิม 2026-07-17 ยังค้างบางข้อ (GZE260627-1 น้ำหนักมั่ว · 16 ตู้/303 แถวไม่มีต้นทุน · คิวตรวจสอบ fstatus 6/7 · "ผิดพลาด 8" · PR217 ใบเสร็จนิติ · แถวรวม=สรุปชิปเม้น+คิดเงินต่อชิปเม้น).
+> **💸 WHT นิติ 1% — ยกเลิกขั้นต่ำ ฿1,000 (owner บ่าย 2026-07-22 · MONEY RULE เปลี่ยน · `58a8cc32`):** *"เปลี่ยนเป็น ไม่ต้องมีขั้นต่ำแล้วครับ เอาแค่ลูกค้าที่ยังไม่ได้ชำระเงิน อันไหนเลยรอชำระไปแล้ว ปล่อยไป"* — **นิติ → หัก 1% ทุกยอด >0** · บุคคลธรรมดาไม่หักเหมือนเดิม. ONE-SOT: `legacyReceiptAmount` (lib/tax/wht.ts) + `computeBillWht` (lib/billing/wht.ts) + collect-total · 8 จุดที่ก๊อปกฎเอง route เข้า SOT. **Forward-only พิสูจน์บน prod:** `computeBillWht` += **paidAt freeze** (`WHT_NO_MIN_SINCE` 2026-07-22 — จำเป็นเพราะจอบิลคำนวณ WHT **สด**แม้บิลจ่ายแล้ว) → บิลนิติ <฿1,000 ที่จ่ายแล้ว 11 ใบนิ่งเดิม · ใบเสร็จ frozen 16 ใบ render จากค่า PIN · pending slip นิติ <฿1,000 = 0 · บิลค้างจ่าย 3 ใบโชว์ 1% แล้ว (= ที่ owner ต้องการ) · 0 data write. UI copy ที่เขียน "ขั้นต่ำ 1,000" อัพครบ (tooltip/FAQ/badge). tests: wht 63 · billing 24 · debit 97 · collect 36.
+>
+> **🔴 codex ลบการ์ด "ยอดเก็บจริง" = 1% หายจากจอ (จับได้ตอน owner สั่ง "ดูงาน codex อีกที" · `bf826960`):** codex c82a5744 "consolidate price detail" ยุบการ์ดซ้ำบน `/admin/forwarders/[fNo]` — แต่การ์ดนั้นเป็น**ที่เดียว**ที่โชว์บรรทัด "หัก ณ ที่จ่าย นิติ 1%" → ตัวที่เหลือเขียน "ราคารวมสุทธิ" แต่โชว์ยอด**ก่อน**หัก = สูงกว่าจริง 1% ทุกงานนิติ (เจ็บขึ้นเพราะเพิ่งยกเลิกขั้นต่ำ). FIX: เติมบรรทัด 1% + ป้าย "ยอดเก็บจริง" ใน per-tracking-editor (คำนวณจาก `legacyReceiptAmount` SOT — drift ไม่ได้เชิงโครงสร้าง · isCorporate resolve ฝั่ง server tb_corporate∪fusercompany · display-only) · เก็บ readOnly mode ของ codex ไว้ (ดี). **บทเรียน: consolidation ของ AI pair ต้อง diff ฟีเจอร์ที่การ์ดเดิมมี ไม่ใช่แค่ "ดูซ้ำ"** — ตรวจงาน codex = ตรวจสิ่งที่มันลบด้วย.
+>
+> **➕ ปิดรอบ (`af86d212` = ALL BRANCHES):** ภูม 3 (Σ หัวชิปเม้น momo-containers = ยอดทั้งชิปเม้น · view-as-role 👁 + money-tier gate · badge นับชิปเม้น) · codex c3c72ad3 (stamp รอบตรวจทั้งกลุ่มสลิปเดียว + reject กลุ่ม — รีวิว: เขียนสถานะ/review ไม่ใช่ยอดเงิน · scope userid+สลิป+type) · ปอน (สคริปต์ seed mock AD006 · dry-run default + --clean undo · ไม่ผูก npm script). ⚠️ คอมดับระหว่าง session → ref origin/codex corrupt → `git update-ref -d` + re-fetch = หาย (งานไม่หาย push ครบก่อนดับ).
+>
+> **🔴 CARRYOVER:** (1) dev DB unreachable → reconcile mig 0271-0273 เมื่อกลับมา. (2) settled-chip บน forwarder-cost-section (ตอนนี้อยู่ที่ preview rows + history เท่านั้น — ทางเลือกที่ agent จงใจไม่แตะ panel เงิน). (3) WORK ORDER เดิม 2026-07-17 ยังค้างบางข้อ (GZE260627-1 น้ำหนักมั่ว · 16 ตู้/303 แถวไม่มีต้นทุน · คิวตรวจสอบ fstatus 6/7 · "ผิดพลาด 8" · PR217 ใบเสร็จนิติ · แถวรวม=สรุปชิปเม้น+คิดเงินต่อชิปเม้น). (4) owner click-test: `/admin/forwarders/52700` (บรรทัด 1% + ยอดเก็บจริง) + อัพ PDF จริง 1 ใบใน flow MCS ก่อนใช้จริง. (5) `WHT_NO_MIN_SINCE` = เที่ยงคืน 22/07 — บิลนิติเล็กจ่ายล่าสุด settle 14/07 = ปลอดภัย ไม่ต้อง bump.
 
 ---
 
