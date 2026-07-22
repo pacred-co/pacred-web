@@ -3,6 +3,8 @@
 import { cookies } from "next/headers";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { isGodRole } from "@/lib/admin/god-role";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { isDevCockpitAdmin } from "@/lib/admin/dev-cockpit";
 import { VIEW_AS_COOKIE, isPreviewableRole } from "@/lib/admin/view-as-role";
 
 /**
@@ -24,9 +26,29 @@ export async function setViewAsRole(
   role: string,
 ): Promise<{ ok: boolean; error?: string }> {
   // Real god-role check (ultra/super) — a non-god who crafts this call is refused.
-  const { roles } = await requireAdmin();
+  const { user, roles } = await requireAdmin();
   if (!isGodRole(roles)) {
     return { ok: false, error: "เฉพาะ Ultra / Super เท่านั้นที่ดูมุมมอง role อื่นได้" };
+  }
+  // 2026-07-22 (ภูม) — this audit tool is scoped to ภูม's OWN account (the same
+  // allowlist as the dev cockpit · AD008/admin_poom). Even another god (พี่ป๊อป)
+  // is refused here, so the preview cookie can only ever be set for ภูม → nobody
+  // else sees the picker OR the exit banner. Display-only either way.
+  const admin = createAdminClient();
+  const { data: prof, error: profErr } = await admin
+    .from("profiles")
+    .select("member_code, admin_login_id")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profErr) {
+    console.error("[setViewAsRole profile probe] failed", {
+      code: profErr.code,
+      message: profErr.message,
+    });
+    return { ok: false, error: "ตรวจสอบสิทธิ์ไม่สำเร็จ" };
+  }
+  if (!isDevCockpitAdmin(prof?.member_code, prof?.admin_login_id)) {
+    return { ok: false, error: "เครื่องมือนี้เฉพาะบัญชีผู้ดูแลที่กำหนด" };
   }
   if (!isPreviewableRole(role)) {
     return { ok: false, error: "role ที่เลือกไม่ถูกต้อง" };

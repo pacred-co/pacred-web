@@ -3,10 +3,11 @@ import { requireAdmin, hasRole } from "@/lib/auth/require-admin";
 import { isGodRole } from "@/lib/admin/god-role";
 import {
   resolveViewAsRole,
-  PREVIEWABLE_ROLES,
   previewRoleLabel,
 } from "@/lib/admin/view-as-role";
-import { ViewAsRoleSwitcher } from "@/components/sections/view-as-role-switcher";
+// The 👁 picker itself lives on /admin/board/inbox (ภูม's page) — not in the
+// shared header. This layout only READS the cookie (below) so the preview
+// still swaps the sidebar/cost-blur across pages + shows the exit banner.
 import { ViewAsRoleBanner } from "@/components/sections/view-as-role-banner";
 import { verifyAdminSession } from "@/lib/auth/admin-session";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
@@ -111,10 +112,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <header className="print:hidden fixed top-0 inset-x-0 z-[60] h-14 bg-[#B91C1C] flex items-center px-4 shadow-md">
         <AdminHeaderNavDisplay />
         <div className="ml-auto flex items-center gap-2">
-          {/* 👁 View-as-role picker — god-only (ultra/super) · display-only preview. */}
-          {canPreviewRole && (
-            <ViewAsRoleSwitcher options={PREVIEWABLE_ROLES} active={viewAsRole} />
-          )}
+          {/* 👁 View-as-role picker moved OUT of the shared header (2026-07-22 · ภูม
+              "เดี๋ยวพี่ป๊อปงง · อยากได้แค่ในหน้า Inbox ของภูมเอง"). The picker now lives
+              only on /admin/board/inbox, scoped to the allow-listed account. This
+              layout still READS the cookie to swap the sidebar/cost-blur while a
+              preview is active (so it works across pages), + shows the exit banner. */}
           <LocaleSwitcher variant="on-primary" />
           <ThemeToggle variant="on-primary" />
         </div>
