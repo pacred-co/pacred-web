@@ -79,7 +79,7 @@ import { WalletBalanceCard } from "@/components/admin/wallet-balance-card";
 import { EditDateSlipForm, ApproveRejectForm, RejectSlipInline } from "./edit-form";
 import { classifyWalletHsRow } from "@/lib/wallet/classify-approve-row";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
-import { calcForwarderOutstanding, type ForwarderPriceFields } from "@/lib/forwarder/outstanding";
+import { loadLinkedForwarderPaymentBatch } from "@/lib/forwarder/linked-payment-batch";
 
 export const dynamic = "force-dynamic";
 
@@ -386,26 +386,24 @@ export default async function AdminWalletDetail({
   // pre-WHT figure) — mixing them would show a 1% gap on juristic rows.
   // DISPLAY-only: no write, no bill/receipt coupling.
   const dueByHno = new Map<string, number>();
+  let linkedDueTotal: number | null = null;
   {
     const hnos = isCreditType(row.type)
       ? paymentTargets.map((t) => t.hno)
       : row.reforder ? [row.reforder] : [];
     const fwdIds = hnos.filter((h) => /^\d+$/.test(h));
-    if (fwdIds.length > 0) {
-      const { data: fwdRows, error: fwdErr } = await admin
-        .from("tb_forwarder")
-        .select(
-          "id,ftotalprice,ftransportprice,fpriceupdate,fshippingservice,pricecrate,ftransportpricechnthb,priceother,fdiscount,fusercompany,paymethod",
-        )
-        .in("id", fwdIds.map(Number));
-      if (fwdErr) {
-        // Fail-soft: the due figure is an aid, not a gate — the page must still
-        // render (and the approve still guards) if this read fails.
-        console.error(`[tb_forwarder due-lookup] failed`, { code: fwdErr.code, message: fwdErr.message });
+    if (fwdIds.length > 0 && fwdIds.length === hnos.length) {
+      const result = await loadLinkedForwarderPaymentBatch(admin, {
+        userId: row.userid,
+        forwarderIds: fwdIds,
+      });
+      if (!result.ok) {
+        console.error(`[linked forwarder due-lookup] failed`, { error: result.error });
+      } else if (result.missingIds.length > 0) {
+        console.error(`[linked forwarder due-lookup] missing rows`, { missingIds: result.missingIds });
       } else {
-        for (const f of (fwdRows ?? []) as Array<ForwarderPriceFields & { id: number }>) {
-          dueByHno.set(String(f.id), calcForwarderOutstanding(f));
-        }
+        linkedDueTotal = result.batch.total_thb;
+        for (const line of result.batch.lines) dueByHno.set(line.id, line.price_thb);
       }
     }
   }
@@ -483,6 +481,7 @@ export default async function AdminWalletDetail({
 
   // ── Derive view-bits ──
   const amount = Number(row.amount ?? 0);
+  const linkedAmountMismatch = linkedDueTotal !== null && Math.round(linkedDueTotal * 100) !== Math.round(amount * 100);
   const status = row.status ?? "1";
   const isPending = status === "1";
   const userid = row.userid;
@@ -855,9 +854,14 @@ export default async function AdminWalletDetail({
                 <p className="mt-1 border-t border-border/70 pt-2 text-[21.14px] font-medium text-green-700">
                   จำนวนเงินในสลิป : {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                   <span className="ml-3 text-red-700">
-                    ยอดรวมทุกรายการ : {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    ยอดรวมทุกรายการ : {(linkedDueTotal ?? amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                   </span>
                 </p>
+                {linkedAmountMismatch && (
+                  <p className="mt-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                    ยอดรายการจริงไม่ตรงกับยอดที่บันทึกในรายการชำระเงิน กรุณาตรวจสอบก่อนอนุมัติ
+                  </p>
+                )}
 
                 {/* ใบเสร็จที่ออกแล้ว (owner 2026-07-16) — เลขที่ + พิมพ์ใบเสร็จรายการนี้
                     + ไปยังประวัติใบเสร็จ. Shown once this settled row minted (or points
