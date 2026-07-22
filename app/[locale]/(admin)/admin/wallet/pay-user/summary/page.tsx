@@ -210,6 +210,14 @@ export default async function PaymentSummaryPage({
   const customerAddress = party?.address ?? "";
 
   // 3. Build display rows + grand-total buckets.
+  const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
+  const batch = computeForwarderDebitBatch(rowsFw as unknown as ForwarderDebitRow[], {
+    userId: userid,
+    isCorporate: reCorporate,
+  });
+  // per-row "อื่นๆ" — the SAME breakdown.otherCharges the PayModal shows, so the
+  // on-screen invoice table + this printed sheet quote one identical column.
+  const otherById = new Map(batch.lines.map((l) => [String(l.id), round2(l.breakdown.otherCharges)]));
   const rows: SummaryRow[] = rowsFw.map((r, idx) => ({
     no: idx + 1,
     orderNo: String(r.id),
@@ -226,6 +234,7 @@ export default async function PaymentSummaryPage({
     productType: PRODUCT_TYPE_LABEL[String(r.fproductstype ?? "")] ?? "-",
     rate: num(r.frefrate),
     amount: num(r.ftotalprice),
+    otherCharges: otherById.get(String(r.id)) ?? 0,
   }));
 
   // ⚠️ SINGLE SOURCE OF TRUTH — the ยอดที่ต้องชำระ + ค่าส่งเหมาๆ + หัก ณ ที่จ่าย on THIS
@@ -237,11 +246,6 @@ export default async function PaymentSummaryPage({
   //                       by satang on multi-row juristic bills → now all three docs match.
   //   • COD (F1)       → a ปลายทาง row's domestic leg is excluded from the gross (the batch
   //                       is COD-aware via paymethod) so the PDF == the actual charge.
-  const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
-  const batch = computeForwarderDebitBatch(rowsFw as unknown as ForwarderDebitRow[], {
-    userId: userid,
-    isCorporate: reCorporate,
-  });
   const maoFeeTotal = round2(batch.lines.reduce((s, l) => s + l.breakdown.maoFee, 0));
   // GROSS (pre-WHT) from the SOT breakdown — freight + otherCharges (COD-aware · F1) + เหมาๆ − ส่วนลด.
   const totalPriceAll = round2(

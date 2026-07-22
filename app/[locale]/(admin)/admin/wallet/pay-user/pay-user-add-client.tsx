@@ -1373,22 +1373,22 @@ function PayModal({
                 <th className="px-2 py-2">เลขออเดอร์</th>
                 {keyType === "2" ? (
                   <>
-                    <th className="px-2 py-2">เลขแทรกกิ้ง</th>
                     <th className="px-2 py-2">เลขตู้</th>
                     <th className="px-2 py-2">ขนส่ง</th>
+                    <th className="px-2 py-2">เลขแทรกกิ้ง</th>
+                    <th className="px-2 py-2">ประเภท</th>
+                    <th className="px-2 py-2 text-right">เรทราคา</th>
                     <th className="px-2 py-2">จำนวน</th>
                     <th className="px-2 py-2">น้ำหนัก (กก.)</th>
                     <th className="px-2 py-2">ปริมาตร (CBM)</th>
                     <th className="px-2 py-2">ขนาด (ก×ย×ส ซม.)</th>
-                    <th className="px-2 py-2">ประเภท</th>
-                    <th className="px-2 py-2 text-right">ค่านำส่ง</th>
-                    <th className="px-2 py-2 text-right">ค่าส่งเหมาๆ</th>
+                    <th className="px-2 py-2 text-right">ค่าขนส่ง</th>
                     <th className="px-2 py-2 text-right">อื่นๆ</th>
                   </>
                 ) : (
                   <th className="px-2 py-2">รายละเอียดสินค้า</th>
                 )}
-                <th className="px-2 py-2 text-right">รวม</th>
+                {keyType !== "2" && <th className="px-2 py-2 text-right">รวม</th>}
               </tr>
             </thead>
             <tbody>
@@ -1397,18 +1397,17 @@ function PayModal({
                     <tr key={r.fid} className={i % 2 ? "bg-gray-50/50" : "bg-white"}>
                       <td className="px-2 py-1.5 text-center text-gray-500">{i + 1}</td>
                       <td className="px-2 py-1.5 font-mono font-semibold text-gray-900">{r.fid}</td>
-                      <td className="px-2 py-1.5 font-mono text-[11px] text-gray-600">{r.ftrackingchn ?? "—"}</td>
                       <td className="px-2 py-1.5 font-mono text-[11px] text-gray-700">{r.fcabinetnumber ?? "—"}</td>
                       <td className="px-2 py-1.5 text-center">{r.transport_label || "—"}</td>
+                      <td className="px-2 py-1.5 font-mono text-[11px] text-gray-600">{r.ftrackingchn ?? "—"}</td>
+                      <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">{r.products_type_label || "—"}</td>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">{r.rate > 0 ? fmt2(r.rate) : "—"}</td>
                       <td className="px-2 py-1.5 text-center">{r.boxes > 0 ? r.boxes : "—"}</td>
                       <td className="px-2 py-1.5 text-center font-mono text-[11px] text-gray-600 tabular-nums">{r.weight > 0 ? r.weight : "—"}</td>
                       <td className="px-2 py-1.5 text-center font-mono text-[11px] text-gray-600 tabular-nums">{r.cbm > 0 ? r.cbm : "—"}</td>
                       <td className="px-2 py-1.5 text-center font-mono text-[11px] text-gray-600">{dimsLabel(r.fwidth, r.flength, r.fheight)}</td>
-                      <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">{r.products_type_label || "—"}</td>
                       <td className="px-2 py-1.5 text-right font-mono tabular-nums">{fmt2(r.breakdown.freight)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono tabular-nums text-sky-600">{fmt2(r.breakdown.maoFee)}</td>
                       <td className="px-2 py-1.5 text-right font-mono tabular-nums">{fmt2(r.breakdown.otherCharges)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono font-semibold tabular-nums text-gray-900">{fmt2(r.price_thb)}</td>
                     </tr>
                   ))
                 : shopRows.map((r, i) => (
@@ -1450,6 +1449,11 @@ function PayModal({
                             ขนาด <span className="font-mono">{dimsLabel(r.fwidth, r.flength, r.fheight)}</span> ซม.
                           </div>
                         )}
+                        {r.rate > 0 && (
+                          <div className="text-[11px] text-gray-500">
+                            เรทราคา <span className="font-mono text-gray-700">{fmt2(r.rate)}</span>
+                          </div>
+                        )}
                         {r.transport_label && (
                           <span className="mt-0.5 inline-block rounded bg-teal-500 px-1.5 py-0.5 text-[10px] font-medium text-white">
                             {r.transport_label}
@@ -1467,14 +1471,10 @@ function PayModal({
                       <div className="font-mono text-base font-bold text-red-700">{fmt2(r.price_thb)}</div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-1 border-t border-gray-100 bg-gray-50/50 px-3 py-2 text-center text-[11px]">
+                  <div className="grid grid-cols-2 gap-1 border-t border-gray-100 bg-gray-50/50 px-3 py-2 text-center text-[11px]">
                     <div>
-                      <div className="text-gray-500">ค่านำส่ง</div>
+                      <div className="text-gray-500">ค่าขนส่ง</div>
                       <div className="font-mono text-gray-800">{fmt2(r.breakdown.freight)}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-500">ค่าส่งเหมาๆ</div>
-                      <div className="font-mono text-sky-600">{fmt2(r.breakdown.maoFee)}</div>
                     </div>
                     <div>
                       <div className="text-gray-500">ค่าบริการอื่นๆ</div>
@@ -1595,7 +1595,7 @@ function PayModal({
             <div className="space-y-1 rounded-lg border border-gray-200 bg-gray-50/40 p-3 text-[12px]">
               <Row label="รวมค่าสินค้าและบริการ" value={fmt2(goodsSum)} />
               <Row label="ค่าจัดส่ง (Delivery Charge)" value={fmt2(0)} />
-              {maoSum > 0 && <Row label="ค่าส่งเหมาๆ (PCSF)" value={fmt2(maoSum)} className="text-sky-600" />}
+              {maoSum > 0 && <Row label="ค่าส่งเหมาๆ" value={fmt2(maoSum)} className="text-sky-600" />}
               {otherSum > 0 && <Row label="ค่าบริการอื่นๆ" value={fmt2(otherSum)} />}
               {discountSum > 0 && <Row label="ส่วนลด" value={`− ${fmt2(discountSum)}`} className="text-emerald-600" />}
               {whtSum > 0 && <Row label="หัก ณ ที่จ่าย 1%" value={`− ${fmt2(whtSum)}`} className="text-orange-600" />}
