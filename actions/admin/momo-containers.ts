@@ -123,12 +123,14 @@ export async function listMomoContainers(): Promise<AdminActionResult<MomoContai
         weight: (r) => num(r.fweight),
         userid: (r) => r.userid,
         // ftotalprice=0 → drop an aggregate-weight bare base from the box Σ (owner
-        // 2026-07-16 · #52559); a priced anchor stays. weight/cbm sum the group below.
+        // 2026-07-16 · #52559); a priced anchor stays. weight/cbm sum the SAME set.
         money: (r) => num(r.ftotalprice),
       });
       const boxes = countable.reduce((s, r) => s + (num(r.famount) ?? 0), 0);
-      const weight = group.reduce((s, r) => s + (num(r.fweight) ?? 0), 0);
-      const cbm = group.reduce((s, r) => s + (num(r.fvolume) ?? 0), 0);
+      // น้ำหนัก/คิว รวมจากชุด countable ชุดเดียวกับกล่อง (ตัดแถวรวมที่น้ำหนักซ้ำ · #52559)
+      // ไม่งั้นน้ำหนัก/คิวนับซ้ำแล้วไปติดธง ⚖️น้ำหนักไม่ตรง ผิดๆ.
+      const weight = countable.reduce((s, r) => s + (num(r.fweight) ?? 0), 0);
+      const cbm = countable.reduce((s, r) => s + (num(r.fvolume) ?? 0), 0);
       const billedCount = group.filter((r) => BILLED.has((r.fstatus ?? "").trim())).length;
       const min = minStatus(group.map((r) => r.fstatus));
       const transport = resolveTransportMode(cabinet, null);

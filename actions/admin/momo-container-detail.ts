@@ -131,12 +131,16 @@ export async function getMomoContainerDetail(cabinet: string): Promise<AdminActi
       weight: (r) => num(r.fweight),
       userid: (r) => r.userid,
       // ftotalprice=0 → drop an aggregate-weight bare base from the box Σ (owner
-      // 2026-07-16 · #52559); a priced anchor stays. weight/cbm sum raw rows below.
+      // 2026-07-16 · #52559); a priced anchor stays. weight/cbm sum the SAME set.
       money: (r) => num(r.ftotalprice),
     });
     const boxes = countable.reduce((s, r) => s + (num(r.famount) ?? 0), 0);
-    const weight = rows.reduce((s, r) => s + (num(r.fweight) ?? 0), 0);
-    const cbm = rows.reduce((s, r) => s + (num(r.fvolume) ?? 0), 0);
+    // น้ำหนัก/คิว รวมจากชุด countable ชุดเดียวกับกล่อง — แถวรวมที่น้ำหนักเป็นยอดรวมของกล่อง
+    // (fweight = Σ กล่อง · ftotalprice ≤ 0 · #52559) ถูกตัดออกทั้งสามค่า ไม่งั้นน้ำหนัก/คิวจะนับซ้ำ
+    // แล้วไปติดธง ⚖️น้ำหนักไม่ตรง ผิดๆ. ส่วนแถว bare ที่มีราคาของตัวเอง (ล็อตแยกจริง · 888073444322)
+    // money > 0 → countable เก็บไว้ → น้ำหนักจริงไม่หาย.
+    const weight = countable.reduce((s, r) => s + (num(r.fweight) ?? 0), 0);
+    const cbm = countable.reduce((s, r) => s + (num(r.fvolume) ?? 0), 0);
     const billedCount = rows.filter((r) => BILLED.has((r.fstatus ?? "").trim())).length;
 
     // per-PR summary (ไอแต้ม "ข้อมูลสรุปในตู้" — but per customer PR)

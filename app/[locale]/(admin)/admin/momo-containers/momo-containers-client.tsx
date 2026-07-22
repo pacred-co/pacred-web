@@ -344,6 +344,10 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     // bare as its own box line) DISJOINT from Σ siblings is a REAL lot → count it
     // ALONGSIDE the siblings. Only a bare ≈ Σ siblings (aggregate header) — or an
     // empty/uncorroborated bare — keeps the legacy drop-the-bare rule.
+    // box_detail ที่ลิสต์ "เลข bare เอง" เป็นบรรทัดกล่อง = ทรง DISJOINT-LOTS
+    // (หัวบิลรวมไม่มีวันเป็นกล่องของตัวเอง) → ใช้แยกล็อตจริง ออกจากการแตกกล่องธรรมดา.
+    // คำนวณครั้งเดียว ใช้ทั้ง discriminator ข้างล่าง + ด่าน extraBoxes.
+    const bareHasOwnBox = (fam[0].boxes ?? []).some((b) => (b.tracking ?? "").trim() === base);
     let countable: typeof fam;
     if (hasBareMember && hasSuffixMembers) {
       const bareRow = fam.find((x) => (x.tracking ?? "") === base);
@@ -351,14 +355,19 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
       const additive = !!bareRow && isAdditiveLotBare({
         bareValue: bareRow.weightKg || 0,
         siblingValueSum: sibs.reduce((sm, x) => sm + (x.weightKg || 0), 0),
-        bareHasOwnBox: (fam[0].boxes ?? []).some((b) => (b.tracking ?? "").trim() === base),
+        bareHasOwnBox,
       });
       countable = additive ? fam : sibs;
     } else {
       countable = fam;
     }
     const memberTrackings = new Set(fam.map((x) => (x.tracking ?? "").trim()).filter(Boolean));
-    const extraBoxes = hasSuffixMembers
+    // เติม Σ ด้วยกล่องใน box_detail ที่ "ไม่มีแถว staging ของตัวเอง" — ยิงเมื่อชิปเม้นมีกล่องจริงให้บวก:
+    // มีแถว -N (hasSuffixMembers) หรือ bare เป็นล็อตแยกที่ล็อตพี่น้องอยู่แค่ใน box_detail (bareHasOwnBox).
+    // memberTrackings กันนับซ้ำ · การแตกกล่องธรรมดา (box_detail = base-1/N…N · ไม่มีกล่อง===base ·
+    // ไม่มีแถว -N) ยังได้ extraBoxes=[] → นับ bare ครั้งเดียว ไม่มีวันเบิ้ล.
+    // นี่คือตัวแก้ 888073444322: กล่องล็อต "-2" ถูกนับจาก box_detail แม้แถว staging ถูกแท็บกรองซ่อนไว้.
+    const extraBoxes = (hasSuffixMembers || bareHasOwnBox)
       ? (fam[0].boxes ?? []).filter((b) => b.tracking && !memberTrackings.has(b.tracking.trim()))
       : [];
     return {
@@ -398,6 +407,24 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     return truth;
   };
   const containerTruth = containerTruthOf();
+
+  // ── shipment TRUTH (UNFILTERED · owner+ภูม 2026-07-22 "888073444322 ควรเป็น 4 กล่อง แต่โชว์ 1") ──
+  // ชั้นเดียวกับ containerTruthOf แต่ลงมาที่ระดับชิปเม้น: หัวชิปเม้นต้องบอกยอด "ทั้งชิปเม้น" แม้แท็บที่เลือก
+  // ซ่อนบางล็อตไว้ (พิสูจน์จาก prod: base commit 10:40 · "-2" commit 10:07 → ช่วงนั้นแท็บ "ยังไม่เข้าระบบ"
+  // เห็นแค่ base → Σ ตกเหลือ 1 กล่อง ทั้งที่ box_detail/tb_forwarder ยืนยัน 4 กล่อง/79.5kg/0.3204 คิว).
+  // ใช้ key เดียวกับ families + เรียก famAgg (SOT เดิม) — ไม่มีสูตรรวมยอดตัวที่สอง.
+  const familyTruthOf = () => {
+    const byBase = new Map<string, typeof tracks>();
+    for (const t of tracks) {
+      const b = (t.tracking ? baseTracking(t.tracking) : null) ?? `__solo_${t.id}`;
+      if (!byBase.has(b)) byBase.set(b, []);
+      byBase.get(b)!.push(t);
+    }
+    const out = new Map<string, { agg: ReturnType<typeof famAgg>; members: number }>();
+    for (const [b, fam] of byBase) out.set(b, { agg: famAgg(fam), members: fam.length });
+    return out;
+  };
+  const familyTruth = familyTruthOf();
 
   // ── ตู้ → กระสอบ tier (owner 2026-07-20 "กระสอบต้องอยู่ในตู้อีกที ไม่ใช่ tier เดียวกับตู้ ·
   //    ในกระสอบต้องแจงว่ามีแทรคกิ้งไหน") — the physical hierarchy:
@@ -1067,7 +1094,22 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
               // every shipment renders the SAME dropdown, no two looks.
               // Σ = countable-members rule + Live complement (famAgg — ONE brain shared
               // with the ตู้/กระสอบ tier rows).
-              const { base, hasSuffixMembers, countable, extraBoxes, qty: famQty, wt: famWt, cbm: famCbm } = famAgg(fam);
+              const { base, hasSuffixMembers, countable, extraBoxes } = famAgg(fam);
+              // Σ หัวชิปเม้น = ยอด "ทั้งชิปเม้น" (unfiltered truth) ไม่ใช่เฉพาะที่แท็บโชว์ — ล็อตที่ถูกแท็บ
+              // ซ่อนยังถูกนับ (888073444322 = 4 กล่อง). ส่วน countable/extraBoxes/base/hasSuffixMembers
+              // ยังมาจาก famAgg(fam) ที่กรองแล้ว เพราะมันคุม "แถวที่เรนเดอร์ให้เห็น" ซึ่งต้องตามตัวกรอง.
+              const famKey = (fam[0].tracking ? baseTracking(fam[0].tracking) : null) ?? `__solo_${fam[0].id}`;
+              const truth = familyTruth.get(famKey);
+              const famQty = truth?.agg.qty ?? 0;
+              const famWt = truth?.agg.wt ?? 0;
+              const famCbm = truth?.agg.cbm ?? 0;
+              const hiddenLots = (truth?.members ?? fam.length) - fam.length;
+              // กันแถวกล่องซ้ำ: เมื่อชิปเม้นไม่มีแถว -N แถวลูกจะกางกล่องจาก box_detail ทั้งหมด (ล่างสุด)
+              // ส่วน extraBoxes ก็เรนเดอร์กล่องที่ไม่มีแถวอีกรอบ → กล่องเดียวกันโผล่ 2 แถว.
+              // ให้ฝั่งแถวลูกข้ามกล่องที่ extraBoxes รับไปแล้ว (แต่ละกล่องมีเจ้าของแถวเดียว).
+              const extraBoxKeys = new Set(
+                extraBoxes.map((b) => (b.tracking ?? "").trim()).filter(Boolean),
+              );
               const grouped = fam.length > 1 || fam.some((x) => (x.tracking ?? "") !== base)
                 || (fam.length === 1 && fam[0].boxes.length > 0);
               const famFid = fam.map((x) => x.committedForwarderId).find((v) => v != null) ?? null;
@@ -1146,6 +1188,12 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                                 <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10.5px] font-bold text-amber-700"
                                   title="ช่วงเลขกล่อง CG ของบางแทรคไม่ตรงกับจำนวนกล่อง (Total Parcel) — ข้อมูล MOMO ขัดกันเอง ตรวจสอบ">
                                   ⚠ CG≠กล่อง
+                                </span>
+                              )}
+                              {hiddenLots > 0 && (
+                                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700"
+                                  title="แท็บ/ตัวกรองที่เลือกซ่อนบางแทรค-บางล็อตของชิปเม้นนี้ไว้ — Σ ด้านบนนับครบทั้งชิปเม้นแล้ว · กดแท็บ 'ทั้งหมด' เพื่อเห็นครบ">
+                                  แสดง {fam.length}/{truth?.members ?? fam.length}
                                 </span>
                               )}
                             </span>
@@ -1228,7 +1276,9 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                 {/* กล่องย่อยของ MOMO (box_detail) — โชว์เฉพาะเมื่อชิปเม้นมี staging แถวเดียว
                     (แถวรวมที่กล่องแตกอยู่ใน box_detail) · ครอบครัวที่มีแถว -N อยู่แล้ว = แถวลูก
                     ด้านบนคือกล่องตัวจริง → ไม่ nest ซ้ำ (เคย 18 หัว × 18 กล่อง = เบิ้ลมโหฬาร) */}
-                {!hasSuffixMembers && isOpen && t.boxes.map((box, bi) => (
+                {!hasSuffixMembers && isOpen && t.boxes
+                  .filter((box) => !extraBoxKeys.has((box.tracking ?? "").trim()))
+                  .map((box, bi) => (
                   <tr key={`${t.id}-b${bi}`} className="bg-sky-50/40 text-[11px]">
                     <td className="px-2 py-1 text-center text-muted" title="กล่องย่อยจาก MOMO (box_detail)">📦</td>
                     {colOrder.map((key) => {
@@ -1243,7 +1293,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                 {/* กล่องที่ Live รู้แต่ feed ไม่ส่งมาเป็นแถว (complement) — โชว์ให้ครบชิปเม้น */}
                 {isOpen && extraBoxes.map((box, bi) => (
                   <tr key={`extra-${base}-${bi}`} className="bg-sky-50/40 text-[11px]">
-                    <td className="px-2 py-1 text-center text-muted" title="กล่องจาก MOMO Live (box_detail) ที่ feed ยังไม่ส่งมาเป็นแถว — นับรวมใน Σ หัวชิปเม้นแล้ว">📦</td>
+                    <td className="px-2 py-1 text-center text-muted" title="กล่องจาก MOMO Live (box_detail) ที่ยังไม่มีแถวของตัวเองในหน้านี้ (feed ไม่ส่งมา หรือแท็บที่เลือกซ่อนไว้) — นับรวมใน Σ หัวชิปเม้นแล้ว">📦</td>
                     {colOrder.map((key) => {
                       const c = colDefs[key];
                       return <td key={key} className={c?.tdClass ?? "px-2 py-1"}>{boxCell(box, key)}</td>;
