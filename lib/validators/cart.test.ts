@@ -15,6 +15,7 @@ import {
   applyPromoSchema,
   PROVIDERS,
 } from "./cart";
+import { PRODUCT_TEXT_MAX } from "./product-text";
 
 let pass = 0;
 let fail = 0;
@@ -75,9 +76,18 @@ assertOk("empty color transformed",      cartItemSchema, { ...validCartItem, col
 assertOk("empty size transformed",       cartItemSchema, { ...validCartItem, size: "" });
 assertOk("empty details transformed",    cartItemSchema, { ...validCartItem, details: "" });
 
-assertFail("title > 300 chars",          cartItemSchema, { ...validCartItem, title: "a".repeat(301) });
+// owner 2026-07-22 — the product-text ceilings moved 300 → PRODUCT_TEXT_MAX
+// (migration 0272 widened the columns), so these bounds are asserted against the
+// shared constant, never a literal. A 301-char marketplace title is now LEGAL.
+assertOk("title 301 chars (was refused at the old 300 ceiling)",
+                                         cartItemSchema, { ...validCartItem, title: "a".repeat(301) });
+assertFail(`title > ${PRODUCT_TEXT_MAX} chars`, cartItemSchema, { ...validCartItem, title: "a".repeat(PRODUCT_TEXT_MAX + 1) });
 assertFail("details > 2000 chars",       cartItemSchema, { ...validCartItem, details: "a".repeat(2001) });
-assertFail("url > 2000 chars",           cartItemSchema, { ...validCartItem, url: "https://example.com/" + "a".repeat(2000) });
+// A tracking-stuffed marketplace URL is NORMALISED (params stripped / truncated),
+// never refused — refusing it is what blocked the owner's order. See
+// lib/validators/product-text.test.ts for the full URL contract.
+assertOk("very long url → normalised, not refused",
+                                         cartItemSchema, { ...validCartItem, url: "https://example.com/" + "a".repeat(2000) });
 
 // ────────────────────────────────────────────────────────────
 section("placeOrderSchema — required address + enum fields");

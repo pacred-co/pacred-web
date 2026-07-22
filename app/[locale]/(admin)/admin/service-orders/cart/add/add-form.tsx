@@ -27,6 +27,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adminAddItemToCart } from "@/actions/admin/cart";
 import { ADMIN_CART_PROVIDERS } from "@/lib/validators/admin-cart";
+import { PRODUCT_TEXT_MAX } from "@/lib/validators/product-text";
 import { toYuanEquivalent } from "@/lib/forwarder/currency-convert";
 
 type Props = {
@@ -149,11 +150,16 @@ export default function AdminAddCartForm({ initialUserId, myAdminId, fxRates, rs
           <label htmlFor="cURL" className={LABEL_CLS}>
             1. ลิงก์หรือชื่อสินค้า <span className="text-red-500">*</span>
           </label>
+          {/* maxLength on every product-text input comes from the SAME constant
+              the server validates against (lib/validators/product-text.ts) — a
+              value the submit would reject must be impossible to type
+              (owner 2026-07-22 · same rule as the qty ceiling). */}
           <input
             id="cURL"
             name="cURL"
             type="text"
             required
+            maxLength={PRODUCT_TEXT_MAX}
             className={INPUT_CLS}
             placeholder="https://item.taobao.com/... หรือชื่อสินค้า"
           />
@@ -167,6 +173,7 @@ export default function AdminAddCartForm({ initialUserId, myAdminId, fxRates, rs
               id="cTitle"
               name="cTitle"
               type="text"
+              maxLength={PRODUCT_TEXT_MAX}
               className={INPUT_CLS}
               placeholder="ชื่อสินค้า (เว้นว่างได้)"
             />
@@ -179,6 +186,7 @@ export default function AdminAddCartForm({ initialUserId, myAdminId, fxRates, rs
               id="cNameShop"
               name="cNameShop"
               type="text"
+              maxLength={PRODUCT_TEXT_MAX}
               className={INPUT_CLS}
               placeholder="pcs"
               defaultValue="pcs"
@@ -216,6 +224,7 @@ export default function AdminAddCartForm({ initialUserId, myAdminId, fxRates, rs
             id="cImages"
             name="cImages"
             type="url"
+            maxLength={PRODUCT_TEXT_MAX}
             className={INPUT_CLS}
             placeholder="https://i.postimg.cc/xxx/yyy.jpg (เว้นว่างได้)"
           />

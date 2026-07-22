@@ -3,7 +3,7 @@
  *
  * Run: pnpm tsx lib/url/normalize-product-url.test.ts
  */
-import { normalizeProductUrl } from "./normalize-product-url";
+import { normalizeProductUrl, MAX_URL_CHARS } from "./normalize-product-url";
 
 let pass = 0, fail = 0;
 function ok(name: string, cond: boolean, detail = "") {
@@ -62,11 +62,11 @@ console.log("\nnormalizeProductUrl — edge cases");
 {
   ok("empty string → empty", normalizeProductUrl("") === "");
   ok("whitespace-only → empty", normalizeProductUrl("   ") === "");
-  ok("non-URL note → truncated to 290", normalizeProductUrl("ขอตามนี้นะ ของจริงดูสีอ่อนหน่อย".repeat(50)).length <= 290);
+  ok("non-URL note → truncated to MAX_URL_CHARS", normalizeProductUrl("ขอตามนี้นะ ของจริงดูสีอ่อนหน่อย".repeat(50)).length <= MAX_URL_CHARS);
   ok("URL without id → fallback origin+pathname",
     normalizeProductUrl("https://item.taobao.com/item.htm?spm=foo") === "https://item.taobao.com/item.htm");
   ok("unknown host → keeps origin+pathname trimmed",
-    normalizeProductUrl("https://example.com/product/abc?utparam=long&".repeat(20)).length <= 290);
+    normalizeProductUrl("https://example.com/product/abc?utparam=long&".repeat(20)).length <= MAX_URL_CHARS);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

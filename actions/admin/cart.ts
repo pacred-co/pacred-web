@@ -54,7 +54,15 @@ import { toYuanEquivalent, normalizeCurrency } from "@/lib/forwarder/currency-co
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
 import { resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 import { mapTaxDocColumns } from "@/lib/tax/tax-doc-mode";
-import { imageUrlField } from "@/lib/validators/image-url";
+import { MAX_ORDER_QTY } from "@/lib/validators/order-qty";
+import {
+  productTitleField,
+  shopNameField,
+  productUrlField,
+  productImageUrlField,
+  variantTextField,
+  productDetailsField,
+} from "@/lib/validators/product-text";
 import {
   adminAddItemToCartSchema,
   adminAddCartUserSchema,
@@ -217,19 +225,28 @@ export async function adminAddItemToCart(
 const adminAddItemsToCartBulkSchema = z.object({
   userid: z.string().trim().min(1, "ระบุ userid").max(20),
   items:  z.array(z.object({
-    cdetails:  z.string().max(500).default(""),
-    curl:      z.string().trim().max(2000),
-    ctitle:    z.string().trim().max(500),
-    cnameshop: z.string().trim().max(120),
+    // owner 2026-07-22 — this batch twin of `adminCartItemSchema` carried FIVE
+    // invented ceilings of its own (cdetails 500 · curl 2000 · ctitle 500 ·
+    // cnameshop 120 · ccolor/csize 120), none of which matched the column or the
+    // single-item schema next to it. Two schemas for one table is how a value
+    // becomes acceptable on one button and rejected on the button beside it —
+    // both now read lib/validators/product-text.ts.
+    cdetails:  productDetailsField().default(""),
+    curl:      productUrlField(),
+    ctitle:    productTitleField(),
+    cnameshop: shopNameField(),
     cprovider: z.string().max(20),
-    // Was max(2000) — 7x the real tb_cart.cimages varchar(300), so a long URL
-    // passed zod then 22001-failed the INSERT. Now validated + normalised +
-    // capped by the shared field (lib/validators/image-url.ts).
-    cimages:   imageUrlField(300).default(""),
-    cprice:    z.number().nonnegative(),
-    camount:   z.number().int().positive().max(99999),
-    ccolor:    z.string().max(120).default(""),
-    csize:     z.string().max(120).default(""),
+    // Validated + normalised + capped at the real column width by the shared
+    // field (lib/validators/image-url.ts) — an over-long URL used to pass zod
+    // and then 22001-fail the INSERT.
+    cimages:   productImageUrlField().default(""),
+    cprice:    z.number().nonnegative({ message: "ราคาต้องไม่ติดลบ" }),
+    // owner 2026-07-17 "ปลดเพดาน … ทั้งลูกค้า และ พนักงาน" — was 99999.
+    camount:   z.number().int()
+                 .positive({ message: "จำนวนต้องมากกว่า 0" })
+                 .max(MAX_ORDER_QTY, { message: `จำนวนต้องไม่เกิน ${MAX_ORDER_QTY.toLocaleString()} ชิ้น` }),
+    ccolor:    variantTextField("สี").default(""),
+    csize:     variantTextField("ขนาด").default(""),
   })).min(1, "ต้องมีอย่างน้อย 1 รายการ"),
 });
 

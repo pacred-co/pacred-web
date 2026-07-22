@@ -7,14 +7,14 @@
  * `pcs-admin/shops.php` L4-159). Column names kept verbatim per the
  * 1:1 faithful-port rule (CLAUDE.md / ADR-0017).
  *
- * tb_cart columns (0081 L877-890, all NOT NULL):
+ * tb_cart columns (0081 L877-890, all NOT NULL · widths per migration 0272):
  *   id        integer
  *   cdetails  text
- *   curl      varchar(300)
- *   ctitle    varchar(300)
- *   cnameshop varchar(300)  DEFAULT 'pcs'
+ *   curl      varchar(1000)  (was 300 — owner 2026-07-22)
+ *   ctitle    varchar(1000)  (was 300)
+ *   cnameshop varchar(1000)  (was 300)  DEFAULT 'pcs'
  *   cprovider varchar(1)    DEFAULT '4' ('1'=1688 '2'=Taobao '3'=Tmall '4'=Shops '5'=Nice)
- *   cimages   varchar(300)
+ *   cimages   varchar(1000)  (was 300)
  *   cprice    numeric(10,2)
  *   camount   integer
  *   ccolor    varchar(200)
@@ -23,7 +23,15 @@
  */
 
 import { z } from "zod";
-import { imageUrlField } from "@/lib/validators/image-url";
+import { MAX_ORDER_QTY } from "@/lib/validators/order-qty";
+import {
+  productTitleField,
+  shopNameField,
+  productUrlField,
+  productImageUrlField,
+  variantTextField,
+  productDetailsField,
+} from "@/lib/validators/product-text";
 
 // Provider codes — legacy `tb_cart.cprovider` is a 1-char string code.
 // '4'=Shops is the catch-all/admin-custom default.
@@ -33,25 +41,38 @@ export const ADMIN_CART_PROVIDERS = ["1", "2", "3", "4", "5"] as const;
 // Optional fields default to "" so the INSERT carries the legacy NOT NULL
 // columns without forcing the form to require every field.
 export const adminCartItemSchema = z.object({
-  cdetails:  z.string().trim().min(1, "กรุณากรอกรายละเอียดสินค้า").max(2000),
-  curl:      z.string().trim().min(1, "กรุณากรอก URL สินค้า").max(300),
-  ctitle:    z.string().trim().max(300).default(""),
-  cnameshop: z.string().trim().max(300).default("pcs"),
+  cdetails:  productDetailsField().min(1, "กรุณากรอกรายละเอียดสินค้า"),
+  // 🔴 owner 2026-07-22 "ไม่สามารถกดสั่งในระบบได้" — THIS field was the block.
+  // The staff link-paste grid sends `product.sourceUrl` = the URL the operator
+  // pasted, verbatim; a 1688 offer opened from a search result measures 401 chars
+  // (spm/offerId/hotSaleSkuId/uuid/forcePC + a percent-encoded Chinese `keywords`).
+  // A bare `.max(300)` refused it with zod's raw English default, which the admin
+  // surface printed straight at the operator. `productUrlField` now normalises the
+  // URL (drops the tracking noise → ~47 chars) BEFORE measuring, against the
+  // widened varchar(1000) column — so this can no longer block anyone.
+  curl:      productUrlField({ required: true }),
+  ctitle:    productTitleField().default(""),
+  cnameshop: shopNameField().default("pcs"),
   cprovider: z.enum(ADMIN_CART_PROVIDERS).default("4"),
   // The CS manual add-form's free-text "URL รูปภาพ" field — the primary vector for
   // an un-renderable image (a Google-Drive FOLDER link, a product webpage URL).
   // Validated + normalised by the shared field (lib/validators/image-url.ts).
-  cimages:   imageUrlField(300).default(""),
+  cimages:   productImageUrlField().default(""),
   cprice:    z.number().nonnegative({ message: "ราคาต้องไม่ติดลบ" }),
-  camount:   z.number().int().positive({ message: "จำนวนต้องมากกว่า 0" }),
-  ccolor:    z.string().trim().max(200).default(""),
-  csize:     z.string().trim().max(200).default(""),
+  // Had NO upper bound at all, while the customer twin caps at MAX_ORDER_QTY —
+  // so a fat-fingered staff qty sailed past zod and only died as an int32
+  // overflow at the INSERT (`camount integer`). Same ceiling for everyone.
+  camount:   z.number().int()
+               .positive({ message: "จำนวนต้องมากกว่า 0" })
+               .max(MAX_ORDER_QTY, { message: `จำนวนต้องไม่เกิน ${MAX_ORDER_QTY.toLocaleString()} ชิ้น` }),
+  ccolor:    variantTextField("สี").default(""),
+  csize:     variantTextField("ขนาด").default(""),
   // Currency selector (price-per-piece in ANY currency). When input_currency
   // ≠ CNY, the SERVER re-derives cprice = ¥-equivalent from (input_currency,
   // input_price, customs.fx_rates) — never trusting the client's cprice.
   // Omit / CNY → cprice is used verbatim (byte-identical to today).
-  input_currency: z.string().trim().max(8).optional(),
-  input_price:    z.number().nonnegative().optional(),
+  input_currency: z.string().trim().max(8, { message: "รหัสสกุลเงินต้องไม่เกิน 8 ตัวอักษร" }).optional(),
+  input_price:    z.number().nonnegative({ message: "ราคาต้องไม่ติดลบ" }).optional(),
 });
 export type AdminCartItemInput = z.infer<typeof adminCartItemSchema>;
 
@@ -84,7 +105,12 @@ export type AdminRemoveCartItemInput = z.infer<typeof adminRemoveCartItemSchema>
 // Edit qty of a single cart row (legacy `updateQuantity.php` AJAX).
 export const adminEditCartQtySchema = z.object({
   cartId: z.number().int().positive(),
-  qty:    z.number().int().positive({ message: "จำนวนต้องมากกว่า 0" }).max(99999),
+  // owner 2026-07-17 "ปลดเพดานไปเป็นไม่จำกัด … และกับทุกคนครับ ทั้งลูกค้า และ พนักงาน":
+  // the customer path already reads its ceiling from lib/validators/order-qty.ts;
+  // this staff path still carried an invented 99999. Same number for everyone.
+  qty:    z.number().int()
+            .positive({ message: "จำนวนต้องมากกว่า 0" })
+            .max(MAX_ORDER_QTY, { message: `จำนวนต้องไม่เกิน ${MAX_ORDER_QTY.toLocaleString()} ชิ้น` }),
 });
 export type AdminEditCartQtyInput = z.infer<typeof adminEditCartQtySchema>;
 
