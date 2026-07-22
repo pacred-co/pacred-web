@@ -94,12 +94,15 @@ async function resolveLegacyAdminId(): Promise<string> {
 
 const bulkApproveWalletHsSchema = z.object({
   ids: z.array(z.number().int().positive()).min(1).max(200),
+  // Exact-slip group review issues one combined receipt, so accounting may
+  // carry the step-2 hand-picked document number into this bulk settlement.
+  overrideRid: z.string().trim().min(1).max(20).optional(),
 });
 export type AdminBulkApproveWalletHsInput = z.infer<typeof bulkApproveWalletHsSchema>;
 
 export async function adminBulkApproveWalletHs(
   input: AdminBulkApproveWalletHsInput,
-): Promise<AdminActionResult<{ processed: number; failed: number; errors: string[] }>> {
+): Promise<AdminActionResult<{ processed: number; failed: number; errors: string[]; receiptIds: number[] }>> {
   // F3 — capture UNEXPECTED throws as a platform_incident, then re-throw
   // unchanged (handled `{ ok:false }` returns propagate normally).
   return withObservability("adminBulkApproveWalletHs", adminBulkApproveWalletHsImpl)(input);
@@ -107,14 +110,14 @@ export async function adminBulkApproveWalletHs(
 
 async function adminBulkApproveWalletHsImpl(
   input: AdminBulkApproveWalletHsInput,
-): Promise<AdminActionResult<{ processed: number; failed: number; errors: string[] }>> {
+): Promise<AdminActionResult<{ processed: number; failed: number; errors: string[]; receiptIds: number[] }>> {
   const parsed = bulkApproveWalletHsSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
-  const { ids } = parsed.data;
+  const { ids, overrideRid } = parsed.data;
 
-  return withAdmin<{ processed: number; failed: number; errors: string[] }>(
+  return withAdmin<{ processed: number; failed: number; errors: string[]; receiptIds: number[] }>(
     ["accounting"],
     async ({ adminId }) => {
       const admin = createAdminClient();
@@ -135,7 +138,7 @@ async function adminBulkApproveWalletHsImpl(
       //    fStatus 5→6 settle below can pick the credit vs non-credit branch.
       const { data: rows, error: readErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status, typeservice, reforder, reforder2, dateslip, note, wusercredit, reviewed_at")
+        .select("id, userid, amount, type, status, typeservice, reforder, reforder2, dateslip, imagesslip, note, wusercredit, reviewed_at")
         .in("id", ids)
         .eq("status", "1");
       if (readErr) return { ok: false, error: readErr.message };
@@ -153,6 +156,7 @@ async function adminBulkApproveWalletHsImpl(
         reforder: string | null;
         reforder2: string | null;
         dateslip: string | null;
+        imagesslip: string | null;
         note: string | null;
         wusercredit: string | null;
         reviewed_at: string | null;
@@ -196,7 +200,13 @@ async function adminBulkApproveWalletHsImpl(
         // it: the accountant clears it one-by-one on /admin/wallet/[id] (where
         // the confirm-to-override dialog lives).
         {
-          const dups = await findDuplicateSlips(admin, { id: r.id, userid: r.userid, amount: r.amount, dateslip: r.dateslip });
+          const dups = await findDuplicateSlips(admin, {
+            id: r.id,
+            userid: r.userid,
+            amount: r.amount,
+            dateslip: r.dateslip,
+            imagesslip: r.imagesslip,
+          });
           if (dups.length > 0) {
             failed++;
             errors.push(`id=${r.id}: พบสลิปที่อาจซ้ำ (${dups.length} รายการ) — ตรวจสอบทีละรายการที่หน้ารายละเอียด`);
@@ -458,7 +468,7 @@ async function adminBulkApproveWalletHsImpl(
       //    Best-effort — receipt failures DO NOT roll back the bulk approve
       //    (the money already moved · receipts can be re-generated manually
       //    via /admin/accounting/forwarder-invoice/add?mode=manual).
-      const receiptsIssued: Array<{ rid: string; fids: number[] }> = [];
+      const receiptsIssued: Array<{ receiptId: number; rid: string; fids: number[] }> = [];
       for (const batch of receiptBatches.values()) {
         const r = await autoIssueReceiptOnPaymentLand(admin, {
           userid:   batch.userid,
@@ -466,9 +476,10 @@ async function adminBulkApproveWalletHsImpl(
           dateSlip: batch.dateSlip,
           source:   "wallet_hs.bulk_approve",
           refWhId:  batch.refWhId,   // อ้างอิงชำระเงิน → funding slip (batch representative)
+          overrideRid: receiptBatches.size === 1 ? overrideRid : undefined,
         });
         if (r.ok) {
-          receiptsIssued.push({ rid: r.data.rid, fids: batch.fids });
+          receiptsIssued.push({ receiptId: r.data.receiptId, rid: r.data.rid, fids: batch.fids });
           revalidatePath(`/admin/accounting/forwarder-invoice/${r.data.receiptId}`);
           for (const fid of batch.fids) {
             revalidatePath(`/service-import/${fid}/invoice`);
@@ -500,7 +511,7 @@ async function adminBulkApproveWalletHsImpl(
       // refresh the admin sidebar/total badges immediately.
       bustAdminChrome();
 
-      return { ok: true, data: { processed, failed, errors } };
+      return { ok: true, data: { processed, failed, errors, receiptIds: receiptsIssued.map((r) => r.receiptId) } };
     },
   );
 }

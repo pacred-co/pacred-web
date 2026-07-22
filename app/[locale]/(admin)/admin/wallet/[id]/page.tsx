@@ -163,6 +163,7 @@ type WalletHsRow = {
   adminidupdate: string | null;
   reforder: string | null;
   reforder2: string | null;
+  reviewed_at: string | null;
 };
 
 type UserRow = {
@@ -431,7 +432,11 @@ export default async function AdminWalletDetail({
       if (simErr) {
         console.error(`[tb_wallet_hs similar] failed`, { code: simErr.code, message: simErr.message });
       } else {
-        const sims = (simRaw ?? []) as unknown as SimilarRow[];
+        const sims = ((simRaw ?? []) as unknown as SimilarRow[]).filter((candidate) =>
+          !(row.imagesslip?.trim()
+            && candidate.userid === row.userid
+            && candidate.imagesslip?.trim() === row.imagesslip.trim()),
+        );
         // resolve each dup's customer name (junk "0"/"" → empty · นิติ→corp · else ชื่อคน)
         const cleanNm = (s: string | null | undefined) => { const v = (s ?? "").trim(); return v && v !== "0" ? v : ""; };
         const uids = [...new Set(sims.map((s) => s.userid).filter((x): x is string => !!x))];
@@ -466,21 +471,57 @@ export default async function AdminWalletDetail({
   //    check above — this matches the EXACT slip filename + same customer. Warn
   //    the reviewer so they treat + edit the group as ONE payment (avoid
   //    "เผลอเปลี่ยนยอด 2 งาน" / double-count on ตัดจ่าย).
-  let sharedSlipSiblings: Array<{ id: number; reforder: string | null }> = [];
-  if (row.imagesslip && row.imagesslip.trim() && row.userid) {
+  let sharedSlipSiblings: Array<{
+    id: number; reforder: string | null; amount: number | string | null;
+    status: string | null; reviewed_at: string | null;
+  }> = [];
+  if (
+    row.type === "4"
+    && row.typeservice === "2"
+    && !String(row.reforder2 ?? "").trim()
+    && row.imagesslip?.trim()
+    && row.userid
+  ) {
     const { data: shRaw, error: shErr } = await admin
       .from("tb_wallet_hs")
-      .select("id,reforder")
+      .select("id,reforder,amount,status,reviewed_at")
       .eq("userid", row.userid)
       .eq("imagesslip", row.imagesslip.trim())
+      .eq("type", "4")
+      .eq("typeservice", "2")
+      .is("reforder2", null)
       .neq("id", row.id)
       .limit(50);
     if (shErr) console.error(`[tb_wallet_hs shared-slip siblings] failed`, { code: shErr.code, message: shErr.message });
-    else sharedSlipSiblings = (shRaw ?? []) as Array<{ id: number; reforder: string | null }>;
+    else sharedSlipSiblings = (shRaw ?? []) as typeof sharedSlipSiblings;
   }
 
   // ── Derive view-bits ──
-  const amount = Number(row.amount ?? 0);
+  const sharedSlipRows = [
+    { id: row.id, reforder: row.reforder, amount: row.amount, status: row.status, reviewed_at: row.reviewed_at },
+    ...sharedSlipSiblings,
+  ];
+  const isDirectSharedSlip = row.type === "4" && row.typeservice === "2" && !String(row.reforder2 ?? "").trim() && sharedSlipSiblings.length > 0;
+  const groupIds = isDirectSharedSlip ? sharedSlipRows.map((item) => item.id) : [row.id];
+  const directSharedTargets = isDirectSharedSlip
+    ? sharedSlipRows.map((item) => item.reforder).filter((value): value is string => Boolean(value))
+    : [];
+  if (directSharedTargets.length > 1 && directSharedTargets.every((value) => /^\d+$/.test(value))) {
+    const groupedDue = await loadLinkedForwarderPaymentBatch(admin, {
+      userId: row.userid,
+      forwarderIds: directSharedTargets,
+    });
+    if (groupedDue.ok && groupedDue.missingIds.length === 0) {
+      dueByHno.clear();
+      linkedDueTotal = groupedDue.batch.total_thb;
+      for (const line of groupedDue.batch.lines) dueByHno.set(line.id, line.price_thb);
+    } else {
+      console.error("[shared-slip grouped due-lookup] failed", groupedDue);
+    }
+  }
+  const amount = isDirectSharedSlip
+    ? sharedSlipRows.reduce((satang, item) => satang + Math.round(Number(item.amount ?? 0) * 100), 0) / 100
+    : Number(row.amount ?? 0);
   const linkedAmountMismatch = linkedDueTotal !== null && Math.round(linkedDueTotal * 100) !== Math.round(amount * 100);
   const status = row.status ?? "1";
   const isPending = status === "1";
@@ -825,7 +866,10 @@ export default async function AdminWalletDetail({
             {(isCredit ? paymentTargets.length > 0 : Boolean(isDebit && row.reforder)) && (
               <div className="border-t border-border pt-3 text-right space-y-1">
                 <p className="text-base font-semibold text-foreground">รายการนี้มาพร้อมกับรายการชำระเงิน</p>
-                {(isCredit ? paymentTargets.map((t) => t.hno) : [row.reforder!]).map((hno, i) => {
+                {(isCredit
+                  ? paymentTargets.map((t) => t.hno)
+                  : directSharedTargets.length > 0 ? directSharedTargets : [row.reforder!]
+                ).map((hno, i) => {
                   const c = classifyHno(hno);
                   const due = dueByHno.get(hno);
                   return (
@@ -899,6 +943,32 @@ export default async function AdminWalletDetail({
                    หน้า 2 = ออกเลขที่ใบเสร็จ + อนุมัติ (รอบ 2). รายการที่ไม่ต้อง
                    รอบ 1 (ถอนเงิน type='3') ข้ามไปหน้า 2 เลย. Completed → audit. */}
 
+            {needsRound1 && (
+              <ol className="grid grid-cols-1 gap-2 border-t border-border pt-3 sm:grid-cols-3" aria-label="ขั้นตอนตรวจสลิป">
+                {[
+                  { no: 1, label: "ตรวจสลิป · วันโอน · รายการซ้ำ", done: Boolean(reviewedAt) || !isPending },
+                  { no: 2, label: "ตรวจข้อมูลเอกสาร · เลขที่ใบเสร็จ", done: status === "2", active: isPending && Boolean(reviewedAt) },
+                  { no: 3, label: "อนุมัติตัดจ่าย · เปิดใบเสร็จ", done: status === "2", active: status === "2" },
+                ].map((step) => (
+                  <li
+                    key={step.no}
+                    className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
+                      step.done
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                        : step.active
+                          ? "border-sky-400 bg-sky-50 text-sky-900 ring-2 ring-sky-100"
+                          : "border-border bg-surface-alt/40 text-muted"
+                    }`}
+                  >
+                    <span className="mr-1.5 inline-flex size-5 items-center justify-center rounded-full border border-current text-[11px]">
+                      {step.done ? "✓" : step.no}
+                    </span>
+                    {step.label}
+                  </li>
+                ))}
+              </ol>
+            )}
+
             {/* หน้า 1 — วันเวลาที่โอนในสลิป (ยังไม่ผ่านรอบ 1) */}
             {isPending && needsRound1 && !reviewedAt && (
               <div className="border-t border-border pt-3">
@@ -915,7 +985,7 @@ export default async function AdminWalletDetail({
                 {/* ตีกลับสลิป (owner 2026-07-16) — สลิปปลอม/ซ้ำ/ไม่ตรง → ปฏิเสธ
                     ตั้งแต่หน้า 1 (ถอยสถานะให้ลูกค้าจ่ายใหม่) โดยไม่ต้องผ่านรอบ 1 ก่อน.
                     reuse ตัวปฏิเสธเดิม (adminRejectWalletDeposit) — ไม่มี money logic ใหม่. */}
-                <RejectSlipInline id={row.id} />
+                <RejectSlipInline id={row.id} groupIds={groupIds} />
               </div>
             )}
 
@@ -936,6 +1006,7 @@ export default async function AdminWalletDetail({
                 )}
                 <ApproveRejectForm
                   id={row.id}
+                  groupIds={groupIds}
                   hasDateSlip={Boolean(row.dateslip)}
                   kind={row.type === "3" ? "withdraw" : "deposit"}
                   // ชั้น-1 dup gate: only a pending('1')/approved('2') same-day

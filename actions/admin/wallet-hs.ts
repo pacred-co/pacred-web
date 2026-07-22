@@ -683,6 +683,7 @@ type ApproveResult = {
   };
   cascadedRows: CascadedRow[];
   hadPaydepositLinks: boolean;
+  receiptId?: number | null;
 };
 
 /**
@@ -714,23 +715,51 @@ export async function adminReviewSlipRound1(
     const admin = createAdminClient();
     const legacyAdminId = await resolveLegacyAdminId();
 
-    // Stamp round-1 ONLY on a still-pending row (atomic guard on status='1').
-    const { data: claimed, error: updErr } = await admin
+    const { data: anchor, error: anchorErr } = await admin
+      .from("tb_wallet_hs")
+      .select("id,userid,imagesslip,type,typeservice,reforder2,status")
+      .eq("id", idNum)
+      .maybeSingle<{
+        id: number; userid: string; imagesslip: string | null; type: string | null;
+        typeservice: string | null; reforder2: string | number | null; status: string | null;
+      }>();
+    if (anchorErr) return { ok: false, error: anchorErr.message };
+    if (!anchor) return { ok: false, error: "ไม่พบรายการ" };
+
+    const isDirectSlipGroup = anchor.type === "4"
+      && anchor.typeservice === "2"
+      && !String(anchor.reforder2 ?? "").trim()
+      && Boolean(anchor.imagesslip?.trim());
+
+    // Stamp round-1 on the whole exact-slip group.  One bank slip must never
+    // require N independent human reviews merely because it paid N shipments.
+    let claimQuery = admin
       .from("tb_wallet_hs")
       .update({ reviewed_at: new Date().toISOString(), reviewed_by_admin_id: legacyAdminId })
-      .eq("id", idNum)
-      .eq("status", "1")
-      .select("id")
-      .maybeSingle();
+      .eq("status", "1");
+    claimQuery = isDirectSlipGroup
+      ? claimQuery
+          .eq("userid", anchor.userid)
+          .eq("imagesslip", anchor.imagesslip!.trim())
+          .eq("type", "4")
+          .eq("typeservice", "2")
+          .is("reforder2", null)
+      : claimQuery.eq("id", idNum);
+    const { data: claimed, error: updErr } = await claimQuery.select("id");
     if (updErr) {
       console.error("[adminReviewSlipRound1] failed", { code: updErr.code, message: updErr.message, id: idNum });
       return { ok: false, error: updErr.message };
     }
-    if (!claimed) {
+    if (!claimed || claimed.length === 0) {
       return { ok: false, error: "ตรวจรอบ 1 ไม่ได้ — รายการนี้ไม่ได้อยู่สถานะ 'รอตรวจสอบ' แล้ว (อาจถูกอนุมัติ/ปฏิเสธไปแล้ว)" };
     }
 
-    await logAdminAction(adminId, "tb_wallet_hs.review_round1", "tb_wallet_hs", String(idNum), {});
+    const claimedIds = claimed.map((row) => Number((row as { id: number }).id));
+    await logAdminAction(adminId, "tb_wallet_hs.review_round1", "tb_wallet_hs", claimedIds.join(","), {
+      anchor_id: idNum,
+      grouped_ids: claimedIds,
+    });
+    for (const claimedId of claimedIds) revalidatePath(`/admin/wallet/${claimedId}`);
     revalidatePath(`/admin/wallet/${idNum}`);
     revalidatePath("/admin/wallet");
     revalidatePath("/admin");
@@ -1143,7 +1172,7 @@ async function adminApproveWalletDepositImpl(
       // ──────────────────────────────────────────────
       const { data: rowRaw, error: rowErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status, note, typeservice, reforder, reforder2, dateslip, wusercredit, reviewed_at")
+        .select("id, userid, amount, type, status, note, typeservice, reforder, reforder2, dateslip, imagesslip, wusercredit, reviewed_at")
         .eq("id", id)
         .maybeSingle<{
           id: number;
@@ -1156,6 +1185,7 @@ async function adminApproveWalletDepositImpl(
           reforder: string | null;
           reforder2: string | null;
           dateslip: string | null;
+          imagesslip: string | null;
           wusercredit: string | null;
           reviewed_at: string | null;
         }>();
@@ -1203,7 +1233,13 @@ async function adminApproveWalletDepositImpl(
       //    acknowledgeDuplicate after eyeballing it. Restores the legacy hard
       //    dup-review that Pacred had softened to an advisory red banner.
       if (!acknowledgeDuplicate) {
-        const dups = await findDuplicateSlips(admin, { id: rowRaw.id, userid: rowRaw.userid, amount: rowRaw.amount, dateslip: rowRaw.dateslip });
+        const dups = await findDuplicateSlips(admin, {
+          id: rowRaw.id,
+          userid: rowRaw.userid,
+          amount: rowRaw.amount,
+          dateslip: rowRaw.dateslip,
+          imagesslip: rowRaw.imagesslip,
+        });
         if (dups.length > 0) {
           return {
             ok: false,
@@ -1407,6 +1443,7 @@ async function adminApproveWalletDepositImpl(
         //      this forwarder, the WHERE matches nothing = harmless no-op (NO
         //      double-effect). Best-effort + logged; NEVER throw (money moved).
         const fid = Number(rowRaw.reforder);
+        let issuedReceiptId: number | null = null;
         if (Number.isFinite(fid) && fid > 0) {
           const isCredit = (rowRaw.wusercredit ?? "").trim() === "1";
           let flipErrMsg: string | null = null;
@@ -1456,6 +1493,7 @@ async function adminApproveWalletDepositImpl(
             logger.warn("wallet-hs", "auto-receipt failed (non-fatal)", { wallet_hs_id: id, userid, fid, error: rcpt.error });
           }
           if (rcpt.ok) {
+            issuedReceiptId = rcpt.data.receiptId;
             revalidatePath(`/admin/accounting/forwarder-invoice/${rcpt.data.receiptId}`);
             revalidatePath("/admin/accounting/forwarder-invoice");
             revalidatePath(`/service-import/${fid}/invoice`);
@@ -1488,6 +1526,7 @@ async function adminApproveWalletDepositImpl(
             customer: { userid, walletTotalBefore: walletBefore, walletTotalAfter: walletAfter },
             cascadedRows,
             hadPaydepositLinks: false,
+            receiptId: issuedReceiptId,
           },
         };
       }
@@ -2690,6 +2729,77 @@ export async function adminRejectWalletDeposit(
       };
     },
   );
+}
+
+// ────────────────────────────────────────────────────────────
+
+const rejectDirectSlipGroupSchema = z.object({
+  ids: z.array(z.number().int().positive()).min(2).max(50),
+  reason: z.string().trim().min(3).max(500),
+});
+
+/** Reject one exact multi-shipment direct-payment slip as one atomic DB update. */
+export async function adminRejectWalletSlipGroup(
+  input: z.infer<typeof rejectDirectSlipGroupSchema>,
+): Promise<AdminActionResult<{ rejectedIds: number[] }>> {
+  const parsed = rejectDirectSlipGroupSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const ids = [...new Set(parsed.data.ids)].sort((a, b) => a - b);
+  if (ids.length < 2) return { ok: false, error: "invalid_group" };
+
+  return withAdmin(["accounting"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const legacyAdminId = await resolveLegacyAdminId();
+    const { data, error } = await admin
+      .from("tb_wallet_hs")
+      .select("id,userid,imagesslip,type,typeservice,reforder2,status")
+      .in("id", ids);
+    if (error) return { ok: false, error: error.message };
+    const rows = (data ?? []) as Array<{
+      id: number; userid: string; imagesslip: string | null; type: string | null;
+      typeservice: string | null; reforder2: string | number | null; status: string | null;
+    }>;
+    const first = rows[0];
+    const exactSlip = first?.imagesslip?.trim() ?? "";
+    const valid = rows.length === ids.length && Boolean(first) && Boolean(exactSlip)
+      && rows.every((row) => row.status === "1"
+        && row.userid === first.userid
+        && row.imagesslip?.trim() === exactSlip
+        && row.type === "4"
+        && row.typeservice === "2"
+        && !String(row.reforder2 ?? "").trim());
+    if (!valid) {
+      return { ok: false, error: "กลุ่มสลิปเปลี่ยนแปลงแล้ว กรุณารีเฟรชและตรวจสอบใหม่ก่อนปฏิเสธ" };
+    }
+
+    const { data: rejected, error: rejectErr } = await admin
+      .from("tb_wallet_hs")
+      .update({
+        status: "3",
+        note: parsed.data.reason,
+        adminid: legacyAdminId,
+        adminidupdate: legacyAdminId,
+      })
+      .in("id", ids)
+      .eq("status", "1")
+      .select("id");
+    if (rejectErr) return { ok: false, error: rejectErr.message };
+    const rejectedIds = (rejected ?? []).map((row) => Number((row as { id: number }).id));
+    if (rejectedIds.length !== ids.length) {
+      return { ok: false, error: "มีพนักงานดำเนินการกลุ่มนี้พร้อมกัน กรุณารีเฟรชเพื่อตรวจสถานะล่าสุด" };
+    }
+    await logAdminAction(adminId, "tb_wallet_hs.reject_slip_group", "tb_wallet_hs", ids.join(","), {
+      ids,
+      userid: first.userid,
+      imagesslip: exactSlip,
+      reason: parsed.data.reason,
+    });
+    for (const id of ids) revalidatePath(`/admin/wallet/${id}`);
+    revalidatePath("/admin/wallet");
+    revalidatePath("/admin");
+    bustAdminChrome();
+    return { ok: true, data: { rejectedIds } };
+  });
 }
 
 // ────────────────────────────────────────────────────────────

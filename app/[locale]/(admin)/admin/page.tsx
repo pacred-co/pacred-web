@@ -41,6 +41,7 @@ import { RevenueCarouselCard } from "@/components/admin/revenue-carousel-card";
 import { getWalletSystemTotals } from "@/lib/admin/wallet-totals";
 import { pendingTopupFilter, pendingWithdrawFilter } from "@/lib/wallet/wallet-hs";
 import { collapseWalletBillingPairs, computeTopupBadge } from "@/lib/admin/topup-slip-dedup";
+import { groupDirectWalletSlips } from "@/lib/admin/wallet-slip-group";
 import { computeBillWht } from "@/lib/billing/wht";
 import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
 import { Link, redirect } from "@/i18n/navigation";
@@ -828,7 +829,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       // real thumbnail (the bare filename was used as a broken href before).
       const base = admin
         .from("tb_wallet_hs")
-        .select("id,date,dateslip,amount,status,imagesslip,userid,note,type,reforder,reforder2");
+        .select("id,date,dateslip,amount,status,imagesslip,userid,note,type,typeservice,reforder,reforder2");
       // Route the LIST through the SAME shared SOT filters as the badge/tabs
       // (lib/wallet/wallet-hs.ts) so the list, the tab count, and the sidebar badge
       // can never disagree. Direction is keyed off `type`, never the amount sign.
@@ -841,6 +842,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       }
       const rawRows = (data ?? []) as unknown as Array<RawWalletHsRow & {
         dateslip: string | null; note: string | null; type: string | null;
+        typeservice: string | null;
         reforder: string | null; reforder2: string | number | null;
       }>;
       // ── COLLAPSE the "เติม-แล้วจ่าย" pair to ONE row (owner 2026-06-21: "คนเดียวกัน
@@ -853,14 +855,26 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
         if (r.type === "4" && r.reforder2) paidFwdByTopup.set(String(r.reforder2), r.reforder ?? "");
       }
       const rows = rawRows.filter((r) => !(r.type === "4" && r.reforder2));
-      const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
-      const walletRows = await Promise.all(rows.map(async (r) => {
+      // Direct import checkout stores one ledger row per shipment, but the
+      // exact same uploaded slip on all of them is ONE accounting review job.
+      // Group before rendering so staff never see/check the same bank slip N
+      // times.  The member+exact-path key is persisted by submitForwarderPayment;
+      // no amount/date heuristic is involved.
+      const slipGroups = groupDirectWalletSlips(rows);
+      const users = await loadUsersByUserId(admin, slipGroups.map((g) => g.anchor.userid));
+      const walletRows = await Promise.all(slipGroups.map(async (group) => {
+        const r = group.anchor;
         const u = users.get(r.userid);
         const slipUrl = await resolveLegacyUrl(r.imagesslip, "slip");
         // "what it's paying" — for a collapsed import-pay pair use the paired
         // forwarder#; else the note; else type label + ref. Never a bare amount.
         const paidFwd = paidFwdByTopup.get(String(r.id));
-        const what = paidFwd
+        const directRefs = group.rows
+          .map((item) => item.reforder)
+          .filter((value): value is string => Boolean(value));
+        const what = directRefs.length > 1
+          ? `ชำระค่าฝากนำเข้า ${directRefs.length} ชิปเมนต์ · ${directRefs.map((ref) => `#${ref}`).join(", ")}`
+          : paidFwd
           ? `ชำระค่าฝากนำเข้า #${paidFwd}`
           : (r.note && r.note.trim())
             ? r.note.trim()
@@ -873,7 +887,9 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           created_at: r.date ?? "",
           member_code: r.userid,
           customer_name: nameOf(u),
-          amount: Math.abs(Number(r.amount ?? 0)),
+          // Integer-satang aggregate avoids binary-float drift and repeated
+          // per-row rounding in this accounting surface.
+          amount: Math.abs(group.totalSatang) / 100,
           detail: `${escapeHtmlInline(what)} · <span class="${slipUrl ? "text-emerald-600" : "text-amber-600"}">${slipNote}</span>`,
           link: `/admin/wallet/${r.id}`,
           status: r.status ?? "1",
@@ -893,21 +909,22 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
         // (type='4' · reforder=fid) is shown TWICE when a ใบวางบิล (FRI) also bills
         // that same forwarder. The FRI wins (richer legacy-shaped doc · routes to the
         // /admin/billing-run/[id] 2-round gate) → suppress the raw wallet twin.
-        const walletFidByRowId = new Map<string, number>();
-        for (const r of rows) {
-          if (r.type === "4" && r.reforder && /^\d+$/.test(String(r.reforder))) {
-            walletFidByRowId.set(String(r.id), Number(r.reforder));
-          }
+        const walletFidsByRowId = new Map<string, number[]>();
+        for (const group of slipGroups) {
+          const fids = group.rows
+            .filter((r) => r.type === "4" && r.reforder && /^\d+$/.test(String(r.reforder)))
+            .map((r) => Number(r.reforder));
+          if (fids.length) walletFidsByRowId.set(String(group.anchor.id), fids);
         }
         const { suppressedWalletFids } = collapseWalletBillingPairs({
-          walletForwarderIds: [...walletFidByRowId.values()],
+          walletForwarderIds: [...walletFidsByRowId.values()].flat(),
           friForwarderSets: friRows.map((f) => ({ invoiceId: f.invoiceId, forwarderIds: f.forwarderIds })),
         });
         const filteredWalletRows = suppressedWalletFids.size === 0
           ? walletRows
-          : walletRows.filter((w) => {
-              const fid = walletFidByRowId.get(w.id);
-              return fid === undefined || !suppressedWalletFids.has(fid);
+            : walletRows.filter((w) => {
+              const fids = walletFidsByRowId.get(w.id);
+              return !fids || !fids.some((fid) => suppressedWalletFids.has(fid));
             });
         return [...filteredWalletRows, ...friRows];
       }

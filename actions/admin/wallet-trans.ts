@@ -152,19 +152,36 @@ export async function adminUpdateWalletHsDateSlip(
       // the slip date matters for the "ตรวจสอบรายการซ้ำ" detector).
       const { data: existing, error: existingErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, status, userid, amount")
+        .select("id, status, userid, amount, type, typeservice, imagesslip, reforder2")
         .eq("id", id)
-        .maybeSingle<{ id: number; status: string | null; userid: string; amount: number }>();
+        .maybeSingle<{
+          id: number; status: string | null; userid: string; amount: number;
+          type: string | null; typeservice: string | null; imagesslip: string | null;
+          reforder2: string | number | null;
+        }>();
       if (existingErr) {
         console.error(`[tb_wallet_hs list] failed`, { code: existingErr.code, message: existingErr.message });
         return { ok: false, error: `db_error:${existingErr.code ?? "unknown"}` };
       }
       if (!existing) return { ok: false, error: "ไม่พบรายการ" };
 
-      const { error: updErr } = await admin
+      const isDirectSlipGroup = existing.type === "4"
+        && existing.typeservice === "2"
+        && !String(existing.reforder2 ?? "").trim()
+        && Boolean(existing.imagesslip?.trim());
+      let updateQuery = admin
         .from("tb_wallet_hs")
         .update({ dateslip: dateslipIso, adminidupdate: legacyAdminId })
-        .eq("id", id);
+        .eq("status", "1");
+      updateQuery = isDirectSlipGroup
+        ? updateQuery
+            .eq("userid", existing.userid)
+            .eq("imagesslip", existing.imagesslip!.trim())
+            .eq("type", "4")
+            .eq("typeservice", "2")
+            .is("reforder2", null)
+        : updateQuery.eq("id", id);
+      const { data: updatedRows, error: updErr } = await updateQuery.select("id");
       if (updErr) {
         console.error(`[tb_wallet_hs mutation] failed`, { code: updErr.code, message: updErr.message });
         return { ok: false, error: updErr.message };
@@ -174,6 +191,7 @@ export async function adminUpdateWalletHsDateSlip(
         userid: existing.userid,
         amount: existing.amount,
         new_dateslip: dateslipIso,
+        grouped_ids: (updatedRows ?? []).map((row) => (row as { id: number }).id),
       });
 
       revalidatePath(`/admin/wallet/${id}`);

@@ -28,6 +28,7 @@ import { RejectReasonPicker } from "@/components/admin/reject-reason-picker";
 import { DateTime24Field } from "@/components/admin/datetime-24-field";
 import { ReceiptDocNoEditor } from "@/components/admin/receipt-doc-no-editor";
 import { adminUpdateWalletHsDateSlip } from "@/actions/admin/wallet-trans";
+import { adminBulkApproveWalletHs } from "@/actions/admin/tb-bulk";
 import { adminUpdateWalletHsPendingAmount } from "@/actions/admin/wallet-hs";
 // ADR-0018 D-3 #2 + MS-1 fix (2026-05-30): repointed approve/reject from
 // `wallet-trans.ts` (no paydeposit cascade) → `wallet-hs.ts` (cascade-aware
@@ -36,6 +37,7 @@ import { adminUpdateWalletHsPendingAmount } from "@/actions/admin/wallet-hs";
 import {
   adminApproveWalletDeposit,
   adminRejectWalletDeposit,
+  adminRejectWalletSlipGroup,
   adminReviewSlipRound1,
   // P1-25/26 (ADR-0018 D-2 rule 1 + rule 3 ¶3-4): customer-withdraw (type='3')
   // approve = no balance change · reject = refund the held money. The detail
@@ -336,7 +338,7 @@ export function EditDateSlipForm({
 // fStatus='5', so the customer can re-submit a new slip immediately).
 // ────────────────────────────────────────────────────────────
 
-export function RejectSlipInline({ id }: { id: number }) {
+export function RejectSlipInline({ id, groupIds = [id] }: { id: number; groupIds?: number[] }) {
   const router = useRouter();
   const [mode, setMode] = useState<"idle" | "reject">("idle");
   const [reason, setReason] = useState<string>("");
@@ -356,7 +358,9 @@ export function RejectSlipInline({ id }: { id: number }) {
       return;
     }
     startTransition(async () => {
-      const res = await adminRejectWalletDeposit({ id, reason: reason.trim() });
+      const res = groupIds.length > 1
+        ? await adminRejectWalletSlipGroup({ ids: groupIds, reason: reason.trim() })
+        : await adminRejectWalletDeposit({ id, reason: reason.trim() });
       if (res.ok) {
         router.refresh(); // slip → '3' · order rolled back → server re-renders
         setMode("idle");
@@ -538,6 +542,7 @@ export function EditAmountForm({
 
 export function ApproveRejectForm({
   id,
+  groupIds = [id],
   hasDateSlip,
   kind = "deposit",
   hasDuplicate = false,
@@ -547,6 +552,8 @@ export function ApproveRejectForm({
   showRound1Banner = true,
 }: {
   id: number;
+  /** Exact-slip direct-payment rows settled together as one review job. */
+  groupIds?: number[];
   hasDateSlip: boolean;
   /**
    * Which legacy tb_wallet_hs flow this row is:
@@ -628,18 +635,32 @@ export function ApproveRejectForm({
     startTransition(async () => {
       const res = isWithdraw
         ? await adminApproveWithdraw({ id })
-        : await adminApproveWalletDeposit({
+        : groupIds.length > 1
+          ? await adminBulkApproveWalletHs({ ids: groupIds, overrideRid: overrideRid ?? undefined })
+          : await adminApproveWalletDeposit({
             id,
             acknowledgeDuplicate,
             // STEP-2: pass the hand-picked receipt เลขที่ (null → auto-mint MAX+1).
             overrideRid: overrideRid ?? undefined,
           });
       if (res.ok) {
+        if (groupIds.length > 1 && "data" in res && res.data && "failed" in res.data && res.data.failed > 0) {
+          setError(`ดำเนินการกลุ่มไม่ครบ: ${res.data.errors[0] ?? "กรุณารีเฟรชและตรวจสอบ"}`);
+          router.refresh();
+          return;
+        }
         // จบลูป (owner 2026-07-15): a receipt-issuing DIRECT slip → หลังยืนยัน + สร้าง
         // ใบเสร็จแล้ว พาไปหน้าประวัติใบเสร็จ (ที่ใบเสร็จเพิ่งออกไปอยู่). อื่นๆ (topup /
         // withdraw · ไม่ออกใบเสร็จ) → refresh อยู่หน้าเดิม แสดงสถานะ "ทำรายการแล้ว".
         if (!isWithdraw && receiptContext) {
-          router.push("/admin/accounting/receipts");
+          const receiptIds = groupIds.length > 1 && "data" in res && res.data && "receiptIds" in res.data
+            ? res.data.receiptIds
+            : groupIds.length === 1 && "data" in res && res.data && "receiptId" in res.data && res.data.receiptId
+              ? [res.data.receiptId]
+              : [];
+          router.push(receiptIds.length === 1
+            ? `/admin/accounting/forwarder-invoice/${receiptIds[0]}`
+            : "/admin/accounting/receipts");
         } else {
           router.refresh();
         }
@@ -668,7 +689,9 @@ export function ApproveRejectForm({
       // handled server-side in adminRejectWithdraw.
       const res = isWithdraw
         ? await adminRejectWithdraw({ id, reason: reason.trim() || undefined })
-        : await adminRejectWalletDeposit({ id, reason: reason.trim() || undefined });
+        : groupIds.length > 1
+          ? await adminRejectWalletSlipGroup({ ids: groupIds, reason: reason.trim() })
+          : await adminRejectWalletDeposit({ id, reason: reason.trim() || undefined });
       if (res.ok) {
         router.refresh();
         setMode("idle");
