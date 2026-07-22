@@ -82,11 +82,15 @@ export function CreateBatchForm({
   groups,
   drivers,
   showCarrierFilter = false,
+  showFlashExport = false,
 }: {
   groups: Stop[];
   drivers: DriverOption[];
   /** Show the 🚚 ขนส่ง carrier-filter chip row — Express tab only (มอบคนขับ = Pacred-only, no filter). */
   showCarrierFilter?: boolean;
+  /** Show the "ส่งออกไฟล์ Flash (นัดรับ)" button — Flash tab only (exports Flash rows
+   *  as the Flash "Import ข้อมูลผู้รับ" CSV · พี่ป๊อป 2026-07-23 Flash แยกแท็บของตัวเอง). */
+  showFlashExport?: boolean;
 }) {
   const router = useRouter();
   const { alert, dialogs } = useConfirmDialogs();
@@ -222,9 +226,13 @@ export function CreateBatchForm({
   // CSV → upload to the Flash web back-office → Flash picks up at the โกดัง.
   // EXPORT-ONLY: no mutation; the action re-reads tb_forwarder by id.
   async function handleExportFlash() {
-    const exportIds = filteredGroups.flatMap((g) => g.forwarderIds);
+    // Flash "Import ข้อมูลผู้รับ" CSV only makes sense for FLASH rows — scope to the
+    // Flash carrier (the parcel tab also lists J&T/ไปรษณีย์; Express may hold any carrier).
+    const exportIds = filteredGroups
+      .filter((g) => g.shipByLabel === "Flash Express")
+      .flatMap((g) => g.forwarderIds);
     if (exportIds.length === 0) {
-      void alert("ไม่มีรายการให้ส่งออก");
+      void alert("ไม่มีรายการ Flash ให้ส่งออก");
       return;
     }
     setExporting(true);
@@ -360,9 +368,9 @@ export function CreateBatchForm({
         </div>
       )}
 
-      {/* ส่งออกไฟล์ Flash (นัดรับ) — Express tab only. Exports the currently-listed
-          external-courier deliveries as the Flash "Import ข้อมูลผู้รับ" CSV. */}
-      {showCarrierFilter && (
+      {/* ส่งออกไฟล์ Flash (นัดรับ) — Flash tab only. Exports the listed Flash deliveries
+          as the Flash "Import ข้อมูลผู้รับ" CSV (scoped to Flash rows only). */}
+      {showFlashExport && (
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
