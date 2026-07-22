@@ -277,9 +277,20 @@ export async function resolveLiveForwarderRate(
 
   const resolved = resolveForwarderRate(candidates, resolveInput);
   // ค่านำเข้าจีน-ไทย ขั้นต่ำ 50 บาท (ภูม 2026-07-01) — ยกยอดที่ต่ำกว่า 50 (แต่มีเรทจริง)
-  // ขึ้นเป็น 50. ไม่แตะเคส rateMissing/rate<=0 (กันสร้างยอดผีบนแถวยังไม่มีเรท). จุดเดียว
-  // ที่ครอบทุกพาธ forwarder (save/MOMO import/computeAndFill/preview) โดยไม่กระทบ cart.
+  // ขึ้นเป็น 50. ไม่แตะเคส rateMissing/rate<=0 (กันสร้างยอดผีบนแถวยังไม่มีเรท).
+  //
+  // 🔵 ต่อ "ชิปเม้น" ไม่ใช่ต่อกล่องแตก (ภูม/พี่ป๊อป 2026-07-22 · "ยึดตามหัว shipment") —
+  // ขั้นต่ำ ฿50 คือ ต่อ 1 ชิปเม้น (พัสดุจริง 1 ตัว) ไม่ใช่ต่อกล่องย่อยที่ MOMO แตกออกมา.
+  // เมื่อ caller ส่ง comparisonKgPerCbm มา (= แถวนี้เป็นกล่องย่อยของชิปเม้นหลายแทรค) เรา
+  // "ไม่" floor รายกล่อง — ยอดรวมทั้งชิปเม้นสูงกว่า ฿50 อยู่แล้ว (ตรงกับ preview ที่ floor
+  // ยอดรวม). ถ้าไม่ส่ง (ชิปเม้นแทรคเดียว/ยืนเดี่ยว) → floor เหมือนเดิม (ของเล็กจริงๆ ฿50 min).
+  // ถ้าไม่ทำ: กล่องเบา (2kg×17=34) โดนดันเป็น 50 ต่อกล่อง → save = 12,179.50 ≠ preview 12,163.50.
+  const isShipmentChild =
+    ctx.comparisonKgPerCbm != null &&
+    Number.isFinite(ctx.comparisonKgPerCbm) &&
+    ctx.comparisonKgPerCbm > 0;
   if (
+    !isShipmentChild &&
     !resolved.rateMissing &&
     resolved.rate > 0 &&
     resolved.transportSubtotal > 0 &&
