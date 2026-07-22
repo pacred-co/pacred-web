@@ -78,8 +78,10 @@ export type SummaryRow = {
   productType: string;
   /** frefrate. */
   rate: number;
-  /** ftotalprice — column 11 shows fTotalPrice ONLY (not the composite). */
+  /** ftotalprice — the ค่าขนส่ง column (China→TH freight; not the composite). */
   amount: number;
+  /** breakdown.otherCharges — the อื่นๆ column (same SOT as the PayModal). */
+  otherCharges: number;
 };
 
 export type PaymentSummaryDocProps = {
@@ -262,18 +264,18 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
               <thead>
                 <tr>
                   <Th w="3%"  th="ลำดับ"        en="No." center />
-                  <Th w="10%" th="เลขที่ออเดอร์" en="Order" center nowrap />
-                  <Th w="10%" th="รหัสพัสดุ"     en="Tracking" left />
+                  <Th w="9%"  th="เลขที่ออเดอร์" en="Order" center nowrap />
                   <Th w="9%"  th="เลขตู้"        en="Container" center />
                   <Th w="5%"  th="ขนส่ง"        en="Ship" center />
-                  <Th w="7%"  th="จากเมือง"      en="From" center />
+                  <Th w="11%" th="รหัสพัสดุ"     en="Tracking" left />
+                  <Th w="6%"  th="ประเภท"       en="Type" center />
+                  <Th w="7%"  th="เรทราคา"      en="Rate" right />
                   <Th w="5%"  th="จำนวน"        en="Box" right />
                   <Th w="7%"  th="น้ำหนัก"       en="Wt·kg" right />
                   <Th w="8%"  th="ปริมาตร"      en="CBM" right />
                   <Th w="10%" th="ขนาด(ก×ย×ส)"  en="W×L×H·ซม." center />
-                  <Th w="6%"  th="ประเภท"       en="Type" center />
-                  <Th w="7%"  th="เรทราคา"      en="Rate" right />
-                  <Th w="13%" th="ค่าขนส่ง"      en="Amount" right />
+                  <Th w="7%"  th="ค่าขนส่ง"      en="Amount" right />
+                  <Th w="8%"  th="อื่นๆ"         en="Other" right />
                 </tr>
               </thead>
               <tbody>
@@ -288,19 +290,19 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
                     <tr key={r.no} style={{ background: "#fff", breakInside: "avoid", pageBreakInside: "avoid" }}>
                       <td style={tdC}>{r.no}</td>
                       <td style={tdMonoC}>#{r.orderNo}</td>
-                      <td style={tdMono}>{r.tracking || "—"}</td>
                       <td style={{ ...tdMonoC, color: "#374151" }}>{r.cabinet || "—"}</td>
                       <td style={{ ...tdMonoC, fontWeight: "bold", color: r.transport === "เรือ" ? "#1d4ed8" : r.transport === "รถ" ? "#b45309" : "#6b7280" }}>
                         {r.transport || "—"}
                       </td>
-                      <td style={{ ...tdC, fontSize: "8px", color: "#374151" }}>{r.fromCity || "—"}</td>
+                      <td style={tdMono}>{r.tracking || "—"}</td>
+                      <td style={{ ...tdC, fontSize: "8px", color: "#374151" }}>{r.productType || "—"}</td>
+                      <td style={tdNum}>{r.rate > 0 ? fmt2(r.rate) : "—"}</td>
                       <td style={tdNum}>{fmt0(r.boxes)}</td>
                       <td style={tdNum}>{fmt2(r.weight)}</td>
                       <td style={tdNum}>{fmt5(r.volume)}</td>
                       <td style={{ ...tdC, fontSize: "8px", color: "#374151", fontFamily: "monospace" }}>{dimsCm(r.width, r.length, r.height)}</td>
-                      <td style={{ ...tdC, fontSize: "8px", color: "#374151" }}>{r.productType || "—"}</td>
-                      <td style={tdNum}>{r.rate > 0 ? fmt2(r.rate) : "—"}</td>
                       <td style={tdNum}>{fmt2(r.amount)}</td>
+                      <td style={tdNum}>{r.otherCharges > 0 ? fmt2(r.otherCharges) : "—"}</td>
                     </tr>
                   ))
                 )}

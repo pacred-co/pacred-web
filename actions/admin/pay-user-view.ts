@@ -251,6 +251,8 @@ export type PayUserFwdRow = {
   cover_url: string | null;
   fdetail: string | null;
   products_type_label: string;
+  /** frefrate — เรทราคา (บาท/กก. หรือ บาท/คิว ตาม basis). */
+  rate: number;
   provenance: string | null;       // ฝากนำเข้า:{adminidcreator} / ฝากสั่งซื้อ:{reforder}
   reforder: string | null;
   fnote: string | null;
@@ -290,7 +292,7 @@ export type PayUserFwdRow = {
 const FWD_VIEW_COLS =
   "id, fdate, fshipby, paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, " +
   "ftransportpricechnthb, priceother, fdiscount, fusercompany, ftrackingchn, fstatus, fcredit, " +
-  "fdatetothai, ftransporttype, fcover, fdetail, fproductstype, adminidcreator, reforder, " +
+  "fdatetothai, ftransporttype, fcover, fdetail, fproductstype, frefrate, adminidcreator, reforder, " +
   "fnote, fnoteuser, fweight, fvolume, fwidth, flength, fheight, famount, famountcount, adminidkey, fcabinetnumber, " +
   "fdatecontainerclose, fpallet, ftrackingth, fdatestatus2, fdatestatus3, fdatestatus4, adminidupdate, fdateadminstatus";
 
@@ -298,7 +300,7 @@ type FwdRaw = ForwarderDebitRow & {
   fdate: string | null; ftrackingchn: string | null; fstatus: string | null; fcredit: string | null;
   fusercompany: string | number | null;
   fdatetothai: string | null; ftransporttype: string | null; fcover: string | null; fdetail: string | null;
-  fproductstype: string | null; adminidcreator: string | null; reforder: string | null; fnote: string | null;
+  fproductstype: string | null; frefrate: number | string | null; adminidcreator: string | null; reforder: string | null; fnote: string | null;
   fnoteuser: string | number | null; fweight: number | string | null; fvolume: number | string | null;
   fwidth: number | string | null; flength: number | string | null; fheight: number | string | null;
   famount: number | string | null; famountcount: number | string | null; adminidkey: string | null;
@@ -388,6 +390,7 @@ export async function getPayUserForwarderView(
         cover_url: coverMap[String(r.id)] ?? null,
         fdetail: r.fdetail,
         products_type_label: PRODUCTS_TYPE_LABEL[String(r.fproductstype ?? "")] ?? "",
+        rate: num(r.frefrate),
         provenance,
         reforder: refO || null,
         fnote: (r.fnote ?? "").trim() || null,
