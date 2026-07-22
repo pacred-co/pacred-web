@@ -3,8 +3,15 @@
  */
 
 import { z } from "zod";
-import { imageUrlField } from "@/lib/validators/image-url";
 import { MAX_ORDER_QTY } from "@/lib/validators/order-qty";
+import {
+  productTitleField,
+  shopNameField,
+  productUrlField,
+  productImageUrlField,
+  variantTextField,
+  productDetailsField,
+} from "@/lib/validators/product-text";
 
 export const PROVIDERS = ["1688", "taobao", "tmall", "shop", "nice"] as const;
 export type Provider = (typeof PROVIDERS)[number];
@@ -85,16 +92,22 @@ export type ApplyPromoInput = z.infer<typeof applyPromoSchema>;
 
 export const cartItemSchema = z.object({
   provider:   z.enum(PROVIDERS).default("shop"),
-  shop_name:  z.string().trim().max(300).default("pacred"),
-  url:        z.string().trim().max(2000).optional().or(z.literal("").transform(() => undefined)),
-  title:      z.string().trim().max(300).optional().or(z.literal("").transform(() => undefined)),
+  // Every text/URL bound below comes from lib/validators/product-text.ts — ONE
+  // number shared with the `tb_cart`/`tb_order` column widths (migration 0272)
+  // and with the inputs' `maxLength`, each with a Thai message that names the
+  // field + the limit. A bare `.max()` here reaches the customer as zod's raw
+  // English "Too big: expected string to have <=N characters" — which is exactly
+  // how the owner's 2026-07-22 blocked order reported itself.
+  shop_name:  shopNameField().default("pacred"),
+  url:        productUrlField().optional().or(z.literal("").transform(() => undefined)),
+  title:      productTitleField().optional().or(z.literal("").transform(() => undefined)),
   // Validated + normalised by the shared image-URL field (lib/validators/image-url.ts):
   // rejects a Drive-folder/share-page link, normalises a Drive file link to its
-  // embeddable thumbnail, and enforces the real `tb_cart.cimages` varchar(300)
-  // ceiling (the old max(500) passed zod then 22001-failed the INSERT).
-  image_path: imageUrlField(300).optional().or(z.literal("").transform(() => undefined)),
-  color:      z.string().trim().max(200).optional().or(z.literal("").transform(() => undefined)),
-  size:       z.string().trim().max(200).optional().or(z.literal("").transform(() => undefined)),
+  // embeddable thumbnail, and enforces the real `tb_cart.cimages` column ceiling
+  // (an over-long value used to pass zod then 22001-fail the INSERT).
+  image_path: productImageUrlField().optional().or(z.literal("").transform(() => undefined)),
+  color:      variantTextField("สี").optional().or(z.literal("").transform(() => undefined)),
+  size:       variantTextField("ขนาด").optional().or(z.literal("").transform(() => undefined)),
   price_cny:  z.number().nonnegative({ message: "ราคาต้องไม่ติดลบ" }),
   // owner 2026-07-17 "ปลดเพดานเป็นไม่จำกัด · เป็นล้านชิ้น" — there is deliberately NO
   // business cap here (a wholesale order of a million pieces is the point). The bound is
@@ -103,13 +116,13 @@ export const cartItemSchema = z.object({
   amount:     z.number().int()
                 .positive({ message: "จำนวนต้องมากกว่า 0" })
                 .max(MAX_ORDER_QTY, { message: `จำนวนต้องไม่เกิน ${MAX_ORDER_QTY.toLocaleString()} ชิ้น` }),
-  details:    z.string().trim().max(2000).optional().or(z.literal("").transform(() => undefined)),
+  details:    productDetailsField().optional().or(z.literal("").transform(() => undefined)),
   // Currency selector (price-per-piece entered in ANY currency). When
   // input_currency ≠ CNY, the SERVER re-derives cprice = ¥-equivalent from
   // (input_currency, input_price, customs.fx_rates) — never trusting the
   // client's price_cny. Omit / CNY → price_cny is used verbatim (no regression).
-  input_currency: z.string().trim().max(8).optional(),
-  input_price:    z.number().nonnegative().optional(),
+  input_currency: z.string().trim().max(8, { message: "รหัสสกุลเงินต้องไม่เกิน 8 ตัวอักษร" }).optional(),
+  input_price:    z.number().nonnegative({ message: "ราคาต้องไม่ติดลบ" }).optional(),
 });
 export type CartItemInput = z.infer<typeof cartItemSchema>;
 

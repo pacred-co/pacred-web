@@ -89,7 +89,7 @@ import {
   trackingEditStatusGate,
 } from "@/lib/service-order/line-edit-gates";
 import { SHOP_ORDER_EDIT_ROLES } from "@/lib/admin/shop-order-access";
-import { imageUrlField } from "@/lib/validators/image-url";
+import { productImageUrlField } from "@/lib/validators/product-text";
 
 // Status-gate helpers live in lib/service-order/line-edit-gates.ts —
 // they're pure, exported, and importable by the test file without
@@ -947,7 +947,9 @@ export async function adminUpdateCartItemShippingNumber(
 const updateItemImageSchema = z.object({
   tb_order_id: z.coerce.number().int().positive(),
   // "" is allowed and means "ไม่มีรูป" (clears the image).
-  cimages:     imageUrlField(300),
+  // Width comes from lib/validators/product-text.ts (the tb_order.cimages column
+  // widened 300 → 1000 in migration 0272 · owner 2026-07-22).
+  cimages:     productImageUrlField(),
 });
 export type AdminUpdateCartItemImageInput = z.infer<typeof updateItemImageSchema>;
 
