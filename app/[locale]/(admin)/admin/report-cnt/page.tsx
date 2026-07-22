@@ -175,9 +175,15 @@ function groupByContainer(rows: Row[], paidContainers: Set<string>): Grouped[] {
       // 0261: MAX(fstatus) = most-advanced tracking → drives the tab BUCKET
       // ("any arrived" · owner 2026-07-18). Ignore empty so blanks can't pin it.
       if (r.fstatus && r.fstatus > existing.maxFstatus) existing.maxFstatus = r.fstatus;
-      // Keep the most recent fdatestatus4 / fdatecontainerclose (legacy emits any)
+      // Keep the most recent fdatestatus4 / fdatecontainerclose (legacy emits any).
+      // 0271: fold the MAX fdatecontainerclose (matches the RPC's MAX(close)) so the
+      // container-level date filter below sees the ตู้'s latest close date — a NULL-
+      // close split row can no longer drop the whole ตู้ out of the date window.
       if (r.fdatestatus4 && (!existing.fdatestatus4 || r.fdatestatus4 > existing.fdatestatus4)) {
         existing.fdatestatus4 = r.fdatestatus4;
+      }
+      if (r.fdatecontainerclose && (!existing.fdatecontainerclose || r.fdatecontainerclose > existing.fdatecontainerclose)) {
+        existing.fdatecontainerclose = r.fdatecontainerclose;
       }
     } else {
       byContainer.set(k, {
@@ -307,17 +313,15 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
       .neq("fcabinetnumber", "0")
       .neq("fstatus", "99") // 0190: drop cancelled containers (parity with the RPC)
       .limit(50_000);
-    // 0243: NO row-level fstatus bucket here — fetch ALL non-99 rows of the
-    // matching cabinets, then bucket by the CONTAINER-WIDE MIN(fstatus) after
-    // grouping (below), matching the RPC's HAVING MIN. The <>'99', transport +
-    // succeed-date filters still apply at the row level (parity with the RPC).
+    // 0243/0271: NO row-level fstatus OR date filter here — fetch ALL non-99 rows
+    // of the matching cabinets, then bucket + date-filter at the CONTAINER level
+    // after grouping (below), matching the RPC's HAVING. Only the transport filter
+    // (container-uniform) + <>'99' stay row-level. 0271: the succeed-date filter is
+    // NO LONGER row-level — a fstatus=4 split row with a NULL fdatecontainerclose
+    // used to be dropped by the date window, distorting the container's MIN(fstatus).
     if (transportType === "1") q = q.eq("ftransporttype", "1");
     if (transportType === "2") q = q.eq("ftransporttype", "2");
     if (transportType === "3") q = q.eq("ftransporttype", "3");
-    if (!isWaiting && startDate && endDate) {
-      q = q.gte("fdatecontainerclose", startDate + " 00:00:00")
-           .lte("fdatecontainerclose", endDate   + " 23:59:59");
-    }
     const { data: rows, error } = await q;
     queryFailed = !!error;
     if (!error && rows) {
@@ -328,8 +332,17 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
       // folds the container-wide max into g.maxFstatus (skipping empty/null), so a
       // cabinet is in exactly ONE tab — mixed cabinets no longer double-list.
       // Same predicate as the RPC's HAVING (isContainerInBucket = shared SOT).
+      // 0271: date-filter the succeed tab by the ตู้'s MAX(fdatecontainerclose) (folded
+      // in groupByContainer), NOT any single row — parity with the RPC's HAVING date.
       const page = isWaiting ? "waiting" : "succeed";
-      const bucketed = tmp.filter((g) => isContainerInBucket(g.maxFstatus ?? "", page));
+      const inDateWindow = (g: { fdatecontainerclose: string | null }): boolean => {
+        if (isWaiting || !startDate || !endDate) return true;
+        const c = (g.fdatecontainerclose ?? "").slice(0, 10);
+        return c !== "" && c >= startDate && c <= endDate;
+      };
+      const bucketed = tmp.filter(
+        (g) => isContainerInBucket(g.maxFstatus ?? "", page) && inDateWindow(g),
+      );
       groupedNoPaid = bucketed.map(({ isPaid: _isPaid, ...rest }) => rest);
     }
   } else {
