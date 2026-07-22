@@ -56,6 +56,35 @@ function toNumber(v: number | string | null | undefined): number {
 }
 
 /**
+ * Is this forwarder row PAID (so ยอดค้างชำระ = 0)? (ภูม 2026-07-22)
+ *
+ * TWO paid signals, matching the CSV export (actions/admin/export/forwarders.ts):
+ *   1. paydeposit === '1' — the deposit/wallet was consumed (explicit paid flag).
+ *   2. fstatus ∈ {6,7,8} (เตรียมส่ง / กำลังจัดส่ง / สำเร็จ) — a CASH order only advances
+ *      past รอชำระเงิน(5) AFTER payment, and a slip-paid DIRECT-CUT row lands at 6/7 with
+ *      paydeposit='' (that path never sets paydeposit='1') → keying only on paydeposit
+ *      showed a genuinely-paid, already-shipped row as a fake red "ยอดค้างชำระ".
+ *
+ * 🔴 CREDIT GUARD (more correct than the CSV): a นิติ+เครดิต order is stamped fstatus='6'
+ * at credit-GRANT (the overloaded status axis · CLAUDE.md) WITHOUT payment — it is billed
+ * on credit = genuinely unpaid AR. So fstatus>=6 counts as paid ONLY when it is NOT a
+ * credit row (fcredit !== '1'). This keeps credit AR showing its real outstanding.
+ *
+ * Numeric compare on fstatus so string filter codes ('c' credit / 'p') never false-match.
+ */
+export function isForwarderPaid(
+  paydeposit: string | number | null | undefined,
+  fstatus: string | number | null | undefined,
+  fcredit: string | number | null | undefined,
+): boolean {
+  if (String(paydeposit ?? "").trim() === "1") return true;
+  const isCredit = String(fcredit ?? "").trim() === "1";
+  const s = Number(String(fstatus ?? "").trim());
+  // 6/7/8 only (not 99 cancelled — Number('99')>=6 would false-pass).
+  return !isCredit && Number.isFinite(s) && s >= 6 && s <= 8;
+}
+
+/**
  * The GROSS composite the customer owes — Σ 7 price columns − discount, with
  * NO juristic 1% allowance applied. This is the legacy `priceFull` BEFORE the
  * `fUserCompany1Per` step (forwarder function.php L1878).

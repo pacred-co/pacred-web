@@ -27,6 +27,7 @@ import {
   FORWARDER_EXPORT_CAP,
   type SearchParams,
 } from "@/app/[locale]/(admin)/admin/forwarders/page";
+import { isForwarderPaid } from "@/lib/forwarder/outstanding";
 
 // The filter shape the page passes through (a subset of its SearchParams that
 // affects the result set). Kept narrow so the inline closure on the page can
@@ -145,12 +146,10 @@ export async function exportForwardersAll(
     volume_cbm: r.volume_cbm.toFixed(4),
     total_price: r.total_price.toFixed(2),
     outstanding_thb: r.outstanding_thb.toFixed(2),
-    // ชำระแล้ว label (2026-07-08 · display-only): a slip-paid row lands at
-    // fstatus 6/7 with paydeposit="" (the direct-cut path never sets
-    // paydeposit='1'), so keying only on paydeposit='1' exported blank for a
-    // genuinely-paid row. Treat fstatus>=6 as paid too. Numeric compare avoids
-    // credit/special string codes ("c") false-matching. LABEL ONLY — no write.
-    paydeposit: (r.paydeposit === "1" || Number(r.status) >= 6) ? "ชำระแล้ว" : "",
+    // ชำระแล้ว label — shared isForwarderPaid (ภูม 2026-07-22): paydeposit='1' OR
+    // shipped/done (fstatus 6/7/8) EXCEPT a credit row (นิติ+เครดิต sits at 6 unpaid).
+    // Same predicate the screen outstanding uses now → CSV label == screen. LABEL ONLY.
+    paydeposit: isForwarderPaid(r.paydeposit, r.status, r.fcredit) ? "ชำระแล้ว" : "",
     fcredit: r.fcredit === "1" ? "เครดิต" : "",
     created_at: r.created_at,
     date_status2: r.date_status2 ?? "",

@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { isGeneralCoid } from "@/lib/forwarder/coid";
+import { isForwarderPaid } from "@/lib/forwarder/outstanding";
 import { FSTATUS_CFG, listRowTint, fstatusVivid } from "@/lib/admin/forwarder-status";
 // 2026-06-12 — the MOMO หัวบิล (bill-header) box-count rule now lives in a
 // shared, unit-tested helper so the report / completeness / check-queue Σ
@@ -1270,7 +1271,7 @@ export function ForwardersTable({
                                 ฿{r.outstanding_thb.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                                 <Explain def={GUIDE.outstanding_net} align="right" />
                               </div>
-                            ) : r.paydeposit === "1" ? (
+                            ) : isForwarderPaid(r.paydeposit, r.status, r.fcredit) ? (
                               <div className="font-mono text-[11px] font-medium text-green-600">
                                 ชำระแล้ว
                               </div>

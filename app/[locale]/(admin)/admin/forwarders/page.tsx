@@ -44,7 +44,7 @@ import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
-import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
+import { calcForwarderOutstanding, isForwarderPaid } from "@/lib/forwarder/outstanding";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { exportForwardersAll } from "@/actions/admin/export/forwarders";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
@@ -1074,7 +1074,12 @@ export async function fetchForwarderList(
   // anywhere in history — limiting to the last 30 days is exactly what made
   // ภูม think the search "didn't work" (silent zero-results when the order
   // was from > 30 days ago).
-  const skipDateWindow = !!(sp.q && sp.q.trim().length > 0);
+  // ภูม 2026-07-22 — ค้นหา "หลายเลข" (q_multi · ปุ่มบน search-bar) ก็ต้องข้ามกรอบ 30 วัน
+  // เหมือนค้นเลขเดียว (sp.q) — ไม่งั้นเลขที่เก่ากว่า 30 วันหาไม่เจอ (คืนค่าว่างเงียบๆ · บั๊ก
+  // คลาสเดียวกับที่เคยแก้ให้ sp.q แต่ลืมต่อยอดมา q_multi).
+  const skipDateWindow = !!(
+    (sp.q && sp.q.trim().length > 0) || (sp.q_multi && sp.q_multi.trim().length > 0)
+  );
   if (!skipDateWindow) {
     if (dateWindow.from) q = q.gte("fdate", dateWindow.from);
     if (dateWindow.to)   q = q.lte("fdate", dateWindow.to + "T23:59:59");
@@ -1374,8 +1379,13 @@ export async function fetchForwarderList(
       cover: r.fcover,
       coverUrl: null,            // filled in after the URL-resolve step below
       // Wave 15 P0-3 — outstanding balance computed from legacy formula.
-      // paydeposit='1' = paid in full → outstanding = 0; otherwise compute.
-      outstanding_thb: r.paydeposit === "1" ? 0 : calcForwarderOutstanding(r),
+      // ภูม 2026-07-22 — PAID = paydeposit='1' OR shipped/done (fstatus 6/7/8) UNLESS
+      // it's a credit row (นิติ+เครดิต sits at fstatus 6 unpaid = real AR). A slip-paid
+      // direct-cut row lands at 6/7 with paydeposit='' → without this it showed a fake
+      // red "ยอดค้างชำระ" + inflated the footer AR (isForwarderPaid = same predicate as CSV).
+      outstanding_thb: isForwarderPaid(r.paydeposit, r.fstatus, r.fcredit)
+        ? 0
+        : calcForwarderOutstanding(r),
       measured_by_admin: r.adminidkey ?? null,
       // Wave 18-B — 7-col fidelity backfill flags.
       print_status_1: r.printstatus1 === "1",
