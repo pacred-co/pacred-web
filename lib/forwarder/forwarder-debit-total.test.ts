@@ -184,6 +184,32 @@ console.log("computeForwarderDebitBatch — corporate but batch < ฿1000 → no
   assertClose("row51 = 900 (full price)", b.lines[0].price_thb, 900);
 }
 
+console.log("computeForwarderDebitBatch — WHT uses the real batch total before satang rounding");
+{
+  // Per-row rounding would produce 990.49 + 990.49 = 1,980.98.
+  // Accounting truth is round((1,000.49 + 1,000.49) × 99%) = 1,980.97.
+  // The last row absorbs the one-satang allocation remainder so the itemised
+  // ledger, document total, QR amount, and actual debit stay identical.
+  const b = computeForwarderDebitBatch(
+    [
+      row({ id: 53, ftotalprice: 1000.49 }),
+      row({ id: 54, ftotalprice: 1000.49 }),
+    ],
+    { userId: "PR900", isCorporate: true },
+  );
+  assertClose("real batch WHT net = 1,980.97", b.total_thb, 1980.97);
+  assertClose(
+    "allocated rows sum exactly to the batch net",
+    b.lines.reduce((sum, line) => sum + line.price_thb, 0),
+    b.total_thb,
+  );
+  assertClose(
+    "allocated WHT sums to 20.01",
+    b.lines.reduce((sum, line) => sum + line.breakdown.wht1pct, 0),
+    20.01,
+  );
+}
+
 console.log("computeForwarderDebitBatch — corporate + PCSF first-item interplay");
 {
   // corporate, 2 PCSF-zero rows. First gets +100, batch sum then ≥1000 → 1% each.
