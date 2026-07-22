@@ -26,6 +26,7 @@ import { fetchCorporateNameMap, resolveBillingIdentity, corpRowFromName } from "
 import { Explain } from "@/components/ui/tooltip";
 import { isWalletCredit } from "@/lib/wallet/wallet-hs";
 import { groupDirectWalletSlips } from "@/lib/admin/wallet-slip-group";
+import { canRenderWalletBulkCheckbox } from "@/lib/admin/wallet-bulk-containment";
 
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอตรวจสอบ",
@@ -99,6 +100,8 @@ type WhsRow = {
   // parent top-up row (`reforder2 = topup.id`). One slip → a top-up row + N pay
   // rows; we collapse them into ONE logical "payment" row in the list.
   reforder2: number | null;
+  reforder: string | null;
+  payment_group_id: string | null;
 };
 
 type URow = {
@@ -113,6 +116,8 @@ export type TransactionsViewProps = {
   kind: string | undefined;
   status: string | undefined;
   q: string | undefined;
+  /** Accounting/god-role mutation capability; ops receives a read-only queue. */
+  canSettle: boolean;
   /** Lane C 2026-06-02 — sortable column headers (ภูม flag #3). */
   sort?: string;
   dir?: string;
@@ -138,7 +143,7 @@ function buildTxHref(params: { kind?: string | null; status?: string | null }): 
   return `/admin/wallet?${qs.toString()}`;
 }
 
-export async function WalletTransactionsView({ kind, status, q, sort, dir, page = 1 }: TransactionsViewProps) {
+export async function WalletTransactionsView({ kind, status, q, canSettle, sort, dir, page = 1 }: TransactionsViewProps) {
   const admin = createAdminClient();
   const { from: rowFrom, to: rowTo } = pageRange(page);
   // Lane C 2026-06-02 — resolve sort + dir from URL with whitelist.
@@ -159,14 +164,36 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
   const effectiveTypeFilter = typeFilter ?? legacyTypeFilter;
 
   const statusFilter = status === "pending" ? "1" : status ?? "";
+  let resolvedNumericSearchId: number | null = null;
+  if (q && /^\d+$/.test(q.trim())) {
+    const requestedId = Number(q.trim());
+    const { data: requestedRow, error: requestedErr } = await admin
+      .from("tb_wallet_hs")
+      .select("id,reforder2,payment_group_id")
+      .eq("id", requestedId)
+      .maybeSingle<{ id: number; reforder2: number | null; payment_group_id: string | null }>();
+    if (requestedErr) {
+      console.error("[wallet tx numeric search resolve] failed", {
+        id: requestedId,
+        code: requestedErr.code,
+        message: requestedErr.message,
+      });
+    }
+    resolvedNumericSearchId = requestedRow?.payment_group_id && requestedRow.reforder2
+      ? Number(requestedRow.reforder2)
+      : requestedId;
+  }
 
-  // PERF (2026-06-03): paginate 50/page via .range + exact count.
+  // PERF (2026-06-03): paginate 50 logical payments/page. 0274 child ledger
+  // rows are excluded from the top-level query and loaded only for the visible
+  // headers below, so one payment cannot split across pages or inflate count.
   let qb = admin
     .from("tb_wallet_hs")
     .select(
-      "id,date,dateslip,amount,status,type,typeservice,imagesslip,depositnamebank,note,userid,adminid,adminidcrate,reforder2",
+      "id,date,dateslip,amount,status,type,typeservice,imagesslip,depositnamebank,note,userid,adminid,adminidcrate,reforder,reforder2,payment_group_id",
       { count: "exact" },
     )
+    .or("payment_group_id.is.null,type.eq.1")
     .order(sortColumn, { ascending: sortDir === "asc" })
     .range(rowFrom, rowTo);
 
@@ -178,12 +205,34 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
   }
   if (q) {
     const term = q.trim();
-    if (/^\d+$/.test(term)) qb = qb.eq("id", Number(term));
+    if (/^\d+$/.test(term)) qb = qb.eq("id", resolvedNumericSearchId ?? Number(term));
     else qb = qb.eq("userid", term.toUpperCase());
   }
 
   const { data: rowsRaw, error, count: totalTx } = await qb;
   const rows = (rowsRaw ?? []) as unknown as WhsRow[];
+  const visiblePaymentGroupIds = Array.from(new Set(
+    rows.map((row) => row.payment_group_id).filter((value): value is string => Boolean(value)),
+  ));
+  let paymentGroupChildren: WhsRow[] = [];
+  if (visiblePaymentGroupIds.length > 0) {
+    const { data: childRowsRaw, error: childRowsErr } = await admin
+      .from("tb_wallet_hs")
+      .select(
+        "id,date,dateslip,amount,status,type,typeservice,imagesslip,depositnamebank,note,userid,adminid,adminidcrate,reforder,reforder2,payment_group_id",
+      )
+      .in("payment_group_id", visiblePaymentGroupIds)
+      .eq("type", "4")
+      .order("id", { ascending: true });
+    if (childRowsErr) {
+      console.error("[wallet tx payment-group children] failed", {
+        code: childRowsErr.code,
+        message: childRowsErr.message,
+      });
+    } else {
+      paymentGroupChildren = (childRowsRaw ?? []) as unknown as WhsRow[];
+    }
+  }
 
   // Resolve every imagesslip → signed Supabase URL in parallel (Wave 13.1).
   const slipUrlMap = await resolveLegacyUrlMap(
@@ -219,8 +268,9 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
   // a top-up parent (a row whose id is referenced by ≥1 pay sibling on the page)
   // becomes the consolidated row; its siblings nest inside a "log หลังบ้าน"
   // expander. Standalone rows (no reforder2 link either way) render unchanged.
-  // DISPLAY-only — the underlying rows are untouched (still selectable for
-  // bulk-approve, still inspectable in the expander).
+  // DISPLAY-only — the underlying rows are untouched and remain inspectable in
+  // the expander. Generic bulk controls are intentionally hidden for this
+  // cascade-only ledger shape.
   type GroupedTx =
     | { kind: "single"; row: WhsRow }
     | { kind: "group"; parent: WhsRow; siblings: WhsRow[]; groupKind: "ledger" | "direct-slip"; totalSatang?: number };
@@ -231,9 +281,10 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
     for (const row of group.rows) directGroupByRowId.set(row.id, group);
   }
 
-  // Map of parent-topup id → its pay siblings present on this page.
+  // Map of parent-topup id → siblings. 0274 children are resolved by group ID
+  // after pagination, so every visible header always renders its complete set.
   const siblingsByParent = new Map<number, WhsRow[]>();
-  for (const r of rows) {
+  for (const r of [...rows, ...paymentGroupChildren]) {
     if (r.reforder2 != null) {
       const arr = siblingsByParent.get(r.reforder2) ?? [];
       arr.push(r);
@@ -388,8 +439,8 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
         </div>
       )}
 
-      {/* Wave 8 Group A — sticky bulk-approve bar (shows when rows selected) */}
-      <TbWalletBulkBar />
+      {/* Mutation chrome is absent for ops/read-only viewers. */}
+      {canSettle ? <TbWalletBulkBar /> : null}
 
       <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         {rows.length === 0 ? (
@@ -422,7 +473,15 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
                 {groupedRows.map((g) => {
                   if (g.kind === "single") {
                     return (
-                      <TxRow key={g.row.id} row={g.row} userMap={userMap} corpNames={corpNames} slipUrlMap={slipUrlMap} sharedSlipCount={sharedSlipCountFor(g.row)} />
+                      <TxRow
+                        key={g.row.id}
+                        row={g.row}
+                        userMap={userMap}
+                        corpNames={corpNames}
+                        slipUrlMap={slipUrlMap}
+                        sharedSlipCount={sharedSlipCountFor(g.row)}
+                        canSettle={canSettle}
+                      />
                     );
                   }
                   // Consolidated "เติม-แล้วจ่าย" group: ONE payment row (the
@@ -436,6 +495,7 @@ export async function WalletTransactionsView({ kind, status, q, sort, dir, page 
                       userMap={userMap}
                       corpNames={corpNames}
                       slipUrlMap={slipUrlMap}
+                      canSettle={canSettle}
                       groupContext={{
                         siblings,
                         ledgerCount: 1 + siblings.length,
@@ -491,8 +551,8 @@ function SlipCell({ row, slipUrlMap }: { row: WhsRow; slipUrlMap: Record<string,
  *   "เติม-แล้วจ่าย" pair (UNIT B): the displayed amount = the top-up amount =
  *   the real paid figure, with a "รวมเป็นรายการเดียว" badge, plus a second
  *   collapsible <tr> ("รายการเดินบัญชี · log หลังบ้าน") holding the parent +
- *   every pay sibling so the in/out ledger stays inspectable — and every
- *   pending underlying row keeps its bulk-approve checkbox.
+ *   every pay sibling so the in/out ledger stays inspectable. Cascade-linked
+ *   ledger groups expose no generic bulk-approve checkbox.
  */
 function TxRow({
   row,
@@ -501,11 +561,13 @@ function TxRow({
   slipUrlMap,
   groupContext,
   sharedSlipCount = 0,
+  canSettle,
 }: {
   row: WhsRow;
   userMap: Map<string, URow>;
   corpNames: Map<string, string>;
   slipUrlMap: Record<string, string | null>;
+  canSettle: boolean;
   groupContext?: {
     siblings: WhsRow[];
     ledgerCount: number;
@@ -534,12 +596,22 @@ function TxRow({
       }).name || row.userid
     : row.userid ?? "—";
   const isGroup = !!groupContext;
+  const parentBulkSelectable = canRenderWalletBulkCheckbox({
+    canSettle,
+    status: row.status,
+    reforder2: row.reforder2,
+    groupKind: groupContext?.groupKind,
+    type: row.type,
+    typeservice: row.typeservice,
+    reforder: row.reforder,
+    paymentGroupId: row.payment_group_id,
+  });
 
   return (
     <>
       <tr className="border-t border-border hover:bg-surface-alt/30">
         <td className="px-2 py-3 w-8">
-          {rowStatus === "1" ? <TbWalletRowCheckbox id={row.id} /> : null}
+          {parentBulkSelectable ? <TbWalletRowCheckbox id={row.id} /> : null}
         </td>
         <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
           {formatThaiDateTime(row.date)}
@@ -646,14 +718,24 @@ function TxRow({
                       const lrType = lr.type ?? "";
                       const lrAmount = Number(lr.amount ?? 0);
                       const lrNeg = lrAmount < 0;
-                      // The parent's checkbox already lives on the consolidated
-                      // main row — only render checkboxes for the pay siblings
-                      // here, so no id is double-mounted with split local state.
+                      // Ledger payment groups are cascade-only and expose no
+                      // generic bulk controls. Exact-slip DIRECT groups remain
+                      // selectable so their detail group action keeps working.
                       const isParent = lr.id === row.id;
+                      const childBulkSelectable = !isParent && canRenderWalletBulkCheckbox({
+                        canSettle,
+                        status: lr.status,
+                        reforder2: lr.reforder2,
+                        groupKind: groupContext!.groupKind,
+                        type: lr.type,
+                        typeservice: lr.typeservice,
+                        reforder: lr.reforder,
+                        paymentGroupId: lr.payment_group_id,
+                      });
                       return (
                         <tr key={lr.id} className="border-t border-border">
                           <td className="px-2 py-1.5 w-6">
-                            {!isParent && lrStatus === "1" ? <TbWalletRowCheckbox id={lr.id} /> : null}
+                            {childBulkSelectable ? <TbWalletRowCheckbox id={lr.id} /> : null}
                           </td>
                           <td className="px-2 py-1.5 font-mono text-muted">{lr.id}</td>
                           <td className="px-2 py-1.5 whitespace-nowrap">

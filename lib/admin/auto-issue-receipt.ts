@@ -166,6 +166,10 @@ export interface AutoIssueReceiptOpts {
    * and the button correctly stays hidden (legacy behaviour — no wallet ref exists).
    */
   refWhId?: number;
+  /** Fail closed unless every requested fid is still present and owned. */
+  requireExactFids?: boolean;
+  /** Frozen payment flows can pin/suppress the follow-on tax-document lane. */
+  taxDocModeOverride?: TaxDocMode;
 }
 
 export type AutoIssueReceiptResult =
@@ -353,8 +357,10 @@ export async function autoIssueReceiptOnPaymentLand(
     logger.warn("auto-receipt", "fid count mismatch — some fids missing or not owned by userid", {
       userid, requested: fids, found: rows.map((r) => r.id),
     });
-    // Don't fail — we still issue a receipt for the rows we did find,
-    // matching the legacy permissive behaviour (loops over what it gets).
+    if (opts.requireExactFids) {
+      return { ok: false, error: "incomplete_forwarder_group" };
+    }
+    // Legacy callers remain permissive and issue for the rows they can load.
   }
 
   // 3. Determine corporate flag — legacy L427-456.
@@ -371,6 +377,9 @@ export async function autoIssueReceiptOnPaymentLand(
     });
   }
   const corporate: 1 | 2 = corpRow?.corporatenumber ? 1 : 2;
+  const documentCorporate: 1 | 2 = opts.isJuristicOverride === undefined
+    ? corporate
+    : (opts.isJuristicOverride ? 1 : 2);
 
   // 4. Per-row line totals (legacy L548) — sum the same buckets the
   //    legacy used. We compute BOTH the raw sum (totalbeforewithholding)
@@ -569,7 +578,7 @@ export async function autoIssueReceiptOnPaymentLand(
     rid = overrideRid;
   } else {
     try {
-      rid = await mintReceiptDocNo(admin, { corporate, dateSlip });
+      rid = await mintReceiptDocNo(admin, { corporate: documentCorporate, dateSlip });
     } catch (e) {
       console.error(`[auto-receipt: mintReceiptDocNo] threw`, {
         error: e instanceof Error ? e.message : String(e),
@@ -612,11 +621,7 @@ export async function autoIssueReceiptOnPaymentLand(
     // is_juristic so the receipt paper's WHT-line visibility matches the pinned
     // net (showWht = corporatetype==='1' && recompnumber). Common billed path =
     // unchanged (bill juristic == live corporate).
-    corporatetype:          String(
-                              opts.totalOverride !== undefined && opts.isJuristicOverride !== undefined
-                                ? (opts.isJuristicOverride ? 1 : 2)
-                                : corporate,
-                            ),
+    corporatetype:          String(documentCorporate),
     documentissuer:         "ระบบอัตโนมัติ",
     documentapprover:       "",
     // อ้างอิงชำระเงิน (refWHID) — the funding wallet_hs.id (wallet-approve paths only).
@@ -692,7 +697,8 @@ export async function autoIssueReceiptOnPaymentLand(
   //     share a customer + a payment event). BEST-EFFORT — a tax-doc failure
   //     never undoes the receipt (the money already moved; the receipt is the
   //     document of record · the tax document is a follow-on).
-  const docMode = pickForwarderTaxDocMode(rows.map((r) => r.tax_doc_pref));
+  const docMode = opts.taxDocModeOverride
+    ?? pickForwarderTaxDocMode(rows.map((r) => r.tax_doc_pref));
   if (docMode !== "none") {
     const taxRes = await issueForwarderTaxInvoice(admin, {
       userid,

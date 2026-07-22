@@ -68,18 +68,25 @@
  * "super" implicit access to every role-gated page.
  */
 
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { User as UserIcon, Printer } from "lucide-react";
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { hasRole, requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { SlipCompare } from "@/components/admin/slip-compare";
 import { WalletBalanceCard } from "@/components/admin/wallet-balance-card";
-import { EditDateSlipForm, ApproveRejectForm, RejectSlipInline } from "./edit-form";
+import {
+  EditDateSlipForm,
+  ApproveRejectForm,
+  RejectSlipInline,
+  RetryFrozenReceiptButton,
+} from "./edit-form";
 import { classifyWalletHsRow } from "@/lib/wallet/classify-approve-row";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { loadLinkedForwarderPaymentBatch } from "@/lib/forwarder/linked-payment-batch";
+import { parseCashbackNoteTag } from "@/lib/cashback/note-tag";
+import { parseFrozenWalletPaymentQuote } from "@/lib/wallet/payment-quote-snapshot";
 
 export const dynamic = "force-dynamic";
 
@@ -164,6 +171,8 @@ type WalletHsRow = {
   reforder: string | null;
   reforder2: string | null;
   reviewed_at: string | null;
+  payment_group_id: string | null;
+  quote_snapshot: unknown;
 };
 
 type UserRow = {
@@ -199,12 +208,24 @@ type SimilarResolved = {
   name: string;
 };
 
+type ReceiptOutboxSummary = {
+  status: string;
+  receipt_id: number | null;
+  receipt_no: string | null;
+  last_error: string | null;
+};
+
 export default async function AdminWalletDetail({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireAdmin(["ops", "accounting", "super"]);
+  const { roles } = await requireAdmin(["ops", "accounting", "super"]);
+  // The mutation actions are accounting-only. Keep this page useful to ops as
+  // a read-only investigation surface, but never render controls that will
+  // inevitably fail the action-level RBAC check (the old UI caused the local
+  // “ไม่มีสิทธิ์” dead-end after the operator had already filled the form).
+  const canSettle = hasRole(roles, "accounting");
   const { id: idParam } = await params;
   const id = Number(idParam);
   if (!Number.isFinite(id) || id <= 0) notFound();
@@ -215,7 +236,7 @@ export default async function AdminWalletDetail({
   const { data: rowRaw, error: rowErr } = await admin
     .from("tb_wallet_hs")
     .select(
-      "id,date,dateslip,amount,status,type,typeservice,imagesslip,userid,note,nouserbank,nameuserbank,depositnamebank,adminidupdate,reforder,reforder2,reviewed_at",
+      "id,date,dateslip,amount,status,type,typeservice,imagesslip,userid,note,nouserbank,nameuserbank,depositnamebank,adminidupdate,reforder,reforder2,reviewed_at,payment_group_id,quote_snapshot",
     )
     .eq("id", id)
     .maybeSingle();
@@ -232,6 +253,34 @@ export default async function AdminWalletDetail({
   }
   if (!rowRaw) notFound();
   const row = rowRaw as unknown as WalletHsRow;
+  // Internal 0274 children are ledger allocations, not independent work. Any
+  // old/deep link must land on the one grouped slip/decision page.
+  if (row.payment_group_id && row.reforder2 && !row.quote_snapshot) {
+    redirect(`/admin/wallet/${row.reforder2}`);
+  }
+  const frozenQuote = row.payment_group_id
+    ? parseFrozenWalletPaymentQuote(row.quote_snapshot)
+    : null;
+  const invalidFrozenQuote = Boolean(row.payment_group_id && !frozenQuote);
+  let receiptOutbox: ReceiptOutboxSummary | null = null;
+  let receiptOutboxLoadFailed = false;
+  if (row.payment_group_id && row.status === "2") {
+    const { data: outboxRaw, error: outboxErr } = await admin
+      .from("wallet_payment_receipt_outbox")
+      .select("status,receipt_id,receipt_no,last_error")
+      .eq("whid", row.id)
+      .maybeSingle<ReceiptOutboxSummary>();
+    if (outboxErr) {
+      receiptOutboxLoadFailed = true;
+      console.error("[wallet detail receipt outbox] failed", {
+        wallet_hs_id: row.id,
+        code: outboxErr.code,
+        message: outboxErr.message,
+      });
+    } else {
+      receiptOutbox = outboxRaw;
+    }
+  }
 
   // ── Parallel reads for the rest of the page ──
   const [
@@ -393,7 +442,17 @@ export default async function AdminWalletDetail({
       ? paymentTargets.map((t) => t.hno)
       : row.reforder ? [row.reforder] : [];
     const fwdIds = hnos.filter((h) => /^\d+$/.test(h));
-    if (fwdIds.length > 0 && fwdIds.length === hnos.length) {
+    if (invalidFrozenQuote) {
+      console.error("[wallet detail] invalid frozen payment quote", {
+        wallet_hs_id: row.id,
+        payment_group_id: row.payment_group_id,
+      });
+    } else if (frozenQuote && isCreditType(row.type)) {
+      linkedDueTotal = frozenQuote.netSatang / 100;
+      for (const line of frozenQuote.lines) {
+        dueByHno.set(String(line.forwarderId), line.amountSatang / 100);
+      }
+    } else if (fwdIds.length > 0 && fwdIds.length === hnos.length) {
       const result = await loadLinkedForwarderPaymentBatch(admin, {
         userId: row.userid,
         forwarderIds: fwdIds,
@@ -522,7 +581,15 @@ export default async function AdminWalletDetail({
   const amount = isDirectSharedSlip
     ? sharedSlipRows.reduce((satang, item) => satang + Math.round(Number(item.amount ?? 0) * 100), 0) / 100
     : Number(row.amount ?? 0);
-  const linkedAmountMismatch = linkedDueTotal !== null && Math.round(linkedDueTotal * 100) !== Math.round(amount * 100);
+  // A cashback-assisted payment intentionally has slip cash < service total.
+  // Compare the authoritative due against the FULL funding equation instead
+  // of flagging a valid [CB:] payment as a red mismatch.
+  const carriedCashback = frozenQuote
+    ? frozenQuote.cashbackSatang / 100
+    : parseCashbackNoteTag(row.note);
+  const fundedAmount = Math.round((amount + carriedCashback) * 100) / 100;
+  const linkedAmountMismatch = linkedDueTotal !== null
+    && Math.round(linkedDueTotal * 100) !== Math.round(fundedAmount * 100);
   const status = row.status ?? "1";
   const isPending = status === "1";
   const userid = row.userid;
@@ -554,6 +621,18 @@ export default async function AdminWalletDetail({
     { hasPaydepositLink: partnerTopupId !== null },
   );
   const isDirectSlip = directSlipShape.shape === "direct-slip";
+  const receiptForwarderHnos = isDirectSlip
+    ? (directSharedTargets.length > 0
+        ? directSharedTargets
+        : row.reforder && /^\d+$/.test(row.reforder) ? [row.reforder] : [])
+    : row.type === "1"
+      ? paymentTargets.map((target) => target.hno).filter((hno) => /^\d+$/.test(hno))
+      : [];
+  const receiptDraftItems = receiptForwarderHnos.map((hno) => ({
+    id: hno,
+    label: `ค่าบริการฝากนำเข้า ${classifyHno(hno).label}`,
+    amount: dueByHno.get(hno) ?? 0,
+  }));
 
   // A4 two-round verify — customer payment slips (type 1/4/8) require a round-1
   // review before the approve (round-2). STEP-1 fold: round-1 is confirmed on the
@@ -772,6 +851,12 @@ export default async function AdminWalletDetail({
               )}
             </div>
 
+            {invalidFrozenQuote && (
+              <div className="rounded-lg border border-red-300 bg-red-50 p-2.5 text-sm font-semibold text-red-800">
+                ยอดกลุ่มชำระที่บันทึกไว้ไม่สมบูรณ์ · ระบบปิดการอนุมัติเพื่อป้องกันยอดผิด กรุณาให้ผู้ดูแลตรวจ migration 0274
+              </div>
+            )}
+
             {/* F4 — shared-slip warning (owner PR178): this slip covers ≥2 รายการ
                 (ชำระรวมสลิปเดียว). Treat + ตัดจ่าย as ONE payment · ระวังแก้ยอดกระทบงานอื่น. */}
             {sharedSlipSiblings.length > 0 && (
@@ -897,6 +982,11 @@ export default async function AdminWalletDetail({
                 })}
                 <p className="mt-1 border-t border-border/70 pt-2 text-[21.14px] font-medium text-green-700">
                   จำนวนเงินในสลิป : {amount.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                  {carriedCashback > 0 && (
+                    <span className="ml-3 text-sky-700">
+                      Cash Back : {carriedCashback.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </span>
+                  )}
                   <span className="ml-3 text-red-700">
                     ยอดรวมทุกรายการ : {(linkedDueTotal ?? amount).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
                   </span>
@@ -969,8 +1059,15 @@ export default async function AdminWalletDetail({
               </ol>
             )}
 
+            {isPending && !canSettle && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                หน้านี้เปิดให้ฝ่ายปฏิบัติการตรวจสอบข้อมูลได้แบบอ่านอย่างเดียว · การบันทึกเวลาสลิป อนุมัติ
+                ปฏิเสธ และออกใบเสร็จ ต้องใช้สิทธิ์ฝ่ายบัญชี
+              </div>
+            )}
+
             {/* หน้า 1 — วันเวลาที่โอนในสลิป (ยังไม่ผ่านรอบ 1) */}
-            {isPending && needsRound1 && !reviewedAt && (
+            {isPending && canSettle && needsRound1 && !reviewedAt && (
               <div className="border-t border-border pt-3">
                 <p className="text-sm font-semibold text-foreground">วันเวลาที่โอนในสลิป</p>
                 <p className="mt-0.5 mb-1 text-[11px] text-muted">
@@ -990,7 +1087,7 @@ export default async function AdminWalletDetail({
             )}
 
             {/* หน้า 2 — ออกเลขที่ใบเสร็จ + อนุมัติ (ผ่านรอบ 1 แล้ว · หรือไม่ต้องรอบ 1) */}
-            {isPending && (!needsRound1 || reviewedAt) && (
+            {isPending && canSettle && (!needsRound1 || reviewedAt) && (
               <>
                 {/* header ย่อ: ผ่านรอบ 1 แล้ว + ปุ่มแก้ไขเวลา (ย้อนกลับได้) */}
                 {needsRound1 && reviewedAt && (
@@ -1029,15 +1126,43 @@ export default async function AdminWalletDetail({
                   //     first fid is the representative for the preview/link.
                   receiptContext={
                     isDirectSlip && row.reforder && /^\d+$/.test(String(row.reforder))
-                      ? { fid: Number(row.reforder), userid, dateSlipIso: row.dateslip }
+                      ? {
+                          fid: Number(row.reforder),
+                          userid,
+                          dateSlipIso: row.dateslip,
+                          paymentTotal: linkedDueTotal ?? fundedAmount,
+                          paymentItems: receiptDraftItems,
+                        }
                       : row.type === "1"
                           && paymentTargets.length > 0
                           && paymentTargets.every((t) => /^\d+$/.test(t.hno))
-                        ? { fid: Number(paymentTargets[0].hno), userid, dateSlipIso: row.dateslip }
+                        ? {
+                            fid: Number(paymentTargets[0].hno),
+                            userid,
+                            dateSlipIso: row.dateslip,
+                            paymentTotal: linkedDueTotal ?? fundedAmount,
+                            paymentItems: receiptDraftItems,
+                          }
                         : null
                   }
                 />
               </>
+            )}
+
+            {status === "2" && row.payment_group_id && canSettle
+              && receiptOutbox && receiptOutbox.status !== "issued" && (
+              <RetryFrozenReceiptButton
+                id={row.id}
+                outboxStatus={receiptOutbox.status}
+                lastError={receiptOutbox.last_error}
+              />
+            )}
+
+            {status === "2" && row.payment_group_id
+              && (receiptOutboxLoadFailed || !receiptOutbox) && (
+              <div className="rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900">
+                ไม่พบคิวใบเสร็จของกลุ่มชำระนี้ กรุณาหยุดออกเอกสารซ้ำและให้ผู้ดูแลตรวจ migration 0274
+              </div>
             )}
 
             {/* Completed → audit badge (owner 2026-07-16 · red status pill like

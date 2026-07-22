@@ -119,7 +119,7 @@ export default async function PaymentDuePage() {
       // page.tsx L253) so the in-place <ForwarderPayModal> can compute the
       // bill + QR without navigating away.
       .select(
-        "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftrackingth, ftransporttype, fshipby, paymethod, fdetail, fcover, famount, fweight, fvolume, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, fcredit, fcreditdate, fdatestatus5, fdatetothai, fcabinetnumber, fdatecontainerclose, fnote, fnoteuser, reforder, adminidcreator, fproductstype",
+        "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftrackingth, ftransporttype, fshipby, paymethod, fdetail, fcover, famount, fweight, fvolume, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, fcredit, fcreditdate, fdatestatus5, fdatetothai, fcabinetnumber, fdatecontainerclose, fnote, fnoteuser, reforder, adminidcreator, fproductstype, tax_doc_pref",
       )
       .eq("userid", userID)
       .eq("fstatus", "5"),
@@ -211,6 +211,7 @@ export default async function PaymentDuePage() {
       adminidcreator: (r.adminidcreator as string) ?? null,
       promoid: null,
       fproductstype: (r.fproductstype as string) ?? null,
+      tax_doc_pref: (r.tax_doc_pref as string) ?? null,
     };
     withTs.push({
       ts: parseTs(r.fdate as string | null),
