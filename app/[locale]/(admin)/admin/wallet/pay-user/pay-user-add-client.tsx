@@ -1376,12 +1376,12 @@ function PayModal({
                     <th className="px-2 py-2">เลขตู้</th>
                     <th className="px-2 py-2">ขนส่ง</th>
                     <th className="px-2 py-2">เลขแทรกกิ้ง</th>
+                    <th className="px-2 py-2">จำนวน</th>
+                    <th className="px-2 py-2">ขนาด (ก×ย×ส ซม.)</th>
+                    <th className="px-2 py-2">ปริมาตร (CBM)</th>
+                    <th className="px-2 py-2">น้ำหนัก (กก.)</th>
                     <th className="px-2 py-2">ประเภท</th>
                     <th className="px-2 py-2 text-right">เรทราคา</th>
-                    <th className="px-2 py-2">จำนวน</th>
-                    <th className="px-2 py-2">น้ำหนัก (กก.)</th>
-                    <th className="px-2 py-2">ปริมาตร (CBM)</th>
-                    <th className="px-2 py-2">ขนาด (ก×ย×ส ซม.)</th>
                     <th className="px-2 py-2 text-right">ค่าขนส่ง</th>
                     <th className="px-2 py-2 text-right">อื่นๆ</th>
                   </>
@@ -1400,12 +1400,12 @@ function PayModal({
                       <td className="px-2 py-1.5 font-mono text-[11px] text-gray-700">{r.fcabinetnumber ?? "—"}</td>
                       <td className="px-2 py-1.5 text-center">{r.transport_label || "—"}</td>
                       <td className="px-2 py-1.5 font-mono text-[11px] text-gray-600">{r.ftrackingchn ?? "—"}</td>
+                      <td className="px-2 py-1.5 text-center">{r.boxes > 0 ? r.boxes : "—"}</td>
+                      <td className="px-2 py-1.5 text-center font-mono text-[11px] text-gray-600">{dimsLabel(r.fwidth, r.flength, r.fheight)}</td>
+                      <td className="px-2 py-1.5 text-center font-mono text-[11px] text-gray-600 tabular-nums">{r.cbm > 0 ? r.cbm : "—"}</td>
+                      <td className="px-2 py-1.5 text-center font-mono text-[11px] text-gray-600 tabular-nums">{r.weight > 0 ? r.weight : "—"}</td>
                       <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">{r.products_type_label || "—"}</td>
                       <td className="px-2 py-1.5 text-right font-mono tabular-nums">{r.rate > 0 ? fmt2(r.rate) : "—"}</td>
-                      <td className="px-2 py-1.5 text-center">{r.boxes > 0 ? r.boxes : "—"}</td>
-                      <td className="px-2 py-1.5 text-center font-mono text-[11px] text-gray-600 tabular-nums">{r.weight > 0 ? r.weight : "—"}</td>
-                      <td className="px-2 py-1.5 text-center font-mono text-[11px] text-gray-600 tabular-nums">{r.cbm > 0 ? r.cbm : "—"}</td>
-                      <td className="px-2 py-1.5 text-center font-mono text-[11px] text-gray-600">{dimsLabel(r.fwidth, r.flength, r.fheight)}</td>
                       <td className="px-2 py-1.5 text-right font-mono tabular-nums">{fmt2(r.breakdown.freight)}</td>
                       <td className="px-2 py-1.5 text-right font-mono tabular-nums">{fmt2(r.breakdown.otherCharges)}</td>
                     </tr>

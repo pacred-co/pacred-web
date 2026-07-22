@@ -103,7 +103,6 @@ export function CustomerRateEditor({
   // header. No inline bottom panel. `open` controls the modal.
   const [open, setOpen] = useState(false);
 
-
   return (
     <>
       {/* Trigger — the legacy ⚙️ "ตั้งค่าเรทขนส่ง" gear in the profile header.
@@ -192,7 +191,7 @@ export function CustomerRateEditor({
         {/* ── ใบเสนอราคา (default) — the quote tool + collapsed rate settings ── */}
         {tab === "quote" && (
           <div className="space-y-3">
-            <QuoteTab customerName={customerName} userid={userid} comparisonValue={comparisonValue} buyerTaxId={buyerTaxId} buyerAddress={buyerAddress} buyerIsJuristic={buyerIsJuristic} buyerPhone={buyerPhone} matrix={matrix} generalDefaults={generalDefaults} quotePackages={quotePackages} />
+            <QuoteTab customerName={customerName} userid={userid} comparisonValue={comparisonValue} buyerTaxId={buyerTaxId} buyerAddress={buyerAddress} buyerIsJuristic={buyerIsJuristic} buyerPhone={buyerPhone} generalDefaults={generalDefaults} quotePackages={quotePackages} />
 
             {/* Rate-setting screens collapsed into the ใบเสนอราคา tab (owner ปอน 2026-07-03) */}
             <details className="rounded-lg border border-border bg-surface-alt/20">

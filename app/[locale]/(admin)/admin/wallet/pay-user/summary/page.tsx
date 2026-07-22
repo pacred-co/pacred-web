@@ -21,6 +21,7 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeForwarderDebitBatch, type ForwarderDebitRow } from "@/lib/forwarder/forwarder-debit-total";
+import { resolveMaoAnchorIds } from "@/lib/forwarder/mao-anchor";
 import { computeBillWht } from "@/lib/billing/wht";
 import { loadCustomerBillingParty } from "@/lib/admin/customer-billing-party";
 // ⚠️ MONEY-ROUTING: buildCompactPaymentQrDataUrl = the SAME QR the PayModal serves
@@ -131,6 +132,7 @@ export default async function PaymentSummaryPage({
           sumTotal={0}
           sumDeliveryChn={0}
           sumDeliveryTh={0}
+          sumMaoFee={0}
           sumOther={0}
           sumDiscount={0}
           whtAmount={0}
@@ -181,6 +183,7 @@ export default async function PaymentSummaryPage({
           sumTotal={0}
           sumDeliveryChn={0}
           sumDeliveryTh={0}
+          sumMaoFee={0}
           sumOther={0}
           sumDiscount={0}
           whtAmount={0}
@@ -211,9 +214,13 @@ export default async function PaymentSummaryPage({
 
   // 3. Build display rows + grand-total buckets.
   const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
+  // เหมาๆ ต้อง elect anchor PER SHIPMENT เหมือน PayModal (pay-user-view.ts:348) — ไม่งั้น
+  // maoFee=0 → ใบพิมพ์เก็บเงินขาด ฿100 เทียบ modal (owner 2026-07-22 · MONEY).
+  const maoAnchorIds = await resolveMaoAnchorIds(admin, rowsFw.map((r) => r.ftrackingchn));
   const batch = computeForwarderDebitBatch(rowsFw as unknown as ForwarderDebitRow[], {
     userId: userid,
     isCorporate: reCorporate,
+    maoAnchorIds,
   });
   // per-row "อื่นๆ" — the SAME breakdown.otherCharges the PayModal shows, so the
   // on-screen invoice table + this printed sheet quote one identical column.
@@ -272,10 +279,10 @@ export default async function PaymentSummaryPage({
   const sumTotal = rowsFw.reduce((s, r) => s + num(r.ftotalprice), 0);
   const sumDeliveryChn = rowsFw.reduce((s, r) => s + num(r.ftransportpricechnthb), 0);
   // ค่าส่งในไทย: a COD (ปลายทาง · paymethod='2') row's ftransportprice is collected at the door by
-  // the courier → excluded (F1), matching the COD-aware gross above. + ค่าส่งเหมาๆ ฿100 folded here
-  // so the Delivery-TH line shows it → Total + CHN + TH + Other − Discount − WHT reconciles to Total Amount.
+  // the courier → excluded (F1), matching the COD-aware gross above. ค่าส่งเหมาๆ แยกเป็น sumMaoFee
+  // (บรรทัด "ค่าส่งเหมาๆ" ของตัวเองในสรุป · ตรงกับ PayModal · owner 2026-07-22).
   const sumDeliveryTh = round2(
-    rowsFw.reduce((s, r) => s + (num(r.paymethod) === 2 ? 0 : num(r.ftransportprice)), 0) + maoFeeTotal,
+    rowsFw.reduce((s, r) => s + (num(r.paymethod) === 2 ? 0 : num(r.ftransportprice)), 0),
   );
   const sumOther = rowsFw.reduce(
     (s, r) => s + num(r.fpriceupdate) + num(r.fshippingservice) + num(r.pricecrate) + num(r.priceother),
@@ -306,6 +313,7 @@ export default async function PaymentSummaryPage({
         sumTotal={sumTotal}
         sumDeliveryChn={sumDeliveryChn}
         sumDeliveryTh={sumDeliveryTh}
+        sumMaoFee={maoFeeTotal}
         sumOther={sumOther}
         sumDiscount={sumDiscount}
         whtAmount={whtAmount}

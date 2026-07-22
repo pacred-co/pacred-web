@@ -136,8 +136,8 @@ export function QuoteHistoryTab({ userid }: { userid: string }) {
               รูปแบบ:
               <select value={viewFilter} onChange={(e) => setViewFilter(e.target.value as ViewFilter)} className={selectCls}>
                 <option value="all">ทั้งหมด</option>
-                <option value="calc">ใบเสนอราคา</option>
-                <option value="compare">ใบประเมินราคา</option>
+                <option value="compare">ใบเสนอราคา</option>
+                <option value="calc">ใบประเมินราคา</option>
               </select>
             </label>
             <p className="ml-auto text-[11px] text-muted">
@@ -173,8 +173,8 @@ export function QuoteHistoryTab({ userid }: { userid: string }) {
                           <span className="rounded-full border border-border bg-surface px-2 py-0.5 text-[11px]">{serviceLabel(r.service || "cargo")}</span>
                         </td>
                         <td className="px-3 py-2">
-                          <span className={`rounded-full px-2 py-0.5 text-[11px] ${r.view === "calc" ? "bg-primary-50 text-primary-700" : "bg-surface-alt text-foreground"}`}>
-                            {r.view === "calc" ? "ใบเสนอราคา" : "ใบประเมินราคา"}
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] ${r.view === "compare" ? "bg-primary-50 text-primary-700" : "bg-surface-alt text-foreground"}`}>
+                            {r.view === "calc" ? "ใบประเมินราคา" : "ใบเสนอราคา"}
                           </span>
                         </td>
                         <td className="px-3 py-2 text-right font-mono">{amount > 0 ? `฿${THB(amount)}` : "—"}</td>

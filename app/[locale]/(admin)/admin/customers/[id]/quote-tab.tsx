@@ -33,7 +33,7 @@ import { EditableQuoteCard } from "@/components/quote/editable-quote-card";
 import { saveQuotationForShare } from "@/actions/admin/save-quotation";
 import { adminSaveCustomerRate } from "@/actions/admin/customer-rate";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
-import type { CustomerRateMatrix, ProductId, TransportId, WarehouseId } from "@/lib/admin/customer-rate-tables";
+import type { ProductId, TransportId, WarehouseId } from "@/lib/admin/customer-rate-tables";
 import type { QuoteDefaultGrid } from "@/lib/admin/quote-default-rates-shared";
 import type { QuotePackage } from "@/lib/quote/quote-packages-shared";
 
@@ -77,7 +77,6 @@ export function QuoteTab({
   buyerAddress: buyerAddressInit = "",
   buyerIsJuristic = false,
   buyerPhone: buyerPhoneInit = "",
-  matrix,
   generalDefaults,
   quotePackages,
 }: {
@@ -92,9 +91,6 @@ export function QuoteTab({
   buyerIsJuristic?: boolean;
   /** Customer phone — seeds the buyer phone (default ''). */
   buyerPhone?: string;
-  /** The customer's CONFIGURED rate matrix — the เทียบราคา table seeds from this
-   *  (per product-category) so the quote shows the real rate, not promo defaults. */
-  matrix?: CustomerRateMatrix;
   /** เรท default ใบเสนอราคา = เรททั่วไป tb_rate_g_* (global · หน้า "ตั้งเรทใบเสนอราคา"
    *  · owner ปอน 2026-07-17) — ชั้น default กลาง SVIP ▸ แพ็ก ▸ นี่ ▸ promo/FDA. */
   generalDefaults: QuoteDefaultGrid;
@@ -151,8 +147,10 @@ export function QuoteTab({
   // doc / buyer SEED values — the ใบเสนอราคา/ใบประเมิน card is now inline-editable,
   // so these only SEED the auto-model; the rep's inline edits live in `overrides`.
   const today = useMemo(() => new Date(), []);
+  // เลขจริง QT-{userid}-{YYYYMMDD}-{NN} (รันต่อลูกค้าต่อวัน · owner 2026-07-22) ออกฝั่ง
+  // server ตอน "ออกเอกสาร". ก่อนออก = ร่าง · issueQuote อัปเดตเป็นเลขจริงหลังออก.
   const ymd = `${today.getFullYear()}${pad(today.getMonth() + 1)}${pad(today.getDate())}`;
-  const refNoSeed = `QT-${userid}-${ymd}`;
+  const refNoSeed = `QT-${userid}-${ymd}-ร่าง`;
   const validUntilSeed = useMemo(() => { const d = new Date(today); d.setDate(d.getDate() + 7); return d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }); }, [today]);
   // Buyer block seeded from the resolved billing identity: for a juristic
   // customer `customerName` is already the COMPANY name, and the tax id +
@@ -185,17 +183,18 @@ export function QuoteTab({
     // อย.·พิเศษ เดินตาม waterfall เดียวกับ ทั่วไป·มอก. แล้ว (owner 2026-07-21 ปลดล็อก).
     const compareRows: CompareRow[] = WAREHOUSE_KEYS.flatMap((w) => {
       const whId = WH_KEY_TO_ID[w];
-      const wh = matrix?.byWarehouse?.[whId];
       const gd = generalDefaults[whId]; // เรท default ใบเสนอราคา (tb_rate_g_* · ต่อทาง '1'รถ/'2'เรือ)
       return QUOTE_RATE_GROUPS.map((g) => {
-        // ชั้น default: SVIP (matrix) ▸ เรททั่วไป (generalDefaults · หน้า "ตั้งเรทใบเสนอราคา"
-        // = เรทบิลจริง tb_rate_g_*) ▸ promo/FDA hardcoded ต่อแพ็กเกจ (fallback สุดท้าย ·
-        // อย.·พิเศษ รหัส 3–4 = เรทเหมา FDA 7,600/6,600 · owner ปอน 2026-07-17).
+        // ชั้น default (owner 2026-07-22 "หน้าสร้างต้องโชว์เรทแต่ละแพ็กตามที่ตั้งไว้ · เรท
+        // เฉพาะตัวที่เซฟแล้ว = ประวัติ ไม่ใช่เรทตั้งต้นของหน้าสร้าง"):
+        //   แพ็ก (qpkg · หน้า "ตั้งเรทใบเสนอราคา") ▸ เรททั่วไป (generalDefaults · tb_rate_g_*) ▸
+        //   promo/FDA hardcoded ต่อแพ็กเกจ (fallback สุดท้าย · อย.·พิเศษ 3–4 = FDA 7,600/6,600).
+        // ⚠️ เดิม SVIP (matrix) อยู่ชั้นบนสุด → พอลูกค้ามีเรทเฉพาะตัวแล้ว ทุกแพ็กยุบเป็นเรทเดียว
+        // (เรทที่เซฟล่าสุด) · สลับแพ็กก็ไม่เปลี่ยน → ตัด SVIP ออกจากหน้าสร้าง แต่ละแพ็กโชว์เรทตัวเอง.
         const groupKey = g.rep === "3" ? "fda" : "general";
         const variant = g.rep === "3" ? "fda" : effLicensed ? "licensed" : "general";
         const promoTruck = rateForVariant(pkg, variant, w, "truck");
         const promoShip = rateForVariant(pkg, variant, w, "ship");
-        // ชั้นแพ็ก (config · owner ปอน 2026-07-18): SVIP ▸ แพ็ก ▸ ทั่วไป ▸ promo · 0/ว่าง = ตกไปทั่วไป.
         const qTruck = qpkg.rates[whId]["1"][groupKey];
         const qShip = qpkg.rates[whId]["2"][groupKey];
         const qc = (v: number) => (v > 0 ? v : undefined);
@@ -204,14 +203,14 @@ export function QuoteTab({
           warehouse: WAREHOUSE_LABEL[w], isYiwu: w === "yiwu",
           category: g.category, warehouseId: whId, products: [...g.products],
           truck: {
-            cbm: wh?.cbm["1"][g.rep] ?? qc(qTruck.cbm) ?? gd["1"][groupKey].cbm ?? promoTruck.cbm,
-            kg: wh?.kg["1"][g.rep] ?? qc(qTruck.kg) ?? gd["1"][groupKey].kg ?? promoTruck.kg,
+            cbm: qc(qTruck.cbm) ?? gd["1"][groupKey].cbm ?? promoTruck.cbm,
+            kg: qc(qTruck.kg) ?? gd["1"][groupKey].kg ?? promoTruck.kg,
             // อี้อู·ทางรถ: fold the +2–3 transit days into the range (owner 2026-07-10).
             days: w === "yiwu" ? foldExtraDays(truckDays, 2, 3) : truckDays,
           },
           ship: {
-            cbm: wh?.cbm["2"][g.rep] ?? qc(qShip.cbm) ?? gd["2"][groupKey].cbm ?? promoShip.cbm,
-            kg: wh?.kg["2"][g.rep] ?? qc(qShip.kg) ?? gd["2"][groupKey].kg ?? promoShip.kg,
+            cbm: qc(qShip.cbm) ?? gd["2"][groupKey].cbm ?? promoShip.cbm,
+            kg: qc(qShip.kg) ?? gd["2"][groupKey].kg ?? promoShip.kg,
             days: qpkg.days.ship || promoShip.days,
           },
         };
@@ -249,7 +248,7 @@ export function QuoteTab({
       conditions: qpkg.conditions.length ? qpkg.conditions : pkg.conditions, notes: QUOTE_NOTES, extraNote: "",
     };
   }, [view, service, pkg, qpkg, pkgIndex, effLicensed, warehouse, mode, cbm, kg, comparison, freight, customs, issueTax, juristic,
-    refNoSeed, validUntilSeed, buyerNameSeed, buyerTaxIdInit, buyerAddressInit, buyerPhoneInit, today, userid, showCustomsInfo, matrix, generalDefaults]);
+    refNoSeed, validUntilSeed, buyerNameSeed, buyerTaxIdInit, buyerAddressInit, buyerPhoneInit, today, userid, showCustomsInfo, generalDefaults]);
 
   // The rep's inline edits — a field-level override merged over the auto-model.
   // Calc-derived fields (lines · compareRows · route · package · conditions) are
@@ -382,6 +381,10 @@ export function QuoteTab({
       const origin = typeof window !== "undefined" ? window.location.origin : "";
       setShareUrl(`${origin}/q/${res.data.token}`);
       setIssued(true);
+      // โชว์เลขรันจริง (server mint · QT{yyMM}-{NNNNN}) บนการ์ดแทนเลขร่าง — refNo ไม่อยู่ใน
+      // calcKey จึงไม่ถูก reset + ไม่ทำให้ un-issue (owner 2026-07-22).
+      const mintedRef = res.data.refNo;
+      if (mintedRef) setOverrides((o) => ({ ...o, refNo: mintedRef }));
     } catch {
       setActionMsg("ออกเอกสารไม่สำเร็จ — ลองใหม่อีกครั้ง");
     } finally {
