@@ -151,13 +151,19 @@ export async function createCargoDeclaration(
       // existing_declaration the SELECT path returns (no corruption — the index
       // held — UX only).
       if (insErr?.code === "23505") {
-        const { data: dup } = await admin
+        // Soft-fail — this re-read only enriches the message with the winner's
+        // id/status. The insert already lost the race (no corruption); if the
+        // read also fails we still return the friendly existing_declaration.
+        const { data: dup, error: dupErr } = await admin
           .from("customs_declarations")
           .select("id, status")
           .eq("cargo_forwarder_id", forwarderId)
           .neq("status", "cancelled")
           .limit(1)
           .maybeSingle<{ id: string; status: string }>();
+        if (dupErr) {
+          console.error("[cargo-declarations create dup lookup]", { forwarderId, code: dupErr.code, message: dupErr.message });
+        }
         if (dup) return { ok: false, error: `existing_declaration:${dup.status}:${dup.id}` };
         return { ok: false, error: "existing_declaration:draft:" };
       }

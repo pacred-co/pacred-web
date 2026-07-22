@@ -37,7 +37,12 @@ export default async function AdminApiForwarderTtwPage() {
   const prs = Array.from(new Set(rows.map((r) => r.member_code).filter((v): v is string => !!v)));
   const nameByPr: Record<string, string> = {};
   if (prs.length > 0) {
-    const { data: us } = await admin.from("tb_users").select("userID, userName").in("userID", prs);
+    // Soft-fail — the name is a decorative badge beside the PR; on error the rows
+    // still render with their PR (same fail-soft posture as the main load above).
+    const { data: us, error: usErr } = await admin.from("tb_users").select("userID, userName").in("userID", prs);
+    if (usErr) {
+      console.error("[api-forwarder-ttw] customer-name lookup failed", { code: usErr.code, message: usErr.message });
+    }
     for (const u of (us ?? []) as { userID: string; userName: string | null }[]) {
       nameByPr[u.userID] = u.userName ?? "";
     }

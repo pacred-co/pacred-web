@@ -5,8 +5,25 @@
  * ไม่มี write · รันซ้ำได้ทุกเมื่อ
  */
 import pg from "pg";
-import { evaluateBasisDrift, type MomoBoxRow } from "../lib/forwarder/basis-drift-guard";
+import {
+  evaluateBasisDrift,
+  type BasisDriftVerdict,
+  type MomoBoxRow,
+} from "../lib/forwarder/basis-drift-guard";
 import { baseOf } from "../lib/integrations/momo-web/box-detail-reconcile-plan";
+
+/** แถวที่ guard สั่ง BLOCK — เก็บไว้พิมพ์รายงานท้ายสคริปต์ (read-only) */
+type BlockedRow = {
+  id: number | string;
+  tr: string;
+  cab: string | null;
+  st: string;
+  user: string;
+  price: number;
+  /** evaluateBasisDrift คืน blocked:true ได้ทางเดียว และทางนั้นแนบ detail ที่คำนวณแล้วเสมอ
+   *  (ทุก return ที่ detail:null คือ blocked:false) → ตรงนี้ non-null เสมอ */
+  d: NonNullable<BasisDriftVerdict["detail"]>;
+};
 
 const num = (v: unknown) => { if (v == null) return 0; const n = typeof v === "number" ? v : parseFloat(String(v)); return Number.isFinite(n) ? n : 0; };
 
@@ -33,7 +50,7 @@ async function main() {
   }
 
   const tally: Record<string, number> = {};
-  const blocked: any[] = [];
+  const blocked: BlockedRow[] = [];
   let zeroBasis = 0;
 
   for (const r of fwd) {
@@ -48,7 +65,10 @@ async function main() {
     });
     if (v.blocked) {
       blocked.push({ id: r.id, tr: tracking, cab: r.fcabinetnumber, st: String(r.fstatus),
-        user: r.userid, price: num(r.ftotalprice), d: v.detail });
+        user: r.userid, price: num(r.ftotalprice),
+        // non-null ตามที่อธิบายบน BlockedRow.d — ถ้าวันหน้ามี return blocked:true ที่ detail=null
+        // จะพังดังตรงบรรทัดพิมพ์เหมือนเดิม (พฤติกรรมเท่ากับตอนเป็น any) ดีกว่านับตกเงียบๆ
+        d: v.detail as NonNullable<BasisDriftVerdict["detail"]> });
     } else {
       tally[v.skipReason ?? "?"] = (tally[v.skipReason ?? "?"] ?? 0) + 1;
     }

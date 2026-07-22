@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { instrumentCron } from "@/lib/cron/instrument";
-import { captureIncident } from "@/lib/observability/incident-store";
+import { captureIncident, autoResolveIncident } from "@/lib/observability/incident-store";
 import {
   detectWalletAnomaly,
   compareOffendersWorstFirst,
@@ -84,6 +84,18 @@ const PAGE_SIZE = 1000;
 // How many top offenders to surface in the console + incident body.
 const TOP_N = 15;
 
+// ── The detector's incident identity ────────────────────────────────────
+// ONE route + ONE stable message, shared by the capture (anomalies found)
+// AND the auto-close (scan came back clean). The fingerprint is a hash of
+// this message — a second hand-written copy that drifted by one character
+// would silently never match the row it is meant to close, and the queue
+// would never empty. Deliberately free of counts / userids so daily
+// re-runs collapse into a single live incident (the varying detail lives
+// in surface_meta + the structured console.error).
+const INCIDENT_ROUTE = "/api/cron/wallet-reconcile";
+const INCIDENT_MESSAGE =
+  "Wallet reconciliation: stored tb_wallet.wallettotal is in an impossible/inconsistent state for one or more customers (negative balance and/or pending-debit overdraft). READ-ONLY scan — investigate by hand; do not auto-fix.";
+
 type WalletRow = { userid: string; wallettotal: number | string | null };
 type HsRow = { userid: string; amount: number | string; status: string | null; type: string | null };
 
@@ -135,6 +147,9 @@ export async function GET(request: Request) {
       console.log("[cron.wallet-reconcile] scanning", { checked, capped });
 
       if (checked === 0) {
+        // Deliberately NO auto-close here: scanning zero wallets proves
+        // nothing about the anomaly, so a still-open incident must stay
+        // open (a "green" verdict from an empty scan would be a lie).
         return {
           status:  "success" as const,
           summary: { checked: 0, drifted: 0, capped },
@@ -194,10 +209,40 @@ export async function GET(request: Request) {
       // ── 4) Alert (only when something is wrong) ────────────────────────
       if (drifted === 0) {
         logger.info("cron.wallet-reconcile", "clean run — no wallet anomalies", { checked, capped });
+
+        // ── Close the incident this detector opened, now that the scan is
+        // clean. Same lifecycle hole as the data-health cron: the daily
+        // re-capture bumped occurrence_count while the anomaly persisted,
+        // but nothing ever closed the row once the wallet was fixed by
+        // hand (e.g. the PR130 negative balance) — so it sat 'open'
+        // forever and the triage queue could not empty.
+        //
+        // "Investigate by hand, never auto-fix" governs the MONEY (this
+        // handler still writes nothing to tb_wallet / tb_wallet_hs — it is
+        // read-only end to end); it does not require the incident ROW to
+        // be closed by hand once the condition is provably gone.
+        //
+        // Only on a COMPLETE scan: if `capped` truncated the base we have
+        // not proven the whole table is clean, so the incident stays open.
+        let autoClosed = false;
+        if (!capped) {
+          const res = await autoResolveIncident({
+            source:  "server",
+            kind:    "server_error",
+            route:   INCIDENT_ROUTE,
+            message: INCIDENT_MESSAGE,   // ← same const the capture uses
+            detail:  `ตรวจกระเป๋าเงิน ${checked.toLocaleString()} ใบแล้วไม่พบยอดผิดปกติ`,
+          });
+          autoClosed = res.closed;
+          if (autoClosed) {
+            console.log("[cron.wallet-reconcile] auto-closed incident — wallets clean", { checked });
+          }
+        }
+
         return {
           status:  capped ? ("partial" as const) : ("success" as const),
-          summary: { checked, drifted: 0, capped },
-          payload: { ok: true, checked, drifted: 0, capped },
+          summary: { checked, drifted: 0, capped, autoClosed },
+          payload: { ok: true, checked, drifted: 0, capped, autoClosed },
         };
       }
 
@@ -230,9 +275,8 @@ export async function GET(request: Request) {
         source:   "server",
         kind:     "server_error",
         severity: "high",
-        route:    "/api/cron/wallet-reconcile",
-        message:
-          "Wallet reconciliation: stored tb_wallet.wallettotal is in an impossible/inconsistent state for one or more customers (negative balance and/or pending-debit overdraft). READ-ONLY scan — investigate by hand; do not auto-fix.",
+        route:    INCIDENT_ROUTE,
+        message:  INCIDENT_MESSAGE,
         surfaceMeta: {
           checked,
           drifted,

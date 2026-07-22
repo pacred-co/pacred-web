@@ -120,11 +120,14 @@ export function HeartbeatLock({
       // Server Actions don't easily survive page unload (no native sendBeacon
       // path); call the action and let the browser cancel mid-flight. The
       // 60-sec TTL means the lock frees itself within a minute anyway.
-      try {
-        void unlockServiceOrder({ h_no: hNo });
-      } catch {
+      //
+      // ⚠️ A sync try/catch CANNOT catch this — `unlockServiceOrder` returns a
+      // promise, so a rejection (which is the EXPECTED outcome here: the
+      // browser cancels the fetch as the page unloads) escapes as an UNHANDLED
+      // rejection rather than being swallowed. Attach `.catch` to the promise.
+      void unlockServiceOrder({ h_no: hNo }).catch(() => {
         /* noop — TTL will free the lock within 60s */
-      }
+      });
     };
     window.addEventListener("beforeunload", beforeUnload);
 
@@ -133,11 +136,12 @@ export function HeartbeatLock({
       clearInterval(interval);
       window.removeEventListener("beforeunload", beforeUnload);
       if (holdsLockRef.current) {
-        try {
-          void unlockServiceOrder({ h_no: hNo });
-        } catch {
-          /* noop */
-        }
+        // Same unhandled-rejection trap as `beforeUnload` above: unmount is
+        // usually a NAVIGATION AWAY, which cancels the in-flight action fetch →
+        // the promise rejects. A sync try/catch never sees it. `.catch` does.
+        void unlockServiceOrder({ h_no: hNo }).catch(() => {
+          /* noop — TTL will free the lock within 60s */
+        });
       }
     };
   }, [tryAcquire, hNo]);

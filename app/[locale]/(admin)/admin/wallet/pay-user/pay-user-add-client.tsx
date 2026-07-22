@@ -56,6 +56,8 @@ import {
   type PayWithTopUpResult,
 } from "@/actions/admin/pay-user";
 import { adminSearchCustomers, type CustomerPickerRow } from "@/actions/admin/search-customers";
+import { describeActionDispatchError } from "@/lib/observability/action-dispatch-error";
+import { isNextControlFlowError } from "@/lib/observability/next-control-flow";
 import { WalletBalanceCard } from "@/components/admin/wallet-balance-card";
 
 // ── formatting ───────────────────────────────────────────────
@@ -165,48 +167,84 @@ export function PayUserAddClient() {
       return;
     }
     startSearch(async () => {
+      // A rejected DISPATCH (deploy churn · dropped connection) is re-thrown by
+      // React to the error boundary if we don't catch it → the whole pay page
+      // blanks. Prod: /admin/wallet/pay-user "An unexpected response was
+      // received from the server." ×2 (2026-07-17). READ path → a plain retry
+      // is safe, so the default (non-mutating) copy applies.
+      try {
+        if (keyType === "2") {
+          const res = await getPayUserForwarderView(c);
+          if (res.ok && res.data) {
+            setPanel(res.data.panel);
+            setFwdRows(res.data.rows);
+            setPendingByStatus(res.data.pendingByStatus ?? []);
+            setSelFwds(new Set()); // forwarder rows do NOT auto-select
+          } else {
+            setErr(res.ok ? "ไม่พบข้อมูล" : res.error);
+          }
+        } else {
+          const res = await getPayUserShopView(c);
+          if (res.ok && res.data) {
+            setPanel(res.data.panel);
+            setShopRows(res.data.rows);
+            // shop rows AUTO-select on load (matching legacy).
+            setSelShops(new Set(res.data.rows.map((r) => r.hno)));
+          } else {
+            setErr(res.ok ? "ไม่พบข้อมูล" : res.error);
+          }
+        }
+      } catch (e) {
+        // Next 16 REJECTS the action promise with a NEXT_REDIRECT / NEXT_NOT_FOUND
+        // sentinel when the action redirects (server-action-reducer.js) — that is
+        // how requireAdmin() sends an expired session to /login. Swallowing it
+        // cancels the redirect and prints the raw "NEXT_REDIRECT" at the admin.
+        if (isNextControlFlowError(e)) throw e;
+        setErr(describeActionDispatchError(e));
+      }
+    });
+  }
+
+  // re-fetch after a successful pay so the balance + remaining list stay correct.
+  //
+  // 🔴 MONEY — this runs AFTER a payment has already committed. If the refetch
+  // throws (dispatch failure) and we let it escape, React unmounts this subtree
+  // into the error boundary: the success banner + result summary the admin was
+  // about to read are DESTROYED, and the natural next move is to pay the same
+  // orders again. Swallowing a refresh failure keeps the settled result on
+  // screen; a stale list is strictly safer than a double charge. `reload()` is
+  // display-only (setPanel/setRows/clear selection) — it never writes.
+  async function reload() {
+    if (!panel) return;
+    const c = panel.user.userid;
+    try {
       if (keyType === "2") {
         const res = await getPayUserForwarderView(c);
         if (res.ok && res.data) {
           setPanel(res.data.panel);
           setFwdRows(res.data.rows);
-          setPendingByStatus(res.data.pendingByStatus ?? []);
-          setSelFwds(new Set()); // forwarder rows do NOT auto-select
-        } else {
-          setErr(res.ok ? "ไม่พบข้อมูล" : res.error);
+          setSelFwds(new Set());
         }
       } else {
         const res = await getPayUserShopView(c);
         if (res.ok && res.data) {
           setPanel(res.data.panel);
           setShopRows(res.data.rows);
-          // shop rows AUTO-select on load (matching legacy).
           setSelShops(new Set(res.data.rows.map((r) => r.hno)));
-        } else {
-          setErr(res.ok ? "ไม่พบข้อมูล" : res.error);
         }
       }
-    });
-  }
-
-  // re-fetch after a successful pay so the balance + remaining list stay correct.
-  async function reload() {
-    if (!panel) return;
-    const c = panel.user.userid;
-    if (keyType === "2") {
-      const res = await getPayUserForwarderView(c);
-      if (res.ok && res.data) {
-        setPanel(res.data.panel);
-        setFwdRows(res.data.rows);
-        setSelFwds(new Set());
-      }
-    } else {
-      const res = await getPayUserShopView(c);
-      if (res.ok && res.data) {
-        setPanel(res.data.panel);
-        setShopRows(res.data.rows);
-        setSelShops(new Set(res.data.rows.map((r) => r.hno)));
-      }
+    } catch (e) {
+      // An auth redirect is NOT a "refresh failure" — it is the framework telling
+      // us to navigate (requireAdmin → /login on an expired session). Let it out:
+      // an admin who is no longer authenticated must not keep operating a money
+      // page. It propagates through submitPayment's catch, which re-throws it too.
+      if (isNextControlFlowError(e)) throw e;
+      // Never surface this as a payment failure — the payment already SUCCEEDED.
+      console.error("[pay-user reload] refresh after successful payment failed", {
+        userid: c,
+        keyType,
+        message: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
@@ -332,13 +370,17 @@ export function PayUserAddClient() {
       }
       const fIds = selectedFwdRows.map((r) => r.fid);
       startPay(async () => {
-        const res = await adminPayForwardersWithTopUp({ userId: panel.user.userid, fIds }, slip);
-        if (res.ok && res.data) {
-          setResult({ kind: "fwd-topup", data: res.data });
-          closeModal();
-          await reload();
-        } else {
-          setErr(res.ok ? "ไม่สามารถทำรายการได้" : res.error);
+        try {
+          const res = await adminPayForwardersWithTopUp({ userId: panel.user.userid, fIds }, slip);
+          if (res.ok && res.data) {
+            setResult({ kind: "fwd-topup", data: res.data });
+            closeModal();
+            await reload();
+          } else {
+            setErr(res.ok ? "ไม่สามารถทำรายการได้" : res.error);
+          }
+        } catch (e) {
+          onPayDispatchFailure(e);
         }
       });
       return;
@@ -348,13 +390,17 @@ export function PayUserAddClient() {
     const hNos = selectedShopRows.map((r) => r.hno);
     if (shopWalletCovers) {
       startPay(async () => {
-        const res = await adminPayOrdersOnBehalf({ userId: panel.user.userid, hNos });
-        if (res.ok && res.data) {
-          setResult({ kind: "shop-wallet", data: res.data });
-          closeModal();
-          await reload();
-        } else {
-          setErr(res.ok ? "ไม่สามารถทำรายการได้" : res.error);
+        try {
+          const res = await adminPayOrdersOnBehalf({ userId: panel.user.userid, hNos });
+          if (res.ok && res.data) {
+            setResult({ kind: "shop-wallet", data: res.data });
+            closeModal();
+            await reload();
+          } else {
+            setErr(res.ok ? "ไม่สามารถทำรายการได้" : res.error);
+          }
+        } catch (e) {
+          onPayDispatchFailure(e);
         }
       });
       return;
@@ -375,15 +421,50 @@ export function PayUserAddClient() {
       return;
     }
     startPay(async () => {
-      const res = await adminPayOrdersWithTopUp({ userId: panel.user.userid, hNos, topUpAmount: amt }, slip);
-      if (res.ok && res.data) {
-        setResult({ kind: "shop-topup", data: res.data });
-        closeModal();
-        await reload();
-      } else {
-        setErr(res.ok ? "ไม่สามารถทำรายการได้" : res.error);
+      try {
+        const res = await adminPayOrdersWithTopUp({ userId: panel.user.userid, hNos, topUpAmount: amt }, slip);
+        if (res.ok && res.data) {
+          setResult({ kind: "shop-topup", data: res.data });
+          closeModal();
+          await reload();
+        } else {
+          setErr(res.ok ? "ไม่สามารถทำรายการได้" : res.error);
+        }
+      } catch (e) {
+        onPayDispatchFailure(e);
       }
     });
+  }
+
+  /**
+   * 🔴 MONEY — a PAY dispatch rejected, so we never saw the server's answer.
+   *
+   * The write may ALREADY have committed (the request can reach the server and
+   * settle while the response is lost). Two things must happen and neither is
+   * optional:
+   *   1. Do NOT let the throw escape. React would re-throw it to the error
+   *      boundary, blank the page, and file an incident — and the admin, seeing
+   *      the page die, re-pays. (Prod filed exactly this shape on this route.)
+   *   2. Close the modal so the page-level red banner is actually READABLE
+   *      (the banner renders on the page, behind the dialog) and the ยืนยัน
+   *      button is out of reflex range. Losing the attached slip is the cheap
+   *      side of that trade — re-attaching costs seconds, a double payment does
+   *      not. The copy tells staff to reload and CHECK the status first.
+   */
+  function onPayDispatchFailure(e: unknown) {
+    // A NEXT_REDIRECT / NEXT_NOT_FOUND sentinel is NOT a dispatch failure — Next 16
+    // rejects the action promise with it so RedirectBoundary can navigate (that is
+    // requireAdmin sending an expired session to /login). Re-throw FIRST, before
+    // any state write, so the framework behaviour is exactly what it was before
+    // these catches existed.
+    if (isNextControlFlowError(e)) throw e;
+    console.error("[pay-user submitPayment] dispatch failed — outcome UNKNOWN", {
+      userid: panel?.user.userid,
+      keyType,
+      message: e instanceof Error ? e.message : String(e),
+    });
+    closeModal();
+    setErr(describeActionDispatchError(e, { mutating: true }));
   }
 
   const hasRows = keyType === "2" ? fwdRows.length > 0 : shopRows.length > 0;

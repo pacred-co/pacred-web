@@ -74,21 +74,29 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
   // ไม่รับเอกสาร → gen QR into the SERVICE นิติ account 0105564077716). The
   // TRADING/LOGISTICS lanes render their own static K-Shop PNG inside
   // <PayDestination>, so only fetch when the resolved lane IS SERVICE (promptpay).
-  const [serviceQr, setServiceQr] = useState<string | null>(null);
+  // Kept TOGETHER with the (lane · payable) it was built for — same contract as
+  // <PayDestination>'s genQr. The effect used to clear this synchronously whenever the
+  // form left the eligible state (react-hooks/set-state-in-effect); the key does that
+  // job one render pass earlier, so a QR encoding a STALE amount can never be handed
+  // to the customer (clear the ยอด and retype, or hop ใบกำกับ→ไม่รับเอกสาร with a new
+  // amount, and the previous QR is refused instead of shown while the new one loads).
+  const [serviceQr, setServiceQr] = useState<{ key: string; url: string | null } | null>(null);
+  const serviceQrKey =
+    payAccount.channel === "promptpay" && payAmount > 0 ? `${payAccount.channel}|${payAmount}` : "";
   useEffect(() => {
-    if (payAccount.channel !== "promptpay" || payAmount <= 0) {
-      setServiceQr(null);
-      return;
-    }
+    // Nothing to fetch for the non-SERVICE lanes / an empty amount.
+    if (payAccount.channel !== "promptpay" || payAmount <= 0) return;
     let alive = true;
     void getForwarderPaymentQr(payAmount).then((res) => {
       if (!alive) return;
-      setServiceQr(res.ok && res.data ? res.data.dataUrl : null);
+      setServiceQr({ key: serviceQrKey, url: res.ok && res.data ? res.data.dataUrl : null });
     });
     return () => {
       alive = false;
     };
-  }, [payAccount.channel, payAmount]);
+  }, [payAccount.channel, payAmount, serviceQrKey]);
+  // Only ever the QR built for THIS lane + THIS payable (never a stale one).
+  const serviceQrToShow = serviceQr && serviceQr.key === serviceQrKey ? serviceQr.url : null;
 
   async function onSlipFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -347,7 +355,7 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
         <PayDestination
           account={payAccount}
           amountThb={payAmount}
-          serviceQrDataUrl={payAccount.channel === "promptpay" ? serviceQr : null}
+          serviceQrDataUrl={serviceQrToShow}
         />
         <div className="space-y-1">
           <span className="text-sm font-medium">

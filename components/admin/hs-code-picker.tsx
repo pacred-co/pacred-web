@@ -50,12 +50,34 @@ export function HsCodePicker({
 }: HsCodePickerProps) {
   const [results, setResults] = useState<HsSearchRow[]>([]);
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  // Seeded from the initial value because the effect below searches on mount too
+  // (a row that opens with an HS code already filled in) — the old effect turned the
+  // spinner on for that first search, so it must start on.
+  const [loading, setLoading] = useState(() => value.trim().length >= 2);
   const [active, setActive] = useState(-1);
   const wrapRef = useRef<HTMLDivElement>(null);
   // Track whether the latest text change came from typing (search) vs a pick
   // (don't immediately re-open the dropdown after a pick).
   const skipNextSearch = useRef(false);
+
+  // `value` is a controlled PROP: it changes from typing AND from the parent
+  // (the bulk bar clears it after apply · the cost editor re-seeds it from `init`),
+  // so the dropdown/spinner must react HERE, not only in the input's onChange.
+  // React's documented "adjust state while rendering" — this is what the effect below
+  // used to do one render LATER (react-hooks/set-state-in-effect: an extra render pass
+  // on every keystroke). pick() claims the value it is about to push, so a pick still
+  // neither spins nor re-opens the dropdown.
+  const [seenValue, setSeenValue] = useState(value);
+  if (value !== seenValue) {
+    setSeenValue(value);
+    if (value.trim().length < 2) {
+      setResults([]);
+      setOpen(false);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+  }
 
   // Debounced search on the value.
   useEffect(() => {
@@ -64,14 +86,8 @@ export function HsCodePicker({
       skipNextSearch.current = false;
       return;
     }
+    if (q.length < 2) return;
     let cancelled = false;
-    if (q.length < 2) {
-      setResults([]);
-      setOpen(false);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
     const t = setTimeout(() => {
       searchHsCodes(q, 12)
         .then((res) => {
@@ -100,6 +116,9 @@ export function HsCodePicker({
 
   function pick(row: HsSearchRow) {
     skipNextSearch.current = true;
+    // Claim the value change we're about to cause so the render-adjust above treats it
+    // as "not a user query" (same role the skip-flag plays for the search effect).
+    setSeenValue(row.code);
     onChange(row.code);
     onPick?.(row);
     setOpen(false);

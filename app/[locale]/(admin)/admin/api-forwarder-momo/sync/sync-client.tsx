@@ -551,6 +551,11 @@ const PREVIEW_COL_COUNT = 15;
 function MomoDetail({ d, raw }: { d: MomoRawDisplay; raw: unknown }) {
   const [rawOpen, setRawOpen] = useState(false);
   const kv: Array<[string, React.ReactNode]> = [
+    // false positive react/jsx-key — `kv` เป็น array ของ tuple [label, value]
+    // ไม่ใช่ list ของ element พี่น้องกัน. ตัว element นี้อยู่ในช่อง value ของ tuple
+    // และถูก render เป็นลูกเดี่ยวใน <dd>{val}</dd> ข้างล่าง โดย key จริงอยู่ที่
+    // wrapper แล้ว (<div key={label}>) → React ไม่มีทาง warn เรื่อง key ตรงนี้.
+    // eslint-disable-next-line react/jsx-key
     ["ลูกค้า (MOMO)", <CustomerCodeLink code={d.memberCode} />],
     ["สถานะ MOMO (เลข)", d.statusCode ?? "—"],
     ["เลขพัสดุจีน", d.tracking || "—"],

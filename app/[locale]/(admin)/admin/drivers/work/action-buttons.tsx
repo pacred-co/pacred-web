@@ -39,6 +39,11 @@
 import { useRef, useState, useTransition } from "react";
 import { prompt } from "@/components/ui/confirm";
 import {
+  isServerActionDispatchError,
+  describeActionDispatchError,
+} from "@/lib/observability/action-dispatch-error";
+import { isNextControlFlowError } from "@/lib/observability/next-control-flow";
+import {
   markDriverItemLoaded,
   markDriverItemDelivered,
   markDriverItemFailed,
@@ -60,6 +65,11 @@ const CAPTURE_COPY: Record<"load" | "deliver", { title: string; verb: string; ct
 export function DriverItemActionButtons({ itemId, status }: Props) {
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+  // True when the last failure was a Server-Action DISPATCH failure (the tab's
+  // bundle can no longer talk to the server — usually a deploy landed while the
+  // driver kept this page open all shift). A reload fetches a fresh bundle, so
+  // the error panel offers that button instead of leaving the driver stuck.
+  const [offerReload, setOfferReload] = useState(false);
   const [mode, setMode] = useState<CaptureMode>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
@@ -125,29 +135,59 @@ export function DriverItemActionButtons({ itemId, status }: Props) {
     fd.append("itemId", String(itemId));
     fd.append("photo", previewFile, previewFile.name || `${mode}.jpg`);
     setErr(null);
+    setOfferReload(false);
     start(async () => {
       const action = mode === "load" ? markDriverItemLoaded : markDriverItemDelivered;
-      const res = await action(fd);
-      if (!res.ok) {
-        setErr(res.error);
-        return;
+      // The DISPATCH itself can reject (deploy churn · a lost connection on the
+      // road). Without this catch React re-throws it to the error boundary →
+      // the driver's whole work-list blanks mid-delivery and an incident is
+      // filed (prod: /admin/drivers/work ×13 on 2026-07-20). Catching keeps the
+      // card alive and tells the driver what to do next.
+      try {
+        const res = await action(fd);
+        if (!res.ok) {
+          setErr(res.error);
+          return;
+        }
+        // success — revalidatePath on the server redraws the card
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+        setPreviewFile(null);
+        setMode(null);
+      } catch (e) {
+        // Next 16 REJECTS the action promise with a NEXT_REDIRECT / NEXT_NOT_FOUND
+        // sentinel when the action redirects (server-action-reducer.js — "the
+        // action promise will be rejected with a redirect so that it's handled by
+        // RedirectBoundary"). requireAdmin() does exactly that on an expired
+        // session — the very scenario here (a driver keeps this page open all
+        // shift). Swallowing it would CANCEL the /login redirect and print the raw
+        // string "NEXT_REDIRECT" at the driver. Re-throw it untouched.
+        if (isNextControlFlowError(e)) throw e;
+        // MUTATING: the status flip may already have committed server-side even
+        // though we never saw the reply — so never invite a blind re-tap.
+        setErr(describeActionDispatchError(e, { mutating: true }));
+        setOfferReload(isServerActionDispatchError(e));
       }
-      // success — revalidatePath on the server redraws the card
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-      setPreviewFile(null);
-      setMode(null);
     });
   }
 
   // ── "ส่งไม่ได้" stays as a quick inline prompt (no photo per legacy).
   async function runFail() {
     setErr(null);
+    setOfferReload(false);
     const reason = await prompt("เหตุผลที่ส่งไม่ได้?");
     if (!reason || !reason.trim()) return;
     start(async () => {
-      const res = await markDriverItemFailed({ itemId, reason: reason.trim() });
-      if (!res.ok) setErr(res.error);
+      try {
+        const res = await markDriverItemFailed({ itemId, reason: reason.trim() });
+        if (!res.ok) setErr(res.error);
+      } catch (e) {
+        // See submitWithPhoto — a redirect()/notFound() from requireAdmin comes
+        // back as a REJECTION here; it must reach the boundary, not the banner.
+        if (isNextControlFlowError(e)) throw e;
+        setErr(describeActionDispatchError(e, { mutating: true }));
+        setOfferReload(isServerActionDispatchError(e));
+      }
     });
   }
 
@@ -202,11 +242,7 @@ export function DriverItemActionButtons({ itemId, status }: Props) {
             ยกเลิก
           </button>
         </div>
-        {err && (
-          <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-2 py-2">
-            {err}
-          </p>
-        )}
+        {err && <ErrorPanel message={err} offerReload={offerReload} />}
       </div>
     );
   }
@@ -262,10 +298,32 @@ export function DriverItemActionButtons({ itemId, status }: Props) {
       {pending && (
         <p className="text-xs text-muted">⏳ กำลังบันทึก...</p>
       )}
-      {err && (
-        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-2 py-2">
-          {err}
-        </p>
+      {err && <ErrorPanel message={err} offerReload={offerReload} />}
+    </div>
+  );
+}
+
+/**
+ * Inline failure panel for one card.
+ *
+ * `offerReload` is set only for a Server-Action DISPATCH failure — the tab's
+ * bundle can no longer reach the server (typically a deploy landed while the
+ * driver kept the work-list open all shift). A reload pulls a fresh bundle, so
+ * it is the ONE action that actually helps; a plain re-tap would fail the same
+ * way. Tap target stays ≥ 44px (mobile-first playbook — drivers wear gloves).
+ */
+function ErrorPanel({ message, offerReload }: { message: string; offerReload: boolean }) {
+  return (
+    <div className="space-y-2 rounded-md border border-red-200 bg-red-50 px-2 py-2">
+      <p className="text-sm text-red-700">{message}</p>
+      {offerReload && (
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="w-full rounded-lg border border-red-300 bg-white px-3 py-2.5 text-sm font-semibold text-red-700 min-h-[44px] hover:bg-red-100 active:bg-red-200"
+        >
+          🔄 โหลดหน้าใหม่
+        </button>
       )}
     </div>
   );

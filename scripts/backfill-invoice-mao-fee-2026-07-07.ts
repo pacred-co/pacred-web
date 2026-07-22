@@ -59,9 +59,42 @@ import pg from "pg";
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { computeForwarderDebitBatch } from "../lib/forwarder/forwarder-debit-total";
-import { calcForwarderGross } from "../lib/forwarder/outstanding";
+import { calcForwarderGross, type ForwarderPriceFields } from "../lib/forwarder/outstanding";
 import { computeBillWht } from "../lib/billing/wht";
 import { MAO_FLAT_FEE } from "../lib/forwarder/mao-fee";
+
+/** แถว tb_forwarder เท่าที่ SELECT มา — ครบทุกช่องที่ ForwarderPriceFields บังคับ.
+ *  ไม่ได้ select `paymethod` (optional) → engine ถือเป็น ต้นทาง เหมือนเดิม = ไม่เปลี่ยนพฤติกรรม. */
+type ForwarderRow = ForwarderPriceFields & {
+  id: number | string;
+  userid: string | null;
+  fshipby: string | null;
+  ftrackingchn: string | null;
+};
+
+/** แถว tb_receipt_item เท่าที่ SELECT มา (rid ↔ fid) */
+type ReceiptItemRow = { rid: string; fid: number | string };
+
+/** แผนแก้ 1 ใบวางบิล — ตัวเดียวกับที่ push เข้า `planned` และเขียนลงไฟล์ backup */
+type BillPlan = {
+  doc_no: string;
+  invoiceId: number;
+  userid: string;
+  corporate: boolean;
+  state: "folded" | "missing";
+  oldMaoFee: number | null;
+  newMaoFee: number;
+  oldSubtotal: number;
+  newSubtotal: number;
+  oldTotal: number;
+  newTotal: number;
+  net_payable: number;
+  wht_amount: number;
+  defoldItemId: number | null;
+  defoldItemNewAmount: number | null;
+  reconciles: boolean;
+  note: string;
+};
 
 const { Client } = pg;
 const APPLY = process.argv.includes("--apply");
@@ -100,18 +133,20 @@ async function connect() {
       await c.connect();
       console.log(`✓ connected (${label})`);
       return c;
-    } catch (e: any) {
-      console.log(`  ✗ ${label}: ${e.code ?? "err"} ${e.message}`);
+    } catch (e) {
+      const { code, message } = (e ?? {}) as { code?: string; message?: string };
+      console.log(`  ✗ ${label}: ${code ?? "err"} ${message}`);
     }
   }
   throw new Error("could not connect to prod via any path");
 }
 
 // ── helpers ─────────────────────────────────────────────────────────
-function toNumber(v: any): number {
+function toNumber(v: unknown): number {
   if (v === null || v === undefined) return 0;
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  const n = parseFloat(v);
+  // parseFloat แปลง arg เป็น string อยู่แล้ว → String(v) ให้ผลเท่าเดิมทุกกรณี
+  const n = parseFloat(String(v));
   return Number.isFinite(n) ? n : 0;
 }
 const round2 = (x: number) => Math.round((Number(x) + Number.EPSILON) * 100) / 100;
@@ -150,9 +185,9 @@ async function main() {
 
     // 3. Pricing inputs for every covered forwarder.
     const allFids = Array.from(new Set(itemRows.map((it) => Number(it.forwarder_id)).filter(Number.isFinite)));
-    const fwById = new Map<number, any>();
+    const fwById = new Map<number, ForwarderRow>();
     if (allFids.length > 0) {
-      const { rows: fwRows } = await c.query(
+      const { rows: fwRows } = await c.query<ForwarderRow>(
         `SELECT id, userid, fshipby, ftrackingchn,
                 ftotalprice, ftransportprice, fpriceupdate, fshippingservice,
                 pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany
@@ -171,8 +206,8 @@ async function main() {
     );
     const rcpByRid = new Map(rcpRows.map((r) => [r.rid, r]));
     const { rows: rcpItemRows } = rcpRows.length
-      ? await c.query(`SELECT rid, fid FROM tb_receipt_item WHERE rid = ANY($1)`, [rcpRows.map((r) => r.rid)])
-      : { rows: [] as any[] };
+      ? await c.query<ReceiptItemRow>(`SELECT rid, fid FROM tb_receipt_item WHERE rid = ANY($1)`, [rcpRows.map((r) => r.rid)])
+      : { rows: [] as ReceiptItemRow[] };
     const rcpFidSet = new Map<string, Set<number>>();
     for (const it of rcpItemRows) {
       if (!rcpFidSet.has(it.rid)) rcpFidSet.set(it.rid, new Set());
@@ -195,7 +230,7 @@ async function main() {
     }
 
     // ── 5. build the plan ──
-    const planned: any[] = [];
+    const planned: BillPlan[] = [];
     const skipped: { doc_no: string; reason: string; detail: string }[] = [];
     let processed = 0;
 

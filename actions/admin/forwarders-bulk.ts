@@ -823,11 +823,19 @@ export async function bulkCancel(
       // stops (fdistatus='2') are NEVER touched (keep the delivery audit).
       // Best-effort — never rolls back the committed cancel.
       try {
-        const { data: openStops } = await admin
+        const { data: openStops, error: stopsErr } = await admin
           .from("tb_forwarder_driver_item")
           .select("id, fdid")
           .in("fid", cancellableIds)
           .in("fdistatus", ["", "1"]);
+        if (stopsErr) {
+          // Best-effort block — the cancel already committed and is NOT rolled
+          // back. Log loudly: a silent failure here leaves an open driver stop
+          // on a cancelled parcel, which blocks its batch from auto-completing.
+          console.error(`[forwarders-bulk bulkCancel] open driver-stop lookup failed (best-effort)`, {
+            code: stopsErr.code, message: stopsErr.message, ids: cancellableIds,
+          });
+        }
         const stops = (openStops ?? []) as Array<{ id: number; fdid: number }>;
         if (stops.length > 0) {
           await admin

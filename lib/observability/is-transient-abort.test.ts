@@ -13,6 +13,10 @@
  */
 
 import { isTransientAbortError, isChunkLoadError } from "./is-transient-abort";
+import {
+  isServerActionDispatchError,
+  describeActionDispatchError,
+} from "./action-dispatch-error";
 
 let pass = 0;
 let fail = 0;
@@ -154,6 +158,79 @@ assertEq(
 assertEq("empty message, no name", isChunkLoadError(err("")), false);
 assertEq("null", isChunkLoadError(null), false);
 assertEq("undefined", isChunkLoadError(undefined), false);
+
+// ── isServerActionDispatchError — the CALL-SITE classifier ──
+// Orthogonal to the two predicates above: those decide "do we FILE an
+// incident"; this one decides "does the call site know the server's answer".
+// It deliberately RETURNS TRUE for all three families (unexpected-response,
+// transient abort, chunk-load) because to a caller they mean the same thing.
+section("isServerActionDispatchError → true (dispatch transport failed)");
+assertEq(
+  "Next reducer 'An unexpected response was received from the server.'",
+  isServerActionDispatchError(err("An unexpected response was received from the server.")),
+  true,
+);
+assertEq(
+  "same message without the trailing period",
+  isServerActionDispatchError(err("An unexpected response was received from the server")),
+  true,
+);
+assertEq(
+  "case/whitespace insensitive",
+  isServerActionDispatchError(err("  AN UNEXPECTED RESPONSE WAS RECEIVED FROM THE SERVER.  ")),
+  true,
+);
+assertEq("cancelled fetch 'Failed to fetch'", isServerActionDispatchError(err("Failed to fetch")), true);
+assertEq("AbortError by name", isServerActionDispatchError(err("whatever", "AbortError")), true);
+assertEq("chunk-load (deploy churn)", isServerActionDispatchError(err("x", "ChunkLoadError")), true);
+
+section("isServerActionDispatchError → false (a REAL error must not be masked)");
+assertEq("ReferenceError", isServerActionDispatchError(err("fxRateMap is not defined")), false);
+assertEq(
+  "TypeError",
+  isServerActionDispatchError(err("Cannot read properties of undefined (reading 'map')")),
+  false,
+);
+assertEq(
+  "substring inside a longer real message is NOT matched",
+  isServerActionDispatchError(err("Parse failed: an unexpected response was received from the server. line 4")),
+  false,
+);
+assertEq("empty message", isServerActionDispatchError(err("")), false);
+assertEq("null", isServerActionDispatchError(null), false);
+assertEq("undefined", isServerActionDispatchError(undefined), false);
+assertEq("a string, not an Error", isServerActionDispatchError("boom"), false);
+
+// ── describeActionDispatchError — MONEY-SAFE copy ──
+// A mutating action whose dispatch failed has an UNKNOWN outcome; the copy
+// must never invite a blind retry (that is how a double-charge happens).
+section("describeActionDispatchError");
+assertEq(
+  "read-path copy invites a retry",
+  describeActionDispatchError(err("An unexpected response was received from the server.")).includes("ลองอีกครั้ง"),
+  true,
+);
+assertEq(
+  "MONEY: mutating copy does NOT invite a retry",
+  describeActionDispatchError(err("An unexpected response was received from the server."), { mutating: true })
+    .includes("ลองอีกครั้ง"),
+  false,
+);
+assertEq(
+  "MONEY: mutating copy tells staff to CHECK the status first",
+  describeActionDispatchError(err("Failed to fetch"), { mutating: true }).includes("ตรวจสอบสถานะ"),
+  true,
+);
+assertEq(
+  "a real error keeps its own message (never masked)",
+  describeActionDispatchError(err("fxRateMap is not defined")),
+  "fxRateMap is not defined",
+);
+assertEq(
+  "a non-Error throw gets generic copy",
+  describeActionDispatchError("boom"),
+  "เกิดข้อผิดพลาดที่ไม่คาดคิด กรุณาลองใหม่อีกครั้ง",
+);
 
 // ── Summary ──
 console.log(`\n${pass} passed, ${fail} failed`);

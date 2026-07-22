@@ -43,7 +43,11 @@ export async function lookupMemberByCode(rawCode: string): Promise<MemberLookupR
     }>();
   if (error || !user) return empty;
 
-  const { data: corp } = await admin
+  // FAIL-CLOSED on identity: a silent corp-read failure would resolve a นิติบุคคล
+  // as a person (ชื่อบุคคล · เลขภาษีว่าง · ที่อยู่ว่าง) and the caller writes those
+  // straight into the ใบเสนอราคา bill-to fields. Returning `empty` shows "ไม่พบ"
+  // and leaves the form untouched — same convention as the tb_users read above.
+  const { data: corp, error: corpErr } = await admin
     .from("tb_corporate")
     .select("corporatename, corporatenumber, corporateaddress")
     .eq("userid", code)
@@ -52,6 +56,10 @@ export async function lookupMemberByCode(rawCode: string): Promise<MemberLookupR
       corporatenumber: string | null;
       corporateaddress: string | null;
     }>();
+  if (corpErr) {
+    console.error("[booking member-lookup corp]", { code, dbCode: corpErr.code, message: corpErr.message });
+    return empty;
+  }
 
   const identity = resolveBillingIdentity({
     userCompany: user.userCompany,

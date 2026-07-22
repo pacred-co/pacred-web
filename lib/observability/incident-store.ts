@@ -31,6 +31,7 @@ import { sendNotification } from "@/lib/notifications";
 import { computeFingerprint } from "./fingerprint";
 import {
   shouldAlert,
+  buildAutoResolvedNote,
   type IncidentKind,
   type IncidentSource,
   type IncidentSeverity,
@@ -216,6 +217,153 @@ export async function captureIncident(
   } catch (e) {
     logger.error("observability", "captureIncident threw", e);
     return { ok: false, error: e instanceof Error ? e.message : "capture_failed" };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Auto-close — the other half of a DETECTOR incident's lifecycle
+// ─────────────────────────────────────────────────────────────────────
+
+export type AutoResolveIncidentInput = {
+  /**
+   * The SAME identity triple the matching captureIncident() call passes.
+   * The fingerprint is recomputed from it with the SAME computeFingerprint,
+   * so the close targets exactly the row the capture opened — pass the
+   * message from ONE shared builder, never a second hand-written copy.
+   */
+  source:  IncidentSource;
+  kind:    IncidentKind;
+  message: string;
+  route?:  string | null;
+  /** What went green — goes into the note after AUTO_RESOLVED_NOTE_PREFIX. */
+  detail:  string;
+};
+
+export type AutoResolveIncidentResult = {
+  ok:           boolean;
+  /** True only when a LIVE incident was actually closed by this call. */
+  closed:       boolean;
+  id?:          string;
+  fingerprint?: string;
+  error?:       string;
+};
+
+/**
+ * Close the live incident a detector cron previously opened, because the
+ * condition it reported is GREEN again.
+ *
+ * ── The bug this fixes ──────────────────────────────────────────────
+ * A detector cron (data-health, wallet-reconcile) opens ONE incident per
+ * failing check with a stable fingerprint and re-captures each run while
+ * the finding persists (occurrence_count climbs). Nothing ever closed it
+ * when the finding went away → the /admin/incidents queue accumulated
+ * rows for problems that were already fixed, and staff could not tell a
+ * real work item from stale noise.
+ *
+ * ── Safety ──────────────────────────────────────────────────────────
+ *  - OWNERSHIP: matches on the recomputed fingerprint AND source AND kind
+ *    AND route. A fingerprint is a hash of (kind, normalised message,
+ *    route), so a row carrying it IS by construction a capture from this
+ *    exact detector — a human-reported / js_error / other-source incident
+ *    can never match. Callers must therefore only pass detector identities.
+ *  - IDEMPOTENT: only rows in a LIVE status are touched (the same
+ *    `not in (resolved,ignored)` predicate captureIncident dedups on), so
+ *    an already-closed / already-ignored row is left exactly as-is, and a
+ *    second run in the same green window is a no-op.
+ *  - RACE-GUARDED (narrow — read this literally): the UPDATE carries
+ *    `.eq("status", <read status>)`, which only protects the window
+ *    BETWEEN this function's own SELECT and its UPDATE. It does NOT mean
+ *    human triage is respected in general: a row a dev already moved to
+ *    'acknowledged' / 'in_progress' IS closed by the next green run (the
+ *    hop is legal per INCIDENT_STATUS_TRANSITIONS and satisfies the 0077
+ *    CHECK, and assigned_to / acknowledged_at are preserved so the row is
+ *    re-openable via reopenIncident) — the condition it reported is gone,
+ *    so the row leaves the queue. Two consequences to know about:
+ *      (a) no logAdminAction entry is written (every HUMAN triage action
+ *          audits; this close records itself in resolution_note only), and
+ *      (b) for a FLAPPING detector the dev's assignment is lost, because
+ *          the next violation opens a FRESH incident (the fingerprint
+ *          partial-unique index excludes closed rows — by design) and a
+ *          new high-severity incident re-fires the seed alert.
+ *    If a flapping check ever becomes noisy, the fix is to stabilise that
+ *    check, or to restrict this close to status='open' rows.
+ *  - FAIL-SOFT: never throws. A failure here must not fail the scan — the
+ *    worst case is the incident stays open one more cycle.
+ *
+ * The terminal status written is 'ignored' (not 'resolved') — see
+ * AUTO_RESOLVED_NOTE_PREFIX in lib/validators/platform-incident.ts for
+ * the 0077 CHECK constraint that forces it. Both are terminal, both drop
+ * off the live queue, and both free the fingerprint's partial-unique slot
+ * so a re-violation opens a FRESH incident.
+ */
+export async function autoResolveIncident(
+  input: AutoResolveIncidentInput,
+): Promise<AutoResolveIncidentResult> {
+  let fingerprint: string | undefined;
+  try {
+    const admin = createAdminClient();
+
+    fingerprint = computeFingerprint({
+      kind:    input.kind,
+      message: input.message,
+      route:   input.route,
+    });
+
+    // Find the LIVE incident this detector owns. The 0077
+    // platform_incidents_fingerprint_live_idx partial-unique index
+    // guarantees at most one live row per fingerprint → maybeSingle.
+    let q = admin
+      .from("platform_incidents")
+      .select("id, status")
+      .eq("fingerprint", fingerprint)
+      .eq("source", input.source)
+      .eq("kind", input.kind)
+      .not("status", "in", "(resolved,ignored)");
+    if (input.route != null) q = q.eq("route", input.route);
+
+    const { data: live, error: liveErr } = await q.maybeSingle<{ id: string; status: string }>();
+    if (liveErr) {
+      console.error(`[platform_incidents auto-resolve lookup] failed`, {
+        code: liveErr.code, message: liveErr.message, fingerprint,
+      });
+      return { ok: false, closed: false, error: liveErr.message, fingerprint };
+    }
+    // Nothing open for this detector — the normal steady-state.
+    if (!live) return { ok: true, closed: false, fingerprint };
+
+    const nowIso = new Date().toISOString();
+    const { data: updated, error: updErr } = await admin
+      .from("platform_incidents")
+      .update({
+        status:          "ignored",
+        resolved_at:     nowIso,
+        resolution_note: buildAutoResolvedNote(input.detail),
+      })
+      .eq("id", live.id)
+      .eq("status", live.status)   // optimistic race-guard vs a human triaging now
+      .select("id")
+      .maybeSingle<{ id: string }>();
+
+    if (updErr) {
+      console.error(`[platform_incidents auto-resolve update] failed`, {
+        code: updErr.code, message: updErr.message, fingerprint,
+      });
+      return { ok: false, closed: false, error: updErr.message, fingerprint };
+    }
+    // 0 rows = a human moved it between the read and the write. Not an
+    // error — their triage wins; the next green run closes it if it is
+    // still live.
+    if (!updated) return { ok: true, closed: false, fingerprint };
+
+    return { ok: true, closed: true, id: updated.id, fingerprint };
+  } catch (e) {
+    logger.error("observability", "autoResolveIncident threw", e, { fingerprint });
+    return {
+      ok:     false,
+      closed: false,
+      error:  e instanceof Error ? e.message : "auto_resolve_failed",
+      fingerprint,
+    };
   }
 }
 

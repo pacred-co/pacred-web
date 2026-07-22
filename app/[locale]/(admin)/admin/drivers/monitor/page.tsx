@@ -312,7 +312,7 @@ export default async function DriverMonitorPage() {
           <Truck className="mx-auto h-10 w-10 text-muted/40 mb-3" />
           <p className="text-sm text-muted">ตอนนี้ยังไม่มีคนขับกำลังออกส่งของ</p>
           <p className="mt-1 text-[11px] text-muted">
-            เมื่อหัวหน้าคลังมอบงานคนขับ (สถานะ "กำลังดำเนินการ") รอบจัดส่งจะขึ้นบนจอนี้ทันที
+            เมื่อหัวหน้าคลังมอบงานคนขับ (สถานะ “กำลังดำเนินการ”) รอบจัดส่งจะขึ้นบนจอนี้ทันที
           </p>
         </div>
       ) : (

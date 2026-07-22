@@ -109,7 +109,7 @@ export default async function ApDisbursementDetailPage({
 
         {/* Slice-2 register note — the pay-flip here is a REGISTER only. */}
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[13px] leading-relaxed text-amber-800">
-          การกด "โอนแล้ว" ในหน้านี้เป็นการ{" "}
+          การกด “โอนแล้ว” ในหน้านี้เป็นการ{" "}
           <span className="font-semibold">บันทึกว่าโอนออกนอกระบบแล้ว (register)</span> —
           เงินโอนออกทางธนาคารจริงแล้ว สลิปคือหลักฐาน ระบบไม่ได้ตัดเงินในแอป.
           มี guard แบบ atomic-claim (เหมือน markShopDisbursementPaid) กันการกดซ้ำ/แข่งกัน.

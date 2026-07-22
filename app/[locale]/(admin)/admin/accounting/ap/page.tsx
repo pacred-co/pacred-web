@@ -122,7 +122,7 @@ export default async function AdminApLedgerPage({
         {/* Workflow banner — request → approve → transfer(register). */}
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[13px] leading-relaxed text-amber-800">
           <span className="font-semibold">ขั้นตอน:</span> ขอเบิก (requested) → อนุมัติ (approved) →
-          "โอนแล้ว" (transferred). การกด "โอนแล้ว" เป็นการ{" "}
+          “โอนแล้ว” (transferred). การกด “โอนแล้ว” เป็นการ{" "}
           <span className="font-semibold">บันทึกว่าโอนออกนอกระบบแล้ว (register)</span> — เงินโอนออก
           ทางธนาคารจริงแล้ว สลิปคือหลักฐาน ระบบไม่ได้ตัดเงินในแอป · มี guard atomic-claim กันกดซ้ำ.
         </div>

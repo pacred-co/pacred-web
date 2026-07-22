@@ -203,6 +203,41 @@ export function isIncidentLive(status: IncidentStatus): boolean {
   return (LIVE_INCIDENT_STATUSES as readonly string[]).includes(status);
 }
 
+// ── Auto-close (detector-cron lifecycle) ─────────────────────────────
+/**
+ * Prefix stamped on the `resolution_note` of an incident closed
+ * AUTOMATICALLY by the detector cron that opened it (the condition it
+ * reported went green again) — never by a human.
+ *
+ * WHY the closed status is 'ignored' and not 'resolved': the 0077 CHECK
+ * `platform_incidents_triaged_consistent` requires `acknowledged_at` +
+ * `assigned_to` (a profiles FK) on a 'resolved' row. A cron has no human
+ * identity, and stamping a real admin as the assignee would fabricate
+ * attribution in an audited table. 'ignored' is the only terminal status
+ * the CHECK permits with no assignee — both terminal statuses are
+ * excluded from LIVE_INCIDENT_STATUSES and from the
+ * platform_incidents_fingerprint_live_idx partial-unique index, so a
+ * re-violation still opens a FRESH incident. This prefix exists so the
+ * triage UI can label the row honestly ("ปิดอัตโนมัติ — ระบบเขียวแล้ว")
+ * instead of the human wording "ปิด (ไม่ใช่บั๊ก)".
+ */
+export const AUTO_RESOLVED_NOTE_PREFIX = "ปิดอัตโนมัติ:";
+
+/** True when this resolution note was written by an auto-close (not a human). */
+export function isAutoResolvedNote(note: string | null | undefined): boolean {
+  return typeof note === "string" && note.trimStart().startsWith(AUTO_RESOLVED_NOTE_PREFIX);
+}
+
+/**
+ * Build the Thai resolution note for an auto-close. `detail` says WHICH
+ * detector went green (e.g. the data-health check id) — the prefix makes
+ * it machine-detectable, the timestamp makes it auditable.
+ */
+export function buildAutoResolvedNote(detail: string, at: Date = new Date()): string {
+  const when = at.toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" });
+  return `${AUTO_RESOLVED_NOTE_PREFIX} ${detail} เมื่อ ${when} (ระบบตรวจซ้ำแล้วไม่พบปัญหา — ปิดโดยอัตโนมัติ ไม่ใช่คนกดปิด)`.slice(0, 2000);
+}
+
 /** True when a new incident at this severity should fire the dev-alert. */
 export function shouldAlert(severity: IncidentSeverity): boolean {
   return (ALERTING_SEVERITIES as readonly string[]).includes(severity);

@@ -3,6 +3,25 @@
 
 ---
 
+# 🩹 2026-07-23 รอบ 2 (เดฟ · owner "error เยอะไปไหมครับ · เก็บบัคใน /admin/incidents ให้หมด") — CI LINT 181→0 + incident lifecycle auto-close + 3 บั๊กเงิน/ลูกค้าที่เจอระหว่างทาง → MAIN · read FIRST
+
+> **📊 "181 errors" = 33 จุดจริง** — `no-html-link-for-pages` **นับซ้ำ 1 ครั้ง/route ที่ match** → `<a>` 2 อัน = 144 errors. **แดงมาตั้งแต่ 25 พ.ค.** (ไฟล์ทั้งหมดเป็นของเก่า · 0 error ในไฟล์ commit วันนี้). **ทำไมไม่เจอ: gate ที่รันคือ `eslint <ไฟล์ที่แก้>` ไม่ใช่ทั้ง repo → กติกาใหม่: `pnpm lint` เต็ม ≥1 ครั้งก่อน push.** **LINT_EXIT=0 แล้ว** (เหลือ warning 189 = CI ไม่ fail · `_input`/schema-as-type ตามคอนเวนชัน).
+>
+> **🔴 3 บั๊กจริงที่เจอระหว่างเก็บ lint/incidents (ไม่ใช่ cosmetic):**
+> 1. **`service-orders-governance.ts:419` — ลบ 1 รายการ = ยอดหัวบิลถูกล้างเกือบศูนย์** (bare destructure → `remain=null` → `sumChn=0` → UPDATE เขียน `htotalpriceuser=(0+hshippingchn)×hrate` พร้อม toast เขียว). fail-CLOSED ก่อนเขียน + ข้อความไทยบอกให้เปิดตรวจยอด.
+> 2. **QR ยอดเก่าโผล่ให้ลูกค้าสแกน** (`yuan-payment-form` + `pay-destination`) — verify agent จับได้ว่า refactor setState ทำให้ QR เดิมค้าง: ล้างช่องยอด→พิมพ์ใหม่ = โชว์ QR ยอดก่อนหน้าระหว่างโหลด. แก้เป็น key `(lane|payable)` → QR ยอดเก่า **โผล่ไม่ได้เชิงโครงสร้าง** (ระหว่างโหลดไม่โชว์ QR แทนที่จะโชว์ผิด).
+> 3. **`NEXT_REDIRECT` ถูกกลืน** — try/catch ใหม่รอบ server-action ดักสัญญาณ redirect ของ Next → session หมดอายุแล้ว **ไม่เด้ง /login** แต่โชว์คำว่า "NEXT_REDIRECT" ค้างจอ (หน้าเงิน!). ใส่ `if (isNextControlFlowError(e)) throw e` เป็นบรรทัดแรกทุก catch.
+>
+> **🔁 คิว /admin/incidents ไม่เคยว่าง = LIFECYCLE BUG ไม่ใช่บัคเยอะ:** `captureIncident` เปิดใบต่อ check ที่แดง + bump ทุกชั่วโมง **แต่ไม่มีใครปิดใบตอน check กลับมาเขียว** (เจอทั้ง data-health + wallet-reconcile cron). FIX = `autoResolveIncident()` **reuse `computeFingerprint()` ตัวเดิม** (ห้ามมี scheme ที่สอง) · ownership gate 4 ชั้น (fingerprint+source+kind+route → ใบที่คนแจ้ง/js_error ปิดไม่ได้) · idempotent · race-guard · fail-soft. ⚠️ **mig 0077 CHECK บังคับ `resolved` ต้องมี `assigned_to`** (cron ไม่มีตัวตน) → เขียน `'ignored'` + note `ปิดอัตโนมัติ:` และ UI โชว์ badge เขียว **"🤖 ปิดอัตโนมัติ — ระบบเขียวแล้ว"**. อยากได้คำว่า resolved จริง = ต้อง migration ผ่อน CHECK (ยังไม่ทำ · owner เคาะ). **verify กับ prod: 22 checks → 22 fingerprint ไม่ชน · ใบแดง 5 ใบไม่ถูกปิดผิด · เขียว 1 ใบ (`cabinet_not_real_container`) ปิดถูก.**
+>
+> **❌ premise ที่ผมให้ผิด — agent พิสูจน์กลับ:** "unexpected response ×13" **ไม่ใช่ bodySizeLimit** — ทุกใบ 6 route มี minified frame เดียวกัน (`at I` = server-action reducer) แต่ **`?dpl=` คนละ deployment = deploy churn** (แท็บเก่ายิงหา chunk ที่ถูกทับ) · bodySizeLimit ตั้ง **50mb** ไม่ใช่ 12mb · 2 route ไม่มี upload เลย. FIX = SOT `lib/observability/action-dispatch-error.ts` — คำไทยที่ **ไม่บอก "ลองอีกครั้ง"** สำหรับ action ที่เขียนข้อมูล (dispatch fail = ไม่รู้ว่า commit ไปหรือยัง → บอกโหลดใหม่ตรวจสถานะ ห้ามกดซ้ำ).
+>
+> **🔴 เงินขาดที่เจอเอง — `899020867609` (PR549) 80kg ค้าง 1 วัน:** guard disjoint-lots ที่เขียน 07-21 กันได้ **ทิศเดียว** (เคสวันนั้น bare มาทีหลัง) → พอ bare มาก่อน ล็อต `-2` (20kg×4) ตกเคส 2 ที่ยังไม่มีข้อยกเว้น = refuse เงียบทุกรอบ cron ≈ **฿1,360**. แก้ให้สมมาตร (discriminator เดิม สลับ argument + **อ่าน box_detail ยืนยัน `bareHasOwnBox` จริง ห้ามส่ง true ลอยๆ** — ตัวนี้คือตัวกัน PR050) · ตารางตัดสิน 4 เคสผ่าน · **เจอเพราะ data-health `shipment_short_a_box` ไม่ใช่เพราะมีคนสังเกต** · หลัง deploy cron commit เอง. learning [`symmetric-guard-both-arrival-orders.md`](docs/learnings/symmetric-guard-both-arrival-orders.md) · memory [[symmetric-guard-arrival-order]] · [[incident-queue-lifecycle-and-ci-lint-2026-07-23]].
+>
+> **🟡 เหลือเป็นงานคน (ไม่ใช่บั๊ก) หลัง auto-close:** เก็บเงินซ้ำ `1780555730` บนใบ 13+24 (บัญชี void FRI2606-00013) · residue 2 ตัว · **132 งานนำเข้าไม่มีที่อยู่ผู้รับ** + 26 ลูกค้าที่อยู่หลักไม่ครบ (CS) · 447 TTW staging รอ owner เคาะ · 35 แถว G6.
+
+---
+
 # 💳 2026-07-23 (เดฟ · owner "หลายลอบแล้ว" · ไล่กด legacy ที่ Codex รัน 127.0.0.1:8088) — BILLING-FLOW FIDELITY: 1 การจ่าย = 1 บิล + ยอดตรง 3 จุด + popup→ใบเสร็จ + shipment-atomic → MAIN · read FIRST
 
 > **🎯 owner 4 ข้อ:** (a) ลูกค้าจ่าย/จ่ายแทน ต้องรวมเป็นบิลเดียว ไม่แยกแทรคละกี่บาท+สลิปซ้ำ (b) เข้าทางเลขแทรคต้องกรุ๊ปเป็นชิปเม้น (c) ยอดบิล=ยอดลูกค้าโอน=หน้าตรวจสลิป (d) ตรวจสลิปเสร็จ popup ต้องเด้ง + step-flow นำไปออกใบเสร็จ. Method = อ่าน source served ที่ `/Applications/XAMPP/xamppfiles/htdocs/PCSCODE/...` + คลิก live (login แล้ว admin_tam · MySQL local `pcsc_pcs2/P%F7*bu98NUB@127.0.0.1/pcsc_main`).

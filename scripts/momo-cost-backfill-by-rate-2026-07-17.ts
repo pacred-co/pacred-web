@@ -65,10 +65,28 @@ import { resolveTransportMode, type TransportMode } from "../lib/forwarder/cabin
 import {
   resolveRowCost,
   costBasisMode,
+  type ContainerRateRow,
   type WarehouseDigit,
   type RowCost,
 } from "../lib/forwarder/resolve-cost";
-import { resolveMomoBoxBasis } from "../lib/integrations/momo-web/box-detail-basis";
+import {
+  resolveMomoBoxBasis,
+  type MomoBoxBasisInput,
+} from "../lib/integrations/momo-web/box-detail-basis";
+
+/** แถว tb_cost_container เท่าที่สคริปต์ใช้ — เรทต่อประเภทสินค้า (ป้อน resolveRowCost) + คีย์เลขตู้ */
+type CostContainerRow = ContainerRateRow & { fcabinetnumber: string };
+
+/** แถว momo_box_detail ตามคอลัมน์ที่ select มา (ค่าจาก pg เป็น string ได้ → ตรงกับ MomoBoxBasisInput) */
+type BoxDetailRow = {
+  box_tracking: string | null;
+  width: MomoBoxBasisInput["width"];
+  length: MomoBoxBasisInput["length"];
+  height: MomoBoxBasisInput["height"];
+  weight_kg: MomoBoxBasisInput["weightKg"];
+  cbm: MomoBoxBasisInput["cbm"];
+  quantity: MomoBoxBasisInput["quantity"];
+};
 
 const APPLY = process.argv.includes("--apply");
 const ARRIVED_ONLY = process.argv.includes("--arrived-only");
@@ -173,18 +191,18 @@ async function main() {
 
   const { rows: stRows } = await client.query(`select * from tb_settings limit 1`);
   const settings = (stRows[0] ?? {}) as Record<string, number | string | null>;
-  const { rows: ccRows } = await client.query(`select * from tb_cost_container`);
-  const ccByCab = new Map<string, any>(ccRows.map((c: any) => [c.fcabinetnumber, c]));
+  const { rows: ccRows } = await client.query<CostContainerRow>(`select * from tb_cost_container`);
+  const ccByCab = new Map<string, CostContainerRow>(ccRows.map((c) => [c.fcabinetnumber, c]));
 
   const cabs = [...new Set(rows.map((r) => r.fcabinetnumber))];
-  const { rows: paidRows } = await client.query(
+  const { rows: paidRows } = await client.query<{ cab: string | null }>(
     `select distinct "fCabinetNumber" as cab from tb_cnt_item where "fCabinetNumber" = any($1::text[])`,
     [cabs]);
-  const paidCabs = new Set<string>(paidRows.map((p: any) => p.cab).filter(Boolean));
+  const paidCabs = new Set<string>(paidRows.map((p) => p.cab).filter(Boolean) as string[]);
 
-  const { rows: boxes } = await client.query(`
+  const { rows: boxes } = await client.query<BoxDetailRow>(`
     select box_tracking, width, length, height, weight_kg, cbm, quantity from momo_box_detail`);
-  const boxByTrack = new Map<string, any>();
+  const boxByTrack = new Map<string, BoxDetailRow>();
   for (const b of boxes) boxByTrack.set(String(b.box_tracking ?? "").trim(), b);
 
   console.log(`\nแถวที่ยังไม่ตั้งต้นทุน (มีเลขตู้) = ${rows.length} แถว · ${cabs.length} ตู้`);

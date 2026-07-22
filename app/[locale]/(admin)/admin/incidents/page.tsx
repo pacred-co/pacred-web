@@ -13,6 +13,7 @@ import {
   INCIDENT_STATUS_BADGE,
   INCIDENT_SEVERITY_BADGE,
   LIVE_INCIDENT_STATUSES,
+  isAutoResolvedNote,
   type IncidentSource,
   type IncidentKind,
   type IncidentSeverity,
@@ -107,6 +108,10 @@ export default async function AdminIncidentsPage({
   // Status filter — default 'live' (the active triage queue).
   const statusMode = sp.status ?? "live";
 
+  const toPadded = sp.to
+    ? (/^\d{4}-\d{2}-\d{2}$/.test(sp.to.trim()) ? `${sp.to.trim()}T23:59:59` : sp.to.trim())
+    : null;
+
   let q = admin
     .from("platform_incidents")
     .select(`id, fingerprint, source, kind, severity, status, title, message, stack,
@@ -117,13 +122,22 @@ export default async function AdminIncidentsPage({
     .order("last_seen", { ascending: false })
     .limit(limit);
 
-  // Exact total count — Wave 10.1 follow-up. Mirror the same filters into
-  // a head:true count query so the chip shows TRUE total when results
-  // exceed `limit`. Pattern: docs/learnings/supabase-rls-patterns.md.
-  let countQ = admin
-    .from("platform_incidents")
-    .select("id", { count: "exact", head: true });
+  // Exact head:true counts — Wave 10.1 follow-up. The chips must show the
+  // TRUE totals, not what happened to fit inside `limit` (§0f "badges อย่ามั่ว").
+  // ONE factory carrying the shared non-status filters, so the total /
+  // live / high chips can never drift apart from the list's own filters.
+  // Pattern: docs/learnings/supabase-rls-patterns.md.
+  const countBase = () => {
+    let c = admin.from("platform_incidents").select("id", { count: "exact", head: true });
+    if (sp.source && (INCIDENT_SOURCES as readonly string[]).includes(sp.source)) c = c.eq("source", sp.source);
+    if (sp.kind && (INCIDENT_KINDS as readonly string[]).includes(sp.kind)) c = c.eq("kind", sp.kind);
+    if (sp.severity && (INCIDENT_SEVERITIES as readonly string[]).includes(sp.severity)) c = c.eq("severity", sp.severity);
+    if (sp.from) c = c.gte("last_seen", sp.from.trim());
+    if (toPadded) c = c.lte("last_seen", toPadded);
+    return c;
+  };
 
+  let countQ = countBase();
   if (statusMode === "live") {
     q = q.in("status", [...LIVE_INCIDENT_STATUSES]);
     countQ = countQ.in("status", [...LIVE_INCIDENT_STATUSES]);
@@ -133,37 +147,45 @@ export default async function AdminIncidentsPage({
   }
   if (sp.source && (INCIDENT_SOURCES as readonly string[]).includes(sp.source)) {
     q = q.eq("source", sp.source);
-    countQ = countQ.eq("source", sp.source);
   }
   if (sp.kind && (INCIDENT_KINDS as readonly string[]).includes(sp.kind)) {
     q = q.eq("kind", sp.kind);
-    countQ = countQ.eq("kind", sp.kind);
   }
   if (sp.severity && (INCIDENT_SEVERITIES as readonly string[]).includes(sp.severity)) {
     q = q.eq("severity", sp.severity);
-    countQ = countQ.eq("severity", sp.severity);
   }
   if (sp.from) {
     q = q.gte("last_seen", sp.from.trim());
-    countQ = countQ.gte("last_seen", sp.from.trim());
   }
-  if (sp.to) {
-    const toS = sp.to.trim();
-    const padded = /^\d{4}-\d{2}-\d{2}$/.test(toS) ? `${toS}T23:59:59` : toS;
-    q = q.lte("last_seen", padded);
-    countQ = countQ.lte("last_seen", padded);
+  if (toPadded) {
+    q = q.lte("last_seen", toPadded);
   }
 
   const { data, error } = await q;
   if (error) {
     console.error(`[platform_incidents list] failed`, { code: error.code, message: error.message });
   }
-  const { count: totalCount } = await countQ;
   const rows = (data ?? []) as Row[];
 
-  // Quick counts for the header summary.
-  const liveCount   = rows.filter((r) => (LIVE_INCIDENT_STATUSES as readonly string[]).includes(r.status)).length;
-  const highCount   = rows.filter((r) => r.severity === "high" || r.severity === "critical").length;
+  // The "ยังไม่ปิด" / "ความรุนแรงสูง" chips are TRUE counts over the whole
+  // filtered set (they used to count only the rows on this page, so a
+  // >limit result under-reported, and "high" also counted already-closed
+  // rows — neither number matched what staff still has to act on).
+  const [totalRes, liveRes, highRes] = await Promise.all([
+    countQ,
+    countBase().in("status", [...LIVE_INCIDENT_STATUSES]),
+    countBase().in("status", [...LIVE_INCIDENT_STATUSES]).in("severity", ["high", "critical"]),
+  ]);
+  for (const [label, res] of [["total", totalRes], ["live", liveRes], ["high", highRes]] as const) {
+    if (res.error) {
+      console.error(`[platform_incidents count:${label}] failed`, {
+        code: res.error.code, message: res.error.message,
+      });
+    }
+  }
+  const totalCount = totalRes.count ?? null;
+  const liveCount  = liveRes.count ?? null;
+  const highCount  = highRes.count ?? null;
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -193,10 +215,10 @@ export default async function AdminIncidentsPage({
           ) : null}
         </span>
         <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-red-700">
-          ยังไม่ปิด <strong>{liveCount}</strong>
+          ยังไม่ปิด <strong>{liveCount ?? "—"}</strong>
         </span>
         <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-orange-700">
-          ความรุนแรงสูง <strong>{highCount}</strong>
+          ความรุนแรงสูง (ยังไม่ปิด) <strong>{highCount ?? "—"}</strong>
         </span>
       </div>
 
@@ -284,6 +306,12 @@ export default async function AdminIncidentsPage({
               const assigneeLabel = assignee
                 ? `${[assignee.first_name, assignee.last_name].filter(Boolean).join(" ") || "—"}${assignee.member_code ? ` (${assignee.member_code})` : ""}`
                 : null;
+              // Closed by the detector cron itself (the condition went green
+              // again), NOT by a human. It is stored as 'ignored' because the
+              // 0077 CHECK requires an assignee on 'resolved' and a cron has
+              // no identity — so the plain "ปิด (ไม่ใช่บั๊ก)" badge would read
+              // as a human dismissal. Label it for what it actually is.
+              const autoClosed = isAutoResolvedNote(r.resolution_note);
               return (
                 <li key={r.id} className="px-5 py-4 space-y-2.5">
                   <div className="flex items-start justify-between flex-wrap gap-2">
@@ -295,9 +323,15 @@ export default async function AdminIncidentsPage({
                           {INCIDENT_SEVERITY_LABEL[r.severity as IncidentSeverity] ?? r.severity}
                         </span>
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${INCIDENT_STATUS_BADGE[r.status as IncidentStatus] ?? ""}`}
+                          className={
+                            autoClosed
+                              ? "rounded-full border px-2 py-0.5 text-[11px] font-medium bg-green-50 text-green-700 border-green-200"
+                              : `rounded-full border px-2 py-0.5 text-[11px] font-medium ${INCIDENT_STATUS_BADGE[r.status as IncidentStatus] ?? ""}`
+                          }
                         >
-                          {INCIDENT_STATUS_LABEL[r.status as IncidentStatus] ?? r.status}
+                          {autoClosed
+                            ? "🤖 ปิดอัตโนมัติ — ระบบเขียวแล้ว"
+                            : (INCIDENT_STATUS_LABEL[r.status as IncidentStatus] ?? r.status)}
                         </span>
                         <span className="rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[11px] text-muted">
                           {INCIDENT_SOURCE_LABEL[r.source as IncidentSource] ?? r.source}
@@ -317,6 +351,15 @@ export default async function AdminIncidentsPage({
                       {assigneeLabel && (
                         <p className="text-[11px] text-muted">
                           ผู้รับผิดชอบ: <span className="font-medium text-foreground">{assigneeLabel}</span>
+                        </p>
+                      )}
+                      {/* Auto-close reason inline (not hidden behind the
+                          collapsed details) — staff must be able to tell
+                          "stale, already healed" from "real work item" at a
+                          glance, without clicking (AGENTS.md §0g). */}
+                      {autoClosed && r.resolution_note && (
+                        <p className="rounded-lg border border-green-200 bg-green-50 px-2 py-1 text-[11px] text-green-800">
+                          {r.resolution_note}
                         </p>
                       )}
                     </div>
@@ -346,7 +389,9 @@ export default async function AdminIncidentsPage({
                         {r.actor_role && <> · actor <code className="font-mono">{r.actor_role}</code></>}
                         {r.actor_ref && <> <code className="font-mono">{r.actor_ref}</code></>}
                       </p>
-                      {r.resolution_note && (
+                      {/* Human resolution note. An auto-close note is already
+                          rendered inline above — don't repeat it here. */}
+                      {r.resolution_note && !autoClosed && (
                         <p className="rounded-lg border border-green-200 bg-green-50 p-2 text-[11px] text-green-800">
                           บันทึกการแก้ไข: {r.resolution_note}
                         </p>

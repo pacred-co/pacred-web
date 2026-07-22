@@ -200,9 +200,17 @@ function SubmitForm({
 
   // Inline reuse-search over the dictionary as the submitter types the name.
   const [matches, setMatches] = useState<HsSearchRow[]>([]);
+  // Dropping the suggestions once the name is too short belongs to the CAUSE of the
+  // change (typing / the submit-reset below), not to the effect — clearing it in the
+  // effect body queued an extra render pass per keystroke
+  // (react-hooks/set-state-in-effect).
+  function onNameThChange(v: string) {
+    setNameTh(v);
+    if (v.trim().length < 2) setMatches([]);
+  }
   useEffect(() => {
     const q = nameTh.trim();
-    if (q.length < 2) { setMatches([]); return; }
+    if (q.length < 2) return;
     let cancelled = false;
     const tmr = setTimeout(() => {
       searchHsCodes(q, 5)
@@ -256,7 +264,7 @@ function SubmitForm({
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="block text-xs font-semibold mb-1">ชื่อสินค้า (ไทย) *</label>
-          <input value={nameTh} onChange={(e) => setNameTh(e.target.value)} className={inputCls} placeholder="เช่น แก้วเซรามิก" maxLength={300} />
+          <input value={nameTh} onChange={(e) => onNameThChange(e.target.value)} className={inputCls} placeholder="เช่น แก้วเซรามิก" maxLength={300} />
           {matches.length > 0 && (
             <div className="mt-1.5 rounded-md border border-sky-200 bg-sky-50/60 p-2 text-[11px]">
               <p className="font-semibold text-sky-800">มีในคลัง HS แล้ว — อาจตอบเองได้:</p>

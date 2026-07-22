@@ -416,10 +416,23 @@ export async function adminDeleteOrderItem(
       //    subtracted ONE unit of cprice (ignoring qty) and NEVER recomputed the THB
       //    total (front/back drift · owner 2026-07-10: ข้อมูลต้องตรงกัน). Mirrors the
       //    per-item refund recompute in service-orders-refund.ts.
-      const { data: remain } = await admin
+      //    💰 FAIL-CLOSED: a silent read failure here would leave `remain` null →
+      //    sumChn = 0 → the header UPDATE below would WIPE htotalpricechn/user to
+      //    (0 + hshippingchn) × hrate. The line is already deleted, so we stop
+      //    BEFORE writing a fabricated total and tell the admin to re-check.
+      const { data: remain, error: remainErr } = await admin
         .from("tb_order")
         .select("cprice, camount, crewallet")
         .eq("hno", d.h_no);
+      if (remainErr) {
+        console.error(`[tb_order remaining-lines recompute] failed`, {
+          code: remainErr.code, message: remainErr.message, hno: d.h_no,
+        });
+        return {
+          ok: false,
+          error: `ลบรายการสำเร็จ แต่คำนวณยอดรวมใหม่ไม่สำเร็จ (ยอดในหัวบิลยังไม่ถูกแก้ไข) — กรุณาเปิดออเดอร์ตรวจยอดอีกครั้ง: ${remainErr.message}`,
+        };
+      }
       const sumChn = (remain ?? [])
         .filter((r) => String((r as { crewallet?: string | null }).crewallet ?? "") !== "1")
         .reduce((a, r) => a + roundUp(Number((r as { cprice?: number | string | null }).cprice ?? 0) * Number((r as { camount?: number | null }).camount ?? 0), 2), 0);

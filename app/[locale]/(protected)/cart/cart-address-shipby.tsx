@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
 import {
   MapPin,
   Truck,
@@ -307,13 +308,13 @@ export function CartAddressShipBy(props: CartAddressShipByProps) {
                   <MapPin className="w-4 h-4" strokeWidth={2.2} />
                   {t("addAddressOrPickup")}
                 </button>
-                <a
+                <Link
                   href="/addresses"
                   className="inline-flex items-center gap-1 rounded-full bg-white text-primary-600 border-2 border-primary-600 text-[12.5px] font-bold px-3.5 py-2 hover:bg-primary-50 transition-colors"
                 >
                   <ChevronRight className="w-3.5 h-3.5" strokeWidth={2.5} />
                   {t("addNewAddress")}
-                </a>
+                </Link>
               </div>
             </div>
           )}

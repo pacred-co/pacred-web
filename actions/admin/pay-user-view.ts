@@ -557,7 +557,17 @@ export async function listPayUserHistory(
 
     if (q) {
       // search on member code OR reference (order/forwarder id) OR admin.
-      query = query.or(`userid.ilike.%${q}%,reforder.ilike.%${q}%,adminidcrate.ilike.%${q}%`);
+      // `.or()` takes a RAW PostgREST filter string, so `,` `(` `)` and `"` in
+      // the term break its grammar → PostgREST 400 → the page shows a db_error
+      // banner for what looks like an ordinary search (pasting a comma-joined
+      // reference list is the easy way to hit it). Strip the grammar chars
+      // instead of failing; READ-ONLY, no money/logic change.
+      const safeQ = q.replace(/[,()"\\]/g, " ").trim();
+      if (safeQ) {
+        query = query.or(
+          `userid.ilike.%${safeQ}%,reforder.ilike.%${safeQ}%,adminidcrate.ilike.%${safeQ}%`,
+        );
+      }
     }
     query = query.range(from, to);
 

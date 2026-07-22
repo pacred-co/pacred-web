@@ -17,6 +17,7 @@
  * §0g self-explaining (icon + title + meaning + date + next) · §0h text ≥ 11px.
  */
 
+import { Link } from "@/i18n/navigation";
 import type { ContainerJourney, JourneyStage } from "@/lib/admin/container-journey";
 import type { WechatForwarderContext } from "@/lib/admin/wechat-forwarder-context";
 
@@ -185,7 +186,7 @@ export function ContainerJourneyPanel({
               <div className="px-3 py-1.5 border-t border-border text-[11px] text-muted">
                 แสดง 5 จาก {wechat.messages.length}
                 {wechat.truncated ? "+" : ""} ข้อความ · ดูทั้งหมดที่{" "}
-                <a href="/admin/wechat-ops" className="text-primary-600 hover:underline">/admin/wechat-ops</a>
+                <Link href="/admin/wechat-ops" className="text-primary-600 hover:underline">/admin/wechat-ops</Link>
               </div>
             )}
           </div>

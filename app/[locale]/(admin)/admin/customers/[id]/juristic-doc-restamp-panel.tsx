@@ -30,8 +30,8 @@ export function JuristicDocRestampPanel({ userid, autoLoad = true }: { userid: s
   const [loading, startLoad] = useTransition();
   const [saving, startSave] = useTransition();
 
-  const load = useCallback(() => {
-    setErr(null); setMsg(null);
+  // The fetch itself — every setState lands after the await, never synchronously.
+  const runLoad = useCallback(() => {
     startLoad(async () => {
       const res = await listCustomerJuristicDocs(userid);
       if (!res.ok) { setErr(res.error ?? "โหลดเอกสารไม่สำเร็จ"); setLoaded(true); return; }
@@ -44,7 +44,12 @@ export function JuristicDocRestampPanel({ userid, autoLoad = true }: { userid: s
     });
   }, [userid]);
 
-  useEffect(() => { if (autoLoad) load(); }, [autoLoad, load]);
+  // Clicking รีเฟรช / เปิด… also drops the previous error/success line.
+  const load = useCallback(() => { setErr(null); setMsg(null); runLoad(); }, [runLoad]);
+
+  // Mount-load goes straight to the fetch: err/msg are still null here, so the reset
+  // would be a no-op setState inside the effect (react-hooks/set-state-in-effect).
+  useEffect(() => { if (autoLoad) runLoad(); }, [autoLoad, runLoad]);
 
   if (!autoLoad && !loaded) {
     return (

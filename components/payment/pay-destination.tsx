@@ -47,32 +47,36 @@ export function PayDestination({
   // LOGISTICS / TRADING serve a static K-Shop image that may not be on disk yet.
   const [qrImgOk, setQrImgOk] = useState(true);
   // …and, when an amount is known, an amount-encoded QR decoded+rebuilt from it.
-  const [genQr, setGenQr] = useState<string | null>(null);
+  // Kept TOGETHER with the (image · amount) it was built for: `genQrUrl` below only
+  // accepts it while that key still matches the current payable, so a QR encoding a
+  // stale amount can never be shown. (The effect used to clear this synchronously
+  // before each rebuild — react-hooks/set-state-in-effect; the key does the same job
+  // one render pass earlier.)
+  const [genQr, setGenQr] = useState<{ key: string; url: string | null } | null>(null);
 
   const isPromptPay = account.channel === "promptpay";
   const hasAmount = amountThb != null && amountThb > 0;
+  const genKey = hasAmount ? `${account.qrImagePath ?? ""}|${amountThb}` : "";
 
   // For the QR-image lanes with a positive amount: decode the static merchant QR
   // and re-render one that encodes the exact payable. Failure → null → static PNG.
   useEffect(() => {
-    if (isPromptPay || !account.qrImagePath || !hasAmount) {
-      setGenQr(null);
-      return;
-    }
+    if (isPromptPay || !account.qrImagePath || !hasAmount) return;
     let alive = true;
-    setGenQr(null);
     buildAmountQrFromStaticImage(account.qrImagePath, amountThb!).then((url) => {
-      if (alive) setGenQr(url);
+      if (alive) setGenQr({ key: genKey, url });
     });
     return () => {
       alive = false;
     };
-  }, [isPromptPay, account.qrImagePath, hasAmount, amountThb]);
+  }, [isPromptPay, account.qrImagePath, hasAmount, amountThb, genKey]);
 
-  const isGeneratedAmountQr = !isPromptPay && genQr != null;
+  // Only ever the QR built for THIS image + THIS amount (never a stale one).
+  const genQrUrl = !isPromptPay && hasAmount && genQr?.key === genKey ? genQr.url : null;
+  const isGeneratedAmountQr = !isPromptPay && genQrUrl != null;
   const qrToShow = isPromptPay
     ? (serviceQrDataUrl ?? null)
-    : (genQr ?? (qrImgOk && account.qrImagePath ? account.qrImagePath : null));
+    : (genQrUrl ?? (qrImgOk && account.qrImagePath ? account.qrImagePath : null));
 
   return (
     <div

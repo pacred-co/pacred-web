@@ -74,7 +74,15 @@ export default async function CustomsLeadsPage({ searchParams }: { searchParams:
   const rows = (data ?? []) as Lead[];
 
   // summary counts (over the whole table, not the filtered view)
-  const { data: allRows } = await admin.from("customs_importer_lead").select("is_existing, lead_status, decl_count, total_cif");
+  // FAIL-LOUD: every headline number on this page (N บริษัท · N ใบขน · the 4 tab
+  // counts · 🔔 ต้องโทร) derives from this read. A silent failure would render
+  // "0 บริษัท / ต้องโทร 0" — telling sales there is no one to call. Throw so Next
+  // shows a real error boundary instead of a confident lie.
+  const { data: allRows, error: allErr } = await admin.from("customs_importer_lead").select("is_existing, lead_status, decl_count, total_cif");
+  if (allErr) {
+    console.error("[customs-leads summary] failed", { code: allErr.code, message: allErr.message });
+    throw new Error(`customs-leads summary load failed: ${allErr.message}`);
+  }
   const all = (allRows ?? []) as Array<{ is_existing: boolean; lead_status: string; decl_count: number; total_cif: number | string }>;
   const existingCount = all.filter((r) => r.is_existing).length;
   const newCount = all.filter((r) => !r.is_existing && r.lead_status !== "our_own").length;
@@ -91,7 +99,14 @@ export default async function CustomsLeadsPage({ searchParams }: { searchParams:
 
   // transport tabs (owner 2026-07-16 "แยก tab ให้ด้วย ทั้งหมด รถ เรือ แอร์") —
   // counts over the whole table so a tab never reads 0 just because of the view.
-  const { data: modeRows } = await admin.from("customs_importer_lead").select("transports");
+  // FAIL-LOUD for the same reason as the summary read: a silent failure sets every
+  // transport tab (ทุกทาง/รถ/เรือ/แอร์) to 0 — exactly the misleading zero the
+  // comment above says these whole-table counts exist to prevent.
+  const { data: modeRows, error: modeErr } = await admin.from("customs_importer_lead").select("transports");
+  if (modeErr) {
+    console.error("[customs-leads transport counts] failed", { code: modeErr.code, message: modeErr.message });
+    throw new Error(`customs-leads transport counts load failed: ${modeErr.message}`);
+  }
   const modeAll = (modeRows ?? []) as Array<{ transports: string[] | null }>;
   const modeCount = (m: string) => modeAll.filter((r) => (r.transports ?? []).includes(m)).length;
   const T_TABS: Array<{ key: string; label: string; count: number }> = [

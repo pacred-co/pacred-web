@@ -6,6 +6,9 @@ import { PayUserAddClient } from "./pay-user-add-client";
 import { PayUserHistoryTable } from "./pay-user-history-table";
 import { PageSizeSelect } from "@/components/admin/page-size-select";
 import { parsePageSize } from "@/lib/admin/paginate";
+import { isNextControlFlowError } from "@/lib/observability/next-control-flow";
+import type { AdminActionResult } from "@/actions/admin/common";
+import type { PayUserHistoryRow } from "@/actions/admin/pay-user-view";
 
 /** จำนวนแถวต่อหน้า (owner 2026-07-16 · ตามภาพ) — เริ่ม 10/25 ที่จำกัด list สั้นๆ ได้จริง. */
 const PAY_USER_SIZES = [10, 25, 50, 100, 200, 400] as const;
@@ -51,7 +54,37 @@ export default async function AdminWalletPayUserPage({
   const page = Math.max(1, Number(sp.page ?? "1") || 1);
   const q = (sp.q ?? "").trim();
   const size = parsePageSize(sp.size, PAY_USER_SIZES);
-  const res = await listPayUserHistory({ page, q, pageSize: size });
+
+  // ── Fail SOFT, never 500 ───────────────────────────────────────────────
+  // `withAdmin` does NOT catch — anything the loader throws (a PostgREST
+  // transport error · a malformed `?q=` reaching the `.or()` filter · a null
+  // deref while shaping a legacy row) escapes into the Server-Component render
+  // and the whole page 500s with only an opaque digest. Prod hit exactly this:
+  // 5 occurrences of digest 1620674152 on /admin/wallet/pay-user over
+  // 2026-07-16→17. The page ALREADY renders `res.error` in a red banner, so a
+  // throw is strictly worse than the failure shape it already handles — funnel
+  // one into the other and the money page stays usable (search + ทำรายการใหม่
+  // still work) instead of blanking.
+  //
+  // Next control-flow sentinels (redirect() from requireAdmin, notFound(), an
+  // HTTP-error fallback) MUST be re-thrown untouched or auth would break.
+  let res: AdminActionResult<{ rows: PayUserHistoryRow[]; total: number; page: number; pageSize: number }>;
+  try {
+    res = await listPayUserHistory({ page, q, pageSize: size });
+  } catch (e) {
+    if (isNextControlFlowError(e)) throw e;
+    console.error("[admin/wallet/pay-user listPayUserHistory] threw", {
+      page,
+      size,
+      hasQuery: q.length > 0,
+      message: e instanceof Error ? e.message : String(e),
+    });
+    res = {
+      ok: false,
+      error: "โหลดประวัติการจ่ายเงินแทนลูกค้าไม่สำเร็จ — กรุณาลองใหม่ หรือล้างคำค้นหาแล้วลองอีกครั้ง",
+    };
+  }
+
   const rows = res.ok ? res.data!.rows : [];
   const total = res.ok ? res.data!.total : 0;
   const pageSize = res.ok ? res.data!.pageSize : 50;

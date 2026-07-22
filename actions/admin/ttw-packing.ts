@@ -73,11 +73,17 @@ export async function adminAssignTtwPackingPr(
     let found = false;
     let customerName: string | null = null;
     if (memberCode) {
-      const { data: u } = await admin
+      const { data: u, error: uErr } = await admin
         .from("tb_users")
         .select("userID, userName")
         .eq("userID", memberCode)
         .maybeSingle();
+      if (uErr) {
+        // Soft-fail — this lookup is display feedback only and does NOT gate the
+        // write below (CS may legitimately enter a PR not yet in tb_users). Log
+        // it so a real DB fault isn't mistaken for "PR ยังไม่มีในระบบ".
+        console.error("[ttw assign-pr] member lookup failed", { memberCode, code: uErr.code, message: uErr.message });
+      }
       if (u) {
         found = true;
         customerName = (u as { userName?: string | null }).userName?.trim() || null;
