@@ -58,6 +58,8 @@ export type SummaryRow = {
   orderNo: string;
   /** ftrackingchn (truncated). */
   tracking: string;
+  /** fcabinetnumber — เลขตู้; "" when not yet assigned. */
+  cabinet: string;
   /** ftransporttype label — รถ / เรือ / -. */
   transport: string;
   /** fwarehousechina label — กวางโจว / อี้อู / -. */
@@ -68,6 +70,10 @@ export type SummaryRow = {
   weight: number;
   /** fvolume (CBM). */
   volume: number;
+  /** fwidth/flength/fheight — ขนาดกล่อง ก×ย×ส (ซม.); 0 when unset. */
+  width: number;
+  length: number;
+  height: number;
   /** fproductstype label — ทั่วไป / มอก. / อย. / พิเศษ / -. */
   productType: string;
   /** frefrate. */
@@ -255,23 +261,25 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
             <table style={{ width: "100%", borderCollapse: "collapse", background: TINT_BG, tableLayout: "fixed" }}>
               <thead>
                 <tr>
-                  <Th w="4%"  th="ลำดับ"        en="No." center />
-                  <Th w="8%"  th="เลขที่ออเดอร์" en="Order" center />
-                  <Th w="17%" th="รหัสพัสดุ"     en="Tracking" left />
-                  <Th w="7%"  th="ขนส่ง"        en="Ship" center />
-                  <Th w="9%"  th="จากเมือง"      en="From" center />
-                  <Th w="6%"  th="จำนวน"        en="Box" right />
-                  <Th w="8%"  th="น้ำหนัก"       en="Wt·kg" right />
-                  <Th w="10%" th="ปริมาตร"      en="CBM" right />
-                  <Th w="8%"  th="ประเภท"       en="Type" center />
-                  <Th w="9%"  th="เรทราคา"      en="Rate" right />
-                  <Th w="14%" th="ค่าขนส่ง"      en="Amount" right />
+                  <Th w="3%"  th="ลำดับ"        en="No." center />
+                  <Th w="10%" th="เลขที่ออเดอร์" en="Order" center nowrap />
+                  <Th w="10%" th="รหัสพัสดุ"     en="Tracking" left />
+                  <Th w="9%"  th="เลขตู้"        en="Container" center />
+                  <Th w="5%"  th="ขนส่ง"        en="Ship" center />
+                  <Th w="7%"  th="จากเมือง"      en="From" center />
+                  <Th w="5%"  th="จำนวน"        en="Box" right />
+                  <Th w="7%"  th="น้ำหนัก"       en="Wt·kg" right />
+                  <Th w="8%"  th="ปริมาตร"      en="CBM" right />
+                  <Th w="10%" th="ขนาด(ก×ย×ส)"  en="W×L×H·ซม." center />
+                  <Th w="6%"  th="ประเภท"       en="Type" center />
+                  <Th w="7%"  th="เรทราคา"      en="Rate" right />
+                  <Th w="13%" th="ค่าขนส่ง"      en="Amount" right />
                 </tr>
               </thead>
               <tbody>
                 {p.rows.length === 0 ? (
                   <tr>
-                    <td colSpan={11} style={{ padding: "8px 4px", textAlign: "center", fontSize: "10px", color: "#6b7280", background: "#fff" }}>
+                    <td colSpan={13} style={{ padding: "8px 4px", textAlign: "center", fontSize: "10px", color: "#6b7280", background: "#fff" }}>
                       ไม่พบรายการ
                     </td>
                   </tr>
@@ -281,6 +289,7 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
                       <td style={tdC}>{r.no}</td>
                       <td style={tdMonoC}>#{r.orderNo}</td>
                       <td style={tdMono}>{r.tracking || "—"}</td>
+                      <td style={{ ...tdMonoC, color: "#374151" }}>{r.cabinet || "—"}</td>
                       <td style={{ ...tdMonoC, fontWeight: "bold", color: r.transport === "เรือ" ? "#1d4ed8" : r.transport === "รถ" ? "#b45309" : "#6b7280" }}>
                         {r.transport || "—"}
                       </td>
@@ -288,6 +297,7 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
                       <td style={tdNum}>{fmt0(r.boxes)}</td>
                       <td style={tdNum}>{fmt2(r.weight)}</td>
                       <td style={tdNum}>{fmt5(r.volume)}</td>
+                      <td style={{ ...tdC, fontSize: "8px", color: "#374151", fontFamily: "monospace" }}>{dimsCm(r.width, r.length, r.height)}</td>
                       <td style={{ ...tdC, fontSize: "8px", color: "#374151" }}>{r.productType || "—"}</td>
                       <td style={tdNum}>{r.rate > 0 ? fmt2(r.rate) : "—"}</td>
                       <td style={tdNum}>{fmt2(r.amount)}</td>
@@ -440,10 +450,15 @@ const tdMono  = { padding: "3px 3px", fontSize: "8px", wordBreak: "break-all" as
 const tdMonoC = { ...tdMono, textAlign: "center" as const };
 const tdNum   = { padding: "3px 3px", fontSize: "9px", textAlign: "right" as const, fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" };
 
-function Th({ w, th, en, left, center, right }: { w: string; th: string; en: string; left?: boolean; center?: boolean; right?: boolean }) {
+/** ขนาดกล่อง กว้าง×ยาว×สูง (ซม.) — "—" when no dimension is set (owner ปอน 2026-07-22). */
+function dimsCm(w: number, l: number, h: number): string {
+  return w > 0 || l > 0 || h > 0 ? `${w}×${l}×${h}` : "—";
+}
+
+function Th({ w, th, en, left, center, right, nowrap }: { w: string; th: string; en: string; left?: boolean; center?: boolean; right?: boolean; nowrap?: boolean }) {
   const align = left ? "left" : center ? "center" : right ? "right" : "left";
   return (
-    <th style={{ textAlign: align as "left" | "center" | "right", padding: "4px 3px", width: w, fontSize: "9px", fontWeight: "bold", color: "#374151" }}>
+    <th style={{ textAlign: align as "left" | "center" | "right", padding: "4px 3px", width: w, fontSize: "9px", fontWeight: "bold", color: "#374151", whiteSpace: nowrap ? "nowrap" : undefined }}>
       {th}<br /><span style={{ fontSize: "8px", fontWeight: "normal", color: "#6b7280" }}>{en}</span>
     </th>
   );

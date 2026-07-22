@@ -259,6 +259,10 @@ export type PayUserFwdRow = {
   weight: number;
   cbm: number;
   boxes: number;
+  // ขนาดกล่อง ก×ย×ส (ซม.) — tb_forwarder.fwidth/flength/fheight (owner ปอน 2026-07-22)
+  fwidth: number;
+  flength: number;
+  fheight: number;
   adminid_key: string | null;
   // เลขพัสดุจีน
   ftrackingchn: string | null;
@@ -287,7 +291,7 @@ const FWD_VIEW_COLS =
   "id, fdate, fshipby, paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, " +
   "ftransportpricechnthb, priceother, fdiscount, fusercompany, ftrackingchn, fstatus, fcredit, " +
   "fdatetothai, ftransporttype, fcover, fdetail, fproductstype, adminidcreator, reforder, " +
-  "fnote, fnoteuser, fweight, fvolume, famount, famountcount, adminidkey, fcabinetnumber, " +
+  "fnote, fnoteuser, fweight, fvolume, fwidth, flength, fheight, famount, famountcount, adminidkey, fcabinetnumber, " +
   "fdatecontainerclose, fpallet, ftrackingth, fdatestatus2, fdatestatus3, fdatestatus4, adminidupdate, fdateadminstatus";
 
 type FwdRaw = ForwarderDebitRow & {
@@ -296,6 +300,7 @@ type FwdRaw = ForwarderDebitRow & {
   fdatetothai: string | null; ftransporttype: string | null; fcover: string | null; fdetail: string | null;
   fproductstype: string | null; adminidcreator: string | null; reforder: string | null; fnote: string | null;
   fnoteuser: string | number | null; fweight: number | string | null; fvolume: number | string | null;
+  fwidth: number | string | null; flength: number | string | null; fheight: number | string | null;
   famount: number | string | null; famountcount: number | string | null; adminidkey: string | null;
   fcabinetnumber: string | null; fdatecontainerclose: string | null; fpallet: string | null;
   ftrackingth: string | null; fdatestatus2: string | null; fdatestatus3: string | null;
@@ -390,6 +395,9 @@ export async function getPayUserForwarderView(
         weight: num(r.fweight),
         cbm,
         boxes: num(r.famount),
+        fwidth: num(r.fwidth),
+        flength: num(r.flength),
+        fheight: num(r.fheight),
         adminid_key: (r.adminidkey ?? "").trim() || null,
         ftrackingchn: (r.ftrackingchn ?? "").trim() || null,
         fcabinetnumber: (r.fcabinetnumber ?? "").trim() || null,
