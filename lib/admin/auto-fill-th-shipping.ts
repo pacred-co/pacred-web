@@ -5,7 +5,7 @@ import {
   type AutoThShippingFill,
 } from "@/lib/forwarder/domestic-shipping";
 import { isMaoCarrier } from "@/lib/forwarder/mao-fee";
-import { isOwnFleetCarrier } from "@/lib/forwarder/carrier-coverage-guard";
+import { isPayAtOriginCarrier } from "@/lib/forwarder/pay-method";
 
 /**
  * autoFillThShippingForForwarder — พี่ป๊อป spec #7 (owner 2026-07-08 · "ต้อง auto").
@@ -69,25 +69,28 @@ export async function autoFillThShippingForForwarder(
   const cab = (row.fcabinetnumber ?? "").trim();
   let shipmentIsMao = isMaoCarrier(row.fshipby);
   if (!shipmentIsMao && (row.fshipby ?? "").trim() === "" && cab && row.userid) {
-    const { data: sib } = await admin
+    const { data: sib, error: sibErr } = await admin
       .from("tb_forwarder")
       .select("id")
       .eq("userid", row.userid)
       .eq("fcabinetnumber", cab)
       .in("fshipby", ["PCSF", "PRF"])
       .limit(1);
+    if (sibErr) console.error(`[autoFillThShipping mao-sib] failed`, { code: sibErr.code, message: sibErr.message, userid: row.userid, cab });
     shipmentIsMao = !!(sib && sib.length > 0);
   }
   if (shipmentIsMao) return null; // เหมาๆ = ฿100 flat only · never a per-tracking domestic leg
 
-  // 🔒 COD LOCK (owner 2026-07-21 "พอเลือกชำระปลายทาง ก็ต้องไม่ใส่ ค่าขนส่งไทย · ควรเป็น 0")
+  // 🔒 CARRIER LOCK (owner พี่ป๊อป 2026-07-21 "พอเลือกชำระปลายทาง ก็ต้องไม่ใส่ ค่าขนส่งไทย · ควรเป็น 0")
   // A ปลายทาง row is collected by the courier at the door — Pacred must store NO domestic
   // charge on it, so there is nothing to auto-fill. Two ways a row is COD: its stored
-  // paymethod is already '2', or its carrier is a private courier (which this rule now
-  // forces to '2' anyway · lib/forwarder/pay-method.ts enforceCodDomesticZero).
+  // paymethod is already '2', or its carrier is NOT pay-at-origin (a non own-fleet, non
+  // Flash/J&T/ไปรษณีย์ courier — which the lock forces to '2' anyway). Flash/J&T/ไปรษณีย์
+  // are ต้นทาง now (Pacred prepays), so they DO auto-fill their ค่าส่งไทย · lib/forwarder/
+  // pay-method.ts isPayAtOriginCarrier.
   const storedPayMethod = String(row.paymethod ?? "").trim();
-  const carrierIsPrivate = (row.fshipby ?? "").trim() !== "" && !isOwnFleetCarrier(row.fshipby);
-  if (storedPayMethod === "2" || carrierIsPrivate) return null;
+  const carrierIsCod = (row.fshipby ?? "").trim() !== "" && !isPayAtOriginCarrier(row.fshipby);
+  if (storedPayMethod === "2" || carrierIsCod) return null;
 
   // girth (w+l+h, cm) — Flash prices by max(kg, size); pass it so a light/bulky
   // parcel isn't under-quoted. 0 when dims are unknown (weight-only path is safe).

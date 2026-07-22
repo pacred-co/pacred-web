@@ -996,51 +996,30 @@ export function EditCrateField({ fId, crate, pricecrate }: { fId: number; crate:
  *  is auto-filled + billed upfront). COD (ปลายทาง) is a MANUAL choice only, shown in
  *  red when the stored paymethod === "2" (the customer asked for เอกชน ปลายทาง). The
  *  dropdown stays editable behind the EditableRow "แก้ไข" toggle. */
+/**
+ * 🔒 READ-ONLY (owner พี่ป๊อป 2026-07-21 "ให้ล็อคไปเลย"). การเก็บเงินค่าขนส่งในไทย
+ * ถูกล็อคตามบริษัทขนส่ง — ไม่มีปุ่มแก้มือ. เปลี่ยนได้ทางเดียว = เปลี่ยนขนส่งในช่อง
+ * "บริษัทขนส่ง" (adminUpdateForwarderShipBy → enforceCodDomesticZero ตั้ง paymethod
+ * ตามขนส่งให้เอง). โชว์ค่า paymethod ที่บันทึกไว้ (= ค่าที่บิลใช้จริง) + เหตุผลล็อค.
+ */
 export function EditPayMethodField({
-  fId,
   paymethod,
-  zip: _zip,
-  fshipby: _fshipby,
+  fshipby,
 }: { fId: number; paymethod: string | null; zip?: string | null; fshipby?: string | null }) {
-  const { pending, err, run } = useEditor();
-  const [editing, setEditing] = useState(false);
-  const isManualCod = paymethod === "2"; // stored "2" = admin chose ปลายทาง COD
-  const initialPay = (paymethod === "2" ? "2" : "1") as "1" | "2";
-  const [payVal, setPayVal] = useState<"1" | "2">(initialPay);
-  const payDisplay = isManualCod ? "ปลายทาง COD (ลูกค้าขอ)" : "ต้นทาง (คิดค่าส่งจริง)";
+  const carrier = (fshipby ?? "").trim();
+  const isCod = paymethod === "2"; // ค่าที่บันทึก = ค่าที่บิลใช้จริง
+  const ruleLabel = isCod ? "ปลายทาง COD" : "ต้นทาง (คิดค่าส่งจริง)";
   return (
-    <div>
-      {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
-      <EditableRow
-        compact
-        label="การเก็บเงินค่าขนส่งในไทย"
-        editing={editing}
-        setEditing={setEditing}
-        display={
-          <span className="inline-flex flex-col gap-0.5">
-            <span className={isManualCod ? "rounded bg-red-50 text-red-700 px-1.5 py-0.5 text-xs font-medium" : "text-foreground"}>
-              {payDisplay}
-            </span>
-          </span>
-        }
-      >
-        {(close) => (
-          <>
-            <p className="text-[11px] text-muted-foreground mb-1">
-              ค่าเริ่มต้น: ต้นทาง (คิดค่าส่งจริง) — เลือก “ปลายทาง COD” หากลูกค้าขอเก็บปลายทาง
-            </p>
-            <select className={selectCls} value={payVal} onChange={(e) => setPayVal(e.target.value as "1" | "2")}>
-              <option value="1">ต้นทาง (คิดค่าส่งจริง)</option>
-              <option value="2">ปลายทาง COD (ลูกค้าขอ)</option>
-            </select>
-            <div className="flex gap-2">
-              <button type="button" disabled={pending} className={btnSave}
-                onClick={() => run(() => adminUpdateForwarderPayMethod({ fId, paymethod: payVal }), close)}>บันทึก</button>
-              <button type="button" disabled={pending} className={btnCancel} onClick={close}>ยกเลิก</button>
-            </div>
-          </>
-        )}
-      </EditableRow>
+    <div className="text-sm text-foreground">
+      <p>
+        <b className="font-semibold">การเก็บเงินค่าขนส่งในไทย : </b>
+        <span className={isCod ? "rounded bg-red-50 text-red-700 px-1.5 py-0.5 text-xs font-semibold" : "font-semibold"}>
+          {ruleLabel}
+        </span>
+      </p>
+      <p className="text-[11px] text-muted-foreground mt-0.5">
+        🔒 ล็อคอัตโนมัติตามขนส่ง{carrier ? ` (${carrierLabel(carrier)})` : ""} — เปลี่ยนได้ที่ช่อง “บริษัทขนส่ง”
+      </p>
     </div>
   );
 }
