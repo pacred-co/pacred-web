@@ -11,6 +11,7 @@
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { momoTypeToProductType } from "@/lib/admin/momo-live-discovery-plan";
@@ -30,10 +31,14 @@ export const dynamic = "force-dynamic";
 // ดู/ชั่งของจริงฝั่งจีน. หน้า /admin/api-forwarder-momo/live ภายในถูกยุบเข้า hub นี้แล้ว
 // (2026-07-20) จึงลิงก์ออกเว็บนอกตรงๆ · เปิดแท็บใหม่ (พนักงานไม่เสียหน้าตรวจตู้ที่ค้างอยู่).
 const MOMO_LIVE_URL = "https://www.momocargo.com/";
-const HUB_LINKS: { href: string; label: string; external?: boolean }[] = [
+// owner 2026-07-22 "เอามาเพิ่มอยู่ในหน้านี้ให้ทีครับ เป็นเมนูเข้าไป … เราจะใช้หน้านี้หน้าเดียว
+// เท่านั้นครับ ของ MOMO ทั้งหมด" — บิลต้นทุน + ตัดจ่าย เดิมอยู่คนละที่ (ผิดกลุ่ม) → เข้าจาก hub นี้.
+// `cost` = เห็นเฉพาะสิทธิ์ต้นทุน (ultra/accounting/pricing) กันคลิกตาย (§0d).
+const HUB_LINKS: { href: string; label: string; external?: boolean; cost?: boolean }[] = [
   { href: "/admin/api-forwarder-momo/sync", label: "📥 Sync จาก MOMO API" },
   { href: "/admin/api-forwarder-momo/packing-upload", label: "📦 อัพ packing list (จาก MOMO)" },
   { href: "/admin/api-forwarder-momo/manual", label: "✍️ เพิ่มงานเอง (manual)" },
+  { href: "/admin/api-forwarder-momo/invoice-cost", label: "💰 บิลต้นทุน MOMO (ตรวจ · บันทึก · ตัดจ่าย)", cost: true },
   { href: MOMO_LIVE_URL, label: "🌐 เปิด MOMO Live (เว็บ MOMO)", external: true },
 ];
 
@@ -56,7 +61,9 @@ function displayBoxesOf(boxes: BoxConsistencyInput[] | undefined): IngestBoxRow[
 }
 
 export default async function MomoContainersPage() {
-  await requireAdmin(["super", "ops", "warehouse"]);
+  const { roles } = await requireAdmin(["super", "ops", "warehouse"]);
+  const showCostLinks = canViewCostProfit(roles);
+  const hubLinks = HUB_LINKS.filter((l) => !l.cost || showCostLinks);
   const admin = createAdminClient();
 
   // Every MOMO-synced tracking (committed + pending), newest-sync first.
@@ -417,7 +424,7 @@ export default async function MomoContainersPage() {
           {" "}กดเลขตู้เพื่อดูรายละเอียดทั้งตู้.
         </p>
         <div className="flex flex-wrap gap-2 pt-1">
-          {HUB_LINKS.map((l) =>
+          {hubLinks.map((l) =>
             // external (MOMO's own site) → plain <a target=_blank>; the i18n <Link>
             // would prefix the locale onto an absolute URL. rel=noreferrer keeps our
             // admin URL out of their referer log.

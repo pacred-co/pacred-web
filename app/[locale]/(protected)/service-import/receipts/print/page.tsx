@@ -601,9 +601,12 @@ export default async function ServiceImportReceiptPrintPage({
         dis1per = 0;
       } else if (
         diff0(amountPayAll2, amountPayAll) <= 1200 &&
-        amountPayAll2 > 1000
+        amountPayAll2 > 0
       ) {
-        // WHT 1% withheld.
+        // WHT 1% withheld. owner 2026-07-22: the ฿1,000 minimum was abolished, so a
+        // small juristic receipt that withheld 1% (net ≈ stored paid amount) shows the
+        // line too. Forward-only: a receipt paid IN FULL hits the exact-paid branch above
+        // (no WHT line) so already-settled small orders are unchanged.
         textPer1 = '<div>LESS WITHHOLDING TAX 1%</div>';
         pricPer1Visible = true;
         pricPer1Value = dis1per;

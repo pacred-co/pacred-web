@@ -26,19 +26,29 @@ export default async function MomoInvoiceCostPage() {
       <nav className="flex items-center gap-1.5 text-xs text-muted">
         <Link href="/admin" className="hover:text-primary-600">Admin</Link>
         <span>›</span>
-        <Link href="/admin/api-forwarder-momo" className="hover:text-primary-600">MOMO</Link>
+        <Link href="/admin/momo-containers" className="hover:text-primary-600">MOMO</Link>
         <span>›</span>
-        <span className="text-foreground font-medium">ต้นทุนจากใบแจ้งหนี้</span>
+        <span className="text-foreground font-medium">บิลต้นทุน MOMO</span>
       </nav>
 
-      <header>
-        <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · MOMO · INVOICE COST</p>
-        <h1 className="mt-1 text-2xl font-bold">ลงต้นทุนจากใบแจ้งหนี้ MOMO</h1>
-        <p className="mt-1.5 text-sm text-muted">
-          <strong>อัปไฟล์ PDF ใบแจ้งหนี้ที่ MOMO (ฮุย ไท่ต๋า) ส่งมาได้เลย</strong> — ระบบจะลงเป็น{" "}
-          <strong>ต้นทุนจริง</strong> ต่อแทรคกิ้ง ตรงตามบิลผู้ขาย (แม่นกว่าเรทตั้งต้น 2,500/คิว ที่บางบรรทัดต่างออกไป).
-          ตรวจตัวอย่างก่อนบันทึกเสมอ · เฉพาะสิทธิ์ ultra / accounting / pricing.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · MOMO · บิลต้นทุน</p>
+          <h1 className="mt-1 text-2xl font-bold">บิลต้นทุน MOMO — ตรวจ · บันทึกต้นทุน · ตัดจ่าย</h1>
+          <p className="mt-1.5 text-sm text-muted">
+            <strong>อัปไฟล์ PDF ใบแจ้งหนี้ที่ MOMO (ฮุย ไท่ต๋า) ส่งมาได้เลย</strong> →{" "}
+            <strong>ตรวจเทียบกับระบบ</strong> → กด <strong>“บันทึกต้นทุน”</strong> (ทีละรายการ หรือทั้งหมด) →{" "}
+            กด <strong>“ตัดจ่ายบิล”</strong> (ทีละรายการ หรือทั้งบิล) → ระบบออกเลขเอกสารตัดจ่าย + เก็บประวัติ + แนบสลิปย้อนหลังได้.
+            MOMO วางบิลมาเป็น <strong>แทรคกิ้ง</strong> (บางบิลมีหลายตู้) — ระบบจึงตัดจ่ายเป็น <strong>บิล</strong> ไม่ใช่ทั้งตู้.
+            เฉพาะสิทธิ์ ultra / accounting / pricing.
+          </p>
+        </div>
+        <Link
+          href="/admin/api-forwarder-momo/invoice-cost/history"
+          className="shrink-0 rounded-full border border-border bg-white dark:bg-surface px-4 py-2 text-sm font-medium shadow-sm hover:bg-surface-alt"
+        >
+          📜 ประวัติการตัดจ่าย
+        </Link>
       </header>
 
       {/* owner 2026-06-25 — กันงงเรื่อง "กดลงต้นทุนแล้วสถานะเด้งไปถึงโกดังจีน".

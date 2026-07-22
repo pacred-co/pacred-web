@@ -7,20 +7,40 @@ Last updated: 2026-06-09 — team & branch model clarified (4 contributors · cu
 
 ---
 
-## 0. The team — four contributors + the owner
+## 0. The team — contributors + the owner
 
-Pacred's codebase is built by **four** contributors. The owner sets direction and reviews the output; he does not commit code.
+Pacred's codebase is built by the contributors below. The owner sets direction and reviews the output; he does not commit code.
 
 | | Role | Branch |
 |---|---|---|
-| **เดฟ** (dave) | Project Lead & Integrator — owns the integration branch, merges everyone's work, gates the release to production. Executes the build on the owner's behalf. | `dave-pacred` |
+| **เดฟ** (dave) | Project Lead & Integrator — owns the integration branch, merges everyone's work, gates the release to production. Executes the build on the owner's behalf. **= Claude Code on BOTH of the owner's machines (Mac + work PC) — same identity, same branch.** | `dave-pacred` |
+| **Codex** | AI pair to เดฟ (OpenAI Codex on BOTH of the owner's machines). Tasking/flow-control · code review · test-running · helper implementation. See §0.1 for the joint workflow. | `codex` |
 | **ภูม** (Poom) | Backend · Admin back-office · Accounting / PEAK | `Poom-pacred` |
 | **ปอน** (podeng) | Frontend · Customer-portal UI · SEO / Marketing | `InwPond007` |
+| **เว็บ** (web) | Frontend lane (as assigned) | `web-pacred` |
 | **ก๊อต** (got) | Senior Advisor & Production Watcher — reviews `main` production alongside เดฟ and takes on delegated tasks (partner APIs, infra, releases). | `main` review + assigned |
 
 **Owner — founder & CEO.** Sets the product direction, reviews output, and makes the business calls. He is **not** a code contributor; เดฟ is his working counterpart on the codebase, and the single live integration branch is `dave-pacred`.
 
-> **Naming note for sync hand-offs.** Because เดฟ works on the owner's behalf, pull/sync hand-offs between contributors can blur who is being addressed. For the record: the only code contributors are the four above, and `dave-pacred` is the one integration branch — don't treat any other name as a separate committer.
+> **Naming note for sync hand-offs.** Because เดฟ works on the owner's behalf, pull/sync hand-offs between contributors can blur who is being addressed. For the record: `dave-pacred` = Claude (both machines) · `codex` = Codex (both machines) — machine changes never mean a new branch. Don't treat any other name as a separate committer, and **never create new remote branches** (Claude's local worktrees push `HEAD:dave-pacred`, nothing else).
+
+### 0.1 Claude × Codex joint workflow (owner directive 2026-07-22)
+
+The owner runs BOTH assistants on BOTH machines. They are teammates, not rivals — "ช่วยกันทำงาน อย่าตีกัน". The loop:
+
+1. **Claude (dave-pacred) — Planning & Architecture.** Head of the build: system design, DB schema, migrations, API/action specs, the money-path decisions, and the big implementation work in its own local worktrees.
+2. **Codex (codex) — Tasking & Flow.** Takes Claude's plans, breaks them into small tasks, paces the work, and implements helper/bounded tasks itself. Syncs from `dave-pacred` continuously.
+3. **Claude — Implementation** of the tasks that are architecture/money-critical.
+4. **Codex — Review & Test.** Reviews Claude's diffs, runs the automated tests, sends error logs back (fixes its own code itself; escalates to Claude only when stuck).
+5. **Loop** until green.
+6. **Codex merges its work into `dave-pacred` IN SEQUENCE (never force, never overwrite)** and waits for review-pull. **เดฟ (Claude) remains the only integrator to `main`** — after the owner's confirm.
+
+**Ground rules for both AIs (from the owner's brief):**
+- ห้ามเดา ห้ามมั่ว ห้ามข้ามขั้นตอน — ไม่เข้าใจให้หยุดแล้วถาม.
+- Before any work: read the repo docs (CLAUDE.md · every relevant `.md`) to catch up on team state.
+- Money paths follow the standing rules in CLAUDE.md/AGENTS.md (dry-run + backup before `--apply` · one SOT · never re-implement refund/credit math).
+- Migration numbers are claimed by checking `ls supabase/migrations | tail` at write time (two-AI collision risk is real — see the 0232 collision precedent).
+- Each side integrates the OTHER's branch before pushing shared work (Claude's routine: ตรวจงานน้อง now includes `codex` alongside `Poom-pacred`/`InwPond007`/`web-pacred`).
 
 ---
 

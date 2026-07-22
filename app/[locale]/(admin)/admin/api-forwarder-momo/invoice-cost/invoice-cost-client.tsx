@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useCallback, useRef, useState, useTransition } from "react";
 import { Link, useRouter } from "@/i18n/navigation";
 import {
   previewMomoInvoiceCost,
@@ -9,6 +9,10 @@ import {
   type MomoIngestPreviewRow,
   type MomoInvoiceCabinetRollup,
 } from "@/actions/admin/momo-invoice-ingest";
+import {
+  createMomoInvoiceSettlement,
+  getMomoSettledFids,
+} from "@/actions/admin/momo-invoice-settlement";
 
 const baht = (n: number | null) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -193,6 +197,70 @@ function RowOutcome({ r }: { r: MomoIngestPreviewRow }) {
   return <span className="text-green-700">✓ ตรงแล้ว</span>;
 }
 
+/** จับคู่ได้ · ตู้ตรง · ไม่ชี้ซ้ำ = ตัดจ่ายได้ (ไม่ผูกกับ willApply ซึ่งเช็คว่าต้นทุนต่างด้วย). */
+function rowEligibleToSettle(r: MomoIngestPreviewRow): boolean {
+  return r.matched && r.fid != null && !r.cabinetConflict && !r.duplicateFid;
+}
+
+type SettledMap = Record<number, { docNo: string; settlementId: number }>;
+
+/** ปุ่มรายแถว: ตัดจ่ายแล้ว (ชิปลิงก์ประวัติ) · หรือ บันทึกต้นทุน + ตัดจ่าย ตามสถานะ (§0d/§0g). */
+function RowActions({
+  r,
+  settled,
+  pending,
+  onApply,
+  onSettle,
+}: {
+  r: MomoIngestPreviewRow;
+  settled: SettledMap;
+  pending: boolean;
+  onApply: (fid: number) => void;
+  onSettle: (fid: number) => void;
+}) {
+  const s = r.fid != null ? settled[r.fid] : undefined;
+  if (s) {
+    return (
+      <Link
+        href={`/admin/api-forwarder-momo/invoice-cost/history/${s.settlementId}`}
+        className="mt-1 inline-flex items-center rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 hover:bg-emerald-200"
+        title="ดูเอกสารตัดจ่าย + แนบสลิป"
+      >
+        ✓ ตัดจ่ายแล้ว · {s.docNo}
+      </Link>
+    );
+  }
+  if (r.fid == null) return null;
+  const fid = r.fid;
+  const canSettle = rowEligibleToSettle(r);
+  if (!r.willApply && !canSettle) return null;
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {r.willApply && (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => onApply(fid)}
+          className="rounded bg-amber-500 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+        >
+          บันทึกต้นทุน
+        </button>
+      )}
+      {canSettle && (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => onSettle(fid)}
+          className="rounded bg-emerald-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+          title="ตัดจ่ายบิลเฉพาะรายการนี้ (ออกเลขเอกสาร + เก็บประวัติ)"
+        >
+          ตัดจ่าย
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function MomoInvoiceCostClient() {
   const router = useRouter();
   const [text, setText] = useState("");
@@ -201,13 +269,27 @@ export function MomoInvoiceCostClient() {
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [showPaste, setShowPaste] = useState(false);
+  // fid → เลขเอกสารตัดจ่ายที่ครอบแถวนี้อยู่ (non-void) — โชว์ชิป "ตัดจ่ายแล้ว" + คำนวณ "ที่เหลือ"
+  const [settled, setSettled] = useState<SettledMap>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pending, start] = useTransition();
+
+  /** ดึงว่าแถวไหน (fid) ถูกตัดจ่ายไปแล้ว — เรียกหลัง preview + หลังบันทึก/ตัดจ่าย. */
+  const refreshSettled = useCallback(async (rows: MomoIngestPreview["rows"]) => {
+    const fids = rows.map((r) => r.fid).filter((f): f is number => f != null);
+    if (fids.length === 0) { setSettled({}); return; }
+    const res = await getMomoSettledFids({ fids });
+    if (!res.ok || !res.data) { setSettled({}); return; }
+    const map: SettledMap = {};
+    for (const s of res.data.settled) map[s.fid] = { docNo: s.docNo, settlementId: s.settlementId };
+    setSettled(map);
+  }, []);
 
   /** ทุกครั้งที่เปลี่ยนแหล่งที่มา ต้องล้าง preview เก่าทิ้ง — กันกดบันทึกจากใบที่ไม่ได้ดูอยู่. */
   function resetTo(s: Source | null) {
     setMsg(null);
     setPreview(null);
+    setSettled({});
     setSource(s);
   }
 
@@ -217,6 +299,7 @@ export function MomoInvoiceCostClient() {
       const res = await previewMomoInvoiceCost(sourcePayload(s));
       if (!res.ok || !res.data) { setMsg({ kind: "err", text: res.ok ? "อ่านไม่สำเร็จ" : res.error }); return; }
       setPreview(res.data);
+      void refreshSettled(res.data.rows);
       if (res.data.rows.length === 0) {
         setMsg({
           kind: "err",
@@ -250,24 +333,58 @@ export function MomoInvoiceCostClient() {
     runPreview({ kind: "pdf", fileBase64: b64, fileName: file.name });
   }
 
-  function doApply() {
+  /** re-run preview จากแหล่งเดิม + refresh ชิปตัดจ่าย — ใช้หลังทุก action ที่เปลี่ยนสถานะ. */
+  async function reloadPreview(s: Source) {
+    const re = await previewMomoInvoiceCost(sourcePayload(s));
+    if (re.ok && re.data) { setPreview(re.data); await refreshSettled(re.data.rows); }
+  }
+
+  /** บันทึกต้นทุน — ทั้งหมด (onlyFids ว่าง) หรือรายการเดียว (onlyFids=[fid]). owner: "แสดงผล
+   *  กลับของ action นั้นๆ" → โชว์ เขียน/ข้าม รายผล. */
+  function doApply(onlyFids?: number[]) {
     if (!preview || !source) return;
-    const n = preview.summary.willApply;
-    if (n === 0) { setMsg({ kind: "err", text: "ไม่มีรายการที่ต้องอัปเดต" }); return; }
-    const blocked = preview.summary.blocked;
-    // §0f — ยืนยันก่อนเขียนเงิน + บอกให้ครบว่าอะไรจะถูกข้าม (ไม่ใช่ "ผิดพลาด N" ลอยๆ)
-    const warn = blocked > 0 ? `\n\n⚠️ มี ${blocked} บรรทัดที่ถูกบล็อกและจะไม่ถูกบันทึก (ตู้ไม่ตรง / ไม่พบในระบบ) — ดูเหตุผลรายบรรทัดในตาราง` : "";
-    const from = source.kind === "pdf" ? `\nจากไฟล์: ${source.fileName}` : "";
-    if (!window.confirm(`บันทึกต้นทุนจากใบแจ้งหนี้ MOMO ${preview.invoiceNo ?? ""}${from}\nจำนวน ${n} แทรคกิ้ง · รวม ฿${baht(preview.rows.filter((r) => r.willApply).reduce((a, r) => a + r.invoiceCost, 0))}\n(ตู้ที่จ่ายเงินแล้วจะถูกข้าม)${warn}\n\nยืนยันบันทึก?`)) return;
+    const scope = onlyFids
+      ? preview.rows.filter((r) => r.willApply && r.fid != null && onlyFids.includes(r.fid))
+      : preview.rows.filter((r) => r.willApply);
+    const n = scope.length;
+    if (n === 0) { setMsg({ kind: "err", text: "ไม่มีรายการที่ต้องบันทึก (ต้นทุนตรงแล้ว หรือถูกบล็อก)" }); return; }
+    const sumThb = scope.reduce((a, r) => a + r.invoiceCost, 0);
+    if (!onlyFids) {
+      // ยืนยันเฉพาะ "บันทึกทั้งหมด" (§0f) — รายการเดียวถือว่าเจตนาชัดจากปุ่มในแถว
+      const blocked = preview.summary.blocked;
+      const warn = blocked > 0 ? `\n\n⚠️ มี ${blocked} บรรทัดที่ถูกบล็อกและจะไม่ถูกบันทึก (ตู้ไม่ตรง / ไม่พบในระบบ) — ดูเหตุผลรายบรรทัดในตาราง` : "";
+      const from = source.kind === "pdf" ? `\nจากไฟล์: ${source.fileName}` : "";
+      if (!window.confirm(`บันทึกต้นทุนจากใบแจ้งหนี้ MOMO ${preview.invoiceNo ?? ""}${from}\nจำนวน ${n} แทรคกิ้ง · รวม ฿${baht(sumThb)}\n(ตู้ที่จ่ายเงินแล้วจะถูกข้าม)${warn}\n\nยืนยันบันทึก?`)) return;
+    }
     setMsg(null);
     start(async () => {
       // ส่ง "แหล่งที่มา" กลับไป ไม่ใช่ผลที่อ่านได้ — server แกะ + คิดใหม่เองทั้งหมด (กติกาเงิน)
-      const res = await applyMomoInvoiceCost(sourcePayload(source));
+      const res = await applyMomoInvoiceCost({ ...sourcePayload(source), ...(onlyFids ? { onlyFids } : {}) });
       if (!res.ok || !res.data) { setMsg({ kind: "err", text: res.ok ? "บันทึกไม่สำเร็จ" : res.error }); return; }
-      setMsg({ kind: "ok", text: `บันทึกต้นทุนแล้ว ${res.data.applied} แทรคกิ้ง (ใบ ${res.data.invoiceNo ?? "-"}) · อัปใบรอบถัดไปได้เลย` });
-      // refresh the preview to reflect the new currentCost
-      const re = await previewMomoInvoiceCost(sourcePayload(source));
-      if (re.ok && re.data) setPreview(re.data);
+      const d = res.data;
+      const skippedNote = d.skipped > 0 ? ` · ข้าม ${d.skipped} (ต้นทุนตรงอยู่แล้ว)` : "";
+      setMsg({ kind: "ok", text: `✅ บันทึกต้นทุนแล้ว ${d.applied}/${d.requested} แทรคกิ้ง${skippedNote} (ใบ ${d.invoiceNo ?? "-"})` });
+      await reloadPreview(source);
+      router.refresh();
+    });
+  }
+
+  /** ตัดจ่ายบิล MOMO — รายการเดียว (fids=[fid]) หรือทั้งบิล (fids = ที่เหลือที่ยังไม่ตัดจ่าย).
+   *  owner: "คำว่า ตัดจ่ายตู้นี้ใช้ไม่ได้ … บางบิลมีหลายตู้" → ตัดจ่ายเป็น "บิล" เสมอ. */
+  function doSettle(fids: number[]) {
+    if (!preview || !source) return;
+    if (fids.length === 0) { setMsg({ kind: "err", text: "ไม่มีรายการที่ตัดจ่ายได้ (จับคู่ไม่ได้ / ตู้ไม่ตรง / ตัดจ่ายไปแล้ว)" }); return; }
+    const rows = preview.rows.filter((r) => r.fid != null && fids.includes(r.fid));
+    const sumThb = rows.reduce((a, r) => a + r.invoiceCost, 0);
+    const label = fids.length === 1 ? `แทรคกิ้ง ${rows[0]?.tracking ?? ""}` : `ทั้งบิล ${fids.length} รายการ`;
+    if (!window.confirm(`ตัดจ่ายบิล MOMO ${preview.invoiceNo ?? ""}\n${label} · รวม ฿${baht(sumThb)}\nระบบจะออกเลขเอกสารตัดจ่าย + เก็บประวัติ (แนบสลิปย้อนหลังได้)\n\nยืนยันตัดจ่าย?`)) return;
+    setMsg(null);
+    start(async () => {
+      const res = await createMomoInvoiceSettlement({ ...sourcePayload(source), fids });
+      if (!res.ok || !res.data) { setMsg({ kind: "err", text: res.ok ? "ตัดจ่ายไม่สำเร็จ" : res.error }); return; }
+      const d = res.data;
+      setMsg({ kind: "ok", text: `💸 ตัดจ่ายบิลแล้ว — เลขเอกสาร ${d.docNo} · ${d.lineCount} รายการ · ฿${baht(d.totalThb)} (ดูประวัติ + แนบสลิปได้ที่ “ประวัติการตัดจ่าย”)` });
+      await reloadPreview(source);
       router.refresh();
     });
   }
@@ -323,11 +440,11 @@ export function MomoInvoiceCostClient() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={doApply}
+              onClick={() => doApply()}
               disabled={pending}
               className="rounded-full bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
             >
-              ยืนยันบันทึกต้นทุน ({preview.summary.willApply} แทรคกิ้ง)
+              บันทึกต้นทุนทั้งหมด ({preview.summary.willApply} แทรคกิ้ง)
             </button>
           </div>
         )}
@@ -395,10 +512,45 @@ export function MomoInvoiceCostClient() {
         )}
       </section>
 
-      {/* สรุปต่อตู้ + สะพานไปตัดจ่าย — วางไว้ "บน" ตารางราย-แทรคกิ้ง เพราะการจ่ายเกิดที่ระดับตู้ */}
+      {/* สรุปต่อตู้ (ข้อมูลอ้างอิง) — MOMO วางบิลเป็นแทรคกิ้ง บางบิลมีหลายตู้ */}
       {preview && preview.rows.length > 0 && (
         <CabinetRollupCard rollup={preview.byCabinet} invoiceNo={preview.invoiceNo} />
       )}
+
+      {/* ตัดจ่ายทั้งบิล — owner: "ตัดจ่ายทั้งบิลได้ครับ" (ไม่ใช่ต่อตู้ · บิลข้ามตู้ได้) */}
+      {preview && preview.rows.length > 0 && (() => {
+        const eligibleFids = preview.rows.filter(rowEligibleToSettle).map((r) => r.fid as number);
+        const remainingFids = eligibleFids.filter((f) => !settled[f]);
+        const settledCount = eligibleFids.length - remainingFids.length;
+        const remainingSum = preview.rows
+          .filter((r) => r.fid != null && remainingFids.includes(r.fid))
+          .reduce((a, r) => a + r.invoiceCost, 0);
+        return (
+          <section className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-5 shadow-sm space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold">ตัดจ่ายบิล MOMO</h2>
+                <p className="mt-0.5 text-[12px] text-muted">
+                  ออกเลขเอกสารตัดจ่าย (MCS…) + เก็บประวัติ · แนบสลิปย้อนหลังได้ที่ “ประวัติการตัดจ่าย”
+                  {settledCount > 0 && <> · ตัดจ่ายแล้ว {settledCount} รายการ</>}
+                  {" · "}เหลือที่ตัดจ่ายได้ {remainingFids.length} รายการ
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={pending || remainingFids.length === 0}
+                onClick={() => doSettle(remainingFids)}
+                className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                💸 ตัดจ่ายทั้งบิล ({remainingFids.length} รายการ · ฿{baht(remainingSum)})
+              </button>
+            </div>
+            {eligibleFids.length > 0 && remainingFids.length === 0 && (
+              <p className="text-[12px] font-medium text-emerald-700">✓ ตัดจ่ายครบทุกรายการของบิลนี้แล้ว — ดูเอกสารที่ “ประวัติการตัดจ่าย”</p>
+            )}
+          </section>
+        );
+      })()}
 
       {preview && preview.rows.length > 0 && (
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
@@ -511,6 +663,13 @@ export function MomoInvoiceCostClient() {
                     <td className="px-2 py-2 text-[11px]">
                       <RowOutcome r={r} />
                       {r.blockReason && <div className="mt-0.5 text-muted">{r.blockReason}</div>}
+                      <RowActions
+                        r={r}
+                        settled={settled}
+                        pending={pending}
+                        onApply={(fid) => doApply([fid])}
+                        onSettle={(fid) => doSettle([fid])}
+                      />
                     </td>
                   </tr>
                 ))}

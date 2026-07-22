@@ -38,13 +38,13 @@
  *     batch level only to size the balance-check threshold.
  *
  *   Corporate (นิติบุคคล) 1% allowance (L333-335 / L397-402 / L455-460):
- *     If the customer is corporate (a `tb_corporate` row exists) AND the
- *     batch total `pricePayAll >= 1000`, EACH row's individual price is
- *     reduced by 1% (`pricePay -= pricePay*0.01`) AND the row is stamped
- *     `fUserCompany='1'`. The gate keys off the BATCH total, not the row
- *     — a single-row batch under ฿1000 gets no discount even for a
- *     corporate customer. We surface `applyCorporateDiscount` so the
- *     action knows whether to write `fusercompany='1'` (else `''`).
+ *     If the customer is corporate (a `tb_corporate` row exists), EACH row's
+ *     individual price is reduced by 1% (`pricePay -= pricePay*0.01`) AND the row
+ *     is stamped `fUserCompany='1'`. 🔴 owner 2026-07-22 — the ฿1,000 BATCH
+ *     minimum was ABOLISHED: the allowance now applies on ANY positive batch
+ *     total (via the shared `legacyReceiptAmount`, default no minimum). We
+ *     surface `applyCorporateDiscount` so the action knows whether to write
+ *     `fusercompany='1'` (else `''`).
  *
  * Legacy stores most of these as numeric columns but a few as `varchar`
  * (string|number|null) — we coerce defensively. All outputs round to 2
@@ -53,6 +53,7 @@
 
 import { MAO_FLAT_FEE, isMaoCarrier } from "./mao-fee";
 import { trackingSuffix } from "@/lib/admin/momo-bill-header";
+import { legacyReceiptAmount } from "@/lib/tax/wht";
 
 /** One unpaid forwarder row's pricing inputs (lowercase = PostgREST casing). */
 export interface ForwarderDebitRow {
@@ -127,8 +128,8 @@ export interface ForwarderDebitBatch {
   /** The id of the first PCSF-zero row whose fTransportPrice the action
    *  must mutate to 50 (faithful L388/L446), or null if none. */
   pcsfTransportFixId: string | null;
-  /** Whether the corporate 1% allowance fired (batch ≥ ฿1000 & corporate).
-   *  When true, each settled row stamps fusercompany='1'; else ''. */
+  /** Whether the corporate 1% allowance fired (corporate & batch > 0 · owner
+   *  2026-07-22 no minimum). When true, each settled row stamps fusercompany='1'; else ''. */
   applyCorporateDiscount: boolean;
 }
 
@@ -260,15 +261,38 @@ export function computeForwarderDebitBatch(
   // batch var separately because its per-row +50 lives only in the loop's
   // local $pricePay, not in the running $pricePayAll until that loop; the
   // net effect is one ฿50, which our single-pass sum reproduces.)
-  const preCorporateTotal = baseLines.reduce((s, l) => s + l.base, 0);
+  // Invalid/non-positive rows are refused below (price_thb=NaN), so they must not
+  // influence either the juristic WHT allowance or the payable batch total.
+  const preCorporateTotal = baseLines.reduce(
+    (s, l) => s + (Number.isFinite(l.base) && l.base > 0 ? l.base : 0),
+    0,
+  );
 
-  // ── corporate 1% allowance — gate on batch total ≥ ฿1000 (L333-335) ──
-  const applyCorporateDiscount = opts.isCorporate && preCorporateTotal >= 1000;
+  // ── corporate 1% allowance — calculate ONCE from the real batch total ──
+  // Accounting invariant: round(Σ raw × 99%) is authoritative. Rounding every
+  // row first can drift by one or more satang: Σ round(row × 99%) !=
+  // round(Σ row × 99%). `legacyReceiptAmount` is also the bill/receipt WHT SOT.
+  // We allocate its final satang remainder to the last payable row so the ledger
+  // remains itemised while Σ line.price_thb equals the document/cash total exactly.
+  const receiptAmount = legacyReceiptAmount(preCorporateTotal, opts.isCorporate);
+  const applyCorporateDiscount = receiptAmount.applied;
+  const lastPayableIndex = baseLines.findLastIndex(
+    (l) => Number.isFinite(l.base) && l.base > 0,
+  );
+  let allocatedNet = 0;
 
-  const lines: ForwarderDebitLine[] = baseLines.map((l) => {
-    const wht1pct = applyCorporateDiscount ? l.base * 0.01 : 0; // L398/L456: per-row 1% off
-    const price = l.base - wht1pct;
-    const finalPrice = Number.isFinite(price) && price > 0 ? round2(price) : NaN;
+  const lines: ForwarderDebitLine[] = baseLines.map((l, index) => {
+    const payable = Number.isFinite(l.base) && l.base > 0;
+    let finalPrice = NaN;
+    if (payable) {
+      finalPrice = index === lastPayableIndex
+        ? round2(receiptAmount.rAmount - allocatedNet)
+        : round2(applyCorporateDiscount ? l.base * 0.99 : l.base);
+      allocatedNet = round2(allocatedNet + finalPrice);
+    }
+    const wht1pct = payable && applyCorporateDiscount
+      ? round2(l.base - finalPrice)
+      : 0;
     return {
       id: l.id,
       price_thb: finalPrice,
@@ -278,15 +302,13 @@ export function computeForwarderDebitBatch(
         otherCharges: round2(l.otherCharges),
         discount: round2(l.discount),
         maoFee: l.maoFee,
-        wht1pct: round2(wht1pct),
+        wht1pct,
         total: Number.isFinite(finalPrice) ? finalPrice : round2(l.base - wht1pct),
       },
     };
   });
 
-  const total_thb = round2(
-    lines.reduce((s, l) => s + (Number.isFinite(l.price_thb) ? l.price_thb : 0), 0),
-  );
+  const total_thb = receiptAmount.rAmount;
 
   return {
     lines,

@@ -63,7 +63,7 @@ const FAQ_GROUPS_TH: FaqGroup[] = [
       },
       {
         q: "ค่าขนส่งคิดยังไง?",
-        a: "ดูจาก 2 ค่า เลือกค่าที่สูงกว่า: (1) น้ำหนัก (กก.) หรือ (2) ปริมาตร (CBM × อัตราคูณ) ลูกค้านิติบุคคลที่สั่งครบ 1,000 บาท ลดเพิ่มอีก 1% และมีค่าบริการ Pacred 50 บาทต่อบิล",
+        a: "ดูจาก 2 ค่า เลือกค่าที่สูงกว่า: (1) น้ำหนัก (กก.) หรือ (2) ปริมาตร (CBM × อัตราคูณ) ลูกค้านิติบุคคลหักภาษี ณ ที่จ่าย 1% และมีค่าบริการ Pacred 50 บาทต่อบิล",
       },
       {
         q: "Term DDP กับ EXW/FOB/CIF ต่างกันยังไง?",
@@ -168,7 +168,7 @@ const FAQ_GROUPS_EN: FaqGroup[] = [
       },
       {
         q: "How is shipping cost calculated?",
-        a: "We take the higher of (1) weight (kg) or (2) volume (CBM × multiplier). Juristic customers spending ≥ 1,000 baht get an additional 1% off, plus a 50-baht Pacred service fee per bill.",
+        a: "We take the higher of (1) weight (kg) or (2) volume (CBM × multiplier). Juristic customers get a 1% withholding-tax deduction (no minimum), plus a 50-baht Pacred service fee per bill.",
       },
       {
         q: "DDP vs. EXW / FOB / CIF — what's the difference?",

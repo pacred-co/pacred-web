@@ -70,6 +70,12 @@ const ingestSchema = z
   .object({
     text: z.string().min(10).max(200_000).optional(),
     fileBase64: z.string().min(1).max(MAX_PDF_BASE64).optional(),
+    /** apply-only: write cost for ONLY these tb_forwarder ids (the per-line "บันทึกต้นทุน"
+     *  button · owner 2026-07-22). Omitted = every willApply row (บันทึกทั้งหมด). Ignored by
+     *  preview. The server still re-derives every line from the source — this only narrows
+     *  WHICH re-derived line gets written; a client can no more inject a cost this way than
+     *  through the source. */
+    onlyFids: z.array(z.number().int().positive()).max(2000).optional(),
   })
   .refine((v) => (v.text != null) !== (v.fileBase64 != null), {
     message: "ต้องส่งข้อความจากใบ หรือไฟล์ PDF อย่างใดอย่างหนึ่ง (ไม่ใช่ทั้งคู่)",
@@ -560,7 +566,7 @@ export async function previewMomoInvoiceCost(input: unknown): Promise<AdminActio
 /** Apply — re-derives from the SAME source server-side (re-extracting the PDF from its own
  *  bytes when that's the source), writes fcosttotalprice on the willApply rows (matched ·
  *  unpaid · ตู้ตรง · cost differs). Idempotent + logged. */
-export async function applyMomoInvoiceCost(input: unknown): Promise<AdminActionResult<{ applied: number; skipped: number; invoiceNo: string | null }>> {
+export async function applyMomoInvoiceCost(input: unknown): Promise<AdminActionResult<{ applied: number; skipped: number; invoiceNo: string | null; requested: number }>> {
   const parsed = ingestSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   return withAdmin([...COST_PROFIT_ROLES], async ({ adminId }) => {
@@ -572,6 +578,10 @@ export async function applyMomoInvoiceCost(input: unknown): Promise<AdminActionR
     // Which source this cost was read from — a money write must never be ambiguous about
     // its origin when someone audits it months later.
     const source: "pdf_upload" | "paste" = parsed.data.fileBase64 != null ? "pdf_upload" : "paste";
+    // Per-line บันทึกต้นทุน (owner 2026-07-22): narrow to the chosen fids. The server still
+    // re-derives every line below — this only decides which re-derived willApply row is
+    // written. Omitted = every willApply row (บันทึกทั้งหมด).
+    const onlyFids = parsed.data.onlyFids && parsed.data.onlyFids.length > 0 ? new Set(parsed.data.onlyFids) : null;
     const preview = await buildPreview(src.text);
     // 🔴 fail-closed: a parse that doesn't foot the Sub-total, or whose CBM reading we
     // could not establish from the invoice itself, never writes money.
@@ -589,13 +599,15 @@ export async function applyMomoInvoiceCost(input: unknown): Promise<AdminActionR
       return { ok: false, error: refusal };
     }
     const admin = createAdminClient();
+    // Rows the caller asked to write (respect onlyFids). `requested` = how many willApply
+    // rows are in scope, so the client can report "เขียน X · ข้าม (ตรงแล้ว/ล็อก) …".
+    const scoped = preview.rows.filter((r) => r.willApply && r.fid != null && (onlyFids == null || onlyFids.has(r.fid)));
     let applied = 0;
-    for (const r of preview.rows) {
-      if (!r.willApply || r.fid == null) continue;
+    for (const r of scoped) {
       const { error } = await admin
         .from("tb_forwarder")
         .update({ fcosttotalprice: r.invoiceCost, fprofittotal: 0 })
-        .eq("id", r.fid)
+        .eq("id", r.fid as number)
         .neq("fcosttotalprice", r.invoiceCost); // optimistic — skip if already set
       if (error) {
         console.error(`[momo-ingest apply] fid ${r.fid}`, { code: error.code, message: error.message });
@@ -642,6 +654,8 @@ export async function applyMomoInvoiceCost(input: unknown): Promise<AdminActionR
       invoiceNo: preview.invoiceNo,
       source,
       applied,
+      requested: scoped.length,
+      onlyFids: onlyFids ? [...onlyFids] : null,
       candidates: preview.summary.willApply,
       unmatched: preview.summary.unmatched,
       cabinetConflicts: preview.summary.cabinetConflicts,
@@ -651,6 +665,6 @@ export async function applyMomoInvoiceCost(input: unknown): Promise<AdminActionR
       subTotal: preview.subTotal,
       cbmBasis: preview.cbmBasis,
     });
-    return { ok: true, data: { applied, skipped: preview.summary.total - applied, invoiceNo: preview.invoiceNo } };
+    return { ok: true, data: { applied, skipped: scoped.length - applied, invoiceNo: preview.invoiceNo, requested: scoped.length } };
   });
 }

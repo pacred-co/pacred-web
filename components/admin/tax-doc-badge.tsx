@@ -86,10 +86,9 @@ export function TaxDocBadge({
  * Juristic (นิติบุคคล) + WHT-1% indicator chip.
  *
  * Mirrors legacy `hs-receipt-forwarder.php`'s corporate signal (the "ลูกค้า
- * บริษัท" tab/column) + the flat-1%-WHT rule in `function.php:1402-1410`
- * (faithful Pacred port in lib/tax/wht.ts): WHT 1% applies when the customer is
- * juristic AND the order total ≥ ฿1000 (unless the per-order `fusercompany`
- * exempts it). DISPLAY ONLY — never recomputes the tax.
+ * บริษัท" tab/column). 🔴 owner 2026-07-22: the ฿1,000 minimum was ABOLISHED —
+ * WHT 1% now applies to a juristic customer on ANY amount (unless the per-order
+ * `fusercompany` exempts it). DISPLAY ONLY — never recomputes the tax.
  *
  * Renders nothing when the customer is not juristic (keeps non-corporate rows
  * uncluttered, same as legacy which only showed the company column for
@@ -97,13 +96,11 @@ export function TaxDocBadge({
  *
  * @param isJuristic   customer is นิติบุคคล (tb_users.userCompany==='1' OR the
  *                     per-order tb_forwarder.fusercompany==='1').
- * @param totalThb     order total (optional) — when provided, the ≥฿1000
- *                     threshold is reflected: below it shows "(ยอด < ฿1,000 ·
- *                     ไม่หัก)" so staff know WHT won't apply.
+ * @param totalThb     order total — accepted for call-site compatibility; no
+ *                     longer drives a threshold caveat (the ฿1,000 floor is gone).
  */
 export function JuristicWhtChip({
   isJuristic,
-  totalThb,
   size = "md",
 }: {
   isJuristic: boolean;
@@ -112,17 +109,13 @@ export function JuristicWhtChip({
 }) {
   if (!isJuristic) return null;
   const pad = size === "sm" ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-0.5 text-[11px]";
-  // WHT 1% only kicks in at total ≥ ฿1000 (legacy threshold). When we know the
-  // total and it's under the floor, say so — otherwise just show the 1% rule.
-  const belowFloor = typeof totalThb === "number" && Number.isFinite(totalThb) && totalThb < 1000;
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full border font-medium whitespace-nowrap border-rose-300 bg-rose-50 text-rose-700 ${pad}`}
-      title="ลูกค้านิติบุคคล — หัก ณ ที่จ่าย 1% เมื่อยอดรวม ≥ ฿1,000 (faithful function.php:1402)"
+      title="ลูกค้านิติบุคคล — หัก ณ ที่จ่าย 1% ทุกยอด (ไม่มีขั้นต่ำ · owner 2026-07-22)"
     >
       <span aria-hidden>🏢</span>
       <span>นิติบุคคล · หัก ณ ที่จ่าย 1%</span>
-      {belowFloor && <span className="opacity-80">(ยอด &lt; ฿1,000 · ไม่หัก)</span>}
     </span>
   );
 }

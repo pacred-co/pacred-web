@@ -21,6 +21,7 @@ import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readThaiBaht } from "@/lib/utils/thai-number";
 import { resolveReceiptFrozenTotals } from "@/lib/receipt/receipt-frozen-totals";
+import { LEGACY_RECEIPT_WHT_MIN } from "@/lib/tax/wht";
 import { DOC_ROWS_PER_PAGE } from "@/lib/receipt/rows-per-page";
 import { ADDRESSES } from "@/components/seo/site";
 import type {
@@ -428,9 +429,17 @@ export async function loadReceiptDocument(
   const maoFee = toNumber(receipt.mao_fee_thb);
   const lineSumWithMao = totals.totalLineSum + maoFee;
 
-  // WHT 1% — legacy: only for corporate AND totalbeforewithholding ≥ 1000
+  // WHT 1% line — show it for a corporate receipt whenever WHT was actually
+  // WITHHELD at issuance (the stored pre-WHT − net > 0). This is forward-only by
+  // construction: a receipt issued under the old ≥ ฿1,000 rule for a small order
+  // stored net==pre-WHT (diff 0) → no line (unchanged); a receipt issued under the
+  // owner's 2026-07-22 no-minimum rule stored a real diff → the line shows. The
+  // `≥ LEGACY_RECEIPT_WHT_MIN` fallback preserves the historical display for legacy
+  // receipts whose header was never populated (live per-line re-sum path).
   const totalBeforeWithholding = headerTotalBefore || lineSumWithMao;
-  const showWht = isCorporate && totalBeforeWithholding >= 1000;
+  const whtStored = headerTotalBefore - headerRamount;
+  const showWht =
+    isCorporate && (whtStored > 0.005 || totalBeforeWithholding >= LEGACY_RECEIPT_WHT_MIN);
 
   // ── FROZEN document-of-record (ภูม flag 2026-07-01 · บิล ≠ ใบเสร็จ) ──
   // A receipt is a snapshot: its printed total MUST equal what was written at
@@ -540,7 +549,7 @@ export async function loadReceiptDocument(
   // A corporate receipt that withholds WHT cannot be printed/downloaded by the
   // CUSTOMER (on /r/<token>) until the 50-ทวิ cert is uploaded AND admin-approved
   // (or admin-waived). Admin reprint is never gated. `receiptShowsWht` already
-  // implies corporate (showWht = isCorporate && total ≥ 1000).
+  // implies corporate (showWht = isCorporate && WHT was actually withheld).
   const whtCertStatus = (receipt.wht_cert_status ?? "none") as
     "none" | "pending" | "approved" | "waived";
   const receiptShowsWht = showWht || (itemsMissing && whtAmount > 0);

@@ -265,6 +265,24 @@
 
 ---
 
+# 🧾 2026-07-22 (เดฟ · PC) — 💰 ตัดจ่ายบิล MOMO ครบวงจร (mig 0273 · MCS register) + Claude×Codex flow + integrate ภูม/ปอน/codex → ALL BRANCHES · read FIRST
+
+> **🏁 CLOSE (owner: "เอามาเพิ่มในหน้า /admin/momo-containers เป็นเมนู · มี action บันทึกต้นทุน+แสดงผล · ตัดจ่ายตามรายการ/ทั้งบิล · ห้ามใช้คำว่าตัดจ่ายตู้ (บิล MOMO เก็บเป็น tracking ข้ามตู้ได้) · รันเอกสาร+ประวัติ+สลิปย้อนหลัง · ลิงก์กลับชิปเม้น · ก่อนขึ้น main ดูงานน้อง codex").** main = dave-pacred = `<HEAD>` (Vercel prod). NEXT FREE mig = **0274**. gate: tsc 0 · build 0 · tests (settlement-core 30+ · debit 94 · mao 10 · fee 24 · wht 19).
+>
+> **💰 ตัดจ่ายบิล MOMO (mig 0273 · applied prod · dev ยัง unreachable → reconcile ทีหลัง):**
+> - **หน้าเดียวของ MOMO**: เมนู "💰 บิลต้นทุน MOMO (ตรวจ + ตัดจ่าย)" ใน `/admin/momo-containers` → `/admin/api-forwarder-momo/invoice-cost` (retitle + breadcrumb กลับ hub) · flow: อัพ PDF → ตรวจเทียบ → **บันทึกต้นทุน** (รายรายการ `onlyFids` / ทั้งหมด · แสดงผลกลับ เขียน/ข้าม/เหตุผล) → **ตัดจ่ายบิล** (รายรายการ / ทั้งบิล) → ประวัติ.
+> - **Register**: `momo_invoice_settlement` + `_line` (RLS service-role) · doc รัน **MCS**YYMM-#### (mint retry-on-collision) · slip_paths jsonb แนบย้อนหลังได้ · void เก็บประวัติ (ไม่ลบ) · history `/invoice-cost/history` + detail (แจงบรรทัด → ลิงก์ `/admin/forwarders/[fid]`).
+> - **Guards**: settle re-derive จาก source ฝั่ง server (ไม่เชื่อยอด client) · file-gate (ยอด foot Sub-total + CBM อ่านได้) · line-gate (matched + ตู้ตรงเท่านั้น) · **double-pay guard สร้างฝั่ง**: fid ที่มี settlement non-void คลุมอยู่ → refuse พร้อมบอกเลข MCS · UNIQUE(settlement_id,fid) + rollback header ถ้า line insert พัง · **เขียนแค่ register — ไม่แตะ fcosttotalprice (ทาง apply เดิม) / fstatus / wallet / tb_cnt**.
+> - **Validate PDF จริง 2 ใบ**: INV-20260714-0001 (21 บรรทัด ฿23,740.17 foot ✓ · 1 ตู้) · INV-20260708-0002 (39 บรรทัด ฿21,626.89 foot ✓ · **2 ตู้**: GZS260620-2 ฿10,858.25 + GZE260701-1 ฿10,768.64 = พิสูจน์ "บิลเดียวหลายตู้" ที่ owner บอก).
+>
+> **🤝 Claude×Codex flow (owner brief · จดเต็ม `docs/team.md §0.1` + memory `codex-joint-workflow`):** Codex = AI pair บน branch `codex` (ทั้ง Mac+PC · เหมือน dave-pacred ที่เป็น Claude ทั้ง 2 เครื่อง) · Claude วางสถาปัตย์+money impl · Codex แตก task/review/test · Codex merge เข้า dave-pacred ตามลำดับ · เดฟ push main หลัง confirm · **ตรวจงานน้อง += codex เสมอ** · ห้ามตั้ง remote branch ใหม่ · ระวัง mig ชนกัน 2 AI (เช็ค tail ตอนเขียน).
+>
+> **🔀 integrate รอบนี้:** ภูม 5 (forwarders 3 flag · **ขั้นต่ำ ฿50 ต่อชิปเม้น MONEY** · 3 P1 sweep) · ปอน (ใบแจ้งหนี้ pay-user + เหมาๆ แยกบรรทัดผ่าน resolveMaoAnchorIds — รีวิวแล้วไม่บวกซ้ำ) · **codex #1: WHT satang-allocation ใน computeForwarderDebitBatch** (legacyReceiptAmount SOT → Σ รายบรรทัด == ยอดเอกสารเป๊ะ · รีวิวแล้ว · 94/94).
+>
+> **🔴 CARRYOVER:** (1) dev DB unreachable → reconcile mig 0271-0273 เมื่อกลับมา. (2) settled-chip บน forwarder-cost-section (ตอนนี้อยู่ที่ preview rows + history เท่านั้น — ทางเลือกที่ agent จงใจไม่แตะ panel เงิน). (3) WORK ORDER เดิม 2026-07-17 ยังค้างบางข้อ (GZE260627-1 น้ำหนักมั่ว · 16 ตู้/303 แถวไม่มีต้นทุน · คิวตรวจสอบ fstatus 6/7 · "ผิดพลาด 8" · PR217 ใบเสร็จนิติ · แถวรวม=สรุปชิปเม้น+คิดเงินต่อชิปเม้น).
+
+---
+
 # 🔴🔴 2026-07-17 ดึก-4 (ปิด session · ไปต่อ Mac) — apply prod 3 อย่าง · ข้อ 1/2/4/5 ปิด · เหลือ ตัดจ่ายค่าตู้ + ตั้งต้นทุน 303 แถว — READ FIRST
 
 > **main = dave-pacred = HEAD** · mig 0260 applied prod · **NEXT FREE mig = 0261** · gate: tsc 0 · build 0 · dep ใหม่ `unpdf` (lockfile sync แล้ว)
@@ -1788,6 +1806,7 @@ app/[locale]/(protected)/         # หลังบ้าน (ลูกค้า
 | คน | บทบาท | Branch | Release to main |
 |---|---|---|---|
 | **เดฟ** (dave) | Project Lead / Integrator (works on the owner's behalf) | `dave-pacred` (the integration trunk) | ✅ release gate, on owner's go |
+| **Codex** | AI pair ของเดฟ (ทั้ง Mac + คอมทำงาน) — tasking · review · test · helper impl (ดู docs/team.md §0.1) | `codex` → merge เข้า `dave-pacred` ตามลำดับ | ❌ รอเดฟ review + owner confirm |
 | **ภูม** (Poom) | Backend / Admin / Accounting | `Poom-pacred` | ❌ own branch → เดฟ integrates |
 | **ปอน** (podeng) | Frontend / UI / SEO | `InwPond007` | ❌ own branch → เดฟ integrates |
 | **ก๊อต** (got) | Senior Advisor / Production Watcher | `main` review + assigned | ✅ release gate with เดฟ |

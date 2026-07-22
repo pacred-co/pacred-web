@@ -181,11 +181,12 @@ export function ForwarderStatusWorkflow(p: Props) {
   // (rendered after credit so the dangerous option sits last)
 
   const isCreditSel = selected === "credit";
-  // owner 2026-07-20 "ให้แสดง + บันทึกได้ตั้งแต่ ถึงโกดังจีน และ กำลังส่งมาไทย" —
-  // the editor opens from ถึงโกดังจีน(2)/กำลังมาไทย(3)/ถึงไทย(4) (was 4-only ตาม
-  // legacy showForm4 — PCS itself renders the form with "บันทึกข้อมูลไม่เปลี่ยนสถานะ"
-  // at every status). Saving from 2/3 is data-only (no status side-effect).
-  const showPricing = selected === "2" || selected === "3" || selected === "4";
+  // The detail/breakdown remains visible through รอชำระเงิน(5) and เตรียมส่ง(6)
+  // so staff reviews one canonical section instead of a duplicate summary card.
+  // The editor itself is read-only once the CURRENT row has entered 5/6 because
+  // its accounting basis is already frozen; see ForwarderPerTrackingEditor.
+  const showPricing = ["2", "3", "4", "5", "6"].includes(selected);
+  const pricingReadOnly = p.currentStatus === "5" || p.currentStatus === "6";
   const showTracking = rank(selected) >= 6; // legacy showForm6()
   // owner 2026-07-17 — a BACKWARD pick (never 99 / credit / forward) goes down the
   // ultra-only rollback path instead of the plain forward status write.
@@ -418,7 +419,11 @@ export function ForwarderStatusWorkflow(p: Props) {
             <section className="mt-3 rounded-2xl border border-border border-l-4 border-l-indigo-400 bg-white dark:bg-surface shadow-sm overflow-hidden">
               <header className="flex items-center gap-2 px-4 pt-4">
                 <Package className="h-4 w-4 text-indigo-500" />
-                <h3 className="text-sm font-semibold tracking-wide">กรอกรายละเอียดสินค้า · ขนาด · ราคา · ทุกแทรคกิง (บันทึกได้ตั้งแต่ถึงโกดังจีน)</h3>
+                <h3 className="text-sm font-semibold tracking-wide">
+                  {pricingReadOnly
+                    ? "รายละเอียดสินค้า · ขนาด · ราคา · ทุกแทรคกิง"
+                    : "กรอกรายละเอียดสินค้า · ขนาด · ราคา · ทุกแทรคกิง (บันทึกได้ตั้งแต่ถึงโกดังจีน)"}
+                </h3>
               </header>
               <div className="p-3 sm:p-4">
                 {/* 2026-06-18 (ภูม · A2) — หลายแถวตามแทรคกิง (สร้างฝั่ง server ใน page.tsx).

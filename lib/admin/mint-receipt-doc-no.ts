@@ -304,3 +304,56 @@ export async function mintTaxInvoiceDocNo(
 
   return `TIV${yyMm}-${nextSuffix}`;
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// QUOTATION DOC NO (QT) — customer_quotations (owner 2026-07-22)
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Mint the next `ref_no` for `customer_quotations` (ใบเสนอราคา / ใบประเมินราคา).
+ *
+ * Format: `QT-{userid}-{YYYYMMDD}-{NN}` — e.g. `QT-PR2000-20260722-01` (owner
+ * 2026-07-22 · the exact pattern requested: QT-PR<code>-<ปี><เดือน><วัน>-<ใบที่>).
+ * The running suffix counts quotes for THIS customer on THIS day (…-01, …-02, …),
+ * so two quotes for the same customer on the same day no longer collide — the bug
+ * was that both were a bare `QT-PR2000-20260722` with no counter. Minted server-side
+ * at issue time; the client shows a `…-ร่าง` draft until then.
+ *
+ * Robust counter: fetch every same-customer-same-day ref and take max(parsed suffix)+1
+ * (doesn't rely on lexicographic order, so zero-padding width is irrelevant). ref_no
+ * is NOT a unique key (a quote is reviewed before sending) so a rare concurrent
+ * double-mint is tolerated, same as receipts.
+ *
+ * @throws Never — on lookup error starts the day's counter at 01. See AGENTS.md §0c.
+ */
+export async function mintQuotationDocNo(
+  admin: SupabaseClient,
+  opts: { userid: string; issueDate: Date },
+): Promise<string> {
+  const uid = opts.userid.toUpperCase();
+  const d = opts.issueDate;
+  const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+  const prefix = `QT-${uid}-${ymd}-`; // e.g. "QT-PR2000-20260722-"
+
+  const { data, error } = await admin
+    .from("customer_quotations")
+    .select("ref_no")
+    .ilike("ref_no", `${prefix}%`)
+    .limit(1000);
+
+  if (error) {
+    console.error(`[mintQuotationDocNo] customer_quotations lookup failed`, {
+      code: error.code,
+      message: error.message,
+      prefix,
+    });
+  }
+
+  let maxSeq = 0;
+  for (const r of data ?? []) {
+    const seq = Number.parseInt(String(r.ref_no ?? "").slice(prefix.length), 10);
+    if (Number.isFinite(seq) && seq > maxSeq) maxSeq = seq;
+  }
+
+  return `${prefix}${String(maxSeq + 1).padStart(2, "0")}`;
+}

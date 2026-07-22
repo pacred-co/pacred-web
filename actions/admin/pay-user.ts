@@ -533,7 +533,7 @@ export async function adminPayForwardersOnBehalf(
 
     // ── AUTHORITATIVE batch — compute prices on EXACTLY the selected rows
     // (legacy `WHERE … AND ID IN ('$ids')`, L316). Pricing depends on the
-    // selection (corporate ≥฿1000 gate + PCSF-first ฿50), so this is the
+    // selection (corporate 1% · owner 2026-07-22 no minimum · + PCSF-first ฿50), so this is the
     // source of truth — NOT the context-loader's full-set preview. Order by
     // id ASC so the "first PCSF" row is deterministic + matches legacy DB order.
     const { data: eligibleRaw, error: eligErr } = await admin

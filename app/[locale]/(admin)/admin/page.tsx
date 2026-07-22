@@ -834,9 +834,10 @@ async function fetchBillingRunSlipRows(
       created_at: r.slip_uploaded_at ?? "",
       member_code: r.userid ?? "",
       customer_name: r.buyer_name ?? "",
-      // NET payable (gross − WHT 1% for juristic ≥฿1,000) — the SAME value the billing-run
-      // detail + ใบเสร็จ compute. Was Number(total_thb) = GROSS → showed 1,196.50 for a
-      // juristic bill whose real payable is 1,184.54 (WHT-fix 2026-07-16).
+      // NET payable (gross − WHT 1% for juristic · owner 2026-07-22 no minimum) — the
+      // SAME value the billing-run detail + ใบเสร็จ compute. These are unpaid bills
+      // awaiting slip review → new rule. Was Number(total_thb) = GROSS → showed 1,196.50
+      // for a juristic bill whose real payable is 1,184.54 (WHT-fix 2026-07-16).
       amount: computeBillWht(Boolean(r.is_juristic), Number(r.total_thb ?? 0)).net_payable,
       detail: `🧾 ใบวางบิล ${escapeHtmlInline(r.doc_no)} · <span class="text-emerald-600">📎 แนบสลิปแล้ว (รอบัญชีตรวจ)</span>`,
       link: `/admin/billing-run/${r.id}`,

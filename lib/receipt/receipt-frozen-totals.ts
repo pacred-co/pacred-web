@@ -21,7 +21,8 @@ export type FrozenTotalsInput = {
   headerRamount: number;
   /** Live per-line sum incl เหมาๆ (fallback only). */
   lineSumWithMao: number;
-  /** Corporate + total ≥ 1000 → this receipt withholds 1%. */
+  /** Corporate AND WHT was withheld → show the 1% line (owner 2026-07-22: no ฿1,000
+   *  minimum — derived by the caller from the stored pre-WHT − net). */
   showWht: boolean;
   /** True when tb_receipt_item rows are absent but the header has an amount. */
   itemsMissing: boolean;

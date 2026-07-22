@@ -7,7 +7,8 @@
  *   • base price formula (L320)
  *   • PCSF first-item ฿50 transport (L386-395) + the fix-id surfaced
  *   • PCSMao single-charge — the ฿50 is counted exactly once (L328-331)
- *   • corporate 1% allowance gated on BATCH total ≥ ฿1000 (L333-335)
+ *   • corporate 1% allowance on ANY positive batch total (L333-335 · owner
+ *     2026-07-22: the ฿1,000 minimum was abolished)
  *   • PCS999 exempt from the PCSF/เหมาๆ rule (L328 / L386)
  *   • defensive varchar coercion + NaN refusal of bad rows
  *
@@ -101,7 +102,7 @@ console.log("computeForwarderDebitBatch — multi-row sum");
   // 500 + 250 + 200 = 950
   assertClose("sum = 950", b.total_thb, 950);
   assertClose("row2 = 250", b.lines[1].price_thb, 250);
-  assertEq("under-1000 corporate=false → no discount even if corp", b.applyCorporateDiscount, false);
+  assertEq("personal (isCorporate=false) → no discount regardless of amount", b.applyCorporateDiscount, false);
 }
 
 console.log("computeForwarderDebitBatch — PCSF/PRF first-item เหมาๆ ฿100");
@@ -158,9 +159,9 @@ console.log("computeForwarderDebitBatch — PCS999 exempt from PCSF +50");
   assertEq("PCS999 not flagged pcsf", b.lines[0].isPcsfFirst, false);
 }
 
-console.log("computeForwarderDebitBatch — corporate 1% allowance, batch ≥ ฿1000");
+console.log("computeForwarderDebitBatch — corporate 1% allowance");
 {
-  // two rows summing to 1200 (≥1000) for a corporate customer → each −1%.
+  // two rows summing to 1200 for a corporate customer → each −1%.
   const b = computeForwarderDebitBatch(
     [
       row({ id: 41, ftotalprice: 800 }),
@@ -174,20 +175,49 @@ console.log("computeForwarderDebitBatch — corporate 1% allowance, batch ≥ �
   assertClose("batch total = 1188", b.total_thb, 1188);
 }
 
-console.log("computeForwarderDebitBatch — corporate but batch < ฿1000 → no discount");
+console.log("computeForwarderDebitBatch — corporate small batch < ฿1000 → 1% (owner 2026-07-22 no minimum)");
 {
   const b = computeForwarderDebitBatch(
     [row({ id: 51, ftotalprice: 900 })],
     { userId: "PR900", isCorporate: true },
   );
-  assertEq("corporate discount NOT fired (< 1000)", b.applyCorporateDiscount, false);
-  assertClose("row51 = 900 (full price)", b.lines[0].price_thb, 900);
+  assertEq("corporate discount fired (no minimum)", b.applyCorporateDiscount, true);
+  assertClose("row51 = 891 (900 − 1%)", b.lines[0].price_thb, 891);
+  assertClose("batch total = 891", b.total_thb, 891);
+}
+
+console.log("computeForwarderDebitBatch — WHT uses the real batch total before satang rounding");
+{
+  // Per-row rounding would produce 990.49 + 990.49 = 1,980.98.
+  // Accounting truth is round((1,000.49 + 1,000.49) × 99%) = 1,980.97.
+  // The last row absorbs the one-satang allocation remainder so the itemised
+  // ledger, document total, QR amount, and actual debit stay identical.
+  const b = computeForwarderDebitBatch(
+    [
+      row({ id: 53, ftotalprice: 1000.49 }),
+      row({ id: 54, ftotalprice: 1000.49 }),
+    ],
+    { userId: "PR900", isCorporate: true },
+  );
+  assertClose("real batch WHT net = 1,980.97", b.total_thb, 1980.97);
+  assertClose(
+    "allocated rows sum exactly to the batch net",
+    b.lines.reduce((sum, line) => sum + line.price_thb, 0),
+    b.total_thb,
+  );
+  assertClose(
+    "allocated WHT sums to 20.01",
+    b.lines.reduce((sum, line) => sum + line.breakdown.wht1pct, 0),
+    20.01,
+  );
 }
 
 console.log("computeForwarderDebitBatch — corporate + PCSF first-item interplay");
 {
-  // corporate, 2 PCSF-zero rows. First gets +100, batch sum then ≥1000 → 1% each.
-  // bases: row(100+100=200 after เหมาๆ), row(100). pre-corp total = 300 → < 1000 → no corp.
+  // corporate, 2 PCSF-zero rows. First gets +100. bases: row(100+100=200 after
+  // เหมาๆ), row(100). pre-corp total = 300 → owner 2026-07-22: any positive juristic
+  // total gets 1% (no minimum). net = round(300 × 99%) = 297; last row absorbs the
+  // satang remainder: row61 = round(200×0.99) = 198, row62 = 297 − 198 = 99.
   const b1 = computeForwarderDebitBatch(
     [
       row({ id: 61, fshipby: "PCSF", ftransportprice: 0, ftotalprice: 100 }),
@@ -195,10 +225,12 @@ console.log("computeForwarderDebitBatch — corporate + PCSF first-item interpla
     ],
     { userId: "PR900", isCorporate: true },
   );
-  assertEq("small PCSF batch — no corp discount", b1.applyCorporateDiscount, false);
-  assertClose("first = 200", b1.lines[0].price_thb, 200);
+  assertEq("small PCSF juristic batch — corp discount fired (no minimum)", b1.applyCorporateDiscount, true);
+  assertClose("first = 198 (200 − 1%)", b1.lines[0].price_thb, 198);
+  assertClose("second = 99 (absorbs remainder)", b1.lines[1].price_thb, 99);
+  assertClose("batch total = 297", b1.total_thb, 297);
 
-  // now make it cross 1000: row 600 + (เหมาๆ 400+100=500) = 1100 ≥ 1000 → 1% each
+  // a bigger batch stays consistent: row 600 + (เหมาๆ 400+100=500) = 1100 → 1% each
   const b2 = computeForwarderDebitBatch(
     [
       row({ id: 71, ftotalprice: 600 }),

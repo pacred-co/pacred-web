@@ -147,32 +147,45 @@ function is(label: string, got: unknown, want: unknown) {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// legacyReceiptAmount — the grenrateReceiptF / auto-issue-receipt flat-1% rule
-// (Lane B 2026-06-05). Asserts the JURISTIC 1% WHT-on-payment-land behaviour.
-// Legacy: 1% allowance applies ⇔ customer is juristic AND total ≥ 1000.
+// legacyReceiptAmount — the grenrateReceiptF / auto-issue-receipt flat-1% rule.
+// owner 2026-07-22: the ฿1,000 MINIMUM was ABOLISHED → 1% applies ⇔ customer is
+// juristic AND amount > 0 (any positive amount). The LEGACY_RECEIPT_WHT_MIN gate
+// survives ONLY as an opt-in `minThreshold` for freezing already-settled docs.
 // ════════════════════════════════════════════════════════════════════════
 
-// 12. Juristic, total ≥ 1000 → 1% allowance applied
+// 12. Juristic, large total → 1% allowance applied
 {
   const r = legacyReceiptAmount(10000, true);
-  eq("legacyReceipt juristic≥1000: totalBefore = 10000", r.totalBeforeWithholding, 10000);
-  eq("legacyReceipt juristic≥1000: rAmount = 9900 (×0.99)", r.rAmount, 9900);
-  is("legacyReceipt juristic≥1000: applied = true", r.applied, true);
+  eq("legacyReceipt juristic 10000: totalBefore = 10000", r.totalBeforeWithholding, 10000);
+  eq("legacyReceipt juristic 10000: rAmount = 9900 (×0.99)", r.rAmount, 9900);
+  is("legacyReceipt juristic 10000: applied = true", r.applied, true);
 }
 
-// 13. Juristic but total < 1000 → NO allowance (legacy small-order exemption)
+// 13. NEW RULE — juristic under ฿1,000 now GETS the 1% (was exempt before 2026-07-22)
 {
   const r = legacyReceiptAmount(999.99, true);
-  eq("legacyReceipt juristic<1000: rAmount unchanged", r.rAmount, 999.99);
-  is("legacyReceipt juristic<1000: applied = false", r.applied, false);
+  eq("legacyReceipt juristic 999.99: rAmount = 989.99 (×0.99)", r.rAmount, 989.99);
+  is("legacyReceipt juristic 999.99: applied = true (no minimum)", r.applied, true);
 }
 
-// 14. Exactly at the threshold (1000) → applied (>= boundary)
+// 13b. NEW RULE — a tiny juristic ฿100 order withholds ฿1 → net ฿99
 {
-  const r = legacyReceiptAmount(1000, true);
-  eq("legacyReceipt juristic=1000: rAmount = 990", r.rAmount, 990);
-  is("legacyReceipt juristic=1000: applied = true (>= boundary)", r.applied, true);
-  is("legacyReceipt threshold constant = 1000", LEGACY_RECEIPT_WHT_MIN, 1000);
+  const r = legacyReceiptAmount(100, true);
+  eq("legacyReceipt juristic 100: rAmount = 99", r.rAmount, 99);
+  is("legacyReceipt juristic 100: applied = true", r.applied, true);
+}
+
+// 14. FORWARD-ONLY FREEZE — passing LEGACY_RECEIPT_WHT_MIN reproduces the OLD gate
+//     (a settled-doc renderer for a small juristic order shows no WHT).
+{
+  const r = legacyReceiptAmount(500, true, LEGACY_RECEIPT_WHT_MIN);
+  eq("legacyReceipt frozen <min: rAmount unchanged = 500", r.rAmount, 500);
+  is("legacyReceipt frozen <min: applied = false", r.applied, false);
+  is("legacyReceipt threshold constant kept = 1000", LEGACY_RECEIPT_WHT_MIN, 1000);
+  // ...and a settled doc AT/above the old min still withholds.
+  const big = legacyReceiptAmount(1000, true, LEGACY_RECEIPT_WHT_MIN);
+  eq("legacyReceipt frozen ≥min: rAmount = 990", big.rAmount, 990);
+  is("legacyReceipt frozen ≥min: applied = true", big.applied, true);
 }
 
 // 15. Personal (non-juristic) → NEVER withheld, even on a large total
@@ -189,7 +202,7 @@ function is(label: string, got: unknown, want: unknown) {
   eq("legacyReceipt rounding: totalBefore = 12345.67", r.totalBeforeWithholding, 12345.67);
 }
 
-// 17. Zero total → no allowance, zero amount (defensive)
+// 17. Zero total → no allowance, zero amount (defensive · gate is amount > 0)
 {
   const r = legacyReceiptAmount(0, true);
   eq("legacyReceipt zero: rAmount = 0", r.rAmount, 0);

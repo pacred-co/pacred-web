@@ -281,9 +281,11 @@ export async function ForwarderImportItemsTable({ r, isJuristic = false }: Props
   // The legacy "รายการสินค้า" table ALWAYS renders this column for EVERY customer
   // (นิติ/บุคคล · ยอดถึง/ไม่ถึง) — when no WHT applies the cell is just blank, the
   // column never disappears (owner: "ขึ้นโชว์ตลอด ถ้าไม่หักก็ไม่ต้องใส่ยอด").
-  // WHT is only DEDUCTED for a juristic customer (นิติบุคคล) on ยอด ≥ ฿1,000
-  // (legacy detail.php L374) — so `applyWHT` gates the AMOUNT, never the column.
-  const applyWHT = isJuristic && totals.priceAllUser >= 1000;
+  // WHT is DEDUCTED for a juristic customer (นิติบุคคล) — owner 2026-07-22: the
+  // ฿1,000 minimum was abolished, so it applies on ANY positive amount (this now
+  // matches calcForwarderOutstanding, which never had the minimum). `applyWHT`
+  // gates the AMOUNT, never the column.
+  const applyWHT = isJuristic && totals.priceAllUser > 0;
   const wht1 = applyWHT ? Math.round(totals.priceAllUser * 0.01 * 100) / 100 : 0;
   const netAfterWht = totals.priceAllUser - wht1;
 
