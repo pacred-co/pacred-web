@@ -213,7 +213,7 @@ export default async function AdminCustomerCreditPage() {
                 shortcuts ไปยัง 3 หน้าตรวจสอบ/ออกเอกสารที่อยู่กระจายในเมนูอื่น:
                 AR-aging cockpit (รายงานยอดค้าง 4 buckets) · เครดิตเกินกำหนด
                 queue (fcreditdate < NOW) · ทำใบวางบิล (Peak format · WHT 1%
-                นิติบุคคล ≥฿1,000). ไม่มี new action — แค่ navigate links. */}
+                นิติบุคคล). ไม่มี new action — แค่ navigate links. */}
             <Link
               href="/admin/accounting/ar-aging"
               className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100"
@@ -231,7 +231,7 @@ export default async function AdminCustomerCreditPage() {
             <Link
               href="/admin/billing-run/add"
               className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
-              title="ทำใบวางบิลสำหรับลูกค้าเครดิต · Peak format · WHT 1% สำหรับนิติบุคคล ≥฿1,000"
+              title="ทำใบวางบิลสำหรับลูกค้าเครดิต · Peak format · WHT 1% สำหรับนิติบุคคล (ทุกยอด)"
             >
               🧾 ทำใบวางบิล
             </Link>

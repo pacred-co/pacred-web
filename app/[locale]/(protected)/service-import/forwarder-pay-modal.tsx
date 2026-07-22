@@ -15,6 +15,7 @@ import { OUTPUT_VAT_RATE } from "@/lib/payment/bank-accounts";
 import { serviceAccountFor } from "@/lib/services/service-catalog";
 import { modeFromPref } from "@/lib/tax/tax-doc-mode";
 import { MAO_FLAT_FEE, isMaoCarrier } from "@/lib/forwarder/mao-fee";
+import { computeBillWht } from "@/lib/billing/wht";
 import { PayDestination } from "@/components/payment/pay-destination";
 
 /**
@@ -133,8 +134,11 @@ export function ForwarderPayModal({
     const sumPricePCSF = countPricePCSF > 0 ? MAO_FLAT_FEE : 0;
     totalPriceAll += sumPricePCSF;
 
-    const totalNiTi =
-      isJuristic && totalPriceAll >= 1000 ? totalPriceAll * 0.01 : 0;
+    // หัก ณ ที่จ่าย 1% (นิติบุคคล) — routed through the SOT (computeBillWht) so this
+    // customer-facing QR/slip preview can't drift from the server. owner 2026-07-22:
+    // the ฿1,000 minimum was abolished → juristic pays net on ANY positive amount.
+    // Live preview (unpaid) → new rule (no paidAt).
+    const totalNiTi = isJuristic ? computeBillWht(true, totalPriceAll).wht_amount : 0;
 
     const payAmount = totalPriceAll - totalNiTi;
 

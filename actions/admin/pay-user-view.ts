@@ -152,7 +152,7 @@ export type PayUserPanel = {
   };
   wallet_balance: number;
   cashback: number;
-  /** true = a tb_corporate row exists (drives the 1% ≥฿1,000 preview). */
+  /** true = a tb_corporate row exists (drives the juristic 1% preview · owner 2026-07-22: no minimum). */
   is_corporate: boolean;
   /**
    * true = tb_users.userCompany==1 (นิติบุคคล — cannot use wallet on ฝากนำเข้า).
@@ -340,8 +340,8 @@ export async function getPayUserForwarderView(
     }
     const rows = (raw ?? []) as unknown as FwdRaw[];
 
-    // Authoritative per-row price (เหมาๆ ฿50 + 1% นิติ if batch ≥ ฿1000) — same
-    // engine the pay action debits, on the SAME eligible set.
+    // Authoritative per-row price (เหมาๆ ฿100 + 1% นิติ · owner 2026-07-22 no minimum) —
+    // same engine the pay action debits, on the SAME eligible set.
     // 🔴 owner 2026-07-16 — elect the เหมาๆ carrier PER SHIPMENT (reads every sibling
     // in the DB) so a MOMO split-at-commit shipment with no bare base row still gets its
     // ฿100 here. Without it this VIEW showed 1,085.55 while the bill said 1,184.54.

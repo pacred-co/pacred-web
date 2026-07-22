@@ -1,5 +1,14 @@
 import { redirect } from "next/navigation";
 import { requireAdmin, hasRole } from "@/lib/auth/require-admin";
+import { isGodRole } from "@/lib/admin/god-role";
+import {
+  resolveViewAsRole,
+  previewRoleLabel,
+} from "@/lib/admin/view-as-role";
+// The 👁 picker itself lives on /admin/board/inbox (ภูม's page) — not in the
+// shared header. This layout only READS the cookie (below) so the preview
+// still swaps the sidebar/cost-blur across pages + shows the exit banner.
+import { ViewAsRoleBanner } from "@/components/sections/view-as-role-banner";
 import { verifyAdminSession } from "@/lib/auth/admin-session";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { getSidebarCounts } from "@/actions/admin/sidebar-counts";
@@ -50,6 +59,18 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const deptName = posInfo.department ? departmentLabel(posInfo.department) : null;
   const positionLabel = [deptName, posInfo.positionName].filter(Boolean).join(" / ") || null;
 
+  // 👁 VIEW-AS-ROLE (ภูม/พี่ป๊อป 2026-07-22) — DISPLAY-ONLY role preview. A god
+  // (ultra/super) can preview any role's sidebar + cost-blur to audit that
+  // department's screens WITHOUT logging in as a staffer. `resolveViewAsRole`
+  // returns a role ONLY for a real god + a valid cookie. `displayRoles` drives
+  // ONLY the sidebar chrome + the cost-blur; `requireAdmin`, every action gate,
+  // and RLS keep using the REAL `roles` → real permissions never change. When
+  // previewing we also drop the position-scope so the FULL role menu shows.
+  const canPreviewRole = isGodRole(roles);
+  const viewAsRole = canPreviewRole ? await resolveViewAsRole(roles) : null;
+  const displayRoles = viewAsRole ? [viewAsRole] : roles;
+  const displayWorkspaceRole = viewAsRole ? null : workspaceRole;
+
   const profile = withProfile?.profile ?? null;
   const adminLabel =
     [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim() ||
@@ -91,6 +112,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <header className="print:hidden fixed top-0 inset-x-0 z-[60] h-14 bg-[#B91C1C] flex items-center px-4 shadow-md">
         <AdminHeaderNavDisplay />
         <div className="ml-auto flex items-center gap-2">
+          {/* 👁 View-as-role picker moved OUT of the shared header (2026-07-22 · ภูม
+              "เดี๋ยวพี่ป๊อปงง · อยากได้แค่ในหน้า Inbox ของภูมเอง"). The picker now lives
+              only on /admin/board/inbox, scoped to the allow-listed account. This
+              layout still READS the cookie to swap the sidebar/cost-blur while a
+              preview is active (so it works across pages), + shows the exit banner. */}
           <LocaleSwitcher variant="on-primary" />
           <ThemeToggle variant="on-primary" />
         </div>
@@ -99,7 +125,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           sidebar on print so receipts/invoices/tax-invoices don't show admin
           chrome bleeding into the page. Side-effect-free for screen rendering. */}
       <div className="print:hidden">
-        <AdminSidebar roles={roles} workspaceRole={workspaceRole} positionLabel={positionLabel} counts={counts} adminLabel={adminLabel} adminAvatar={profile?.avatar_url ?? null} />
+        <AdminSidebar roles={displayRoles} workspaceRole={displayWorkspaceRole} positionLabel={viewAsRole ? null : positionLabel} counts={counts} adminLabel={adminLabel} adminAvatar={profile?.avatar_url ?? null} />
         {/* 2026-06-13 (ปอน · owner "ทำให้ left sidebar responsive เหมือนหน้านำเข้าทุกหน้า"):
             collapse the desktop sidebar to a hover-expand icon rail on EVERY admin
             page (was page-scoped to /admin/forwarders/[fNo]). Lifted here so the
@@ -114,7 +140,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           cost PLAIN (no blur, no eye). Every other cost-seeing role gets the
           blur + PIN gate. */}
       <div className="admin-content flex-1 lg:ml-64 min-h-screen min-w-0 overflow-x-clip pt-14 print:pt-0 print:ml-0">
-        <CostRevealProvider bypass={hasRole(roles, ["accounting", "pricing"])}>
+        {/* 👁 preview banner — pushed into the content flow so it never overlaps.
+            cost-blur (below) follows displayRoles so the preview is faithful:
+            previewing warehouse blurs cost, previewing accounting shows it. */}
+        {viewAsRole && <ViewAsRoleBanner label={previewRoleLabel(viewAsRole)} />}
+        <CostRevealProvider bypass={hasRole(displayRoles, ["accounting", "pricing"])}>
           <RouteFade>{children}</RouteFade>
         </CostRevealProvider>
       </div>

@@ -755,7 +755,10 @@ export async function getReceiptDetail(id: number): Promise<ReceiptDetail | null
     ramount,
     totalBeforeWithholding,
     whtAmount,
-    applyJuristic1Pct:      isCorporate && totalBeforeWithholding >= 1000,
+    // owner 2026-07-22 (no ฿1,000 minimum) + forward-only: derive "was 1% withheld?"
+    // from the STORED pre-WHT − net (whtAmount), never a re-evaluated threshold — so
+    // an already-issued receipt renders exactly what it stored.
+    applyJuristic1Pct:      isCorporate && whtAmount > 0.005,
     adminid:                receiptData.adminid,
     userid:                 receiptData.userid,
     statusprint:            receiptData.statusprint,

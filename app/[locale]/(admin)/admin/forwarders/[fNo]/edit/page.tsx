@@ -828,7 +828,7 @@ export default async function AdminForwarderEditPage({
       {/* ── 4.4 รายการสินค้า + freight breakdown ── 2026-06-05 PM (ภูม flag
           round 2): now ONE combined table — N per-item rows (¥ from tb_order)
           + final summary row (฿ legacy 16-col freight breakdown) +
-          WHT 1% for juristic ≥ ฿1000.
+          WHT 1% for juristic (owner 2026-07-22: no ฿1,000 minimum).
           The old standalone <ForwarderItemsTable> section below was REMOVED
           per ภูม: "ตามpcs มันก็ไม่มี ต้องลบออก". */}
       <FreightBreakdownTable

@@ -700,7 +700,11 @@ async function tryRenderTbForwarder(
   const { missing: rateMissing } = await previewForwarderRateMissing(admin, r.id);
   const tRate = await getTranslations("forwarderInlineRate");
 
-  // Corporate identity drives the juristic badge and company-name header.
+  // ── 2026-06-19 (Unit A) — ยอดเก็บจริง + breakdown (แจงรายละเอียดค่า) ──────────
+  // Corporate identity drives the juristic badge, company-name header AND the
+  // collect total (same engine as จ่ายแทนลูกค้า — never drift). owner 2026-07-22:
+  // the นิติ 1% fires on ANY positive total — the ฿1,000 batch minimum was
+  // abolished (see lib/tax/wht.ts legacyReceiptAmount).
   let isCorporateCustomer = (r.fusercompany ?? "").trim() === "1";
   // Also fetch the corp NAME (2026-07-03) so the "จาก :" header shows the
   // COMPANY for a juristic customer (was leaking the contact person). Single

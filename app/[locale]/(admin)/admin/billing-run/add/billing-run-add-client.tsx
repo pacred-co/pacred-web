@@ -261,9 +261,10 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
   const totalAmount = Math.max(0, subtotal + maoFee + numChn + numTh + numOther - numDiscount);
 
   // WHT 1% — mirrors the server rule (computeBillWht in billing-run.ts) + the
-  // ใบเสร็จ: a นิติบุคคล buyer withholds 1% on the transport fee when the bill
-  // total ≥ 1,000 THB. Display-only here; the print/detail recompute identically.
-  const showWht = !!selectedCustomer?.is_juristic && totalAmount >= 1000;
+  // ใบเสร็จ: a นิติบุคคล buyer withholds 1% on the transport fee. owner 2026-07-22:
+  // the ฿1,000 minimum was abolished → 1% on ANY positive amount. This is a NEW bill
+  // being created (unpaid) → new rule. Display-only here; the print/detail recompute identically.
+  const showWht = !!selectedCustomer?.is_juristic && totalAmount > 0;
   const whtAmount = showWht ? Math.round(totalAmount * 0.01 * 100) / 100 : 0;
   const netPayable = Math.round((totalAmount - whtAmount) * 100) / 100;
 
@@ -738,7 +739,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
             value={totalAmount}
           />
 
-          {/* Optional WHT block · only นิติบุคคล + ≥฿1,000 */}
+          {/* Optional WHT block · นิติบุคคล (owner 2026-07-22: no ฿1,000 minimum) */}
           {showWht && (
             <>
               <LedgerRow
@@ -769,9 +770,6 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
           </GuideNote>
         )}
 
-        {selectedCustomer?.is_juristic && totalAmount > 0 && totalAmount < 1000 && !showWht && (
-          <p className="text-xs text-muted mt-2">* นิติบุคคล แต่ยอดน้อยกว่า ฿1,000 — ไม่หักภาษี ณ ที่จ่าย</p>
-        )}
       </section>
 
       {/* SECTION 4 — Note */}

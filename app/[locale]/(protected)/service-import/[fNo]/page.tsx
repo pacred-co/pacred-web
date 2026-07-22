@@ -920,7 +920,7 @@ export default async function ServiceImportDetailPage({
   // ── 2026-06-19 (Unit A) — ยอดเก็บจริง breakdown (READ-ONLY, customer labels) ──
   // The cost table above shows ftotalprice = freight only; at pay-time admin
   // collects freight + เหมาๆ ฿100 (first PCSF-zero row) − ส่วนลด − หัก ณ ที่จ่าย
-  // นิติ 1% (juristic & batch ≥ ฿1,000). We compute the real collect with the SAME
+  // นิติ 1% (juristic · owner 2026-07-22 no minimum). We compute the real collect with the SAME
   // canonical fn the admin detail + จ่ายแทนลูกค้า use, so the customer sees 95.10
   // (not 45.10) before paying — no surprise at checkout. isCorporate: a
   // tb_corporate row exists OR fusercompany==='1' (matches the admin derivation).

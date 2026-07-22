@@ -26,8 +26,8 @@
  *     helper at `lib/admin/mint-receipt-doc-no.ts`. Format: `FRC2605-00219`
  *     or `FRG2605-00007` (per-corporate-type sequence per year-month).
  *   - INSERTs tb_receipt + N × tb_receipt_item (legacy L568-581).
- *   - WHT 1% deduction (`rAmount = pricePayAll * 0.99`) applies ONLY when
- *     `corporate=1` AND `pricePayAll ≥ 1000` (legacy L557-559).
+ *   - WHT 1% deduction (`rAmount = pricePayAll * 0.99`) applies when `corporate=1`
+ *     (owner 2026-07-22: the ฿1,000 minimum was abolished — any positive amount).
  *   - Logs to `admin_audit_log` with `action='auto_receipt.created'` and
  *     `admin_id='system-auto'` so accountancy can audit.
  *   - Best-effort SMS notify to the customer with the receipt URL.
@@ -55,7 +55,7 @@ import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-tota
 import { resolveMaoAnchorIds } from "@/lib/forwarder/mao-anchor";
 import { mintReceiptDocNo } from "@/lib/admin/mint-receipt-doc-no";
 import { resolveReceiptMaoFee } from "@/lib/admin/receipt-mao-fee";
-import { legacyReceiptAmount, LEGACY_RECEIPT_WHT_MIN } from "@/lib/tax/wht";
+import { legacyReceiptAmount } from "@/lib/tax/wht";
 import { issueForwarderTaxInvoice } from "@/lib/admin/forwarder-tax-invoice";
 import { modeFromPref, type TaxDocMode } from "@/lib/tax/tax-doc-mode";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
@@ -439,10 +439,12 @@ export async function autoIssueReceiptOnPaymentLand(
   const maoFeeThb = resolveReceiptMaoFee(recomputedMaoFeeThb, opts.maoFeeOverride);
   const pricePayAll = pricePayBase + maoFeeThb;
 
-  // Legacy L557-559: 1% WHT applies only to juristic AND total ≥ 1000.
-  // Shared, unit-tested rule (lib/tax/wht.ts:legacyReceiptAmount) so the
-  // grenrateReceiptF juristic-1% behaviour can't silently drift untested.
-  // The เหมาๆ is part of the bill total → it's in the WHT base too (consistent w/ the bill).
+  // owner 2026-07-22: 1% WHT applies to juristic on ANY positive amount (the
+  // ฿1,000 minimum was abolished). Shared, unit-tested rule
+  // (lib/tax/wht.ts:legacyReceiptAmount, default no minimum) so the juristic-1%
+  // behaviour can't silently drift untested. This is a LIVE issuance (the receipt
+  // is minted now) → new rule. The เหมาๆ is part of the bill total → it's in the
+  // WHT base too (consistent w/ the bill).
   const live = legacyReceiptAmount(pricePayAll, corporate === 1);
 
   // G1 (billing-run mark-paid · 2026-07-08) — RECONCILE-not-recompute. When the
@@ -469,7 +471,11 @@ export async function autoIssueReceiptOnPaymentLand(
     rAmount = opts.netOverride !== undefined
       ? Math.round(opts.netOverride * 100) / 100
       : legacyReceiptAmount(opts.totalOverride, billJuristic).rAmount;
-    applyJuristic1Pct = billJuristic && opts.totalOverride >= LEGACY_RECEIPT_WHT_MIN;
+    // Forward-only: derive "was 1% withheld?" from the PINNED bill amounts, not a
+    // re-evaluated threshold. A bill settled under the old ≥ ฿1,000 rule pinned
+    // net==total (no WHT) → applyJuristic1Pct stays false; a bill withholding 1%
+    // pinned net<total → true. Never retro-applies the new rule to a paid bill.
+    applyJuristic1Pct = billJuristic && totalBeforeWithholding - rAmount > 0.005;
   }
 
   // 5. Customer header info — name/address for the printable receipt.

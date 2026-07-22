@@ -249,8 +249,10 @@ export default async function PaymentSummaryPage({
   //   • gross + เหมาๆ  → computeForwarderDebitBatch breakdown (the mao/pricing SOT · owner
   //                       2026-07-15 · เหมาๆ ฿100 is a VIRTUAL flat fee, NOT a stored column)
   //   • WHT + net      → computeBillWht (the bill/receipt WHT SOT · F4 · single 1% of the
-  //                       grand total when juristic & ≥ ฿1,000). The old per-row Σ 1% drifted
-  //                       by satang on multi-row juristic bills → now all three docs match.
+  //                       grand total when juristic · owner 2026-07-22 no ฿1,000 minimum).
+  //                       The old per-row Σ 1% drifted by satang on multi-row juristic
+  //                       bills → now all three docs match. This is a live pay preview
+  //                       (no paidAt) → new rule.
   //   • COD (F1)       → a ปลายทาง row's domestic leg is excluded from the gross (the batch
   //                       is COD-aware via paymethod) so the PDF == the actual charge.
   const maoFeeTotal = round2(batch.lines.reduce((s, l) => s + l.breakdown.maoFee, 0));

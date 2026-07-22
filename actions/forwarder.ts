@@ -62,7 +62,7 @@ type ActionResult<T = void> =
 //   - +50 ฿ flat fee when at least one row uses fShipBy='PCSF' with
 //     fTransportPrice=0 (the PCS เหมาๆ promo) AND that user isn't on
 //     the `user-not-50.json` allowlist.
-//   - -1% discount when userCompany==1 (juristic) AND price >= 1000.
+//   - -1% discount when userCompany==1 (juristic) · owner 2026-07-22: no ฿1,000 minimum.
 export type CalculateForwarderTotalInput = {
   ids: number[];
 };
@@ -482,8 +482,8 @@ async function submitForwarderPaymentImpl(
   let pricePayAll = collect.total;
   // Whether the +50 PCSF flat fee fired (the split must distribute it).
   const applied50 = collect.applied50;
-  // forwarder.php L268-270 — juristic 1% reduction when total ≥ 1000 (decided
-  // by the helper off userCompany, NOT tb_corporate — BUG-2b fix).
+  // forwarder.php L268-270 — juristic 1% reduction (owner 2026-07-22: no ฿1,000
+  // minimum · decided by the helper off userCompany, NOT tb_corporate — BUG-2b fix).
   const applyNiti = collect.appliedWht;
 
   // ── ADR-0025 — apply-cashback at checkout (getListPayForwarder.php

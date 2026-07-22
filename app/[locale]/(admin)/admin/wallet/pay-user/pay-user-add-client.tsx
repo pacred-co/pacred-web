@@ -469,7 +469,7 @@ export function PayUserAddClient() {
             <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-[13px] text-amber-800">
               <span className="font-semibold">ลูกค้านิติบุคคล:</span> ชำระในหน้านี้ได้ตามปกติ —
               ใช้ <span className="font-semibold">สลิปการโอน</span> (แนบในขั้นตอนชำระเงิน · ระบบไม่ตัดจากกระเป๋า)
-              · หัก ณ ที่จ่าย 1% อัตโนมัติเมื่อยอด ≥ ฿1,000 · ชำระแล้วระบบออกใบเสร็จให้เอง
+              · หัก ณ ที่จ่าย 1% อัตโนมัติ (ทุกยอด) · ชำระแล้วระบบออกใบเสร็จให้เอง
             </div>
           )}
         </div>

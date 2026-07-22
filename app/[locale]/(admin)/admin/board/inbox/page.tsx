@@ -15,6 +15,11 @@ import { type WaitingReason } from "@/types/work-item-chat";
 import { WorkItemCard } from "../work-item-card";
 import { DevCockpitPanel } from "@/components/admin/dev-cockpit-panel";
 import { isDevCockpitAdmin, loadDevCockpit, type DevCockpit } from "@/lib/admin/dev-cockpit";
+// 👁 view-as-role picker — moved here (2026-07-22) from the shared admin header,
+// gated to ภูม's own account (same allowlist as the dev cockpit) so พี่ป๊อป
+// never sees it. Display-only role preview — see lib/admin/view-as-role.ts.
+import { PREVIEWABLE_ROLES, resolveViewAsRole } from "@/lib/admin/view-as-role";
+import { ViewAsRoleSwitcher } from "@/components/sections/view-as-role-switcher";
 
 /**
  * 0080 + IC-1 — per-role inbox with two tabs.
@@ -87,6 +92,12 @@ export default async function AdminBoardInboxPage({
   }
   const cockpitName = [meProfile?.first_name, meProfile?.last_name].filter(Boolean).join(" ") || "ภูม";
   const cockpitCode = meProfile?.member_code ?? "AD008";
+
+  // 👁 view-as-role preview — the picker is scoped to ภูม (same allowlist as the
+  // cockpit). resolveViewAsRole is god-gated internally; compute only for the
+  // operator. The (admin) layout reads the same cookie to swap the sidebar +
+  // cost-blur across every page while a preview is active.
+  const viewAsRole = showCockpit ? await resolveViewAsRole(roles) : null;
 
   const selectCols = `
     id, entity_type, entity_ref, type, title, note, status, priority,
@@ -239,6 +250,13 @@ export default async function AdminBoardInboxPage({
       {/* Dev cockpit — ภูม only · hi-tech mission-control hero */}
       {showCockpit && cockpit && (
         <DevCockpitPanel cockpit={cockpit} adminName={cockpitName} adminCode={cockpitCode} />
+      )}
+
+      {/* 👁 ดูมุมมองแบบ role อื่น — ภูม only · moved here 2026-07-22 from the shared
+          admin header (พี่ป๊อปจะได้ไม่เห็น). Sets a display-only preview cookie the
+          layout reads to swap the sidebar + cost-blur across pages. */}
+      {showCockpit && (
+        <ViewAsRoleSwitcher options={PREVIEWABLE_ROLES} active={viewAsRole} />
       )}
 
       {/* Tab bar — URL state via ?tab= */}
