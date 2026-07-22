@@ -45,6 +45,7 @@ import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { calcForwarderOutstanding, isForwarderPaid } from "@/lib/forwarder/outstanding";
+import { filterCountableForwarderRows } from "@/lib/admin/momo-bill-header";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { exportForwardersAll } from "@/actions/admin/export/forwarders";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
@@ -105,7 +106,8 @@ function buildForwarderMenubar(c: { s5: number; s6: number }): MenubarItem[] {
   {
     label: "ค้นหา",
     children: [
-      { label: "รหัสเดียว",    href: "/admin/forwarders?focus=search" },
+      // ภูม 2026-07-22 — ลบ "รหัสเดียว" (?focus=search) ทิ้ง · มันไม่ทำอะไร (ไม่มีตัวอ่าน
+      // focus) · ช่องค้นหาเลขเดียวมีอยู่บนหน้าอยู่แล้ว. เหลือ "หลายรหัส" (bulk-search) ที่ใช้ได้.
       { label: "หลายรหัส",     href: "/admin/forwarders/bulk-search" },
     ],
   },
@@ -927,10 +929,20 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           weight/boxes. Labeled "รวมหน้านี้" to be honest about the scope
           (this is NOT a full-table aggregate). */}
       {rows.length > 0 && (() => {
-        const sumOutstanding = rows.reduce((s, r) => s + (r.outstanding_thb || 0), 0);
-        const sumTotalPrice = rows.reduce((s, r) => s + (r.total_price || 0), 0);
-        const sumWeight = rows.reduce((s, r) => s + (r.weight_kg || 0), 0);
-        const sumBoxes = rows.reduce((s, r) => s + (r.amount_count || 0), 0);
+        // ภูม 2026-07-22 — Σ กล่อง/น้ำหนัก/เงิน คิดจาก "แถวที่นับได้" (ตัดหัวบิล MOMO ของ
+        // ชิปเม้นที่แตกกล่อง เหมือนตารางด้านบน countableGroupMembers) ไม่งั้นกล่อง+น้ำหนักนับ
+        // ซ้ำหัวบิล (6+6=12). money ปลอดภัยอยู่แล้ว (หัวบิล ftotalprice=0) แต่รวมในชุดเดียวกัน
+        // เพื่อความสอดคล้อง. filter จัดกลุ่มด้วย (baseTracking, userid) เองแบบเดียวกับตาราง.
+        const countable = filterCountableForwarderRows(rows, {
+          tracking: (r) => r.tracking_chn,
+          weight: (r) => r.weight_kg,
+          userid: (r) => r.customer?.userid ?? "",
+          money: (r) => r.total_price,
+        });
+        const sumOutstanding = countable.reduce((s, r) => s + (r.outstanding_thb || 0), 0);
+        const sumTotalPrice = countable.reduce((s, r) => s + (r.total_price || 0), 0);
+        const sumWeight = countable.reduce((s, r) => s + (r.weight_kg || 0), 0);
+        const sumBoxes = countable.reduce((s, r) => s + (r.amount_count || 0), 0);
         return (
           <div className="rounded-lg border border-border bg-surface-alt/60 px-4 py-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-2 text-sm">
             <span className="font-medium text-muted">
@@ -1562,7 +1574,8 @@ async function resolvePurchaserAdminId(
 
 async function loadStatusCounts(
   admin: ReturnType<typeof createAdminClient>,
-  dateWindow: { from: string | null; to: string | null; isDefault: boolean },
+  // ภูม 2026-07-22 — badge นับทั้งหมด (ไม่สนวันที่) · dateWindow ไม่ใช้แล้ว (กรองแค่ list)
+  _dateWindow: { from: string | null; to: string | null; isDefault: boolean },
   purchaserScope?: string | null,
 ) {
   // owner ④ — when a purchaser scope is set, badge counts reflect ONLY that
@@ -1573,13 +1586,11 @@ async function loadStatusCounts(
   // purchaser scope is applied on the base builder (before this helper) to keep
   // the generic constraint narrow (a wide {gte,lte,eq} constraint tripped
   // TS2589 "excessively deep").
-  function applyDate<T extends { gte: (col: string, v: string) => T; lte: (col: string, v: string) => T }>(
-    builder: T,
-  ): T {
-    let q = builder;
-    if (dateWindow.from) q = q.gte("fdate", dateWindow.from);
-    if (dateWindow.to)   q = q.lte("fdate", dateWindow.to + "T23:59:59");
-    return q;
+  // ภูม 2026-07-22 — badge counts นับทั้งหมด (ไม่สนวันที่) · pass-through. date window
+  // ยังใช้กรอง LIST (fetchForwarderList) แต่ไม่ผูกกับ badge → เลข badge นิ่ง + ตรงผลค้นหา
+  // ที่ข้ามกรอบวันได้ (revert Wave 18-B date-scoping ตามที่ owner สั่ง). วันที่ = ไว้กรองหาเอง.
+  function applyDate<T>(builder: T): T {
+    return builder;
   }
   function base() {
     let q = admin.from("tb_forwarder").select("id", { count: "exact", head: true });
