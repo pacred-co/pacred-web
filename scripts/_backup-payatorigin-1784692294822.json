@@ -1,0 +1,83 @@
+[
+ {
+  "id": "52162",
+  "userid": "PR043",
+  "ftrackingchn": "79014489632554",
+  "fstatus": "5",
+  "fshipby": "2",
+  "paymethod": "2",
+  "ftransportprice": "0.00"
+ },
+ {
+  "id": "52163",
+  "userid": "PR043",
+  "ftrackingchn": "79014495220346",
+  "fstatus": "5",
+  "fshipby": "2",
+  "paymethod": "2",
+  "ftransportprice": "0.00"
+ },
+ {
+  "id": "52164",
+  "userid": "PR043",
+  "ftrackingchn": "YT7629647967871",
+  "fstatus": "5",
+  "fshipby": "2",
+  "paymethod": "2",
+  "ftransportprice": "0.00"
+ },
+ {
+  "id": "52671",
+  "userid": "PR1665",
+  "ftrackingchn": "300384426286-1/2",
+  "fstatus": "3",
+  "fshipby": "2",
+  "paymethod": "2",
+  "ftransportprice": "0.00"
+ },
+ {
+  "id": "52672",
+  "userid": "PR1665",
+  "ftrackingchn": "300384426286-2/2",
+  "fstatus": "3",
+  "fshipby": "2",
+  "paymethod": "2",
+  "ftransportprice": "0.00"
+ },
+ {
+  "id": "52744",
+  "userid": "PR224",
+  "ftrackingchn": "773432487940999",
+  "fstatus": "2",
+  "fshipby": "2",
+  "paymethod": "2",
+  "ftransportprice": "0.00"
+ },
+ {
+  "id": "52745",
+  "userid": "PR224",
+  "ftrackingchn": "JT3170896294464",
+  "fstatus": "2",
+  "fshipby": "2",
+  "paymethod": "2",
+  "ftransportprice": "0.00"
+ },
+ {
+  "id": "52848",
+  "userid": "PR224",
+  "ftrackingchn": "79019981206892",
+  "fstatus": "2",
+  "fshipby": "2",
+  "paymethod": "2",
+  "ftransportprice": "0.00"
+ },
+ {
+  "id": "52924",
+  "userid": "PR549",
+  "ftrackingchn": "899020867609",
+  "fstatus": "2",
+  "fshipby": "2",
+  "paymethod": "2",
+  "ftransportprice": "0.00"
+ }
+]
