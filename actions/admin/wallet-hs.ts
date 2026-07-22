@@ -80,6 +80,8 @@ import { logger } from "@/lib/logger";
 // only UNEXPECTED throws (requireAdmin auth-throw · null-deref · DB driver
 // throw) are filed as incidents; handled `{ ok:false }` returns are untouched.
 import { withObservability } from "@/lib/observability/with-observability";
+import { loadLinkedForwarderPaymentBatch } from "@/lib/forwarder/linked-payment-batch";
+import { checkLinkedPaymentConsistency } from "@/lib/forwarder/linked-payment-consistency";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — same helper as actions/admin/warehouse-history.ts
@@ -1598,6 +1600,48 @@ async function adminApproveWalletDepositImpl(
       const hasLinks = links.length > 0;
 
       const cascadedRows: CascadedRow[] = [];
+
+      // Compare stored topup + child rows with the authoritative batch engine
+      // before the atomic status claim. This blocks stale per-row WHT rounding.
+      const linkedForwarderIds = links.map((link) => link.hno);
+      if (
+        rowRaw.typeservice === "2"
+        && linkedForwarderIds.length > 0
+        && linkedForwarderIds.every((value) => /^\d+$/.test(value))
+      ) {
+        const authoritative = await loadLinkedForwarderPaymentBatch(admin, {
+          userId: userid,
+          forwarderIds: linkedForwarderIds,
+        });
+        if (!authoritative.ok) {
+          return { ok: false, error: `ตรวจสอบยอดรายการจริงไม่สำเร็จ (${authoritative.error})` };
+        }
+        if (authoritative.missingIds.length > 0) {
+          return { ok: false, error: `ไม่พบรายการฝากนำเข้า: ${authoritative.missingIds.join(", ")}` };
+        }
+
+        const { data: childRows, error: childErr } = await admin
+          .from("tb_wallet_hs")
+          .select("reforder,amount")
+          .eq("reforder2", String(id))
+          .eq("type", "4")
+          .eq("status", "1");
+        if (childErr) return { ok: false, error: `db_error:${childErr.code ?? "unknown"}` };
+
+        const consistency = checkLinkedPaymentConsistency(amount, childRows ?? [], authoritative.batch);
+        if (!consistency.ok) {
+          console.error("[wallet approve] linked forwarder amount mismatch", {
+            id,
+            storedTotal: amount,
+            expectedTotal: consistency.expectedTotal,
+            differences: consistency.differences,
+          });
+          return {
+            ok: false,
+            error: `ยอดชำระไม่ตรงกับยอดรายการจริง (ควรเป็น ${consistency.expectedTotal.toFixed(2)} บาท) กรุณาแก้ยอดก่อนอนุมัติ`,
+          };
+        }
+      }
 
       // ──────────────────────────────────────────────
       // 3. Flip the topup row to status='2' — ATOMIC CLAIM. Fold the
