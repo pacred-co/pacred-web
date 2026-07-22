@@ -529,7 +529,11 @@ export function PerTrackingEditorClient({
           // ค่าเทียบ on the ORDER TOTAL (ภูม 2026-06-18 "เทียบต่อจำนวนรวม กิโล/คิว") —
           // Σweight÷Σcbm of every tracking, so the KG-vs-CBM basis is decided ONCE
           // on the whole order (matching the preview box above), not per row.
-          comparisonKgPerCbm: calc.v > 0 ? calc.kgPerCbm : undefined,
+          // 2026-07-22 — ส่งเฉพาะเมื่อชิปเม้นมีหลายแทรค (rows.length > 1). เป็นสัญญาณเดียว
+          // ที่บอก engine ว่า "แถวนี้เป็นกล่องย่อยของชิปเม้น" → (1) ตัดสิน basis ที่ระดับ
+          // ชิปเม้น (2) ไม่ floor ฿50 รายกล่อง. ชิปเม้นแทรคเดียว → undefined → engine ใช้
+          // ratio ของแถวเอง (ผลเท่าเดิม) + floor ฿50 ตามปกติ (ของเล็กจริงๆ).
+          comparisonKgPerCbm: rows.length > 1 && calc.v > 0 ? calc.kgPerCbm : undefined,
           // per-row adders.
           fDiscount: parseFloat(r.fDiscount) || 0,
           fTransportPriceChnThb: parseFloat(r.fTransportPriceChnThb) || 0,

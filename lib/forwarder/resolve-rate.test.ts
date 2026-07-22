@@ -499,5 +499,69 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
   near("higher: no card → 0", noCard.transportSubtotal, 0);
 }
 
+// ── 15. SHIPMENT-level charge-higher (ภูม/พี่ป๊อป 2026-07-22 "ยึดตามหัว shipment") ──
+// When the caller threads the shipment-TOTAL ratio (comparisonKgPerCbm), the
+// charge-higher basis is decided on the WHOLE shipment (Σweight×kgRate vs
+// Σcbm×cbmRate ≡ ratio×kgRate vs cbmRate) so every sibling row lands on the SAME
+// basis → Σ rows == the shipment total (== the per-tracking preview). WITHOUT the
+// aggregate it's this row's own dearer side (unchanged). `hi(...)` keeps CHARGE_
+// HIGHER on (the shipped const).
+{
+  const hiA = (over: Partial<ResolveRateInput> = {}): ResolveRateInput => ({
+    weightKg: 0, volumeCbm: 0, comparisonEnabled: false, comparisonValue: null, ...over,
+  });
+  // The real GZE260716-1/1784007549 case: manual rate 17 ฿/กก · 5000 ฿/คิว. The
+  // shipment is DENSE (Σ715.5kg / Σ0.7208คิว = 992.67 kg/คิว).
+  const manual = cand({ manualOverride: true, manualKg: 17, manualCbm: 5000 });
+
+  // The light box #52661 (2kg · 0.015314คิว): ON ITS OWN cbm 76.57 > kg 34 → per-row
+  // charge-higher picks CBM (the over-charge that made the save ≠ the preview).
+  const lightRow = resolveForwarderRate(manual, hiA({ weightKg: 2, volumeCbm: 0.015314 }));
+  eq("ship: light box alone → cbm (per-row over-charge)", lightRow.basis, "cbm");
+  near("ship: light box alone subtotal=76.57", lightRow.transportSubtotal, 76.57);
+
+  // SAME light box, now with the shipment aggregate ratio 992.67 → the shipment is a
+  // WEIGHT shipment (992.67×17=16,875 > 5,000) → this box prices by weight 2×17=34.
+  const lightAgg = resolveForwarderRate(manual, hiA({ weightKg: 2, volumeCbm: 0.015314, comparisonKgPerCbm: 992.67 }));
+  eq("ship: light box in dense shipment → kg", lightAgg.basis, "kg");
+  near("ship: light box in dense shipment subtotal=34 (2×17)", lightAgg.transportSubtotal, 34);
+  eq("ship: refPrice=1 (kg)", lightAgg.refPrice, 1);
+
+  // A heavy box IN A BULKY shipment: box 300kg/0.05คิว (own ratio 6,000 → per-row KG),
+  // shipment aggregate ratio 100 (light) → shipment is a CBM shipment → box prices CBM.
+  const heavyRow = resolveForwarderRate(manual, hiA({ weightKg: 300, volumeCbm: 0.05 }));
+  eq("ship: heavy box alone → kg (per-row)", heavyRow.basis, "kg");
+  near("ship: heavy box alone subtotal=5100 (300×17)", heavyRow.transportSubtotal, 5100);
+  const heavyAgg = resolveForwarderRate(manual, hiA({ weightKg: 300, volumeCbm: 0.05, comparisonKgPerCbm: 100 }));
+  eq("ship: heavy box in bulky shipment → cbm", heavyAgg.basis, "cbm");
+  near("ship: heavy box in bulky shipment subtotal=250 (0.05×5000)", heavyAgg.transportSubtotal, 250);
+
+  // Σ-consistency proof: price ALL 8 real rows with the aggregate → Σ == 12,163.50
+  // (the preview footer + what ภูม expects), NOT the per-row-max 12,206.07.
+  const ROWS = [
+    { w: 4, c: 0.007904 }, { w: 2, c: 0.015314 }, { w: 12, c: 0.011520 }, { w: 23, c: 0.071680 },
+    { w: 17.5, c: 0.011040 }, { w: 50, c: 0.071680 }, { w: 5, c: 0.011520 }, { w: 602, c: 0.520128 },
+  ];
+  const shipTotal = ROWS.reduce(
+    (s, r) => s + resolveForwarderRate(manual, hiA({ weightKg: r.w, volumeCbm: r.c, comparisonKgPerCbm: 992.67 })).transportSubtotal,
+    0,
+  );
+  near("ship: Σ 8 rows == shipment total 12,163.50", Math.round(shipTotal * 100) / 100, 12163.5, 0.02);
+
+  // Guard: WITHOUT the aggregate the same 8 rows still sum to the per-row-max 12,206.07
+  // (proves the single-row / undefined-aggregate path is byte-unchanged).
+  const perRowTotal = ROWS.reduce(
+    (s, r) => s + resolveForwarderRate(manual, hiA({ weightKg: r.w, volumeCbm: r.c })).transportSubtotal,
+    0,
+  );
+  near("ship: Σ 8 rows per-row (no aggregate) == 12,206.07 (unchanged)", Math.round(perRowTotal * 100) / 100, 12206.07, 0.02);
+
+  // System (non-manual) path honours the aggregate too (MOMO auto-fill threads it).
+  const sysCard = cand({ isSvip: true, svipKg: 17, svipCbm: 5000 });
+  const sysAgg = resolveForwarderRate(sysCard, hiA({ weightKg: 2, volumeCbm: 0.015314, comparisonKgPerCbm: 992.67 }));
+  eq("ship: system rate + aggregate → kg (same as manual)", sysAgg.basis, "kg");
+  near("ship: system subtotal=34", sysAgg.transportSubtotal, 34);
+}
+
 console.log(`\n${pass} pass, ${fail} fail`);
 process.exit(fail > 0 ? 1 : 0);

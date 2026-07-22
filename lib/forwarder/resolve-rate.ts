@@ -272,6 +272,17 @@ export const COMPARISON_MAX = 350;
  * basis and fRefPrice all follow the winner so the bill/doc stay self-consistent.
  * The doc-tier ฿/คิว discount still lowers the CBM candidate BEFORE the comparison.
  *
+ * 🔵 SHIPMENT-LEVEL DECISION (ภูม/พี่ป๊อป 2026-07-22 "ยึดตามหัว shipment ไปเลย"):
+ * when the caller threads the shipment-TOTAL ratio (`comparisonKgPerCbm` — the
+ * multi-tracking editor save AND the MOMO auto-fill BOTH do) "the higher basis" is
+ * decided on the WHOLE SHIPMENT, not this one box: Σweight×kgRate vs Σcbm×cbmRate ≡
+ * (ratio × kgRate) vs cbmRate. Every sibling row then lands on the SAME basis → the
+ * Σ of the rows == the shipment total (== the per-tracking preview footer), not the Σ
+ * of each box's own dearer side (which over-charges a light box onto CBM inside a
+ * weight shipment · the "กดบันทึกแล้วราคาไม่เปลี่ยน" divergence ภูม hit on 1784007549).
+ * Without an aggregate (single-row edit / callers that pass undefined) it stays this
+ * row's own kg-price vs cbm-price — byte-identical to before.
+ *
  * SCOPE: the SELL basis only. Cost, ค่าส่งไทย, เหมาๆ, crate, discounts, WHT are
  * untouched, and NOTHING is re-priced retroactively — a stored row only changes when
  * something already re-prices it (save dimensions / rate-card save), and the billed
@@ -422,8 +433,31 @@ export function resolveForwarderRate(
     const cbmDiscH = applyDocTierCbmDiscount(cbmProbeH.rate, docEligible, docDiscountCbm);
     const priceKgH = round2(weight * kgProbeH.rate);
     const priceCbmH = round2(cbm * cbmDiscH.rate);
-    // Tie → CBM (legacy `priceCBM >= priceKg` · forwarder.php L1993).
-    if (priceCbmH >= priceKgH) {
+    // ── SHIPMENT-level charge-higher (ภูม/พี่ป๊อป 2026-07-22 "ยึดตามหัว shipment ไปเลย") ──
+    // "เก็บค่าที่แพงกว่า" is decided on the WHOLE SHIPMENT, not this one box, WHENEVER
+    // the caller threads the shipment-total ratio (the multi-tracking editor save AND
+    // the MOMO auto-fill BOTH do — comparisonKgPerCbm). WHY: summing each box's OWN
+    // dearer side over-charges vs the shipment total — a light box (2kg/0.015คิว) flips
+    // to CBM on its own (76.57 > 34) while the heavy shipment as a whole is a weight
+    // shipment. That made the SAVE (Σ per-row-max = 12,206.07) diverge from the
+    // per-tracking preview footer (shipment total = 12,163.50), and violated the owner's
+    // "คิดเป็นชิปเม้น" rule. At shipment scope the dearer basis is
+    //     Σweight × kgRate   vs   Σcbm × cbmRate     ≡   (ratio × kgRate)  vs  cbmRate
+    // (both ÷ Σcbm) — computable from the ratio + the two unit rates, so EVERY sibling
+    // row lands on the SAME basis → Σ rows == the shipment total (== the preview). Note
+    // `decisionKgPerCbm` already holds the aggregate ratio when supplied (>0), else this
+    // row's own — so WITHOUT an aggregate (single-row edit / callers that pass undefined)
+    // the decision is this row's own kg-price vs cbm-price, BYTE-IDENTICAL to before.
+    // Still "charge the higher basis" — just at shipment granularity. The per-CBM
+    // doc-tier discount already lowered cbmDiscH.rate, so the comparison stays fair.
+    const shipmentDecision =
+      input.comparisonKgPerCbm != null &&
+      Number.isFinite(input.comparisonKgPerCbm) &&
+      input.comparisonKgPerCbm > 0;
+    const cbmWins = shipmentDecision
+      ? cbmDiscH.rate >= decisionKgPerCbm * kgProbeH.rate  // Σcbm×cbmRate vs Σweight×kgRate (÷Σcbm) · tie → CBM
+      : priceCbmH >= priceKgH;                             // this row's own · tie → CBM (unchanged)
+    if (cbmWins) {
       return {
         rate: cbmDiscH.rate,
         basis: "cbm",

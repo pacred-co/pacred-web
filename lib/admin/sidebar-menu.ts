@@ -1324,7 +1324,7 @@ const wrapServiceImport: MenuItem = {
       children: [
         { labelKey: "serviceNav.importList", href: "/admin/forwarders",           icon: "Package",  badge: "forwarderArrived" },
         { labelKey: "forwarder.listPrepare", href: "/admin/forwarders?status=6",   icon: "Truck",    badge: "forwarderDelivery" },
-        { labelKey: "forwarder.listCredit",  href: "/admin/forwarders?q=c",        icon: "Landmark" },
+        { labelKey: "forwarder.listCredit",  href: "/admin/forwarders?status=c",   icon: "Landmark" },
         { labelKey: "forwarder.listAdd",     href: "/admin/forwarders/new",        icon: "Plus" },
       ],
     },
