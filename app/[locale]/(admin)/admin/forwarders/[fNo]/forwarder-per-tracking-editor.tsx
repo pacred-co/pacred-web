@@ -46,6 +46,8 @@ type SeedRow = {
 
 type Props = {
   r: SeedRow;
+  /** Accounting basis is frozen at รอชำระเงิน/เตรียมส่ง; render details only. */
+  readOnly?: boolean;
   // ORDER-level shared rate toggles — seeded from the landed row's pricingInit so
   // they reflect what the order currently uses (applied to every row on save).
   customRateInit: "0" | "1";
@@ -111,6 +113,7 @@ function num(v: number | string | null | undefined): number {
 
 export async function ForwarderPerTrackingEditor({
   r,
+  readOnly = false,
   customRateInit,
   customRateKgInit,
   customRateCbmInit,
@@ -480,6 +483,7 @@ export async function ForwarderPerTrackingEditor({
   return (
     <PerTrackingEditorClient
       rows={editorRows}
+      readOnly={readOnly}
       isMao={isMao}
       customRateInit={customRateInit}
       customRateKgInit={customRateKgInit}
