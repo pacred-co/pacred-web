@@ -9,7 +9,7 @@
  *      source).
  *   2. Renders ONE freight-breakdown footer row (from tb_forwarder header
  *      · in ฿ · matching legacy `forwarder/detail.php` L385-440 16-col layout)
- *      WHT 1% applied if juristic ≥ ฿1000 (legacy L374).
+ *      WHT 1% applied if juristic (owner 2026-07-22: no ฿1,000 minimum).
  *
  * The standalone <ForwarderItemsTable> below it on /edit was removed (ภูม:
  * legacy doesn't have it).
@@ -168,7 +168,8 @@ export async function FreightBreakdownTable({ r, isJuristic }: Props) {
     fTotalPrice + fTransportPrice + fPriceUpdate + fShippingService +
     fTransportPriceCHNTHB + priceCrate + priceOther - fDiscount;
   const priceAllUserBefore = priceAllUser;
-  const applyWHT = isJuristic && priceAllUserBefore >= 1000;
+  // owner 2026-07-22: juristic 1% WHT on ANY positive amount (no ฿1,000 minimum).
+  const applyWHT = isJuristic && priceAllUserBefore > 0;
   const price1Per = applyWHT ? priceAllUser * 0.01 : 0;
   if (applyWHT) priceAllUser = priceAllUser - price1Per;
 

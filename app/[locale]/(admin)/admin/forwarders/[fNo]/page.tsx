@@ -711,13 +711,14 @@ async function tryRenderTbForwarder(
   // ── 2026-06-19 (Unit A) — ยอดเก็บจริง + breakdown (แจงรายละเอียดค่า) ──────────
   // The header/items show ftotalprice = freight ONLY (e.g. 45.10). The amount the
   // customer is actually collected at pay-time = freight + เหมาๆ ฿100 (first
-  // PCSF-zero row) − ส่วนลด − หัก ณ ที่จ่าย นิติ 1% (when juristic & batch ≥ ฿1,000).
-  // So a forwarder showing 45.10 collects 95.10 → the owner's confusion. We compute
-  // it with the SAME canonical fn the จ่ายแทนลูกค้า page uses so the two never drift.
+  // PCSF-zero row) − ส่วนลด − หัก ณ ที่จ่าย นิติ 1% (when juristic · owner 2026-07-22:
+  // no ฿1,000 minimum). So a forwarder showing 45.10 collects 95.10 → the owner's
+  // confusion. We compute it with the SAME canonical fn the จ่ายแทนลูกค้า page uses so
+  // the two never drift.
   //
   // isCorporate: a tb_corporate row exists for this userid OR fusercompany==='1'.
-  // (Single-row batch: the 1% only fires if THIS row's total ≥ ฿1,000, matching
-  // computeForwarderDebitBatch's batch-≥1000 gate — faithful to pay-users.php.)
+  // (owner 2026-07-22: the 1% fires for any positive juristic total — the ฿1,000
+  // batch minimum in computeForwarderDebitBatch was abolished.)
   let collectIsCorporate = (r.fusercompany ?? "").trim() === "1";
   // Also fetch the corp NAME (2026-07-03) so the "จาก :" header shows the
   // COMPANY for a juristic customer (was leaking the contact person). Single

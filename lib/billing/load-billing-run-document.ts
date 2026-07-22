@@ -371,7 +371,9 @@ export async function loadBillingRunDocument(
       sum_update:         named.update,
       sum_other_rows:     named.other,
       sum_discount_rows:  named.discount,
-      ...computeBillWht(hdrRaw.is_juristic, Number(hdrRaw.total_thb)),
+      // Forward-only: a bill paid BEFORE the 2026-07-22 change keeps the old ≥ ฿1,000
+      // gate (paidAt) so its printed/detail net still equals what was collected.
+      ...computeBillWht(hdrRaw.is_juristic, Number(hdrRaw.total_thb), { paidAt: hdrRaw.paid_at }),
     },
     items: items.map((i) => {
       const f = fwdByID.get(i.forwarder_id) ?? null;

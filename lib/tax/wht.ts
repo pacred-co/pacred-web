@@ -236,13 +236,21 @@ export function calcForwarderNetPayable(
 //   - `legacyReceiptAmount` (this) = the legacy flat 1%-off-the-grand-total
 //     allowance the legacy `grenrateReceiptF` wrote onto tb_receipt.ramount.
 //
-// Faithful to legacy `pcs-admin/include/function.php`:
-//   - grenrateReceiptF (L557-559): the 1% allowance applies only when the
-//     customer is juristic AND the total ≥ 1000 (small juristic orders get no
-//     allowance).
-//   - calPriceForwarderMainNew (L1875-1885) uses the SAME `userCompany==1 &&
+// 🔴 owner 2026-07-22 — the ฿1,000 MINIMUM was ABOLISHED: a juristic customer
+// now gets the 1% allowance on ANY (positive) amount. `legacyReceiptAmount`
+// therefore defaults to NO minimum (`minThreshold = 0`). The legacy
+// `LEGACY_RECEIPT_WHT_MIN` (= 1000) is KEPT only so a caller rendering an
+// already-SETTLED historical document (e.g. a bill paid before the change) can
+// reproduce exactly what the customer remitted — forward-only: we never
+// retro-withhold on already-paid work.
+//
+// Originally faithful to legacy `pcs-admin/include/function.php`:
+//   - grenrateReceiptF (L557-559): the 1% allowance applied only when the
+//     customer was juristic AND the total ≥ 1000 (small juristic orders got no
+//     allowance) — the gate the owner has now removed.
+//   - calPriceForwarderMainNew (L1875-1885) used the SAME `userCompany==1 &&
 //     priceFull>=1000` gate (plus an `fUserCompany==1` per-order override that
-//     forces the allowance regardless of amount).
+//     forced the allowance regardless of amount).
 //
 // WHT eligibility = the JURISTIC flag — there is NO separate per-customer "WHT
 // enable" field in legacy. A customer is juristic ⇔ they registered with
@@ -252,7 +260,7 @@ export function calcForwarderNetPayable(
 //
 // Pure + rounded to 2 satang. Returns BOTH the pre-WHT total and the amount
 // the customer actually pays so callers (and tests) can assert each.
-export const LEGACY_RECEIPT_WHT_MIN = 1000; // legacy threshold (≥ 1000 to withhold)
+export const LEGACY_RECEIPT_WHT_MIN = 1000; // PRE-2026-07-22 threshold — kept ONLY to freeze already-settled docs
 export const LEGACY_RECEIPT_WHT_PCT = 1;    // legacy flat allowance %
 
 export interface LegacyReceiptAmount {
@@ -267,16 +275,26 @@ export interface LegacyReceiptAmount {
 /**
  * Compute the legacy receipt amount + whether the juristic 1% allowance fired.
  *
+ * owner 2026-07-22: the ฿1,000 minimum is ABOLISHED → the allowance fires for a
+ * juristic customer on ANY positive amount (`minThreshold` defaults to 0). A
+ * caller rendering an ALREADY-SETTLED historical document passes
+ * `LEGACY_RECEIPT_WHT_MIN` to reproduce the pre-change behaviour (forward-only).
+ *
  * @param pricePayAll  the pre-WHT grand total (sum of charge buckets − discount)
  * @param isJuristic   the customer's juristic flag (userCompany='1' / has tb_corporate)
+ * @param minThreshold minimum amount before the allowance applies — DEFAULT 0
+ *                     (new rule). Pass LEGACY_RECEIPT_WHT_MIN to freeze a doc
+ *                     settled under the old ≥ ฿1,000 rule.
  */
 export function legacyReceiptAmount(
   pricePayAll: number,
   isJuristic: boolean,
+  minThreshold: number = 0,
 ): LegacyReceiptAmount {
   const total = round2(pricePayAll);
-  // Legacy gate: juristic AND total ≥ 1000.
-  const applied = isJuristic && pricePayAll >= LEGACY_RECEIPT_WHT_MIN;
+  // owner 2026-07-22: juristic AND amount > 0 (no minimum). `minThreshold` is 0
+  // for live/forward work; a settled-doc renderer passes LEGACY_RECEIPT_WHT_MIN.
+  const applied = isJuristic && pricePayAll > 0 && pricePayAll >= minThreshold;
   const rAmount = applied
     ? round2(pricePayAll * (1 - LEGACY_RECEIPT_WHT_PCT / 100))
     : total;

@@ -38,13 +38,13 @@
  *     batch level only to size the balance-check threshold.
  *
  *   Corporate (นิติบุคคล) 1% allowance (L333-335 / L397-402 / L455-460):
- *     If the customer is corporate (a `tb_corporate` row exists) AND the
- *     batch total `pricePayAll >= 1000`, EACH row's individual price is
- *     reduced by 1% (`pricePay -= pricePay*0.01`) AND the row is stamped
- *     `fUserCompany='1'`. The gate keys off the BATCH total, not the row
- *     — a single-row batch under ฿1000 gets no discount even for a
- *     corporate customer. We surface `applyCorporateDiscount` so the
- *     action knows whether to write `fusercompany='1'` (else `''`).
+ *     If the customer is corporate (a `tb_corporate` row exists), EACH row's
+ *     individual price is reduced by 1% (`pricePay -= pricePay*0.01`) AND the row
+ *     is stamped `fUserCompany='1'`. 🔴 owner 2026-07-22 — the ฿1,000 BATCH
+ *     minimum was ABOLISHED: the allowance now applies on ANY positive batch
+ *     total (via the shared `legacyReceiptAmount`, default no minimum). We
+ *     surface `applyCorporateDiscount` so the action knows whether to write
+ *     `fusercompany='1'` (else `''`).
  *
  * Legacy stores most of these as numeric columns but a few as `varchar`
  * (string|number|null) — we coerce defensively. All outputs round to 2
@@ -128,8 +128,8 @@ export interface ForwarderDebitBatch {
   /** The id of the first PCSF-zero row whose fTransportPrice the action
    *  must mutate to 50 (faithful L388/L446), or null if none. */
   pcsfTransportFixId: string | null;
-  /** Whether the corporate 1% allowance fired (batch ≥ ฿1000 & corporate).
-   *  When true, each settled row stamps fusercompany='1'; else ''. */
+  /** Whether the corporate 1% allowance fired (corporate & batch > 0 · owner
+   *  2026-07-22 no minimum). When true, each settled row stamps fusercompany='1'; else ''. */
   applyCorporateDiscount: boolean;
 }
 
@@ -262,7 +262,7 @@ export function computeForwarderDebitBatch(
   // local $pricePay, not in the running $pricePayAll until that loop; the
   // net effect is one ฿50, which our single-pass sum reproduces.)
   // Invalid/non-positive rows are refused below (price_thb=NaN), so they must not
-  // influence either the ฿1,000 WHT gate or the payable batch total.
+  // influence either the juristic WHT allowance or the payable batch total.
   const preCorporateTotal = baseLines.reduce(
     (s, l) => s + (Number.isFinite(l.base) && l.base > 0 ? l.base : 0),
     0,

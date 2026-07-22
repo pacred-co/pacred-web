@@ -309,7 +309,7 @@ export default function AddInvoiceForm({
                   <dd className="tabular-nums text-indigo-700">฿{fmtBaht(summary.grandTotal)}</dd>
                 </div>
                 <div className="text-xs text-slate-500 pt-2">
-                  ยอดสุทธิจะคำนวณตามนิติบุคคล/บุคคล (หัก ณ ที่จ่าย 1% เฉพาะนิติฯ ≥ ฿1,000)
+                  ยอดสุทธิจะคำนวณตามนิติบุคคล/บุคคล (หัก ณ ที่จ่าย 1% เฉพาะนิติฯ · ทุกยอด)
                 </div>
               </dl>
             </div>

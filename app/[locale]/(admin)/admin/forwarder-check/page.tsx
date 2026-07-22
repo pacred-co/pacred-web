@@ -375,8 +375,9 @@ export default async function AdminForwarderCheckPage({
       Number(r.ftransportpricechnthb ?? 0) +
       Number(r.priceother ?? 0) -
       Number(r.fdiscount ?? 0);
+    // owner 2026-07-22: juristic 1% on ANY positive amount (no ฿1,000 minimum).
     const onePercent =
-      customerCompany === 1 && priceFull >= 1000 ? Math.round(priceFull * 0.01 * 100) / 100 : 0;
+      customerCompany === 1 && priceFull > 0 ? Math.round(priceFull * 0.01 * 100) / 100 : 0;
     // Profit (legacy profitItem formula at forwarder-check.php L405)
     const profit =
       priceFull -

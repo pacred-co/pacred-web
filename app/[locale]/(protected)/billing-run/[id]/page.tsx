@@ -130,7 +130,8 @@ export default async function CustomerBillingRunDetailPage({
   }
 
   const isOverdue = hdrRaw.status === "issued" && hdrRaw.date_due < isoToday();
-  const wht = computeBillWht(hdrRaw.is_juristic, Number(hdrRaw.total_thb));
+  // Forward-only: a bill paid before the 2026-07-22 change keeps its old ≥ ฿1,000 gate.
+  const wht = computeBillWht(hdrRaw.is_juristic, Number(hdrRaw.total_thb), { paidAt: hdrRaw.paid_at });
   const t = await getTranslations("billingRunDetail");
 
   return (

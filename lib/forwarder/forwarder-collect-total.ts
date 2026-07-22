@@ -36,8 +36,8 @@
  *       user is on the userNotPCS50 allowlist (the หนองแขม self-handling exemption).
  *     If countPricePCSF >= 1 → price += 50 (ONE flat fee for the whole batch).
  *
- *   Juristic 1% reduction (calPrice.php L43-45):
- *     If userCompany == '1' AND price >= 1000 → price -= price * 0.01.
+ *   Juristic 1% reduction (calPrice.php L43-45 · owner 2026-07-22 no minimum):
+ *     If userCompany == '1' AND price > 0 → price -= price * 0.01.
  *     ⚠️ gated on tb_users.userCompany — NOT on tb_corporate existence.
  *
  * Legacy stores most of these as numeric columns but a few as `varchar`
@@ -75,7 +75,7 @@ export interface ForwarderCollectTotal {
   countPCSF: number;
   /** Whether the flat ฿50 PCSF เหมาๆ fee was added (countPCSF >= 1). */
   applied50: boolean;
-  /** Whether the juristic 1% reduction fired (userCompany='1' AND total >= 1000). */
+  /** Whether the juristic 1% reduction fired (userCompany='1' AND total > 0 · owner 2026-07-22 no minimum). */
   appliedWht: boolean;
 }
 
@@ -168,8 +168,11 @@ export function computeForwarderCollectTotal(
   const applied50 = countPricePCSF >= 1;
   if (applied50) price += MAO_FLAT_FEE;
 
-  // calPrice.php L43-45 — juristic users with price >= 1000 get a 1% reduction.
-  const appliedWht = userCompany === "1" && price >= 1000;
+  // calPrice.php L43-45 — juristic users get a 1% reduction. owner 2026-07-22:
+  // the ฿1,000 minimum was ABOLISHED → the 1% now applies on ANY positive amount
+  // (this is the live customer self-pay total, so it always reflects the current
+  // rule — settled orders keep their own frozen ใบเสร็จ).
+  const appliedWht = userCompany === "1" && price > 0;
   if (appliedWht) price -= price * 0.01;
 
   return {

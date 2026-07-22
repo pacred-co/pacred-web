@@ -155,7 +155,7 @@ export type BillingRunInvoiceRow = {
   item_count: number;
   /** Computed: status='issued' AND date_due < today. */
   is_overdue: boolean;
-  /** WHT 1% (หัก ณ ที่จ่าย) + ยอดชำระสุทธิ — juristic & total ≥ 1,000 only. */
+  /** WHT 1% (หัก ณ ที่จ่าย) + ยอดชำระสุทธิ — juristic (owner 2026-07-22: no ฿1,000 minimum). */
   wht_amount: number;
   net_payable: number;
 };
@@ -865,7 +865,9 @@ export async function getInvoiceList(
 
       const rows: BillingRunInvoiceRow[] = raw.map((r) => {
         const total = Number(r.total_thb);
-        const wht = computeBillWht(r.is_juristic, total);
+        // Forward-only: a bill paid BEFORE the 2026-07-22 rule change keeps its old
+        // ≥ ฿1,000 gate (paidAt) so its displayed net = what was collected.
+        const wht = computeBillWht(r.is_juristic, total, { paidAt: r.paid_at });
         return {
           id:           r.id,
           doc_no:       r.doc_no,
@@ -1668,9 +1670,9 @@ async function createBillingRunInvoiceImpl(
       // ยอดเก็บจริง (ภูม 2026-06-23: บิล 4,083.96 แต่ detail 4,183.96). Pull JUST the
       // maoFee per line from the batch engine — the SAME once-per-shipment anchor
       // logic the detail page uses (anchored to the base tracking · เดฟ "กันเก็บเบิ้ล").
-      // We deliberately do NOT swap the whole engine (computeForwarderDebitBatch
-      // applies its 1% at batch≥฿1000, calcForwarderOutstanding per-row) so juristic
-      // <฿1000 bills don't shift — the ONLY money delta is the ฿100 เหมาๆ, stored as
+      // We deliberately do NOT swap the whole engine here (the bill stores GROSS +
+      // shows the 1% WHT as its own line via computeBillWht · owner 2026-07-22: 1% on
+      // any juristic amount, no minimum) — the ONLY money delta is the ฿100 เหมาๆ, stored as
       // its OWN summary line (mao_fee_thb · NOT folded into a row) so the customer
       // SEES it and the ใบเสร็จ reconciles to it (ภูม flag: แยกให้เห็น + ใบเสร็จต้องตรง).
       // 🔴 owner 2026-07-16 — per-SHIPMENT เหมาๆ carrier. Was: base-only → a MOMO
@@ -2025,7 +2027,8 @@ async function markBillingRunPaidImpl(
       // a juristic buyer remits = net_payable (gross − หัก ณ ที่จ่าย 1%); the 1%
       // is withheld + paid to the revenue dept on our behalf (we reclaim it via
       // the 50-ทวิ cert). Log BOTH so the audit trail shows face vs cash collected.
-      const paidWht = computeBillWht(cur.is_juristic, Number(cur.total_thb));
+      // Paying NOW (paidAtIso ≥ the 2026-07-22 change) → new no-minimum rule.
+      const paidWht = computeBillWht(cur.is_juristic, Number(cur.total_thb), { paidAt: paidAtIso });
       await logAdminAction(adminId, "billing_run.mark_paid", "forwarder_invoice", String(v.invoiceId), {
         doc_no: cur.doc_no, payment_method: v.paymentMethod, reference: v.paymentReference,
         total_thb: Number(cur.total_thb), wht_amount: paidWht.wht_amount,
@@ -2418,7 +2421,9 @@ export async function ensureBillingRunReceipt(
 
       // 4. None yet → issue NOW, PINNED to the bill's frozen totals + buyer identity
       //    (identical overrides to markBillingRunPaid's auto-issue) → receipt == bill.
-      const paidWht = computeBillWht(cur.is_juristic, Number(cur.total_thb));
+      //    Forward-only: freeze to the bill's paid_at so a bill paid before the
+      //    2026-07-22 change reissues its receipt at the collected (old-rule) net.
+      const paidWht = computeBillWht(cur.is_juristic, Number(cur.total_thb), { paidAt: cur.paid_at });
       const dateSlip = cur.paid_at ? new Date(cur.paid_at) : new Date();
       const rcpt = await autoIssueReceiptOnPaymentLand(admin, {
         userid: cur.userid,

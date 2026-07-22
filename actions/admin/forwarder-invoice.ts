@@ -76,6 +76,7 @@ import { sendNotification } from "@/lib/notifications";
 import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver";
 import { isBillableForwarder } from "@/lib/forwarder/billing-eligibility";
 import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-total";
+import { legacyReceiptAmount } from "@/lib/tax/wht";
 
 // ────────────────────────────────────────────────────────────
 // Schema — multi-row batch input
@@ -216,7 +217,7 @@ function composeReceiptBody(opts: {
  *      on a receipt
  *   2. Determine corporate (1=juristic / 2=individual) from tb_corporate
  *   3. Compute totals — pre-WHT (totalbeforewithholding) + post-juristic-1%
- *      (rAmount); WHT applies only if corporate=1 AND total ≥ 1000
+ *      (rAmount); WHT applies if corporate=1 (owner 2026-07-22: no ฿1,000 minimum)
  *   4. Mint rid via `mintReceiptDocNo` (FRC/FRG yyMM-NNNNN)
  *   5. INSERT tb_receipt · batch INSERT N × tb_receipt_item
  *   6. Notify customer (SMS + LINE + email · best-effort)
@@ -346,11 +347,14 @@ export async function adminIssueForwarderInvoice(
       ) / 100;
       const pricePayAll = pricePayBase + maoFeeThb;
 
-      const totalBeforeWithholding = Math.round(pricePayAll * 100) / 100;
-      const applyJuristic1Pct = corporate === 1 && pricePayAll >= 1000;
-      const rAmount = applyJuristic1Pct
-        ? Math.round(pricePayAll * 0.99 * 100) / 100
-        : totalBeforeWithholding;
+      // owner 2026-07-22: juristic → 1% on ANY positive amount (no ฿1,000 minimum).
+      // Route through the shared SOT (lib/tax/wht.ts:legacyReceiptAmount, default
+      // no minimum) so this manual-issue path can't drift from the auto/bill path.
+      // This is a LIVE issuance → new rule.
+      const receiptCalc = legacyReceiptAmount(pricePayAll, corporate === 1);
+      const totalBeforeWithholding = receiptCalc.totalBeforeWithholding;
+      const applyJuristic1Pct = receiptCalc.applied;
+      const rAmount = receiptCalc.rAmount;
 
       // 4. Mint the rid — main thread provides this minter.
       const issueDateObj = new Date(`${issueDate}T00:00:00`);

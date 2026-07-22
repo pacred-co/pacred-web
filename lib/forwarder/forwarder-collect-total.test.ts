@@ -8,8 +8,8 @@
  *   • per-row composite total formula (L26)
  *   • PCSF-zero row → +฿50 flat batch fee (L29-42)
  *   • หนองแขม district × userNotPCS50 allowlist → NO +50 (L34-38)
- *   • juristic (userCompany='1') AND total >= 1000 → 1% reduction (L43-45)
- *   • juristic AND total < 1000 → NO 1%
+ *   • juristic (userCompany='1') → 1% reduction on ANY positive total (L43-45 ·
+ *     owner 2026-07-22: the ฿1,000 minimum was abolished)
  *   • non-juristic → NO 1%
  *
  * The whole point of this helper is killing BUG-2 — display == charge — so the
@@ -135,25 +135,25 @@ console.log("forwarder-collect-total:");
   assertEq("หนองแขม but non-allowlist user → applied50 true", r.applied50, true);
 }
 
-// 4. userCompany='1' AND total >= 1000 → 1% off.
+// 4. userCompany='1' → 1% off (any positive amount).
 {
   const r = computeForwarderCollectTotal(
     [row({ ftotalprice: "1000", fpriceupdate: "200" })],
     { userId: "PR140", userCompany: "1" },
   );
-  // 1200, juristic, >= 1000 → 1% off = 1188
-  assertClose("juristic >= 1000 → 1% off, total = 1188", r.total, 1188);
-  assertEq("juristic >= 1000 → appliedWht true", r.appliedWht, true);
+  // 1200, juristic → 1% off = 1188
+  assertClose("juristic → 1% off, total = 1188", r.total, 1188);
+  assertEq("juristic → appliedWht true", r.appliedWht, true);
 }
 
-// 5. userCompany='1' AND total < 1000 → NO 1%.
+// 5. userCompany='1' AND total < 1000 → 1% off (owner 2026-07-22: no minimum).
 {
   const r = computeForwarderCollectTotal(
     [row({ ftotalprice: "500" })],
     { userId: "PR141", userCompany: "1" },
   );
-  assertClose("juristic but < 1000 → NO 1%, total = 500", r.total, 500);
-  assertEq("juristic but < 1000 → appliedWht false", r.appliedWht, false);
+  assertClose("juristic < 1000 → 1% off (no minimum), total = 495", r.total, 495);
+  assertEq("juristic < 1000 → appliedWht true", r.appliedWht, true);
 }
 
 // 6. non-juristic (userCompany != '1') AND total >= 1000 → NO 1%.
