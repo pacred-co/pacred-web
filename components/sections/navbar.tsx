@@ -147,7 +147,7 @@ export function NavBar() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-50 w-full shadow-lg">
+    <header className="print:hidden sticky top-0 z-50 w-full shadow-lg">
 
       {/* ── Main navbar ── */}
       <div className="bg-[#B91C1C]">

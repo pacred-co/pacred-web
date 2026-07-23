@@ -588,7 +588,7 @@ export function AdminSidebar({
       {/* Mobile toggle */}
       <button
         onClick={() => setOpenMobile((v) => !v)}
-        className="lg:hidden fixed top-3 left-3 z-[60] inline-flex items-center justify-center w-10 h-10 rounded-lg bg-primary-600 text-white shadow-lg hover:bg-primary-700 transition-colors"
+        className="lg:hidden print:hidden fixed top-3 left-3 z-[60] inline-flex items-center justify-center w-10 h-10 rounded-lg bg-primary-600 text-white shadow-lg hover:bg-primary-700 transition-colors"
         aria-label="Menu"
       >
         {openMobile ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -737,7 +737,7 @@ export function AdminSidebar({
       {openMobile && (
         <div
           onClick={closeMobile}
-          className="lg:hidden fixed inset-0 z-40 bg-black/50"
+          className="lg:hidden print:hidden fixed inset-0 z-40 bg-black/50"
         />
       )}
     </>

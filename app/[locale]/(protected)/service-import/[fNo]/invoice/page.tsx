@@ -3,6 +3,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
+import { signReceiptToken } from "@/lib/receipt/receipt-token";
 import { TaxInvoiceRequestPanel } from "@/components/tax-invoice-request-panel";
 import { getMyTaxInvoiceForOrder } from "@/actions/tax-invoices";
 import { CONTACT, ADDRESSES, TAX_ID } from "@/components/seo/site";
@@ -481,8 +482,25 @@ export default async function ServiceImportInvoicePage({
             <div className="no-print flex flex-wrap items-center justify-end gap-2">
               {whtPrintLocked ? (
                 <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
-                  🔒 ใบเสร็จนิติฉบับนี้พิมพ์ได้หลังบัญชีตรวจใบ 50 ทวิ — แนบไฟล์/พิมพ์ฟอร์มที่กรอกให้แล้ว
-                  ได้ที่หน้า <b>ใบเสร็จออนไลน์</b> (ปุ่มด้านล่างของเอกสารนี้)
+                  <p>🔒 ใบเสร็จนิติฉบับนี้พิมพ์ได้หลังบัญชีตรวจใบ 50 ทวิ</p>
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    <a
+                      href={`/r/${signReceiptToken(receipt.id)}/wht-form`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-md border border-emerald-500 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                    >
+                      📄 พิมพ์ฟอร์ม 50 ทวิ (กรอกให้แล้ว)
+                    </a>
+                    <a
+                      href={`/r/${signReceiptToken(receipt.id)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-md border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+                    >
+                      📎 แนบใบ 50 ทวิ (หน้าใบเสร็จออนไลน์)
+                    </a>
+                  </div>
                 </div>
               ) : (
                 <PrintButton label="📄 พิมพ์ / บันทึก PDF" />

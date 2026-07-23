@@ -28,7 +28,7 @@ export async function ImpersonationBanner() {
   return (
     <div
       role="alert"
-      className="sticky top-0 z-[60] w-full bg-red-600 text-white shadow-lg border-b-2 border-red-800"
+      className="print:hidden sticky top-0 z-[60] w-full bg-red-600 text-white shadow-lg border-b-2 border-red-800"
     >
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-sm">
         <div className="flex items-center gap-2 min-w-0">

@@ -246,7 +246,7 @@ export function FloatingTabs({
           Layout: [หน้าแรก] [บริการ] [ออเดอร์] [📞 FAB] [ชำระ] [แชท] [เมนู]
           3 tabs | FAB | 3 tabs — per ปอน 2026-05-22 redesign */}
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-surface/95 backdrop-blur-md border-t border-border shadow-[0_-4px_15px_rgba(0,0,0,0.06)]"
+        className="md:hidden print:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-surface/95 backdrop-blur-md border-t border-border shadow-[0_-4px_15px_rgba(0,0,0,0.06)]"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         {/*
