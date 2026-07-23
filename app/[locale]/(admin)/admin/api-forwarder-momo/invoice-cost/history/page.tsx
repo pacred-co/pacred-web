@@ -16,6 +16,8 @@ import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 export const dynamic = "force-dynamic";
 
 const baht = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const cbm = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+const num = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 
 export default async function MomoSettlementHistoryPage() {
   const { roles } = await requireAdmin();
@@ -68,7 +70,13 @@ export default async function MomoSettlementHistoryPage() {
                   <th className="text-center">วันที่ตัดจ่าย</th>
                   <th className="text-left">เอกสารตัดจ่าย</th>
                   <th className="text-center">ผู้ทำรายการ</th>
-                  <th className="text-right">ยอดที่จ่าย</th>
+                  <th className="text-right">แทรคกิ้ง</th>
+                  <th className="text-right">กล่อง</th>
+                  <th className="text-right">คิว</th>
+                  <th className="text-right">กิโล</th>
+                  <th className="text-right">ต้นทุน (จ่าย MOMO)</th>
+                  <th className="text-right">ราคาขาย</th>
+                  <th className="text-right">กำไร</th>
                   <th className="text-center">หลักฐาน</th>
                   <th className="text-center">สถานะ</th>
                   <th className="text-center">ตัวเลือก</th>
@@ -101,20 +109,31 @@ export default async function MomoSettlementHistoryPage() {
                         ใบแจ้งหนี้ MOMO : <span className="font-medium text-foreground">{r.invoiceNo || "—"}</span>
                         {r.invoiceDate && <> · ลงวันที่ {r.invoiceDate}</>}
                       </div>
-                      <div className="text-xs text-muted">
-                        จำนวนรายการ : {r.lineCount} แทรคกิ้ง
-                        {r.status === "void" && r.voidReason && (
-                          <> · <span className="text-red-700">เหตุผลยกเลิก : {r.voidReason}</span></>
-                        )}
-                      </div>
+                      {r.status === "void" && r.voidReason && (
+                        <div className="text-xs text-red-700">เหตุผลยกเลิก : {r.voidReason}</div>
+                      )}
                     </td>
 
                     <td className="px-4 py-3 text-center text-xs whitespace-nowrap">
                       <span className="font-medium text-foreground">{r.createdBy ?? "-"}</span>
                     </td>
 
-                    <td className="px-4 py-3 text-right font-bold tabular-nums whitespace-nowrap">
-                      ฿{baht(r.totalThb)}
+                    <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">{r.lineCount}</td>
+                    <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">{num(r.boxCount)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">{cbm(r.cbmTotal)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">{num(r.weightKg)}</td>
+                    <td className="px-4 py-3 text-right font-bold tabular-nums whitespace-nowrap">฿{baht(r.totalThb)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">
+                      {r.sellThb > 0 ? `฿${baht(r.sellThb)}` : <span className="text-muted">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      {r.sellThb > 0 ? (
+                        <span className={`font-bold tabular-nums ${r.profitThb < 0 ? "text-red-700" : "text-emerald-700"}`}>
+                          ฿{baht(r.profitThb)}
+                        </span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
                     </td>
 
                     {/* หลักฐาน 2 ชนิด แยกกัน — ใบเสร็จ MOMO (REC) กับ สลิปการโอน */}

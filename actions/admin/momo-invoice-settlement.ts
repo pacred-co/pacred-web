@@ -179,6 +179,23 @@ export async function createMomoInvoiceSettlement(input: unknown): Promise<Admin
     const legacyAdminId = await resolveLegacyAdminId();
     const sourceKind = parsed.data.fileBase64 != null ? "pdf" : "text";
     const totalThb = round2(eligible.reduce((a, e) => a + e.amount, 0));
+
+    // สรุปยอด "ของใบนี้" เฉพาะบรรทัดที่ตัดจ่ายจริง (owner 2026-07-23) — แช่ไว้เป็น snapshot
+    // (ดูเหตุผลใน mig 0277: ประวัติต้องไม่เปลี่ยนเลขย้อนหลังเมื่อมีคนแก้ราคา/น้ำหนักทีหลัง).
+    // กล่อง/คิว/กิโล มาจากฝั่ง "ใบ MOMO" ให้เข้าชุดกับ total_thb · ขาย มาจากแถวเรา.
+    const settledFids = new Set(eligible.map((e) => e.fid));
+    const summary = preview.rows.reduce(
+      (a, r) => {
+        if (r.fid == null || !settledFids.has(r.fid)) return a;
+        return {
+          boxes: a.boxes + Number(r.qty ?? 0),
+          cbm: a.cbm + Number(r.invoiceCbm ?? 0),
+          kg: a.kg + Number(r.invoiceKg ?? 0),
+          sell: a.sell + Number(r.ourSell ?? 0),
+        };
+      },
+      { boxes: 0, cbm: 0, kg: 0, sell: 0 },
+    );
     const nowIso = new Date().toISOString();
 
     // ── mint MCS{yyMM}-{NNNN} with retry-on-collision (doc_no is UNIQUE) ──
@@ -201,6 +218,10 @@ export async function createMomoInvoiceSettlement(input: unknown): Promise<Admin
           supplier: "MOMO",
           total_thb: totalThb,
           line_count: eligible.length,
+          box_count: summary.boxes,
+          cbm_total: Math.round(summary.cbm * 1_000_000) / 1_000_000,
+          weight_kg: round2(summary.kg),
+          sell_thb: round2(summary.sell),
           status: "paid",
           slip_paths: [],
           note: parsed.data.note ?? null,
@@ -377,6 +398,14 @@ export type MomoSettlementHeader = {
   invoiceDate: string | null;
   totalThb: number;
   lineCount: number;
+  /** สรุปของใบนั้น — snapshot ตอนตัดจ่าย (mig 0277). */
+  boxCount: number;
+  cbmTotal: number;
+  weightKg: number;
+  /** Σ ค่านำเข้าที่ขายลูกค้า ของแถวที่ตัดจ่าย. */
+  sellThb: number;
+  /** กำไร = sellThb − totalThb · derive ตอนอ่าน (ที่มาที่เดียว ไม่เก็บซ้ำ). */
+  profitThb: number;
   status: "paid" | "void";
   slipCount: number;
   /** จำนวนใบเสร็จ MOMO (REC-…) ที่แนบไว้ — แยกจาก slipCount (สลิปการโอน). */
@@ -394,7 +423,7 @@ export async function listMomoInvoiceSettlements(input?: { limit?: number }): Pr
     const admin = createAdminClient();
     const { data, error } = await admin
       .from("momo_invoice_settlement")
-      .select("id, doc_no, invoice_no, invoice_date, total_thb, line_count, status, slip_paths, receipt_paths, created_by, created_at, void_reason")
+      .select("id, doc_no, invoice_no, invoice_date, total_thb, line_count, box_count, cbm_total, weight_kg, sell_thb, status, slip_paths, receipt_paths, created_by, created_at, void_reason")
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) { console.error("[momo-settlement list] failed", { message: error.message }); return { ok: false, error: error.message }; }
@@ -405,6 +434,11 @@ export async function listMomoInvoiceSettlements(input?: { limit?: number }): Pr
       invoiceDate: (r.invoice_date as string | null) ?? null,
       totalThb: Number(r.total_thb ?? 0),
       lineCount: Number(r.line_count ?? 0),
+      boxCount: Number(r.box_count ?? 0),
+      cbmTotal: Number(r.cbm_total ?? 0),
+      weightKg: Number(r.weight_kg ?? 0),
+      sellThb: Number(r.sell_thb ?? 0),
+      profitThb: Math.round((Number(r.sell_thb ?? 0) - Number(r.total_thb ?? 0)) * 100) / 100,
       status: (r.status as "paid" | "void") ?? "paid",
       slipCount: Array.isArray(r.slip_paths) ? r.slip_paths.length : 0,
       receiptCount: Array.isArray(r.receipt_paths) ? r.receipt_paths.length : 0,
@@ -439,7 +473,7 @@ export async function getMomoInvoiceSettlement(input: { id: number }): Promise<A
     const admin = createAdminClient();
     const { data: h, error: hErr } = await admin
       .from("momo_invoice_settlement")
-      .select("id, doc_no, invoice_no, invoice_date, total_thb, line_count, status, slip_paths, receipt_paths, note, created_by, created_at, paid_by, paid_at, void_by, void_at, void_reason")
+      .select("id, doc_no, invoice_no, invoice_date, total_thb, line_count, box_count, cbm_total, weight_kg, sell_thb, status, slip_paths, receipt_paths, note, created_by, created_at, paid_by, paid_at, void_by, void_at, void_reason")
       .eq("id", id).maybeSingle<Record<string, unknown>>();
     if (hErr) { console.error("[momo-settlement detail head] failed", { message: hErr.message }); return { ok: false, error: hErr.message }; }
     if (!h) return { ok: false, error: "ไม่พบรายการตัดจ่าย" };
@@ -480,6 +514,11 @@ export async function getMomoInvoiceSettlement(input: { id: number }): Promise<A
         invoiceDate: (h.invoice_date as string | null) ?? null,
         totalThb: Number(h.total_thb ?? 0),
         lineCount: Number(h.line_count ?? 0),
+        boxCount: Number(h.box_count ?? 0),
+        cbmTotal: Number(h.cbm_total ?? 0),
+        weightKg: Number(h.weight_kg ?? 0),
+        sellThb: Number(h.sell_thb ?? 0),
+        profitThb: Math.round((Number(h.sell_thb ?? 0) - Number(h.total_thb ?? 0)) * 100) / 100,
         status: (h.status as "paid" | "void") ?? "paid",
         slipCount: slipPaths.length,
         receiptCount: receiptPaths.length,

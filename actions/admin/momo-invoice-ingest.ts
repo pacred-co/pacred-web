@@ -178,6 +178,8 @@ export type MomoIngestPreviewRow = {
   ourCbm: number | null;
   /** คิวที่ MOMO เรียกเก็บบรรทัดนี้ ปรับเป็น "ยอดทั้งบรรทัด" แล้ว (ใบแบบ per_box = cbm × กล่อง). */
   invoiceCbm: number;
+  /** น้ำหนัก (กก.) ที่พิมพ์บนใบบรรทัดนี้ — ใช้ทำสรุปยอดของใบตอนตัดจ่าย. */
+  invoiceKg: number;
   /** ourCbm − invoiceCbm · + = ระบบเรามีคิวมากกว่าที่ใบเรียกเก็บ · null = จับคู่ไม่ได้. */
   cbmDiff: number | null;
   /** ค่านำเข้าที่เราขายลูกค้า (ftotalprice) · null = จับคู่ไม่ได้. */
@@ -684,6 +686,7 @@ async function buildPreview(text: string): Promise<MomoIngestPreview> {
       ourKg: f ? f.fweight : null,
       ourCbm,
       invoiceCbm,
+      invoiceKg: l.kg,
       cbmDiff: ourCbm == null ? null : round6(ourCbm - invoiceCbm),
       ourSell,
       profitNow: ourSell == null ? null : round2(ourSell - (currentCost ?? 0)),
