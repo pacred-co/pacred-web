@@ -33,34 +33,55 @@
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import type { Metadata } from "next";
-import {
-  ClipboardCheck,
-  ClipboardList,
-  Info,
-  Mail,
-  Phone,
-  Truck,
-  UserCheck,
-} from "lucide-react";
+import { Mail, Phone } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
 import { qrSvgDataUrl } from "@/lib/barcode";
-import {
-  DOC_CREAM as CREAM,
-  DOC_CREAM_BD as CREAM_BD,
-  DOC_GOLD as GOLD,
-  DocMetaBox,
-  DocMetaRow,
-  DocPrintStyles,
-} from "@/components/admin/driver-doc-paper";
-import { SITE_LEGAL_NAME_TH, SITE_URL, ADDRESSES, CONTACT } from "@/components/seo/site";
+import { DocPrintStyles } from "@/components/admin/driver-doc-paper";
+import { DocSectionLabel } from "@/components/receipt/doc-section-label";
+import { DocCertRow } from "@/components/receipt/doc-cert-row";
+import { SITE_LEGAL_NAME_TH, SITE_URL, ADDRESSES, CONTACT, TAX_ID } from "@/components/seo/site";
 
 export const dynamic = "force-dynamic";
 
 const LOGO = "/images/pacred-logo-tight.png";
+
+/**
+ * 🎨 owner 2026-07-23: "แก้ไขให้เป็นแพทเทิร์นเดียวกัน … ไปลอกมาจากใบแจ้งหนี้ในระบบเลย"
+ *
+ * ใบส่งสินค้า จึงย้ายมาใช้ house style ของเอกสารฝั่ง "ส่งให้ลูกค้า" — ชุดเดียวกับ
+ * ใบแจ้งหนี้ (`wallet/pay-user/summary/summary-doc.tsx`) · ใบวางบิล · ใบเสร็จ:
+ * โครงสร้าง/เส้น/ระยะ ตามใบแจ้งหนี้ + ป้ายหมวด <DocSectionLabel>
+ * + แถวลายเซ็น <DocCertRow> (ได้ลายเซ็นจริง + ตราบริษัท เหมือนใบแจ้งหนี้).
+ *
+ * ⚠️ ตั้งใจ "ไม่" ไปแก้สีใน `driver-doc-paper.tsx` (ซึ่งจะลากบิลจัดส่ง + บิลหาสินค้า
+ * มาด้วย) — ไฟล์นั้นจดเหตุผลไว้ว่าใช้ทองแทนแดง "เพราะเป็นเอกสารโกดัง/คนขับ ต้องไม่ถูก
+ * มองผ่านๆ ว่าเป็นเอกสารการเงิน". เส้นแบ่งที่ใช้ตัดสิน = ใบไหน "ยื่นให้ลูกค้าเซ็น":
+ *   • ใบส่งสินค้า (ใบนี้) → ลูกค้าเซ็นรับ = เอกสารหน้าบ้าน → ตามชุดใบแจ้งหนี้
+ *   • บิลจัดส่ง / บิลหาสินค้า → กระดาษทำงานภายใน → คงทองไว้ตามเดิม
+ */
+/**
+ * 🔴 owner 2026-07-23 (รอบสอง): "กรอบ ไอคอน อะไรที่เป็นสีเหลืองในหน้านี้ เปลี่ยนเป็น
+ * สีแดงให้หมด" → ทั้งใบใช้ **แดงแบรนด์** `#B30000` (= `--color-primary-600` ใน
+ * globals.css และ `DOC_RED` ใน driver-doc-paper) แทนส้มของใบแจ้งหนี้.
+ * โครงสร้าง/เส้น/ระยะ ยังยึดใบแจ้งหนี้เหมือนเดิม — เปลี่ยนแค่เฉดสี.
+ * พื้นอ่อนใช้ alpha ต่ำกว่าส้ม (.10 vs .165) เพราะแดงเข้มกว่า ถ้าใช้ค่าเท่ากันจะทึบ
+ * จนตัวหนังสือบนแถบอ่านยาก.
+ */
+const TITLE_COLOR = "#B30000";
+const TINT_BG = "rgba(179,0,0,0.10)";
+/** เส้นผมคั่นแถว — ค่าเดียวกับที่ใบแจ้งหนี้ใช้ (tdC/tdNum → borderTop 0.5px #e5e7eb). */
+const HAIRLINE = "#e5e7eb";
+/** เส้นแบ่งโครงสร้าง — ค่าเดียวกับใบแจ้งหนี้ (`1px solid #d8dade`).
+ *  owner 2026-07-23: ย้ายจาก "ใต้หัวเอกสาร" มาไว้ "ใต้บล็อกผู้รับ/ขนส่งโดย" แทน
+ *  → เส้นเดียวในเอกสาร ทำหน้าที่แยก "ใครรับ" ออกจาก "ของอะไรบ้าง". */
+const RULE = "#d8dade";
+// ชื่อเดิมที่ตัวหน้าใช้อยู่ — ชี้มาที่โทนใหม่ทั้งคู่ ไม่ต้องไล่แก้ทุกจุดที่อ้างถึง
+const GOLD = TITLE_COLOR;
+const CREAM = TINT_BG;
 
 type Batch = {
   id: number;
@@ -263,6 +284,37 @@ export default async function DeliverySlipPage({
     .map((p) => (p ?? "").trim())
     .filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
 
+  // ── ชื่อคนขับ (owner 2026-07-23 "เอาชื่อจริงมาใส่ ไม่ใช่ user") ──────────────
+  // `tb_forwarder_driver.fdadminid` เก็บ "รหัสพนักงาน" (AD###) แต่ของเก่าบางแถว
+  // เก็บ "ชื่อล็อกอิน" (เช่น admin_pond) แทน → จับคู่ทั้ง 2 คอลัมน์.
+  //
+  // ⚠️ ห้ามหาใน `tb_users` — ตารางนั้นเป็นของ "ลูกค้า" พนักงานไม่มีแถวอยู่ในนั้น
+  // (ยืนยันกับ prod: AD020 ไม่มีใน tb_users) ซึ่งเป็นสาเหตุที่คอลัมน์ "ผู้รับผิดชอบ"
+  // บนหน้ารายการรอบโชว์รหัสดิบแทนชื่อ. ชื่อจริงอยู่ที่ `profiles` + ชื่อเล่นอยู่ที่
+  // `admin_contact_extras`.
+  let driverName = "";
+  if (batch.fdadminid) {
+    const { data: drv, error: drvErr } = await admin
+      .from("profiles")
+      .select("first_name, last_name, member_code, admin_login_id")
+      .or(`member_code.eq.${batch.fdadminid},admin_login_id.eq.${batch.fdadminid}`)
+      .limit(1)
+      .maybeSingle<{ first_name: string | null; last_name: string | null }>();
+    if (drvErr) {
+      // ชื่อคนขับเป็นข้อมูลประกอบ — อ่านไม่ได้ให้พิมพ์เอกสารต่อได้ ไม่ทำทั้งใบล้ม
+      console.error(`/admin/drivers/${id}/delivery-slip: driver name lookup failed`, {
+        code: drvErr.code,
+        message: drvErr.message,
+      });
+    }
+    driverName = [drv?.first_name, drv?.last_name]
+      .map((s) => (s ?? "").trim())
+      .filter(Boolean)
+      .join(" ");
+  }
+  // หาชื่อไม่เจอ → โชว์รหัสไว้ ดีกว่าเว้นว่างจนไม่รู้ว่าใครขับ
+  const driverLabel = driverName || batch.fdadminid || "—";
+
   const docNo = forwarders.map((f) => f.id).join(",");
   const dateLabel = batch.fddate
     ? new Date(batch.fddate).toLocaleString("th-TH", {
@@ -298,6 +350,24 @@ export default async function DeliverySlipPage({
   return (
     <div className="doc-desk min-h-screen bg-slate-100 text-slate-900">
       <DocPrintStyles />
+      {/* ซ่อน URL/วันที่/เลขหน้า ที่ browser แปะบนหัว-ท้ายกระดาษตอนสั่งพิมพ์
+          (owner 2026-07-23 "เวลาสั่งพิมพ์มันขึ้นลิงก์เว็ป").
+          หัว-ท้ายพวกนั้นถูกวาดใน "ขอบกระดาษ" ของ @page → บีบขอบเป็น 0 มันก็ไม่มี
+          ที่ให้วาด. แล้วค่อยใส่ขอบกระดาษเองที่ตัวเอกสารแทน ไม่งั้นเนื้อหาจะชนขอบ.
+          ประกาศไว้ "หลัง" <DocPrintStyles /> เพื่อ override @page ของชุดเอกสาร
+          คนขับเฉพาะหน้านี้ (บิลจัดส่ง/บิลหาสินค้า ยังใช้ margin 1cm เหมือนเดิม).
+          ⚠️ ไม่ 100% ทุก browser — Chrome/Edge ทำตาม, บางตัวยังโชว์อยู่ ทางที่
+          ชัวร์สุดคือติ๊ก "Headers and footers" ออกในหน้าต่างพิมพ์. */}
+      <style>{`
+        @media print {
+          @page { size: A4 portrait; margin: 0; }
+          /* คืนขอบกระดาษให้เนื้อหาเอง + สูงเต็มหน้าเพื่อให้บล็อกล่างยังไปติดก้นหน้า */
+          .print-area {
+            padding: 12mm 12mm !important;
+            min-height: 297mm !important;
+          }
+        }
+      `}</style>
 
       {/* On-screen toolbar */}
       <div className="no-print sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-white/90 px-4 py-3 backdrop-blur">
@@ -317,7 +387,16 @@ export default async function DeliverySlipPage({
           </span>
         </div>
         <PrintButton label="🖨 พิมพ์ใบส่งสินค้า" />
-      </div>      <main className="print-area mx-auto my-6 max-w-[820px] bg-white p-8 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_6px_20px_rgba(0,0,0,0.06)]">
+      </div>
+      {/* หน้าเป็นคอลัมน์ยืดได้ + สูงขั้นต่ำเท่าพื้นที่พิมพ์จริง (A4 297mm − ขอบ
+          @page 1cm สองด้าน = 277mm) → ตัวคั่น flex-1 ใต้ตารางจะดันบล็อกล่าง
+          (สรุป · หมายเหตุ · ลายเซ็น) ลงไปติดก้นหน้า แทนที่จะลอยอยู่กลางกระดาษ
+          เวลารายการน้อย. ใช้ min-height ไม่ใช่ height เพื่อให้รายการเยอะๆ ไหลลง
+          หน้าถัดไปได้ (ไม่โดนตัด) — สูตรเดียวกับใบแจ้งหนี้ (owner 2026-07-23). */}
+      <main
+        className="print-area mx-auto my-6 flex max-w-[820px] flex-col bg-white p-8 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_6px_20px_rgba(0,0,0,0.06)]"
+        style={{ minHeight: "277mm" }}
+      >
         {/* Header — sender (left) · document title + no./date (right) */}
         <div className="flex items-start justify-between gap-6">
           <div className="min-w-0">
@@ -351,17 +430,20 @@ export default async function DeliverySlipPage({
             <p className="mt-1.5 text-right text-[10px] font-medium tracking-[0.25em] text-slate-400">
               DELIVERY NOTE
             </p>
-            {/* Same tinted meta box the sibling บิลจัดส่ง uses — shared
-                component, not a look-alike, so the two can never drift. */}
-            <DocMetaBox>
-              <DocMetaRow k="เลขที่/No." v={`#${docNo}`} />
-              <DocMetaRow k="วันที่/Date" v={dateLabel} last />
-            </DocMetaBox>
+            {/* Peak meta box — พื้นอ่อน ไม่มีขอบ มุมโค้ง 2px เหมือนใบแจ้งหนี้
+                (`summary-doc.tsx`: background TINT_BG + borderRadius 2px เปล่าๆ).
+                เลิกใช้ <DocMetaBox> ของชุดเอกสารคนขับตรงนี้ เพราะกล่องนั้นมีขอบทอง
+                — ใบนี้ย้ายมาตามชุดใบแจ้งหนี้แล้ว (owner 2026-07-23). */}
+            <div className="mt-3 rounded-[3px]" style={{ background: TINT_BG }}>
+              <MetaRow k="เลขที่/No." v={`#${docNo}`} />
+              <MetaRow k="วันที่/Date" v={dateLabel} />
+              <MetaRow k="ผู้ขับ/Driver" v={driverLabel} last />
+            </div>
           </div>
         </div>
 
-        {/* accent rule closing the header */}
-        <div className="mt-4 border-t-2" style={{ borderColor: GOLD }} />
+        {/* ไม่มีเส้นปิดหัวเอกสารแล้ว (owner 2026-07-23) — ระยะห่างแยกหัวเอกสาร
+            ออกจากบล็อกผู้รับเองอยู่แล้ว เส้นย้ายลงไปใต้ "ขนส่งโดย" แทน */}
 
         {/* Recipient — legacy's เรียน / Attention block */}
         <div className="mt-4 text-[12px] leading-relaxed">
@@ -380,8 +462,15 @@ export default async function DeliverySlipPage({
           </p>
         </div>
 
+        {/* เส้นแบ่ง — คั่น "ใครรับ / ส่งด้วยอะไร" ออกจาก "ของอะไรบ้าง"
+            (owner 2026-07-23 "เอาเส้นมาขั้นตรงนี้แทน") */}
+        <div className="mt-4" style={{ borderTop: `1px solid ${RULE}` }} />
+
         {/* Items — bordered grid with a tinted head + a รวม row (legacy shape) */}
-        <div className="mt-5 overflow-hidden rounded border border-slate-300">
+        {/* Peak style (owner 2026-07-23 "ผมอยากได้แบบ peak") — ตารางไม่มีกรอบนอก
+            ไม่มีเส้นทุกช่อง: พื้นอ่อนทั้งตาราง + เส้นผมคั่นแถวเท่านั้น เหมือน
+            ใบแจ้งหนี้ (`summary-doc.tsx` tdC/tdNum ใช้ borderTop 0.5px อย่างเดียว). */}
+        <div className="mt-5 overflow-hidden rounded-[3px]" style={{ background: TINT_BG }}>
           <table className="w-full border-collapse text-[12px]">
             <thead>
               <tr className="text-center" style={{ background: CREAM }}>
@@ -395,38 +484,39 @@ export default async function DeliverySlipPage({
             </thead>
             <tbody>
               {forwarders.map((f, i) => (
-                <tr key={f.id}>
-                  <td className="border border-slate-200 px-2 py-1.5 text-center font-mono">
+                // แถวข้อมูลพื้นขาว → แถบอ่อนเหลือแค่หัวตารางกับแถวรวม (Peak)
+                <tr key={f.id} className="bg-white">
+                  <td className="border-t border-slate-200 px-2 py-1.5 text-center font-mono">
                     {i + 1}:{f.id}
                   </td>
-                  <td className="border border-slate-200 px-2 py-1.5 break-words">
+                  <td className="border-t border-slate-200 px-2 py-1.5 break-words">
                     {f.ftrackingchn || "—"}
                   </td>
-                  <td className="border border-slate-200 px-2 py-1.5 text-center">
+                  <td className="border-t border-slate-200 px-2 py-1.5 text-center">
                     {f.fpallet || "—"}
                   </td>
-                  <td className="border border-slate-200 px-2 py-1.5 text-right">
+                  <td className="border-t border-slate-200 px-2 py-1.5 text-right">
                     {fmt(f.fweight, 2)}
                   </td>
-                  <td className="border border-slate-200 px-2 py-1.5 text-right">
+                  <td className="border-t border-slate-200 px-2 py-1.5 text-right">
                     {fmt(f.fvolume, 3)}
                   </td>
-                  <td className="border border-slate-200 px-2 py-1.5 text-right">
+                  <td className="border-t border-slate-200 px-2 py-1.5 text-right">
                     {fmt(f.famount, 0)}
                   </td>
                 </tr>
               ))}
               <tr className="font-bold" style={{ background: CREAM }}>
-                <td className="border border-slate-200 px-2 py-1.5 text-right" colSpan={3}>
+                <td className="border-t border-slate-200 px-2 py-1.5 text-right" colSpan={3}>
                   รวม
                 </td>
-                <td className="border border-slate-200 px-2 py-1.5 text-right">
+                <td className="border-t border-slate-200 px-2 py-1.5 text-right">
                   {fmt(totalWeight, 2)}
                 </td>
-                <td className="border border-slate-200 px-2 py-1.5 text-right">
+                <td className="border-t border-slate-200 px-2 py-1.5 text-right">
                   {fmt(totalCbm, 3)}
                 </td>
-                <td className="border border-slate-200 px-2 py-1.5 text-right">
+                <td className="border-t border-slate-200 px-2 py-1.5 text-right">
                   {fmt(totalBoxes, 0)}
                 </td>
               </tr>
@@ -434,19 +524,22 @@ export default async function DeliverySlipPage({
           </table>
         </div>
 
+        {/* ตัวคั่นยืดได้ — กินที่ว่างที่เหลือ ดันทุกอย่างข้างล่างไปติดก้นหน้า.
+            รายการเยอะจนล้นหน้า ตัวนี้จะยุบเป็น 0 เองแล้วเนื้อหาไหลลงหน้าถัดไป. */}
+        <div className="flex-1" aria-hidden="true" />
+
+        {/* ── บล็อกท้ายเอกสาร (สรุป · หมายเหตุ · ลายเซ็น) ────────────────────
+            `break-inside: avoid` กันไม่ให้กลุ่มนี้ถูกผ่าครึ่งคนละหน้าเวลาพิมพ์ */}
+        <div style={{ breakInside: "avoid" }}>
+
         {/* สรุป box + QR */}
         <div className="mt-5 flex items-stretch gap-4">
-          <div
-            className="min-w-0 flex-1 rounded-lg border p-4"
-            style={{ background: CREAM, borderColor: CREAM_BD }}
-          >
-            <p
-              className="mb-2 inline-flex items-center gap-1.5 text-[12px] font-bold"
-              style={{ color: GOLD }}
-            >
-              <ClipboardList className="h-3.5 w-3.5" />
-              สรุป
-            </p>
+          {/* กล่องสรุป = พื้นเปล่า ไม่มีสี ไม่มีขอบ (owner 2026-07-23 "เอาสีออก") —
+              ตรงกับใบแจ้งหนี้ด้วย: ที่นั่นแถวสรุปก็พื้นเปล่า มีแค่บรรทัดยอดสุดท้าย
+              บรรทัดเดียวที่ได้แถบสี ไม่ใช่ทั้งกล่อง. */}
+          <div className="min-w-0 flex-1 px-1 py-1">
+            {/* ป้ายหมวดตัวเดียวกับใบแจ้งหนี้/ใบวางบิล/ใบเสร็จ (📋 สรุป) */}
+            <DocSectionLabel section="summary" style={{ marginBottom: "6px" }} />
             <TotalLine k="น้ำหนักรวม" v={fmt(totalWeight, 2)} unit="Kg" />
             <TotalLine k="ปริมาตรรวม" v={fmt(totalCbm, 3)} unit="CBM" />
             <TotalLine k="จำนวนรวม" v={fmt(totalBoxes, 0)} unit="BOX" strong />
@@ -470,21 +563,33 @@ export default async function DeliverySlipPage({
           ) : null}
         </div>
 
-        {/* หมายเหตุ */}
-        <p className="mt-4 flex items-start gap-2 text-[11px] text-slate-500">
-          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: GOLD }} />
-          <span>
-            <span className="font-semibold text-slate-600">หมายเหตุ</span>{" "}
-            เอกสารนี้จัดทำขึ้นเพื่อการตรวจสอบรายการจัดส่งสินค้าเท่านั้น
-          </span>
-        </p>
-
-        {/* Signatures */}
-        <div className="mt-6 grid grid-cols-3 gap-6 text-[12px]">
-          <SignBox icon={<UserCheck className="h-3.5 w-3.5" style={{ color: GOLD }} />} label="ผู้รับสินค้า" />
-          <SignBox icon={<Truck className="h-3.5 w-3.5" style={{ color: GOLD }} />} label="ผู้ส่งสินค้า" />
-          <SignBox icon={<ClipboardCheck className="h-3.5 w-3.5" style={{ color: GOLD }} />} label="ผู้ตรวจสอบ" />
+        {/* 💬 หมายเหตุ — ป้ายหมวดชุดเดียวกับใบแจ้งหนี้ */}
+        <div className="mt-4 flex items-start gap-2">
+          <DocSectionLabel section="remark" style={{ minWidth: "14mm" }} />
+          <p className="text-[11px] leading-relaxed text-slate-500">
+            เอกสารนี้จัดทำขึ้นเพื่อการตรวจสอบรายการจัดส่งสินค้าเท่านั้น — ไม่ใช่ใบเสร็จรับเงิน
+            <br />
+            {SITE_LEGAL_NAME_TH} เลขประจำตัวผู้เสียภาษี {TAX_ID}
+          </p>
         </div>
+
+        {/* ✍️ รับรอง — แถวลายเซ็นตัวเดียวกับใบแจ้งหนี้/ใบวางบิล/ใบเสร็จ
+            (<DocCertRow>) จึงได้ลายเซ็นจริง + ตราบริษัทมาเหมือนกัน แทนที่จะเป็น
+            เส้นประว่างๆ ที่วาดเองเฉพาะใบนี้. ป้าย 3 ช่องปรับเป็นภาษาของใบส่งสินค้า
+            (ผู้ส่ง / ผู้ตรวจสอบ / ผู้รับสินค้า) ตามที่ legacy PCS ใช้. */}
+        <div className="mt-6 flex items-start gap-2">
+          <DocSectionLabel section="certify" style={{ minWidth: "14mm" }} />
+          <DocCertRow
+            customerName={consigneeName ? `คุณ${consigneeName}` : (head.userid ?? "")}
+            dateIssued={dateLabel}
+            issuerLabel="ผู้ส่งสินค้า (Pacred)"
+            approverLabel="ผู้ตรวจสอบ (Pacred)"
+            receiverLabel="ผู้รับสินค้า (ลูกค้า)"
+            boxHeight="18mm"
+          />
+        </div>
+
+        </div>{/* ── ปิดบล็อกท้ายเอกสาร ── */}
 
         <p className="no-print pt-8 text-center text-[11px] text-slate-400">
           กดปุ่ม &quot;พิมพ์ใบส่งสินค้า&quot; ด้านบนเพื่อพิมพ์ หรือใช้คีย์บอร์ด Ctrl+P
@@ -505,7 +610,8 @@ function ItemTh({
   className?: string;
 }) {
   return (
-    <th className={`border border-slate-200 px-2 py-1.5 font-bold ${className}`}>
+    // Peak: หัวตารางไม่มีเส้นเลย — แถบสีอ่อนทำหน้าที่แยกหัวออกจากเนื้อเอง
+    <th className={`px-2 py-1.5 font-bold ${className}`}>
       {th}
       <br />
       <span className="text-[10px] font-normal uppercase tracking-wide text-slate-400">
@@ -532,7 +638,7 @@ function TotalLine({
       className={`flex items-baseline justify-between gap-3 py-1 text-[12px] ${
         strong ? "" : "border-b"
       }`}
-      style={strong ? undefined : { borderColor: CREAM_BD }}
+      style={strong ? undefined : { borderColor: HAIRLINE }}
     >
       <span className="text-slate-500">{k}</span>
       <span className="flex items-baseline gap-2">
@@ -543,17 +649,18 @@ function TotalLine({
   );
 }
 
-/** One signature column — icon + role, a dotted rule, then a dated line. */
-function SignBox({ icon, label }: { icon: React.ReactNode; label: string }) {
+// (SignBox ที่วาดเส้นประเองถูกถอดออก 2026-07-23 — แถวลายเซ็นใช้ <DocCertRow>
+//  ตัวเดียวกับใบแจ้งหนี้/ใบวางบิล/ใบเสร็จแล้ว จึงไม่ต้องมีเวอร์ชันเฉพาะใบนี้อีก)
+
+/** แถวในกล่อง เลขที่/วันที่ — Peak: ไม่มีขอบกล่อง มีแค่เส้นผมคั่นระหว่างแถว. */
+function MetaRow({ k, v, last }: { k: string; v: React.ReactNode; last?: boolean }) {
   return (
-    <div>
-      <p className="inline-flex items-center gap-1.5 font-semibold text-slate-700">
-        {icon}
-        {label}
-      </p>
-      <div className="mt-9 border-b border-dotted border-slate-400" />
-      <p className="mt-2 text-slate-500">วันที่ Date :</p>
-      <div className="mt-6 border-b border-dotted border-slate-400" />
+    <div
+      className="flex items-start justify-between gap-3 px-3 py-1.5"
+      style={last ? undefined : { borderBottom: `0.5px solid ${HAIRLINE}` }}
+    >
+      <span className="shrink-0 text-[11px] text-slate-500">{k}</span>
+      <span className="min-w-0 break-words text-right text-[12px] font-semibold">{v}</span>
     </div>
   );
 }

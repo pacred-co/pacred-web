@@ -25,11 +25,16 @@ export type PageSizeSelectProps = {
   /** Override the selectable sizes (default = ALLOWED_PAGE_SIZES). Pair the
    *  server's parsePageSize(sp.size, sizes) with the same array. */
   sizes?: readonly number[];
+  /** Offer the "ทั้งหมด (สูงสุด 5,000)" option. Default true (every existing
+   *  caller keeps it). Pass false on a screen whose whole point is to KEEP the
+   *  query small — offering a 5,000-row fetch there contradicts the intent
+   *  (owner 2026-07-23, /admin/drivers). */
+  allowAll?: boolean;
 };
 
 const ALL_VALUE = "all";
 
-export function PageSizeSelect({ basePath, current, params = {}, sizes = ALLOWED_PAGE_SIZES }: PageSizeSelectProps) {
+export function PageSizeSelect({ basePath, current, params = {}, sizes = ALLOWED_PAGE_SIZES, allowAll = true }: PageSizeSelectProps) {
   const router = useRouter();
 
   // "all" when the current size is the capped ทั้งหมด window; else the number.
@@ -61,7 +66,9 @@ export function PageSizeSelect({ basePath, current, params = {}, sizes = ALLOWED
             {n.toLocaleString("th-TH")}
           </option>
         ))}
-        <option value={ALL_VALUE}>ทั้งหมด (สูงสุด {ALL_PAGE_SIZE_CAP.toLocaleString("th-TH")})</option>
+        {allowAll && (
+          <option value={ALL_VALUE}>ทั้งหมด (สูงสุด {ALL_PAGE_SIZE_CAP.toLocaleString("th-TH")})</option>
+        )}
       </select>
       <span>แถว/หน้า</span>
     </label>

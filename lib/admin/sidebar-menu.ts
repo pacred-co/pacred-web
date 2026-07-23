@@ -1795,31 +1795,57 @@ const menuDriver: MenuSection[] = [
     // Section header standardised to "Cargo & Freight" everywhere
     // (2026-05-20 ค่ำ ภูม merge — Pacred = 1 company).
     header: "Cargo & Freight",
+    // 2026-07-23 (owner พี่ป๊อป · driver workspace pass 1 — SIDEBAR ONLY):
+    // owner rewrote this section to the legacy PCS driver menu shape
+    // (งานที่ต้องส่ง · ประวัติงาน · ค้นหารายการฝากนำเข้า · หมายเหตุฝากสั่ง ·
+    // หมายเหตุนำเข้า · ออกรายงาน). Every href below points at an EXISTING
+    // route — no new pages in this pass (owner: "อย่าเพิ่งไปเอาหน้าข้างในมา").
+    // The inner pages are the next pass.
     items: [
-      // 2026-05-23 (Wave 10 · Agent C) — mobile work-list FIRST. This is the
-      // page drivers open on their phone: today's deliveries + load/deliver/
-      // fail buttons. Self-row enforcement built into requireAdmin path so
-      // a driver only sees their own batch.
-      { labelKey: "driver.work",      href: "/admin/drivers/work",            icon: "Smartphone", badge: "driverItems" },
-      // 2026-06-08 (ภูม warehouse-handoff round 2): removed the two
-      // `driver.toDeliver` + `driver.history` leaves that pointed at
-      // `/admin/driver-runs`. That page still reads the rebuilt-empty
-      // `forwarder_driver` table (0 rows on prod) instead of the live
-      // `tb_forwarder_driver_item` (29,782 rows), so drivers would land
-      // there and see "no work" forever. `/admin/drivers/work` already
-      // implements the same workflow correctly (filters by member_code
-      // → tb_forwarder_driver.fdadminid → tb_forwarder_driver_item) and
-      // includes a "done" tab covering history. Keeping the broken URL
-      // accessible (Phase gate also un-blocked round 2) for the sales/
-      // accounting disbursement view via menuSales — they read its
-      // disbursement menubar — but drivers no longer have a leaf that
-      // sends them there.
-      // 2026-05-30 (Wave 29 #5 · Agent A) — flat barcode-intake shortcut.
-      // The driver role scans intake daily (legacy `barcode-d-import.php`).
-      // Replaces the prior `driver.barcode` leaf which pointed at the orphan
-      // `/admin/barcode/driver` hub page (deleted in this commit · was reading
-      // the abandoned `forwarders` rebuilt table).
-      itemBarcodeRecordIntakeFlat,
+      // งานที่ต้องส่ง / ประวัติงาน — the two leaves ภูม removed on 2026-06-08
+      // return, but pointed at `/admin/drivers/work` (the LIVE work-list over
+      // tb_forwarder_driver_item) instead of the old `/admin/driver-runs`,
+      // which still reads the rebuilt-empty `forwarder_driver` table (0 rows
+      // on prod) and would show a driver "no work" forever. The work page
+      // already implements both views via its tab strip, so this is a
+      // deep-link, not a rebuild.
+      //
+      // 2026-07-23 (owner): both leaves now open `/admin/drivers` — the run
+      // (รอบจัดส่ง) list — not the per-parcel work page. `/admin/drivers` gained
+      // a driver mode that (a) hard-scopes rows to fdadminid = the caller's own
+      // member_code and (b) splits on ?view=:
+      //   view=todo    → fdstatus '1'      (งานที่ต้องส่ง)
+      //   view=history → fdstatus '2','3'  (ประวัติงาน)
+      // `/admin/drivers/work` still exists (per-parcel load/deliver/fail + photo)
+      // and is reached by opening a run.
+      { labelKey: "driver.toDeliver", href: "/admin/drivers?view=todo",    icon: "Truck"   },
+      { labelKey: "driver.history",   href: "/admin/drivers?view=history", icon: "History" },
+      // ค้นหารายการฝากนำเข้า — same parent+2-children shape as `blockBarcode`
+      // and as legacy (ด้วยเครื่องสแกน / ด้วยกล้อง).
+      {
+        labelKey: "barcode.searchImport",
+        icon: "Barcode",
+        children: [
+          { labelKey: "barcode.byScanner", href: "/admin/barcode/driver/all", icon: "ScanLine" },
+          { labelKey: "barcode.byCamera",  href: "/admin/barcode/cargo/all",  icon: "Camera"   },
+        ],
+      },
+      // หมายเหตุฝากสั่ง — `/admin/service-orders/notes` existed but was an
+      // orphan (no sidebar entry anywhere · §0d). Wired here.
+      { labelKey: "purchasing.note",  href: "/admin/service-orders/notes", icon: "MessageSquare", badge: "shopNote"       },
+      { labelKey: "forwarder.note",   href: "/admin/forwarders/notes",     icon: "FileText",      badge: "forwarderNote"  },
+      // ออกรายงาน — accordion with the ONE driver report (legacy shape), NOT the
+      // flat `itemReportsAll` link into the 37-report hub: a driver has no
+      // business browsing sales/profit/AR reports. `/admin/reports/delivery-history`
+      // (📦 ประวัติการส่งสินค้า) already existed but was an orphan — no sidebar
+      // entry anywhere (§0d) — so this wires it rather than building a page.
+      {
+        labelKey: "report.title",
+        icon: "BarChart3",
+        children: [
+          { labelKey: "report.driverReport", href: "/admin/reports/delivery-history", icon: "Truck" },
+        ],
+      },
     ],
   },
   learningSection,

@@ -3400,6 +3400,7 @@
       "allUser": "All-service totals",
       "byCode": "Totals by customer code",
       "driver": "Driver delivery jobs",
+      "driverReport": "Driver report",
       "web": "Website access"
     },
     "accounting": {
