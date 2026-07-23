@@ -8,6 +8,7 @@ import {
   type MomoIngestPreview,
   type MomoIngestPreviewRow,
   type MomoInvoiceCabinetRollup,
+  type MomoInvoiceShipmentRollup,
 } from "@/actions/admin/momo-invoice-ingest";
 import {
   createMomoInvoiceSettlement,
@@ -200,47 +201,19 @@ function ReconcileSummary({ p }: { p: MomoIngestPreview }) {
  * ตารางข้างล่างเป็นราย-แทรคกิ้ง (grain ของใบ) แต่การจ่ายเกิดที่ **ตู้** — ก่อนหน้านี้บัญชี
  * ต้องบวกเองว่าตู้นี้ใบเรียกเก็บเท่าไร แล้วไปไล่หาตู้เองใน 44 ตู้ที่หน้าจ่าย.
  */
-/**
- * ลิงก์ไปหน้าตัดจ่าย พร้อมติ๊กตู้ให้.
- * 🔴 ต้องส่ง `page` ให้ถูกแท็บ — หน้ารายงานตู้แยก waiting (ยังไม่ถึงไทย) / succeed (ถึงไทยแล้ว)
- *    และ default = waiting. ตู้ที่ MOMO วางบิลมาส่วนใหญ่ถึงไทยแล้ว (อยู่ succeed) → ลิงก์ที่ไม่ส่ง
- *    page จะเด้งไปแท็บที่ "ไม่มีตู้นั้น" = ติ๊กไม่ติด แล้วบัญชีก็หาไม่เจอเหมือนเดิม.
- */
-function payHref(cabinets: string[], page: string | null, invoiceNo: string | null): string {
-  const qs = new URLSearchParams({ actionPay: "1", cabinet: cabinets.join(",") });
-  if (page) qs.set("page", page);
-  if (invoiceNo) qs.set("invoice", invoiceNo);
-  return `/admin/report-cnt?${qs.toString()}`;
-}
 
-function CabinetRollupCard({ rollup, invoiceNo }: { rollup: MomoInvoiceCabinetRollup[]; invoiceNo: string | null }) {
+function CabinetRollupCard({ rollup }: { rollup: MomoInvoiceCabinetRollup[] }) {
   if (rollup.length === 0) return null;
-  // ติ๊กให้เฉพาะตู้ที่ "ตรวจผ่านแล้ว" — ตู้ที่ยังขัดแย้งต้องไม่ถูกพาไปจ่าย (owner: ตรวจให้ตรงก่อน)
-  const payable = rollup.filter((c) => c.canPay && c.cabinet);
-  // ปุ่มรวมได้ก็ต่อเมื่อทุกตู้อยู่แท็บเดียวกัน — ข้ามแท็บติ๊กพร้อมกันไม่ได้ (หน้าเดียว = แท็บเดียว)
-  const pages = new Set(payable.map((c) => c.payPage));
-  const payAllHref =
-    payable.length > 1 && pages.size === 1
-      ? payHref(payable.map((c) => c.cabinet as string), payable[0].payPage, invoiceNo)
-      : null;
 
   return (
     <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-semibold">ตรวจต่อ “ตู้” — ใบนี้เรียกเก็บตู้ไหนบ้าง</h2>
-          <p className="mt-0.5 text-[12px] text-muted">
-            MOMO วางบิลเป็น <strong>แทรคกิ้ง</strong> แต่เราจ่ายเป็น <strong>ตู้</strong> — นี่คือยอดของใบรอบนี้ที่รวมเป็นรายตู้แล้ว
-          </p>
-        </div>
-        {payAllHref && (
-          <Link
-            href={payAllHref}
-            className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-          >
-            → ตัดจ่ายค่าตู้ ({payable.length} ตู้ที่ตรวจผ่าน · ติ๊กให้แล้ว)
-          </Link>
-        )}
+      <div>
+        <h2 className="text-sm font-semibold">ตรวจต่อ “ตู้” — ใบนี้เรียกเก็บตู้ไหนบ้าง (ดูอ้างอิงเท่านั้น)</h2>
+        <p className="mt-0.5 text-[12px] text-muted">
+          MOMO เก็บเราเป็น <strong>แทรคกิ้ง</strong> — <strong>การตัดจ่ายจึงเกิดที่แทรคกิ้ง/บิล ไม่ใช่ที่ตู้</strong>{" "}
+          (ปุ่ม “ตัดจ่าย” อยู่ในตารางรายแทรคกิ้งด้านล่าง · บิลเดียวมีหลายตู้ได้) ·
+          ตารางนี้ไว้<strong>ไล่ดูว่าใบรอบนี้แตะตู้ไหนบ้าง</strong> กดเลขตู้เพื่อเปิดดูตู้นั้นได้
+        </p>
       </div>
 
       <div className="overflow-x-auto scrollbar-x-visible">
@@ -253,7 +226,7 @@ function CabinetRollupCard({ rollup, invoiceNo }: { rollup: MomoInvoiceCabinetRo
               <th className="px-2 py-2 text-right">ขาย · กำไรหลังบันทึก</th>
               <th className="px-2 py-2 text-right">ต้นทุนทั้งตู้ในระบบเรา</th>
               <th className="px-2 py-2 text-left">ผล / ต้องทำอะไร</th>
-              <th className="px-2 py-2 text-right">ตัดจ่าย</th>
+              <th className="px-2 py-2 text-right">อ้างอิง</th>
             </tr>
           </thead>
           <tbody>
@@ -265,7 +238,16 @@ function CabinetRollupCard({ rollup, invoiceNo }: { rollup: MomoInvoiceCabinetRo
                 }`}
               >
                 <td className="px-2 py-2">
-                  <span className="font-mono font-medium">{c.cabinet ?? "(ใบไม่ระบุตู้)"}</span>
+                  {c.cabinet ? (
+                    <Link
+                      href={`/admin/report-cnt/${encodeURIComponent(c.cabinet)}`}
+                      className="font-mono font-medium text-primary-600 underline decoration-dotted underline-offset-2 hover:text-primary-700"
+                    >
+                      {c.cabinet}
+                    </Link>
+                  ) : (
+                    <span className="font-mono font-medium">(ใบไม่ระบุตู้)</span>
+                  )}
                   {c.transportLabel && <span className="ml-1 text-muted">· {c.transportLabel}</span>}
                   {c.paid && <span className="ml-1 rounded bg-gray-200 px-1 text-[11px] text-gray-700">จ่ายแล้ว</span>}
                 </td>
@@ -308,15 +290,15 @@ function CabinetRollupCard({ rollup, invoiceNo }: { rollup: MomoInvoiceCabinetRo
                         ส่วนต่าง ฿{baht(c.roundDiff)} คือของที่ MOMO <strong>ยังไม่ได้เรียกเก็บ</strong> (ระบบตั้งเป็น
                         ต้นทุนประเมินไว้ก่อน) · <strong>จ่ายรอบนี้ ฿{baht(c.invoiceTotal)} เท่านั้น</strong> อย่าจ่ายยอดทั้งตู้
                         <br />
-                        ⚠️ ระบบให้ตัดจ่าย <strong>ตู้ละครั้งเดียว</strong> — จ่ายตู้นี้ตอนนี้แล้ว รอบหน้าที่ MOMO บิลส่วนที่เหลือ
-                        จะบันทึกเข้าตู้นี้ไม่ได้ · ให้บัญชีเคาะก่อนว่าจะจ่ายเลย หรือรอ MOMO บิลครบ
+                        ✅ ตัดจ่ายเป็น <strong>รายแทรคกิ้ง</strong> (ตารางล่าง) — รอบนี้ตัดเฉพาะที่ใบเรียกเก็บ
+                        ส่วนที่ MOMO ยังไม่บิล รอบหน้ามาค่อยตัดเพิ่มได้ ไม่ติดล็อก
                       </div>
                     </>
                   ) : (
                     <>
-                      <span className="font-medium text-green-700">✓ ตรวจผ่าน — ตัดจ่ายได้</span>
+                      <span className="font-medium text-green-700">✓ ตรวจผ่าน — ตัดจ่ายได้ (ที่ตารางรายแทรคกิ้ง)</span>
                       <div className="mt-0.5 text-muted">
-                        ยอดที่ต้องจ่าย MOMO รอบนี้ = <strong>฿{baht(c.invoiceTotal)}</strong>
+                        ยอดที่ใบรอบนี้เรียกเก็บในตู้นี้ = <strong>฿{baht(c.invoiceTotal)}</strong>
                         {c.roundDiff != null && Math.abs(c.roundDiff) > 0.02 && (
                           <>
                             {" · "}ต้นทุนในระบบยังต่างอยู่ ฿{baht(Math.abs(c.roundDiff))} —{" "}
@@ -330,13 +312,13 @@ function CabinetRollupCard({ rollup, invoiceNo }: { rollup: MomoInvoiceCabinetRo
                   )}
                 </td>
                 <td className="px-2 py-2 text-right">
-                  {c.canPay && c.cabinet ? (
+                  {c.cabinet ? (
                     <Link
-                      href={payHref([c.cabinet], c.payPage, invoiceNo)}
-                      className="inline-block whitespace-nowrap rounded-full bg-emerald-600 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-emerald-700"
-                      title={`เปิดหน้ารายงานตู้ + ติ๊กตู้ ${c.cabinet} ให้อัตโนมัติ`}
+                      href={`/admin/report-cnt/${encodeURIComponent(c.cabinet)}`}
+                      className="inline-block whitespace-nowrap rounded-full border border-border px-3 py-1.5 text-[11px] font-medium hover:bg-surface-alt"
+                      title={`เปิดดูรายละเอียดตู้ ${c.cabinet}`}
                     >
-                      → ตัดจ่ายตู้นี้
+                      ดูตู้ →
                     </Link>
                   ) : (
                     <span className="text-[11px] text-muted">—</span>
@@ -437,6 +419,11 @@ export function MomoInvoiceCostClient() {
   const [settled, setSettled] = useState<SettledMap>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pending, start] = useTransition();
+  /** เลขฐานชิปเม้น → ยอดทั้งครอบครัว · ใช้อธิบายกำไรรายกล่องที่ติดลบ (Σ มาจาก DB ฝั่ง server
+   *  ไม่ใช่จากบรรทัดบนใบ — ครอบครัวอาจถูกบิลไม่ครบในรอบเดียว). */
+  const shipByBase = new Map<string, MomoInvoiceShipmentRollup>(
+    (preview?.byShipment ?? []).map((s) => [s.base, s]),
+  );
 
   /** ดึงว่าแถวไหน (fid) ถูกตัดจ่ายไปแล้ว — เรียกหลัง preview + หลังบันทึก/ตัดจ่าย. */
   const refreshSettled = useCallback(async (rows: MomoIngestPreview["rows"]) => {
@@ -715,7 +702,7 @@ export function MomoInvoiceCostClient() {
 
       {/* สรุปต่อตู้ (ข้อมูลอ้างอิง) — MOMO วางบิลเป็นแทรคกิ้ง บางบิลมีหลายตู้ */}
       {preview && preview.rows.length > 0 && (
-        <CabinetRollupCard rollup={preview.byCabinet} invoiceNo={preview.invoiceNo} />
+        <CabinetRollupCard rollup={preview.byCabinet} />
       )}
 
       {/* ตัดจ่ายทั้งบิล — owner: "ตัดจ่ายทั้งบิลได้ครับ" (ไม่ใช่ต่อตู้ · บิลข้ามตู้ได้) */}
@@ -801,123 +788,204 @@ export function MomoInvoiceCostClient() {
             </div>
           )}
 
+          {/* ยอดทั้งชิปเม้น คีย์ด้วยเลขฐาน — ใช้อธิบายกำไรรายกล่องที่ติดลบ (ดู byShipment ฝั่ง server) */}
+          {/* ตารางรายแทรคกิ้ง — owner 2026-07-23: "แยกคอลัมน์ให้เป็นเหมือนตาราง excel แบบเข้าใจง่าย"
+              + "ทำให้ แทรคกิ้ง PR เลขตู้ กดเข้าไปดูในระบบเพื่ออ้างอิงได้ทั้งหมด".
+              เดิมยัด ลูกค้า+ตู้ ไว้ช่องเดียว และ ขาย+กำไร ไว้ช่องเดียว → อ่านยาก ทานกับ Excel ไม่ได้
+              ตอนนี้ 1 ค่า = 1 คอลัมน์ และทั้ง 3 ตัวอ้างอิงกดเข้าระบบได้. */}
           <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-xs">
+            <table className="w-full border-collapse text-xs [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border">
               <thead className="bg-surface-alt/50 text-[11px] uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-2 py-2 text-left">แทรคกิ้ง (บนใบ)</th>
-                  <th className="px-2 py-2 text-left">ลูกค้า / ตู้ (ระบบเรา)</th>
-                  <th className="px-2 py-2 text-right">คิว × เรท · กล่อง</th>
-                  <th className="px-2 py-2 text-right">คิว เรา / ใบ · ดิฟ</th>
+                  <th className="px-2 py-2 text-left">รหัสลูกค้า</th>
+                  <th className="px-2 py-2 text-left">เลขตู้</th>
+                  <th className="px-2 py-2 text-right">กล่อง</th>
+                  <th className="px-2 py-2 text-right">เรท ฿/คิว</th>
+                  <th className="px-2 py-2 text-right">คิว (ระบบเรา)</th>
+                  <th className="px-2 py-2 text-right">คิว (ใบ MOMO)</th>
+                  <th className="px-2 py-2 text-right">ดิฟคิว</th>
                   <th className="px-2 py-2 text-right">ต้นทุนปัจจุบัน</th>
-                  <th className="px-2 py-2 text-right">ต้นทุนใบแจ้งหนี้</th>
-                  <th className="px-2 py-2 text-right">ขาย · กำไร</th>
+                  <th className="px-2 py-2 text-right">ต้นทุนใบ MOMO</th>
+                  <th className="px-2 py-2 text-right">ดิฟต้นทุน</th>
+                  <th className="px-2 py-2 text-right">ราคาขาย</th>
+                  <th className="px-2 py-2 text-right">กำไร</th>
                   <th className="px-2 py-2 text-left">ผล / ต้องทำอะไร</th>
                 </tr>
               </thead>
               <tbody>
-                {preview.rows.map((r) => (
-                  <tr
-                    key={r.tracking}
-                    className={`border-t border-border align-top ${
-                      !r.matched || r.cabinetConflict || r.duplicateFid ? "bg-red-50/60" : r.willApply ? "bg-amber-50/40" : ""
-                    }`}
-                  >
-                    <td className="px-2 py-2 font-mono">
-                      {r.tracking}
-                      {r.matchedVia === "bare_base" && (
-                        <span
-                          className="ml-1 rounded bg-violet-100 px-1 text-[11px] font-sans text-violet-700"
-                          title={`MOMO บิลกล่องแรกของชุดแยก · ระบบเราเก็บเป็นเลขเปล่า "${r.matchedTracking}" (น้ำหนัก/คิว ตรงกัน จึงจับคู่ให้)`}
-                        >
-                          = {r.matchedTracking}
-                        </span>
-                      )}
-                      {r.totalMismatch && (
-                        <span
-                          className="ml-1 text-orange-600"
-                          title={`ยอดบนใบ ฿${baht(r.invoiceCost)} ไม่ตรงกับ ${r.cbm} × ${baht(r.unitPrice)} = ฿${baht(Math.round(r.cbm * r.unitPrice * 100) / 100)} — MOMO คิดเลขไม่ตรงสูตรของใบนี้ ตรวจกับ MOMO`}
-                        >
-                          ⚠ ยอดไม่ตรงสูตร
-                        </span>
-                      )}
-                      {r.rateMissing && (
-                        <span className="ml-1 text-[11px] text-muted" title="ใบพิมพ์เรทเป็น 0.00 — ตรวจยอดด้วยสูตรไม่ได้ (ยอดที่พิมพ์ยังเป็นบิลจริง)">
-                          (ใบไม่ได้พิมพ์เรท)
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 text-[11px]">
-                      {r.matched ? (
-                        <>
-                          <span className="font-medium">{r.userid ?? "-"}</span>
-                          <span className="text-muted"> / {r.fcabinetnumber ?? "(ยังไม่ผูกตู้)"}</span>
-                          {r.cabinetConflict && (
-                            <div className="mt-0.5 font-medium text-red-700">ใบว่า {r.invoiceCabinet}</div>
-                          )}
-                          {r.cabinetUnlinked && (
-                            <div className="mt-0.5 text-sky-700">ใบว่าตู้ {r.invoiceCabinet} — ยังไม่ผูก (บันทึกต้นทุนได้)</div>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-red-700">—{r.invoiceCabinet ? ` (ใบว่าตู้ ${r.invoiceCabinet})` : ""}</span>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 text-right text-muted whitespace-nowrap">
-                      {r.cbm} × {baht(r.unitPrice)} · {r.qty} กล่อง
-                    </td>
-                    <td className="px-2 py-2 text-right whitespace-nowrap">
-                      {r.matched ? (
-                        <>
-                          <span className="tabular-nums">{cbm(r.ourCbm)}</span>
-                          <span className="text-muted"> / {cbm(r.invoiceCbm)}</span>
-                          {r.cbmDiff != null && (
-                            <div className="mt-0.5">
-                              <DiffPill value={r.cbmDiff} text={signedCbm(r.cbmDiff)} good="up" />
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-muted">— / {cbm(r.invoiceCbm)}</span>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 text-right">{baht(r.currentCost)}</td>
-                    <td className="px-2 py-2 text-right font-semibold">{baht(r.invoiceCost)}</td>
-                    <td className="px-2 py-2 text-right whitespace-nowrap">
-                      {r.ourSell == null ? (
-                        <span className="text-muted">—</span>
-                      ) : (
-                        <>
-                          <span className="tabular-nums">{baht(r.ourSell)}</span>
-                          {r.ourSell <= 0 && (
-                            <span className="ml-1 text-[11px] text-amber-700" title="แถวนี้ยังไม่ตั้งราคาขาย — กำไรที่โชว์จึงยังไม่ใช่ของจริง">
-                              (ยังไม่ตั้งราคา)
-                            </span>
-                          )}
-                          <div
-                            className={`text-[11px] font-medium tabular-nums ${
-                              (r.profitAfter ?? 0) < 0 ? "text-red-700" : "text-emerald-700"
-                            }`}
-                            title={`กำไรตอนนี้ ฿${baht(r.profitNow)} → หลังบันทึกต้นทุนจากใบนี้ ฿${baht(r.profitAfter)}`}
+                {preview.rows.map((r) => {
+                  const ship = r.shipmentBase ? shipByBase.get(r.shipmentBase) : undefined;
+                  const costDelta =
+                    r.currentCost == null ? null : Math.round((r.invoiceCost - r.currentCost) * 100) / 100;
+                  return (
+                    <tr
+                      key={r.tracking}
+                      className={`align-top ${
+                        !r.matched || r.cabinetConflict || r.duplicateFid
+                          ? "bg-red-50/60"
+                          : r.willApply
+                            ? "bg-amber-50/40"
+                            : ""
+                      }`}
+                    >
+                      {/* แทรคกิ้ง → เปิดรายการนำเข้าในระบบ */}
+                      <td className="px-2 py-2 font-mono whitespace-nowrap">
+                        {r.fid ? (
+                          <Link
+                            href={`/admin/forwarders/${r.fid}`}
+                            className="text-primary-600 underline decoration-dotted underline-offset-2 hover:text-primary-700"
+                            title={`เปิดรายการนำเข้า #${r.fid}${r.matchedTracking && r.matchedTracking !== r.tracking ? ` (ระบบเก็บเป็น ${r.matchedTracking})` : ""}`}
                           >
-                            กำไร ฿{baht(r.profitAfter)}
-                          </div>
-                        </>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 text-[11px]">
-                      <RowOutcome r={r} />
-                      {r.blockReason && <div className="mt-0.5 text-muted">{r.blockReason}</div>}
-                      <RowActions
-                        r={r}
-                        settled={settled}
-                        pending={pending}
-                        onApply={(fid) => doApply([fid])}
-                        onSettle={(fid) => doSettle([fid])}
-                      />
-                    </td>
-                  </tr>
-                ))}
+                            {r.tracking}
+                          </Link>
+                        ) : (
+                          r.tracking
+                        )}
+                        {r.matchedVia === "bare_base" && (
+                          <span
+                            className="ml-1 rounded bg-violet-100 px-1 text-[11px] font-sans text-violet-700"
+                            title={`MOMO บิลกล่องแรกของชุดแยก · ระบบเราเก็บเป็นเลขเปล่า "${r.matchedTracking}" (น้ำหนัก/คิว ตรงกัน จึงจับคู่ให้)`}
+                          >
+                            = {r.matchedTracking}
+                          </span>
+                        )}
+                        {r.totalMismatch && (
+                          <span
+                            className="ml-1 text-orange-600"
+                            title={`ยอดบนใบ ฿${baht(r.invoiceCost)} ไม่ตรงกับ ${r.cbm} × ${baht(r.unitPrice)} = ฿${baht(Math.round(r.cbm * r.unitPrice * 100) / 100)} — MOMO คิดเลขไม่ตรงสูตรของใบนี้ ตรวจกับ MOMO`}
+                          >
+                            ⚠
+                          </span>
+                        )}
+                        {r.rateMissing && (
+                          <span className="ml-1 text-[11px] text-muted" title="ใบพิมพ์เรทเป็น 0.00 — ตรวจยอดด้วยสูตรไม่ได้ (ยอดที่พิมพ์ยังเป็นบิลจริง)">
+                            (ไม่มีเรทบนใบ)
+                          </span>
+                        )}
+                      </td>
+
+                      {/* รหัสลูกค้า → โปรไฟล์ลูกค้า */}
+                      <td className="px-2 py-2 whitespace-nowrap">
+                        {r.userid ? (
+                          <Link
+                            href={`/admin/customers/${encodeURIComponent(r.userid)}`}
+                            className="font-medium text-primary-600 underline decoration-dotted underline-offset-2 hover:text-primary-700"
+                          >
+                            {r.userid}
+                          </Link>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+
+                      {/* เลขตู้ → หน้ารายละเอียดตู้ */}
+                      <td className="px-2 py-2 whitespace-nowrap">
+                        {r.fcabinetnumber ? (
+                          <Link
+                            href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
+                            className="font-mono text-primary-600 underline decoration-dotted underline-offset-2 hover:text-primary-700"
+                          >
+                            {r.fcabinetnumber}
+                          </Link>
+                        ) : r.matched ? (
+                          <span className="text-muted">(ยังไม่ผูกตู้)</span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                        {r.cabinetConflict && (
+                          <div className="mt-0.5 text-[11px] font-medium text-red-700">ใบว่า {r.invoiceCabinet}</div>
+                        )}
+                        {r.cabinetUnlinked && (
+                          <div className="mt-0.5 text-[11px] text-sky-700">ใบว่า {r.invoiceCabinet}</div>
+                        )}
+                      </td>
+
+                      <td className="px-2 py-2 text-right tabular-nums">{r.qty}</td>
+                      <td className="px-2 py-2 text-right tabular-nums text-muted">{baht(r.unitPrice)}</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{r.matched ? cbm(r.ourCbm) : "—"}</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{cbm(r.invoiceCbm)}</td>
+                      <td className="px-2 py-2 text-right">
+                        {r.cbmDiff == null ? (
+                          <span className="text-muted">—</span>
+                        ) : (
+                          <DiffPill value={r.cbmDiff} text={signedCbm(r.cbmDiff)} good="up" />
+                        )}
+                      </td>
+
+                      <td className="px-2 py-2 text-right tabular-nums">{baht(r.currentCost)}</td>
+                      <td className="px-2 py-2 text-right font-semibold tabular-nums">{baht(r.invoiceCost)}</td>
+                      <td className="px-2 py-2 text-right">
+                        {costDelta == null ? (
+                          <span className="text-muted">—</span>
+                        ) : (
+                          <DiffPill value={costDelta} text={signedBaht(costDelta)} good="down" />
+                        )}
+                      </td>
+
+                      <td className="px-2 py-2 text-right tabular-nums">
+                        {r.ourSell == null ? (
+                          <span className="text-muted">—</span>
+                        ) : (
+                          <>
+                            {baht(r.ourSell)}
+                            {r.ourSell <= 0 && (
+                              <div className="text-[11px] text-amber-700" title="แถวนี้ยังไม่ตั้งราคาขาย">
+                                ยังไม่ตั้งราคา
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </td>
+
+                      {/* กำไรรายกล่อง + คำอธิบายเมื่อติดลบ (owner: "ติดลบคือยังไง ผิดปกติไหม") */}
+                      <td className="px-2 py-2 text-right">
+                        {r.profitAfter == null ? (
+                          <span className="text-muted">—</span>
+                        ) : (
+                          <>
+                            <span
+                              className={`font-medium tabular-nums ${r.profitAfter < 0 ? "text-red-700" : "text-emerald-700"}`}
+                            >
+                              {baht(r.profitAfter)}
+                            </span>
+                            {r.profitAfter < 0 && ship && ship.rows > 1 && (
+                              <div
+                                className={`mt-0.5 text-[11px] ${ship.profit >= 0 ? "text-muted" : "text-red-700 font-medium"}`}
+                                title={
+                                  ship.profit >= 0
+                                    ? `ขายคิดตามน้ำหนัก แต่ทุนคิดตามคิว — กล่องที่เบาแต่ใหญ่จึงติดลบรายกล่อง` +
+                                      ` · ทั้งชิปเม้น ${ship.rows} กล่อง ${ship.weightKg} kg / ${ship.cbm} คิว` +
+                                      (ship.densityKgPerCbm ? ` (${ship.densityKgPerCbm} kg/คิว)` : "") +
+                                      ` → ขาย ฿${baht(ship.sell)} − ทุน ฿${baht(ship.cost)} = กำไร ฿${baht(ship.profit)}`
+                                    : `ทั้งชิปเม้นก็ติดลบ — ตรวจเรทขาย/ต้นทุนของงานนี้`
+                                }
+                              >
+                                {ship.profit >= 0 ? (
+                                  <>ทั้งชิปเม้น ({ship.rows} กล่อง) กำไร ฿{baht(ship.profit)} ✓</>
+                                ) : (
+                                  <>🔴 ทั้งชิปเม้นก็ติดลบ ฿{baht(ship.profit)}</>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </td>
+
+                      <td className="px-2 py-2 text-[11px]">
+                        <RowOutcome r={r} />
+                        {r.blockReason && <div className="mt-0.5 text-muted">{r.blockReason}</div>}
+                        <RowActions
+                          r={r}
+                          settled={settled}
+                          pending={pending}
+                          onApply={(fid) => doApply([fid])}
+                          onSettle={(fid) => doSettle([fid])}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
