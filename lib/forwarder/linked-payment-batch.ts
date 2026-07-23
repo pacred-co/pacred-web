@@ -7,9 +7,19 @@ import {
   type ForwarderDebitRow,
 } from "@/lib/forwarder/forwarder-debit-total";
 import { resolveMaoAnchorIds } from "@/lib/forwarder/mao-anchor";
+import { classifyCorporateProfile } from "@/lib/forwarder/corporate-profile-gate";
 
 type Result =
-  | { ok: true; batch: ForwarderDebitBatch; missingIds: string[] }
+  | {
+      ok: true;
+      batch: ForwarderDebitBatch;
+      missingIds: string[];
+      /**
+       * ข้อมูลนิติที่ยังไม่ครบ "สำหรับพิมพ์เอกสาร" แต่ไม่กระทบยอดเงิน (ปัจจุบัน = ที่อยู่นิติ).
+       * null = ครบ/ไม่ใช่นิติ. ผู้เรียกควรเอาไปเตือนให้ไปเติม — ไม่ใช่เอาไปบล็อกการรับเงิน.
+       */
+      corporateProfileWarning: string | null;
+    }
   | { ok: false; error: string };
 
 /** Load and calculate one linked forwarder payment with the production money engine. */
@@ -45,19 +55,31 @@ export async function loadLinkedForwarderPaymentBatch(
   if (!user) return { ok: false, error: "user_not_found" };
 
   // One identity predicate for quote + WHT + receipt class. Any company signal
-  // (legacy userCompany flag OR a corporate row/tax ID) requires a complete
-  // legal billing record before money is accepted; otherwise the old flow could
-  // quote 1% WHT but later mint an FRG personal receipt with a blank tax ID.
+  // (legacy userCompany flag OR a corporate row/tax ID) means the corporate receipt
+  // class + 1% WHT — so the identity that JUSTIFIES that class (ชื่อ + เลขภาษี) must
+  // exist, otherwise the old flow could quote 1% WHT but later mint an FRG personal
+  // receipt with a blank tax ID. ดูการแยก money-critical vs document-only ข้างล่าง.
   const isCorporate = String(user.userCompany ?? "").trim() === "1" || corp != null;
+
+  // แยก "อะไรคิดเงิน" ออกจาก "อะไรแค่พิมพ์บนเอกสาร" — owner 2026-07-23 (บัญชียืนยันสลิปไม่ได้
+  // ทั้งที่ลูกค้าจ่ายมาแล้ว · PR022 บริษัท เจ แนค: ชื่อ ✓ เลขภาษี ✓ แต่ที่อยู่นิติว่าง).
+  //
+  // ตัวที่คิดเงินคือ `isCorporate` (boolean) ตัวเดียว → ส่งเข้า computeForwarderDebitBatch
+  // แล้วไปกำหนด WHT 1% ผ่าน legacyReceiptAmount. **ที่อยู่ไม่ได้เข้าสูตรเงินเลย** — เป็นข้อความ
+  // บนเอกสารล้วน. เดิม guard บังคับครบทั้ง 3 ช่องเท่ากันหมด ทำให้ "ที่อยู่ว่าง" บล็อกเส้นเงิน
+  // ทั้งเส้นทั้งที่ยอดเท่ากันเป๊ะไม่ว่าจะมีที่อยู่หรือไม่.
+  //
+  // 🔑 ที่สำคัญกว่า: guard นี้ถูกเรียกทั้ง "ก่อนลูกค้าจ่าย" (quote) และ "หลังเงินเข้าแล้ว" (บัญชี
+  // อนุมัติสลิป). บล็อกตอน quote = ป้องกันได้จริง · บล็อกตอนอนุมัติ = เงินเข้าบัญชีไปแล้ว
+  // ลูกค้าจ่ายแล้ว แต่ออกใบเสร็จไม่ได้และงานค้าง — กันอะไรไม่ได้เลย มีแต่ทำงานค้าง
+  // (คลาสเดียวกับบทเรียน 2026-06-14: guard ที่ port เพิ่มเข้ามาบนเส้นที่ legacy ไม่เคยกั้น).
+  let corporateProfileWarning: string | null = null;
   if (isCorporate) {
-    const hasCompleteCorporateIdentity = Boolean(
-      corp?.corporatename?.trim()
-      && corp.corporatenumber?.trim()
-      && corp.corporateaddress?.trim(),
-    );
-    if (!hasCompleteCorporateIdentity) {
-      return { ok: false, error: "corporate_billing_profile_incomplete" };
+    const verdict = classifyCorporateProfile(corp);
+    if (verdict.blockingMissing.length > 0) {
+      return { ok: false, error: `corporate_billing_profile_incomplete:${verdict.blockingMissing.join(",")}` };
     }
+    corporateProfileWarning = verdict.warning;
   }
 
   const { data, error } = await admin
@@ -79,5 +101,5 @@ export async function loadLinkedForwarderPaymentBatch(
     isCorporate,
     maoAnchorIds,
   });
-  return { ok: true, batch, missingIds };
+  return { ok: true, batch, missingIds, corporateProfileWarning };
 }

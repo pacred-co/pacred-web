@@ -169,10 +169,21 @@ export function ForwarderPayModal({
 
   const serverQuote = quoteState?.key === quoteRequestKey ? quoteState.quote : null;
   const serverQuoteError = quoteErrorState?.key === quoteRequestKey ? quoteErrorState.error : null;
-  const serverQuoteErrorMessage = serverQuoteError === "corporate_billing_profile_incomplete"
-    || serverQuoteError === "billing_profile_incomplete"
-    ? "ข้อมูลสำหรับออกเอกสารยังไม่ครบ (ชื่อ · เลขผู้เสียภาษีกรณีนิติบุคคล · ที่อยู่) กรุณาบันทึกข้อมูลก่อนชำระ"
-    : serverQuoteError;
+  // error มี suffix บอกช่องที่ขาด ("…incomplete:ชื่อนิติบุคคล,เลขประจำตัวผู้เสียภาษี") → match ด้วย
+  // prefix แล้วบอกให้ตรงว่าขาดอะไร (§0f อย่ามั่ว — ข้อความลอยๆ ทำให้ไม่รู้จะไปกรอกอะไร)
+  const serverQuoteErrorMessage = (() => {
+    if (!serverQuoteError) return serverQuoteError;
+    if (
+      serverQuoteError.startsWith("corporate_billing_profile_incomplete")
+      || serverQuoteError.startsWith("billing_profile_incomplete")
+    ) {
+      const fields = serverQuoteError.split(":")[1];
+      return fields
+        ? `ข้อมูลนิติบุคคลยังไม่ครบ: ${fields.split(",").join(" · ")} — กรุณาติดต่อเจ้าหน้าที่เพื่อเพิ่มข้อมูลก่อนชำระ`
+        : "ข้อมูลสำหรับออกเอกสารยังไม่ครบ กรุณาติดต่อเจ้าหน้าที่ก่อนชำระ";
+    }
+    return serverQuoteError;
+  })();
   const quoteLineById = useMemo(
     () => new Map((serverQuote?.lines ?? []).map((line) => [Number(line.id), line])),
     [serverQuote],
