@@ -44,7 +44,7 @@ import {
 /** Toggle the `.receipt-fit` class on the receipt wrapper container. */
 const FIT_TARGET_ID = "publicReceiptDoc";
 
-export default function PublicReceiptToolbar() {
+export default function PublicReceiptToolbar({ printLocked = false }: { printLocked?: boolean }) {
   // 2026-06-14 — the 50-ทวิ cert NO LONGER locks the print/download. The legacy
   // PCS receipt never gated the customer print on the cert, and blocking it
   // created a chicken-and-egg (the customer needs the receipt in hand to issue
@@ -125,7 +125,17 @@ export default function PublicReceiptToolbar() {
               <span>{fit ? t("paperView") : t("fullScreen")}</span>
             </button>
 
-            {/* พิมพ์ — always available (the 50-ทวิ cert never gates the print). */}
+            {/* พิมพ์ — 🔒 owner เคาะ 2026-07-24: ใบเสร็จหัก 1% ต้องผ่านตรวจใบ 50 ทวิ ก่อน
+                (printLocked) · ระหว่างนั้นปุ่มอธิบายแทนการยิง window.print — และต่อให้กด
+                Cmd+P เอง หน้าแม่ก็ซ่อนกระดาษไว้แล้ว (print:hidden) ได้หน้าแจ้งแทน. */}
+            {printLocked ? (
+              <div className="flex min-h-[44px] items-start gap-3 rounded-xl bg-amber-50 px-3 py-2 text-left">
+                <Printer className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+                <span className="text-[13px] leading-snug text-amber-800">
+                  พิมพ์ได้หลังบัญชีตรวจใบ 50 ทวิ — แนบไฟล์ได้ที่กรอบด้านบนของหน้านี้
+                </span>
+              </div>
+            ) : (
             <button
               type="button"
               onClick={handlePrint}
@@ -134,8 +144,10 @@ export default function PublicReceiptToolbar() {
               <Printer className="h-5 w-5 text-primary-600" />
               <span>{t("print")}</span>
             </button>
+            )}
 
-            {/* ดาวน์โหลด PDF (+ hint) — always available. */}
+            {/* ดาวน์โหลด PDF (+ hint) — ซ่อนตอน locked (คือ window.print ตัวเดียวกัน). */}
+            {!printLocked && (
             <button
               type="button"
               onClick={handlePrint}
@@ -147,6 +159,7 @@ export default function PublicReceiptToolbar() {
               </span>
               <span className="pl-8 text-xs leading-snug text-muted">{t("downloadPdfHint")}</span>
             </button>
+            )}
 
             {/* English / ไทย */}
             <button

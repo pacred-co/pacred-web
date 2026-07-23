@@ -96,13 +96,29 @@ export default async function PublicReceiptPage({
           Ships WITH `receipt-fit` so the A4 paper fits a phone on first paint
           (no horizontal scroll, no flash) — the toolbar toggles it off for
           true "paper" view. On desktop fit caps at 210mm, so it looks the same. */}
-      <div id="publicReceiptDoc" className="receipt-fit mx-auto max-w-5xl px-2 py-4 sm:px-4">
+      {/* 🔒 owner เคาะ 2026-07-24: ใบเสร็จนิติที่หัก 1% "สร้างรอไว้ แต่บล็อกการพิมพ์"
+          จนกว่าบัญชีจะตรวจรับใบ 50 ทวิ (approve/waive) — ดูบนจอได้เพื่อเช็คยอด/ออกใบ
+          50 ทวิ แต่พิมพ์ไม่ได้: ตอนพิมพ์ (รวม Cmd+P) กระดาษถูกซ่อน แล้วได้หน้าแจ้งแทน.
+          legacy PCS ไม่มี gate นี้ในระบบ (จัดการนอกระบบ) — อันนี้คือของที่ owner สั่งให้
+          เหนือกว่า legacy · ไก่-กับ-ไข่แก้ด้วยฟอร์ม 50 ทวิ กรอกให้ที่ /r/[token]/wht-form. */}
+      <div
+        id="publicReceiptDoc"
+        className={`receipt-fit mx-auto max-w-5xl px-2 py-4 sm:px-4${showCertPrompt ? " print:hidden" : ""}`}
+      >
         <ReceiptPaper pages={doc.pages} qrDataUrl={qrDataUrl} {...doc.commonProps} />
       </div>
+      {showCertPrompt && (
+        <div className="hidden print:block p-16 text-center">
+          <p className="text-xl font-bold">ใบเสร็จ {doc.commonProps.rid} ยังพิมพ์ไม่ได้</p>
+          <p className="mt-3 text-sm">
+            ใบเสร็จฉบับนี้มีหักภาษี ณ ที่จ่าย 1% — ต้องแนบใบ 50 ทวิ และผ่านการตรวจจากบัญชีก่อน
+            จึงจะพิมพ์ฉบับจริงได้ · เปิดหน้าใบเสร็จออนไลน์เพื่อแนบไฟล์ หรือพิมพ์ฟอร์ม 50 ทวิ
+            ที่กรอกข้อมูลให้แล้วจากหน้านั้น
+          </p>
+        </div>
+      )}
 
-      {/* No `printLocked` — the receipt is always printable (legacy never gated
-          the print on the cert; the cert prompt above is a non-blocking nudge). */}
-      <PublicReceiptToolbar />
+      <PublicReceiptToolbar printLocked={!isCancelled && showCertPrompt} />
     </div>
   );
 }

@@ -128,6 +128,7 @@ type ReceiptRow = {
   // the ใบวางบิล's delivery_address. Wins over recompaddress (single-slot rule).
   delivery_address:       string | null;
   corporatetype:          string | null;
+  wht_cert_status:        string | null;
 };
 
 type ReceiptItemRow = {
@@ -205,7 +206,7 @@ export default async function ServiceImportInvoicePage({
       .select(
         "id, rid, refid, rstatus, rdatecreate, rdate, issuedate, " +
         "ramount, totalbeforewithholding, mao_fee_thb, userid, recompnumber, recompname, " +
-        "recompaddress, delivery_address, corporatetype",
+        "recompaddress, delivery_address, corporatetype, wht_cert_status",
       )
       .eq("rid", itemLink.rid)
       .maybeSingle<ReceiptRow>();
@@ -465,13 +466,37 @@ export default async function ServiceImportInvoicePage({
         )}
 
         {/* ──── RECEIPT EXISTS — full invoice ──── */}
-        {receipt && (
+        {receipt && (() => {
+          // 🔒 owner เคาะ 2026-07-24 — ใบเสร็จนิติที่หัก 1% พิมพ์ได้ต่อเมื่อบัญชีตรวจรับ
+          // ใบ 50 ทวิ แล้ว (approve/waive) · กติกาเดียวกับหน้า /r/[token] เป๊ะ — ถ้าหน้านี้
+          // ไม่บล็อกด้วย ลูกค้าอ้อม gate ได้ทาง portal. แนบไฟล์/พิมพ์ฟอร์มทำที่หน้าใบเสร็จ
+          // ออนไลน์ (ลิงก์เดิมบนหน้านี้) — ที่นี่แค่กันพิมพ์ + อธิบาย.
+          const whtPrintLocked =
+            receipt.corporatetype === "1"
+            && !!(receipt.recompnumber ?? "").trim()
+            && !["approved", "waived"].includes(String(receipt.wht_cert_status ?? ""));
+          return (
           <>
             {/* Action bar — hidden on print */}
             <div className="no-print flex flex-wrap items-center justify-end gap-2">
-              <PrintButton label="📄 พิมพ์ / บันทึก PDF" />
+              {whtPrintLocked ? (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
+                  🔒 ใบเสร็จนิติฉบับนี้พิมพ์ได้หลังบัญชีตรวจใบ 50 ทวิ — แนบไฟล์/พิมพ์ฟอร์มที่กรอกให้แล้ว
+                  ได้ที่หน้า <b>ใบเสร็จออนไลน์</b> (ปุ่มด้านล่างของเอกสารนี้)
+                </div>
+              ) : (
+                <PrintButton label="📄 พิมพ์ / บันทึก PDF" />
+              )}
             </div>
+            {whtPrintLocked && (
+              <div className="hidden print:block p-16 text-center">
+                <p className="text-xl font-bold">ใบเสร็จ {receipt.rid} ยังพิมพ์ไม่ได้</p>
+                <p className="mt-3 text-sm">ต้องแนบใบ 50 ทวิ และผ่านการตรวจจากบัญชีก่อน จึงจะพิมพ์ฉบับจริงได้</p>
+              </div>
+            )}
 
+            {/* ตอนพิมพ์: ซ่อนกระดาษเมื่อ locked (Cmd+P ได้หน้าแจ้งข้างบนแทน) */}
+            <div className={whtPrintLocked ? "print:hidden" : undefined}>
             <article className="invoice-card rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
               {/* Header band */}
               <div className="bg-gradient-to-r from-primary-50 to-white border-b border-slate-200 p-6 sm:p-8">
@@ -667,8 +692,10 @@ export default async function ServiceImportInvoicePage({
                 <p>• สำหรับสอบถามเพิ่มเติม โทร {CONTACT.phoneCompanyDisplay} / LINE @pacred / {CONTACT.email}</p>
               </div>
             </article>
+            </div>
           </>
-        )}
+          );
+        })()}
 
         {/* ใบกำกับภาษี request panel — World-B (ADR-0027). Paid orders only;
             hidden on print (the panel self-marks no-print). */}
