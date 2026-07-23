@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
+import { routeOrderOf } from "@/lib/admin/driver-route-order";
 import { BILL_BADGE_CLASS, DriverBillViewModal } from "./driver-bill-view-modal";
 import { BatchManage, RemoveItemButton } from "./batch-manage";
 import { CourierUrlInput } from "./courier-url-input";
@@ -90,8 +91,8 @@ function isSelfDelivery(code: string | null | undefined): boolean {
 // ตอนส่งเป็น PROP (triggerClassName) ให้ <DriverBillViewModal> — คนละทาง. ไม่ใส่ px/py/text
 // ในนี้ เพื่อให้แต่ละที่กำหนดขนาดเองได้ (desktop เล็ก · mobile ใหญ่).
 const PRINT_BADGE_CLS =
-  "inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#C82333] to-[#E85D6E] " +
-  "font-semibold text-white shadow-sm hover:from-[#B21F2D] hover:to-[#DC4C5D]";
+  "inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#A01824] to-[#C82333] " +
+  "font-semibold text-white shadow-sm hover:from-[#87141E] hover:to-[#B21F2D]";
 
 type Batch = {
   id:              number;
@@ -414,6 +415,14 @@ export default async function AdminDriverBatchDetailPage({
     }),
   );
 
+  // เรียงจุดส่งตามเส้นทางจริง near→far (ปอน 2026-07-24) — เลขลำดับบนการ์ด/แถว
+  // = ลำดับการจัดส่งจริง (SOT เดียวกับหน้าสติกเกอร์ · lib/admin/driver-route-order).
+  stopsWithPhotos.sort(
+    (a, b) =>
+      routeOrderOf(a.forwarder.faddressdistrict) -
+      routeOrderOf(b.forwarder.faddressdistrict),
+  );
+
   // 6b. รูปตอนขึ้นรถ (fdipictureon) — ภูม 2026-07-10: the header's top-right area
   // shows a neat gallery of the LOADING photos (proof of what got put on the
   // truck for this run). If the driver snapped no loading photo yet, fall back
@@ -598,8 +607,8 @@ export default async function AdminDriverBatchDetailPage({
           </div>
         </div>
 
-        {/* ปุ่มดูใบส่งของ (popup) + นับถอยหลัง */}
-        <div className="flex items-center gap-2">
+        {/* ปุ่มดูใบส่งของ (popup) + นับถอยหลัง · items-end = เวลา bottom-align กับ badge */}
+        <div className="flex items-end gap-2">
           <DriverBillViewModal
             groups={billGroups}
             batchName={batch.fdname ?? `#${batch.id}`}
@@ -609,8 +618,12 @@ export default async function AdminDriverBatchDetailPage({
             triggerClassName="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#e02424] px-4 py-2 text-sm font-bold text-white shadow-md active:scale-95"
           />
           {batch.endtime && (
-            <div className="ml-auto flex shrink-0 flex-col items-end text-right">
-              <span className="text-[11px] text-muted">ส่งของก่อนเวลา</span>
+            // label + เวลา in-flow (ปอน 2026-07-24) — ไม่ล้น = ไม่ทับแถวด้านบน ·
+            // row = items-end → เวลา bottom-align กับ badge "ดูใบส่งสินค้า" (ไม่ขยับ).
+            <div className="ml-auto flex shrink-0 flex-col items-end">
+              <span className="mb-0.5 whitespace-nowrap text-[11px] leading-none text-muted">
+                ส่งของก่อนเวลา
+              </span>
               <BatchCountdown endTimeIso={batch.endtime} status={fdstatus} size="lg" />
             </div>
           )}
@@ -647,17 +660,17 @@ export default async function AdminDriverBatchDetailPage({
         {/* ปุ่ม นำทาง + พิมพ์ (2×2) */}
         <div className="grid grid-cols-2 gap-2">
           {googleMapsHref && (
-            <a href={googleMapsHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-2.5 text-sm font-medium text-emerald-700">
+            <a href={googleMapsHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-600 to-emerald-500 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-emerald-700 hover:to-emerald-600">
               <MapPin className="h-4 w-4" /> Google นำทาง
             </a>
           )}
-          <Link href={`/admin/drivers/${batch.id}/print`} target="_blank" className="inline-flex items-center justify-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-3 py-2.5 text-sm font-medium text-primary-700">
+          <Link href={`/admin/drivers/${batch.id}/print`} target="_blank" className="inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#A01824] to-[#C82333] px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-[#87141E] hover:to-[#B21F2D]">
             <Printer className="h-4 w-4" /> พิมพ์บิลจัดส่ง
           </Link>
-          <Link href={`/admin/drivers/${batch.id}/picking-list`} target="_blank" className="inline-flex items-center justify-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-800">
+          <Link href={`/admin/drivers/${batch.id}/picking-list`} target="_blank" className="inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-amber-600 to-amber-500 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-amber-700 hover:to-amber-600">
             <ClipboardList className="h-4 w-4" /> พิมพ์บิลหาสินค้า
           </Link>
-          <Link href={`/admin/drivers/${batch.id}/stickers`} target="_blank" className="inline-flex items-center justify-center gap-1.5 rounded-full border border-sky-300 bg-sky-50 px-3 py-2.5 text-sm font-medium text-sky-700">
+          <Link href={`/admin/drivers/${batch.id}/stickers`} target="_blank" className="inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-sky-600 to-sky-500 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-sky-700 hover:to-sky-600">
             <Tag className="h-4 w-4" /> พิมพ์สติกเกอร์
           </Link>
         </div>
@@ -1086,7 +1099,7 @@ export default async function AdminDriverBatchDetailPage({
 
                     {/* พิมพ์ใบส่งสินค้าเฉพาะจุดนี้ (ปอน 2026-07-24) — ปุ่มเดียวกับใน popup
                         "ดูบิลใบส่งสินค้า" (พิมพ์และบันทึกบิลรวม → delivery-slip?fids= ของจุดนี้). */}
-                    <div className="px-3 pt-3">
+                    <div className="flex flex-wrap items-center gap-2 px-3 pt-3">
                       <a
                         href={`/admin/drivers/${batch.id}/delivery-slip?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
                         target="_blank"
@@ -1094,6 +1107,15 @@ export default async function AdminDriverBatchDetailPage({
                         className={`${PRINT_BADGE_CLS} px-3 py-1 text-xs`}
                       >
                         <Printer className="h-3.5 w-3.5" /> พิมพ์และบันทึกบิลรวม
+                      </a>
+                      {/* พิมพ์สติกเกอร์เฉพาะจุดนี้ (ปอน 2026-07-24 · คู่กับปุ่มบิล เหมือนในการ์ดมือถือ) */}
+                      <a
+                        href={`/admin/drivers/${batch.id}/stickers?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-600 to-sky-500 px-3 py-1 text-xs font-semibold text-white shadow-sm hover:from-sky-700 hover:to-sky-600"
+                      >
+                        <Tag className="h-3.5 w-3.5" /> พิมพ์สติกเกอร์
                       </a>
                     </div>
 
@@ -1141,7 +1163,7 @@ export default async function AdminDriverBatchDetailPage({
           + "แสดงเพิ่มเติม" (กางตารางออเดอร์ + ปุ่มพิมพ์). จอ ≥lg ใช้ตารางเดิม (บล็อกด้านบน). */}
       {stopsWithPhotos.length > 0 && (
         <div className="lg:hidden space-y-3">
-          {stopsWithPhotos.map((stop) => {
+          {stopsWithPhotos.map((stop, idx) => {
             const f = stop.forwarder;
             const total = stop.items.length;
             const delivered = stop.items.filter((e) => e.item.fdistatus === "2").length;
@@ -1159,14 +1181,24 @@ export default async function AdminDriverBatchDetailPage({
             const heroPhoto = deliveryPhotos[0] ?? stop.items.find((e) => e.coverUrl)?.coverUrl ?? null;
             return (
               <div key={stop.addressKey} className="rounded-2xl border border-border bg-white shadow-sm p-4 space-y-3">
-                {/* สถานะ (วงกลม) + จำนวน */}
+                {/* ลำดับส่ง (ปอน 2026-07-24 · = ลำดับการจัดส่งตามเส้นทาง) + สถานะ + จำนวน */}
                 <div className="flex items-center gap-2">
-                  <span className={`flex h-9 w-9 items-center justify-center rounded-full border-2 ${allDone ? "border-[#28d094] bg-[#28d094] text-white" : "border-[#ff4961] text-[#ff4961]"}`}>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-500 text-base font-bold text-white shadow-sm">
+                    {idx + 1}
+                  </span>
+                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 ${allDone ? "border-[#28d094] bg-[#28d094] text-white" : "border-[#ff4961] text-[#ff4961]"}`}>
                     {allDone ? <CheckCircle2 className="h-5 w-5" /> : <Truck className="h-4 w-4" />}
                   </span>
-                  <span className="text-base font-bold">{total} รายการ</span>
+                  <div className="leading-tight">
+                    <p className="text-[11px] text-muted">ลำดับส่ง</p>
+                    <p className="text-base font-bold">{total} รายการ</p>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
+                  {/* แท็กประเภทขนส่ง (ปอน 2026-07-24 · แถวเดียวกับสถานะ) — PRF/เหมาๆ ฯลฯ */}
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${isSelfDelivery(f.fshipby) ? "bg-rose-600 text-white" : "border border-slate-300 bg-slate-200 text-slate-700"}`}>
+                    <Truck className="h-3 w-3" /> {shipByLabel(f.fshipby)}
+                  </span>
                   <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${allDone ? ITEM_STATUS_CLS["2"] : delivered > 0 ? ITEM_STATUS_CLS["1"] : ITEM_STATUS_CLS[""]}`}>
                     {allDone ? <CheckCircle2 className="h-3 w-3" /> : <Truck className="h-3 w-3" />}
                     {allDone ? "สำเร็จ" : `ส่งแล้ว ${delivered}/${total}`}
@@ -1192,7 +1224,7 @@ export default async function AdminDriverBatchDetailPage({
                       </div>
                     )}
                     {editableIds.length > 0 && (
-                      <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={deliveryPhotos.length > 0} />
+                      <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={deliveryPhotos.length > 0} gradient />
                     )}
                   </div>
 
@@ -1245,19 +1277,9 @@ export default async function AdminDriverBatchDetailPage({
                   </table>
                 </div>
 
-                {/* ปุ่มพิมพ์ badge — โชว์เลย ไม่ต้องกด "แสดงเพิ่มเติม" (ปอน 2026-07-24) */}
-                <a
-                  href={`/admin/drivers/${batch.id}/delivery-slip?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`${PRINT_BADGE_CLS} w-full justify-center px-4 py-2.5 text-sm`}
-                >
-                  <Printer className="h-4 w-4" /> พิมพ์ใบส่งสินค้า
-                </a>
-
-                {/* แสดงเพิ่มเติม — กางตารางออเดอร์ */}
+                {/* แสดงเพิ่มเติม — กางตารางออเดอร์ (ขึ้นก่อนปุ่มพิมพ์ · ปอน 2026-07-24) */}
                 <details className="group">
-                  <summary className="mx-auto flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-full border border-[#C82333]/40 bg-white px-5 py-2 text-sm font-bold text-[#C82333] shadow-sm active:scale-95">
+                  <summary className="flex w-full cursor-pointer list-none items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#A01824] to-[#C82333] px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:from-[#87141E] hover:to-[#B21F2D] active:scale-95">
                     <ChevronDown className="h-4 w-4 transition group-open:rotate-180" /> แสดงเพิ่มเติม
                   </summary>
                   <div className="mt-2 space-y-2">
@@ -1268,6 +1290,7 @@ export default async function AdminDriverBatchDetailPage({
                             <th className="px-2 py-1">ออเดอร์</th>
                             <th className="px-2 py-1">แทรคกิ้ง</th>
                             <th className="px-2 py-1 text-right">กล่อง</th>
+                            <th className="px-2 py-1 text-right">CBM</th>
                             <th className="px-2 py-1 text-right">KG</th>
                           </tr>
                         </thead>
@@ -1281,6 +1304,7 @@ export default async function AdminDriverBatchDetailPage({
                               </td>
                               <td className="px-2 py-1 font-mono break-all">{forwarder.ftrackingchn ?? "—"}</td>
                               <td className="px-2 py-1 text-right">{forwarder.famount ?? 0}</td>
+                              <td className="px-2 py-1 text-right">{Number(forwarder.fvolume ?? 0).toFixed(5)}</td>
                               <td className="px-2 py-1 text-right">{Number(forwarder.fweight ?? 0).toFixed(2)}</td>
                             </tr>
                           ))}
@@ -1289,6 +1313,27 @@ export default async function AdminDriverBatchDetailPage({
                     </div>
                   </div>
                 </details>
+
+                {/* ปุ่มพิมพ์ 2 อันคู่กัน เฉพาะจุดนี้ (per-stop fids · ปอน 2026-07-24)
+                    — ใบส่งสินค้า (delivery-slip?fids=) + สติกเกอร์ (stickers?fids=). */}
+                <div className="grid grid-cols-2 gap-2">
+                  <a
+                    href={`/admin/drivers/${batch.id}/delivery-slip?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`${PRINT_BADGE_CLS} justify-center px-2.5 py-2.5 text-xs`}
+                  >
+                    <Printer className="h-4 w-4 shrink-0" /> พิมพ์ใบส่งสินค้า
+                  </a>
+                  <a
+                    href={`/admin/drivers/${batch.id}/stickers?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-sky-600 to-sky-500 px-2.5 py-2.5 text-xs font-semibold text-white shadow-sm hover:from-sky-700 hover:to-sky-600"
+                  >
+                    <Tag className="h-4 w-4 shrink-0" /> พิมพ์สติกเกอร์
+                  </a>
+                </div>
               </div>
             );
           })}
