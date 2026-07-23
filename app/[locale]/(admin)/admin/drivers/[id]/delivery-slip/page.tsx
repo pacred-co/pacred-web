@@ -10,11 +10,13 @@
  *     handed to (and signed by) that customer. Reached from the
  *     "พิมพ์และบันทึกบิลรวม" action inside the bill modal.
  *
- * Faithful to the legacy PCS form: sender block + QR, centred ใบส่งสินค้า
- * title, เรียน/Attention + เลขที่/วันที่ box, an ITEM/DESCRIPTION/LOCATION/
- * Kg/CBM/BOX table with a รวม row, and the three signature boxes
- * (ผู้รับสินค้า · ผู้ส่งสินค้า · ผู้ตรวจสอบ). Branding is Pacred's own — the
- * company block comes from `components/seo/site.ts`, never hardcoded.
+ * Content follows the legacy PCS form (ITEM / DESCRIPTION / LOCATION / Kg /
+ * CBM / BOX + the three signatures ผู้รับสินค้า · ผู้ส่งสินค้า · ผู้ตรวจสอบ),
+ * but the LAYOUT is Pacred's own (ปอน 2026-07-23): brand block + big
+ * ใบส่งสินค้า / DELIVERY NOTE title, a labelled RECIPIENT section, a hairline
+ * items table instead of legacy's heavy boxed grid, right-aligned totals with
+ * units, and the QR moved down beside them. Company details come from
+ * `components/seo/site.ts`, never hardcoded.
  *
  * ── Scope / security ─────────────────────────────────────────────────
  * `?fids=` names which parcels the slip covers. Those ids are INTERSECTED
@@ -29,6 +31,7 @@
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import type { Metadata } from "next";
+import { Mail, Phone } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -298,157 +301,205 @@ export default async function DeliverySlipPage({
         </div>
         <PrintButton label="🖨 พิมพ์ใบส่งสินค้า" />
       </div>
-
-      <main className="print-area mx-auto my-6 max-w-[820px] bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_6px_20px_rgba(0,0,0,0.06)] sm:p-8">
-        {/* Sender block + QR */}
-        <div className="flex items-start justify-between gap-4 border border-slate-800 p-3">
-          <div className="flex min-w-0 items-start gap-3">
+      <main className="print-area mx-auto my-6 max-w-[820px] bg-white p-8 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_6px_20px_rgba(0,0,0,0.06)]">
+        {/* Header — brand (left) · document title (right) */}
+        <div className="flex items-start justify-between gap-6">
+          <div className="flex min-w-0 items-start gap-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={LOGO} alt="Pacred" className="mt-1 h-9 w-auto shrink-0" />
+            <img src={LOGO} alt="Pacred" className="mt-0.5 h-11 w-auto shrink-0" />
             <div className="min-w-0">
-              <p className="text-[11px] text-slate-500">ผู้ส่ง/From</p>
-              <p className="text-base font-bold leading-tight">{SITE_LEGAL_NAME_TH}</p>
-              <p className="text-[12px] leading-snug text-slate-700">
+              <p className="text-[13px] font-bold leading-tight">{SITE_LEGAL_NAME_TH}</p>
+              <p className="mt-1 max-w-[300px] text-[11px] leading-relaxed text-slate-500">
                 {ADDRESSES.office.full}
               </p>
-              <p className="text-[12px] text-slate-700">
-                โทร. {CONTACT.phoneCompanyDisplay}
+              <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-600">
+                <Phone className="h-3 w-3 shrink-0 text-slate-400" />
+                {CONTACT.phoneCompanyDisplay}
+              </p>
+              <p className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                <Mail className="h-3 w-3 shrink-0 text-slate-400" />
+                {CONTACT.email}
               </p>
             </div>
           </div>
-          {qr ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={qr} alt={`QR รอบ #${batch.id}`} title={runUrl} className="h-20 w-20 shrink-0" />
-          ) : null}
-        </div>
-
-        {/* Title */}
-        <div className="border-x border-b border-slate-800 py-2 text-center">
-          <h1 className="text-xl font-bold">ใบส่งสินค้า</h1>
-        </div>
-
-        {/* Consignee (left) · doc no + date (right) */}
-        <div className="flex border-x border-b border-slate-800 text-[12px]">
-          <div className="min-w-0 flex-1 space-y-0.5 p-2 leading-snug">
-            <p>
-              <span className="text-slate-500">เรียน/Attention :</span>{" "}
-              <span className="font-semibold">{head.userid ?? "—"}</span>{" "}
-              {consigneeName ? `คุณ${consigneeName}` : ""} {consigneeAddress}
-            </p>
-            {consigneePhones.length > 0 && <p>โทร. {consigneePhones.join(", ")}</p>}
-            <p>
-              <span className="text-slate-500">ขนส่งโดย :</span>{" "}
-              {nameShipBy(head.fshipby)}
+          <div className="shrink-0 text-right">
+            <h1 className="text-[26px] font-black leading-none text-slate-800">ใบส่งสินค้า</h1>
+            <p className="mt-1.5 text-[10px] font-medium tracking-[0.25em] text-slate-400">
+              DELIVERY NOTE
             </p>
           </div>
-          <div className="w-[42%] shrink-0 border-l border-slate-800">
-            <div className="flex gap-2 border-b border-slate-800 p-2">
-              <span className="shrink-0 text-slate-500">เลขที่/No:</span>
-              <span className="min-w-0 break-words font-semibold">#{docNo}</span>
-            </div>
-            <div className="flex gap-2 p-2">
-              <span className="shrink-0 text-slate-500">วันที่/Date:</span>
-              <span>{dateLabel}</span>
-            </div>
+        </div>
+
+        {/* Document meta — right aligned under the title */}
+        <div className="mt-6 ml-auto w-full max-w-[340px] text-[12px]">
+          <MetaLine k="เลขที่เอกสาร" v={`#${docNo}`} />
+          <MetaLine k="วันที่" v={dateLabel} />
+        </div>
+
+        {/* Recipient */}
+        <SectionHead th="ข้อมูลผู้รับสินค้า" en="RECIPIENT" />
+        <div className="flex flex-wrap gap-x-10 gap-y-1.5 text-[12px]">
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <Field k="รหัสลูกค้า" v={head.userid ?? "—"} mono />
+            <Field k="ชื่อผู้รับ" v={consigneeName ? `คุณ${consigneeName}` : "—"} />
+            <Field k="ที่อยู่จัดส่ง" v={consigneeAddress || "—"} />
+            <Field k="โทรศัพท์" v={consigneePhones.join(", ") || "—"} />
+          </div>
+          <div className="w-[210px] shrink-0">
+            <Field k="ขนส่งโดย" v={nameShipBy(head.fshipby)} />
           </div>
         </div>
 
-        {/* Items */}
-        <table className="w-full border-collapse text-[12px]">
+        {/* Items — hairline rules, no boxed grid */}
+        <table className="mt-6 w-full text-[12px]">
           <thead>
-            <tr className="text-center">
-              <th className="w-20 border border-slate-800 px-2 py-1.5 font-bold">
-                ลำดับที่
-                <br />
-                <span className="text-[11px] font-normal text-slate-500">ITEM</span>
-              </th>
-              <th className="border border-slate-800 px-2 py-1.5 font-bold">
-                รายการ
-                <br />
-                <span className="text-[11px] font-normal text-slate-500">DESCRIPTION</span>
-              </th>
-              <th className="w-20 border border-slate-800 px-2 py-1.5 font-bold">
-                ที่ตั้ง
-                <br />
-                <span className="text-[11px] font-normal text-slate-500">LOCATION</span>
-              </th>
-              <th className="w-24 border border-slate-800 px-2 py-1.5 font-bold">
-                น้ำหนัก
-                <br />
-                <span className="text-[11px] font-normal text-slate-500">Kg</span>
-              </th>
-              <th className="w-24 border border-slate-800 px-2 py-1.5 font-bold">
-                ปริมาตร
-                <br />
-                <span className="text-[11px] font-normal text-slate-500">CBM</span>
-              </th>
-              <th className="w-20 border border-slate-800 px-2 py-1.5 font-bold">
-                จำนวน
-                <br />
-                <span className="text-[11px] font-normal text-slate-500">BOX</span>
-              </th>
+            <tr className="border-y border-slate-300 text-slate-500">
+              <ItemTh th="ลำดับที่" en="ITEM" className="w-20 text-left" />
+              <ItemTh th="รายการ" en="DESCRIPTION" className="text-left" />
+              <ItemTh th="ที่ตั้ง" en="LOCATION" className="w-24 text-center" />
+              <ItemTh th="น้ำหนัก" en="Kg" className="w-24 text-right" />
+              <ItemTh th="ปริมาตร" en="CBM" className="w-24 text-right" />
+              <ItemTh th="จำนวน" en="BOX" className="w-20 text-right" />
             </tr>
           </thead>
           <tbody>
-            {forwarders.map((f, i) => (
-              <tr key={f.id}>
-                <td className="border border-slate-800 px-2 py-1 text-center font-mono">
-                  {i + 1}:{f.id}
-                </td>
-                <td className="border border-slate-800 px-2 py-1 break-words">
-                  {f.ftrackingchn || "—"}
-                </td>
-                <td className="border border-slate-800 px-2 py-1 text-center">
-                  {f.fpallet || "—"}
-                </td>
-                <td className="border border-slate-800 px-2 py-1 text-right">
-                  {fmt(f.fweight, 2)}
-                </td>
-                <td className="border border-slate-800 px-2 py-1 text-right">
-                  {fmt(f.fvolume, 3)}
-                </td>
-                <td className="border border-slate-800 px-2 py-1 text-right">
-                  {fmt(f.famount, 0)}
-                </td>
+            {forwarders.map((f) => (
+              <tr key={f.id} className="border-b border-slate-100">
+                <td className="py-2 font-mono">{f.id}</td>
+                <td className="py-2 break-words">{f.ftrackingchn || "—"}</td>
+                <td className="py-2 text-center">{f.fpallet || "—"}</td>
+                <td className="py-2 text-right">{fmt(f.fweight, 2)}</td>
+                <td className="py-2 text-right">{fmt(f.fvolume, 3)}</td>
+                <td className="py-2 text-right">{fmt(f.famount, 0)}</td>
               </tr>
             ))}
-            <tr className="font-bold">
-              <td className="border border-slate-800 px-2 py-1 text-right" colSpan={3}>
-                รวม
-              </td>
-              <td className="border border-slate-800 px-2 py-1 text-right">
-                {fmt(totalWeight, 2)}
-              </td>
-              <td className="border border-slate-800 px-2 py-1 text-right">
-                {fmt(totalCbm, 3)}
-              </td>
-              <td className="border border-slate-800 px-2 py-1 text-right">
-                {fmt(totalBoxes, 0)}
-              </td>
-            </tr>
           </tbody>
         </table>
 
-        {/* Signatures — receiver · sender · checker */}
-        <table className="w-full border-collapse text-[12px]">
-          <tbody>
-            <tr>
-              <td className="w-1/3 border border-slate-800 px-2 py-2">ผู้รับสินค้า :</td>
-              <td className="w-1/3 border border-slate-800 px-2 py-2">ผู้ส่งสินค้า :</td>
-              <td className="w-1/3 border border-slate-800 px-2 py-2">ผู้ตรวจสอบ :</td>
-            </tr>
-            <tr>
-              <td className="border border-slate-800 px-2 py-2">วันที่ Date :</td>
-              <td className="border border-slate-800 px-2 py-2">วันที่ Date :</td>
-              <td className="border border-slate-800 px-2 py-2">วันที่ Date :</td>
-            </tr>
-          </tbody>
-        </table>
+        {/* Totals + QR — right column */}
+        <div className="mt-5 flex justify-end">
+          <div className="w-full max-w-[320px]">
+            <TotalLine k="น้ำหนักรวม" v={fmt(totalWeight, 2)} unit="Kg" />
+            <TotalLine k="ปริมาตรรวม" v={fmt(totalCbm, 3)} unit="CBM" />
+            <TotalLine k="จำนวนรวม" v={fmt(totalBoxes, 0)} unit="BOX" strong />
 
-        <p className="no-print pt-3 text-center text-[11px] text-slate-400">
+            {qr ? (
+              <div className="mt-5 flex flex-col items-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={qr}
+                  alt={`QR รอบ #${batch.id}`}
+                  title={runUrl}
+                  className="h-[76px] w-[76px]"
+                />
+                <p className="mt-1 text-center text-[9px] leading-tight text-slate-400">
+                  ตรวจสอบเอกสาร
+                  <br />
+                  สแกนเพื่อเปิดรายการ
+                </p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Signatures */}
+        <div className="mt-10 grid grid-cols-3 gap-8 text-[12px]">
+          {["ผู้รับสินค้า", "ผู้ส่งสินค้า", "ผู้ตรวจสอบ"].map((label) => (
+            <div key={label}>
+              <p className="text-slate-600">{label}</p>
+              <div className="mt-9 border-b border-dotted border-slate-400" />
+              <p className="mt-2 text-slate-600">วันที่ / Date</p>
+              <div className="mt-7 border-b border-dotted border-slate-400" />
+            </div>
+          ))}
+        </div>
+
+        <p className="no-print pt-8 text-center text-[11px] text-slate-400">
           กดปุ่ม &quot;พิมพ์ใบส่งสินค้า&quot; ด้านบนเพื่อพิมพ์ หรือใช้คีย์บอร์ด Ctrl+P
         </p>
       </main>
+    </div>
+  );
+}
+
+/** Right-aligned `label : value` line in the document meta block. */
+function MetaLine({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-b border-slate-200 py-1.5">
+      <span className="shrink-0 text-slate-500">{k} :</span>
+      <span className="min-w-0 break-words text-right font-semibold">{v}</span>
+    </div>
+  );
+}
+
+/** Section heading with the accent bar (ข้อมูลผู้รับสินค้า / RECIPIENT). */
+function SectionHead({ th, en }: { th: string; en: string }) {
+  return (
+    <div className="mb-3 mt-7 flex items-center gap-2">
+      <span className="h-4 w-1 rounded-sm bg-primary-600" />
+      <h2 className="text-[12px] font-bold text-slate-800">
+        {th} <span className="font-normal text-slate-400">/ {en}</span>
+      </h2>
+    </div>
+  );
+}
+
+/** One `label   value` row in the recipient block. */
+function Field({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
+  return (
+    <div className="flex gap-3">
+      <span className="w-[74px] shrink-0 text-slate-500">{k}</span>
+      <span className={`min-w-0 break-words ${mono ? "font-mono font-semibold" : ""}`}>
+        {v}
+      </span>
+    </div>
+  );
+}
+
+/** Items-table head cell — Thai over its English caption. */
+function ItemTh({
+  th,
+  en,
+  className = "",
+}: {
+  th: string;
+  en: string;
+  className?: string;
+}) {
+  return (
+    <th className={`py-2 align-bottom font-semibold ${className}`}>
+      {th}
+      <br />
+      <span className="text-[10px] font-normal uppercase tracking-wide text-slate-400">
+        {en}
+      </span>
+    </th>
+  );
+}
+
+/** One totals row — label · value · unit. */
+function TotalLine({
+  k,
+  v,
+  unit,
+  strong,
+}: {
+  k: string;
+  v: string;
+  unit: string;
+  strong?: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-baseline justify-between gap-3 border-b py-1.5 text-[12px] ${
+        strong ? "border-slate-300" : "border-slate-100"
+      }`}
+    >
+      <span className="text-slate-500">{k}</span>
+      <span className="flex items-baseline gap-2">
+        <span className={strong ? "font-bold" : "font-semibold"}>{v}</span>
+        <span className="w-9 text-right text-[10px] text-slate-400">{unit}</span>
+      </span>
     </div>
   );
 }
