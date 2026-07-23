@@ -350,7 +350,7 @@ export default async function PaymentSummaryPage({
 
   return (
     <>
-      <title>{`ใบแจ้งหนี้ ${docNo} | PR Admin`}</title>
+      <title>{docNo}</title>
 
       <div className="no-print bg-gray-100 p-4 text-center print:hidden">
         <PrintButton />

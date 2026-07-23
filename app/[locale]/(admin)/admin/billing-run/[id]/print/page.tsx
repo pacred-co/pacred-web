@@ -96,7 +96,7 @@ export default async function BillingRunPrintPage({
 
   return (
     <>
-      <title>{`พิมพ์ใบวางบิล ${header.doc_no} | PR Admin`}</title>
+      <title>{header.doc_no}</title>
 
       <div className="no-print bg-gray-100 p-4 text-center print:hidden">
         <PrintButton />

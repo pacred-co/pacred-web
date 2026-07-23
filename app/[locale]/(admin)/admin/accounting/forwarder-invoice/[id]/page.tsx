@@ -97,6 +97,12 @@ export default async function ForwarderInvoicePrintPage({
 
   return (
     <div className="min-h-screen bg-slate-100 print:bg-white">
+
+    {/* ชื่อไฟล์ตอน Save PDF = เลขที่เอกสาร (owner 2026-07-23 "ตั้งตามเลขที่ใบรายการไปเลย")
+
+        — Chrome ใช้ document.title เป็นชื่อไฟล์ตั้งต้น + เป็นหัวกระดาษ */}
+
+    <title>{doc.commonProps.rid}</title>
       <div className="mx-auto max-w-5xl px-4 py-6">
         {/* ── Breadcrumb + actions (hidden on print) ── */}
         <div className="no-print">
