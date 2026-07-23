@@ -28,7 +28,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ArrowLeft, Truck, Home, Send, CheckCircle2, Zap } from "lucide-react";
+import { ArrowLeft, Truck, Home, Send, CheckCircle2, Zap, Package } from "lucide-react";
 import { CreateBatchForm } from "./create-batch-form";
 import { SelfPickupForm } from "./self-pickup-form";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
@@ -130,18 +130,28 @@ function nameShipBy(code: string | null): string {
   return SHIP_BY_LABEL[code] ?? code;
 }
 
-// 3-way carrier split (ภูม 2026-06-23):
-//   • Pacred's own drivers → fShipBy IN ('PCSF','PCSE')  → "มอบคนขับ"
-//   • customer self-pickup → fShipBy = 'PCS'              → "รับเองหน้าโกดัง"
-//   • external couriers     → everything else (numeric 1–47 · 'F' · …) → "Express"
+// Carrier split (ภูม 2026-06-23 · พี่ป๊อป 2026-07-23 — split EACH big parcel courier
+// into its OWN tab, NOT one combined tab):
+//   • Pacred's own drivers  → fShipBy IN ('PCSF','PCSE')  → "มอบคนขับ"
+//   • customer self-pickup  → fShipBy = 'PCS'             → "รับเองหน้าโกดัง"
+//   • Flash Express         → fShipBy = '2'               → "Flash Express" tab
+//   • J&T Express           → fShipBy = '24'              → "J&T Express" tab
+//   • ไปรษณีย์ไทย/EMS         → fShipBy = '11'              → "ไปรษณีย์ไทย" tab
+//   • other external couriers → everything else (Kerry · DHL · SCG · regional · 'F' · …)
+//                             → "Express (ขนส่งภายนอก)"
+// (codes are the legacy nameShipBy numbers above: "2" Flash · "24" J&T · "11" ไปรษณีย์)
 function isPacredDriver(code: string | null): boolean {
   return code === "PCSF" || code === "PCSE";
 }
 function isSelfPickup(code: string | null): boolean {
   return code === "PCS";
 }
+function isFlash(code: string | null): boolean { return code === "2"; }
+function isJt(code: string | null): boolean { return code === "24"; }
+function isThaiPost(code: string | null): boolean { return code === "11"; }
 function isExpress(code: string | null): boolean {
-  return !isPacredDriver(code) && !isSelfPickup(code);
+  return !isPacredDriver(code) && !isSelfPickup(code)
+    && !isFlash(code) && !isJt(code) && !isThaiPost(code);
 }
 
 type Stop = {
@@ -357,8 +367,19 @@ export default async function CreateDriverBatchPage({
   await requireAdmin(["ops", "super", "warehouse"]);
   const admin = createAdminClient();
   const sp = await searchParams;
-  const activeTab: "driver" | "pickup" | "express" =
-    sp.tab === "pickup" ? "pickup" : sp.tab === "express" ? "express" : "driver";
+  const activeTab: "driver" | "pickup" | "flash" | "jt" | "post" | "express" =
+    sp.tab === "pickup" ? "pickup"
+      : sp.tab === "flash" ? "flash"
+      : sp.tab === "jt" ? "jt"
+      : sp.tab === "post" ? "post"
+      : sp.tab === "express" ? "express"
+      : "driver";
+  // Single-carrier tab label (Flash / J&T / ไปรษณีย์) for the header copy.
+  const parcelLabel =
+    activeTab === "flash" ? "Flash Express"
+      : activeTab === "jt" ? "J&T Express"
+      : activeTab === "post" ? "ไปรษณีย์ไทย/EMS"
+      : "";
 
   // 1. Forwarders already in an open assignment (fdistatus '' or '1') — these
   //    must NOT be offered again.
@@ -401,13 +422,22 @@ export default async function CreateDriverBatchPage({
   //    (complete partition — no overlap, no loss · every row lands in one).
   const driverEligible  = allEligible.filter((r) => isPacredDriver(r.fshipby));
   const pickupEligible  = allEligible.filter((r) => isSelfPickup(r.fshipby));
+  const flashEligible   = allEligible.filter((r) => isFlash(r.fshipby));
+  const jtEligible      = allEligible.filter((r) => isJt(r.fshipby));
+  const postEligible    = allEligible.filter((r) => isThaiPost(r.fshipby));
   const expressEligible = allEligible.filter((r) => isExpress(r.fshipby));
   const driverCount  = driverEligible.length;
   const pickupCount  = pickupEligible.length;
+  const flashCount   = flashEligible.length;
+  const jtCount      = jtEligible.length;
+  const postCount    = postEligible.length;
   const expressCount = expressEligible.length;
 
   const eligible =
     activeTab === "pickup"  ? pickupEligible  :
+    activeTab === "flash"   ? flashEligible   :
+    activeTab === "jt"      ? jtEligible      :
+    activeTab === "post"    ? postEligible    :
     activeTab === "express" ? expressEligible :
     driverEligible;
 
@@ -454,9 +484,10 @@ export default async function CreateDriverBatchPage({
   // card stays one customer). The pickup tab uses pickupGroups above instead.
   const groups = activeTab === "pickup" ? [] : buildStops(eligible, customerById);
 
-  // 4. Driver picker — the มอบคนขับ + Express tabs both assign a Pacred driver.
+  // 4. Driver picker — every tab EXCEPT รับเองหน้าโกดัง assigns a Pacred driver
+  //    (the driver takes the parcels out to the courier / delivers · unchanged flow).
   let drivers: DriverOption[] = [];
-  if (activeTab === "driver" || activeTab === "express") {
+  if (activeTab !== "pickup") {
     const { data: driversData, error: driversErr } = await admin
       .from("admins")
       .select("profile_id, role, is_active, profile:profiles!profile_id(member_code, first_name, last_name)")
@@ -500,18 +531,23 @@ export default async function CreateDriverBatchPage({
         <h1 className="mt-1 text-2xl font-bold flex items-center gap-2">
           {activeTab === "pickup" ? <Home className="h-6 w-6" />
             : activeTab === "express" ? <Zap className="h-6 w-6" />
+            : parcelLabel ? <Package className="h-6 w-6" />
             : <Truck className="h-6 w-6" />}
           {activeTab === "pickup"
             ? "รับเองหน้าโกดัง — ปิดงานส่งสำเร็จ"
             : activeTab === "express"
             ? "Express — มอบงานขนส่งภายนอกให้คนขับไปส่ง"
+            : parcelLabel
+            ? `${parcelLabel} — มอบงานให้คนขับไปส่ง`
             : "สร้างรายการขนส่ง — มอบงานให้คนขับรถ"}
         </h1>
         <p className="mt-1 text-sm text-muted">
           {activeTab === "pickup"
             ? "ของที่ลูกค้ามารับเองที่โกดัง — แยกการ์ดตามลูกค้า (รหัสลูกค้า) · ติ๊กพัสดุที่รับแล้วของลูกค้าคนนั้น แนบรูป (ถ้ามี) → กด \"บันทึกส่งสำเร็จ\" ปิดงานทีละลูกค้าได้ โดยไม่ต้องมอบคนขับ"
             : activeTab === "express"
-            ? "งานที่ส่งผ่านบริษัทขนส่งภายนอก (Flash · Kerry · J&T · เฟิร์ส · จันทร์สว่าง · …) — เลือกบริษัทขนส่งจากตัวกรอง 🚚 ด้านล่าง · มอบคนขับ Pacred ไปส่งให้ขนส่ง · สร้างรอบจัดส่ง"
+            ? "งานที่ส่งผ่านบริษัทขนส่งภายนอก (Kerry · DHL · SCG · เฟิร์ส · จันทร์สว่าง · …) — เลือกบริษัทขนส่งจากตัวกรอง 🚚 ด้านล่าง · มอบคนขับ Pacred ไปส่งให้ขนส่ง · สร้างรอบจัดส่ง"
+            : parcelLabel
+            ? `งานที่ส่งผ่าน${parcelLabel} เจ้าเดียว — แยกออกมาเป็นแท็บของตัวเอง · มอบคนขับ Pacred ไปส่งให้ขนส่ง · สร้างรอบจัดส่ง`
             : "ส่งโดยคนขับ Pacred เอง (เหมาๆ / Pacred Express) — เลือกจุดส่ง · เลือกคนขับ · กำหนดเวลา · สร้างรอบจัดส่ง. แต่ละ \"จุดส่ง\" คือกลุ่มที่อยู่ปลายทางเดียวกัน"}
         </p>
       </div>
@@ -524,6 +560,9 @@ export default async function CreateDriverBatchPage({
         <ul className="flex flex-nowrap items-stretch -mb-px min-w-max">
           <li><PcsDriverTab href="/admin/drivers/new" active={activeTab === "driver"} icon={<Truck className="h-4 w-4" />} label="มอบงานให้คนขับรถ" count={driverCount} /></li>
           <li><PcsDriverTab href="/admin/drivers/new?tab=pickup" active={activeTab === "pickup"} icon={<Home className="h-4 w-4" />} label="รายการรับเองหน้าโกดัง" count={pickupCount} /></li>
+          <li><PcsDriverTab href="/admin/drivers/new?tab=flash" active={activeTab === "flash"} icon={<Package className="h-4 w-4" />} label="Flash Express" count={flashCount} /></li>
+          <li><PcsDriverTab href="/admin/drivers/new?tab=jt" active={activeTab === "jt"} icon={<Package className="h-4 w-4" />} label="J&T Express" count={jtCount} /></li>
+          <li><PcsDriverTab href="/admin/drivers/new?tab=post" active={activeTab === "post"} icon={<Package className="h-4 w-4" />} label="ไปรษณีย์ไทย" count={postCount} /></li>
           <li><PcsDriverTab href="/admin/drivers/new?tab=express" active={activeTab === "express"} icon={<Zap className="h-4 w-4" />} label="Express (ขนส่งภายนอก)" count={expressCount} /></li>
           <li><PcsDriverTab href="/admin/drivers" active={false} icon={<Send className="h-4 w-4" />} label="กำลังจัดส่ง" count={inProgress} /></li>
           {/* Legacy tab (forwarder-driver.php:762) — a health/stat indicator: are all
@@ -535,7 +574,7 @@ export default async function CreateDriverBatchPage({
               active={false}
               icon={<CheckCircle2 className="h-4 w-4" />}
               label="จำนวนรายการเตรียมส่งอนุมัติจ่ายเงินแล้ว"
-              badgeText={`${(driverCount + pickupCount + expressCount + inProgress).toLocaleString("th-TH")}/${totalReadyToShip.toLocaleString("th-TH")}`}
+              badgeText={`${(driverCount + pickupCount + flashCount + jtCount + postCount + expressCount + inProgress).toLocaleString("th-TH")}/${totalReadyToShip.toLocaleString("th-TH")}`}
               title="รายการที่อนุมัติจ่ายเงินแล้ว (สถานะเตรียมส่ง) ทั้งหมด — กดดูรายการเต็ม"
             />
           </li>
@@ -571,7 +610,12 @@ export default async function CreateDriverBatchPage({
       {activeTab === "pickup" ? (
         <SelfPickupForm groups={pickupGroups} />
       ) : (
-        <CreateBatchForm groups={groups} drivers={drivers} showCarrierFilter={activeTab === "express"} />
+        <CreateBatchForm
+          groups={groups}
+          drivers={drivers}
+          showCarrierFilter={activeTab === "express"}
+          showFlashExport={activeTab === "flash"}
+        />
       )}
     </main>
   );
