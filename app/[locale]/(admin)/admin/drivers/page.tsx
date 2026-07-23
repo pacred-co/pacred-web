@@ -23,6 +23,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { parsePage, pageRange, parsePageSize } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { PageSizeSelect } from "@/components/admin/page-size-select";
@@ -279,6 +280,31 @@ export default async function AdminDriversPage({
         u.userID,
         { member_code: u.userID, name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—" },
       ]),
+    );
+  }
+
+  // อวาตาร์ ผู้รับผิดชอบ (fdadminid) + ผู้สร้าง (fdadmincreator) — profiles.avatar_url
+  // by member_code · resolve ผ่าน resolveLegacyUrl (ปอน 2026-07-24 · มือถือ+เดสก์ท็อป).
+  const adminCodes = Array.from(
+    new Set(rows.flatMap((r) => [r.fdadminid, r.fdadmincreator]).filter(Boolean) as string[]),
+  );
+  const avatarByCode = new Map<string, string | null>();
+  if (adminCodes.length > 0) {
+    const { data: profRows, error: profErr } = await admin
+      .from("profiles")
+      .select("member_code, avatar_url")
+      .in("member_code", adminCodes);
+    if (profErr) {
+      console.error("/admin/drivers: admin avatar lookup failed", profErr);
+    }
+    const rawByCode = new Map(
+      ((profRows ?? []) as { member_code: string; avatar_url: string | null }[]).map((p) => [p.member_code, p.avatar_url]),
+    );
+    await Promise.all(
+      adminCodes.map(async (code) => {
+        const raw = rawByCode.get(code);
+        avatarByCode.set(code, raw ? await resolveLegacyUrl(raw, "admin-avatar") : null);
+      }),
     );
   }
 
@@ -648,16 +674,28 @@ export default async function AdminDriversPage({
                     {/* ผู้รับผิดชอบ (คนขับ = fdadminid) */}
                     <td className="px-3 py-3 text-xs">
                       {r.fdadminid ? (
-                        <>
-                          <div className="font-medium text-foreground">{driver?.name ?? r.fdadminid}</div>
-                          <div className="font-mono text-[11px] text-muted">{r.fdadminid}</div>
-                        </>
+                        <div className="flex items-center gap-2">
+                          <AdminAvatar url={avatarByCode.get(r.fdadminid) ?? null} code={r.fdadminid} />
+                          <div className="min-w-0">
+                            <div className="font-medium text-foreground">{driver?.name ?? r.fdadminid}</div>
+                            <div className="font-mono text-[11px] text-muted">{r.fdadminid}</div>
+                          </div>
+                        </div>
                       ) : (
                         <span className="text-muted">— ยังไม่ระบุคนขับ —</span>
                       )}
                     </td>
                     {/* ผู้สร้างรายการ */}
-                    <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">{r.fdadmincreator ?? "—"}</td>
+                    <td className="px-3 py-3 text-xs whitespace-nowrap">
+                      {r.fdadmincreator ? (
+                        <div className="flex items-center gap-2">
+                          <AdminAvatar url={avatarByCode.get(r.fdadmincreator) ?? null} code={r.fdadmincreator} />
+                          <span className="text-foreground">{r.fdadmincreator}</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
                     {/* ส่งแล้ว / ทั้งหมด */}
                     <td className="px-3 py-3 text-xs text-right whitespace-nowrap">
                       <div className="font-semibold text-foreground tabular-nums">{agg.doneCount} / {agg.itemCount}</div>
@@ -760,12 +798,20 @@ export default async function AdminDriversPage({
                 <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-xl border border-border bg-surface-alt/30 p-3">
                   <div>
                     <p className="text-[11px] text-muted">ผู้รับผิดชอบ</p>
-                    <p className="text-xs font-semibold text-foreground">{driver?.name ?? r.fdadminid ?? "—"}</p>
-                    {r.fdadminid && <p className="font-mono text-[11px] text-muted">{r.fdadminid}</p>}
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                      <AdminAvatar url={r.fdadminid ? avatarByCode.get(r.fdadminid) ?? null : null} code={r.fdadminid} />
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-foreground">{driver?.name ?? r.fdadminid ?? "—"}</p>
+                        {r.fdadminid && <p className="font-mono text-[11px] text-muted">{r.fdadminid}</p>}
+                      </div>
+                    </div>
                   </div>
                   <div>
                     <p className="text-[11px] text-muted">ผู้สร้างรายการ</p>
-                    <p className="text-xs font-semibold text-foreground">{r.fdadmincreator ?? "—"}</p>
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                      <AdminAvatar url={r.fdadmincreator ? avatarByCode.get(r.fdadmincreator) ?? null : null} code={r.fdadmincreator} />
+                      <p className="truncate text-xs font-semibold text-foreground">{r.fdadmincreator ?? "—"}</p>
+                    </div>
                   </div>
                   <div>
                     <p className="text-[11px] text-muted">ส่งแล้ว</p>
@@ -816,16 +862,20 @@ export default async function AdminDriversPage({
       </div>
 
       </div>{/* ── ปิดกรอบขาว ── */}
-
-      <p className="text-[11px] text-muted">
-        ฐานข้อมูล: legacy <code className="rounded bg-surface-alt px-1">tb_forwarder_driver</code>{" "}
-        + <code className="rounded bg-surface-alt px-1">tb_forwarder_driver_item</code>{" "}
-        — ทั้งหมด {(tallyData ?? []).length} รอบในช่วง{" "}
-        {hasCustomRange
-          ? `${fromIso ? formatThaiDate(fromIso) : "เริ่มแรก"} – ${toIso ? formatThaiDate(toIso) : "ปัจจุบัน"}`
-          : unbounded ? "ทั้งหมด" : "90 วัน"}
-      </p>
     </main>
+  );
+}
+
+// รูปโปรไฟล์แอดมิน (ผู้รับผิดชอบ/ผู้สร้าง) — มีรูป = <img> · ไม่มี = ตัวย่อวงกลม (ปอน 2026-07-24).
+function AdminAvatar({ url, code }: { url: string | null; code: string | null | undefined }) {
+  const initial = (code ?? "?").trim().charAt(0).toUpperCase() || "?";
+  return url ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={url} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-border" />
+  ) : (
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-500 text-[11px] font-bold text-white">
+      {initial}
+    </span>
   );
 }
 

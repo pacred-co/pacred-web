@@ -39,10 +39,11 @@ export function DriverBottomNav({ noteBadge }: { noteBadge?: number }) {
 
   return (
     <>
-      {/* spacer กันเนื้อหาถูกบังหลังแถบ fixed (มือถือเท่านั้น) */}
-      <div className="h-16 lg:hidden print:hidden" aria-hidden />
+      {/* spacer กันเนื้อหาถูกบังหลังแถบ fixed (มือถือเท่านั้น) — เผื่อ safe-area
+          (home-indicator iPhone) ให้เท่ากับความสูง nav จริง ห้ามบังเนื้อหาเด็ดขาด (ปอน 2026-07-24) */}
+      <div className="h-[calc(4rem+env(safe-area-inset-bottom))] lg:hidden print:hidden" aria-hidden />
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.06)] lg:hidden print:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.06)] pb-[env(safe-area-inset-bottom)] lg:hidden print:hidden">
         <ul className="grid grid-cols-5">
           {tabs.map((t, i) => {
             const active = pathname === t.match || pathname.startsWith(`${t.match}/`);
