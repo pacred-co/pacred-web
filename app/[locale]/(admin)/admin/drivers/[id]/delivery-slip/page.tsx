@@ -478,7 +478,9 @@ export default async function DeliverySlipPage({
               {consigneeName ? <p className="font-semibold">คุณ{consigneeName}</p> : null}
               <p className="text-slate-700">{consigneeAddress || "—"}</p>
               {consigneePhones.length > 0 ? (
-                <p className="text-slate-700">โทร. {consigneePhones.join(", ")}</p>
+                <p className="inline-flex items-center gap-1 text-slate-700">
+                  <Phone className="h-3 w-3 shrink-0" style={{ color: GOLD }} /> โทร. {consigneePhones.join(", ")}
+                </p>
               ) : null}
               <p className="mt-1">
                 <span className="text-slate-500">ขนส่งโดย :</span>{" "}
@@ -514,10 +516,12 @@ export default async function DeliverySlipPage({
                   // เรียบร้อย ดีกว่าดันล้นออกนอกกล่อง
                   <span className="inline-flex flex-wrap items-baseline justify-end gap-x-2">
                     <span>{driverLabel}</span>
-                    {/* ไม่มีไอคอนโทรศัพท์ตรงนี้ (owner 2026-07-23) — อยู่ในกล่องที่มี
-                        ป้าย "ผู้ขับ/Driver" กำกับอยู่แล้ว ไอคอนเลยกลายเป็นของเกิน */}
+                    {/* ไอคอนโทร กลับมาแล้ว (ปอน 2026-07-24 · ให้เบอร์ทุกที่ในใบมีไอคอน 📞
+                        เหมือนบล็อกผู้ส่ง) — reverses owner 2026-07-23 ที่เคยถอดออกว่า "ของเกิน". */}
                     {driverPhone && (
-                      <span className="text-[11px] font-normal text-slate-600">{driverPhone}</span>
+                      <span className="inline-flex items-center gap-1 text-[11px] font-normal text-slate-600">
+                        <Phone className="h-3 w-3 shrink-0" style={{ color: GOLD }} /> {driverPhone}
+                      </span>
                     )}
                   </span>
                 }

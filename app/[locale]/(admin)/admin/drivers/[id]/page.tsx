@@ -24,7 +24,7 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import {
   Truck, Clock, CheckCircle2, XCircle, MapPin, Phone,
-  Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2, ClipboardList, Tag,
+  Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2, ClipboardList, Tag, ChevronDown,
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
@@ -82,6 +82,16 @@ function isSelfDelivery(code: string | null | undefined): boolean {
   const c = (code ?? "").trim();
   return c === "PCS" || c === "PCSE" || c === "PCSF";
 }
+
+// ปุ่มพิมพ์ (per-stop) — gradient badge. ประกาศเป็น const ฝั่ง SERVER ตรงนี้ เพราะ
+// BILL_BADGE_CLASS export มาจากไฟล์ "use client" (driver-bill-view-modal) → พอ import
+// เข้ามาในหน้า server มันกลายเป็น client-reference ใช้เป็น raw className บน server ไม่ได้
+// (throw "Attempted to call BILL_BADGE_CLASS from the server"). BILL_BADGE_CLASS ยังใช้ได้
+// ตอนส่งเป็น PROP (triggerClassName) ให้ <DriverBillViewModal> — คนละทาง. ไม่ใส่ px/py/text
+// ในนี้ เพื่อให้แต่ละที่กำหนดขนาดเองได้ (desktop เล็ก · mobile ใหญ่).
+const PRINT_BADGE_CLS =
+  "inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#C82333] to-[#E85D6E] " +
+  "font-semibold text-white shadow-sm hover:from-[#B21F2D] hover:to-[#DC4C5D]";
 
 type Batch = {
   id:              number;
@@ -287,20 +297,24 @@ export default async function AdminDriverBatchDetailPage({
     new Set([batch.fdadminid, batch.fdadmincreator].map((c) => (c ?? "").trim()).filter(Boolean)),
   );
   const adminNameByCode = new Map<string, string>();
+  // รูปโปรไฟล์พนักงาน (ปอน 2026-07-24) — โชว์ avatar จริงในกล่อง ดำเนินงาน/มอบหมาย
+  // (หัวมือถือ) แทนตัวอักษรย่อ. avatar_url อยู่ใน profiles เดียวกับชื่อ.
+  const adminAvatarRawByCode = new Map<string, string>();
   if (adminCodes.length > 0) {
     const { data: adminRows, error: adminNameErr } = await admin
       .from("profiles")
-      .select("member_code, first_name, last_name")
+      .select("member_code, first_name, last_name, avatar_url")
       .in("member_code", adminCodes);
     if (adminNameErr) {
       console.error(`/admin/drivers/${id}: staff name lookup failed`, {
         code: adminNameErr.code, message: adminNameErr.message,
       });
     }
-    for (const p of (adminRows ?? []) as { member_code: string | null; first_name: string | null; last_name: string | null }[]) {
+    for (const p of (adminRows ?? []) as { member_code: string | null; first_name: string | null; last_name: string | null; avatar_url: string | null }[]) {
       const code = (p.member_code ?? "").trim();
       const name = `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim();
       if (code && name) adminNameByCode.set(code, name);
+      if (code && (p.avatar_url ?? "").trim()) adminAvatarRawByCode.set(code, (p.avatar_url ?? "").trim());
     }
   }
   const adminNameOf = (code: string | null | undefined): string =>
@@ -309,6 +323,13 @@ export default async function AdminDriverBatchDetailPage({
   // customer-driver) then to the raw code so the field is never blank.
   const driverDisplayName = adminNameOf(batch.fdadminid) || (driverName !== "—" ? driverName : "") || (batch.fdadminid ?? "");
   const creatorDisplayName = adminNameOf(batch.fdadmincreator) || (batch.fdadmincreator ?? "");
+  // resolve รูปโปรไฟล์ (คนขับ + ผู้มอบหมาย) — resolveLegacyUrl ผ่าน full URL / เซ็น path ให้
+  const driverAvatarRaw = adminAvatarRawByCode.get((batch.fdadminid ?? "").trim());
+  const creatorAvatarRaw = adminAvatarRawByCode.get((batch.fdadmincreator ?? "").trim());
+  const [driverAvatar, creatorAvatar] = await Promise.all([
+    driverAvatarRaw ? resolveLegacyUrl(driverAvatarRaw, "admin-avatar") : Promise.resolve(null),
+    creatorAvatarRaw ? resolveLegacyUrl(creatorAvatarRaw, "admin-avatar") : Promise.resolve(null),
+  ]);
 
   // 4b. Active driver roster — for the "เปลี่ยนคนขับ" dropdown (ops only).
   let driverOptions: { code: string; name: string }[] = [];
@@ -542,8 +563,108 @@ export default async function AdminDriverBatchDetailPage({
         กลับรายการ
       </Link>
 
-      {/* Header card */}
-      <section className="rounded-2xl border border-border bg-white shadow-sm p-5 space-y-4">
+      {/* ── หัวมือถือ (ปอน 2026-07-24 · ตามภาพ 2) — จอ <lg ใช้การ์ดนี้ · ≥lg ใช้หัวเดิม ── */}
+      <section className="lg:hidden rounded-2xl border border-border bg-white shadow-sm p-4 space-y-3">
+        {/* หัวข้อ + สถานะ */}
+        <div className="flex items-start gap-2">
+          <Truck className="mt-0.5 h-6 w-6 flex-shrink-0" />
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-lg font-bold leading-tight">รายการที่ต้องส่งของ #{batch.id}</h1>
+              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${BATCH_STATUS_CLS[fdstatus]}`}>
+                {fdstatus === "1" && <Clock className="h-3 w-3" />}
+                {fdstatus === "2" && <CheckCircle2 className="h-3 w-3" />}
+                {fdstatus === "3" && <XCircle className="h-3 w-3" />}
+                {BATCH_STATUS_LABEL[fdstatus]}
+              </span>
+            </div>
+            {batch.fddate && <p className="text-xs text-muted">สร้าง {formatThaiDateTime(batch.fddate)}</p>}
+          </div>
+        </div>
+
+        {/* กล่องสถิติ 3 ช่อง */}
+        <div className="grid grid-cols-3 divide-x divide-border rounded-xl border border-border">
+          <div className="px-2 py-2.5 text-center">
+            <div className="flex items-center justify-center gap-1 text-[11px] text-muted"><Package className="h-3.5 w-3.5" /> แทรคกิ้ง</div>
+            <div className="mt-0.5 text-lg font-bold">{totalItems}</div>
+          </div>
+          <div className="px-2 py-2.5 text-center">
+            <div className="flex items-center justify-center gap-1 text-[11px] text-muted"><MapPin className="h-3.5 w-3.5" /> จุดส่ง</div>
+            <div className="mt-0.5 text-lg font-bold">{batch.fdamount ?? stops.length}</div>
+          </div>
+          <div className="px-2 py-2.5 text-center">
+            <div className="flex items-center justify-center gap-1 text-[11px] text-muted"><Package className="h-3.5 w-3.5" /> กล่อง</div>
+            <div className="mt-0.5 text-lg font-bold">{totalBoxes}</div>
+          </div>
+        </div>
+
+        {/* ปุ่มดูใบส่งของ (popup) + นับถอยหลัง */}
+        <div className="flex items-center gap-2">
+          <DriverBillViewModal
+            groups={billGroups}
+            batchName={batch.fdname ?? `#${batch.id}`}
+            printHref={`/admin/drivers/${batch.id}/print`}
+            slipHref={`/admin/drivers/${batch.id}/delivery-slip`}
+            label="ดูใบส่งสินค้า"
+            triggerClassName="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#e02424] px-4 py-2 text-sm font-bold text-white shadow-md active:scale-95"
+          />
+          {batch.endtime && (
+            <div className="ml-auto flex shrink-0 flex-col items-end text-right">
+              <span className="text-[11px] text-muted">ส่งของก่อนเวลา</span>
+              <BatchCountdown endTimeIso={batch.endtime} status={fdstatus} size="lg" />
+            </div>
+          )}
+        </div>
+
+        {/* ผู้ดำเนินงาน / มอบหมาย */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="flex items-center gap-2 rounded-lg border border-border p-2">
+            {driverAvatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={driverAvatar} alt="" className="h-8 w-8 flex-shrink-0 rounded-full object-cover ring-1 ring-primary-200" />
+            ) : (
+              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary-500 text-xs font-bold text-white">{(driverDisplayName || "?").trim().charAt(0)}</span>
+            )}
+            <div className="min-w-0">
+              <p className="text-[11px] text-muted">ดำเนินงาน</p>
+              <p className="truncate text-xs font-semibold">{driverDisplayName || "—"}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg border border-border p-2">
+            {creatorAvatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={creatorAvatar} alt="" className="h-8 w-8 flex-shrink-0 rounded-full object-cover ring-1 ring-primary-200" />
+            ) : (
+              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary-500 text-xs font-bold text-white">{(creatorDisplayName || "?").trim().charAt(0)}</span>
+            )}
+            <div className="min-w-0">
+              <p className="text-[11px] text-muted">มอบหมาย</p>
+              <p className="truncate text-xs font-semibold">{creatorDisplayName || "—"}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ปุ่ม นำทาง + พิมพ์ (2×2) */}
+        <div className="grid grid-cols-2 gap-2">
+          {googleMapsHref && (
+            <a href={googleMapsHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-2.5 text-sm font-medium text-emerald-700">
+              <MapPin className="h-4 w-4" /> Google นำทาง
+            </a>
+          )}
+          <Link href={`/admin/drivers/${batch.id}/print`} target="_blank" className="inline-flex items-center justify-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-3 py-2.5 text-sm font-medium text-primary-700">
+            <Printer className="h-4 w-4" /> พิมพ์บิลจัดส่ง
+          </Link>
+          <Link href={`/admin/drivers/${batch.id}/picking-list`} target="_blank" className="inline-flex items-center justify-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-800">
+            <ClipboardList className="h-4 w-4" /> พิมพ์บิลหาสินค้า
+          </Link>
+          <Link href={`/admin/drivers/${batch.id}/stickers`} target="_blank" className="inline-flex items-center justify-center gap-1.5 rounded-full border border-sky-300 bg-sky-50 px-3 py-2.5 text-sm font-medium text-sky-700">
+            <Tag className="h-4 w-4" /> พิมพ์สติกเกอร์
+          </Link>
+        </div>
+      </section>
+
+      {/* Header card — เดสก์ท็อป (≥lg) */}
+      <section className="hidden lg:block rounded-2xl border border-border bg-white shadow-sm p-5 space-y-4">
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
             {/* legacy forwarder-driver.php L1635 — "รายการที่ต้องส่งของ เลขที่รายการ #ID" */}
@@ -732,7 +853,7 @@ export default async function AdminDriverBatchDetailPage({
           <p className="text-sm text-muted">ไม่มีรายการในรอบนี้</p>
         </div>
       ) : (
-        <div className="rounded-xl border border-[#dcdfe4] bg-white overflow-hidden">
+        <div className="hidden lg:block rounded-xl border border-[#dcdfe4] bg-white overflow-hidden">
           {/* Legacy detail-table header (forwarder-driver.php detail:
               จำนวน | บริษัทขนส่ง | ข้อมูล) — the stops below read as ONE bordered
               table, not floaty cards (ภูม 2026-07-19 "ตารางยังไม่เหมือน"). */}
@@ -885,9 +1006,11 @@ export default async function AdminDriverBatchDetailPage({
                       ออเดอร์ + รหัสสมาชิก + แทรคกิ้ง + กล่อง/นน./ปริมาตร + ตัวเลือก).
                       ปุ่มลบย้ายมาท้ายแต่ละแถว (ตัวเลือก) — รู้ว่าลบรายการไหน (ภูม 2026-07-19). */}
                   <div className="p-0">
-                    <div className="overflow-x-auto scrollbar-x-visible">
-                      {/* table-fixed + % widths → ทุกสต็อป (แต่ละ section) คอลัมน์ตรงกัน (แก้เบี้ยว) */}
-                      <table className="w-full text-xs border-collapse table-fixed [&>thead>tr>th]:border [&>thead>tr>th]:border-[#dcdfe4] [&>tbody>tr>td]:border [&>tbody>tr>td]:border-[#dcdfe4]">
+                    {/* กรอบมนๆ (ปอน 2026-07-24) — ตารางออเดอร์อยู่ในกรอบขาวมุมโค้ง เหมือนใน
+                        popup "ดูบิลใบส่งสินค้า": เลิกเส้นกริดทุกช่อง เหลือเส้นคั่นแถว + พื้นขาว
+                        มุมโค้ง (rounded-xl). table-fixed + % widths คงไว้ให้คอลัมน์ทุกจุดตรงกัน. */}
+                    <div className="mx-3 mt-3 overflow-x-auto scrollbar-x-visible rounded-xl border border-[#dcdfe4] bg-white">
+                      <table className="w-full text-xs border-collapse table-fixed [&>tbody>tr]:border-t [&>tbody>tr]:border-[#dcdfe4]">
                         <thead className="bg-surface-alt/60 text-left text-[11px] font-bold text-[#6b6f82]">
                           <tr>
                             <th className="px-2 py-1.5 w-[4%]">#</th>
@@ -961,6 +1084,19 @@ export default async function AdminDriverBatchDetailPage({
                       </table>
                     </div>
 
+                    {/* พิมพ์ใบส่งสินค้าเฉพาะจุดนี้ (ปอน 2026-07-24) — ปุ่มเดียวกับใน popup
+                        "ดูบิลใบส่งสินค้า" (พิมพ์และบันทึกบิลรวม → delivery-slip?fids= ของจุดนี้). */}
+                    <div className="px-3 pt-3">
+                      <a
+                        href={`/admin/drivers/${batch.id}/delivery-slip?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`${PRINT_BADGE_CLS} px-3 py-1 text-xs`}
+                      >
+                        <Printer className="h-3.5 w-3.5" /> พิมพ์และบันทึกบิลรวม
+                      </a>
+                    </div>
+
                     {/* notes + courier-link — padded sub-section below the flush table.
                         (ปุ่มลบย้ายเข้าไปในคอลัมน์ "ตัวเลือก" ท้ายแต่ละแถวแล้ว) */}
                     {(stop.items.some((e) => e.item.fdistatus === "3" && e.item.fdinote) || isOpsOverride) && (
@@ -995,6 +1131,165 @@ export default async function AdminDriverBatchDetailPage({
                   </div>
                 </div>
               </section>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── การ์ดรายการมือถือ (ปอน 2026-07-24 · ตามภาพ) — จอ <lg เป็นการ์ดต่อจุด:
+          สถานะ(วงกลม)+รูป+แก้ภาพ | ลูกค้า+ที่อยู่+GoogleMaps | ตารางย่อ(แทรคกิ้ง·กล่อง·CBM·KG)
+          + "แสดงเพิ่มเติม" (กางตารางออเดอร์ + ปุ่มพิมพ์). จอ ≥lg ใช้ตารางเดิม (บล็อกด้านบน). */}
+      {stopsWithPhotos.length > 0 && (
+        <div className="lg:hidden space-y-3">
+          {stopsWithPhotos.map((stop) => {
+            const f = stop.forwarder;
+            const total = stop.items.length;
+            const delivered = stop.items.filter((e) => e.item.fdistatus === "2").length;
+            const failed = stop.items.filter((e) => e.item.fdistatus === "3").length;
+            const allDone = total > 0 && delivered === total;
+            const hasPin = Boolean(f.faddresslatitude && f.faddresslongitude);
+            const addrText = [f.faddressno, f.faddresssubdistrict, f.faddressdistrict, f.faddressprovince, f.faddresszipcode].filter(Boolean).join(" ");
+            const mapHref = hasPin
+              ? `https://www.google.com/maps/search/${f.faddresslatitude},${f.faddresslongitude}`
+              : `https://www.google.com/maps/search/${encodeURIComponent(addrText)}`;
+            const deliveryPhotos = Array.from(new Set(stop.items.map((e) => e.photoOffUrl).filter((u): u is string => Boolean(u))));
+            const editableIds = stop.items.filter((e) => e.item.fdistatus !== "3").map((e) => e.item.id);
+            const phones = [f.faddresstel, f.faddresstel2].map((p) => (p ?? "").trim()).filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
+            const placeholder = isWarehousePlaceholder(f.faddressname);
+            const heroPhoto = deliveryPhotos[0] ?? stop.items.find((e) => e.coverUrl)?.coverUrl ?? null;
+            return (
+              <div key={stop.addressKey} className="rounded-2xl border border-border bg-white shadow-sm p-4 space-y-3">
+                {/* สถานะ (วงกลม) + จำนวน */}
+                <div className="flex items-center gap-2">
+                  <span className={`flex h-9 w-9 items-center justify-center rounded-full border-2 ${allDone ? "border-[#28d094] bg-[#28d094] text-white" : "border-[#ff4961] text-[#ff4961]"}`}>
+                    {allDone ? <CheckCircle2 className="h-5 w-5" /> : <Truck className="h-4 w-4" />}
+                  </span>
+                  <span className="text-base font-bold">{total} รายการ</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${allDone ? ITEM_STATUS_CLS["2"] : delivered > 0 ? ITEM_STATUS_CLS["1"] : ITEM_STATUS_CLS[""]}`}>
+                    {allDone ? <CheckCircle2 className="h-3 w-3" /> : <Truck className="h-3 w-3" />}
+                    {allDone ? "สำเร็จ" : `ส่งแล้ว ${delivered}/${total}`}
+                  </span>
+                  {failed > 0 && (
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${ITEM_STATUS_CLS["3"]}`}>
+                      <AlertTriangle className="h-3 w-3" /> ส่งไม่ได้ {failed}
+                    </span>
+                  )}
+                </div>
+
+                {/* รูป+แก้ภาพ | ลูกค้า+ที่อยู่+ติดต่อ */}
+                <div className="flex gap-3">
+                  <div className="w-20 flex-shrink-0 space-y-1.5">
+                    {heroPhoto ? (
+                      <a href={heroPhoto} target="_blank" rel="noopener noreferrer" className="block">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={heroPhoto} alt="รูปส่งสินค้า" className="h-20 w-20 rounded-lg border border-border object-cover" />
+                      </a>
+                    ) : (
+                      <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-dashed border-border text-muted">
+                        <Camera className="h-5 w-5" />
+                      </div>
+                    )}
+                    {editableIds.length > 0 && (
+                      <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={deliveryPhotos.length > 0} />
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="leading-tight">
+                      {f.userid && <span className="font-mono text-sm font-bold text-primary-600">{f.userid} </span>}
+                      <span className="text-sm font-bold text-foreground">{customerNameOf(f.userid)}</span>
+                    </div>
+                    {placeholder ? (
+                      <p className="inline-block rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800">⚠️ ยังไม่ระบุที่อยู่จัดส่ง</p>
+                    ) : (
+                      <p className="text-xs leading-relaxed text-foreground/80">
+                        {f.faddressno ?? ""} ตำบล/แขวง {f.faddresssubdistrict ?? ""} อำเภอ/เขต{" "}
+                        <span className="rounded bg-amber-100 px-1 text-amber-800">{f.faddressdistrict ?? ""}</span>{" "}
+                        จังหวัด {f.faddressprovince ?? ""} {f.faddresszipcode ?? ""}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-1.5">
+                      {phones.map((p) => (
+                        <a key={p} href={`tel:${p}`} className="inline-flex shrink-0 items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
+                          <Phone className="h-3 w-3" /> {p}
+                        </a>
+                      ))}
+                      <a href={mapHref} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                        <MapPin className="h-3 w-3" /> GoogleMaps
+                      </a>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ตารางย่อ */}
+                <div className="overflow-hidden rounded-lg border border-border">
+                  <table className="w-full text-center text-xs">
+                    <thead className="bg-surface-alt/60 text-[11px] text-muted">
+                      <tr>
+                        <th className="px-2 py-1 font-semibold">แทรคกิ้ง</th>
+                        <th className="px-2 py-1 font-semibold">กล่อง</th>
+                        <th className="px-2 py-1 font-semibold">CBM</th>
+                        <th className="px-2 py-1 font-semibold">KG</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="font-semibold">
+                        <td className="border-t border-border px-2 py-1.5">{total}</td>
+                        <td className="border-t border-border px-2 py-1.5">{stop.totalBoxes}</td>
+                        <td className="border-t border-border px-2 py-1.5">{stop.totalVolume.toFixed(5)}</td>
+                        <td className="border-t border-border px-2 py-1.5">{stop.totalWeight.toFixed(2)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* ปุ่มพิมพ์ badge — โชว์เลย ไม่ต้องกด "แสดงเพิ่มเติม" (ปอน 2026-07-24) */}
+                <a
+                  href={`/admin/drivers/${batch.id}/delivery-slip?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`${PRINT_BADGE_CLS} w-full justify-center px-4 py-2.5 text-sm`}
+                >
+                  <Printer className="h-4 w-4" /> พิมพ์ใบส่งสินค้า
+                </a>
+
+                {/* แสดงเพิ่มเติม — กางตารางออเดอร์ */}
+                <details className="group">
+                  <summary className="mx-auto flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-full border border-[#C82333]/40 bg-white px-5 py-2 text-sm font-bold text-[#C82333] shadow-sm active:scale-95">
+                    <ChevronDown className="h-4 w-4 transition group-open:rotate-180" /> แสดงเพิ่มเติม
+                  </summary>
+                  <div className="mt-2 space-y-2">
+                    <div className="overflow-x-auto rounded-lg border border-border">
+                      <table className="w-full text-[11px]">
+                        <thead className="bg-surface-alt/50 text-left text-muted">
+                          <tr>
+                            <th className="px-2 py-1">ออเดอร์</th>
+                            <th className="px-2 py-1">แทรคกิ้ง</th>
+                            <th className="px-2 py-1 text-right">กล่อง</th>
+                            <th className="px-2 py-1 text-right">KG</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stop.items.map(({ item, forwarder }) => (
+                            <tr key={item.id} className="border-t border-border align-top">
+                              <td className="px-2 py-1">
+                                <Link href={`/admin/forwarders/${forwarder.id}`} className="font-mono text-primary-600">
+                                  {forwarder.fidorco ?? `#${forwarder.id}`}
+                                </Link>
+                              </td>
+                              <td className="px-2 py-1 font-mono break-all">{forwarder.ftrackingchn ?? "—"}</td>
+                              <td className="px-2 py-1 text-right">{forwarder.famount ?? 0}</td>
+                              <td className="px-2 py-1 text-right">{Number(forwarder.fweight ?? 0).toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </details>
+              </div>
             );
           })}
         </div>

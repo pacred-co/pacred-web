@@ -96,9 +96,16 @@ const TAB_NEXT: Record<TabKey, string> = {
 export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   // 2026-05-28 — Driver landing redirect (G12 — Driver mobile UI parity sprint).
   // Drivers logging into /admin used to hit notFound() because the office
-  // role gate below excludes them. Their actual home is /admin/drivers/work.
-  // Done BEFORE requireAdmin so a driver-only user doesn't 404 — they
+  // role gate below excludes them. Their actual home is the "งานที่ต้องส่ง"
+  // queue. Done BEFORE requireAdmin so a driver-only user doesn't 404 — they
   // bounce one segment over to where their job lives.
+  //
+  // 2026-07-23 (owner ปอน) — landing target moved /admin/drivers/work →
+  // /admin/drivers?view=todo. Both are driver pages, but ?view=todo is the
+  // richer self-scoped "งานที่ต้องส่ง" list (open runs + งานที่ต้องส่ง/ประวัติงาน
+  // split + date search) the owner wants drivers to open on. /admin/drivers
+  // already allows `driver` (self-scoped, line ~100) so this never 404s, and
+  // /admin/drivers is NOT phase-gated so the proxy won't bounce it (no loop).
   //
   // Multi-role admins (e.g. someone with BOTH driver + ops) still see the
   // ops dashboard — the redirect only fires when driver is the ONLY role.
@@ -120,7 +127,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     const isDriverOnly = effectiveRoles.every((r) => r === "driver");
     if (isDriverOnly) {
       const locale = await getLocale();
-      redirect({ href: "/admin/drivers/work", locale });
+      redirect({ href: "/admin/drivers?view=todo", locale });
     }
     // 2026-06-08 (ภูม warehouse-handoff round 4 · pre-handoff browser smoke):
     // Same pattern as driver-only. Warehouse staff (เบียร์/แหวน/มาร์ค)
