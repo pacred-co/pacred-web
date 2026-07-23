@@ -378,6 +378,10 @@ export default async function ServiceImportInvoicePage({
 
   return (
     <div className="min-h-screen bg-slate-50">
+
+    {/* ชื่อไฟล์ตอน Save PDF + หัวกระดาษ = ชื่อเอกสาร (กฎ print กลาง 2026-07-23) */}
+
+    <title>{`ใบเสร็จ F${fNo}`}</title>
       {/* Print-only CSS — hide chrome on @media print. */}
       <style>{`
         @media print {

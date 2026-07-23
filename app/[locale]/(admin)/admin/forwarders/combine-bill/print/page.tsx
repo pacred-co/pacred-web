@@ -344,6 +344,8 @@ export default async function CombineBillPrintPage({
 
   return (
     <div className="bg-white text-black min-h-screen">
+      {/* ชื่อไฟล์ตอน Save PDF + หัวกระดาษ = ชื่อเอกสาร (กฎ print กลาง 2026-07-23) */}
+      <title>{`บิลรวม ${header.userid ?? ""}`}</title>
       {/*
         Print-only styles — hide admin sidebar (rendered by
         (admin)/layout.tsx as <aside>) + the on-screen toolbar; reset

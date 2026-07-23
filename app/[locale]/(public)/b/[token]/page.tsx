@@ -120,6 +120,8 @@ export default async function PublicBillPage({
 
   return (
     <div className="min-h-screen bg-slate-100 print:bg-white">
+      {/* ชื่อไฟล์ตอน Save PDF = เลขที่เอกสาร (กฎ print กลาง 2026-07-23) */}
+      <title>{header.doc_no}</title>
       {/* `id` is the toggle target for the toolbar's เต็มจอ/กระดาษ (.receipt-fit).
           Ships WITH `receipt-fit` so the A4 paper fits a phone on first paint. */}
       <div id="publicBillDoc" className="receipt-fit mx-auto max-w-5xl px-2 py-4 sm:px-4">

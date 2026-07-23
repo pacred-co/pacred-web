@@ -252,6 +252,10 @@ export default async function PrintAllPage({
 
   return (
     <div className="bg-white text-black min-h-screen">
+
+    {/* ชื่อไฟล์ตอน Save PDF + หัวกระดาษ = ชื่อเอกสาร (กฎ print กลาง 2026-07-23) */}
+
+    <title>พิมพ์เอกสาร</title>
       {/* Print-only styles — hide admin sidebar + on-screen toolbar; A4. */}
       <style>{`
         @media print {

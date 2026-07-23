@@ -72,6 +72,8 @@ export default async function ShopDisbursementPrintPage({
 
   return (
     <main className="min-h-screen bg-gray-100 p-4 text-black print:bg-white print:p-0">
+      {/* ชื่อไฟล์ตอน Save PDF + หัวกระดาษ = ชื่อเอกสาร (กฎ print กลาง 2026-07-23) */}
+      <title>{`ภาษีขาย ชุดเบิกจ่าย ${batch.id}`}</title>
       {/* Toolbar — hidden on print */}
       <div className="mx-auto mb-3 flex max-w-[297mm] items-center justify-between print:hidden">
         <Link

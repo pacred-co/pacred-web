@@ -80,6 +80,8 @@ export default async function PublicReceiptPage({
 
   return (
     <div className="min-h-screen bg-slate-100 print:bg-white">
+      {/* ชื่อไฟล์ตอน Save PDF = เลขที่เอกสาร (กฎ print กลาง 2026-07-23) */}
+      <title>{doc.commonProps.rid}</title>
       <div className="px-2 pt-4 sm:px-4">
         {isCancelled && (
           <div className="mx-auto max-w-2xl rounded-2xl border-2 border-red-400 bg-red-50 p-4 text-center text-red-800 mb-3">

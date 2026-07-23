@@ -164,6 +164,10 @@ export default async function ChinaReceiveBillPage({
 
   return (
     <main className="min-h-screen bg-gray-100 p-4 text-gray-900 print:bg-white print:p-0">
+
+    {/* ชื่อไฟล์ตอน Save PDF + หัวกระดาษ = ชื่อเอกสาร (กฎ print กลาง 2026-07-23) */}
+
+    <title>{`ใบรับสินค้า ${orderNo}`}</title>
       {/* ── screen-only toolbar ── */}
       <div className="mx-auto mb-4 flex max-w-[210mm] items-center justify-between gap-3 print:hidden">
         <div className="flex items-center gap-2">

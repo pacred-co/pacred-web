@@ -409,6 +409,8 @@ export default async function AdminServiceOrderPrintPage({
   // ── Legacy / PCS skin (default · UNCHANGED) ───────────────────────────
   return (
     <div className="print-fullscreen-overlay">
+      {/* ชื่อไฟล์ตอน Save PDF + หัวกระดาษ = ชื่อเอกสาร (กฎ print กลาง 2026-07-23) */}
+      <title>ใบรายการฝากสั่งซื้อ</title>
       {/* Faithful printShop.php L86-92 — mark hPrintBill/hPrintBill2='1' on print
           (Server Action on mount; the render itself stays a pure read). */}
       <MarkPrintedOnMount hNos={docs.map((d) => d.hNo)} isReceipt={isReceipt} />

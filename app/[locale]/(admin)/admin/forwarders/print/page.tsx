@@ -299,6 +299,8 @@ export default async function ForwarderLabelPrintPage({
   if (ids.length === 0) {
     return (
       <main className="min-h-screen bg-gray-50 p-6 text-gray-900">
+      {/* ชื่อไฟล์ตอน Save PDF + หัวกระดาษ = ชื่อเอกสาร (กฎ print กลาง 2026-07-23) */}
+      <title>ใบงานนำเข้า</title>
         <div className="mx-auto max-w-3xl space-y-4">
           <div className="rounded-lg border border-amber-300 bg-amber-50 p-6 shadow-sm">
             <h1 className="mb-2 text-xl font-bold text-amber-900">

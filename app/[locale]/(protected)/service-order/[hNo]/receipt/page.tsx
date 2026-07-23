@@ -99,6 +99,10 @@ export default async function ShopOrderReceiptPage({
 
   return (
     <div className="bg-white text-black min-h-screen">
+
+    {/* ชื่อไฟล์ตอน Save PDF + หัวกระดาษ = ชื่อเอกสาร (กฎ print กลาง 2026-07-23) */}
+
+    <title>{`เอกสาร ${hNo}`}</title>
       <style>{`
         @media print {
           .no-print { display: none !important; }

@@ -278,6 +278,10 @@ export default async function DriverStickerSheetPage({
 
   return (
     <div className="bg-white text-black min-h-screen">
+
+    {/* ชื่อไฟล์ตอน Save PDF + หัวกระดาษ = ชื่อเอกสาร (กฎ print กลาง 2026-07-23) */}
+
+    <title>{`สติกเกอร์ ${batch.fdname ?? `รอบ #${batchId}`}`}</title>
       {/* Print-only styles — A4 portrait, 2-across sticker grid. Each sticker
           is a fixed ~90mm × 55mm card (≈ a common 2-column A4 label sheet). */}
       <style>{`
