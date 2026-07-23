@@ -20,17 +20,21 @@
  */
 
 import { Link } from "@/i18n/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
+import { createClient } from "@/lib/supabase/server";
+import { parsePage, pageRange, parsePageSize } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { PageSizeSelect } from "@/components/admin/page-size-select";
+import { DriverSelectionProvider, SelectAllBox, RowBox } from "./row-selection";
+import { ThaiDateField } from "@/components/admin/thai-date-field";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { Explain } from "@/components/ui/tooltip";
 import { BatchDeleteInline } from "./batch-delete-inline";
 import { exportDriversAll } from "@/actions/admin/export/drivers";
 import { countPendingDispatch } from "@/lib/admin/pending-dispatch";
-import { formatThaiDate, formatThaiDateTime, formatThaiTime } from "@/lib/utils/thai-datetime";
-import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock, Printer, ClipboardList, MonitorSpeaker } from "lucide-react";
+import { formatThaiDate, formatThaiDateTime, formatThaiTime, anyDateToIso } from "@/lib/utils/thai-datetime";
+import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock, Printer, ClipboardList, MonitorSpeaker, Search } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +43,9 @@ export const dynamic = "force-dynamic";
 function nowIso90dAgo(): string {
   return new Date(Date.now() - 90 * 86_400_000).toISOString().substring(0, 10);
 }
+// (nowIsoToday / isIsoDate ถูกถอดออก 2026-07-23 พร้อมกับตอนเปลี่ยนช่องวันที่จาก
+//  <input type="date"> เป็นช่องข้อความ วว/ดด/ปปปป — การตรวจรูปแบบย้ายไปอยู่ที่
+//  `anyDateToIso` ใน lib/utils/thai-datetime.ts ซึ่งมี unit test คุมแล้ว.)
 
 type FdStatus = "1" | "2" | "3";
 
@@ -78,20 +85,80 @@ type DriverDirectoryEntry = { member_code: string; name: string };
 export default async function AdminDriversPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; range?: string; page?: string }>;
+  searchParams: Promise<{
+    status?: string; range?: string; page?: string; view?: string;
+    from?: string; to?: string; q?: string; size?: string;
+  }>;
 }) {
   // warehouse included — warehouse staff assemble truck loads + issue the
   // delivery note (ใบส่งสินค้า) on-site (ภูม 2026-06-17 · owner confirmed).
-  await requireAdmin(["ops", "super", "warehouse"]);
+  //
+  // 2026-07-23 (owner พี่ป๊อป) — `driver` added: a driver now works OUT OF THIS
+  // PAGE too ("ประวัติกับงานที่ต้องส่งใช้หน้านี้เลย"), but sees ONLY the runs
+  // assigned to his own id, split into งานที่ต้องส่ง / ประวัติงาน. Planners
+  // (ops/super/warehouse) keep the unchanged full view.
+  const { user, roles } = await requireAdmin(["ops", "super", "warehouse", "driver"]);
+  const isPlanner = isGodRole(roles) || roles.includes("ops") || roles.includes("warehouse");
 
   const sp     = await searchParams;
   const status = (sp.status === "1" || sp.status === "2" || sp.status === "3") ? sp.status : null;
+  // view = the driver-facing split. todo → open runs · history → closed runs.
+  // Planners may use it too (it just pre-filters their list).
+  const view   = (sp.view === "todo" || sp.view === "history") ? sp.view : null;
   const range  = sp.range ?? "90d";   // "90d" default · "all" override
   const admin  = createAdminClient();
 
+  // ── ตัวกรองวันที่ (owner 2026-07-23 · legacy "วันที่บันทึกรายการ") ─────────────
+  // Precedence: an explicit from/to wins → else range=all means no bound → else
+  // the legacy default of the last 90 days. Both the LIST and the chip TALLY use
+  // the very same window, so a count can never disagree with the rows below it.
+  // Accepts วว/ดด/ปปปป (what the field submits) OR a bare ISO date (old
+  // bookmarks/links from before the format switch) — both normalise to ISO.
+  const fromParam = anyDateToIso(sp.from);
+  const toParam   = anyDateToIso(sp.to);
+  const hasCustomRange = Boolean(fromParam || toParam);
+  const unbounded = !hasCustomRange && range === "all";
+  const fromIso = fromParam ?? (unbounded ? null : nowIso90dAgo());
+  const toIso   = toParam;
+
+  // ── Self-scope for a pure driver ────────────────────────────────────────────
+  // `tb_forwarder_driver.fdadminid` holds the legacy userid == profiles.member_code
+  // (same join the mobile work-list uses). FAIL-CLOSED: a driver whose profile has
+  // no member_code sees NOTHING rather than falling through to every driver's runs.
+  let myUserid: string | null = null;
+  if (!isPlanner) {
+    const supabase = await createClient();
+    const { data: myProfile, error: myProfileErr } = await supabase
+      .from("profiles")
+      .select("member_code")
+      .eq("id", user.id)
+      .maybeSingle<{ member_code: string | null }>();
+    if (myProfileErr) {
+      console.error("/admin/drivers: own-profile lookup failed", myProfileErr, { userId: user.id });
+      throw new Error(`ไม่สามารถอ่านข้อมูลพนักงาน: ${myProfileErr.message}`);
+    }
+    myUserid = myProfile?.member_code ?? null;
+  }
+  const selfOnly = !isPlanner;
+  const selfBlocked = selfOnly && !myUserid;
+
   // Pagination — server-side window via ?page=N (PERF 2026-06-03).
+  // 2026-07-23 (owner "จำกัดการแสดงผล … query ไม่หนัก"): the row window is now
+  // user-picked via ?size= (แสดง N รายการ) instead of a fixed 50. Every size is
+  // still a SERVER-side `.range()`, so a bigger list never means a bigger scan
+  // than the user asked for.
+  const PAGE_SIZES = [10, 25, 50, 100, 250] as const;
+  const pageSize = parsePageSize(sp.size, PAGE_SIZES);
   const page = parsePage(sp.page);
-  const { from: rowFrom, to: rowTo } = pageRange(page);
+  const { from: rowFrom, to: rowTo } = pageRange(page, pageSize);
+
+  // ── ช่องค้นหา (legacy "ค้นหา:") ────────────────────────────────────────────
+  // Searches the run NAME (ชื่อรายการ = fdname, e.g. "2026-07-20-05-AD020") and,
+  // when the term is all digits, the run id. Escaped for PostgREST `ilike` so a
+  // `%`/`_` typed by the user is matched literally instead of acting as a wildcard.
+  const searchTerm = (sp.q ?? "").trim().slice(0, 80);
+  const searchEscaped = searchTerm.replace(/[\\%_]/g, (m) => `\\${m}`);
+  const searchAsId = /^\d+$/.test(searchTerm) ? Number(searchTerm) : null;
 
   // Build the WHERE clause. Default is "last 90 days" (legacy behaviour).
   let q = admin
@@ -100,17 +167,32 @@ export default async function AdminDriversPage({
     .order("id", { ascending: false })
     .range(rowFrom, rowTo);
 
-  if (status) q = q.eq("fdstatus", status);
+  // A driver only ever sees runs assigned to him.
+  if (selfOnly && myUserid) q = q.eq("fdadminid", myUserid);
 
-  if (range !== "all") {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 90);
-    q = q.gte("fddate", cutoff.toISOString().substring(0, 10));
+  // The view split wins over the raw status chip when present.
+  if (view === "todo")         q = q.eq("fdstatus", "1");
+  else if (view === "history") q = q.in("fdstatus", ["2", "3"]);
+  else if (status)             q = q.eq("fdstatus", status);
+
+  if (searchTerm) {
+    q = searchAsId !== null
+      ? q.or(`id.eq.${searchAsId},fdname.ilike.%${searchEscaped}%`)
+      : q.ilike("fdname", `%${searchEscaped}%`);
   }
 
-  const { data: rowsData, error: rowsErr, count: totalBatches } = await q;
+  if (fromIso) q = q.gte("fddate", fromIso);
+  // `fddate` carries a time component — bound the END of the chosen day so a
+  // to=2026-07-23 still includes rows stamped 2026-07-23 05:43.
+  if (toIso)   q = q.lt("fddate", `${toIso}T23:59:59.999`);
+
+  // selfBlocked = a driver with no member_code → never run the query (would
+  // otherwise return EVERY driver's runs).
+  const { data: rowsData, error: rowsErr, count: totalBatches } = selfBlocked
+    ? { data: [] as unknown[], error: null, count: 0 }
+    : await q;
   if (rowsErr) {
-    console.error("/admin/drivers: list query failed", rowsErr, { status, range });
+    console.error("/admin/drivers: list query failed", rowsErr, { status, view, range });
     throw new Error(`ไม่สามารถอ่านรายการรอบจัดส่ง: ${rowsErr.message}`);
   }
   const rows = (rowsData ?? []) as unknown as BatchRow[];
@@ -118,11 +200,17 @@ export default async function AdminDriversPage({
   // Status tally (filter chips show counts of the active range).
   // Next 16 react-hooks/purity rule rejects raw `Date.now()` inline in render
   // — must be wrapped in a module-scope helper (see drivers/page.tsx top: `nowIso90dAgo`).
-  const tallyCutoff = range !== "all" ? nowIso90dAgo() : "1970-01-01";
-  const { data: tallyData, error: tallyErr } = await admin
+  let tallyQ = admin
     .from("tb_forwarder_driver")
     .select("fdstatus")
-    .gte("fddate", tallyCutoff);
+    .gte("fddate", fromIso ?? "1970-01-01");
+  if (toIso) tallyQ = tallyQ.lt("fddate", `${toIso}T23:59:59.999`);
+  // Same self-scope as the list — otherwise a driver's chip counts would show
+  // the whole company's runs next to his own (much shorter) list.
+  if (selfOnly && myUserid) tallyQ = tallyQ.eq("fdadminid", myUserid);
+  const { data: tallyData, error: tallyErr } = selfBlocked
+    ? { data: [] as { fdstatus: string }[], error: null }
+    : await tallyQ;
   if (tallyErr) {
     console.error("/admin/drivers: tally query failed", tallyErr);
   }
@@ -198,7 +286,10 @@ export default async function AdminDriversPage({
   // 2026-06-19 (owner): the accurate "รอจัดรถ" = fstatus=6 (เตรียมส่ง · ชำระแล้ว) NOT
   // already in an open driver batch (the plain fstatus=6 count over-counted by
   // including rows already on a run). Warehouse/planning sees this → confirm-saves.
-  const readyCount = await countPendingDispatch(admin);
+  // Planner-only number ("งานรอจัดรถ" across the whole company). Skipped for a
+  // driver — it is not his workload, and showing it would read as "you have N
+  // jobs waiting" when those jobs belong to nobody yet.
+  const readyCount = isPlanner ? await countPendingDispatch(admin) : 0;
 
   // ── CSV export — columns mirror the <thead> 1:1, multi-line cells split out ──
   const csvCols: CsvCol[] = [
@@ -235,57 +326,82 @@ export default async function AdminDriversPage({
   });
 
   return (
-    <main className="p-4 sm:p-6 lg:p-8 space-y-5">
+    // พื้นหลังเทา #f4f5fa (owner 2026-07-23) = สีพื้น body ของ PCS admin เดิม
+    // (legacy `assets/css/bootstrap.min.css` → `body{background-color:#f4f5fa}`),
+    // ทำให้การ์ด/ตารางสีขาวลอยขึ้นมาแทนที่จะจมไปกับพื้นขาว. min-h กันพื้นขาวโผล่
+    // ท้ายหน้าเวลารายการสั้น (3.5rem = ความสูงแถบหัวของ .admin-content pt-14).
+    <main className="p-4 sm:p-6 lg:p-8 space-y-5 bg-[#f4f5fa] min-h-[calc(100vh-3.5rem)]">
+
+      {/* ── กรอบขาวใบเดียวคลุมทั้งแผง: หัวข้อ → ตัวกรองวันที่ → แถบกรอง → ตาราง → หน้า
+          (owner 2026-07-23) เหมือน legacy PCS ที่ทุกอย่างอยู่ในแผงขาวบนพื้น #f4f5fa
+          `overflow-hidden` กันมุมตารางทะลุขอบโค้งของการ์ด. */}
+      <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
+
       {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-3">
+      <div className="flex items-start justify-between flex-wrap gap-3 px-4 py-4 border-b border-border">
         <div>
-          <p className="text-xs font-semibold tracking-widest text-primary-500">CARGO · มอบงานคนขับ</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-500">
+            {selfOnly ? "DRIVER · งานของฉัน" : "CARGO · มอบงานคนขับ"}
+          </p>
           <h1 className="mt-1 text-2xl font-bold flex items-center gap-2">
             <Truck className="h-6 w-6" />
-            รายการขนส่งสินค้า
+            {selfOnly
+              ? (view === "history" ? "ประวัติงาน" : "งานที่ต้องส่ง")
+              : "รายการขนส่งสินค้า"}
           </h1>
-          <p className="mt-1 text-sm text-muted">
-            จัดกลุ่มตามคนขับ — กดที่ชื่อคนขับเพื่อกาง/ยุบรอบจัดส่ง (1 รอบ = 1 คนขับ · N จุดส่ง). คลิกแถวเพื่อดูรายละเอียดและถ่ายภาพส่งของ
-          </p>
+          {/* คำอธิบายใต้หัวข้อ ถูกเอาออก 2026-07-23 (owner) — หัวข้อ + ชิปมุมมอง
+              บอกอยู่แล้วว่ากำลังดูอะไร ไม่ต้องมีบรรทัดอธิบายซ้ำ. */}
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* พี่ป๊อป spec 2026-07-06 §3 — จอมอนิเตอร์ "กำลังจัดส่ง" (real-time
-              driver board · รูป/เบอร์/ชื่อเล่น + ความคืบหน้า). §0d reach. */}
-          <Link
-            href="/admin/drivers/monitor"
-            className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 min-h-[44px]"
-          >
-            <MonitorSpeaker className="h-4 w-4" />
-            จอมอนิเตอร์ (กำลังจัดส่ง)
-          </Link>
-          <CsvButton
-            rows={csvRows}
-            cols={csvCols}
-            filename={`drivers-${range}${status ? `-status${status}` : ""}.csv`}
-            fetchAll={async () => {
-              "use server";
-              return exportDriversAll({ status, range });
-            }}
-          />
-          <Link
-            href="/admin/drivers/new"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-600 min-h-[44px]"
-          >
-            <Plus className="h-4 w-4" />
-            สร้างรายการขนส่ง
-            {(readyCount ?? 0) > 0 && (
-              <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">
-                {readyCount} รอมอบ
-              </span>
-            )}
-          </Link>
-        </div>
+        {/* Planner-only toolbar. A driver neither creates runs, exports the
+            company CSV, nor watches the dispatch monitor. */}
+        {isPlanner && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* พี่ป๊อป spec 2026-07-06 §3 — จอมอนิเตอร์ "กำลังจัดส่ง" (real-time
+                driver board · รูป/เบอร์/ชื่อเล่น + ความคืบหน้า). §0d reach. */}
+            <Link
+              href="/admin/drivers/monitor"
+              className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 min-h-[44px]"
+            >
+              <MonitorSpeaker className="h-4 w-4" />
+              จอมอนิเตอร์ (กำลังจัดส่ง)
+            </Link>
+            <CsvButton
+              rows={csvRows}
+              cols={csvCols}
+              filename={`drivers-${range}${status ? `-status${status}` : ""}.csv`}
+              fetchAll={async () => {
+                "use server";
+                return exportDriversAll({ status, range });
+              }}
+            />
+            <Link
+              href="/admin/drivers/new"
+              className="inline-flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-600 min-h-[44px]"
+            >
+              <Plus className="h-4 w-4" />
+              สร้างรายการขนส่ง
+              {(readyCount ?? 0) > 0 && (
+                <span className="rounded-full bg-white/20 px-2 py-0.5 text-xs">
+                  {readyCount} รอมอบ
+                </span>
+              )}
+            </Link>
+          </div>
+        )}
       </div>
+
+      {/* A driver whose profile carries no member_code can't be matched to any
+          run — say so instead of rendering a silently-empty table. */}
+      {selfBlocked && (
+        <div className="mx-4 mt-3 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          ⚠️ บัญชีของคุณยังไม่มีรหัสพนักงาน (member code) — ระบบจึงจับคู่งานที่มอบหมายให้ไม่ได้ กรุณาแจ้งแอดมิน
+        </div>
+      )}
 
       {/* 🚐 Pending-dispatch alert — paid/ready forwarders with no driver yet. */}
       {readyCount > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-blue-400 bg-blue-50 px-4 py-3">
+        <div className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-blue-400 bg-blue-50 px-4 py-3">
           <p className="text-sm text-blue-900">
             <Truck className="inline h-4 w-4 mr-1" />
             <strong>{readyCount}</strong> รายการชำระแล้ว/เตรียมส่ง{" "}
@@ -304,38 +420,161 @@ export default async function AdminDriversPage({
         </div>
       )}
 
-      {/* Filter chips */}
+      {/* ── ตัวกรองวันที่ (legacy "วันที่บันทึกรายการ" + ค้นหาข้อมูล / ทั้งหมด) ──────
+          A plain GET form (no `action` → submits to the current path, keeping the
+          locale prefix) — same pattern as /admin/drivers/work. The form REPLACES
+          the query string, so `view`/`status` ride along as hidden inputs. */}
+      <form method="GET" className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 border-b border-border">
+        {view && <input type="hidden" name="view" value={view} />}
+        {status && <input type="hidden" name="status" value={status} />}
+        {/* ป้าย "วันที่บันทึกรายการ (วว/ดด/ปปปป …)" ถูกเอาออก 2026-07-23 (owner) —
+            ตัวช่องมี placeholder "วว/ดด/ปปปป" + ปฏิทินให้กดอยู่แล้ว. การอ่านออกเสียง
+            สำหรับ screen-reader ยังครบผ่าน aria-label ของ <ThaiDateField>. */}
+        <div>
+          {/* ⚠️ ห้ามเปลี่ยนกลับเป็น <input type="date"> ตรงๆ — รูปแบบที่ "แสดง" ของมัน
+              ยึดภาษาของ browser/OS ไม่ใช่ของหน้าเว็บ บนเครื่องภาษาอังกฤษจะขึ้นเป็น
+              04/24/2026 (ดด/วว) ซึ่งคนไทยอ่านเป็น 4 เม.ย. — บังคับด้วย HTML/CSS
+              ไม่ได้. <ThaiDateField> แสดง วว/ดด/ปปปป แต่กดแล้วเปิดปฏิทินของ browser
+              ให้ (owner 2026-07-23) — ได้ทั้งสองอย่าง. */}
+          <div className="flex items-center gap-1.5">
+            <ThaiDateField id="fd-from" name="from" defaultValueIso={fromIso} ariaLabel="วันที่เริ่มต้น" />
+            <span className="text-muted text-xs">–</span>
+            <ThaiDateField id="fd-to" name="to" defaultValueIso={toIso} ariaLabel="วันที่สิ้นสุด" />
+          </div>
+        </div>
+        <button
+          type="submit"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 min-h-[38px]"
+        >
+          <Search className="h-4 w-4" /> ค้นหาข้อมูล
+        </button>
+        <Link
+          href={buildHref({ status, view, range: "all", from: null, to: null })}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100 min-h-[38px]"
+        >
+          <Search className="h-4 w-4" /> ค้นหาข้อมูลทั้งหมด
+        </Link>
+      </form>
+
+      {/* ผลลัพธ์การค้นหา … (legacy red result line) */}
+      <p className="px-4 pt-2.5 text-[13px] font-medium text-primary-600">
+        ผลลัพธ์การค้นหา{" "}
+        {hasCustomRange
+          ? `${fromIso ? formatThaiDate(fromIso) : "เริ่มแรก"} – ${toIso ? formatThaiDate(toIso) : "ปัจจุบัน"}`
+          : unbounded
+            ? "ทั้งหมด"
+            : "90 วันที่ผ่านมา"}
+        {" · "}พบ {totalBatches ?? 0} รอบ
+      </p>
+
+      {/* ── แถวควบคุมเดียว (owner 2026-07-23 "ยก แสดง กับ ค้นหา ขึ้นไปแถวเดียวกัน"):
+             ซ้าย = ชิปมุมมอง · ขวา = แสดง N แถว/หน้า + ช่องค้นหา ─────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pt-2.5 pb-3 border-b border-border">
+
+      {/* Filter chips. A driver gets the two-way งานที่ต้องส่ง / ประวัติงาน split
+          (same as his sidebar) instead of the planner's raw fdstatus chips. */}
       <div className="flex flex-wrap gap-2">
-        <Chip href={buildHref({ status: null, range })} active={!status}>
-          ทั้งหมด ({(tallyData ?? []).length})
-        </Chip>
-        {(["1", "2", "3"] as FdStatus[]).map((s) => (
-          <Chip key={s} href={buildHref({ status: s, range })} active={status === s}>
-            <span className="inline-flex items-center gap-1">
-              {STATUS_ICON[s]}
-              {STATUS_LABEL[s]} ({tally[s] ?? 0})
-            </span>
-          </Chip>
-        ))}
-        <span className="text-xs text-muted self-center px-2">|</span>
-        <Chip href={buildHref({ status, range: "90d" })} active={range !== "all"}>
-          90 วันล่าสุด
-        </Chip>
-        <Chip href={buildHref({ status, range: "all" })} active={range === "all"}>
-          ทั้งหมด
-        </Chip>
+        {selfOnly ? (
+          <>
+            <Chip href={buildHref({ status: null, view: "todo", range, from: fromParam, to: toParam })} active={view !== "history"}>
+              <span className="inline-flex items-center gap-1">
+                {STATUS_ICON["1"]} งานที่ต้องส่ง ({tally["1"] ?? 0})
+              </span>
+            </Chip>
+            <Chip href={buildHref({ status: null, view: "history", range, from: fromParam, to: toParam })} active={view === "history"}>
+              <span className="inline-flex items-center gap-1">
+                {STATUS_ICON["2"]} ประวัติงาน ({(tally["2"] ?? 0) + (tally["3"] ?? 0)})
+              </span>
+            </Chip>
+          </>
+        ) : (
+          <>
+            <Chip href={buildHref({ status: null, view, range, from: fromParam, to: toParam })} active={!status && !view}>
+              ทั้งหมด ({(tallyData ?? []).length})
+            </Chip>
+            {(["1", "2", "3"] as FdStatus[]).map((s) => (
+              <Chip key={s} href={buildHref({ status: s, view: null, range, from: fromParam, to: toParam })} active={status === s}>
+                <span className="inline-flex items-center gap-1">
+                  {STATUS_ICON[s]}
+                  {STATUS_LABEL[s]} ({tally[s] ?? 0})
+                </span>
+              </Chip>
+            ))}
+          </>
+        )}
+        {/* 2026-07-23 — the old "90 วันล่าสุด / ทั้งหมด" chips are gone: the date
+            toolbar above now owns the date window (its inputs are pre-filled with
+            the active one, and "ค้นหาข้อมูลทั้งหมด" is the unbounded reset). Two
+            competing date controls on one panel is how a filter starts lying. */}
       </div>
 
+      {/* ขวาของแถวเดียวกัน: แสดง N แถว/หน้า + ค้นหา */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {/* PageSizeSelect เขียนคำว่า "แสดง … แถว/หน้า" มาในตัวแล้ว — ห้ามใส่ซ้ำ.
+            allowAll=false: หน้านี้ owner สั่งให้ "จำกัดการแสดงผล" → ไม่ควรมีปุ่ม
+            ดึง 5,000 แถวรวดเดียวให้กดตั้งแต่แรก. */}
+        <PageSizeSelect
+          basePath="/admin/drivers"
+          current={pageSize}
+          sizes={PAGE_SIZES}
+          allowAll={false}
+          params={{ status: sp.status, view: sp.view, range: sp.range, from: sp.from, to: sp.to, q: sp.q }}
+        />
+
+        {/* GET form — Enter ค้นหาได้เลย. hidden inputs พาตัวกรองอื่นไปด้วย ไม่งั้น
+            การกดค้นหาจะล้างช่วงวันที่/มุมมองที่เลือกไว้ทิ้ง. */}
+        <form method="GET" className="flex items-center gap-2">
+          {view && <input type="hidden" name="view" value={view} />}
+          {status && <input type="hidden" name="status" value={status} />}
+          {fromParam && <input type="hidden" name="from" value={fromParam} />}
+          {toParam && <input type="hidden" name="to" value={toParam} />}
+          {!hasCustomRange && range === "all" && <input type="hidden" name="range" value="all" />}
+          {sp.size && <input type="hidden" name="size" value={sp.size} />}
+          <label htmlFor="fd-q" className="text-sm text-muted whitespace-nowrap">ค้นหา:</label>
+          <input
+            id="fd-q" type="search" name="q" defaultValue={searchTerm} maxLength={80}
+            placeholder="ชื่อรายการ / เลขที่รอบ"
+            className="rounded-lg border border-border bg-white px-3 py-2 text-sm min-h-[38px] w-52 max-w-full"
+          />
+          <button
+            type="submit"
+            className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface-alt px-3 py-2 text-sm font-medium hover:bg-border/40 min-h-[38px]"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+        </form>
+      </div>
+
+      </div>{/* ── ปิดแถวควบคุม (ชิป | แสดง+ค้นหา) ── */}
+
+      {searchTerm && (
+        <p className="px-4 pt-2.5 text-[13px] text-muted">
+          กรองด้วยคำว่า <strong className="text-foreground">“{searchTerm}”</strong>
+          {" · "}
+          <Link
+            href={buildHref({ status, view, range, from: fromParam, to: toParam })}
+            className="text-primary-600 hover:underline"
+          >
+            ล้างการค้นหา
+          </Link>
+        </p>
+      )}
+
       {/* Flat dense table — one row per batch (legacy forwarder-driver.php default
-          list mode L269-348: ID · วันที่สร้าง · ชื่อรายการ (+meta) · ผู้รับผิดชอบ ·
+          list mode L269-348: ☑ · วันที่สร้าง · ชื่อรายการ (+meta) · ผู้รับผิดชอบ ·
           ผู้สร้างรายการ · สถานะ · ตัวเลือก). No driver grouping — 1 row = 1 รอบ. */}
-      <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white shadow-sm">
+      <DriverSelectionProvider>
+      <div className="overflow-x-auto scrollbar-x-visible">
         <table className="w-full text-sm border-collapse min-w-[1000px] [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
           <thead className="bg-surface-alt/60 text-center text-[13px] font-bold tracking-wide text-[#6b6f82]">
             <tr>
               {/* legacy forwarder-driver.php list mode L157-166: ID / วันที่สร้าง / ชื่อรายการ /
                   ผู้รับผิดชอบ / ผู้สร้างรายการ / สถานะ / ตัวเลือก (ส่งแล้ว = Pacred progress add). */}
-              <th className="border-b border-border px-3 py-2.5 whitespace-nowrap w-16">ID</th>
+              {/* ช่องติ๊ก แทนคอลัมน์ ID (owner 2026-07-23 · ตรงกับ legacy).
+                  เลขที่รอบยังเข้าถึงได้จาก "ชื่อรายการ" และปุ่ม "ดูรายละเอียด". */}
+              <th className="border-b border-border px-3 py-2.5 whitespace-nowrap w-10 text-center">
+                <SelectAllBox ids={batchIds} />
+              </th>
               <th className="border-b border-border px-3 py-2.5 whitespace-nowrap">วันที่สร้าง</th>
               <th className="border-b border-border px-3 py-2.5">ชื่อรายการ</th>
               <th className="border-b border-border px-3 py-2.5">ผู้รับผิดชอบ</th>
@@ -361,7 +600,13 @@ export default async function AdminDriversPage({
               <tr>
                 <td colSpan={8} className="px-3 py-12 text-center">
                   <AlertCircle className="mx-auto h-8 w-8 text-muted/50 mb-3" />
-                  <p className="text-sm text-muted">ยังไม่มีรอบจัดส่งในช่วงนี้</p>
+                  <p className="text-sm text-muted">
+                    {selfOnly
+                      ? (view === "history"
+                          ? "ยังไม่มีงานที่ปิดแล้วในช่วงนี้"
+                          : "ตอนนี้ไม่มีงานที่ต้องส่ง — รอแอดมินมอบงานให้")
+                      : "ยังไม่มีรอบจัดส่งในช่วงนี้"}
+                  </p>
                 </td>
               </tr>
             ) : (
@@ -373,14 +618,9 @@ export default async function AdminDriversPage({
                 const zebra    = ri % 2 === 0 ? "bg-white" : "bg-[#cabcbf]/30"; // legacy pink stripe (rgba(202,188,191,.28))
                 return (
                   <tr key={r.id} className={`border-b border-border align-top hover:bg-primary-50/30 ${zebra}`}>
-                    {/* เลขที่ (ID) */}
-                    <td className="px-3 py-3 whitespace-nowrap">
-                      <Link
-                        href={`/admin/drivers/${r.id}`}
-                        className="font-mono font-semibold text-primary-600 hover:underline"
-                      >
-                        #{r.id}
-                      </Link>
+                    {/* ช่องติ๊ก (แทนคอลัมน์ ID เดิม) */}
+                    <td className="px-3 py-3 whitespace-nowrap text-center">
+                      <RowBox id={r.id} />
                     </td>
                     {/* วันที่สร้าง — legacy forwarder-driver.php L304-309: DATE line + TIME line */}
                     <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
@@ -452,8 +692,10 @@ export default async function AdminDriversPage({
                         >
                           <Printer className="h-3 w-3" /> บิลจัดส่ง
                         </Link>
-                        {/* ลบรายการ (legacy parity) — เฉพาะรอบ OPEN ที่ยังไม่มีของส่งสำเร็จ */}
-                        {fdstatus === "1" && agg.doneCount === 0 && (
+                        {/* ลบรายการ (legacy parity) — เฉพาะรอบ OPEN ที่ยังไม่มีของส่งสำเร็จ.
+                            PLANNER ONLY: a driver must never be able to delete the run
+                            he was assigned (2026-07-23). */}
+                        {isPlanner && fdstatus === "1" && agg.doneCount === 0 && (
                           <BatchDeleteInline batchId={r.id} />
                         )}
                       </div>
@@ -465,28 +707,45 @@ export default async function AdminDriversPage({
           </tbody>
         </table>
       </div>
+      </DriverSelectionProvider>
 
-      <Pagination
-        page={page}
-        pageSize={DEFAULT_PAGE_SIZE}
-        total={totalBatches ?? 0}
-        basePath="/admin/drivers"
-        params={{ status: sp.status, range: sp.range }}
-      />
+      {/* หน้า (pagination) อยู่ในกรอบขาวใบเดียวกับตาราง — ปิดท้ายการ์ด */}
+      <div className="border-t border-border px-4 py-3">
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={totalBatches ?? 0}
+          basePath="/admin/drivers"
+          params={{ status: sp.status, view: sp.view, range: sp.range, from: sp.from, to: sp.to, q: sp.q, size: sp.size }}
+        />
+      </div>
+
+      </div>{/* ── ปิดกรอบขาว ── */}
 
       <p className="text-[11px] text-muted">
         ฐานข้อมูล: legacy <code className="rounded bg-surface-alt px-1">tb_forwarder_driver</code>{" "}
         + <code className="rounded bg-surface-alt px-1">tb_forwarder_driver_item</code>{" "}
-        — ทั้งหมด {(tallyData ?? []).length} รอบในช่วง {range === "all" ? "ทั้งหมด" : "90 วัน"}
+        — ทั้งหมด {(tallyData ?? []).length} รอบในช่วง{" "}
+        {hasCustomRange
+          ? `${fromIso ? formatThaiDate(fromIso) : "เริ่มแรก"} – ${toIso ? formatThaiDate(toIso) : "ปัจจุบัน"}`
+          : unbounded ? "ทั้งหมด" : "90 วัน"}
       </p>
     </main>
   );
 }
 
-function buildHref({ status, range }: { status: string | null; range: string }) {
+function buildHref({ status, view, range, from, to }: {
+  status: string | null; view?: string | null; range: string;
+  from?: string | null; to?: string | null;
+}) {
   const p = new URLSearchParams();
   if (status) p.set("status", status);
+  if (view) p.set("view", view);
   if (range && range !== "90d") p.set("range", range);
+  // Carry the chosen date window across chip clicks — switching งานที่ต้องส่ง ⇄
+  // ประวัติงาน must not silently reset the dates the user just searched.
+  if (from) p.set("from", from);
+  if (to) p.set("to", to);
   const qs = p.toString();
   return qs ? `/admin/drivers?${qs}` : "/admin/drivers";
 }

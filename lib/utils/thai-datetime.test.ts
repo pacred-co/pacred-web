@@ -1,4 +1,7 @@
-import { formatThaiDateTime, formatThaiDate, formatThaiTime, parseDbInstant } from "./thai-datetime";
+import {
+  formatThaiDateTime, formatThaiDate, formatThaiTime, parseDbInstant,
+  ddmmyyyyToIso, isoToDdmmyyyy, anyDateToIso,
+} from "./thai-datetime";
 
 let pass = 0;
 let fail = 0;
@@ -72,6 +75,42 @@ console.log("thai-datetime helper");
   const bareNow = new Date().toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
   const drift = Math.abs(Date.now() - parseDbInstant(bareNow)!.getTime());
   assert("tz-less 'now' parses within 2s (no 7h drift)", drift < 2000);
+}
+
+// ── วว/ดด/ปปปป ⇄ ISO (date-only form fields · owner 2026-07-23) ──────────────
+{
+  console.log("  ddmmyyyyToIso");
+  assert("24/04/2026 → 2026-04-24",        ddmmyyyyToIso("24/04/2026") === "2026-04-24");
+  assert("1-digit d/m padded",             ddmmyyyyToIso("1/7/2026") === "2026-07-01");
+  assert("surrounding spaces tolerated",   ddmmyyyyToIso("  24/04/2026 ") === "2026-04-24");
+  assert("leap day 29/02/2024 accepted",   ddmmyyyyToIso("29/02/2024") === "2024-02-29");
+  assert("29/02/2026 (not leap) → null",   ddmmyyyyToIso("29/02/2026") === null);
+  assert("31/02/2026 → null",              ddmmyyyyToIso("31/02/2026") === null);
+  assert("31/04/2026 (30-day month) → null", ddmmyyyyToIso("31/04/2026") === null);
+  assert("month 13 → null",                ddmmyyyyToIso("01/13/2026") === null);
+  assert("day 0 → null",                   ddmmyyyyToIso("00/04/2026") === null);
+  assert("ISO input → null (wrong shape)", ddmmyyyyToIso("2026-04-24") === null);
+  assert("garbage → null",                 ddmmyyyyToIso("not-a-date") === null);
+  assert("null → null",                    ddmmyyyyToIso(null) === null);
+  // Guard the reason these are string-only: no timezone may shift the day.
+  assert("no tz shift on 01/01",           ddmmyyyyToIso("01/01/2026") === "2026-01-01");
+  assert("no tz shift on 31/12",           ddmmyyyyToIso("31/12/2026") === "2026-12-31");
+
+  console.log("  isoToDdmmyyyy");
+  assert("2026-04-24 → 24/04/2026",        isoToDdmmyyyy("2026-04-24") === "24/04/2026");
+  assert("ISO datetime prefix accepted",   isoToDdmmyyyy("2026-04-24T05:43:00") === "24/04/2026");
+  assert("null → ''",                      isoToDdmmyyyy(null) === "");
+  assert("garbage → ''",                   isoToDdmmyyyy("nope") === "");
+
+  console.log("  anyDateToIso (back-compat with old ISO links)");
+  assert("accepts dd/mm/yyyy",             anyDateToIso("24/04/2026") === "2026-04-24");
+  assert("accepts ISO unchanged",          anyDateToIso("2026-04-24") === "2026-04-24");
+  assert("rejects impossible ISO",         anyDateToIso("2026-02-31") === null);
+  assert("garbage → null",                 anyDateToIso("zzz") === null);
+
+  // Round-trip: whatever the field shows must survive a submit unchanged.
+  const rt = ["2026-01-01", "2026-04-24", "2024-02-29", "2026-12-31"];
+  assert("round-trip ISO→ดด/ปป→ISO stable", rt.every((iso) => ddmmyyyyToIso(isoToDdmmyyyy(iso)) === iso));
 }
 
 console.log(`\n${pass} pass, ${fail} fail`);
