@@ -25,6 +25,8 @@ import { Link } from "@/i18n/navigation";
 
 export type BillGroupItem = {
   no: number;
+  /** tb_forwarder.id — the ใบส่งสินค้า is issued per group and numbered by these. */
+  fid: number;
   orderNo: string;      // #<id> or the running order code
   pr: string;           // รหัสสมาชิก (PR / —)
   customerName: string;
@@ -86,11 +88,19 @@ export function DriverBillViewModal({
   groups,
   batchName,
   printHref,
+  slipHref,
   triggerClassName = TRIGGER_DEFAULT,
 }: {
   groups: BillGroup[];
   batchName: string;
+  /** บิลจัดส่ง — ONE sheet for the whole run (secondary link in the header). */
   printHref: string;
+  /**
+   * ใบส่งสินค้า base path. A DIFFERENT document from `printHref`: one sheet per
+   * delivery address, signed by that customer. Each group appends its own
+   * `?fids=` so the slip covers exactly that address's parcels.
+   */
+  slipHref: string;
   /**
    * Override the trigger's look. The batch header renders this as a compact
    * chip right under the run meta (ปอน 2026-07-23) — staff open the bills far
@@ -138,9 +148,20 @@ export function DriverBillViewModal({
           <div className="my-4 w-full max-w-6xl rounded-2xl bg-white shadow-xl sm:my-6">
             {/* Title bar — legacy's amber rule under the heading */}
             <div className="flex items-start justify-between gap-3 border-b-2 border-amber-400 px-3 py-3 sm:px-4">
-              <h3 className="min-w-0 break-words text-base font-bold text-foreground">
-                บิลรายการส่งสินค้า · {batchName}
-              </h3>
+              <div className="min-w-0">
+                <h3 className="break-words text-base font-bold text-foreground">
+                  บิลรายการส่งสินค้า · {batchName}
+                </h3>
+                {/* the OTHER document — one sheet for the whole run */}
+                <a
+                  href={printHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] text-sky-700 hover:underline"
+                >
+                  บิลจัดส่ง (คนขับ · ทั้งรอบ) →
+                </a>
+              </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -299,7 +320,7 @@ export function DriverBillViewModal({
                             {/* per-group action + legacy helper line */}
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                               <a
-                                href={printHref}
+                                href={`${slipHref}?fids=${g.items.map((i) => i.fid).join(",")}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className={BILL_BADGE_CLASS}

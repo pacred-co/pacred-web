@@ -518,6 +518,7 @@ export default async function AdminDriverBatchDetailPage({
       phones,
       items: stop.items.map(({ forwarder }, i) => ({
         no: i + 1,
+        fid: forwarder.id,
         orderNo: forwarder.fidorco ?? `#${forwarder.id}`,
         pr: forwarder.userid ?? "—",
         customerName: customerNameOf(forwarder.userid),
@@ -588,6 +589,7 @@ export default async function AdminDriverBatchDetailPage({
                 groups={billGroups}
                 batchName={batch.fdname ?? `#${batch.id}`}
                 printHref={`/admin/drivers/${batch.id}/print`}
+                slipHref={`/admin/drivers/${batch.id}/delivery-slip`}
                 triggerClassName={BILL_BADGE_CLASS}
               />
             </div>

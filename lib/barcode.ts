@@ -73,3 +73,38 @@ export function code128SvgDataUrl(
     return null;
   }
 }
+
+/**
+ * Render `text` as a QR code → inline `data:image/svg+xml` URL.
+ *
+ * Same bwip-js dependency as the Code128 helper above — NO new package, and
+ * deliberately NOT the `qrcode` lib, which CLAUDE.md reserves for
+ * `lib/promptpay.ts` (payment QRs must stay in one audited place; this is a
+ * plain document reference, not money).
+ *
+ * Used by the ใบส่งสินค้า delivery slip, where the legacy PCS form carries a QR
+ * in the top-right corner. QR has no charset restriction, so unlike Code128
+ * there is no safe-pattern gate. Returns `null` on any failure so a bad render
+ * degrades to "no QR" instead of 500-ing a printable document.
+ */
+export function qrSvgDataUrl(text: string, scale = 3): string | null {
+  const value = (text ?? "").trim();
+  if (!value) return null;
+  try {
+    const svg = bwipjs.toSVG({
+      bcid: "qrcode",
+      text: value,
+      scale,
+      // bwip-js defaults QR to error-correction level M (~15% recovery) —
+      // enough for a printed page that may be folded or smudged. Not passed
+      // explicitly: `eclevel` is absent from bwip-js's RenderOptions types.
+    });
+    return `data:image/svg+xml;base64,${Buffer.from(svg, "utf-8").toString("base64")}`;
+  } catch (e) {
+    console.error("[barcode] QR render failed", {
+      text: value,
+      message: (e as Error).message,
+    });
+    return null;
+  }
+}
