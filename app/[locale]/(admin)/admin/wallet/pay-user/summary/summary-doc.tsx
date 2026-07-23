@@ -70,10 +70,10 @@ export type SummaryRow = {
   weight: number;
   /** fvolume (CBM). */
   volume: number;
-  /** fwidth/flength/fheight — ขนาดกล่อง ก×ย×ส (ซม.); 0 when unset. */
-  width: number;
-  length: number;
-  height: number;
+  /** ขนาดกล่อง ก×ย×ส (ซม.) — resolved via resolveDimsDisplay (own dim, else the real
+   *  per-box sizes from momo_box_detail, else "—"). A multi-box MOMO row shows each
+   *  distinct size (its aggregate row carries blank ก×ย×ส). */
+  dimsDisplay: string;
   /** fproductstype label — ทั่วไป / มอก. / อย. / พิเศษ / -. */
   productType: string;
   /** frefrate. */
@@ -299,7 +299,7 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
                       </td>
                       <td style={tdMono}>{r.tracking || "—"}</td>
                       <td style={tdNum}>{fmt0(r.boxes)}</td>
-                      <td style={{ ...tdC, fontSize: "8px", color: "#374151", fontFamily: "monospace" }}>{dimsCm(r.width, r.length, r.height)}</td>
+                      <td style={{ ...tdC, fontSize: "8px", color: "#374151", fontFamily: "monospace" }}>{r.dimsDisplay || "—"}</td>
                       <td style={tdNum}>{fmt5(r.volume)}</td>
                       <td style={tdNum}>{fmt2(r.weight)}</td>
                       <td style={{ ...tdC, fontSize: "8px", color: "#374151" }}>{r.productType || "—"}</td>
@@ -455,11 +455,6 @@ const tdC     = { padding: "3px 3px", fontSize: "9px", textAlign: "center" as co
 const tdMono  = { padding: "3px 3px", fontSize: "8px", wordBreak: "break-all" as const, fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" };
 const tdMonoC = { ...tdMono, textAlign: "center" as const };
 const tdNum   = { padding: "3px 3px", fontSize: "9px", textAlign: "right" as const, fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" };
-
-/** ขนาดกล่อง กว้าง×ยาว×สูง (ซม.) — "—" when no dimension is set (owner ปอน 2026-07-22). */
-function dimsCm(w: number, l: number, h: number): string {
-  return w > 0 || l > 0 || h > 0 ? `${w}×${l}×${h}` : "—";
-}
 
 function Th({ w, th, en, left, center, right, nowrap }: { w: string; th: string; en: string; left?: boolean; center?: boolean; right?: boolean; nowrap?: boolean }) {
   const align = left ? "left" : center ? "center" : right ? "right" : "left";

@@ -125,6 +125,49 @@ function liveVolDiff(t: IngestTrack): boolean {
   return t.hasLive && t.liveCbm != null && t.cbm > 0 && Math.abs(t.cbm - t.liveCbm) > VOL_EPS;
 }
 
+// ── รอตรวจ · ยังไม่พร้อม (owner 2026-07-23 "ยังมีบางชิปเม้นข้อมูลยังไม่ถูกต้อง · กรองรอไว้
+//    หน้ารอ เอาเข้าระบบ · เดี๋ยวเราจะรอตรวจ") — กัน "ข้อมูลมั่ว" ไม่ให้ถูกกวาดเข้าระบบตอน
+//    นำเข้าเป็นชุด. หลักคิด: แถวที่ MOMO **ยังไม่รับเข้าโกดัง/ยังไม่ชั่ง** (in transit) =
+//    "ยังไม่มีข้อมูล" ไม่ใช่ "ข้อมูลผิด" → ต้อง**ไม่**นับเป็นรอตรวจ (ไม่งั้นตัวเลขบวมหลอก) ·
+//    แถวที่ **มาถึงแล้ว** (ผ่าน in-transit ไปแล้ว) แต่ข้อมูลผิด/ไม่ครบ = ตัวที่ต้องกรองรอตรวจ.
+/** MOMO ยังไม่รับของเข้าโกดัง (รอต้นทางส่ง) → ยังไม่ชั่ง-วัด = ยังไม่มีค่า ไม่ใช่ค่าผิด.
+ *  reuse โดยทั้งด่าน isNotReady และ modal "ดึง Live" (เดิม inline อยู่ที่นั่น) → แถว
+ *  "รอ MOMO ชั่ง" จะไม่หลุดเข้านับรอตรวจ. คำที่ match = MOMO_STATUS_TH ("รอต้นทางส่งเข้าโกดัง"
+ *  = WAITING_SELLER_SHIP) + คำเผื่อของ Live board. */
+function inTransit(t: IngestTrack): boolean {
+  return /รอต้นทาง|รอเข้าโกดัง|ยังไม่เข้าโกดัง/.test(t.adminStatusText ?? "");
+}
+/** แถวที่มาถึงแล้วแต่ข้อมูลยังผิด/ไม่ครบ = ต้องกรองรอตรวจก่อนนำเข้า (uncommitted + ไม่ใช่
+ *  แถวที่ยังในระหว่างทาง). OR ของสัญญาณที่หน้านี้คำนวณอยู่แล้ว (ไม่คิดใหม่/ไม่ query ใหม่). */
+function isNotReady(t: IngestTrack): boolean {
+  if (t.committed || inTransit(t)) return false;
+  // ⚠️ "ยังไม่เข้าตู้" (!t.container) จงใจ**ไม่**เป็นด่าน hold (owner 2026-07-23): แถวที่
+  // ชั่งน้ำหนัก+คิวครบ + PR ถูก แต่ MOMO ยังไม่ให้เลขตู้ = ข้อมูล**ถูกต้อง** อยู่ในระหว่าง
+  // lifecycle (เลขตู้ Live เติมให้ทีหลังตอน commit เป็น fstatus 3) — ไม่ใช่ "ข้อมูลผิด".
+  // หน้ามีป้าย "⏳ ยังไม่เข้าตู้ปิด" โชว์แยกทุกแถวอยู่แล้ว. hold = ข้อมูลผิด/ไม่ครบจริงเท่านั้น.
+  return (
+    t.weightKg <= 0 ||
+    t.cbm <= 0 ||
+    (t.guessedUserId ?? "").trim() === "" ||
+    t.userIdValid === false ||
+    t.momoGarbage != null ||
+    pkWtDiff(t) || pkVolDiff(t) || liveWtDiff(t) || liveVolDiff(t)
+  );
+}
+/** เหตุผลที่แถวถูกกรองรอตรวจ (ภาษาคน) — ใช้บนป้ายรายแถว + คำเตือนตอนกดนำเข้าทีละแถว. */
+function notReadyReasons(t: IngestTrack): string[] {
+  if (t.committed || inTransit(t)) return [];
+  const r: string[] = [];
+  if (t.weightKg <= 0) r.push("ไม่มีน้ำหนัก");
+  if (t.cbm <= 0) r.push("ไม่มีคิว");
+  if ((t.guessedUserId ?? "").trim() === "") r.push("ไม่มีรหัสลูกค้า");
+  else if (t.userIdValid === false) r.push("รหัส PR ไม่มีในระบบ");
+  if (t.momoGarbage != null) r.push("MOMO มั่ว (กล่องไม่ตรง)");
+  if (pkWtDiff(t) || pkVolDiff(t)) r.push("น้ำหนัก/คิว ไม่ตรง packing");
+  if (liveWtDiff(t) || liveVolDiff(t)) r.push("ไม่ตรง MOMO Live");
+  return r;
+}
+
 // 🔴 CLOSED CARRIER LIST (owner 2026-07-14) — "บังคับให้เลือกให้ใส่แค่ที่มีในไฟล์ที่ส่งให้เท่านั้น".
 // The hardcoded list here used to offer DHL (1) · Kerry (4) · Nim Express (5) · ไปรษณีย์ไทย (11) —
 // none of which are in the owner's workbook → gone. At MOMO-commit time the delivery address is
@@ -227,7 +270,7 @@ const DATA_KEYS = [
 // ให้ CS มาคอยตรวจเทียบกับทางโกดังจีน หรือเอารูป กับ แทรคกิ้ง ไปคอยถามหาลูกค้า
 // หรือตอนลูกค้าตามของมา". NO CODE = พัสดุที่ MOMO ไม่ได้แนบรหัสลูกค้ามาให้ = ของไม่มี
 // เจ้าของในระบบ → ถ้าไม่ตามหา มันจะค้างในตู้ ไม่มีใครถูกเก็บเงิน (รายได้หาย + ของค้างโกดัง).
-type Tab = "pending" | "committed" | "all" | "mismatch" | "garbage" | "nocode";
+type Tab = "pending" | "committed" | "all" | "mismatch" | "garbage" | "nocode" | "notready";
 
 export function MomoIngestClient({ tracks, missing, loadError }: { tracks: IngestTrack[]; missing: MissingParcel[]; loadError: string | null }) {
   const router = useRouter();
@@ -263,7 +306,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkRunning, setBulkRunning] = useState(false);
-  const [bulkResult, setBulkResult] = useState<null | { ok: number; errors: { tracking: string; message: string }[] }>(null);
+  const [bulkResult, setBulkResult] = useState<null | { ok: number; errors: { tracking: string; message: string }[]; heldSkipped?: number }>(null);
 
   const counts = useMemo(() => ({
     all: tracks.length,
@@ -274,6 +317,8 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     // NO CODE (owner 2026-07-21) — MOMO ไม่แนบรหัสลูกค้า = ของไม่มีเจ้าของในระบบ.
     // นับเฉพาะที่ยังไม่ commit (แถวที่ commit แล้ว = CS หาเจ้าของเจอแล้วตอนนำเข้า).
     nocode: tracks.filter((t) => !t.committed && (t.guessedUserId ?? "").trim() === "").length,
+    // รอตรวจ · ยังไม่พร้อม (owner 2026-07-23) — มาถึงแล้วแต่ข้อมูลผิด/ไม่ครบ (in-transit ไม่นับ).
+    notready: tracks.filter(isNotReady).length,
   }), [tracks]);
   const invalidPr = useMemo(() => tracks.filter((t) => !t.committed && t.userIdValid === false).length, [tracks]);
 
@@ -286,6 +331,8 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     // NO CODE = ยังไม่นำเข้า + MOMO ไม่ส่ง PR — คิว CS ตามหาเจ้าของ (owner 2026-07-21)
     else if (tab === "nocode")
       list = list.filter((t) => !t.committed && (t.guessedUserId ?? "").trim() === "");
+    // รอตรวจ = มาถึงแล้วแต่ข้อมูลผิด/ไม่ครบ — กรองรอไว้ให้ตรวจก่อนนำเข้า (owner 2026-07-23)
+    else if (tab === "notready") list = list.filter(isNotReady);
     const term = q.trim().toLowerCase();
     if (term)
       list = list.filter((t) =>
@@ -461,7 +508,9 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
   // ── ติ๊กเลือก — เลือกได้เฉพาะแถวที่ "ยังไม่เข้าระบบ" และอยู่ในผลกรองปัจจุบัน ──
   const allPendingIds = useMemo(
     () => {
-      const pending = filtered.filter((t) => !t.committed && !rowResult[t.id]?.ok);
+      // owner 2026-07-23 — "เลือกทั้งหมด" + นำเข้าเป็นชุด ต้อง**ไม่**กวาดแถวรอตรวจ
+      // (ข้อมูลยังไม่ครบ) เข้าระบบ → คัด isNotReady ออกจากชุด select-all.
+      const pending = filtered.filter((t) => !t.committed && !rowResult[t.id]?.ok && !isNotReady(t));
       // a family must commit ONE shape (the box rows OR the bare aggregate — the
       // commit chokepoint refuses the other anyway). Select-all prefers the box
       // rows (real per-box dims) → skip the bare when pending box siblings exist.
@@ -523,7 +572,12 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     setBulkRunning(true);
     const errors: { tracking: string; message: string }[] = [];
     let ok = 0;
-    for (const t of selectedTracks) {
+    // defense in depth (owner 2026-07-23) — แถวรอตรวจ (ข้อมูลไม่ครบ) ห้ามถูกกวาดเข้าระบบ
+    // ตอนนำเข้าเป็นชุด แม้จะหลุดเข้ามาในชุดที่เลือก (เช่น ติ๊กรายตัว) → นำเข้าเฉพาะแถวที่พร้อม ·
+    // แถวรอตรวจเก็บไว้ให้ตรวจ+นำเข้าทีละแถว.
+    const ready = selectedTracks.filter((t) => !isNotReady(t));
+    const heldSkipped = selectedTracks.length - ready.length;
+    for (const t of ready) {
       const label = t.tracking ?? t.id;
       try {
         const res = await commitMomoRowToForwarder({
@@ -553,7 +607,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     }
     setBulkRunning(false);
     setBulkOpen(false);
-    setBulkResult({ ok, errors });
+    setBulkResult({ ok, errors, heldSkipped });
     startTransition(() => router.refresh());
   }
 
@@ -694,6 +748,17 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     if (!modal) return;
     const userID = modal.userID.trim().toUpperCase();
     if (!/^PR\d+$/i.test(userID)) return; // guarded by the disabled button too
+    // owner 2026-07-23 — นำเข้าทีละแถวยังทำได้หลังตรวจ ("เดี๋ยวเราจะรอตรวจ") แต่ถ้าแถวนี้
+    // ยังไม่พร้อม ต้องให้ยืนยันว่าจะนำเข้าทั้งที่ข้อมูลยังไม่ครบ (ไม่ hard-block). ช่อง PR
+    // ในโมดัลใส่ค่าถูกรูปแบบแล้ว (การันตีจาก early-return) → ตัดเหตุผลเรื่อง PR ออก เตือน
+    // เฉพาะปัญหาที่โมดัลแก้ไม่ได้ (น้ำหนัก/คิว/ตู้/มั่ว/ไม่ตรง).
+    if (isNotReady(modal.track)) {
+      const reasons = notReadyReasons(modal.track).filter(
+        (r) => r !== "ไม่มีรหัสลูกค้า" && r !== "รหัส PR ไม่มีในระบบ",
+      );
+      if (reasons.length > 0 &&
+        !(await confirm(`⚠️ แถวนี้ยังไม่พร้อม: ${reasons.join(" · ")}\n\nยืนยันนำเข้าระบบทั้งที่ข้อมูลยังไม่ครบ?`))) return;
+    }
     const input: CommitMomoRowInput = {
       rowId: modal.track.id,
       userID,
@@ -904,7 +969,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     <div className="space-y-3">
       {/* tabs + search */}
       <div className="flex flex-wrap items-center gap-2">
-        {([["pending", "🟡 ยังไม่เข้าระบบ"], ["committed", "✅ เข้าระบบแล้ว"], ["nocode", "❓ NO CODE (ไม่รู้เจ้าของ)"], ["mismatch", "❗ ไม่ตรง (Packing/Live)"], ["all", "ทั้งหมด"]] as [Tab, string][]).map(([k, label]) => (
+        {([["pending", "🟡 ยังไม่เข้าระบบ"], ["committed", "✅ เข้าระบบแล้ว"], ["nocode", "❓ NO CODE (ไม่รู้เจ้าของ)"], ["notready", "🛑 รอตรวจ · ยังไม่พร้อม"], ["mismatch", "❗ ไม่ตรง (Packing/Live)"], ["all", "ทั้งหมด"]] as [Tab, string][]).map(([k, label]) => (
           <button key={k} type="button" onClick={() => setTab(k)}
             className={`rounded-full px-3 py-1 text-xs font-medium ${tab === k ? "bg-primary-600 text-white" : "bg-surface-alt text-muted hover:bg-surface-alt/70"}`}>
             {label} <span className="opacity-70">{counts[k]}</span>
@@ -984,6 +1049,20 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
         </div>
       )}
 
+      {/* 🛑 รอตรวจ · ยังไม่พร้อม — คิวตรวจข้อมูลก่อนนำเข้า (owner 2026-07-23 "ยังมีบางชิปเม้น
+          ข้อมูลยังไม่ถูกต้อง · กรองรอไว้หน้ารอ เอาเข้าระบบ · เดี๋ยวเราจะรอตรวจ") */}
+      {tab === "notready" && (
+        <div className="rounded-xl border border-rose-300 bg-rose-50 px-3 py-2.5 text-xs text-rose-900">
+          <div className="font-bold">🛑 รอตรวจ = พัสดุที่มาถึงแล้ว แต่ข้อมูลยังไม่ถูกต้อง/ไม่ครบ — ตรวจ/แก้ให้ครบก่อนกดนำเข้าระบบ</div>
+          <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
+            <li>แถวเหล่านี้ <b>ถูกกันออกจาก &quot;เลือกทั้งหมด&quot;</b> — การนำเข้าเป็นชุดจะไม่กวาดของที่ข้อมูลยังไม่ครบเข้าระบบ (กันข้อมูลมั่ว)</li>
+            <li><b>แก้ที่ตาราง:</b> กด ✎ ที่ช่อง <b>น้ำหนัก / คิว / จำนวน / ขนาด / PR</b> เพื่อเติมให้ครบ · หรือกด <b>🔄 ดึง Live</b> ให้ MOMO เติมให้</li>
+            <li><b>ตรวจแล้วมั่นใจ:</b> ติ๊กแถวนั้นแล้วกดนำเข้า → ระบบจะถามยืนยันอีกครั้งว่าจะนำเข้าทั้งที่ข้อมูลยังไม่ครบ (ไม่บังคับปิดตาย)</li>
+            <li><b>ที่ยังไม่ถึงโกดัง</b> (MOMO ยังไม่รับของ/ยังไม่ชั่ง) จะ<b>ไม่</b>อยู่ในแท็บนี้ — อยู่แท็บ &quot;🟡 ยังไม่เข้าระบบ&quot; รอ MOMO ชั่งก่อน</li>
+          </ul>
+        </div>
+      )}
+
       {loadError && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">โหลดข้อมูลไม่สำเร็จ: {loadError}</div>
       )}
@@ -996,7 +1075,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
         <div className={`rounded-xl border px-3 py-2 text-xs ${bulkResult.errors.length > 0 ? "border-amber-300 bg-amber-50" : "border-emerald-300 bg-emerald-50"}`}>
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-foreground">
-              นำเข้าระบบสำเร็จ {bulkResult.ok} รายการ{bulkResult.errors.length > 0 ? ` · ไม่สำเร็จ ${bulkResult.errors.length}` : ""}
+              นำเข้าระบบสำเร็จ {bulkResult.ok} รายการ{bulkResult.errors.length > 0 ? ` · ไม่สำเร็จ ${bulkResult.errors.length}` : ""}{bulkResult.heldSkipped ? ` · ข้าม ${bulkResult.heldSkipped} แถวที่ยังไม่พร้อม (รอตรวจ)` : ""}
             </span>
             <button type="button" onClick={() => setBulkResult(null)} className="ml-auto rounded-full border border-border bg-white px-2 py-0.5 text-[11px] hover:bg-surface-alt">ปิด</button>
           </div>
@@ -1116,7 +1195,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
               // header checkbox = เลือกทั้งชิปเม้น (the selectable members · bare excluded —
               // the box rows are the commit shape; the chokepoint guards the rest)
               const famSelectableIds = fam
-                .filter((x) => !x.committed && !rowResult[x.id]?.ok && !(hasSuffixMembers && (x.tracking ?? "") === base))
+                .filter((x) => !x.committed && !rowResult[x.id]?.ok && !isNotReady(x) && !(hasSuffixMembers && (x.tracking ?? "") === base))
                 .map((x) => x.id);
               const famAllSel = famSelectableIds.length > 0 && famSelectableIds.every((id) => sel.has(id));
               const isOpen = !grouped || openFams.has(base);
@@ -1248,6 +1327,13 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                     )}
                     {rr && !rr.ok && (
                       <div className="mt-0.5 text-[11px] font-semibold text-red-700" title={rr.message}>ไม่สำเร็จ</div>
+                    )}
+                    {/* owner 2026-07-23 — ป้ายรอตรวจต่อแถว (มาถึงแล้วแต่ข้อมูลไม่ครบ) พร้อมเหตุผลใน tooltip */}
+                    {!done && isNotReady(t) && (
+                      <div className="mt-0.5 inline-flex items-center gap-0.5 rounded bg-rose-100 px-1 py-0.5 text-[10px] font-bold text-rose-700"
+                        title={`ยังไม่พร้อม (ตรวจก่อนนำเข้า): ${notReadyReasons(t).join(" · ")}`}>
+                        🛑 รอตรวจ
+                      </div>
                     )}
                   </td>
                   {/* คอลัมน์ที่ลากย้ายได้ — render จาก colOrder (เนื้อหา = ตารางปอนเป๊ะ · ผ่าน colDefs) */}
@@ -1433,6 +1519,16 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                   <span>{invalidSelected} รายการ PR ไม่ตรง tb_users → ระบบจะปฏิเสธเอง (ไม่เดา PR ให้) — ติ๊กทีละรายการเพื่อแก้ PR ก่อน</span>
                 </p>
               )}
+              {/* owner 2026-07-23 — เตือนล่วงหน้าว่าแถวรอตรวจ (ข้อมูลไม่ครบ) จะถูกข้าม ไม่นำเข้า */}
+              {(() => {
+                const held = selectedTracks.filter(isNotReady).length;
+                return held > 0 ? (
+                  <p className="flex items-start gap-1.5 rounded bg-rose-50 px-2 py-1.5 text-[11px] text-rose-700">
+                    <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                    <span>{held} รายการยังไม่พร้อม (ข้อมูลไม่ครบ) → จะถูก<b>ข้าม</b> ไม่นำเข้า · ตรวจ/แก้แล้วนำเข้าทีละรายการได้ที่แท็บ &quot;🛑 รอตรวจ&quot;</span>
+                  </p>
+                ) : null;
+              })()}
               {/* full-data preview — โชว์ครบเหมือนตาราง (ภูม: "แสดงข้อมูลให้ครบทั้งหมด เพื่อตรวจอีกที") */}
               {previewTable(selectedTracks)}
             </div>
@@ -1608,9 +1704,8 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                         โกดัง (รอต้นทางส่ง / รอเข้าโกดัง) MOMO ยังไม่ได้ชั่ง-วัด → กด Live กี่ครั้ง
                         ก็เติมไม่ได้ ไม่ใช่ระบบพัง. บอกล่วงหน้าตรงนี้ ก่อนพนักงานกดแล้วงงว่าทำไม 0. */}
                     {(() => {
-                      const notYetAtWarehouse = incompleteRows.filter((r) =>
-                        /รอต้นทาง|รอเข้าโกดัง|ยังไม่เข้าโกดัง/.test(r.adminStatusText ?? ""),
-                      ).length;
+                      // ใช้ helper ตัวเดียวกับด่าน isNotReady (in-transit = MOMO ยังไม่รับ/ยังไม่ชั่ง)
+                      const notYetAtWarehouse = incompleteRows.filter(inTransit).length;
                       if (notYetAtWarehouse === 0) return null;
                       return (
                         <div className="mt-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-700">

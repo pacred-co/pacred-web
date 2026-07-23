@@ -54,10 +54,10 @@ export type BillingRunPaperRow = {
   rate:        number;
   famount:     number;
   fweight:     number;
-  /** มิติกล่อง ก·ส·ย (ซม.) — owner 2026-07-18 · แสดงใต้คอลลัม ลัง. */
-  fwidth:      number;
-  fheight:     number;
-  flength:     number;
+  /** ขนาดกล่อง ก×ย×ส (ซม.) — resolved via resolveDimsDisplay (own dim, else the real
+   *  per-box sizes from momo_box_detail, else "—"). owner 2026-07-23 — replaces the
+   *  raw ก/ส/ย columns so a multi-box MOMO row can show each distinct size in one cell. */
+  dimsDisplay: string;
   fvolume:     number;
   /** ค่าขนส่งสินค้า (freight-only · ftotalprice) — the row Amount so Rate × Kg
    *  reconciles on the paper. The GROSS amount_thb is unchanged in storage. */
@@ -261,14 +261,12 @@ function BillingRunPage({
               <tr>
                 <Th w="4%"  th="ลำดับ"   en="No." left />
                 <Th w="7%"  th="ออเดอร์"  en="Order" left />
-                <Th w="15%" th="รหัสพัสดุ" en="Tracking" left />
+                <Th w="17%" th="รหัสพัสดุ" en="Tracking" left />
                 <Th w="7%"  th="ประเภท"   en="Type" center />
                 <Th w="11%" th="เลขตู้"   en="Cabinet" left />
                 <Th w="6%"  th="ขนส่ง"    en="Ship" center />
                 <Th w="5%"  th="ลัง"      en="Box" right />
-                <Th w="6%"  th="กว้าง"    en="W·cm" right />
-                <Th w="6%"  th="สูง"      en="H·cm" right />
-                <Th w="6%"  th="ยาว"      en="L·cm" right />
+                <Th w="16%" th="ขนาด(ก×ย×ส)" en="W×L×H·ซม." center />
                 <Th w="8%"  th="ปริมาตร"  en="CBM" right />
                 <Th w="6%"  th="คิดตาม"   en="Basis" center />
                 <Th w="13%" th="ค่าขนส่ง" en="Amount" right />
@@ -277,7 +275,7 @@ function BillingRunPage({
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={13} style={{ padding: "8px 4px", textAlign: "center", fontSize: "10px", color: "#6b7280", background: "#fff" }}>
+                  <td colSpan={11} style={{ padding: "8px 4px", textAlign: "center", fontSize: "10px", color: "#6b7280", background: "#fff" }}>
                     ไม่พบรายการ
                   </td>
                 </tr>
@@ -291,9 +289,9 @@ function BillingRunPage({
                     <td style={{ ...tdMono, color: "#374151" }}>{row.cabinet || "—"}</td>
                     <td style={{ ...tdMonoC, fontWeight: "bold", color: row.transport === "SEA" ? "#1d4ed8" : "#b45309" }}>{row.transport || "—"}</td>
                     <td style={tdNum}>{fmt0(row.famount)}</td>
-                    <td style={tdNum}>{fmtDim(row.fwidth)}</td>
-                    <td style={tdNum}>{fmtDim(row.fheight)}</td>
-                    <td style={tdNum}>{fmtDim(row.flength)}</td>
+                    {/* ขนาด(ก×ย×ส) — one cell: own dim, else the real per-box sizes from
+                        momo_box_detail, else "—" (resolveDimsDisplay · owner 2026-07-23). */}
+                    <td style={{ ...tdC, fontSize: "8px", color: "#374151", fontFamily: "monospace" }}>{row.dimsDisplay || "—"}</td>
                     <td style={tdNum}>{fmt5(row.fvolume)}</td>
                     <td style={{ ...tdC, fontSize: "8px", color: "#374151" }}>{row.rateBasis || "—"}</td>
                     {/* Amount = ค่าขนส่งสินค้า (freight-only) so Rate × Kg reconciles;
@@ -449,9 +447,6 @@ const tdC      = { padding: "3px 3px", fontSize: "9px", textAlign: "center" as c
 const tdMono   = { padding: "3px 3px", fontSize: "8px", wordBreak: "break-all" as const, fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" };
 const tdMonoC  = { ...tdMono, textAlign: "center" as const };
 const tdNum    = { padding: "3px 3px", fontSize: "9px", textAlign: "right" as const, fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" };
-
-/** ก·ส·ย (ซม.) — up to 2 decimals, "—" when unmeasured (0/empty). */
-const fmtDim = (n: number) => (n > 0 ? n.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—");
 
 function Th({ w, th, en, left, center, right }: { w: string; th: string; en: string; left?: boolean; center?: boolean; right?: boolean }) {
   const align = left ? "left" : center ? "center" : right ? "right" : "left";

@@ -22,6 +22,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeForwarderDebitBatch, type ForwarderDebitRow } from "@/lib/forwarder/forwarder-debit-total";
 import { resolveMaoAnchorIds } from "@/lib/forwarder/mao-anchor";
+import { resolveDimsDisplay, type BoxDimInput } from "@/lib/forwarder/resolve-box-dims";
 import { computeBillWht } from "@/lib/billing/wht";
 import { loadCustomerBillingParty } from "@/lib/admin/customer-billing-party";
 // ⚠️ MONEY-ROUTING: buildCompactPaymentQrDataUrl = the SAME QR the PayModal serves
@@ -212,6 +213,56 @@ export default async function PaymentSummaryPage({
   const customerTaxId = party?.taxId || "-";
   const customerAddress = party?.address ?? "";
 
+  // 2.5 ขนาดกล่อง (ก×ย×ส) fallback via momo_box_detail (owner 2026-07-23) — a
+  // MULTI-BOX MOMO row leaves ก×ย×ส BLANK on its aggregate row on purpose (its boxes
+  // differ in size · propagate-live-data.ts), and a single-box row can be blank
+  // before Live propagates — the real per-box dims live in momo_box_detail. Best-
+  // effort ENRICHMENT: load the per-box dims for the rows that carry NO own dim so
+  // the printed ขนาด column shows the real sizes instead of "—". A lookup failure
+  // must NEVER break the invoice → degrade to no-detail (→ "—", same as before).
+  const baseOfTracking = (t: string) => (t ?? "").trim().replace(/-\d+(\/\d+)?$/, "");
+  const blankDimBases = Array.from(
+    new Set(
+      rowsFw
+        .filter((r) => !(num(r.fwidth) > 0) && !(num(r.flength) > 0) && !(num(r.fheight) > 0))
+        .map((r) => baseOfTracking(r.ftrackingchn ?? ""))
+        .filter((b) => b.length > 0),
+    ),
+  );
+  const boxDimsByBase = new Map<string, BoxDimInput[]>();
+  if (blankDimBases.length > 0) {
+    const { data: bdData, error: bdErr } = await admin
+      .from("momo_box_detail")
+      .select("base_tracking, width, length, height, quantity")
+      .in("base_tracking", blankDimBases)
+      .limit(50_000);
+    if (bdErr) {
+      console.error("[pay-user/summary: momo_box_detail dims] failed (degrading to '—')", {
+        code: bdErr.code, message: bdErr.message,
+      });
+    } else {
+      for (const b of (bdData ?? []) as unknown as Array<{
+        base_tracking: string | null;
+        width: number | string | null;
+        length: number | string | null;
+        height: number | string | null;
+        quantity: number | string | null;
+      }>) {
+        const base = (b.base_tracking ?? "").trim();
+        if (!base) continue;
+        const box: BoxDimInput = {
+          width: num(b.width),
+          length: num(b.length),
+          height: num(b.height),
+          quantity: num(b.quantity),
+        };
+        const arr = boxDimsByBase.get(base);
+        if (arr) arr.push(box);
+        else boxDimsByBase.set(base, [box]);
+      }
+    }
+  }
+
   // 3. Build display rows + grand-total buckets.
   const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
   // เหมาๆ ต้อง elect anchor PER SHIPMENT เหมือน PayModal (pay-user-view.ts:348) — ไม่งั้น
@@ -235,9 +286,14 @@ export default async function PaymentSummaryPage({
     boxes: num(r.famount),
     weight: num(r.fweight),
     volume: num(r.fvolume),
-    width: num(r.fwidth),
-    length: num(r.flength),
-    height: num(r.fheight),
+    // ก×ย×ส — own dim, else the real per-box sizes from momo_box_detail, else "—"
+    // (multi-box MOMO rows carry blank ก×ย×ส on the aggregate). SOT resolveDimsDisplay.
+    dimsDisplay: resolveDimsDisplay({
+      fwidth: num(r.fwidth),
+      flength: num(r.flength),
+      fheight: num(r.fheight),
+      boxDims: boxDimsByBase.get(baseOfTracking(r.ftrackingchn ?? "")),
+    }),
     productType: PRODUCT_TYPE_LABEL[String(r.fproductstype ?? "")] ?? "-",
     rate: num(r.frefrate),
     amount: num(r.ftotalprice),
