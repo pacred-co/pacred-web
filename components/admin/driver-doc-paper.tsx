@@ -12,8 +12,11 @@
  * Design language is the same one the ใบเสนอราคา uses
  * (`components/quote/quote-paper.tsx`): a white A4 card on a grey desk, a
  * tinted meta box, a rounded table with a tinted head, and a page-number
- * footer — but GOLD instead of the quote's red, because these are warehouse /
- * driver paperwork and must not be mistaken at a glance for a money document.
+ * footer.
+ *
+ * 🔴 2026-07-23 — เดิมใช้ทองแทนแดง "เพราะเป็นเอกสารโกดัง/คนขับ ต้องไม่ถูกมองผ่านๆ
+ * ว่าเป็นเอกสารการเงิน". owner สั่งเปลี่ยนเป็นแดงแบรนด์ให้เข้าชุดกับใบส่งสินค้า
+ * (รับทราบข้อแลกเปลี่ยนแล้ว) → ดูหมายเหตุที่ DOC_GOLD ด้านล่างสำหรับวิธีย้อนกลับ.
  *
  * PURE PRESENTATION — no data access, no client state (safe in a Server
  * Component).
@@ -23,13 +26,23 @@ import { Mail, MapPin, Phone } from "lucide-react";
 import { SITE_LEGAL_NAME_TH, ADDRESSES, CONTACT } from "@/components/seo/site";
 
 // ── Tokens ───────────────────────────────────────────────────────────────
-export const DOC_GOLD = "#D99A2B"; // title · footer rule · icons · accents
+//
+// 🔴 owner 2026-07-23: สั่งให้เอกสารคนขับ (บิลจัดส่ง · บิลหาสินค้า) ใช้ชุดสีเดียว
+// กับใบส่งสินค้าที่เพิ่งปรับไป = **แดงแบรนด์ #B30000** (เดิมเป็นทอง #D99A2B).
+//
+// ⚠️ ทับเหตุผลเดิมที่จดไว้หัวไฟล์ ("ใช้ทองแทนแดง เพราะเป็นเอกสารโกดัง/คนขับ
+// ต้องไม่ถูกมองผ่านๆ ว่าเป็นเอกสารการเงิน") — owner รับทราบข้อนี้แล้วและเลือก
+// ความเป็นชุดเดียวกันของเอกสารมากกว่า. ถ้าจะย้อนกลับ: เปลี่ยน 3 ค่าข้างล่างนี้
+// กลับเป็น #D99A2B / #FDF6EA / #F0E1C6 — จบในบรรทัดเดียว ไม่ต้องแก้หน้าไหน.
+export const DOC_GOLD = "#B30000"; // title · footer rule · icons · accents
 // Brand red (= `primary-600`). ปอน 2026-07-23: the headline counts read dark
 // red so the number a picker/driver must match is the loudest thing on the
 // page — gold sat too close to the cream chrome to pop.
 export const DOC_RED = "#B30000";
-export const DOC_CREAM = "#FDF6EA"; // meta box · table head · subtotal rows
-export const DOC_CREAM_BD = "#F0E1C6";
+// พื้นอ่อน + เส้น — ค่าเดียวกับใบส่งสินค้า/ใบแจ้งหนี้ (alpha .10 เพราะแดงเข้มกว่าทอง
+// ถ้าใช้ความเข้มเท่าเดิมตัวหนังสือบนแถบจะอ่านยาก · เส้นใช้ hairline เทากลาง)
+export const DOC_CREAM = "rgba(179,0,0,0.10)"; // meta box · table head · subtotal rows
+export const DOC_CREAM_BD = "#e5e7eb";
 export const DOC_PINK = "#FDECEC"; // group/section header rows
 export const DOC_PINK_BD = "#F5D5D5";
 export const DOC_PINK_TX = "#B91C1C";
