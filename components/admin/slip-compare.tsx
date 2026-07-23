@@ -45,11 +45,15 @@ export function SlipCompare({
   customerSlipUrl,
   customerSlipMissingReason,
   customerName,
+  extraSlipUrls = [],
   dups,
 }: {
   customerSlipUrl: string | null;
   customerSlipMissingReason: string | null;
   customerName: string;
+  /** สลิปใบที่ 2+ ของการจ่ายเดียวกัน (owner 2026-07-23 · ลูกค้าโอนหลายครั้งต่อ 1 ใบ).
+   *  ว่าง = พฤติกรรมเดิมทุกประการ (โชว์ใบเดียว). */
+  extraSlipUrls?: string[];
   dups: DupSlip[];
 }) {
   const [idx, setIdx] = useState(0);
@@ -75,16 +79,35 @@ export function SlipCompare({
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" /> สลิปลูกค้า (ตัวจริง)
           </p>
           <div className="flex flex-1 flex-col rounded-lg border-2 border-dashed border-emerald-400 p-1">
-            <div className="flex flex-1 items-center justify-center">
+            <div className="flex flex-1 flex-col items-center justify-center gap-1.5">
               {customerSlipUrl ? (
-                <ClickableSlip url={customerSlipUrl} onZoom={setLightbox} />
+                <>
+                  <ClickableSlip url={customerSlipUrl} onZoom={setLightbox} />
+                  {/* สลิปใบที่ 2+ ของการจ่ายเดียวกัน — โชว์ครบทุกใบ บัญชีจะได้ตรวจยอดรวมได้
+                      (owner 2026-07-23: ลูกค้าโอน 2 ครั้งรวมเป็นยอดใบเดียว). */}
+                  {extraSlipUrls.map((u, i) => (
+                    <div key={u} className="w-full">
+                      <p className="mb-0.5 text-center text-[10.5px] font-medium text-emerald-700">
+                        + สลิปใบที่ {i + 2}
+                      </p>
+                      <ClickableSlip url={u} onZoom={setLightbox} />
+                    </div>
+                  ))}
+                </>
               ) : (
                 <div className="flex h-full min-h-32 w-full items-center justify-center px-2 text-center text-[11px] italic text-muted">
                   {customerSlipMissingReason ?? "ไม่มีสลิป"}
                 </div>
               )}
             </div>
-            <p className="mt-1 truncate px-0.5 text-center text-[11px] text-muted">{customerName}</p>
+            <p className="mt-1 truncate px-0.5 text-center text-[11px] text-muted">
+              {customerName}
+              {extraSlipUrls.length > 0 && (
+                <span className="ml-1 font-medium text-emerald-700">
+                  · โอน {extraSlipUrls.length + 1} ครั้ง
+                </span>
+              )}
+            </p>
           </div>
         </div>
 

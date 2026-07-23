@@ -239,6 +239,10 @@ export function ForwarderPayModal({
 
   // ── slip upload ──
   const [slipPath, setSlipPath] = useState<string | null>(null);
+  /** สลิปใบที่ 2+ — owner 2026-07-23: ลูกค้าโอนหลายครั้งให้ครบยอดใบเดียว (เคส PR172
+   *  โอน 18/07 ฿8,918.42 + 20/07 ฿15,212.30 = ฿24,130.72 พอดี) แต่เดิมแนบได้ใบเดียว
+   *  บัญชีเลยตรวจหลักฐานไม่ครบ. ใบหลักยังเป็น slipPath ตัวเดิม ไม่เปลี่ยนความหมาย. */
+  const [extraSlipPaths, setExtraSlipPaths] = useState<string[]>([]);
   const [slipUploading, setSlipUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -252,6 +256,7 @@ export function ForwarderPayModal({
     // into the next payment attempt.
     uploadSeq.current += 1;
     setSlipPath(null);
+    setExtraSlipPaths([]);
     setSlipUploading(false);
     setError(null);
     setDone(false);
@@ -280,10 +285,27 @@ export function ForwarderPayModal({
     if (seq !== uploadSeq.current) return;
     setSlipUploading(false);
     if (res.ok && res.data) {
-      setSlipPath(res.data.path);
+      const path = res.data.path;
+      // ใบแรก = ใบหลัก · ใบถัดไปต่อท้าย (กันซ้ำไฟล์เดิม)
+      setSlipPath((cur) => cur ?? path);
+      setExtraSlipPaths((cur) =>
+        slipPath && path !== slipPath && !cur.includes(path) ? [...cur, path] : cur,
+      );
     } else {
-      setSlipPath(null);
       setError(res.ok ? t("slipUploadFailed") : res.error);
+    }
+    // เคลียร์ input เพื่อให้เลือกไฟล์ "ชื่อเดิม" ซ้ำได้ และเพื่อแนบใบถัดไปได้ทันที
+    e.target.value = "";
+  }
+
+  /** ถอดสลิปออกก่อนกดยืนยัน — ถอดใบหลักแล้วเลื่อนใบถัดไปขึ้นมาเป็นใบหลักแทน. */
+  function removeSlip(path: string) {
+    if (path === slipPath) {
+      const [next, ...rest] = extraSlipPaths;
+      setSlipPath(next ?? null);
+      setExtraSlipPaths(rest);
+    } else {
+      setExtraSlipPaths((cur) => cur.filter((p) => p !== path));
     }
   }
 
@@ -309,6 +331,7 @@ export function ForwarderPayModal({
       const res = await submitForwarderPayment({
         ids: rows.map((r) => r.id),
         slipPath,
+        ...(extraSlipPaths.length > 0 ? { extraSlipPaths } : {}),
         quoteKey: serverQuote.quoteKey,
       });
       if (res.ok) {
@@ -766,6 +789,51 @@ export function ForwarderPayModal({
                       </>
                     )}
                   </label>
+
+                  {/* รายการสลิปที่แนบแล้ว + ปุ่มแนบเพิ่ม — owner 2026-07-23:
+                      "ลูกค้าจ่ายมาสองสลิป ยอดรวมเท่ากับยอดที่ออกใบไปเก็บ แต่แนบได้ใบเดียว
+                       แล้วจะส่งให้บัญชีตรวจยังไง". โอนหลายครั้งต่อ 1 ใบเป็นเรื่องปกติ
+                      (ลูกค้าทยอยโอน / ติดลิมิตต่อครั้ง) → แนบได้สูงสุด 5 ใบ. */}
+                  {slipPath && (
+                    <div className="space-y-2">
+                      <ul className="space-y-1.5">
+                        {[slipPath, ...extraSlipPaths].map((p, i) => (
+                          <li
+                            key={p}
+                            className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2"
+                          >
+                            <span className="text-emerald-600">✓</span>
+                            <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+                              สลิปที่ {i + 1}
+                              <span className="ml-1 font-normal text-muted">
+                                · {p.split("/").pop()}
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeSlip(p)}
+                              className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold text-red-700 hover:bg-red-100"
+                            >
+                              เอาออก
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      {[slipPath, ...extraSlipPaths].length < 5 && (
+                        <label
+                          htmlFor="imagesSlip"
+                          className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-emerald-400 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-50"
+                        >
+                          <Upload className="h-3.5 w-3.5" strokeWidth={2.4} />
+                          แนบสลิปเพิ่ม (โอนหลายครั้ง)
+                        </label>
+                      )}
+                      <p className="text-[11px] text-muted">
+                        โอนหลายครั้งให้ครบยอดได้ — แนบให้ครบทุกใบ บัญชีจะได้ตรวจยอดรวมได้
+                        (สูงสุด 5 ใบ)
+                      </p>
+                    </div>
+                  )}
                 </div>
                 )}
               </>
