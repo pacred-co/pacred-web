@@ -32,12 +32,26 @@
  */
 
 import { notFound } from "next/navigation";
+import { Boxes, ListOrdered, MapPin, Package } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { PrintButton } from "@/components/print-button";
-import { SITE_NAME, ADDRESSES, CONTACT } from "@/components/seo/site";
+import {
+  DOC_CREAM as CREAM,
+  DOC_GOLD as GOLD,
+  DOC_PINK as PINK,
+  DOC_PINK_BD as PINK_BD,
+  DOC_PINK_TX as PINK_TX,
+  DocBrandBlock,
+  DocFooter,
+  DocMetaBox,
+  DocMetaRow,
+  DocPrintStyles,
+  DocStat,
+  DocTitle,
+} from "@/components/admin/driver-doc-paper";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +82,10 @@ const FORWARDER_COLS =
 // Rows with no assigned location sort last, under a clear "ยังไม่ระบุตำแหน่ง"
 // bucket, so the assembler sees exactly what still needs a shelf.
 const NO_LOCATION = "￿__ยังไม่ระบุ";
+
+// Paper chrome (logo · meta box · stat cards · footer · print rules) is SHARED
+// with the sibling บิลจัดส่ง at `../print` so the two stay one visual set —
+// see components/admin/driver-doc-paper.tsx.
 
 function fmt(n: number | string | null | undefined, decimals = 0): string {
   const v = Number(n ?? 0);
@@ -228,17 +246,8 @@ export default async function DriverPickingListPrintPage({
   let rowNo = 0;
 
   return (
-    <div className="bg-white text-black min-h-screen">
-      {/* Print-only styles — hide admin sidebar + on-screen toolbar; A4. */}
-      <style>{`
-        @media print {
-          aside, .no-print { display: none !important; }
-          html, body { background: #fff !important; }
-          body { padding: 0 !important; margin: 0 !important; }
-          .print-area { box-shadow: none !important; border: none !important; }
-        }
-        @page { size: A4 portrait; margin: 1cm; }
-      `}</style>
+    <div className="doc-desk min-h-screen bg-slate-100 text-slate-900">
+      <DocPrintStyles />
 
       {/* On-screen toolbar */}
       <div className="no-print sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-white/90 px-4 py-3 backdrop-blur">
@@ -264,62 +273,69 @@ export default async function DriverPickingListPrintPage({
         <PrintButton label="🖨 พิมพ์บิลหาสินค้า" />
       </div>
 
-      <main className="print-area mx-auto max-w-[800px] p-6 space-y-4">
-        {/* Header — logo/company + batch meta */}
-        <div className="flex items-start justify-between gap-4 border-b-2 border-black pb-3">
-          <div>
-            <h1 className="text-3xl font-black text-primary-700 leading-none">
-              {SITE_NAME}
-            </h1>
-            <p className="text-[11px] text-gray-600 mt-1">
-              {ADDRESSES.office.full}
-            </p>
-            <p className="text-[11px] text-gray-600">
-              โทร {CONTACT.phoneCompanyDisplay} · {CONTACT.email}
-            </p>
-          </div>
-          <div className="text-right text-xs space-y-0.5">
-            <h2 className="text-xl font-bold">บิลหาสินค้า</h2>
-            <p className="text-[11px] text-gray-500">Picking List (คลัง)</p>
-            <p className="text-gray-700">
-              <span className="text-gray-500">ชื่อเรื่อง:</span>{" "}
-              {batch.fdname ?? `รอบ #${batch.id}`}
-            </p>
-            <p className="text-gray-700">
-              <span className="text-gray-500">รอบจัดส่ง:</span>{" "}
-              <span className="font-mono">#{batch.id}</span>
-            </p>
-            <p className="text-gray-700">
-              <span className="text-gray-500">วันที่สร้าง:</span> {dateLabel}
-            </p>
-          </div>
-        </div>
+      <main className="print-area mx-auto my-6 max-w-[860px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08),0_6px_20px_rgba(0,0,0,0.06)]">
+        <div className="flex flex-col gap-5 p-6 sm:p-9">
+          {/* Header — brand block (left) · document title + meta box (right) */}
+          <div className="flex items-start justify-between gap-6">
+            <DocBrandBlock />
 
-        {/* Run totals strip */}
-        <div className="grid grid-cols-3 gap-2 text-center text-sm">
-          <Cell label="จำนวนตำแหน่ง" value={fmt(totalLocations, 0)} />
-          <Cell label="จำนวนรายการ" value={fmt(totalParcels, 0)} />
-          <Cell label="จำนวนกล่อง" value={fmt(totalBoxes, 0)} />
-        </div>
+            <div className="w-[46%] max-w-[320px] shrink-0">
+              <DocTitle title="บิลหาสินค้า" subtitle="Picking List (คลัง)" />
+              <DocMetaBox>
+                <DocMetaRow k="ชื่อรอบ" v={batch.fdname ?? `รอบ #${batch.id}`} />
+                <DocMetaRow k="ผู้สร้างรอบ" v={batch.fdadminid || "—"} />
+                <DocMetaRow
+                  k="รอบจัดส่ง"
+                  v={<span className="font-mono">#{batch.id}</span>}
+                />
+                <DocMetaRow k="วันที่สร้าง" v={dateLabel} last />
+              </DocMetaBox>
+            </div>
+          </div>
 
-        <p className="text-[11px] text-gray-500">
-          เรียงตาม <b>ตำแหน่งจัดเก็บ (Location)</b> → ตู้ → เลขแทรคกิ้ง ·
-          ติ๊ก ☐ เมื่อหยิบสินค้าออกจากชั้นครบแล้ว
-        </p>
+          {/* Run totals */}
+          <div className="grid grid-cols-3 gap-3">
+            <DocStat
+              icon={<MapPin className="h-5 w-5" style={{ color: GOLD }} />}
+              label="จำนวนตำแหน่ง"
+              value={fmt(totalLocations, 0)}
+            />
+            <DocStat
+              icon={<Package className="h-5 w-5" style={{ color: GOLD }} />}
+              label="จำนวนรายการ"
+              value={fmt(totalParcels, 0)}
+            />
+            <DocStat
+              icon={<Boxes className="h-5 w-5" style={{ color: GOLD }} />}
+              label="จำนวนกล่อง"
+              value={fmt(totalBoxes, 0)}
+            />
+          </div>
+
+          <p className="flex items-start gap-2 text-[12px]" style={{ color: GOLD }}>
+            <ListOrdered className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              เรียงตาม <b>ตำแหน่งจัดเก็บ (Location)</b> → ตู้ → เลขแทรคกิ้ง ·
+              ติ๊ก ☐ เมื่อหยิบสินค้าออกจากชั้นครบแล้ว
+            </span>
+          </p>
 
         {/* Picking table — grouped by storage location */}
-        <table className="w-full text-xs border-collapse">
+        <div className="overflow-hidden rounded-xl border border-slate-200">
+        <table className="w-full text-[12px] border-collapse">
           <thead>
-            <tr className="bg-gray-100 text-center">
-              <th className="border border-gray-400 px-1 py-1 w-8">☐</th>
-              <th className="border border-gray-400 px-1 py-1 w-10">ลำดับ</th>
-              <th className="border border-gray-400 px-1 py-1 w-16">รูปสินค้า</th>
-              <th className="border border-gray-400 px-2 py-1 w-24">รหัสลูกค้า</th>
-              <th className="border border-gray-400 px-2 py-1">เลขแทรคกิ้ง</th>
-              <th className="border border-gray-400 px-2 py-1 w-24">ตู้</th>
-              <th className="border border-gray-400 px-2 py-1 w-14">กล่อง</th>
-              <th className="border border-gray-400 px-2 py-1 w-16">น้ำหนัก</th>
-              <th className="border border-gray-400 px-2 py-1 w-16">ปริมาตร</th>
+            <tr className="text-center" style={{ background: CREAM }}>
+              <th className="border border-slate-200 px-2 py-2.5 w-10">
+                <span className="mx-auto block h-3.5 w-3.5 rounded-[3px] border-2 border-slate-400" />
+              </th>
+              <th className="border border-slate-200 px-2 py-2.5 w-12 font-bold">ลำดับ</th>
+              <th className="border border-slate-200 px-2 py-2.5 w-20 font-bold">รูปสินค้า</th>
+              <th className="border border-slate-200 px-2 py-2.5 w-24 font-bold">รหัสลูกค้า</th>
+              <th className="border border-slate-200 px-2 py-2.5 font-bold">เลขแทรคกิ้ง</th>
+              <th className="border border-slate-200 px-2 py-2.5 w-32 font-bold">ตู้</th>
+              <th className="border border-slate-200 px-2 py-2.5 w-14 font-bold">กล่อง</th>
+              <th className="border border-slate-200 px-2 py-2.5 w-16 font-bold">น้ำหนัก</th>
+              <th className="border border-slate-200 px-2 py-2.5 w-16 font-bold">ปริมาตร</th>
             </tr>
           </thead>
           <tbody>
@@ -327,7 +343,7 @@ export default async function DriverPickingListPrintPage({
               <tr>
                 <td
                   colSpan={9}
-                  className="border border-gray-400 px-2 py-6 text-center text-gray-500"
+                  className="border border-slate-200 px-2 py-6 text-center text-gray-500"
                 >
                   ไม่มีรายการในรอบนี้
                 </td>
@@ -345,33 +361,33 @@ export default async function DriverPickingListPrintPage({
                       return (
                         <tr key={r.id} className="align-top">
                           {/* หยิบแล้ว — the assembler's tick box */}
-                          <td className="border border-gray-400 px-1 py-2 text-center">
-                            <span className="inline-block h-4 w-4 border border-gray-500" />
+                          <td className="border border-slate-200 px-1 py-2 text-center">
+                            <span className="inline-block h-4 w-4 rounded-[3px] border-2 border-slate-400" />
                           </td>
-                          <td className="border border-gray-400 px-1 py-1 text-center font-mono">
+                          <td className="border border-slate-200 px-1 py-1 text-center font-mono">
                             {rowNo}
                           </td>
                           {/* รูปสินค้า — ให้พนักงานเห็นหน้าตากล่อง หาของในโกดังง่าย */}
-                          <td className="border border-gray-400 px-1 py-1 text-center">
+                          <td className="border border-slate-200 px-1 py-1 text-center">
                             {coverByFid.has(r.id) ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img
                                 src={coverByFid.get(r.id)}
                                 alt={r.ftrackingchn ?? "รูปสินค้า"}
-                                className="mx-auto h-12 w-12 rounded object-cover border border-gray-300"
+                                className="mx-auto h-16 w-16 rounded-lg object-cover border border-slate-200"
                               />
                             ) : (
-                              <span className="inline-flex h-12 w-12 items-center justify-center rounded border border-dashed border-gray-300 text-[11px] text-gray-400">
+                              <span className="inline-flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-slate-300 text-[11px] text-slate-400">
                                 ไม่มีรูป
                               </span>
                             )}
                           </td>
-                          <td className="border border-gray-400 px-2 py-1">
+                          <td className="border border-slate-200 px-2 py-1">
                             <div className="font-bold font-mono">
                               {r.userid ?? "—"}
                             </div>
                           </td>
-                          <td className="border border-gray-400 px-2 py-1 break-all">
+                          <td className="border border-slate-200 px-2 py-1 break-words">
                             {r.ftrackingchn || "—"}
                             {r.fnote ? (
                               <div className="text-[11px] text-gray-600">
@@ -379,33 +395,33 @@ export default async function DriverPickingListPrintPage({
                               </div>
                             ) : null}
                           </td>
-                          <td className="border border-gray-400 px-2 py-1 text-center break-all">
+                          <td className="border border-slate-200 px-2 py-1 text-center break-words">
                             {r.fcabinetnumber || "—"}
                           </td>
-                          <td className="border border-gray-400 px-2 py-1 text-right font-mono">
+                          <td className="border border-slate-200 px-2 py-1 text-right font-mono">
                             {fmt(r.famount, 0)}
                           </td>
-                          <td className="border border-gray-400 px-2 py-1 text-right">
+                          <td className="border border-slate-200 px-2 py-1 text-right">
                             {fmt(r.fweight, 2)}
                           </td>
-                          <td className="border border-gray-400 px-2 py-1 text-right">
+                          <td className="border border-slate-200 px-2 py-1 text-right">
                             {fmt(r.fvolume, 3)}
                           </td>
                         </tr>
                       );
                     })}
                     {/* per-location subtotal — helps the picker confirm the shelf is clear */}
-                    <tr className="bg-gray-50 font-semibold">
+                    <tr className="font-bold" style={{ background: CREAM }}>
                       <td
-                        className="border border-gray-400 px-2 py-1 text-right"
+                        className="border border-slate-200 px-2 py-1 text-right"
                         colSpan={6}
                       >
                         รวมตำแหน่ง {g.label} · {g.rows.length} รายการ
                       </td>
-                      <td className="border border-gray-400 px-2 py-1 text-right font-mono">
+                      <td className="border border-slate-200 px-2 py-1 text-right font-mono">
                         {fmt(gBoxes, 0)}
                       </td>
-                      <td className="border border-gray-400 px-2 py-1" colSpan={2} />
+                      <td className="border border-slate-200 px-2 py-1" colSpan={2} />
                     </tr>
                   </LocationGroup>
                 );
@@ -413,11 +429,18 @@ export default async function DriverPickingListPrintPage({
             )}
           </tbody>
         </table>
+        </div>
 
-        <p className="no-print text-[11px] text-gray-500 text-center pt-2">
-          กดปุ่ม &quot;พิมพ์บิลหาสินค้า&quot; ด้านบนเพื่อพิมพ์ หรือใช้คีย์บอร์ด
-          Ctrl+P
-        </p>
+          <DocFooter
+            left={`เอกสารเลขที่: ${batch.fdname ?? `รอบ #${batch.id}`}`}
+            right="หน้า 1 จาก 1"
+          />
+
+          <p className="no-print text-[11px] text-slate-400 text-center">
+            กดปุ่ม &quot;พิมพ์บิลหาสินค้า&quot; ด้านบนเพื่อพิมพ์ หรือใช้คีย์บอร์ด
+            Ctrl+P
+          </p>
+        </div>
       </main>
     </div>
   );
@@ -433,12 +456,20 @@ function LocationGroup({
 }) {
   return (
     <>
-      <tr className="bg-primary-50">
+      <tr style={{ background: PINK }}>
         <td
           colSpan={9}
-          className="border border-gray-400 px-2 py-1.5 font-bold text-primary-800"
+          className="px-3 py-2 font-bold"
+          style={{
+            borderTop: `1px solid ${PINK_BD}`,
+            borderBottom: `1px solid ${PINK_BD}`,
+            color: PINK_TX,
+          }}
         >
-          📍 ตำแหน่งจัดเก็บ: {location}
+          <span className="inline-flex items-center gap-1.5">
+            <MapPin className="h-4 w-4 shrink-0" />
+            ตำแหน่งจัดเก็บ: {location}
+          </span>
         </td>
       </tr>
       {children}
@@ -446,11 +477,3 @@ function LocationGroup({
   );
 }
 
-function Cell({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded border border-gray-300 px-2 py-1.5">
-      <div className="text-[11px] text-gray-500">{label}</div>
-      <div className="text-base font-bold">{value}</div>
-    </div>
-  );
-}

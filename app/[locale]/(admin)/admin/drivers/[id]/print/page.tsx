@@ -55,12 +55,25 @@
  */
 
 import { notFound } from "next/navigation";
+import { MapPin, Package, Truck } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { PrintButton } from "@/components/print-button";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
-import { SITE_NAME, ADDRESSES, CONTACT } from "@/components/seo/site";
+import {
+  DOC_CREAM as CREAM,
+  DOC_GOLD as GOLD,
+  DOC_RED,
+  DocBrandBlock,
+  DocFooter,
+  DocMetaBox,
+  DocMetaRow,
+  DocPrintStyles,
+  DocStat,
+  DocTitle,
+} from "@/components/admin/driver-doc-paper";
 
 export const dynamic = "force-dynamic";
 
@@ -90,12 +103,14 @@ type Forwarder = {
   faddresszipcode: string | null;
   faddresstel: string | null;
   faddresstel2: string | null;
+  fcover: string | null;
 };
 
 const FORWARDER_COLS =
   "id, userid, ftrackingchn, fshipby, famount, fweight, fvolume, fpallet, " +
   "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
-  "faddressdistrict, faddressprovince, faddresszipcode, faddresstel, faddresstel2";
+  "faddressdistrict, faddressprovince, faddresszipcode, faddresstel, faddresstel2, " +
+  "fcover";
 
 function fmt(n: number | string | null | undefined, decimals = 0): string {
   const v = Number(n ?? 0);
@@ -106,14 +121,54 @@ function fmt(n: number | string | null | undefined, decimals = 0): string {
   });
 }
 
-/** CONCAT('คุณ ',fAddressName,…) — printDriver.php L181 ship-to string. */
-function fullAddress(f: Forwarder): string {
+/**
+ * Ship-to line — the CONCAT from printDriver.php L181, with ONE change:
+ * the อำเภอ/เขต is rendered as a red chip.
+ *
+ * Why (ปอน 2026-07-23): a driver plans and re-sorts his run by DISTRICT, so
+ * that single token is what he hunts for on every row while the truck is
+ * moving. Buried mid-sentence in a 4-line address it is the hardest thing on
+ * the page to find; as a chip it is the easiest.
+ *
+ * The district is its own column (`faddressdistrict`) — no string-parsing
+ * guesswork, so the chip can never highlight the wrong token.
+ *
+ * Empty parts now drop their prefix instead of printing a dangling "ต." /
+ * "อ." / "จ." (the old CONCAT emitted those unconditionally). Rows WITH data
+ * render byte-identical to before, apart from the chip.
+ */
+function ShipToAddress({ f }: { f: Forwarder }) {
+  const who = `คุณ ${f.faddressname ?? ""} ${f.faddresslastname ?? ""} ${f.faddressno ?? ""}`
+    .replace(/\s+/g, " ")
+    .trim();
+  const sub = (f.faddresssubdistrict ?? "").trim();
+  const district = (f.faddressdistrict ?? "").trim();
+  const province = (f.faddressprovince ?? "").trim();
+  const zip = (f.faddresszipcode ?? "").trim();
+  const tel = [(f.faddresstel ?? "").trim(), (f.faddresstel2 ?? "").trim()]
+    .filter(Boolean)
+    .join(", ");
+
   return (
-    `คุณ ${f.faddressname ?? ""} ${f.faddresslastname ?? ""} ${f.faddressno ?? ""}` +
-    ` ต.${f.faddresssubdistrict ?? ""} อ.${f.faddressdistrict ?? ""}` +
-    ` จ.${f.faddressprovince ?? ""} ${f.faddresszipcode ?? ""}` +
-    ` โทร. ${f.faddresstel ?? ""}${f.faddresstel2 ? `, ${f.faddresstel2}` : ""}`
-  ).replace(/\s+/g, " ").trim();
+    <>
+      {who}
+      {sub ? ` ต.${sub}` : ""}
+      {district ? (
+        <>
+          {" "}
+          <span
+            className="inline-block whitespace-nowrap rounded px-1.5 py-0.5 font-bold text-white"
+            style={{ background: DOC_RED }}
+          >
+            อ.{district}
+          </span>
+        </>
+      ) : null}
+      {province ? ` จ.${province}` : ""}
+      {zip ? ` ${zip}` : ""}
+      {tel ? ` โทร. ${tel}` : ""}
+    </>
+  );
 }
 
 export default async function DriverPickingSlipPrintPage({
@@ -204,6 +259,22 @@ export default async function DriverPickingSlipPrintPage({
     forwarders = (fwdData ?? []) as unknown as Forwarder[];
   }
 
+  // 3b. รูปสินค้า (fcover) → signed/legacy URL per parcel, shown under the
+  //     tracking number (ปอน 2026-07-23). The driver matches the carton in his
+  //     hand to the picture before he hands it over — a 14-digit tracking
+  //     number is slow and error-prone to read off a scuffed label.
+  //     Same resolver the sibling บิลหาสินค้า uses. Parallel; no cover → a
+  //     "ไม่มีรูป" placeholder so the column keeps its rhythm.
+  const coverByFid = new Map<number, string>();
+  await Promise.all(
+    forwarders.map(async (f) => {
+      if (f.fcover) {
+        const u = await resolveLegacyUrl(f.fcover, "cover");
+        if (u) coverByFid.set(f.id, u);
+      }
+    }),
+  );
+
   // 4. Driver display name — tb_users camelCase (CLAUDE.md exception).
   let driverName = "—";
   if (batch.fdadminid) {
@@ -274,17 +345,8 @@ export default async function DriverPickingSlipPrintPage({
     : "—";
 
   return (
-    <div className="bg-white text-black min-h-screen">
-      {/* Print-only styles — hide admin sidebar + on-screen toolbar; A4. */}
-      <style>{`
-        @media print {
-          aside, .no-print { display: none !important; }
-          html, body { background: #fff !important; }
-          body { padding: 0 !important; margin: 0 !important; }
-          .print-area { box-shadow: none !important; border: none !important; }
-        }
-        @page { size: A4 portrait; margin: 1cm; }
-      `}</style>
+    <div className="doc-desk min-h-screen bg-slate-100 text-slate-900">
+      <DocPrintStyles />
 
       {/* On-screen toolbar */}
       <div className="no-print sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-white/90 px-4 py-3 backdrop-blur">
@@ -322,55 +384,56 @@ export default async function DriverPickingSlipPrintPage({
         <PrintButton label="🖨 พิมพ์บิลจัดส่ง" />
       </div>
 
-      <main className="print-area mx-auto max-w-[800px] p-6 space-y-4">
+      <main className="print-area mx-auto my-6 max-w-[860px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08),0_6px_20px_rgba(0,0,0,0.06)]">
+        <div className="flex flex-col gap-5 p-6 sm:p-9">
         {/* Header — logo/company + batch meta (printDriver.php L130-157) */}
-        <div className="flex items-start justify-between gap-4 border-b-2 border-black pb-3">
-          <div>
-            <h1 className="text-3xl font-black text-primary-700 leading-none">
-              {SITE_NAME}
-            </h1>
-            <p className="text-[11px] text-gray-600 mt-1">
-              {ADDRESSES.office.full}
-            </p>
-            <p className="text-[11px] text-gray-600">
-              โทร {CONTACT.phoneCompanyDisplay} · {CONTACT.email}
-            </p>
-          </div>
-          <div className="text-right text-xs space-y-0.5">
-            <h2 className="text-xl font-bold">บิลจัดส่ง</h2>
-            <p className="text-[11px] text-gray-500">Delivery Note (คนขับ)</p>
-            <p className="text-gray-700">
-              <span className="text-gray-500">ชื่อเรื่อง:</span>{" "}
-              {batch.fdname ?? `รอบ #${batch.id}`}
-            </p>
-            <p className="text-gray-700">
-              <span className="text-gray-500">ผู้ส่งสินค้า:</span>{" "}
-              <span className="font-mono">{batch.fdadminid ?? "—"}</span> ·{" "}
-              {driverName}
-            </p>
-            <p className="text-gray-700">
-              <span className="text-gray-500">วันที่สร้าง:</span> {dateLabel}
-            </p>
+        <div className="flex items-start justify-between gap-6">
+          <DocBrandBlock />
+          <div className="w-[46%] max-w-[320px] shrink-0">
+            <DocTitle title="บิลจัดส่ง" subtitle="Delivery Note (คนขับ)" />
+            <DocMetaBox>
+              <DocMetaRow k="ชื่อเรื่อง" v={batch.fdname ?? `รอบ #${batch.id}`} />
+              <DocMetaRow
+                k="ผู้ส่งสินค้า"
+                v={
+                  <>
+                    <span className="font-mono">{batch.fdadminid ?? "—"}</span>
+                    {driverName ? ` · ${driverName}` : ""}
+                  </>
+                }
+              />
+              <DocMetaRow k="วันที่สร้าง" v={dateLabel} last />
+            </DocMetaBox>
           </div>
         </div>
 
         {/* Run totals strip (printDriver.php L152-156) */}
-        <div className="grid grid-cols-3 gap-2 text-center text-sm">
-          <Cell label="จำนวนกล่อง" value={fmt(totalBoxes, 0)} />
-          <Cell label="จำนวนแทรคกิ้ง" value={fmt(totalTrackings, 0)} />
-          <Cell label="จำนวนจุดที่ส่ง" value={fmt(totalStops, 0)} />
+        <div className="grid grid-cols-3 gap-3">
+          <DocStat
+            icon={<Package className="h-5 w-5" style={{ color: GOLD }} />}
+            label="จำนวนกล่อง"
+            value={fmt(totalBoxes, 0)}          />
+          <DocStat
+            icon={<Truck className="h-5 w-5" style={{ color: GOLD }} />}
+            label="จำนวนแทรคกิ้ง"
+            value={fmt(totalTrackings, 0)}          />
+          <DocStat
+            icon={<MapPin className="h-5 w-5" style={{ color: GOLD }} />}
+            label="จำนวนจุดที่ส่ง"
+            value={fmt(totalStops, 0)}          />
         </div>
 
         {/* Manifest table (printDriver.php L168-216) */}
-        <table className="w-full text-xs border-collapse">
+        <div className="overflow-hidden rounded-xl border border-slate-200">
+        <table className="w-full text-[12px] border-collapse">
           <thead>
-            <tr className="bg-gray-100 text-center">
-              <th className="border border-gray-400 px-1 py-1 w-10">ลำดับ</th>
-              <th className="border border-gray-400 px-2 py-1 w-28">รหัสลูกค้า</th>
-              <th className="border border-gray-400 px-2 py-1">ที่อยู่จัดส่ง</th>
-              <th className="border border-gray-400 px-2 py-1 w-24">บริษัทขนส่ง</th>
-              <th className="border border-gray-400 px-2 py-1 w-28">เลขแทรคกิ้ง</th>
-              <th className="border border-gray-400 px-2 py-1 w-24">ผู้รับสินค้า</th>
+            <tr className="text-center" style={{ background: CREAM }}>
+              <th className="border border-slate-200 px-2 py-2.5 w-14 font-bold">ลำดับ</th>
+              <th className="border border-slate-200 px-2 py-2.5 w-28 font-bold">รหัสลูกค้า</th>
+              <th className="border border-slate-200 px-2 py-2.5 font-bold">ที่อยู่จัดส่ง</th>
+              <th className="border border-slate-200 px-2 py-2.5 w-28 font-bold">บริษัทขนส่ง</th>
+              <th className="border border-slate-200 px-2 py-2.5 w-32 font-bold">เลขแทรคกิ้ง</th>
+              <th className="border border-slate-200 px-2 py-2.5 w-28 font-bold">ผู้รับสินค้า</th>
             </tr>
           </thead>
           <tbody>
@@ -378,7 +441,7 @@ export default async function DriverPickingSlipPrintPage({
               <tr>
                 <td
                   colSpan={6}
-                  className="border border-gray-400 px-2 py-6 text-center text-gray-500"
+                  className="border border-slate-200 px-2 py-6 text-center text-gray-500"
                 >
                   ไม่มีรายการในรอบนี้
                 </td>
@@ -387,11 +450,11 @@ export default async function DriverPickingSlipPrintPage({
               forwarders.map((f, idx) => (
                 <tr key={f.id} className="align-top">
                   {/* ลำดับ : fID (printDriver.php L205 — "($count+1):$row[ID]") */}
-                  <td className="border border-gray-400 px-1 py-1 text-center font-mono">
+                  <td className="border border-slate-200 px-1 py-1 text-center font-mono">
                     {idx + 1}:#{f.id}
                   </td>
                   {/* รหัสลูกค้า + box/Kg/CBM/Location (printDriver.php L206) */}
-                  <td className="border border-gray-400 px-2 py-1">
+                  <td className="border border-slate-200 px-2 py-1">
                     <div className="font-bold font-mono">{f.userid ?? "—"}</div>
                     <div className="text-[11px] text-gray-600 leading-tight">
                       box: {fmt(f.famount, 0)}
@@ -404,19 +467,36 @@ export default async function DriverPickingSlipPrintPage({
                     </div>
                   </td>
                   {/* ที่อยู่จัดส่ง (printDriver.php L207) */}
-                  <td className="border border-gray-400 px-2 py-1 leading-snug">
-                    {fullAddress(f)}
+                  <td className="border border-slate-200 px-2 py-1 leading-snug">
+                    <ShipToAddress f={f} />
                   </td>
                   {/* บริษัทขนส่ง (printDriver.php L208) */}
-                  <td className="border border-gray-400 px-2 py-1 text-center">
+                  <td className="border border-slate-200 px-2 py-1 text-center">
                     {nameShipBy(f.fshipby)}
                   </td>
                   {/* เลขแทรคกิ้ง (printDriver.php L209-212) */}
-                  <td className="border border-gray-400 px-2 py-1 text-center break-all">
-                    {f.ftrackingchn || "—"}
+                  <td className="border border-slate-200 px-2 py-1 text-center break-words">
+                    <div>{f.ftrackingchn || "—"}</div>
+                    {coverByFid.has(f.id) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={coverByFid.get(f.id)}
+                        alt={f.ftrackingchn ?? "รูปสินค้า"}
+                        className="mx-auto mt-1 h-16 w-16 rounded-lg border border-slate-200 object-cover"
+                      />
+                    ) : (
+                      <span className="mt-1 inline-flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-slate-300 text-[11px] text-slate-400">
+                        ไม่มีรูป
+                      </span>
+                    )}
                   </td>
-                  {/* ผู้รับสินค้า — blank sign-here line (printDriver.php L213) */}
-                  <td className="border border-gray-400 px-2 py-1 text-center text-gray-400">
+                  {/* ผู้รับสินค้า — blank sign-here line (printDriver.php L213).
+                      align-middle (not the row's align-top): the rows are tall
+                      now that each carries a photo, and a signature line pinned
+                      to the top edge is awkward to sign against — the customer
+                      wants the pen in the middle of the box. `<td>` defaults to
+                      `vertical-align: inherit`, so this overrides the row. */}
+                  <td className="border border-slate-200 px-2 py-1 text-center align-middle text-slate-300">
                     ____________
                   </td>
                 </tr>
@@ -424,21 +504,19 @@ export default async function DriverPickingSlipPrintPage({
             )}
           </tbody>
         </table>
+        </div>
 
-        <p className="no-print text-[11px] text-gray-500 text-center pt-2">
-          กดปุ่ม &quot;พิมพ์ใบส่งสินค้า&quot; ด้านบนเพื่อพิมพ์ หรือใช้คีย์บอร์ด
+        <DocFooter
+          left={`เอกสารเลขที่: ${batch.fdname ?? `รอบ #${batch.id}`}`}
+          right="หน้า 1 จาก 1"
+        />
+
+        <p className="no-print text-[11px] text-slate-400 text-center">
+          กดปุ่ม &quot;พิมพ์บิลจัดส่ง&quot; ด้านบนเพื่อพิมพ์ หรือใช้คีย์บอร์ด
           Ctrl+P
         </p>
+        </div>
       </main>
-    </div>
-  );
-}
-
-function Cell({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded border border-gray-300 px-2 py-1.5">
-      <div className="text-[11px] text-gray-500">{label}</div>
-      <div className="text-base font-bold">{value}</div>
     </div>
   );
 }
