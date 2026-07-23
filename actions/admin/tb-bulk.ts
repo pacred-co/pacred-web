@@ -37,6 +37,10 @@ import { modeFromPref } from "@/lib/tax/tax-doc-mode";
 import { spendCashbackAtCheckout } from "./wallet-hs";
 import { cashbackRefId, parseCashbackNoteTag } from "@/lib/cashback/note-tag";
 import { classifyWalletHsRow } from "@/lib/wallet/classify-approve-row";
+import {
+  findWalletBulkContainmentBlock,
+  walletReceiptBatchKey,
+} from "@/lib/admin/wallet-bulk-containment";
 // F3 — server-side capture rail (see wallet-hs.ts docblock). Delegate the
 // throwing bulk money action to a non-exported *Impl run through
 // withObservability — transparent, re-throws the ORIGINAL error, files only
@@ -93,7 +97,8 @@ async function resolveLegacyAdminId(): Promise<string> {
 // summary { ok, processed, failed }.
 
 const bulkApproveWalletHsSchema = z.object({
-  ids: z.array(z.number().int().positive()).min(1).max(200),
+  ids: z.array(z.number().int().positive()).min(1).max(200)
+    .refine((ids) => new Set(ids).size === ids.length, "ids ต้องไม่ซ้ำกัน"),
   // Exact-slip group review issues one combined receipt, so accounting may
   // carry the step-2 hand-picked document number into this bulk settlement.
   overrideRid: z.string().trim().min(1).max(20).optional(),
@@ -122,15 +127,6 @@ async function adminBulkApproveWalletHsImpl(
     async ({ adminId }) => {
       const admin = createAdminClient();
 
-      // 2026-05-28 B-4 P0 fix: resolve the LEGACY admin slug (varchar(20)
-      // tb_admin.adminID) instead of writing the Supabase UUID (36 chars)
-      // — the latter throws 22001 "value too long for character varying(20)"
-      // on tb_wallet_hs.adminid and silently bumps result.failed for every
-      // row. The single-row path (wallet-trans.ts) already does this; this
-      // is the bulk path catching up. `adminId` (UUID) stays in the audit
-      // log as a separate column where it belongs.
-      const legacyAdminId = await resolveLegacyAdminId();
-
       // 1. Fetch all candidate rows in one query (filter to pending only).
       //    Wave 29: include typeservice + reforder + dateslip so we can fire
       //    the auto-receipt hook for any forwarder payment in the batch.
@@ -138,12 +134,18 @@ async function adminBulkApproveWalletHsImpl(
       //    fStatus 5→6 settle below can pick the credit vs non-credit branch.
       const { data: rows, error: readErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status, typeservice, reforder, reforder2, dateslip, imagesslip, note, wusercredit, reviewed_at")
+        .select("id, userid, amount, type, status, typeservice, reforder, reforder2, dateslip, imagesslip, note, wusercredit, reviewed_at, payment_group_id")
         .in("id", ids)
         .eq("status", "1");
       if (readErr) return { ok: false, error: readErr.message };
       if (!rows || rows.length === 0) {
         return { ok: false, error: "ไม่พบรายการที่รออนุมัติ (อาจถูกอนุมัติไปแล้ว)" };
+      }
+      if (rows.length !== ids.length) {
+        return {
+          ok: false,
+          error: "bulk_all_or_none — บางรายการไม่ได้อยู่สถานะรอตรวจสอบ ระบบยังไม่อนุมัติรายการใด กรุณารีเฟรช",
+        };
       }
 
       type Row = {
@@ -160,23 +162,149 @@ async function adminBulkApproveWalletHsImpl(
         note: string | null;
         wusercredit: string | null;
         reviewed_at: string | null;
+        payment_group_id: string | null;
       };
       const candidates = rows as Row[];
 
+      // P0 containment — the generic bulk loop below claims ONE ledger row at
+      // a time and cannot perform the paydeposit cascade. Reject the ENTIRE
+      // request before any mutation when it contains either:
+      //   • a type='1' payment header linked by tb_wallet_paydeposit, or
+      //   • any allocation child carrying reforder2 (including an orphan whose
+      //     parent lives on another pagination page).
+      // Exact shared-slip DIRECT rows (type='4', reforder2 empty) stay allowed;
+      // their detail flow intentionally calls this action with the whole slip.
+      const type1Ids = candidates
+        .filter((row) => row.type === "1")
+        .map((row) => row.id);
+      const linkedHeaderIds = new Set<number>();
+      if (type1Ids.length > 0) {
+        const [bridgeResult, childResult] = await Promise.all([
+          admin
+            .from("tb_wallet_paydeposit")
+            .select("whid")
+            .in("whid", type1Ids),
+          admin
+            .from("tb_wallet_hs")
+            .select("reforder2")
+            .in("reforder2", type1Ids),
+        ]);
+        if (bridgeResult.error || childResult.error) {
+          return {
+            ok: false,
+            error: `bulk_payment_group_guard_failed:${bridgeResult.error?.code ?? childResult.error?.code ?? "unknown"} — ไม่อนุมัติรายการใด`,
+          };
+        }
+        for (const link of (bridgeResult.data ?? []) as Array<{ whid: number | string | null }>) {
+          const whid = Number(link.whid);
+          if (Number.isFinite(whid) && whid > 0) linkedHeaderIds.add(whid);
+        }
+        for (const child of (childResult.data ?? []) as Array<{ reforder2: number | string | null }>) {
+          const whid = Number(child.reforder2);
+          if (Number.isFinite(whid) && whid > 0) linkedHeaderIds.add(whid);
+        }
+      }
+      const containmentBlock = findWalletBulkContainmentBlock(candidates, linkedHeaderIds);
+      if (containmentBlock) {
+        const reason = containmentBlock.kind === "linked-payment-child"
+          ? "เป็นรายการย่อยของการชำระเงินแบบกลุ่ม"
+          : "เป็นหัวรายการชำระเงินแบบกลุ่ม";
+        return {
+          ok: false,
+          error: `bulk_payment_group_requires_detail — id=${containmentBlock.id} ${reason} กรุณาตรวจและอนุมัติจากหน้ารายละเอียด (ยังไม่มีรายการใดถูกแก้ไข)`,
+        };
+      }
+
+      // Round 2 is all-or-none. Previously this check lived inside the mutation
+      // loop, so one unreviewed sibling could leave a physical slip half-settled.
+      const unreviewed = candidates.find(
+        (row) => (row.type === "1" || row.type === "4" || row.type === "8") && !row.reviewed_at,
+      );
+      if (unreviewed) {
+        return {
+          ok: false,
+          error: `bulk_round1_incomplete — id=${unreviewed.id} ยังไม่ได้ตรวจสลิปรอบ 1 ระบบยังไม่อนุมัติรายการใด`,
+        };
+      }
+
+      // Legacy direct rows can share one physical slip. If any such row is in
+      // the request, require the exact complete DB group (same customer+path),
+      // all pending, before the first claim. The list UI hides these rows; this
+      // guard protects direct Server Action calls and the detail group action.
+      const directRows = candidates.filter((row) =>
+        row.type === "4"
+        && row.typeservice === "2"
+        && Boolean(row.reforder?.trim())
+        && !String(row.reforder2 ?? "").trim()
+        && Boolean(row.imagesslip?.trim()),
+      );
+      if (directRows.length > 0) {
+        const directKeys = new Set(directRows.map(walletReceiptBatchKey));
+        const { data: fullDirectRows, error: fullDirectErr } = await admin
+          .from("tb_wallet_hs")
+          .select("id,userid,imagesslip,status,reviewed_at,type,typeservice,reforder2")
+          .in("userid", Array.from(new Set(directRows.map((row) => row.userid))))
+          .in("imagesslip", Array.from(new Set(directRows.map((row) => row.imagesslip!.trim()))))
+          .eq("type", "4")
+          .eq("typeservice", "2")
+          .is("reforder2", null);
+        if (fullDirectErr) {
+          return { ok: false, error: `direct_slip_group_guard_failed:${fullDirectErr.code ?? "unknown"}` };
+        }
+        const requestedIds = new Set(directRows.map((row) => row.id));
+        for (const key of directKeys) {
+          const dbGroup = ((fullDirectRows ?? []) as Array<{
+            id: number;
+            userid: string;
+            imagesslip: string | null;
+            status: string | null;
+            reviewed_at: string | null;
+          }>).filter((row) => walletReceiptBatchKey(row) === key);
+          if (
+            dbGroup.length === 0
+            || dbGroup.some((row) => row.status !== "1" || !row.reviewed_at || !requestedIds.has(row.id))
+            || directRows.filter((row) => walletReceiptBatchKey(row) === key).length !== dbGroup.length
+          ) {
+            return {
+              ok: false,
+              error: "direct_slip_group_incomplete — สลิปเดียวกันต้องตรวจและอนุมัติครบทั้งกลุ่ม ระบบยังไม่แก้รายการใด",
+            };
+          }
+        }
+      }
+
+      for (const row of candidates) {
+        const duplicates = await findDuplicateSlips(admin, {
+          id: row.id,
+          userid: row.userid,
+          amount: row.amount,
+          dateslip: row.dateslip,
+          imagesslip: row.imagesslip,
+        });
+        if (duplicates.length > 0) {
+          return {
+            ok: false,
+            error: `bulk_duplicate_slip — id=${row.id} พบสลิปที่อาจซ้ำ (${duplicates.length} รายการ) ระบบยังไม่อนุมัติรายการใด`,
+          };
+        }
+      }
+
+      // Resolve the legacy varchar admin slug only after the fail-closed
+      // preflight. This is still read-only, but keeping all preparation after
+      // the guard makes the no-mutation boundary explicit and auditable.
+      const legacyAdminId = await resolveLegacyAdminId();
+
       // 2. Per-row: UPDATE tb_wallet_hs status='2' + adjust tb_wallet.wallettotal.
-      //    Wave 29: collect forwarder-payment rows (typeservice='2') per userid
-      //    so we can fire ONE auto-receipt per (userid, dateSlip-day) batch
-      //    after the loop — matches the legacy `grenrateReceiptF` behaviour
-      //    of grouping multiple paid fids onto a single tb_receipt.
+      //    Collect forwarder-payment rows (typeservice='2') by exact physical
+      //    slip (userid + imagesslip). Rows without a slip fall back to their
+      //    own wallet_hs.id, so separate payments can never be folded merely
+      //    because they happened on the same customer/day.
       let processed = 0;
       let failed = 0;
       const errors: string[] = [];
-      // refWhId = a REPRESENTATIVE wallet_hs.id of the batch (the first slip that
-      // formed it). Same-customer same-day batch → any funding slip is a valid
-      // "อ้างอิงชำระเงิน" jump-off; the receipt list links there. (Legacy: 1 receipt
-      // ← 1 topup; Pacred bulk may fold several same-day slips into 1 receipt.)
+      // refWhId = a REPRESENTATIVE wallet_hs.id of this exact-slip batch.
       const receiptBatches = new Map<string, { userid: string; dateSlip: Date; fids: number[]; refWhId: number }>();
-      // BUG-1 — track which (userid · dateSlip-day) receipt batches have already
+      // BUG-1 — track which exact-slip receipt batches have already
       // had the PCSF เหมาๆ ฿50 persisted to a forwarder row, so a batch with
       // multiple PCSF-zero rows gets the ฿50 on the FIRST one only (the receipt
       // SUMS all rows → total = freight_sum + 50, matching the single paid total).
@@ -193,26 +321,6 @@ async function adminBulkApproveWalletHsImpl(
           continue;
         }
 
-        // ชั้น-1 dup gate (legacy w-s-deposit-detail.php) — a SAME-CUSTOMER
-        // same-day same-amount pending/approved twin = a likely double-paid slip.
-        // Auto-debit rows with no slip short-circuit (dateslip null). In the BULK
-        // path we can't show a per-row confirm, so we SKIP such a row and report
-        // it: the accountant clears it one-by-one on /admin/wallet/[id] (where
-        // the confirm-to-override dialog lives).
-        {
-          const dups = await findDuplicateSlips(admin, {
-            id: r.id,
-            userid: r.userid,
-            amount: r.amount,
-            dateslip: r.dateslip,
-            imagesslip: r.imagesslip,
-          });
-          if (dups.length > 0) {
-            failed++;
-            errors.push(`id=${r.id}: พบสลิปที่อาจซ้ำ (${dups.length} รายการ) — ตรวจสอบทีละรายการที่หน้ารายละเอียด`);
-            continue;
-          }
-        }
         // Determine the wallet delta via the shared classifier (money-critical ·
         // 2026-07-02). DIRECT-CUT: a ฝากนำเข้า direct-slip (type='4'
         // typeservice='2' reforder set · reforder2 empty · no paydeposit link)
@@ -355,11 +463,9 @@ async function adminBulkApproveWalletHsImpl(
           }
         }
 
-        // Wave 29: queue forwarder-payment rows for the auto-receipt
-        // hook (typeservice='2' + reforder = a tb_forwarder.id). Group
-        // by (userid · dateSlip-day) so a batch of fids for the same
-        // customer becomes ONE tb_receipt — matches legacy grenrateReceiptF
-        // which loops over multiple `refOrder` rows under one whID.
+        // Queue forwarder-payment rows for the auto-receipt hook
+        // (typeservice='2' + reforder = a tb_forwarder.id). Only rows carrying
+        // the exact same customer/slip identity coalesce into one receipt.
         if (r.typeservice === "2" && r.reforder) {
           const fid = Number(r.reforder);
           if (Number.isFinite(fid) && fid > 0) {
@@ -400,7 +506,7 @@ async function adminBulkApproveWalletHsImpl(
             }
 
             const dt = r.dateslip ? new Date(r.dateslip) : new Date();
-            const dayKey = `${r.userid}|${dt.toISOString().slice(0, 10)}`;
+            const receiptBatchKey = walletReceiptBatchKey(r);
 
             // BUG-1 — persist the PCSF เหมาๆ ฿50 onto tb_forwarder.ftransportprice
             // BEFORE the batch receipt is issued. submitForwarderPayment (self-pay)
@@ -414,7 +520,7 @@ async function adminBulkApproveWalletHsImpl(
             // re-approve / a row already bumped by the admin path = 0-row no-op); the
             // affected-row count confirms this row WAS the PCSF-zero one before we
             // mark the batch done (so a leading non-PCSF row doesn't consume the slot).
-            if ((r.typeservice === "2") && (r.type ?? "") === "4" && !pcsf50AppliedBatches.has(dayKey)) {
+            if ((r.typeservice === "2") && (r.type ?? "") === "4" && !pcsf50AppliedBatches.has(receiptBatchKey)) {
               const { data: bumped, error: pcsfErr } = await admin
                 .from("tb_forwarder")
                 .update({ ftransportprice: MAO_FLAT_FEE })
@@ -430,15 +536,15 @@ async function adminBulkApproveWalletHsImpl(
                 });
               } else if (bumped) {
                 // This row was the PCSF-zero one and got the ฿50 → lock the batch.
-                pcsf50AppliedBatches.add(dayKey);
+                pcsf50AppliedBatches.add(receiptBatchKey);
               }
             }
 
-            const existing = receiptBatches.get(dayKey);
+            const existing = receiptBatches.get(receiptBatchKey);
             if (existing) {
               existing.fids.push(fid);
             } else {
-              receiptBatches.set(dayKey, { userid: r.userid, dateSlip: dt, fids: [fid], refWhId: Number(r.id) });
+              receiptBatches.set(receiptBatchKey, { userid: r.userid, dateSlip: dt, fids: [fid], refWhId: Number(r.id) });
             }
           }
         }
@@ -464,7 +570,7 @@ async function adminBulkApproveWalletHsImpl(
         }
       }
 
-      // 3. Wave 29: fire auto-receipt for each (userid · dateSlip-day) batch.
+      // 3. Fire auto-receipt for each exact physical-slip batch.
       //    Best-effort — receipt failures DO NOT roll back the bulk approve
       //    (the money already moved · receipts can be re-generated manually
       //    via /admin/accounting/forwarder-invoice/add?mode=manual).

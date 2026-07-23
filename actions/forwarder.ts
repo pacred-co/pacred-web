@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { bustCustomerChrome } from "@/lib/cache/revalidate-chrome";
 import { BANK } from "@/components/seo/site";
@@ -14,12 +15,9 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { validateStoredFile } from "@/lib/file-validation";
 import { buildServicePromptPayQrDataUrl } from "@/lib/promptpay";
 import { PACRED_BANK_ACCOUNTS } from "@/lib/payment/bank-accounts";
-import { appendCashbackNoteTag } from "@/lib/cashback/note-tag";
-import {
-  computeForwarderCollectTotal,
-  type ForwarderCollectRow,
-} from "@/lib/forwarder/forwarder-collect-total";
 import { loadLinkedForwarderPaymentBatch } from "@/lib/forwarder/linked-payment-batch";
+import { modeFromPref } from "@/lib/tax/tax-doc-mode";
+import { loadCustomerBillingParty } from "@/lib/admin/customer-billing-party";
 // F3 — server-side capture rail (see actions/admin/wallet-hs.ts docblock). A
 // "use server" file may only EXPORT async functions, so the throwing payment
 // action delegates to a non-exported *Impl run through withObservability:
@@ -71,7 +69,52 @@ export type CalculateForwarderTotalResult = {
   count: number;
   price: string;
   priceRaw: number;
+  grossRaw: number;
+  whtRaw: number;
+  /** Fingerprint of the exact server quote shown to the customer. */
+  quoteKey: string;
+  billingIdentity: ForwarderBillingIdentity;
+  lines: Array<{
+    id: string;
+    price: number;
+    freight: number;
+    otherCharges: number;
+    discount: number;
+    maoFee: number;
+    wht: number;
+  }>;
 } | { ok: false; error: string };
+
+type ForwarderBillingIdentity = {
+  name: string;
+  taxId: string;
+  address: string;
+  isJuristic: boolean;
+};
+
+async function loadForwarderBillingIdentity(
+  admin: ReturnType<typeof createAdminClient>,
+  userID: string,
+  expectedJuristic: boolean,
+): Promise<ForwarderBillingIdentity | null> {
+  const party = await loadCustomerBillingParty(admin, userID);
+  if (!party) return null;
+  const identity = {
+    name: party.name.trim(),
+    taxId: party.taxId.trim(),
+    address: party.address.trim(),
+    isJuristic: party.isJuristic,
+  };
+  if (
+    !identity.name
+    || !identity.address
+    || identity.isJuristic !== expectedJuristic
+    || (identity.isJuristic && !identity.taxId)
+  ) {
+    return null;
+  }
+  return identity;
+}
 
 export async function calculateForwarderTotal(
   input: CalculateForwarderTotalInput,
@@ -83,24 +126,10 @@ export async function calculateForwarderTotal(
 
   // calPrice.php L4 — guard: empty/no IDs returns zero state.
   if (input.ids.length === 0) {
-    return { ok: true, count: 0, price: numberFormatLegacy(0), priceRaw: 0 };
+    return { ok: false, error: "no_forwarder_ids" };
   }
 
   const admin = createAdminClient();
-
-  // calPrice.php L11-18 — SELECT userCompany, userName, userLastName
-  //                        FROM tb_users WHERE userID='$userID'
-  // We only need userCompany here (the juristic 1% discount lever);
-  // userName/userLastName are read but unused by the calc.
-  const { data: userRow, error: userRowErr } = await admin
-    .from("tb_users")
-    .select("userCompany")
-    .eq("userID", userID)
-    .maybeSingle<{ userCompany: string | number | null }>();
-  if (userRowErr) {
-    console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
-  }
-  const userCompany = String(userRow?.userCompany ?? "");
 
   // calPrice.php L21 — SELECT fAddressDistrict, fShipBy, fShippingService,
   //   fTransportType, fDiscount, ID, fTrackingCHN, fRefRate, fTotalPrice,
@@ -121,19 +150,90 @@ export async function calculateForwarderTotal(
     console.error(`[tb_forwarder list] failed`, { code: rowsErr.code, message: rowsErr.message });
   }
 
-  // calPrice.php L25-45 — the per-row composite total + the +50 PCSF flat
-  // fee (with the หนองแขม/userNotPCS50 exemption) + the juristic 1% reduction.
-  // Routed through the SHARED pure helper so the DISPLAY here can never drift
-  // from the CHARGE in submitForwarderPayment (the BUG-2 root cause).
-  const collectRows = (rows ?? []) as ForwarderCollectRow[];
-  const { total } = computeForwarderCollectTotal(collectRows, { userId: userID, userCompany });
+  const eligibleIds = (rows ?? []).map((row) => Number((row as { id: number }).id));
+  if (eligibleIds.length !== new Set(input.ids).size) {
+    return { ok: false, error: "ineligible_row" };
+  }
+
+  // One server quote powers the pay bar, modal, QR and submit. This is the
+  // exact calculator the admin approval guard replays; the browser no longer
+  // carries a second hand-written money engine.
+  const quote = await loadLinkedForwarderPaymentBatch(admin, {
+    userId: userID,
+    forwarderIds: eligibleIds,
+  });
+  if (!quote.ok) return { ok: false, error: quote.error };
+  if (quote.missingIds.length > 0) return { ok: false, error: "missing_forwarder_rows" };
+  const billingIdentity = await loadForwarderBillingIdentity(
+    admin,
+    userID,
+    quote.batch.applyCorporateDiscount,
+  );
+  if (!billingIdentity) return { ok: false, error: "billing_profile_incomplete" };
+
+  const lines = quote.batch.lines.map((line) => ({
+    id: line.id,
+    price: line.price_thb,
+    freight: line.breakdown.freight,
+    otherCharges: line.breakdown.otherCharges,
+    discount: line.breakdown.discount,
+    maoFee: line.breakdown.maoFee,
+    wht: line.breakdown.wht1pct,
+  }));
+  const grossRaw = Math.round(lines.reduce(
+    (sum, line) => sum + line.freight + line.otherCharges + line.maoFee - line.discount,
+    0,
+  ) * 100) / 100;
+  const whtRaw = Math.round(lines.reduce((sum, line) => sum + line.wht, 0) * 100) / 100;
+  const total = quote.batch.total_thb;
 
   return {
     ok: true,
-    count: collectRows.length,
+    count: lines.length,
     price: numberFormatLegacy(total),
     priceRaw: total,
+    grossRaw,
+    whtRaw,
+    quoteKey: buildForwarderQuoteKey(userID, quote.batch, billingIdentity),
+    billingIdentity,
+    lines,
   };
+}
+
+function buildForwarderQuoteKey(
+  userID: string,
+  batch: {
+    total_thb: number;
+    applyCorporateDiscount: boolean;
+    lines: Array<{
+      id: string;
+      price_thb: number;
+      breakdown: { wht1pct: number; maoFee: number };
+    }>;
+  },
+  billingIdentity: ForwarderBillingIdentity,
+): string {
+  const canonical = {
+    version: 1,
+    userID,
+    net_satang: Math.round(batch.total_thb * 100),
+    apply_niti: batch.applyCorporateDiscount,
+    billing_identity: {
+      name: billingIdentity.name,
+      tax_id: billingIdentity.taxId,
+      address: billingIdentity.address,
+      is_juristic: billingIdentity.isJuristic,
+    },
+    lines: batch.lines
+      .map((line) => ({
+        id: Number(line.id),
+        amount_satang: Math.round(line.price_thb * 100),
+        wht_satang: Math.round(line.breakdown.wht1pct * 100),
+        mao_satang: Math.round(line.breakdown.maoFee * 100),
+      }))
+      .sort((a, b) => a.id - b.id),
+  };
+  return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 
 // PHP `number_format($n, 2)` — 2 decimals, comma thousands separator.
@@ -296,9 +396,13 @@ export async function uploadForwarderSlip(
 // return ok with an already-submitted note instead of double-inserting.
 const submitForwarderPaymentSchema = z.object({
   ids: z.array(z.number().int().positive()).min(1).max(50),
-  slipPath: z.string().trim().min(1).max(300),
+  // tb_wallet_hs.imagesslip is varchar(150), and the atomic RPC enforces the
+  // same bound. Reject before touching the database instead of relying on a
+  // truncation/column error after the customer uploaded a slip.
+  slipPath: z.string().trim().min(1).max(150),
   slipDate: z.string().trim().max(40).optional(),
   cashBackKey: z.number().nonnegative().optional(),
+  quoteKey: z.string().regex(/^[a-f0-9]{64}$/),
 });
 export type SubmitForwarderPaymentInput = z.infer<
   typeof submitForwarderPaymentSchema
@@ -326,7 +430,17 @@ async function submitForwarderPaymentImpl(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
-  const { ids, slipPath, slipDate, cashBackKey } = parsed.data;
+  const { ids, slipPath, slipDate, cashBackKey, quoteKey } = parsed.data;
+  // This flow has no transactional cashback reservation yet. Merely reading
+  // cbtotal before the payment RPC lets two concurrent submissions both claim
+  // the same balance and leaves the second slip underfunded at approval. The
+  // current UI does not offer cashback here; fail closed for direct callers too.
+  if (cashBackKey && cashBackKey > 0) {
+    return {
+      ok: false,
+      error: "cashback_hold_unavailable — การใช้ Cash Back กับรายการฝากนำเข้ายังไม่พร้อม กรุณาชำระยอดเต็ม",
+    };
+  }
 
   const data = await getCurrentUserWithProfile();
   if (!data?.profile) return { ok: false, error: "not_signed_in" };
@@ -379,22 +493,6 @@ async function submitForwarderPaymentImpl(
     };
   }
 
-  // calPrice.php L11-18 — the juristic 1% reduction lever is
-  // `tb_users.userCompany`, NOT `tb_corporate` existence. The display path
-  // (calculateForwarderTotal) gates on userCompany; the charge MUST use the
-  // SAME source or it drifts (BUG-2b: a tb_corporate row with userCompany≠'1'
-  // — or vice-versa — was charged differently than displayed). Read userCompany
-  // from tb_users and route the whole calc through the shared helper.
-  const { data: userRow, error: userRowErr } = await admin
-    .from("tb_users")
-    .select("userCompany")
-    .eq("userID", userID)
-    .maybeSingle<{ userCompany: string | number | null }>();
-  if (userRowErr) {
-    console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
-  }
-  const userCompany = String(userRow?.userCompany ?? "");
-
   // forwarder.php L252-253 — re-fetch the selected eligible rows
   // server-side (trust nothing from the client). The legacy predicate:
   //   userID=$userID AND (fStatus='5' OR fCredit='1') AND ID IN (ids)
@@ -403,7 +501,7 @@ async function submitForwarderPaymentImpl(
   const { data: rows, error: rowsErr } = await admin
     .from("tb_forwarder")
     .select(
-      "id, fshipby, paymethod, fcredit, faddressdistrict, fpriceupdate, ftotalprice, ftransportprice, fdiscount, pricecrate, ftransportpricechnthb, priceother, fshippingservice",
+      "id, fshipby, paymethod, fcredit, faddressdistrict, fpriceupdate, ftotalprice, ftransportprice, fdiscount, pricecrate, ftransportpricechnthb, priceother, fshippingservice, tax_doc_pref",
     )
     .eq("userid", userID)
     .or("fstatus.eq.5,fcredit.eq.1")
@@ -426,6 +524,7 @@ async function submitForwarderPaymentImpl(
     ftransportpricechnthb: number | string | null;
     priceother: number | string | null;
     fshippingservice: number | string | null;
+    tax_doc_pref: string | null;
   }>;
   if (eligible.length === 0) {
     // getListPayForwarder.php L321 — 'ไม่พบรายการที่ต้องชำระเงิน'.
@@ -437,19 +536,31 @@ async function submitForwarderPaymentImpl(
   if (ids.some((id) => !eligibleIds.has(id))) {
     return { ok: false, error: "ineligible_row — มีรายการที่ชำระเงินไม่ได้ปะปนมา" };
   }
+  // Credit jobs do not have a transactional reservation/settlement leg in the
+  // grouped-payment RPC. Letting them through would mark work paid without a
+  // matching bank or wallet movement, so direct callers must fail closed too.
+  if (eligible.some((row) => row.fcredit === "1")) {
+    return {
+      ok: false,
+      error: "credit_payment_group_unavailable — รายการเครดิตยังไม่รองรับการชำระแบบกลุ่ม กรุณาให้ฝ่ายบัญชีตรวจสอบ",
+    };
+  }
 
-  // calPrice.php L25-45 — route the WHOLE collect calc through the SAME shared
-  // helper the display (calculateForwarderTotal) uses, so charge == shown
-  // (BUG-2). The helper owns: the per-row composite, the PCSF +50 (with the
-  // หนองแขม/userNotPCS50 exemption), and the juristic 1%-if-≥1000 decision.
-  const collect = computeForwarderCollectTotal(eligible as ForwarderCollectRow[], {
-    userId: userID,
-    userCompany,
-  });
-  // forwarder.php L268-270 — juristic 1% reduction (owner 2026-07-22: no ฿1,000
-  // minimum · decided by the helper off userCompany, NOT tb_corporate — BUG-2b fix).
-  // Used below for the fUserCompany stamp on the forwarder flip.
-  const applyNiti = collect.appliedWht;
+  const documentModes = new Set(eligible.map((row) => modeFromPref(row.tax_doc_pref)));
+  if (documentModes.size > 1) {
+    return { ok: false, error: "mixed_tax_document_modes — รายการในกลุ่มเลือกประเภทเอกสารไม่เหมือนกัน กรุณาแก้ให้เป็นแบบเดียวก่อนชำระ" };
+  }
+  const documentMode = documentModes.values().next().value ?? "none";
+  // The previous UI added flat 7% while submit stored no VAT and the tax
+  // invoice used class-based VAT/WHT. Refuse the unsafe lane until the frozen
+  // quote/RPC migration is wired end-to-end; never accept a slip against a
+  // number the resulting document cannot reproduce.
+  if (documentMode !== "none") {
+    return {
+      ok: false,
+      error: "tax_document_direct_payment_unavailable — รายการที่ขอใบกำกับภาษี/ใบขนยังไม่เปิดรับชำระตรง กรุณาติดต่อฝ่ายบัญชีเพื่อออกยอดเอกสารที่ถูกต้อง",
+    };
+  }
 
   // ── ONE ENGINE = ONE NUMBER (owner: "ยอดบิล ≠ ยอดลูกค้าชำระ ≠ หน้าตรวจสลิป") ──
   // The per-line allocation comes from the SAME authoritative engine the
@@ -468,59 +579,27 @@ async function submitForwarderPaymentImpl(
     return { ok: false, error: `ไม่พบรายการ: ${authoritative.missingIds.join(", ")}` };
   }
   const batch = authoritative.batch;
-  // Parity check vs the customer-facing display engine (computeForwarderCollect
-  // Total) — these are tested-equal; a drift here means an engine bug, so log
-  // LOUD (the verify page will also surface it as slip-vs-due mismatch).
-  if (Math.round(batch.total_thb * 100) !== Math.round(collect.total * 100)) {
-    console.error(`[submitForwarderPayment] engine drift collect≠debit`, {
-      userID, ids, collectTotal: collect.total, debitTotal: batch.total_thb,
-    });
+  const applyNiti = batch.applyCorporateDiscount;
+  const billingIdentity = await loadForwarderBillingIdentity(admin, userID, applyNiti);
+  if (!billingIdentity) {
+    return {
+      ok: false,
+      error: "billing_profile_incomplete — กรุณาบันทึกชื่อและที่อยู่สำหรับออกเอกสารก่อนชำระ",
+    };
+  }
+  if (buildForwarderQuoteKey(userID, batch, billingIdentity) !== quoteKey) {
+    return {
+      ok: false,
+      error: "quote_changed — ยอดรายการมีการเปลี่ยนหลังสร้าง QR ระบบยังไม่บันทึกสลิป กรุณาปิดแล้วเปิดหน้าชำระใหม่",
+    };
   }
 
   // pricePayAll = the HEADLINE the customer transfers (the slip amount).
-  let pricePayAll = batch.total_thb;
+  const pricePayAll = batch.total_thb;
 
-  // ── ADR-0025 — apply-cashback at checkout (getListPayForwarder.php
-  //    L188-203 `cashBackKey`). Read the customer's live cashback balance
-  //    and CLAMP the requested `cashBackKey` to `min(cbtotal, billRemainder)`
-  //    server-side (never trust the client). Cashback reduces the slip the
-  //    customer must upload (the legacy: `totalPriceAll − walletTotal −
-  //    cashBackKey − totalNiTi`); the bill total here already excludes the
-  //    wallet pre-apply (m2 #3 — this surface is slip-only), so the cashback
-  //    reduces `pricePayAll` directly.
-  //
-  //    Carry-then-settle (D-2a): we do NOT debit tb_cash_back at submit
-  //    (faithful hold-then-settle — the legacy holds; the debit lands on the
-  //    admin slip-approve). We stamp the applied amount as a `[CB:<amt>]`
-  //    note tag on the FIRST pending row so the approve cascade can settle
-  //    it once (idempotent on `cbhrefid=forwarder:walleths:<row-id>`).
-  //
-  //    ⚠️ COUPLING (ADR-0025 D-2 note): these slip rows are status='1' type='4'
-  //    and are approved by `adminApproveWalletHs`/`adminBulkApproveWalletHs`
-  //    (actions/admin/wallet-trans.ts + tb-bulk.ts) — NOT the type='1'
-  //    `adminApproveWalletDeposit` cascade that the cashback settle is wired
-  //    into. Until those approve sites also call `spendCashbackAtCheckout`
-  //    (paired with the m2 #3 wallet pre-apply restoration), the carried
-  //    cashback on THIS surface is recorded but settled only via the deposit
-  //    cascade. The amount IS clamped + reflected in the slip total here, and
-  //    the carry tag is idempotency-anchored, so no double-spend can occur.
-  let cashBackApplied = 0;
-  if (cashBackKey && cashBackKey > 0) {
-    const { data: cbRow, error: cbErr } = await admin
-      .from("tb_cash_back")
-      .select("cbtotal")
-      .eq("userid", userID)
-      .maybeSingle<{ cbtotal: number | string | null }>();
-    if (cbErr) {
-      console.error(`[tb_cash_back read] failed`, { code: cbErr.code, message: cbErr.message, userid: userID });
-    }
-    const cbTotal = Number(cbRow?.cbtotal ?? 0);
-    // Clamp to [0, min(balance, billRemainder)] — rounded to 2dp.
-    cashBackApplied = Math.round(Math.max(0, Math.min(cashBackKey, cbTotal, pricePayAll)) * 100) / 100;
-    pricePayAll = Math.round((pricePayAll - cashBackApplied) * 100) / 100;
-  }
-
-  const datetimeNow = new Date().toISOString();
+  // Reserved in the frozen schema for the future transactional-hold flow.
+  // Today this remains zero because non-zero requests fail closed above.
+  const cashBackApplied = 0;
 
   // ── ONE BILL PER PAYMENT (owner 2026-07-22 · legacy member/forwarder.php
   //    L292-345 re-read) ──
@@ -544,106 +623,87 @@ async function submitForwarderPaymentImpl(
   // the verify queue showed per-tracking amounts ≠ the slip total, and
   // the receipt step-flow (which lives on the DEPOSIT detail) never ran.
 
-  // Per-row allocation = the batch engine's own satang-allocated lines
-  // (mao ฿100 anchored once per shipment · juristic 1% · COD leg excluded ·
-  // Σ lines == batch.total_thb exactly — no second allocator, no drift).
-  const priceByFid = new Map(batch.lines.map((l) => [String(l.id), l.price_thb]));
-
-  // 1. TOPUP HEADER — the ONE row the verify queue sees. amount = what the
-  //    customer actually transferred (post-cashback). The ADR-0025 [CB:<amt>]
-  //    tag rides THIS row's note (the deposit approve/reject cascade parses
-  //    the TOPUP row's note — previously the tag sat on a child the cascade
-  //    never read).
-  const { data: topupRow, error: topErr } = await admin
-    .from("tb_wallet_hs")
-    .insert({
-      date: datetimeNow,
-      dateslip: slipDate ? slipDate : null,
-      status: "1",
-      type: "1",
-      typenew: "6",
-      typeservice: "2",
-      paydeposit: "1",
-      amount: Number(pricePayAll.toFixed(2)),
-      imagesslip: slipPath,
-      depositnamebank: `KBANK-${BANK.accountNumber}`,
-      note: appendCashbackNoteTag("", cashBackApplied),
-      userid: userID,
-      reforder: "",
-      whno: "",
-      wusercredit: "",
-      adminidcrate: "",
-    })
-    .select("id")
-    .single<{ id: number }>();
-  if (topErr || !topupRow) {
-    return { ok: false, error: `wallet_hs topup insert: ${topErr?.message ?? "no row"}` };
+  // Persist the whole group through ONE PostgreSQL transaction. A PostgREST
+  // sequence cannot roll back a failed bridge or a zero-row forwarder update;
+  // the RPC locks every source and writes header + children + bridges + pending
+  // flips together, or writes nothing. Integer satang is the only money unit at
+  // this boundary.
+  const lineAmountsSatang = batch.lines.map((line) => Math.round(line.price_thb * 100));
+  if (lineAmountsSatang.some((amount) => !Number.isSafeInteger(amount) || amount <= 0)) {
+    return { ok: false, error: "invalid_payment_quote — พบยอดรายการที่ไม่ถูกต้อง กรุณาติดต่อฝ่ายบัญชี" };
   }
-  const whID = topupRow.id;
-
-  // 2. CHILDREN — allocation rows under the header. NO slip (the header
-  //    carries it); refOrder2 links each to the header.
-  const hsRows = eligible.map((r) => ({
-    date: datetimeNow,
-    dateslip: slipDate ? slipDate : null,
-    status: "1",
-    type: "4",
-    typenew: "6",
-    typeservice: "2",
-    paydeposit: "1",
-    amount: priceByFid.get(String(r.id)) ?? 0,
-    imagesslip: "",
-    depositnamebank: "",
-    note: "",
-    userid: userID,
-    reforder: String(r.id),
-    reforder2: whID,
-    whno: "",
-    wusercredit: r.fcredit === "1" ? "1" : "",
-    adminidcrate: "",
-  }));
-
-  const { error: insErr } = await admin.from("tb_wallet_hs").insert(hsRows);
-  if (insErr) {
-    // Roll the header back so a retry doesn't strand a slip-bearing topup
-    // with no children (best-effort — PostgREST has no transaction).
-    await admin.from("tb_wallet_hs").delete().eq("id", whID);
-    return { ok: false, error: `wallet_hs insert: ${insErr.message}` };
+  const netSatang = lineAmountsSatang.reduce((sum, amount) => sum + amount, 0);
+  const expectedNetSatang = Math.round(batch.total_thb * 100);
+  if (!Number.isSafeInteger(netSatang) || netSatang !== expectedNetSatang) {
+    return { ok: false, error: "payment_quote_drift — ยอดรวมรายการไม่ตรงกับยอดชำระ กรุณาติดต่อฝ่ายบัญชี" };
+  }
+  const whtSatang = batch.lines.reduce(
+    (sum, line) => sum + Math.round(line.breakdown.wht1pct * 100),
+    0,
+  );
+  const maoFeeSatang = batch.lines.reduce(
+    (sum, line) => sum + Math.round(line.breakdown.maoFee * 100),
+    0,
+  );
+  const grossSatang = netSatang + whtSatang;
+  const cashbackSatang = Math.round(cashBackApplied * 100);
+  const bankSatang = Math.round(pricePayAll * 100);
+  if (bankSatang + cashbackSatang !== netSatang) {
+    return { ok: false, error: "payment_split_drift — ยอดโอนและเครดิตไม่ตรงกับยอดชำระ กรุณาลองใหม่" };
   }
 
-  // 3. Bridge rows — the approve/reject cascade walks tb_wallet_paydeposit
-  //    (whid → hno) to settle/revert every parent under this ONE payment.
-  const { error: bridgeErr } = await admin
-    .from("tb_wallet_paydeposit")
-    .insert(eligible.map((r) => ({ whid: whID, hno: String(r.id) })));
-  if (bridgeErr) {
-    // Loud — without bridges the cascade can't settle the children. The
-    // payment record itself is intact; accounting settles via the fallback
-    // (reforder2 linkage) or re-submits.
-    console.error(`[submitForwarderPayment bridge insert] FAILED`, {
-      code: bridgeErr.code, message: bridgeErr.message, whID, userID,
+  // One immutable uploaded object identifies one retry. Hashing keeps the key
+  // below the DB bound without exposing the auth UID/path in a ledger index.
+  const idempotencyKey = `forwarder:${createHash("sha256")
+    .update(`${authUser.id}\u0000${slipPath}`)
+    .digest("hex")}`;
+  const depositNameBank = `KBANK-${BANK.accountNumber}`;
+  const { data: whIdRaw, error: atomicErr } = await admin.rpc(
+    "submit_forwarder_payment_group_atomic",
+    {
+      p_idempotency_key: idempotencyKey,
+      p_userid: userID,
+      p_forwarder_ids: batch.lines.map((line) => Number(line.id)),
+      p_line_amounts_satang: lineAmountsSatang,
+      p_quote_snapshot: {
+        gross_satang: grossSatang,
+        vat_satang: 0,
+        wht_satang: whtSatang,
+        net_satang: netSatang,
+        cashback_satang: cashbackSatang,
+        bank_satang: bankSatang,
+        metadata: {
+          engine: "forwarder-debit-total-v1",
+          document_mode: documentMode,
+          mao_fee_satang: maoFeeSatang,
+        },
+      },
+      p_slip_path: slipPath,
+      p_slip_date: slipDate ?? null,
+      p_deposit_name_bank: depositNameBank,
+      p_apply_niti: applyNiti,
+      p_billing_identity: {
+        name: billingIdentity.name,
+        tax_id: billingIdentity.taxId,
+        address: billingIdentity.address,
+        is_juristic: billingIdentity.isJuristic,
+      },
+    },
+  );
+  const whID = Number(whIdRaw);
+  if (atomicErr || !Number.isSafeInteger(whID) || whID <= 0) {
+    console.error("[submitForwarderPayment atomic RPC] failed", {
+      code: atomicErr?.code,
+      message: atomicErr?.message,
+      userID,
+      ids,
     });
-  }
-
-  // 4. Flip forwarders to the legacy pending-verify state (forwarder.php
-  //    L343-347): non-credit → fStatus='6' + paydeposit='1' (+fDateStatus6);
-  //    credit → fCredit='' + paydeposit='1' (no fstatus flip). G6: the
-  //    dispatch queue excludes paydeposit='1', so nothing ships until the
-  //    slip is approved. Reject reverts (cascade case-B).
-  const fUserCompanyValue = applyNiti ? "1" : "";
-  for (const r of eligible) {
-    const isCreditRow = r.fcredit === "1";
-    const fwdPatch: Record<string, unknown> = isCreditRow
-      ? { fcredit: "", paydeposit: "1", fdateadminstatus: datetimeNow, fusercompany: fUserCompanyValue }
-      : { fstatus: "6", paydeposit: "1", fdateadminstatus: datetimeNow, fdatestatus6: datetimeNow, fusercompany: fUserCompanyValue };
-    let q = admin.from("tb_forwarder").update(fwdPatch).eq("id", r.id).eq("userid", userID);
-    q = isCreditRow ? q.eq("fcredit", "1") : q.eq("fstatus", "5");
-    const { error: fUpdErr } = await q;
-    if (fUpdErr) {
-      console.error(`[submitForwarderPayment forwarder flip] failed`, {
-        code: fUpdErr.code, message: fUpdErr.message, fid: r.id, whID,
-      });
-    }
+    return {
+      ok: false,
+      error: atomicErr?.code === "PGRST202"
+        ? "payment_schema_not_ready — ระบบบันทึกกลุ่มชำระยังไม่พร้อม กรุณาติดต่อผู้ดูแล"
+        : "payment_group_failed — ไม่สามารถบันทึกกลุ่มชำระได้ ข้อมูลยังไม่ถูกตัด กรุณาลองใหม่",
+    };
   }
 
   // The receipt fires at APPROVE (adminApproveWalletDeposit case-B →

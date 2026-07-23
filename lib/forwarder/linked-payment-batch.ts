@@ -22,13 +22,43 @@ export async function loadLinkedForwarderPaymentBatch(
   ).sort((a, b) => a - b);
   if (ids.length === 0) return { ok: false, error: "no_forwarder_ids" };
 
-  const { data: corp, error: corpErr } = await admin
-    .from("tb_corporate")
-    .select("id")
-    .eq("userid", args.userId)
-    .limit(1)
-    .maybeSingle<{ id: number }>();
+  const [{ data: user, error: userErr }, { data: corp, error: corpErr }] = await Promise.all([
+    admin
+      .from("tb_users")
+      .select("userCompany")
+      .eq("userID", args.userId)
+      .maybeSingle<{ userCompany: string | number | null }>(),
+    admin
+      .from("tb_corporate")
+      .select("id,corporatename,corporatenumber,corporateaddress")
+      .eq("userid", args.userId)
+      .limit(1)
+      .maybeSingle<{
+        id: number;
+        corporatename: string | null;
+        corporatenumber: string | null;
+        corporateaddress: string | null;
+      }>(),
+  ]);
+  if (userErr) return { ok: false, error: `user_lookup:${userErr.code ?? "unknown"}` };
   if (corpErr) return { ok: false, error: `corporate_lookup:${corpErr.code ?? "unknown"}` };
+  if (!user) return { ok: false, error: "user_not_found" };
+
+  // One identity predicate for quote + WHT + receipt class. Any company signal
+  // (legacy userCompany flag OR a corporate row/tax ID) requires a complete
+  // legal billing record before money is accepted; otherwise the old flow could
+  // quote 1% WHT but later mint an FRG personal receipt with a blank tax ID.
+  const isCorporate = String(user.userCompany ?? "").trim() === "1" || corp != null;
+  if (isCorporate) {
+    const hasCompleteCorporateIdentity = Boolean(
+      corp?.corporatename?.trim()
+      && corp.corporatenumber?.trim()
+      && corp.corporateaddress?.trim(),
+    );
+    if (!hasCompleteCorporateIdentity) {
+      return { ok: false, error: "corporate_billing_profile_incomplete" };
+    }
+  }
 
   const { data, error } = await admin
     .from("tb_forwarder")
@@ -46,7 +76,7 @@ export async function loadLinkedForwarderPaymentBatch(
   const maoAnchorIds = await resolveMaoAnchorIds(admin, rows.map((row) => row.ftrackingchn));
   const batch = computeForwarderDebitBatch(rows, {
     userId: args.userId,
-    isCorporate: corp != null,
+    isCorporate,
     maoAnchorIds,
   });
   return { ok: true, batch, missingIds };

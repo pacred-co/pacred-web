@@ -257,7 +257,7 @@ export default async function ServiceImportPage({
   let listQuery = admin
     .from("tb_forwarder")
     .select(
-      "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftrackingth, ftransporttype, fshipby, paymethod, fdetail, fcover, famount, fweight, fvolume, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, fcredit, fcreditdate, fdatestatus5, fdatetothai, fcabinetnumber, fdatecontainerclose, fnote, fnoteuser, reforder, adminidcreator, fproductstype",
+      "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftrackingth, ftransporttype, fshipby, paymethod, fdetail, fcover, famount, fweight, fvolume, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, fcredit, fcreditdate, fdatestatus5, fdatetothai, fcabinetnumber, fdatecontainerclose, fnote, fnoteuser, reforder, adminidcreator, fproductstype, tax_doc_pref",
     )
     .eq("userid", memberCode);
   switch (q) {
@@ -358,6 +358,7 @@ export default async function ServiceImportPage({
       adminidcreator: (r.adminidcreator as string) ?? null,
       promoid: promoByFid.get(Number(r.id)) ?? null,
       fproductstype: (r.fproductstype as string) ?? null,
+      tax_doc_pref: (r.tax_doc_pref as string) ?? null,
       pendingSlip: pendingSlipIds.has(Number(r.id)),
       onOpenBill: openBillIds.has(Number(r.id)),
     }),

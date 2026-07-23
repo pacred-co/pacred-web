@@ -1,21 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Upload } from "lucide-react";
 import {
+  calculateForwarderTotal,
   getForwarderPaymentQr,
   submitForwarderPayment,
   uploadForwarderSlip,
 } from "@/actions/forwarder";
 import { confirm } from "@/components/ui/confirm";
 import type { ForwarderRow } from "./forwarder-row-view";
-import { OUTPUT_VAT_RATE } from "@/lib/payment/bank-accounts";
 import { serviceAccountFor } from "@/lib/services/service-catalog";
 import { modeFromPref } from "@/lib/tax/tax-doc-mode";
-import { MAO_FLAT_FEE, isMaoCarrier } from "@/lib/forwarder/mao-fee";
-import { computeBillWht } from "@/lib/billing/wht";
 import { PayDestination } from "@/components/payment/pay-destination";
 
 /**
@@ -111,39 +109,79 @@ export type ForwarderPayModalProps = {
 
 export function ForwarderPayModal({
   rows,
-  isJuristic,
   open,
   onClose,
 }: ForwarderPayModalProps) {
   const router = useRouter();
   const t = useTranslations("forwarderPayModal");
 
-  // ── bill arithmetic — getListPayForwarder.php L96-247 ──
-  const bill = useMemo(() => {
-    let totalPriceAll = 0;
-    for (const r of rows) totalPriceAll += perRowTotal(r);
+  const quoteRequestKey = useMemo(
+    () => JSON.stringify(
+      [...rows]
+        .sort((a, b) => a.id - b.id)
+        .map((row) => [
+          row.id,
+          row.paymethod,
+          row.fshipby,
+          row.ftotalprice,
+          row.ftransportprice,
+          row.fpriceupdate,
+          row.fshippingservice,
+          row.pricecrate,
+          row.ftransportpricechnthb,
+          row.priceother,
+          row.fdiscount,
+          row.ftrackingchn,
+          row.fcabinetnumber,
+          row.tax_doc_pref,
+        ]),
+    ),
+    [rows],
+  );
 
-    // เหมาๆ (PCSF/PRF) flat delivery fee — the SOT is ฿100 (MAO_FLAT_FEE · owner
-    // 2026-06-19). Was hardcoded ฿50 + filtered only "PCSF" (missed the PRF rebrand),
-    // so the amount the customer SAW/QR/slip = ฿50 while the server split
-    // (actions/forwarder.ts) recorded ฿100 → "หลังบ้าน 100 เก็บลูกค้า 50". Now matches
-    // the SOT + isMaoCarrier so PCSF + PRF both price at ฿100.
-    const countPricePCSF = rows.filter(
-      (r) => isMaoCarrier(r.fshipby) && Number(r.ftransportprice) === 0,
-    ).length;
-    const sumPricePCSF = countPricePCSF > 0 ? MAO_FLAT_FEE : 0;
-    totalPriceAll += sumPricePCSF;
+  const documentModes = useMemo(
+    () => Array.from(new Set(rows.map((row) => modeFromPref(row.tax_doc_pref)))),
+    [rows],
+  );
+  const taxDirectPayBlocked = documentModes.some((mode) => mode !== "none");
 
-    // หัก ณ ที่จ่าย 1% (นิติบุคคล) — routed through the SOT (computeBillWht) so this
-    // customer-facing QR/slip preview can't drift from the server. owner 2026-07-22:
-    // the ฿1,000 minimum was abolished → juristic pays net on ANY positive amount.
-    // Live preview (unpaid) → new rule (no paidAt).
-    const totalNiTi = isJuristic ? computeBillWht(true, totalPriceAll).wht_amount : 0;
+  type Quote = Extract<Awaited<ReturnType<typeof calculateForwarderTotal>>, { ok: true }>;
+  const [quoteState, setQuoteState] = useState<{ key: string; quote: Quote } | null>(null);
+  const [quoteErrorState, setQuoteErrorState] = useState<{ key: string; error: string } | null>(null);
 
-    const payAmount = totalPriceAll - totalNiTi;
+  // The browser renders the exact server quote that submit + admin approval
+  // replay. Keep the key beside the response so a stale promise can never show
+  // the previous shipment's QR/amount while a new modal is opening.
+  useEffect(() => {
+    if (!open || rows.length === 0 || taxDirectPayBlocked) return;
+    let cancelled = false;
+    void calculateForwarderTotal({ ids: rows.map((row) => row.id) }).then((res) => {
+      if (cancelled) return;
+      if (res.ok) {
+        setQuoteState({ key: quoteRequestKey, quote: res });
+        setQuoteErrorState(null);
+      } else {
+        setQuoteErrorState({ key: quoteRequestKey, error: res.error });
+      }
+    });
+    return () => { cancelled = true; };
+  }, [open, quoteRequestKey, rows, taxDirectPayBlocked]);
 
-    return { totalPriceAll, sumPricePCSF, totalNiTi, payAmount };
-  }, [rows, isJuristic]);
+  const serverQuote = quoteState?.key === quoteRequestKey ? quoteState.quote : null;
+  const serverQuoteError = quoteErrorState?.key === quoteRequestKey ? quoteErrorState.error : null;
+  const serverQuoteErrorMessage = serverQuoteError === "corporate_billing_profile_incomplete"
+    || serverQuoteError === "billing_profile_incomplete"
+    ? "ข้อมูลสำหรับออกเอกสารยังไม่ครบ (ชื่อ · เลขผู้เสียภาษีกรณีนิติบุคคล · ที่อยู่) กรุณาบันทึกข้อมูลก่อนชำระ"
+    : serverQuoteError;
+  const quoteLineById = useMemo(
+    () => new Map((serverQuote?.lines ?? []).map((line) => [Number(line.id), line])),
+    [serverQuote],
+  );
+  const bill = {
+    totalPriceAll: serverQuote?.grossRaw ?? 0,
+    totalNiTi: serverQuote?.whtRaw ?? 0,
+    payAmount: serverQuote?.priceRaw ?? 0,
+  };
 
   // ── pay-destination routing (service-catalog serviceAccountFor → 3-account SOT) ──
   // owner 2026-07-07 v2: a cargo-import (ฝากนำเข้าคาร์โก้) balance routes to the
@@ -164,41 +202,40 @@ export function ForwarderPayModal({
   // ── VAT — only the TRADING (ใบกำกับ) lane charges the customer output VAT 7%
   //    on top of the bill. SERVICE/LOGISTICS collect the base amount (no VAT
   //    line). This is the amount shown, QR-encoded, and hinted in <PayDestination>.
-  const payAmountFinal = useMemo(
-    () =>
-      anyTaxInvoice
-        ? Math.round(bill.payAmount * (1 + OUTPUT_VAT_RATE) * 100) / 100
-        : bill.payAmount,
-    [anyTaxInvoice, bill.payAmount],
-  );
+  const payAmountFinal = bill.payAmount;
 
   // ── PromptPay QR (SERVICE lane only — the account number now comes from the
   //    3-account SOT resolved in `payAccount`, not from the QR response). ──
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [qrError, setQrError] = useState<string | null>(null);
+  const [qrState, setQrState] = useState<{ amountSatang: number; dataUrl: string } | null>(null);
+  const [qrErrorState, setQrErrorState] = useState<{ amountSatang: number; error: string } | null>(null);
+  const payAmountSatang = Math.round(payAmountFinal * 100);
+  const qrDataUrl = qrState?.amountSatang === payAmountSatang ? qrState.dataUrl : null;
+  const qrError = qrErrorState?.amountSatang === payAmountSatang ? qrErrorState.error : null;
 
   useEffect(() => {
-    if (payAmountFinal <= 0) return;
+    if (payAmountFinal <= 0 || taxDirectPayBlocked) return;
+    const requestedSatang = Math.round(payAmountFinal * 100);
     let cancelled = false;
     void getForwarderPaymentQr(payAmountFinal).then((res) => {
       if (cancelled) return;
       if (res.ok && res.data) {
-        setQrDataUrl(res.data.dataUrl);
-        setQrError(null);
+        setQrState({ amountSatang: requestedSatang, dataUrl: res.data.dataUrl });
+        setQrErrorState(null);
       } else {
-        setQrDataUrl(null);
         const code = res.ok ? null : res.error;
-        setQrError(
-          code === "promptpay_not_configured"
+        setQrState(null);
+        setQrErrorState({
+          amountSatang: requestedSatang,
+          error: code === "promptpay_not_configured"
             ? t("qrErrorNotConfigured")
             : t("qrErrorGeneric"),
-        );
+        });
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [payAmountFinal]);
+  }, [payAmountFinal, taxDirectPayBlocked, t]);
 
   // ── slip upload ──
   const [slipPath, setSlipPath] = useState<string | null>(null);
@@ -207,15 +244,40 @@ export function ForwarderPayModal({
   const [done, setDone] = useState(false);
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
+  const uploadSeq = useRef(0);
+
+  const closeModal = useCallback(() => {
+    // This component can stay mounted between openings (notably the detail
+    // page). Never let a completed state or the previous physical slip leak
+    // into the next payment attempt.
+    uploadSeq.current += 1;
+    setSlipPath(null);
+    setSlipUploading(false);
+    setError(null);
+    setDone(false);
+    setQuoteState(null);
+    setQuoteErrorState(null);
+    setQrState(null);
+    setQrErrorState(null);
+    if (fileRef.current) fileRef.current.value = "";
+    onClose();
+  }, [onClose]);
+
+  function goToPendingPayments() {
+    closeModal();
+    router.push("/service-import/pending");
+  }
 
   async function onSlipChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    const seq = ++uploadSeq.current;
     setError(null);
     setSlipUploading(true);
     const fd = new FormData();
     fd.append("slip", file);
     const res = await uploadForwarderSlip(fd);
+    if (seq !== uploadSeq.current) return;
     setSlipUploading(false);
     if (res.ok && res.data) {
       setSlipPath(res.data.path);
@@ -227,6 +289,14 @@ export function ForwarderPayModal({
 
   async function onConfirm() {
     if (rows.length === 0) return;
+    if (taxDirectPayBlocked) {
+      setError("รายการที่ขอใบกำกับภาษี/ใบขนยังไม่เปิดรับชำระตรง กรุณาติดต่อฝ่ายบัญชีเพื่อออกยอดเอกสารที่ถูกต้อง");
+      return;
+    }
+    if (!serverQuote) {
+      setError(serverQuoteErrorMessage ? `คำนวณยอดไม่สำเร็จ: ${serverQuoteErrorMessage}` : "กำลังคำนวณยอดจากระบบ กรุณารอสักครู่");
+      return;
+    }
     if (!slipPath) {
       setError(t("errorSlipRequired"));
       return;
@@ -239,6 +309,7 @@ export function ForwarderPayModal({
       const res = await submitForwarderPayment({
         ids: rows.map((r) => r.id),
         slipPath,
+        quoteKey: serverQuote.quoteKey,
       });
       if (res.ok) {
         setDone(true);
@@ -253,11 +324,11 @@ export function ForwarderPayModal({
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") closeModal();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, closeModal]);
 
   if (!open) return null;
 
@@ -287,7 +358,7 @@ export function ForwarderPayModal({
             </h4>
             <button
               type="button"
-              onClick={onClose}
+              onClick={closeModal}
               aria-label={t("close")}
               className="shrink-0 inline-flex w-8 h-8 items-center justify-center rounded-full text-muted hover:bg-surface-alt hover:text-foreground transition-colors text-xl leading-none"
             >
@@ -299,7 +370,7 @@ export function ForwarderPayModal({
           <div className="px-4 py-4 max-h-[80vh] overflow-y-auto space-y-3">
             {done ? (
               // Success state
-              <div className="py-6 text-center space-y-3">
+              <div className="py-6 text-center space-y-4">
                 <div className="inline-flex w-14 h-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 text-3xl">
                   ✓
                 </div>
@@ -309,11 +380,32 @@ export function ForwarderPayModal({
                 <p className="text-sm text-muted">
                   {t("successDesc", { count: rows.length })}
                 </p>
-                <div className="pt-2">
+                <ol className="mx-auto grid max-w-xl gap-2 text-left text-xs sm:grid-cols-3" aria-label="ขั้นตอนหลังแจ้งชำระ">
+                  <li className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-emerald-900">
+                    <span className="font-black">1 · ส่งหลักฐานแล้ว ✓</span>
+                    <span className="mt-0.5 block">รวม {rows.length} งานไว้ในการจ่ายเดียว</span>
+                  </li>
+                  <li className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-amber-950">
+                    <span className="font-black">2 · รอตรวจสลิป</span>
+                    <span className="mt-0.5 block">ฝ่ายบัญชีตรวจยอดรวมทั้งกลุ่ม</span>
+                  </li>
+                  <li className="rounded-xl border border-border bg-surface-alt/40 px-3 py-2 text-muted">
+                    <span className="font-black text-foreground">3 · รับใบเสร็จ</span>
+                    <span className="mt-0.5 block">ออก 1 ใบ ครบทุกงานหลังอนุมัติ</span>
+                  </li>
+                </ol>
+                <div className="flex flex-wrap justify-center gap-2 pt-2">
                   <button
                     type="button"
-                    onClick={onClose}
+                    onClick={goToPendingPayments}
                     className="inline-flex items-center justify-center rounded-full bg-red-600 text-white px-5 py-2 text-sm font-bold hover:bg-red-700 active:scale-[0.98] transition-all"
+                  >
+                    ดูสถานะการตรวจสลิป →
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="inline-flex items-center justify-center rounded-full border border-border bg-white px-5 py-2 text-sm font-bold text-foreground hover:bg-surface-alt dark:bg-surface"
                   >
                     {t("close")}
                   </button>
@@ -342,6 +434,27 @@ export function ForwarderPayModal({
                 {error && (
                   <div className="rounded-lg bg-red-600 text-white px-3 py-2 text-sm">
                     {error}
+                  </div>
+                )}
+
+                {taxDirectPayBlocked && (
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                    <p className="font-bold">ยังไม่เปิดรับชำระตรงสำหรับรายการที่ขอใบกำกับภาษี/ใบขน</p>
+                    <p className="mt-1 text-xs leading-relaxed">
+                      ระบบหยุดไว้ก่อนสร้าง QR เพราะยอด VAT/WHT และบัญชีรับเงินต้องตรงกับเอกสารทุกจุด · กรุณาติดต่อฝ่ายบัญชีให้ออกยอดเอกสารก่อนโอน
+                    </p>
+                  </div>
+                )}
+
+                {!taxDirectPayBlocked && !serverQuote && (
+                  <div className={`rounded-lg border px-3 py-2 text-sm ${
+                    serverQuoteError
+                      ? "border-red-300 bg-red-50 text-red-800"
+                      : "border-sky-200 bg-sky-50 text-sky-800"
+                  }`}>
+                    {serverQuoteErrorMessage
+                      ? `คำนวณยอดจากระบบไม่สำเร็จ: ${serverQuoteErrorMessage}`
+                      : "กำลังคำนวณยอดจริงจากระบบ… QR และปุ่มยืนยันจะเปิดเมื่อยอดพร้อม"}
                   </div>
                 )}
 
@@ -387,8 +500,11 @@ export function ForwarderPayModal({
                       </span>
                     </div>
                     {rows.map((row) => {
-                      const rowTotal = perRowTotal(row);
-                      const other = otherCharges(row);
+                      const quoteLine = quoteLineById.get(row.id);
+                      const rowTotal = quoteLine?.price ?? perRowTotal(row);
+                      const other = quoteLine
+                        ? quoteLine.otherCharges + quoteLine.maoFee
+                        : otherCharges(row);
                       const ptKey = productTypeKey(row.fproductstype);
                       const ptLabel = ptKey ? t(ptKey) : null;
                       const trackingChn =
@@ -457,12 +573,30 @@ export function ForwarderPayModal({
                   </div>
                 </div>
 
+                {!taxDirectPayBlocked && serverQuote && (
+                  <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+                    <p className="font-black">ข้อมูลที่จะบันทึกลงใบเสร็จของกลุ่มนี้</p>
+                    <dl className="mt-2 grid gap-1 text-xs sm:grid-cols-[8rem_1fr]">
+                      <dt className="font-semibold text-sky-700">ชื่อ</dt>
+                      <dd className="font-medium">{serverQuote.billingIdentity.name}</dd>
+                      <dt className="font-semibold text-sky-700">เลขผู้เสียภาษี</dt>
+                      <dd>{serverQuote.billingIdentity.taxId || "—"}</dd>
+                      <dt className="font-semibold text-sky-700">ที่อยู่</dt>
+                      <dd>{serverQuote.billingIdentity.address}</dd>
+                    </dl>
+                    <p className="mt-2 text-[11px] text-sky-700">
+                      ระบบจะตรึงข้อมูลชุดนี้พร้อมยอดชำระ เพื่อให้หน้าตรวจสลิปและใบเสร็จตรงกัน
+                    </p>
+                  </div>
+                )}
+
                 {/* Summary bar — RED invoice summary (ปอน 2026-06-08): สรุปยอด →
                     ยอดรวมค่าใช้จ่าย · ภาษีหัก ณ ที่จ่าย (อัตรา) · ยอดชำระสุทธิ, with
                     dotted leaders for the formal-invoice read. WHT is the legacy
                     1% juristic rule (getListPayForwarder.php) — shows "1%" when
                     withheld, otherwise "ไม่หัก". Any PCSF flat fee is already
                     rolled into totalPriceAll (ยอดรวมค่าใช้จ่าย). */}
+                {!taxDirectPayBlocked && serverQuote && (
                 <div className="rounded-xl bg-gradient-to-br from-red-600 to-red-700 text-white px-4 py-3.5 shadow-md shadow-red-600/25">
                   <h5 className="mb-2.5 text-sm font-black">{t("summaryHeading")}</h5>
                   <div className="space-y-2">
@@ -489,22 +623,6 @@ export function ForwarderPayModal({
                         <span className="text-[11px] font-normal opacity-90">{t("baht")}</span>
                       </span>
                     </div>
-                    {/* VAT 7% — ONLY when a ใบกำกับภาษี is chosen (TRADING lane) */}
-                    {anyTaxInvoice && (
-                      <div className="flex items-baseline gap-2 text-[13px]">
-                        <span className="shrink-0 opacity-90">
-                          VAT{" "}
-                          <span className="inline-flex items-center rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-bold align-middle">
-                            {Math.round(OUTPUT_VAT_RATE * 100)}%
-                          </span>
-                        </span>
-                        <span aria-hidden className="flex-1 self-center border-b border-dotted border-white/30" />
-                        <span className="shrink-0 tabular-nums font-semibold">
-                          +{numberFormat2(Math.round(bill.payAmount * OUTPUT_VAT_RATE * 100) / 100)}{" "}
-                          <span className="text-[11px] font-normal opacity-90">{t("baht")}</span>
-                        </span>
-                      </div>
-                    )}
                     {/* ยอดชำระสุทธิ */}
                     <div className="flex items-baseline gap-2 border-t border-white/25 pt-2.5">
                       <span className="shrink-0 text-sm font-bold">{t("summaryNetPay")}</span>
@@ -516,6 +634,7 @@ export function ForwarderPayModal({
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* QR + destination account — routed by the 3-account SOT
                     (lib/payment/bank-accounts.ts). The fetched `qrDataUrl` is the
@@ -524,6 +643,7 @@ export function ForwarderPayModal({
                     render their own static K-Shop PNG inside <PayDestination>.
                     DISPLAY-ONLY — slip/record path unchanged. (ปอน 2026-06-08:
                     "เอาก้อน QR ย้ายลงมาต่อแถบแดง".) */}
+                {!taxDirectPayBlocked && serverQuote && (
                 <div className="rounded-xl bg-white border border-border px-4 py-4 text-center">
                   {payAccount.channel === "promptpay" && (
                     <div
@@ -570,6 +690,7 @@ export function ForwarderPayModal({
                     {t("scanInstruction")}
                   </p>
                 </div>
+                )}
 
                 {/* Slip upload — the FINAL required step, pinned to the bottom
                     as a big OBVIOUS dropzone so it's unmistakable that a slip
@@ -577,6 +698,7 @@ export function ForwarderPayModal({
                     ชัดๆ ว่าต้องอัปไฟล์ ดูง่ายๆ"). Logic unchanged — the real
                     <input name="imagesSlip"> is kept (legacy contract) and just
                     visually hidden behind the styled dropzone label. */}
+                {!taxDirectPayBlocked && serverQuote && (
                 <div className="rounded-xl border border-border bg-white dark:bg-surface px-4 py-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-black text-foreground">
@@ -645,6 +767,7 @@ export function ForwarderPayModal({
                     )}
                   </label>
                 </div>
+                )}
               </>
             )}
           </div>
@@ -654,7 +777,7 @@ export function ForwarderPayModal({
             <footer className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border bg-surface-alt/30">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={closeModal}
                 className="inline-flex items-center justify-center rounded-full border border-border bg-white dark:bg-surface text-foreground px-4 py-2 text-sm font-bold hover:bg-surface-alt active:scale-[0.98] transition-all"
               >
                 {t("cancel")}
@@ -662,14 +785,20 @@ export function ForwarderPayModal({
               <button
                 type="button"
                 onClick={onConfirm}
-                disabled={pending || slipUploading || !slipPath}
+                disabled={pending || slipUploading || !slipPath || !serverQuote || taxDirectPayBlocked}
                 className={`inline-flex items-center justify-center rounded-full px-5 py-2 text-sm font-bold transition-all ${
-                  pending || slipUploading || !slipPath
+                  pending || slipUploading || !slipPath || !serverQuote || taxDirectPayBlocked
                     ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                     : "bg-red-600 text-white hover:bg-red-700 active:scale-[0.98] shadow-md shadow-red-600/25"
                 }`}
               >
-                {pending ? t("saving") : t("confirm")}
+                {pending
+                  ? t("saving")
+                  : taxDirectPayBlocked
+                    ? "ติดต่อฝ่ายบัญชีเพื่อออกยอด"
+                    : !serverQuote
+                      ? "กำลังคำนวณยอด…"
+                      : t("confirm")}
               </button>
             </footer>
           )}

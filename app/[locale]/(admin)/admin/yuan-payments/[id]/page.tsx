@@ -7,7 +7,8 @@
  * slip + action panel). PCS legacy shows two wallet summary cards on top
  * + one BIG detail card with breadcrumb + clickable customer info + status
  * badge + body sections + price breakdown right column. This rewrite ports
- * that polish over while keeping the wired YuanPaymentActions island intact.
+ * that polish over; the action area is the guided <YuanVerifyFlow> combo
+ * (the old YuanPaymentActions tiny-button island was retired 2026-07-23).
  *
  * Layout (top → bottom):
  *   1. TOP CARDS (grid md:2) — left: this customer's wallet + cash-back
@@ -22,10 +23,16 @@
  *      RIGHT 1/3 — price breakdown (paythb · paythbcost · payrate · payratecost
  *        · payprofitthb)
  *   4. SLIP IMAGES (existing — customer + admin sections)
- *   5. ACTION PANEL (existing YuanPaymentActions client island, unchanged)
+ *   5. ACTION AREA — guided slip-verify combo (owner 2026-07-23 "ทุกเลนใช้
+ *      แพทเทินเดียวกับ /admin/wallet/[id]"): twin-warning banner (วันเดียวกัน +
+ *      ยอดเท่ากัน · paystatus 1/2) → 3-step <ol> indicator (exact wallet
+ *      classNames) → <YuanVerifyFlow> client island (PAGE-1 ตรวจรอบ 1 /
+ *      PAGE-2 อนุมัติ+ตัดจ่าย · pacred-dialog confirms · success popup).
+ *      Replaces the old tiny-button row (YuanPaymentActions · ../actions-cell).
  *
  * ── What is preserved (don't break) ──────────────────────────────────
- *   - YuanPaymentActions client island (same props, same wiring)
+ *   - The server actions + their args (adminReviewYuanRound1 ·
+ *     adminUpdateYuanPayment completed/failed · refund modal) — UI-only change
  *   - paystatusToPacred + paidViaWallet logic for P0-11
  *   - Slip resolver (customer + admin slips)
  *   - Refund-probe via tb_wallet_hs
@@ -48,7 +55,7 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { SlipImage } from "@/components/admin/slip-image";
 import { YuanQrAttach } from "./yuan-qr-attach";
 import { Link } from "@/i18n/navigation";
-import { YuanPaymentActions } from "../actions-cell";
+import { YuanVerifyFlow } from "./verify-flow";
 import { paystatusToPacred } from "@/lib/legacy-paystatus-map";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 
@@ -93,8 +100,10 @@ type PaymentRow = {
   imagesslip: string | null;
   imagesslipadmin: string | null;
   payee_qr_image: string | null;
-  // P0-11: '1' = paid from wallet (refund must reverse the debit on YuanPaymentActions)
+  // P0-11: '1' = paid from wallet (refund must reverse the debit on the refund lane)
   paydeposit: string | null;
+  // A4 round-1 stamp (owner 2026-06-21) — drives the step indicator + PAGE-1/2 fold.
+  reviewed_at: string | null;
 };
 type UserRow = {
   userID: string;
@@ -237,6 +246,46 @@ export default async function AdminYuanPaymentDetail({
   // buttons to render off a single source of truth.
   const pacredStatus = paystatusToPacred(status, Boolean(refundRow.data?.id));
   const paidViaWallet = row.paydeposit === "1";
+
+  // ── Duplicate-twin detector (owner 2026-07-23 · wallet [id] "รายการใกล้เคียง"
+  //    parity for the yuan lane): other tb_payment rows with the SAME ฿ amount
+  //    (paythb) on the SAME DATE(paydate), still pending or already approved
+  //    (paystatus 1/2 — a rejected '3' twin is harmless), excluding self.
+  //    PostgREST has no DATE() helper → [day_start, day_end] range like the
+  //    wallet page. READ-only · fail-soft (no banner on error).
+  type TwinRow = {
+    id: number;
+    paydate: string | null;
+    paythb: number | string | null;
+    userid: string | null;
+    paystatus: string | null;
+  };
+  let twins: TwinRow[] = [];
+  const twinAmount = Number(row.paythb ?? 0);
+  if (row.paydate && twinAmount > 0) {
+    const payDate = new Date(row.paydate);
+    if (!Number.isNaN(payDate.getTime())) {
+      const dayStart = new Date(payDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(payDate);
+      dayEnd.setHours(23, 59, 59, 999);
+      const { data: twinRaw, error: twinErr } = await admin
+        .from("tb_payment")
+        .select("id,paydate,paythb,userid,paystatus")
+        .eq("paythb", twinAmount)
+        .neq("id", row.id)
+        .in("paystatus", ["1", "2"])
+        .gte("paydate", dayStart.toISOString())
+        .lte("paydate", dayEnd.toISOString())
+        .order("id", { ascending: false })
+        .limit(20);
+      if (twinErr) {
+        console.error(`[tb_payment twins] failed`, { code: twinErr.code, message: twinErr.message });
+      } else {
+        twins = (twinRaw ?? []) as unknown as TwinRow[];
+      }
+    }
+  }
 
   return (
     <main className="p-4 lg:p-6 space-y-4">
@@ -469,23 +518,115 @@ export default async function AdminYuanPaymentDetail({
         </section>
       )}
 
-      {/* ── 5. ACTION PANEL — preserved YuanPaymentActions client island ── */}
-      <section className="rounded-2xl border border-primary-200 bg-primary-50/40 dark:bg-primary-50/5 p-5">
-        <p className="text-xs font-semibold text-primary-700 mb-2">การดำเนินการ</p>
-        <YuanPaymentActions
+      {/* ── 5. ACTION AREA — guided slip-verify combo (wallet [id] pattern ·
+             owner 2026-07-23 "ทุกเลนตรวจสลิปใช้แพทเทินเดียวกัน") ── */}
+      <section className="rounded-2xl border border-primary-200 bg-primary-50/40 dark:bg-primary-50/5 p-5 space-y-3">
+        <p className="text-xs font-semibold text-primary-700">
+          การดำเนินการ — ตรวจสลิปฝากโอน (2 รอบ)
+        </p>
+
+        {/* twin warning — วันเดียวกัน + ยอดเท่ากัน ที่ยังมีผล (รอตรวจ/อนุมัติแล้ว) */}
+        {twins.length > 0 && (
+          <div className="rounded-xl border border-red-300 bg-red-50 p-3 dark:bg-red-50/10">
+            <p className="text-sm font-bold text-red-700">
+              ⚠️ รายการนี้ใกล้เคียงกับรายการอื่น {twins.length} รายการ (วันเดียวกัน · ยอดเท่ากัน)
+            </p>
+            <p className="mt-0.5 text-[11px] text-red-800">
+              ตรวจให้แน่ใจว่าไม่ใช่สลิปซ้ำ ก่อนผ่านรอบ 1 / อนุมัติตัดจ่าย
+            </p>
+            <div className="mt-2 space-y-1">
+              {twins.map((tw) => (
+                <div
+                  key={tw.id}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md border border-red-200 bg-white px-2 py-1 text-[11px] text-red-900 dark:bg-surface"
+                >
+                  <span>
+                    วันที่/เวลา:{" "}
+                    <b className="font-mono">
+                      {tw.paydate ? new Date(tw.paydate).toLocaleString("th-TH") : "—"}
+                    </b>
+                  </span>
+                  <span>
+                    ลูกค้า: <b className="font-mono">{tw.userid ?? "—"}</b>
+                  </span>
+                  <span>
+                    ยอด:{" "}
+                    <b className="font-mono">
+                      ฿{Number(tw.paythb ?? 0).toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+                    </b>
+                  </span>
+                  <span>
+                    สถานะ: <b>{STATUS_LABEL[tw.paystatus ?? ""] ?? `status ${tw.paystatus}`}</b>
+                  </span>
+                  <Link
+                    href={`/admin/yuan-payments/${tw.id}`}
+                    className="ml-auto font-mono font-semibold text-red-700 underline hover:text-red-800"
+                  >
+                    #{tw.id} →
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 3-step indicator — exact wallet [id] chip classNames. ฝากโอน mints NO
+            tb_receipt → step labels never promise one (owner dead-end rule). */}
+        <ol
+          className="grid grid-cols-1 gap-2 border-t border-border pt-3 sm:grid-cols-3"
+          aria-label="ขั้นตอนตรวจสลิปฝากโอน"
+        >
+          {[
+            {
+              no: 1,
+              label: "ตรวจสลิป · วันโอน · รายการซ้ำ",
+              done: Boolean(row.reviewed_at) || status !== "1",
+              active: status === "1" && !row.reviewed_at,
+            },
+            {
+              no: 2,
+              label: "ตรวจยอดโอน · เรทต้นทุน",
+              done: status === "2" || status === "3",
+              active: status === "1" && Boolean(row.reviewed_at),
+            },
+            {
+              no: 3,
+              label: "อนุมัติตัดจ่าย · แจ้งผลลูกค้า",
+              done: status === "2" || status === "3",
+              active: status === "2" || status === "3",
+            },
+          ].map((step) => (
+            <li
+              key={step.no}
+              className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
+                step.done
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                  : step.active
+                    ? "border-sky-400 bg-sky-50 text-sky-900 ring-2 ring-sky-100"
+                    : "border-border bg-surface-alt/40 text-muted"
+              }`}
+            >
+              <span className="mr-1.5 inline-flex size-5 items-center justify-center rounded-full border border-current text-[11px]">
+                {step.done ? "✓" : step.no}
+              </span>
+              {step.label}
+            </li>
+          ))}
+        </ol>
+
+        <YuanVerifyFlow
           id={String(row.id)}
           status={pacredStatus}
-          yuan_amount={Number(row.payyuan ?? 0)}
-          thb_amount={Number(row.paythb ?? 0)}
-          member_code={row.userid}
-          customer_name={customerName}
+          yuanAmount={Number(row.payyuan ?? 0)}
+          thbAmount={Number(row.paythb ?? 0)}
+          payRate={Number(row.payrate ?? 0)}
+          memberCode={row.userid}
+          customerName={customerName}
           phone={user?.userTel ?? null}
-          paid_via_wallet={paidViaWallet}
-          reviewedAt={(row as { reviewed_at?: string | null }).reviewed_at ?? null}
+          paidViaWallet={paidViaWallet}
+          reviewedAt={row.reviewed_at ?? null}
+          twinCount={twins.length}
         />
-        <p className="text-[11px] text-muted mt-2">
-          P0-11 · ปุ่มเขียน tb_payment (เปลี่ยนสถานะ + stamp adminid)
-        </p>
       </section>
 
       {/* Bottom nav */}

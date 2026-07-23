@@ -23,7 +23,7 @@
 import { useState, useEffect, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Calendar, CheckCircle2, XCircle, Loader2, Pencil } from "lucide-react";
+import { Calendar, CheckCircle2, XCircle, Loader2, Pencil, RefreshCw } from "lucide-react";
 import { RejectReasonPicker } from "@/components/admin/reject-reason-picker";
 import { DateTime24Field } from "@/components/admin/datetime-24-field";
 import { ReceiptDocNoEditor } from "@/components/admin/receipt-doc-no-editor";
@@ -583,7 +583,13 @@ export function ApproveRejectForm({
    * receipt context so accounting can see/edit the receipt เลขที่ + live dup-check
    * before it's minted. Absent → no panel (the row issues no receipt at approve).
    */
-  receiptContext?: { fid: number; userid: string; dateSlipIso: string | null } | null;
+  receiptContext?: {
+    fid: number;
+    userid: string;
+    dateSlipIso: string | null;
+    paymentTotal: number;
+    paymentItems: Array<{ id: string; label: string; amount: number }>;
+  } | null;
   /**
    * 2-screen split (owner 2026-07-15): when the round-1 status is already shown by
    * a separate date-panel header above, suppress this form's own round-1 banner to
@@ -599,10 +605,14 @@ export function ApproveRejectForm({
   // null = keep the auto-mint suggestion (receipt เลขที่ minted MAX+1 at settle);
   // string = accounting hand-picked the เลขที่ (passed as overrideRid).
   const [overrideRid, setOverrideRid] = useState<string | null>(null);
+  const [receiptDocReady, setReceiptDocReady] = useState(!receiptContext);
   // Post-approve success popup (owner 2026-07-22 "popup ต้องเด้ง หลังตรวจสลิป
   // เสร็จ + นำพาไปออกใบเสร็จ" — the legacy sweetalert 'sUpdate' step). Set on a
   // successful verify; carries the minted receipt id(s) for the onward step.
-  const [successInfo, setSuccessInfo] = useState<{ receiptIds: number[] } | null>(null);
+  const [successInfo, setSuccessInfo] = useState<{
+    receiptIds: number[];
+    receiptExpected: boolean;
+  } | null>(null);
 
   const isWithdraw = kind === "withdraw";
   // Round-1 is pending when the row needs it + hasn't been reviewed yet.
@@ -614,6 +624,10 @@ export function ApproveRejectForm({
 
   function approve() {
     setError(null);
+    if (receiptContext && !receiptDocReady) {
+      setError("เลขที่ใบเสร็จยังตรวจไม่เสร็จหรือซ้ำ กรุณาใช้เลขที่ระบบแนะนำหรือเลขที่ว่าง");
+      return;
+    }
     // The slip-date gate only applies to deposit top-ups (the date must match
     // the bank slip before crediting). Withdraw approve = "confirm bank payout";
     // no incoming slip to match, so no gate.
@@ -667,7 +681,10 @@ export function ApproveRejectForm({
             ? [res.data.receiptId]
             : [];
         router.refresh();
-        setSuccessInfo({ receiptIds: receiptIds.filter((n): n is number => typeof n === "number") });
+        setSuccessInfo({
+          receiptIds: receiptIds.filter((n): n is number => typeof n === "number"),
+          receiptExpected: Boolean(receiptContext),
+        });
       } else {
         setError(res.error);
       }
@@ -714,12 +731,24 @@ export function ApproveRejectForm({
       {successInfo && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
           <div className="w-full max-w-sm rounded-2xl border border-emerald-200 bg-white p-5 text-center shadow-2xl dark:bg-surface">
-            <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-emerald-100 text-2xl">✅</div>
-            <p className="text-base font-bold text-foreground">ตรวจสลิปสำเร็จ · ตัดจ่ายเรียบร้อย</p>
+            <div className={`mx-auto mb-2 flex size-12 items-center justify-center rounded-full text-2xl ${
+              successInfo.receiptExpected && successInfo.receiptIds.length === 0
+                ? "bg-amber-100"
+                : "bg-emerald-100"
+            }`}>
+              {successInfo.receiptExpected && successInfo.receiptIds.length === 0 ? "⚠️" : "✅"}
+            </div>
+            <p className="text-base font-bold text-foreground">
+              {successInfo.receiptExpected && successInfo.receiptIds.length === 0
+                ? "ตัดจ่ายแล้ว · แต่ใบเสร็จยังไม่ถูกสร้าง"
+                : "ตรวจสลิปสำเร็จ · ตัดจ่ายเรียบร้อย"}
+            </p>
             <p className="mt-1 text-xs text-muted">
               {successInfo.receiptIds.length > 0
                 ? "ระบบสร้างใบเสร็จรับเงินให้อัตโนมัติแล้ว"
-                : "บันทึกรายการเรียบร้อย"}
+                : successInfo.receiptExpected
+                  ? "ระบบไม่ปิดบังความผิดพลาดนี้ กรุณาไปหน้าประวัติใบเสร็จเพื่อตรวจและออกเอกสารซ้ำ"
+                  : "บันทึกรายการเรียบร้อย"}
             </p>
             <div className="mt-4 grid gap-2">
               {successInfo.receiptIds.length > 0 && (
@@ -735,6 +764,22 @@ export function ApproveRejectForm({
                   🧾 เปิดใบเสร็จ
                 </button>
               )}
+              {successInfo.receiptExpected && successInfo.receiptIds.length === 0 && (
+                <button
+                  type="button"
+                  onClick={() => router.push("/admin/accounting/receipts")}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-amber-700"
+                >
+                  ⚠️ ตรวจคิวใบเสร็จ
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => router.push("/admin/wallet?view=tx&status=1")}
+                className="inline-flex items-center justify-center rounded-lg border border-primary-300 bg-primary-50 px-3 py-2 text-sm font-semibold text-primary-700 hover:bg-primary-100"
+              >
+                ไปตรวจงานถัดไป →
+              </button>
               <button
                 type="button"
                 onClick={() => setSuccessInfo(null)}
@@ -773,10 +818,14 @@ export function ApproveRejectForm({
           {!isWithdraw && receiptContext && (
             <div className="mb-2">
               <ReceiptDocNoEditor
+                key={`${receiptContext.userid}:${receiptContext.dateSlipIso ?? ""}`}
                 fid={receiptContext.fid}
                 userid={receiptContext.userid}
                 dateSlipIso={receiptContext.dateSlipIso}
+                paymentTotal={receiptContext.paymentTotal}
+                paymentItems={receiptContext.paymentItems}
                 onOverrideRidChange={setOverrideRid}
+                onValidityChange={setReceiptDocReady}
                 disabled={pending}
               />
             </div>
@@ -785,7 +834,7 @@ export function ApproveRejectForm({
             <button
               type="button"
               onClick={approve}
-              disabled={pending || round1Pending}
+              disabled={pending || round1Pending || (Boolean(receiptContext) && !receiptDocReady)}
               title={round1Pending ? "ยืนยันวันที่โอน + ตรวจซ้ำ (รอบ 1) ที่ช่อง ‘วันเวลาที่โอนในสลิป’ ด้านบนก่อน" : undefined}
               className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-green-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
             >
@@ -849,6 +898,74 @@ export function ApproveRejectForm({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Retry the durable 0274 receipt intent after settlement already committed. */
+export function RetryFrozenReceiptButton({
+  id,
+  outboxStatus,
+  lastError,
+}: {
+  id: number;
+  outboxStatus: string;
+  lastError: string | null;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [receiptId, setReceiptId] = useState<number | null>(null);
+
+  function retry() {
+    setError(null);
+    startTransition(async () => {
+      const result = await adminApproveWalletDeposit({ id });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      const nextReceiptId = result.data?.receiptId ?? null;
+      if (!nextReceiptId) {
+        setError("ยังออกใบเสร็จไม่สำเร็จ ระบบเก็บคิวไว้แล้ว กรุณาตรวจข้อผิดพลาดและลองใหม่");
+        router.refresh();
+        return;
+      }
+      setReceiptId(nextReceiptId);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-950">
+      <p className="text-sm font-bold">ตัดจ่ายแล้ว · ใบเสร็จยังอยู่ในคิว</p>
+      <p className="mt-1 text-xs">
+        สถานะคิว: <span className="font-mono font-semibold">{outboxStatus}</span>
+        {lastError ? ` · ${lastError}` : ""}
+      </p>
+      {error && <p className="mt-2 text-xs font-semibold text-red-700">{error}</p>}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {receiptId ? (
+          <button
+            type="button"
+            onClick={() => router.push(`/admin/accounting/forwarder-invoice/${receiptId}`)}
+            className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700"
+          >
+            🧾 เปิดใบเสร็จ
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={retry}
+            disabled={pending}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-50"
+          >
+            {pending
+              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> กำลังลองออกใบเสร็จ…</>
+              : <><RefreshCw className="h-3.5 w-3.5" /> ลองออกใบเสร็จอีกครั้ง</>}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

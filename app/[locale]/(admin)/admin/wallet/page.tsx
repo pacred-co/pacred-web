@@ -28,7 +28,7 @@
 
 import { Link } from "@/i18n/navigation";
 import { redirect } from "next/navigation";
-import { requireAdmin } from "@/lib/auth/require-admin";
+import { hasRole, requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { PageHeader } from "@/components/admin/page-header";
@@ -86,6 +86,7 @@ export default async function AdminWalletPage({
   // customer's wallet PII via createAdminClient (RLS-bypass) — money
   // page → accounting + ops (super implicit). Driver/warehouse refused.
   const { roles } = await requireAdmin(["ops", "accounting"]);
+  const canSettle = hasRole(roles, "accounting");
 
   const sp = await searchParams;
 
@@ -254,7 +255,15 @@ export default async function AdminWalletPage({
         {view === "balance" ? (
           <WalletBalanceView q={sp.q} sort={sp.sort} dir={sp.dir} page={parsePage(sp.page)} />
         ) : (
-          <WalletTransactionsView kind={sp.kind} status={sp.status} q={sp.q} sort={sp.sort} dir={sp.dir} page={parsePage(sp.page)} />
+          <WalletTransactionsView
+            kind={sp.kind}
+            status={sp.status}
+            q={sp.q}
+            sort={sp.sort}
+            dir={sp.dir}
+            page={parsePage(sp.page)}
+            canSettle={canSettle}
+          />
         )}
       </main>
     </>

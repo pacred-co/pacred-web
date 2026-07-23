@@ -82,6 +82,11 @@ import { logger } from "@/lib/logger";
 import { withObservability } from "@/lib/observability/with-observability";
 import { loadLinkedForwarderPaymentBatch } from "@/lib/forwarder/linked-payment-batch";
 import { checkLinkedPaymentConsistency } from "@/lib/forwarder/linked-payment-consistency";
+import {
+  parseFrozenWalletPaymentQuote,
+  type FrozenWalletPaymentQuote,
+} from "@/lib/wallet/payment-quote-snapshot";
+import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — same helper as actions/admin/warehouse-history.ts
@@ -686,6 +691,430 @@ type ApproveResult = {
   receiptId?: number | null;
 };
 
+type AtomicPaymentGroupDecision = {
+  whid: number;
+  paymentGroupId: string;
+  fids: number[];
+  alreadyDone: boolean;
+  receiptOutboxStatus: string;
+};
+
+type FrozenReceiptResult = {
+  receiptId: number | null;
+  receiptNo: string | null;
+  error: string | null;
+};
+
+function parseAtomicPaymentGroupDecision(raw: unknown): AtomicPaymentGroupDecision | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  const fids = Array.isArray(value.fids)
+    ? value.fids.map(Number)
+    : [];
+  const whid = Number(value.whid);
+  if (
+    !Number.isSafeInteger(whid)
+    || whid <= 0
+    || typeof value.payment_group_id !== "string"
+    || fids.length === 0
+    || fids.some((fid) => !Number.isSafeInteger(fid) || fid <= 0)
+    || typeof value.already_done !== "boolean"
+    || typeof value.receipt_outbox_status !== "string"
+  ) {
+    return null;
+  }
+  return {
+    whid,
+    paymentGroupId: value.payment_group_id,
+    fids,
+    alreadyDone: value.already_done,
+    receiptOutboxStatus: value.receipt_outbox_status,
+  };
+}
+
+/** Find one active receipt that covers the whole frozen group, never a partial. */
+async function findActiveFrozenGroupReceipt(
+  admin: ReturnType<typeof createAdminClient>,
+  whid: number,
+  fids: number[],
+): Promise<{ id: number; rid: string } | null> {
+  const { data: receipts, error: receiptsErr } = await admin
+    .from("tb_receipt")
+    .select("id,rid")
+    .eq("refwhid", whid)
+    .in("rstatus", ["0", "1", "3"]);
+  if (receiptsErr) {
+    logger.warn("wallet-hs", "receipt recovery header lookup failed", {
+      wallet_hs_id: whid,
+      code: receiptsErr.code,
+      error: receiptsErr.message,
+    });
+    return null;
+  }
+  const headers = (receipts ?? []) as Array<{ id: number; rid: string }>;
+  const candidateRids = headers.map((receipt) => receipt.rid);
+  if (candidateRids.length === 0) return null;
+
+  // Load every item on those exact refWHID receipts. Recovery succeeds only
+  // when one receipt's item set equals the frozen group — no missing or extra
+  // forwarder and no fallback to a receipt from another payment.
+  const { data: items, error: itemsErr } = await admin
+    .from("tb_receipt_item")
+    .select("fid,rid")
+    .in("rid", candidateRids);
+  if (itemsErr) {
+    logger.warn("wallet-hs", "receipt recovery item lookup failed", {
+      wallet_hs_id: whid,
+      code: itemsErr.code,
+      error: itemsErr.message,
+    });
+    return null;
+  }
+  const rows = (items ?? []) as Array<{ fid: number | string | null; rid: string | null }>;
+
+  const required = new Set(fids);
+  const coveredByRid = new Map<string, Set<number>>();
+  for (const row of rows) {
+    if (!row.rid) continue;
+    const fid = Number(row.fid);
+    if (!Number.isSafeInteger(fid)) continue;
+    const covered = coveredByRid.get(row.rid) ?? new Set<number>();
+    covered.add(fid);
+    coveredByRid.set(row.rid, covered);
+  }
+  const candidates = headers.filter((receipt) => {
+    const covered = coveredByRid.get(receipt.rid);
+    return covered != null
+      && covered.size === required.size
+      && Array.from(required).every((fid) => covered.has(fid));
+  });
+  candidates.sort((a, b) => b.id - a.id);
+  const found = candidates[0];
+  return found ? { id: Number(found.id), rid: found.rid } : null;
+}
+
+/**
+ * Consume the durable receipt intent written in the same transaction as the
+ * 0274 approval. If the process dies after receipt insert but before the outbox
+ * stamp, a retry recovers the exact full-group receipt and marks it issued.
+ */
+async function consumeFrozenGroupReceiptOutbox(
+  admin: ReturnType<typeof createAdminClient>,
+  opts: {
+    whid: number;
+    paymentGroupId: string;
+    userid: string;
+    fids: number[];
+    dateSlip: Date;
+    quote: FrozenWalletPaymentQuote;
+  },
+): Promise<FrozenReceiptResult> {
+  const { data: outboxRaw, error: outboxErr } = await admin
+    .from("wallet_payment_receipt_outbox")
+    .select("payment_group_id,status,attempt_count,receipt_id,receipt_no,last_error,requested_receipt_no,updated_at")
+    .eq("whid", opts.whid)
+    .maybeSingle<{
+      payment_group_id: string;
+      status: string;
+      attempt_count: number | null;
+      receipt_id: number | null;
+      receipt_no: string | null;
+      last_error: string | null;
+      requested_receipt_no: string | null;
+      updated_at: string;
+    }>();
+  if (outboxErr || !outboxRaw || outboxRaw.payment_group_id !== opts.paymentGroupId) {
+    const error = outboxErr
+      ? `receipt_outbox_read_failed:${outboxErr.code ?? "unknown"}`
+      : "receipt_outbox_missing";
+    logger.warn("wallet-hs", "approved frozen group has no readable receipt intent", {
+      wallet_hs_id: opts.whid,
+      error,
+    });
+    return { receiptId: null, receiptNo: null, error };
+  }
+  if (outboxRaw.status === "issued" && outboxRaw.receipt_id) {
+    return {
+      receiptId: Number(outboxRaw.receipt_id),
+      receiptNo: outboxRaw.receipt_no,
+      error: null,
+    };
+  }
+
+  // Claim one delivery attempt with compare-and-swap. A process that dies
+  // while holding the claim can be reclaimed after five minutes; fresh claims
+  // are left alone so two admin retries cannot mint concurrently.
+  const currentAttempt = Number(outboxRaw.attempt_count ?? 0);
+  const nextAttempt = currentAttempt + 1;
+  const staleBefore = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  let claimQuery = admin
+    .from("wallet_payment_receipt_outbox")
+    .update({
+      status: "processing",
+      attempt_count: nextAttempt,
+      last_error: null,
+    })
+    .eq("whid", opts.whid)
+    .eq("attempt_count", currentAttempt);
+  if (outboxRaw.status === "processing") {
+    if (new Date(outboxRaw.updated_at).getTime() > Date.now() - 5 * 60 * 1000) {
+      return { receiptId: null, receiptNo: null, error: "receipt_issue_in_progress" };
+    }
+    claimQuery = claimQuery.eq("status", "processing").lt("updated_at", staleBefore);
+  } else {
+    claimQuery = claimQuery.in("status", ["pending", "failed"]);
+  }
+  const { data: claimedRaw, error: claimErr } = await claimQuery
+    .select("status,attempt_count,requested_receipt_no")
+    .maybeSingle<{
+      status: string;
+      attempt_count: number;
+      requested_receipt_no: string | null;
+    }>();
+  if (claimErr) {
+    return {
+      receiptId: null,
+      receiptNo: null,
+      error: `receipt_outbox_claim_failed:${claimErr.code ?? "unknown"}`,
+    };
+  }
+  if (!claimedRaw) {
+    const { data: winner, error: winnerErr } = await admin
+      .from("wallet_payment_receipt_outbox")
+      .select("status,receipt_id,receipt_no")
+      .eq("whid", opts.whid)
+      .maybeSingle<{ status: string; receipt_id: number | null; receipt_no: string | null }>();
+    if (winnerErr) {
+      return {
+        receiptId: null,
+        receiptNo: null,
+        error: `receipt_outbox_reread_failed:${winnerErr.code ?? "unknown"}`,
+      };
+    }
+    if (winner?.status === "issued" && winner.receipt_id) {
+      return {
+        receiptId: Number(winner.receipt_id),
+        receiptNo: winner.receipt_no,
+        error: null,
+      };
+    }
+    return { receiptId: null, receiptNo: null, error: "receipt_issue_in_progress" };
+  }
+
+  let receipt: { id: number; rid: string } | null = null;
+  let issueError: string | null = null;
+  try {
+    const issued = await autoIssueReceiptOnPaymentLand(admin, {
+      userid: opts.userid,
+      fids: opts.fids,
+      dateSlip: opts.dateSlip,
+      source: "wallet_hs.payment-group-0274",
+      overrideRid: claimedRaw.requested_receipt_no ?? undefined,
+      refWhId: opts.whid,
+      totalOverride: opts.quote.grossSatang / 100,
+      netOverride: opts.quote.netSatang / 100,
+      isJuristicOverride: opts.quote.isJuristic,
+      maoFeeOverride: opts.quote.maoFeeSatang / 100,
+      recompNameOverride: opts.quote.billingIdentity.name,
+      recompNumberOverride: opts.quote.billingIdentity.taxId,
+      recompAddressOverride: opts.quote.billingIdentity.address,
+      requireExactFids: true,
+      taxDocModeOverride: "none",
+    });
+    if (issued.ok) {
+      receipt = { id: issued.data.receiptId, rid: issued.data.rid };
+    } else if (issued.alreadyIssued) {
+      receipt = await findActiveFrozenGroupReceipt(admin, opts.whid, opts.fids);
+      if (!receipt) issueError = "already_issued_but_no_full_group_receipt";
+    } else {
+      issueError = issued.error;
+    }
+  } catch (error) {
+    issueError = error instanceof Error ? error.message : String(error);
+  }
+
+  const { data: stampedRaw, error: stampErr } = await admin
+    .from("wallet_payment_receipt_outbox")
+    .update(receipt
+      ? {
+          status: "issued",
+          receipt_id: receipt.id,
+          receipt_no: receipt.rid,
+          last_error: null,
+        }
+      : {
+          status: "failed",
+          last_error: issueError ?? "receipt_issue_failed",
+        })
+    .eq("whid", opts.whid)
+    .eq("status", "processing")
+    .eq("attempt_count", claimedRaw.attempt_count)
+    .select("status,receipt_id,receipt_no")
+    .maybeSingle<{ status: string; receipt_id: number | null; receipt_no: string | null }>();
+  if (stampErr) {
+    logger.warn("wallet-hs", "receipt outbox result stamp failed", {
+      wallet_hs_id: opts.whid,
+      code: stampErr.code,
+      error: stampErr.message,
+      receipt_id: receipt?.id ?? null,
+    });
+  }
+  if (!stampErr && !stampedRaw) {
+    const { data: winner, error: winnerErr } = await admin
+      .from("wallet_payment_receipt_outbox")
+      .select("status,receipt_id,receipt_no")
+      .eq("whid", opts.whid)
+      .maybeSingle<{ status: string; receipt_id: number | null; receipt_no: string | null }>();
+    if (winnerErr) {
+      logger.warn("wallet-hs", "receipt outbox winner reread failed", {
+        wallet_hs_id: opts.whid,
+        code: winnerErr.code,
+        error: winnerErr.message,
+      });
+    }
+    if (winner?.status === "issued" && winner.receipt_id) {
+      return {
+        receiptId: Number(winner.receipt_id),
+        receiptNo: winner.receipt_no,
+        error: null,
+      };
+    }
+  }
+  return receipt
+    ? { receiptId: receipt.id, receiptNo: receipt.rid, error: null }
+    : { receiptId: null, receiptNo: null, error: issueError ?? "receipt_issue_failed" };
+}
+
+async function approveFrozenWalletPaymentGroup(
+  admin: ReturnType<typeof createAdminClient>,
+  opts: {
+    whid: number;
+    paymentGroupId: string;
+    userid: string;
+    dateSlip: string | null;
+    legacyAdminId: string;
+    overrideRid: string | undefined;
+    quote: FrozenWalletPaymentQuote;
+  },
+): Promise<
+  | { ok: true; decision: AtomicPaymentGroupDecision; receipt: FrozenReceiptResult }
+  | { ok: false; error: string }
+> {
+  const { data: rawDecision, error: rpcErr } = await admin.rpc(
+    "approve_forwarder_payment_group_atomic",
+    {
+      p_whid: opts.whid,
+      p_admin_slug: safeLegacyAdminId(opts.legacyAdminId, 10),
+      p_requested_receipt_no: opts.overrideRid ?? null,
+    },
+  );
+  const decision = parseAtomicPaymentGroupDecision(rawDecision);
+  const expectedFids = opts.quote.lines.map((line) => line.forwarderId).sort((a, b) => a - b);
+  const returnedFids = decision?.fids.slice().sort((a, b) => a - b) ?? [];
+  const decisionMatchesFrozenGroup = decision != null
+    && decision.whid === opts.whid
+    && decision.paymentGroupId === opts.paymentGroupId
+    && returnedFids.length === expectedFids.length
+    && returnedFids.every((fid, index) => fid === expectedFids[index]);
+  if (rpcErr || !decision || !decisionMatchesFrozenGroup) {
+    logger.warn("wallet-hs", "atomic frozen payment-group approve failed", {
+      wallet_hs_id: opts.whid,
+      code: rpcErr?.code,
+      error: rpcErr?.message,
+    });
+    return {
+      ok: false,
+      error: rpcErr?.code === "PGRST202"
+        ? "payment_schema_not_ready — ระบบอนุมัติกลุ่มชำระยังไม่พร้อม ข้อมูลยังไม่ถูกตัด"
+        : "payment_group_approve_failed — อนุมัติกลุ่มไม่สำเร็จ ข้อมูลทั้งหมดคงสถานะเดิม กรุณาลองใหม่",
+    };
+  }
+  const receipt = await consumeFrozenGroupReceiptOutbox(admin, {
+    whid: opts.whid,
+    paymentGroupId: opts.paymentGroupId,
+    userid: opts.userid,
+    fids: decision.fids,
+    dateSlip: opts.dateSlip ? new Date(opts.dateSlip) : new Date(),
+    quote: opts.quote,
+  });
+  return { ok: true, decision, receipt };
+}
+
+type AtomicPaymentGroupRejectDecision = Omit<
+  AtomicPaymentGroupDecision,
+  "receiptOutboxStatus"
+>;
+
+function parseAtomicPaymentGroupRejectDecision(
+  raw: unknown,
+): AtomicPaymentGroupRejectDecision | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  const whid = Number(value.whid);
+  const fids = Array.isArray(value.fids) ? value.fids.map(Number) : [];
+  if (
+    !Number.isSafeInteger(whid)
+    || whid <= 0
+    || typeof value.payment_group_id !== "string"
+    || fids.length === 0
+    || fids.some((fid) => !Number.isSafeInteger(fid) || fid <= 0)
+    || typeof value.already_done !== "boolean"
+  ) {
+    return null;
+  }
+  return {
+    whid,
+    paymentGroupId: value.payment_group_id,
+    fids,
+    alreadyDone: value.already_done,
+  };
+}
+
+async function rejectFrozenWalletPaymentGroup(
+  admin: ReturnType<typeof createAdminClient>,
+  opts: {
+    whid: number;
+    paymentGroupId: string;
+    legacyAdminId: string;
+    reason: string | undefined;
+    quote: FrozenWalletPaymentQuote;
+  },
+): Promise<
+  | { ok: true; decision: AtomicPaymentGroupRejectDecision }
+  | { ok: false; error: string }
+> {
+  const { data: rawDecision, error: rpcErr } = await admin.rpc(
+    "reject_forwarder_payment_group_atomic",
+    {
+      p_whid: opts.whid,
+      p_admin_slug: safeLegacyAdminId(opts.legacyAdminId, 10),
+      p_reason: opts.reason ?? null,
+    },
+  );
+  const decision = parseAtomicPaymentGroupRejectDecision(rawDecision);
+  const expectedFids = opts.quote.lines.map((line) => line.forwarderId).sort((a, b) => a - b);
+  const returnedFids = decision?.fids.slice().sort((a, b) => a - b) ?? [];
+  const matches = decision != null
+    && decision.whid === opts.whid
+    && decision.paymentGroupId === opts.paymentGroupId
+    && returnedFids.length === expectedFids.length
+    && returnedFids.every((fid, index) => fid === expectedFids[index]);
+  if (rpcErr || !decision || !matches) {
+    logger.warn("wallet-hs", "atomic frozen payment-group reject failed", {
+      wallet_hs_id: opts.whid,
+      code: rpcErr?.code,
+      error: rpcErr?.message,
+    });
+    return {
+      ok: false,
+      error: rpcErr?.code === "PGRST202"
+        ? "payment_schema_not_ready — ระบบปฏิเสธกลุ่มชำระยังไม่พร้อม ข้อมูลยังไม่เปลี่ยน"
+        : "payment_group_reject_failed — ปฏิเสธกลุ่มไม่สำเร็จ ข้อมูลทั้งหมดคงสถานะเดิม กรุณาลองใหม่",
+    };
+  }
+  return { ok: true, decision };
+}
+
 /**
  * Approve a customer top-up slip (status `1`→`2`).
  *
@@ -1172,7 +1601,7 @@ async function adminApproveWalletDepositImpl(
       // ──────────────────────────────────────────────
       const { data: rowRaw, error: rowErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status, note, typeservice, reforder, reforder2, dateslip, imagesslip, wusercredit, reviewed_at")
+        .select("id, userid, amount, type, status, note, typeservice, reforder, reforder2, dateslip, imagesslip, wusercredit, reviewed_at, payment_group_id, quote_snapshot")
         .eq("id", id)
         .maybeSingle<{
           id: number;
@@ -1188,15 +1617,95 @@ async function adminApproveWalletDepositImpl(
           imagesslip: string | null;
           wusercredit: string | null;
           reviewed_at: string | null;
+          payment_group_id: string | null;
+          quote_snapshot: unknown;
         }>();
       if (rowErr) {
         console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
         return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
       }
       if (!rowRaw) return { ok: false, error: "ไม่พบรายการ" };
-
-      // Idempotency — already-terminal returns OK with alreadyDone.
-      if (rowRaw.status === "2" || rowRaw.status === "3") {
+      const frozenQuote = rowRaw.payment_group_id
+        ? parseFrozenWalletPaymentQuote(rowRaw.quote_snapshot)
+        : null;
+      if (rowRaw.payment_group_id && !frozenQuote) {
+        return {
+          ok: false,
+          error: "ข้อมูลยอดกลุ่มชำระที่บันทึกไว้ไม่สมบูรณ์ ระบบยังไม่อนุมัติ กรุณาให้ผู้ดูแลตรวจ migration 0274",
+        };
+      }
+      // Opposite terminal decisions are not idempotent: an already-rejected
+      // payment cannot be reported as an approved success.
+      if (rowRaw.status === "3") {
+        return { ok: false, error: "รายการนี้ถูกปฏิเสธไปแล้ว ไม่สามารถอนุมัติซ้ำได้" };
+      }
+      // A frozen group re-enters the atomic RPC on an approved retry so a
+      // durable pending/failed receipt intent can heal after a process crash.
+      // Do not replay the settlement RPC here: forwarders may legitimately
+      // have advanced beyond paid status since approval. The immutable outbox
+      // + frozen quote are the receipt recovery authority.
+      if (rowRaw.status === "2" && rowRaw.payment_group_id && frozenQuote) {
+        const fids = frozenQuote.lines.map((line) => line.forwarderId);
+        const receipt = await consumeFrozenGroupReceiptOutbox(admin, {
+          whid: id,
+          paymentGroupId: rowRaw.payment_group_id,
+          userid: rowRaw.userid,
+          fids,
+          dateSlip: rowRaw.dateslip ? new Date(rowRaw.dateslip) : new Date(),
+          quote: frozenQuote,
+        });
+        const { data: walletRow, error: walletReadErr } = await admin
+          .from("tb_wallet")
+          .select("wallettotal")
+          .eq("userid", rowRaw.userid)
+          .maybeSingle<{ wallettotal: number | string | null }>();
+        if (walletReadErr) {
+          logger.warn("wallet-hs", "receipt recovery wallet display read failed", {
+            wallet_hs_id: id,
+            userid: rowRaw.userid,
+            code: walletReadErr.code,
+            error: walletReadErr.message,
+          });
+        }
+        const walletTotal = Number(walletRow?.wallettotal ?? 0);
+        const cascadedRows: CascadedRow[] = fids.map((fid) => ({
+          table: "tb_forwarder",
+          id: String(fid),
+          fromStatus: "approved",
+          toStatus: "approved",
+          note: "atomic 0274 idempotent receipt recovery",
+        }));
+        await logAdminAction(adminId, "tb_wallet_hs.approve_deposit.retry", "tb_wallet_hs", String(id), {
+          userid: rowRaw.userid,
+          payment_group_id: rowRaw.payment_group_id,
+          receipt_id: receipt.receiptId,
+          receipt_error: receipt.error,
+          fids,
+        });
+        revalidatePath(`/admin/wallet/${id}`);
+        revalidatePath("/admin/wallet");
+        revalidatePath("/admin/accounting/receipts");
+        for (const fid of fids) revalidatePath(`/admin/forwarders/${fid}`);
+        bustAdminChrome();
+        return {
+          ok: true,
+          data: {
+            ok: true,
+            walletHsId: id,
+            alreadyDone: true,
+            customer: {
+              userid: rowRaw.userid,
+              walletTotalBefore: walletTotal,
+              walletTotalAfter: walletTotal,
+            },
+            cascadedRows,
+            hadPaydepositLinks: true,
+            receiptId: receipt.receiptId,
+          },
+        };
+      }
+      // Legacy already-approved rows retain their no-op retry contract.
+      if (rowRaw.status === "2") {
         return {
           ok: true,
           data: {
@@ -1215,6 +1724,23 @@ async function adminApproveWalletDepositImpl(
       }
       if (rowRaw.status !== "1") {
         return { ok: false, error: `รายการนี้สถานะไม่ใช่ 'รอตรวจสอบ' (status=${rowRaw.status ?? "null"})` };
+      }
+      // Check a hand-picked receipt number only for a still-pending row. A
+      // successful retry may legitimately carry the same override that the
+      // first call already used; terminal idempotency above must win first.
+      if (overrideRid) {
+        const { data: duplicateRid, error: duplicateRidErr } = await admin
+          .from("tb_receipt")
+          .select("id")
+          .eq("rid", overrideRid)
+          .limit(1)
+          .maybeSingle<{ id: number }>();
+        if (duplicateRidErr) {
+          return { ok: false, error: `ตรวจเลขที่ใบเสร็จไม่สำเร็จ:${duplicateRidErr.code ?? "unknown"}` };
+        }
+        if (duplicateRid) {
+          return { ok: false, error: `เลขที่ใบเสร็จ ${overrideRid} ถูกใช้แล้ว ระบบยังไม่อนุมัติรายการ` };
+        }
       }
 
       // ── A4 TWO-ROUND verify (owner 2026-06-21 · D2 same admin OK). The approve
@@ -1639,26 +2165,23 @@ async function adminApproveWalletDepositImpl(
       const hasLinks = links.length > 0;
 
       const cascadedRows: CascadedRow[] = [];
+      let receiptQuote: {
+        gross: number;
+        net: number;
+        isJuristic: boolean;
+        maoFee: number;
+      } | null = null;
 
-      // Compare stored topup + child rows with the authoritative batch engine
-      // before the atomic status claim. This blocks stale per-row WHT rounding.
+      // Compare the stored header/links/children before the status claim. New
+      // 0274 groups are governed by the immutable quote the customer actually
+      // saw and transferred against; live repricing is diagnostic only. Legacy
+      // rows without a snapshot retain the live authoritative-engine guard.
       const linkedForwarderIds = links.map((link) => link.hno);
       if (
         rowRaw.typeservice === "2"
         && linkedForwarderIds.length > 0
         && linkedForwarderIds.every((value) => /^\d+$/.test(value))
       ) {
-        const authoritative = await loadLinkedForwarderPaymentBatch(admin, {
-          userId: userid,
-          forwarderIds: linkedForwarderIds,
-        });
-        if (!authoritative.ok) {
-          return { ok: false, error: `ตรวจสอบยอดรายการจริงไม่สำเร็จ (${authoritative.error})` };
-        }
-        if (authoritative.missingIds.length > 0) {
-          return { ok: false, error: `ไม่พบรายการฝากนำเข้า: ${authoritative.missingIds.join(", ")}` };
-        }
-
         const { data: childRows, error: childErr } = await admin
           .from("tb_wallet_hs")
           .select("reforder,amount")
@@ -1667,25 +2190,195 @@ async function adminApproveWalletDepositImpl(
           .eq("status", "1");
         if (childErr) return { ok: false, error: `db_error:${childErr.code ?? "unknown"}` };
 
-        // ADR-0025: an applied-cashback payment stores the header amount NET of
-        // the cashback (the slip the customer actually transferred = total − CB;
-        // the CB rides the [CB:<amt>] note tag + is debited from tb_cash_back at
-        // approve). Add it back before comparing against the authoritative total.
-        const cbCarried = parseCashbackNoteTag(rowRaw.note);
-        const headerGross = Math.round((amount + cbCarried) * 100) / 100;
-        const consistency = checkLinkedPaymentConsistency(headerGross, childRows ?? [], authoritative.batch);
-        if (!consistency.ok) {
-          console.error("[wallet approve] linked forwarder amount mismatch", {
-            id,
-            storedTotal: amount,
-            expectedTotal: consistency.expectedTotal,
-            differences: consistency.differences,
+        if (frozenQuote) {
+          const linkIds = linkedForwarderIds.map(Number).sort((a, b) => a - b);
+          const quoteIds = frozenQuote.lines.map((line) => line.forwarderId).sort((a, b) => a - b);
+          const linksMatch = linkIds.length === quoteIds.length
+            && linkIds.every((value, index) => value === quoteIds[index]);
+          const quoteAmountById = new Map(
+            frozenQuote.lines.map((line) => [line.forwarderId, line.amountSatang]),
+          );
+          const childrenMatch = (childRows ?? []).length === frozenQuote.lines.length
+            && (childRows ?? []).every((child) => {
+              const childId = Number(child.reforder);
+              return quoteAmountById.get(childId) === Math.round(Number(child.amount ?? 0) * 100);
+            });
+          const headerMatches = Math.round(amount * 100) === frozenQuote.bankSatang;
+          if (!linksMatch || !childrenMatch || !headerMatches) {
+            return {
+              ok: false,
+              error: "โครงสร้างกลุ่มชำระไม่ตรงกับยอดที่บันทึกไว้ (หัวรายการ/รายการย่อย/ลิงก์ไม่ครบ) ระบบยังไม่อนุมัติ",
+            };
+          }
+
+          receiptQuote = {
+            gross: frozenQuote.grossSatang / 100,
+            net: frozenQuote.netSatang / 100,
+            isJuristic: frozenQuote.isJuristic,
+            maoFee: frozenQuote.maoFeeSatang / 100,
+          };
+
+          // Price changes after transfer must not strand the immutable payment.
+          // Keep the live engine as an audit signal, never as the authority.
+          const live = await loadLinkedForwarderPaymentBatch(admin, {
+            userId: userid,
+            forwarderIds: linkedForwarderIds,
           });
-          return {
-            ok: false,
-            error: `ยอดชำระไม่ตรงกับยอดรายการจริง (ควรเป็น ${consistency.expectedTotal.toFixed(2)} บาท) กรุณาแก้ยอดก่อนอนุมัติ`,
+          if (
+            !live.ok
+            || live.missingIds.length > 0
+            || Math.round(live.batch.total_thb * 100) !== frozenQuote.netSatang
+          ) {
+            logger.warn("wallet-hs", "frozen payment quote differs from live pricing", {
+              wallet_hs_id: id,
+              payment_group_id: rowRaw.payment_group_id,
+              frozen_net_satang: frozenQuote.netSatang,
+              live_error: live.ok ? null : live.error,
+              live_missing_ids: live.ok ? live.missingIds : [],
+              live_net_satang: live.ok ? Math.round(live.batch.total_thb * 100) : null,
+            });
+          }
+        } else {
+          const authoritative = await loadLinkedForwarderPaymentBatch(admin, {
+            userId: userid,
+            forwarderIds: linkedForwarderIds,
+          });
+          if (!authoritative.ok) {
+            return { ok: false, error: `ตรวจสอบยอดรายการจริงไม่สำเร็จ (${authoritative.error})` };
+          }
+          if (authoritative.missingIds.length > 0) {
+            return { ok: false, error: `ไม่พบรายการฝากนำเข้า: ${authoritative.missingIds.join(", ")}` };
+          }
+
+          const cbCarried = parseCashbackNoteTag(rowRaw.note);
+          const headerGross = Math.round((amount + cbCarried) * 100) / 100;
+          const consistency = checkLinkedPaymentConsistency(headerGross, childRows ?? [], authoritative.batch);
+          if (!consistency.ok) {
+            return {
+              ok: false,
+              error: `ยอดชำระไม่ตรงกับยอดรายการจริง (ควรเป็น ${consistency.expectedTotal.toFixed(2)} บาท) กรุณาแก้ยอดก่อนอนุมัติ`,
+            };
+          }
+          receiptQuote = {
+            gross: Math.round(authoritative.batch.lines.reduce(
+              (sum, line) => sum
+                + line.breakdown.freight
+                + line.breakdown.otherCharges
+                + line.breakdown.maoFee
+                - line.breakdown.discount,
+              0,
+            ) * 100) / 100,
+            net: headerGross,
+            isJuristic: authoritative.batch.applyCorporateDiscount,
+            maoFee: Math.round(authoritative.batch.lines.reduce(
+              (sum, line) => sum + line.breakdown.maoFee,
+              0,
+            ) * 100) / 100,
           };
         }
+      }
+
+      // Migration 0274 groups never enter the legacy per-row loop below. The
+      // database RPC locks and validates the exact frozen group, settles the
+      // header + every child + every forwarder, and writes the receipt intent
+      // in one transaction. Receipt delivery then consumes that durable intent.
+      if (rowRaw.payment_group_id && frozenQuote) {
+        if (!hasLinks || rowRaw.typeservice !== "2" || !receiptQuote) {
+          return {
+            ok: false,
+            error: "โครงสร้างกลุ่มชำระไม่ครบ ระบบยังไม่อนุมัติและยังไม่เปลี่ยนสถานะรายการ",
+          };
+        }
+        const atomic = await approveFrozenWalletPaymentGroup(admin, {
+          whid: id,
+          paymentGroupId: rowRaw.payment_group_id,
+          userid,
+          dateSlip: rowRaw.dateslip,
+          legacyAdminId,
+          overrideRid,
+          quote: frozenQuote,
+        });
+        if (!atomic.ok) return atomic;
+
+        const { data: walletRow, error: walletErr } = await admin
+          .from("tb_wallet")
+          .select("wallettotal")
+          .eq("userid", userid)
+          .maybeSingle<{ wallettotal: number | string | null }>();
+        if (walletErr) {
+          logger.warn("wallet-hs", "atomic group wallet display read failed", {
+            wallet_hs_id: id,
+            userid,
+            code: walletErr.code,
+            error: walletErr.message,
+          });
+        }
+        const walletTotal = Number(walletRow?.wallettotal ?? 0);
+        cascadedRows.push({
+          table: "tb_wallet_hs",
+          id: String(id),
+          fromStatus: atomic.decision.alreadyDone ? "2" : "1",
+          toStatus: "2",
+          note: `atomic payment group ${rowRaw.payment_group_id}`,
+        });
+        for (const fid of atomic.decision.fids) {
+          cascadedRows.push({
+            table: "tb_forwarder",
+            id: String(fid),
+            fromStatus: atomic.decision.alreadyDone ? "settled" : "fstatus=6|paydeposit=1",
+            toStatus: "fstatus=6|paydeposit=",
+            note: "atomic 0274 group settle",
+          });
+        }
+        if (atomic.receipt.receiptId) {
+          cascadedRows.push({
+            table: "tb_wallet_hs",
+            id: String(atomic.receipt.receiptId),
+            fromStatus: null,
+            toStatus: "issued",
+            note: `one receipt for ${atomic.decision.fids.length} forwarders`,
+          });
+        }
+
+        await logAdminAction(adminId, "tb_wallet_hs.approve_deposit", "tb_wallet_hs", String(id), {
+          userid,
+          amount,
+          payment_group_id: rowRaw.payment_group_id,
+          atomic_0274: true,
+          fids: atomic.decision.fids,
+          receipt_id: atomic.receipt.receiptId,
+          receipt_error: atomic.receipt.error,
+          before: { wallettotal: walletTotal },
+          after: { wallettotal: walletTotal },
+          cascade: cascadedRows,
+        });
+        revalidatePath(`/admin/wallet/${id}`);
+        revalidatePath("/admin/wallet");
+        revalidatePath("/admin/accounting/receipts");
+        for (const fid of atomic.decision.fids) {
+          revalidatePath(`/admin/forwarders/${fid}`);
+          revalidatePath(`/service-import/${fid}/invoice`);
+        }
+        if (atomic.receipt.receiptId) {
+          revalidatePath(`/admin/accounting/forwarder-invoice/${atomic.receipt.receiptId}`);
+        }
+        bustAdminChrome();
+        return {
+          ok: true,
+          data: {
+            ok: true,
+            walletHsId: id,
+            alreadyDone: atomic.decision.alreadyDone || undefined,
+            customer: {
+              userid,
+              walletTotalBefore: walletTotal,
+              walletTotalAfter: walletTotal,
+            },
+            cascadedRows,
+            hadPaydepositLinks: true,
+            receiptId: atomic.receipt.receiptId,
+          },
+        };
       }
 
       // ──────────────────────────────────────────────
@@ -2104,7 +2797,9 @@ async function adminApproveWalletDepositImpl(
       //   balance. cbhrefid anchored on the topup row id so reject (below)
       //   refunds the same key. (Mirror of the tb_credit decrement above.)
       // ──────────────────────────────────────────
-      const cashbackRequested = parseCashbackNoteTag(rowRaw.note);
+      const cashbackRequested = frozenQuote
+        ? frozenQuote.cashbackSatang / 100
+        : parseCashbackNoteTag(rowRaw.note);
       if (cashbackRequested > 0) {
         const cbRefId = cashbackRefId("forwarder", `walleths:${id}`);
         const cbRes = await spendCashbackAtCheckout(admin, {
@@ -2209,6 +2904,11 @@ async function adminApproveWalletDepositImpl(
             dateSlip: rowRaw.dateslip ? new Date(rowRaw.dateslip) : new Date(),
             source: "wallet_hs.deposit-cascade",
             overrideRid,
+            refWhId: id,
+            totalOverride: receiptQuote?.gross,
+            netOverride: receiptQuote?.net,
+            isJuristicOverride: receiptQuote?.isJuristic,
+            maoFeeOverride: receiptQuote?.maoFee,
           });
           if (rcpt.ok) {
             issuedReceiptId = rcpt.data.receiptId;
@@ -2329,7 +3029,7 @@ export async function adminRejectWalletDeposit(
       // ──────────────────────────────────────────
       const { data: rowRaw, error: rowErr } = await admin
         .from("tb_wallet_hs")
-        .select("id, userid, amount, type, status, note")
+        .select("id, userid, amount, type, status, note, payment_group_id, quote_snapshot")
         .eq("id", id)
         .maybeSingle<{
           id: number;
@@ -2338,14 +3038,35 @@ export async function adminRejectWalletDeposit(
           type: string | null;
           status: string | null;
           note: string | null;
+          payment_group_id: string | null;
+          quote_snapshot: unknown;
         }>();
       if (rowErr) {
         console.error(`[tb_wallet_hs list] failed`, { code: rowErr.code, message: rowErr.message });
         return { ok: false, error: `db_error:${rowErr.code ?? "unknown"}` };
       }
       if (!rowRaw) return { ok: false, error: "ไม่พบรายการ" };
-
-      if (rowRaw.status === "2" || rowRaw.status === "3") {
+      const frozenQuote = rowRaw.payment_group_id
+        ? parseFrozenWalletPaymentQuote(rowRaw.quote_snapshot)
+        : null;
+      if (rowRaw.payment_group_id && !frozenQuote) {
+        return {
+          ok: false,
+          error: "ข้อมูลยอดกลุ่มชำระที่บันทึกไว้ไม่สมบูรณ์ ระบบยังไม่ปฏิเสธ กรุณาให้ผู้ดูแลตรวจ migration 0274",
+        };
+      }
+      // An approved payment is the opposite decision, never an idempotent
+      // reject success.
+      if (rowRaw.status === "2") {
+        return { ok: false, error: "รายการนี้อนุมัติและตัดจ่ายแล้ว ไม่สามารถปฏิเสธย้อนหลังได้" };
+      }
+      if (rowRaw.status !== "1" && rowRaw.status !== "3") {
+        return { ok: false, error: `รายการนี้สถานะไม่ใช่ 'รอตรวจสอบ' (status=${rowRaw.status ?? "null"})` };
+      }
+      // Legacy rejected rows retain their no-op retry contract. Frozen groups
+      // continue below so the RPC can prove the whole group is consistently
+      // rejected rather than trusting the header alone.
+      if (rowRaw.status === "3" && !rowRaw.payment_group_id) {
         return {
           ok: true,
           data: {
@@ -2363,9 +3084,6 @@ export async function adminRejectWalletDeposit(
           },
         };
       }
-      if (rowRaw.status !== "1") {
-        return { ok: false, error: `รายการนี้สถานะไม่ใช่ 'รอตรวจสอบ' (status=${rowRaw.status ?? "null"})` };
-      }
       // type='1' = "เติม-แล้วจ่าย" topup-and-pay (cascades to its pay siblings +
       // parent order/forwarder in the `if (hasLinks)` block below). type='4'
       // (direct forwarder-pay) + type='8' (direct shop-pay) are SINGLE pending
@@ -2379,6 +3097,79 @@ export async function adminRejectWalletDeposit(
 
       const userid = rowRaw.userid;
       const cascadedRows: CascadedRow[] = [];
+
+      if (rowRaw.payment_group_id && frozenQuote) {
+        const atomic = await rejectFrozenWalletPaymentGroup(admin, {
+          whid: id,
+          paymentGroupId: rowRaw.payment_group_id,
+          legacyAdminId,
+          reason,
+          quote: frozenQuote,
+        });
+        if (!atomic.ok) return atomic;
+        const { data: walletRow, error: walletErr } = await admin
+          .from("tb_wallet")
+          .select("wallettotal")
+          .eq("userid", userid)
+          .maybeSingle<{ wallettotal: number | string | null }>();
+        if (walletErr) {
+          logger.warn("wallet-hs", "atomic reject wallet display read failed", {
+            wallet_hs_id: id,
+            userid,
+            code: walletErr.code,
+            error: walletErr.message,
+          });
+        }
+        const walletTotal = Number(walletRow?.wallettotal ?? 0);
+        cascadedRows.push({
+          table: "tb_wallet_hs",
+          id: String(id),
+          fromStatus: atomic.decision.alreadyDone ? "3" : "1",
+          toStatus: "3",
+          note: reason || "atomic 0274 payment-group reject",
+        });
+        for (const fid of atomic.decision.fids) {
+          cascadedRows.push({
+            table: "tb_forwarder",
+            id: String(fid),
+            fromStatus: atomic.decision.alreadyDone ? "fstatus=5" : "fstatus=6|paydeposit=1",
+            toStatus: "fstatus=5|paydeposit=",
+            note: "atomic 0274 group reversal",
+          });
+        }
+        await logAdminAction(adminId, "tb_wallet_hs.reject_deposit", "tb_wallet_hs", String(id), {
+          userid,
+          amount: Number(rowRaw.amount ?? 0),
+          payment_group_id: rowRaw.payment_group_id,
+          atomic_0274: true,
+          already_done: atomic.decision.alreadyDone,
+          reason: reason ?? null,
+          fids: atomic.decision.fids,
+          before: { wallettotal: walletTotal },
+          after: { wallettotal: walletTotal },
+          cascade: cascadedRows,
+        });
+        revalidatePath(`/admin/wallet/${id}`);
+        revalidatePath("/admin/wallet");
+        for (const fid of atomic.decision.fids) revalidatePath(`/admin/forwarders/${fid}`);
+        bustAdminChrome();
+        return {
+          ok: true,
+          data: {
+            ok: true,
+            walletHsId: id,
+            alreadyDone: atomic.decision.alreadyDone || undefined,
+            customer: {
+              userid,
+              walletTotalBefore: walletTotal,
+              walletTotalAfter: walletTotal,
+            },
+            refundedAmount: 0,
+            cascadedRows,
+            hadPaydepositLinks: true,
+          },
+        };
+      }
 
       // ──────────────────────────────────────────
       // 2. Read paydeposit links.

@@ -588,6 +588,7 @@ export function BillingRunActions({
                   auto-creates the ใบเสร็จ; let accounting see/edit the เลขที่ + dup-check
                   first. Absent override → auto-mint (MAX+1) unchanged. */}
               <ReceiptDocNoEditor
+                key={`${customerId}:${paidAt ?? ""}`}
                 userid={customerId}
                 dateSlipIso={paidAt}
                 onOverrideRidChange={setOverrideRid}
