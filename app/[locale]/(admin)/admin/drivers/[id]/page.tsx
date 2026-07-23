@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
-import { DriverBillViewModal } from "./driver-bill-view-modal";
+import { BILL_BADGE_CLASS, DriverBillViewModal } from "./driver-bill-view-modal";
 import { BatchManage, RemoveItemButton } from "./batch-manage";
 import { CourierUrlInput } from "./courier-url-input";
 import { TruckBookingCopyBox } from "./truck-booking-copy-box";
@@ -579,6 +579,18 @@ export default async function AdminDriverBatchDetailPage({
                 </div>
               )}
             </div>
+
+            {/* ดูบิลใบเสร็จในรายการนี้ (legacy #listBill → addFromBill action=3 · ภูม 2026-07-10).
+                ปอน 2026-07-23 — ยกขึ้นมาไว้ใต้ข้อมูลรอบ: staff เปิดดูบิลบ่อยกว่าสั่งพิมพ์มาก
+                แต่เดิมมันไปอยู่ท้ายแถวปุ่มพิมพ์ ต้องกวาดตาหา. */}
+            <div className="mt-2">
+              <DriverBillViewModal
+                groups={billGroups}
+                batchName={batch.fdname ?? `#${batch.id}`}
+                printHref={`/admin/drivers/${batch.id}/print`}
+                triggerClassName={BILL_BADGE_CLASS}
+              />
+            </div>
           </div>
 
           {/* right cluster: รูปขึ้นรถ panel (ภูม 2026-07-10) + status/countdown col */}
@@ -678,13 +690,6 @@ export default async function AdminDriverBatchDetailPage({
             <Tag className="h-3.5 w-3.5" />
             พิมพ์สติกเกอร์ที่อยู่ (เรียงตามเส้นทาง)
           </Link>
-          {/* ดูบิลใบเสร็จในรายการนี้ (legacy #listBill → addFromBill action=3 · ภูม 2026-07-10):
-              modal รวมทุกจุดส่ง จัดกลุ่มตามลูกค้า + ปุ่มพิมพ์บิลจัดส่ง. */}
-          <DriverBillViewModal
-            groups={billGroups}
-            batchName={batch.fdname ?? `#${batch.id}`}
-            printHref={`/admin/drivers/${batch.id}/print`}
-          />
           {isOpsOverride && (
             <BatchManage
               batchId={batch.id}
