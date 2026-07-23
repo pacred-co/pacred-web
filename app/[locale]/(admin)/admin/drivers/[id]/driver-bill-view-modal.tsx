@@ -52,6 +52,18 @@ export type BillGroup = {
 const TRIGGER_DEFAULT =
   "inline-flex items-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100";
 
+/**
+ * The legacy PCS badge-pill (Bootstrap `badge badge-danger`, #DC3545) — a
+ * fully-rounded capsule in a brighter red than our brand #B30000.
+ *
+ * ONE constant shared by the header trigger AND the per-group print action
+ * (ปอน 2026-07-23): they are the same control in the user's mind — open the
+ * bills / print the bills — so they must never drift apart. Exported so the
+ * batch page can dress its trigger with it too.
+ */
+export const BILL_BADGE_CLASS =
+  "inline-flex items-center gap-1.5 rounded-full bg-[#DC3545] px-3 py-1 text-xs font-semibold text-white hover:bg-[#C82333]";
+
 const PAGE_SIZES = [10, 25, 50, 100];
 /** Legacy tints the ที่อยู่ cell so the eye lands on it first. */
 const ADDR_TINT = "#FBEAEA";
@@ -290,7 +302,7 @@ export function DriverBillViewModal({
                                 href={printHref}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700"
+                                className={BILL_BADGE_CLASS}
                               >
                                 <Printer className="h-3.5 w-3.5" /> พิมพ์และบันทึกบิลรวม
                               </a>

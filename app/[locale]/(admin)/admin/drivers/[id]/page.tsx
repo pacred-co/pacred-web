@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
-import { DriverBillViewModal } from "./driver-bill-view-modal";
+import { BILL_BADGE_CLASS, DriverBillViewModal } from "./driver-bill-view-modal";
 import { BatchManage, RemoveItemButton } from "./batch-manage";
 import { CourierUrlInput } from "./courier-url-input";
 import { TruckBookingCopyBox } from "./truck-booking-copy-box";
@@ -588,7 +588,7 @@ export default async function AdminDriverBatchDetailPage({
                 groups={billGroups}
                 batchName={batch.fdname ?? `#${batch.id}`}
                 printHref={`/admin/drivers/${batch.id}/print`}
-                triggerClassName="inline-flex items-center gap-1 rounded-md bg-primary-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-primary-700"
+                triggerClassName={BILL_BADGE_CLASS}
               />
             </div>
           </div>
