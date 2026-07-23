@@ -23,6 +23,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { computeBillWht } from "@/lib/billing/wht";
 import { isCreditRow } from "@/lib/forwarder/credit-advance-guard";
 import { sumNamedFees, type ForwarderFeeFields } from "@/lib/forwarder/fee-breakdown";
+import { resolveDimsDisplay, type BoxDimInput } from "@/lib/forwarder/resolve-box-dims";
 
 // ── Public document shape (moved here from actions/admin/billing-run.ts so the
 //    public loader + the admin action share ONE definition) ─────────────────
@@ -125,10 +126,14 @@ export type BillingRunInvoiceDetail = {
       freight: number;
       /** ประเภทสินค้า = รหัสภายใน g/m/a/s (owner 2026-07-18 · ลูกค้าเห็นแค่รหัสใต้ "Type"). */
       product_type: string;
-      /** มิติกล่อง ก×ส×ย (ซม.) — 0 เมื่อยังไม่วัด (owner 2026-07-18 · ใบวางบิล cols). */
-      fwidth: number;
-      fheight: number;
-      flength: number;
+      /**
+       * ขนาดกล่อง ก×ย×ส (ซม.) — resolved via resolveDimsDisplay (owner 2026-07-23):
+       * the row's OWN dim, else the real per-box sizes from momo_box_detail, else "—".
+       * Supersedes the raw fwidth/fheight/flength this shape carried — a MULTI-BOX
+       * MOMO row leaves ก×ย×ส BLANK on the aggregate row on purpose (its boxes differ
+       * in size · propagate-live-data.ts) so the raw columns printed "—".
+       */
+      dimsDisplay: string;
     } | null;
   }>;
 };
@@ -307,6 +312,63 @@ export async function loadBillingRunDocument(
     }
   }
 
+  // ขนาดกล่อง (ก×ย×ส) fallback via momo_box_detail (owner 2026-07-23) — a MULTI-BOX
+  // MOMO row leaves ก×ย×ส BLANK on its aggregate row on purpose (its boxes differ in
+  // size · propagate-live-data.ts), and a single-box row can be blank before Live
+  // propagates — the real per-box dims live in momo_box_detail. Best-effort ENRICHMENT:
+  // load the per-box dims for the LINE forwarders with NO own dim so the printed ขนาด
+  // column shows the real sizes instead of "—". This loader also serves the PUBLIC
+  // /b/[token] page, so a lookup failure must NEVER throw — degrade to no-detail
+  // (→ "—", exactly as before this fix). Strip a "-i/n" split-suffix → the base
+  // tracking (momo_box_detail is keyed by BASE), same convention as the rest of the app.
+  const baseOfTracking = (t: string) => (t ?? "").trim().replace(/-\d+(\/\d+)?$/, "");
+  const boxDimsByBase = new Map<string, BoxDimInput[]>();
+  const blankDimBases = Array.from(
+    new Set(
+      [...fwdByID.values()]
+        .filter(
+          (f) =>
+            !(Number(f.fwidth ?? 0) > 0) &&
+            !(Number(f.flength ?? 0) > 0) &&
+            !(Number(f.fheight ?? 0) > 0),
+        )
+        .map((f) => baseOfTracking(f.ftrackingchn ?? ""))
+        .filter((b) => b.length > 0),
+    ),
+  );
+  if (blankDimBases.length > 0) {
+    const { data: bdData, error: bdErr } = await admin
+      .from("momo_box_detail")
+      .select("base_tracking, width, length, height, quantity")
+      .in("base_tracking", blankDimBases)
+      .limit(50_000);
+    if (bdErr) {
+      console.error("[loadBillingRunDocument momo_box_detail dims] failed (degrading to '—')", {
+        code: bdErr.code, message: bdErr.message,
+      });
+    } else {
+      for (const b of ((bdData ?? []) as unknown as Array<{
+        base_tracking: string | null;
+        width: number | string | null;
+        length: number | string | null;
+        height: number | string | null;
+        quantity: number | string | null;
+      }>)) {
+        const base = (b.base_tracking ?? "").trim();
+        if (!base) continue;
+        const box: BoxDimInput = {
+          width: Number(b.width ?? 0),
+          length: Number(b.length ?? 0),
+          height: Number(b.height ?? 0),
+          quantity: Number(b.quantity ?? 0),
+        };
+        const arr = boxDimsByBase.get(base);
+        if (arr) arr.push(box);
+        else boxDimsByBase.set(base, [box]);
+      }
+    }
+  }
+
   // Σ the per-row named fees folded inside subtotal_thb (owner 2026-07-07) — over
   // the LINE forwarders, so the paper can split "ค่าขนส่งรายการ" into its correctly
   // labeled parts (ค่าขนส่งในไทย · LOGISTICS distinct from ค่าส่งเหมาๆ · SERVICE). The
@@ -397,11 +459,16 @@ export async function loadBillingRunDocument(
               rate:         f.frefrate != null ? Number(f.frefrate) : 0,
               // ค่าขนส่งสินค้า (freight-only) — the row Amount so Rate × Kg reconciles.
               freight:      f.ftotalprice != null ? Number(f.ftotalprice) : 0,
-              // ประเภท (รหัส g/m/a/s) + มิติกล่อง ก×ส×ย (ซม.) — owner 2026-07-18 ใบวางบิล cols.
+              // ประเภท (รหัส g/m/a/s) — owner 2026-07-18. ขนาดกล่อง ก×ย×ส — owner 2026-07-23
+              // via resolveDimsDisplay: the row's own dim, else the real per-box sizes from
+              // momo_box_detail (blank on multi-box aggregate rows), else "—".
               product_type: productTypeCode(f.fproductstype),
-              fwidth:       f.fwidth  != null ? Number(f.fwidth)  : 0,
-              fheight:      f.fheight != null ? Number(f.fheight) : 0,
-              flength:      f.flength != null ? Number(f.flength) : 0,
+              dimsDisplay:  resolveDimsDisplay({
+                fwidth:  Number(f.fwidth  ?? 0),
+                flength: Number(f.flength ?? 0),
+                fheight: Number(f.fheight ?? 0),
+                boxDims: boxDimsByBase.get(baseOfTracking(f.ftrackingchn ?? "")),
+              }),
             }
           : null,
       };
