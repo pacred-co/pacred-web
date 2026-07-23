@@ -27,6 +27,7 @@
  */
 
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import type { Metadata } from "next";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
@@ -35,7 +36,7 @@ import { PrintButton } from "@/components/print-button";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
 import { qrSvgDataUrl } from "@/lib/barcode";
 import { DocPrintStyles } from "@/components/admin/driver-doc-paper";
-import { SITE_LEGAL_NAME_TH, ADDRESSES, CONTACT } from "@/components/seo/site";
+import { SITE_LEGAL_NAME_TH, SITE_URL, ADDRESSES, CONTACT } from "@/components/seo/site";
 
 export const dynamic = "force-dynamic";
 
@@ -257,9 +258,22 @@ export default async function DeliverySlipPage({
   const totalCbm = forwarders.reduce((s, f) => s + Number(f.fvolume ?? 0), 0);
   const totalBoxes = forwarders.reduce((s, f) => s + Number(f.famount ?? 0), 0);
 
-  // QR = the document number, so a scan on the warehouse floor resolves the
-  // exact slip being held. (Owner may want a URL instead — one-line change.)
-  const qr = qrSvgDataUrl(`PACRED-DN#${docNo}`);
+  // QR = a real link to this run's detail page, mirroring legacy PCS whose slip
+  // QR opened `…/forwarder-driver/detail/<id>/`. Scanning the printed sheet on
+  // the floor jumps straight to the run — a bare doc number would only be a
+  // string to re-type.
+  //
+  // Origin comes from the REQUEST, not SITE_URL: on localhost SITE_URL falls
+  // back to the production domain, which would print a QR that opens prod while
+  // you are testing. Header-derived origin is right on both without config.
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const proto =
+    h.get("x-forwarded-proto") ??
+    (host && /^(localhost|127\.0\.0\.1|\[::1\])(:|$)/.test(host) ? "http" : "https");
+  const origin = host ? `${proto}://${host}` : SITE_URL;
+  const runUrl = `${origin}/admin/drivers/${batch.id}`;
+  const qr = qrSvgDataUrl(runUrl);
 
   return (
     <div className="doc-desk min-h-screen bg-slate-100 text-slate-900">
@@ -304,7 +318,7 @@ export default async function DeliverySlipPage({
           </div>
           {qr ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={qr} alt={`QR ${docNo}`} className="h-20 w-20 shrink-0" />
+            <img src={qr} alt={`QR รอบ #${batch.id}`} title={runUrl} className="h-20 w-20 shrink-0" />
           ) : null}
         </div>
 
