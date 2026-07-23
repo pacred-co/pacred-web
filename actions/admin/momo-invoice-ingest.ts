@@ -57,6 +57,13 @@ import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport"
 import { isContainerInBucket, type ReportCntPage } from "@/lib/admin/report-cnt-bucket";
 import { parseMomoInvoiceText, type MomoCbmBasis } from "@/lib/admin/momo-invoice-parser";
 import { extractMomoInvoicePdfText } from "@/lib/admin/momo-invoice-pdf";
+import {
+  invoiceLineCbm,
+  buildReconcileTotals,
+  type ReconcileTotals,
+} from "@/lib/admin/momo-invoice-reconcile";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
+import { baseTrackingOf } from "@/lib/integrations/momo-web/live-parcel-metrics";
 import { MOMO_INVOICE_PDF_MAX_BYTES } from "@/lib/admin/momo-invoice-pdf-text";
 
 /** base64 inflates ~4/3 → a 20 MB PDF is ~27 MB, well under the 50mb serverActions
@@ -122,8 +129,18 @@ type ForwarderRow = {
   fcabinetnumber: string | null;
   userid: string | null;
   fcosttotalprice: number;
+  /** ค่านำเข้าจีน-ไทย ที่เราขายลูกค้า — the SELL leg MOMO's cost is compared against.
+   *  Same column `/admin/report-cnt` labels "ราคาขาย" (cnt-list-table priceSum), so the
+   *  two screens can never disagree. NOT the customer's whole bill (see the reconcile
+   *  module's header) and NEVER written from here — display only. */
+  ftotalprice: number;
   fweight: number;
   fvolume: number;
+  /** famount + famountcount are the quantity SOT's inputs: `totalCbmOf` needs both to
+   *  resolve fvolume's two conventions (row-total vs per-box). Loading fvolume alone
+   *  understates our CBM by ×famount on every manual/legacy/TTW row. */
+  famount: number;
+  famountcount: string | null;
 };
 
 /**
@@ -157,7 +174,22 @@ export type MomoIngestPreviewRow = {
   userid: string | null;
   currentCost: number | null;
   ourKg: number | null;
+  /** คิวของแถวเรา = row TOTAL ผ่าน `totalCbmOf` (กฎ famountcount) — ไม่ใช่ fvolume ดิบ. */
   ourCbm: number | null;
+  /** คิวที่ MOMO เรียกเก็บบรรทัดนี้ ปรับเป็น "ยอดทั้งบรรทัด" แล้ว (ใบแบบ per_box = cbm × กล่อง). */
+  invoiceCbm: number;
+  /** น้ำหนัก (กก.) ที่พิมพ์บนใบบรรทัดนี้ — ใช้ทำสรุปยอดของใบตอนตัดจ่าย. */
+  invoiceKg: number;
+  /** ourCbm − invoiceCbm · + = ระบบเรามีคิวมากกว่าที่ใบเรียกเก็บ · null = จับคู่ไม่ได้. */
+  cbmDiff: number | null;
+  /** ค่านำเข้าที่เราขายลูกค้า (ftotalprice) · null = จับคู่ไม่ได้. */
+  ourSell: number | null;
+  /** กำไรที่ระบบแสดงอยู่ตอนนี้ = ขาย − ต้นทุนปัจจุบัน. */
+  profitNow: number | null;
+  /** กำไรหลังบันทึกต้นทุนจากใบนี้ = ขาย − ต้นทุนใบแจ้งหนี้. */
+  profitAfter: number | null;
+  /** เลขฐานของชิปเม้นที่แถวนี้สังกัด — คีย์ไปหา byShipment (อธิบายกำไรรายกล่องที่ติดลบ). */
+  shipmentBase: string | null;
   cabinetPaid: boolean;
   willApply: boolean;
   /** ตู้ที่ MOMO ระบุบนใบ (null บนใบรุ่นเก่าที่ไม่พิมพ์ตู้). */
@@ -202,6 +234,18 @@ export type MomoInvoiceCabinetRollup = {
   partialRound: boolean;
   /** ส่วนต่าง Σ ตู้ − Σ ใบรอบนี้ (บวก = ในระบบมากกว่าที่ใบเรียกเก็บ). */
   roundDiff: number | null;
+  /** Σ คิวที่ใบเรียกเก็บ ในตู้นี้ (บรรทัดรอบนี้เท่านั้น · ปรับเป็นยอดทั้งบรรทัดแล้ว). */
+  invoiceCbm: number;
+  /** Σ คิวของแถวเรา ที่ใบรอบนี้แตะ (จับคู่ได้เท่านั้น · กฎ famountcount). */
+  ourCbm: number;
+  /** ourCbm − invoiceCbm ในตู้นี้. */
+  cbmDiff: number;
+  /** Σ ราคาขาย (ค่านำเข้า) ของแถวที่ใบรอบนี้แตะ — เทียบกับ invoiceTotal ได้ตรงชุด. */
+  ourSell: number;
+  /** กำไรของชุดนี้หลังบันทึกต้นทุนจากใบ = ourSell − invoiceTotal (เฉพาะบรรทัดจับคู่ได้). */
+  profitAfter: number;
+  /** กำไรของชุดนี้ตามที่ระบบแสดงอยู่ตอนนี้ = ourSell − Σ ต้นทุนปัจจุบันของแถวชุดเดียวกัน. */
+  profitNow: number;
   canPay: boolean;
   /** เหตุผลไทยว่าทำไมตู้นี้ยังตัดจ่ายไม่ได้ (null = จ่ายได้). */
   payBlockReason: string | null;
@@ -214,12 +258,55 @@ export type MomoInvoiceCabinetRollup = {
   payPage: ReportCntPage | null;
 };
 
+/**
+ * ยอด "ทั้งชิปเม้น" ของครอบครัวแทรคกิ้งหนึ่ง (เลขฐาน + ทุกกล่อง `-N`) — owner 2026-07-23:
+ * *"งานที่ติดลบ คือยังไงนะครับ เป็นไปได้ด้วยหรอครับ ขายต่ำกว่าทุน มีอะไรผิดปกติหรือเปล่า"*
+ *
+ * 🔑 คำตอบ: **ไม่ผิดปกติ และไม่ใช่ขาดทุนจริง** — เป็นผลของการ "แบ่งกล่อง" ล้วนๆ:
+ *   ขาย คิดตาม **น้ำหนัก** (฿/kg) · ทุน คิดตาม **คิว** (฿/CBM)
+ * กล่องที่ **เบาแต่ใหญ่** จึงขายได้น้อยแต่กินทุนเยอะ → กำไรรายกล่องติดลบ ส่วนกล่องที่
+ * **หนักแต่กะทัดรัด** จะเป็นตรงข้าม พอรวมทั้งชิปเม้นแล้วบวก. จุดคุ้มทุน = (ทุน/คิว) ÷ (ขาย/kg).
+ *
+ * ตัวอย่างจริงบน prod (1782459481 · PR10601 · เรท ฿11/kg · ทุน ฿2,500/คิว → คุ้มทุนที่ 227.3 kg/คิว):
+ *   -3  47.5kg / 0.21924 = 216.7 kg/คิว → −฿25.60   (ต่ำกว่าจุดคุ้มทุน)
+ *   -5  11.0kg / 0.05610 = 196.1 kg/คิว → −฿19.25   (ต่ำกว่าจุดคุ้มทุน)
+ *   รวม 7 กล่อง 266kg / 0.8545 = 311.3 kg/คิว → **+฿789.75** ✅
+ *
+ * ⚠️ Σ ต้องมาจาก **ทุกพี่น้องใน DB** ไม่ใช่แค่บรรทัดที่อยู่บนใบรอบนี้ — ถ้ารวมแค่บนใบแล้วเรียกว่า
+ * "ทั้งชิปเม้น" จะเป็นการโกหกเมื่อ MOMO บิลมาไม่ครบครอบครัว (§0f อย่ามั่ว).
+ * แนวเดียวกับ ForwarderProfitPanel ที่ทำ rollup นี้ไว้แล้วบนหน้า /admin/forwarders/[fNo].
+ */
+export type MomoInvoiceShipmentRollup = {
+  /** เลขฐานของครอบครัว (ตัด `-N` / `-N/M` ออกแล้ว). */
+  base: string;
+  /** จำนวนแถวพี่น้องทั้งหมดใน DB (ไม่ใช่แค่ที่อยู่บนใบรอบนี้). */
+  rows: number;
+  weightKg: number;
+  cbm: number;
+  /** Σ ftotalprice ของทั้งครอบครัว. */
+  sell: number;
+  /** Σ fcosttotalprice ของทั้งครอบครัว (ค่าที่เก็บอยู่ตอนนี้). */
+  cost: number;
+  /** sell − cost · + = ทั้งชิปเม้นกำไรจริง แม้บางกล่องจะติดลบ. */
+  profit: number;
+  /** kg ต่อคิว ของทั้งชิปเม้น (null = ไม่มีคิว). */
+  densityKgPerCbm: number | null;
+};
+
 export type MomoIngestPreview = {
   invoiceNo: string | null;
   grandTotal: number | null;
   rows: MomoIngestPreviewRow[];
   /** ยอดสรุป "ต่อตู้" ของใบรอบนี้ — สะพานไปหน้าตัดจ่ายค่าตู้. */
   byCabinet: MomoInvoiceCabinetRollup[];
+  /**
+   * สรุปเทียบทั้งใบ (owner 2026-07-23) — คิวในระบบ vs คิวที่ MOMO เรียกเก็บ + ดิฟ ·
+   * ต้นทุนที่ MOMO เก็บ vs ที่ระบบบันทึกไว้ · ราคาขาย · และกำไรก่อน/หลังบันทึก + ดิฟ.
+   * Σ เฉพาะบรรทัดที่จับคู่ได้ (บรรทัดที่ไม่พบแยกรายงานไว้ใน unmatched* — ห้ามกลืนหาย).
+   */
+  reconcile: ReconcileTotals;
+  /** ยอดทั้งชิปเม้นต่อครอบครัวแทรคกิ้ง — ใช้ตอบ "ทำไมกล่องนี้ติดลบ" (ดู type ข้างบน). */
+  byShipment: MomoInvoiceShipmentRollup[];
   /** "หักภาษีค่าขนส่ง ณ ที่จ่าย (WHT 1%)" ที่พิมพ์บนใบ (null = อ่านไม่เจอ). */
   whtThb: number | null;
   summary: {
@@ -252,6 +339,8 @@ export type MomoIngestPreview = {
 
 const TRANSPORT_LABEL: Record<string, string> = { "1": "รถ", "2": "เรือ", "3": "อากาศ" };
 const round2 = (n: number): number => Math.round(n * 100) / 100;
+/** CBM keeps 6dp (we store 6dp · MOMO prints 4dp) — rounding to 2 would invent a diff. */
+const round6 = (n: number): number => Math.round(n * 1_000_000) / 1_000_000;
 
 /**
  * Roll the per-tracking invoice lines up to the ตู้ grain that ตัดจ่ายค่าตู้ actually
@@ -280,18 +369,35 @@ async function buildCabinetRollup(
     invoiceTotal: number;
     blockedLines: number;
     willApplyLines: number;
+    /** The comparison Σ — MATCHED lines only (same honesty rule as the file-level
+     *  reconcile: a line we could not find has no คิว/ขาย/ต้นทุน of ours to compare). */
+    invoiceCbm: number;
+    ourCbm: number;
+    ourSell: number;
+    matchedInvoiceTotal: number;
+    matchedCurrentCost: number;
   };
   const acc = new Map<string, Acc>();
   for (const r of rows) {
     const linked = !!r.fcabinetnumber;
     const cabinet = r.fcabinetnumber ?? r.invoiceCabinet ?? null;
-    const key = cabinet ?? " ไม่ระบุตู้";
+    const key = cabinet ?? "ไม่ระบุตู้";
     const cur =
       acc.get(key) ??
-      { cabinet, linked, invoiceLines: 0, invoiceTotal: 0, blockedLines: 0, willApplyLines: 0 };
+      {
+        cabinet, linked, invoiceLines: 0, invoiceTotal: 0, blockedLines: 0, willApplyLines: 0,
+        invoiceCbm: 0, ourCbm: 0, ourSell: 0, matchedInvoiceTotal: 0, matchedCurrentCost: 0,
+      };
     cur.linked = cur.linked || linked;
     cur.invoiceLines += 1;
     cur.invoiceTotal += r.invoiceCost;
+    if (r.matched) {
+      cur.invoiceCbm += r.invoiceCbm;
+      cur.ourCbm += r.ourCbm ?? 0;
+      cur.ourSell += r.ourSell ?? 0;
+      cur.matchedInvoiceTotal += r.invoiceCost;
+      cur.matchedCurrentCost += r.currentCost ?? 0;
+    }
     if (!r.matched || r.cabinetConflict || r.duplicateFid) cur.blockedLines += 1;
     if (r.willApply) cur.willApplyLines += 1;
     acc.set(key, cur);
@@ -368,6 +474,12 @@ async function buildCabinetRollup(
         ourCostSum,
         partialRound,
         roundDiff,
+        invoiceCbm: round6(a.invoiceCbm),
+        ourCbm: round6(a.ourCbm),
+        cbmDiff: round6(a.ourCbm - a.invoiceCbm),
+        ourSell: round2(a.ourSell),
+        profitAfter: round2(a.ourSell - a.matchedInvoiceTotal),
+        profitNow: round2(a.ourSell - a.matchedCurrentCost),
         canPay: payBlockReason == null,
         payBlockReason,
         payPage:
@@ -379,6 +491,76 @@ async function buildCabinetRollup(
       };
     })
     .sort((a, b) => b.invoiceTotal - a.invoiceTotal);
+}
+
+/**
+ * รวมยอด "ทั้งชิปเม้น" ต่อครอบครัวแทรคกิ้ง — ตอบคำถาม "ทำไมกล่องนี้ขายต่ำกว่าทุน".
+ *
+ * ต้องอ่าน **ทุกพี่น้องจาก DB** ไม่ใช่แค่บรรทัดบนใบ (ดู doc ของ MomoInvoiceShipmentRollup):
+ * ใช้แพทเทิน `.or(eq base, like base-%)` + re-check `baseTrackingOf` ฝั่ง client แบบเดียวกับ
+ * `resolveMaoAnchorIds` — การ re-check นี้จำเป็น ไม่ใช่ของแถม เพราะ LIKE prefix จะกินเลขอื่น
+ * (`1783582` จะ swallow `1783582423` ถ้าไม่เช็คซ้ำ).
+ *
+ * fail-soft: อ่านไม่ได้ → คืน [] → หน้าจอแค่ไม่มีคำอธิบายเสริม ไม่พังและไม่บล็อกการบันทึก.
+ */
+async function buildShipmentRollup(
+  admin: ReturnType<typeof createAdminClient>,
+  bases: readonly string[],
+): Promise<MomoInvoiceShipmentRollup[]> {
+  const uniq = Array.from(new Set(bases.filter((b) => b !== "")));
+  if (uniq.length === 0) return [];
+
+  type Sib = {
+    ftrackingchn: string | null;
+    fweight: number | null;
+    fvolume: number | null;
+    famount: number | null;
+    famountcount: string | null;
+    ftotalprice: number | null;
+    fcosttotalprice: number | null;
+  };
+  const acc = new Map<string, { rows: number; kg: number; cbm: number; sell: number; cost: number }>();
+
+  const CHUNK = 40;
+  for (let i = 0; i < uniq.length; i += CHUNK) {
+    const slice = uniq.slice(i, i + CHUNK);
+    const filter = slice.map((b) => `ftrackingchn.eq.${b},ftrackingchn.like.${b}-%`).join(",");
+    const { data, error } = await admin
+      .from("tb_forwarder")
+      .select("ftrackingchn, fweight, fvolume, famount, famountcount, ftotalprice, fcosttotalprice")
+      .or(filter)
+      .limit(2000);
+    if (error) {
+      console.error(`[momo-ingest shipment] failed`, { code: error.code, message: error.message });
+      continue; // fail-soft — คำอธิบายหายไปเฉยๆ ไม่กระทบยอดเงินใดๆ
+    }
+    for (const r of (data ?? []) as Sib[]) {
+      const t = (r.ftrackingchn ?? "").trim();
+      const b = baseTrackingOf(t);
+      if (!b || !slice.includes(b)) continue; // กัน LIKE prefix กินเลขอื่น
+      const cur = acc.get(b) ?? { rows: 0, kg: 0, cbm: 0, sell: 0, cost: 0 };
+      cur.rows += 1;
+      cur.kg += Number(r.fweight ?? 0);
+      cur.cbm += totalCbmOf({ fvolume: r.fvolume, famount: r.famount, famountcount: r.famountcount });
+      cur.sell += Number(r.ftotalprice ?? 0);
+      cur.cost += Number(r.fcosttotalprice ?? 0);
+      acc.set(b, cur);
+    }
+  }
+
+  return Array.from(acc.entries()).map(([base, a]): MomoInvoiceShipmentRollup => {
+    const cbm = round6(a.cbm);
+    return {
+      base,
+      rows: a.rows,
+      weightKg: round2(a.kg),
+      cbm,
+      sell: round2(a.sell),
+      cost: round2(a.cost),
+      profit: round2(a.sell - a.cost),
+      densityKgPerCbm: cbm > 0 ? Math.round((a.kg / cbm) * 10) / 10 : null,
+    };
+  });
 }
 
 async function buildPreview(text: string): Promise<MomoIngestPreview> {
@@ -397,7 +579,9 @@ async function buildPreview(text: string): Promise<MomoIngestPreview> {
   if (lookups.size > 0) {
     const { data, error } = await admin
       .from("tb_forwarder")
-      .select("id, ftrackingchn, fcabinetnumber, userid, fcosttotalprice, fweight, fvolume")
+      .select(
+        "id, ftrackingchn, fcabinetnumber, userid, fcosttotalprice, ftotalprice, fweight, fvolume, famount, famountcount",
+      )
       .in("ftrackingchn", Array.from(lookups));
     if (error) console.error(`[momo-ingest match] failed`, { code: error.code, message: error.message });
     for (const r of (data ?? []) as Array<Record<string, unknown>>) {
@@ -410,8 +594,11 @@ async function buildPreview(text: string): Promise<MomoIngestPreview> {
           fcabinetnumber: (r.fcabinetnumber as string | null) ?? null,
           userid: (r.userid as string | null) ?? null,
           fcosttotalprice: Number(r.fcosttotalprice ?? 0),
+          ftotalprice: Number(r.ftotalprice ?? 0),
           fweight: Number(r.fweight ?? 0),
           fvolume: Number(r.fvolume ?? 0),
+          famount: Number(r.famount ?? 0),
+          famountcount: (r.famountcount as string | null) ?? null,
         });
       }
     }
@@ -451,6 +638,12 @@ async function buildPreview(text: string): Promise<MomoIngestPreview> {
     const f = hit?.row ?? null;
     const cabinetPaid = f?.fcabinetnumber ? paidCabs.has(f.fcabinetnumber) : false;
     const currentCost = f ? f.fcosttotalprice : null;
+    // The 4 comparison numbers (owner 2026-07-23: "คิวในระบบ / คิวที่ MOMO เรียกเก็บ /
+    // ดิฟ / ต้นทุน MOMO / ขาย / diff กำไร"). Both sides normalised to a row TOTAL before
+    // they meet — invoice via the file's cbmBasis, ours via the famountcount rule.
+    const invoiceCbm = invoiceLineCbm(l, parsed.cbmBasis);
+    const ourCbm = f ? totalCbmOf(f) : null;
+    const ourSell = f ? f.ftotalprice : null;
     // เทียบตู้เฉพาะเมื่อมีทั้ง 2 ฝั่ง (ใบรุ่นเก่าไม่พิมพ์ตู้ → ไม่ถือว่าขัดแย้ง)
     const cabinetConflict = !!l.cabinet && !!f?.fcabinetnumber && l.cabinet !== f.fcabinetnumber;
     const cabinetUnlinked = !!l.cabinet && !!f && !f.fcabinetnumber;
@@ -491,7 +684,14 @@ async function buildPreview(text: string): Promise<MomoIngestPreview> {
       userid: f?.userid ?? null,
       currentCost,
       ourKg: f ? f.fweight : null,
-      ourCbm: f ? f.fvolume : null,
+      ourCbm,
+      invoiceCbm,
+      invoiceKg: l.kg,
+      cbmDiff: ourCbm == null ? null : round6(ourCbm - invoiceCbm),
+      ourSell,
+      profitNow: ourSell == null ? null : round2(ourSell - (currentCost ?? 0)),
+      profitAfter: ourSell == null ? null : round2(ourSell - l.lineTotal),
+      shipmentBase: f ? baseTrackingOf(f.ftrackingchn) || null : null,
       cabinetPaid,
       willApply,
       invoiceCabinet: l.cabinet,
@@ -504,12 +704,19 @@ async function buildPreview(text: string): Promise<MomoIngestPreview> {
   });
 
   const byCabinet = await buildCabinetRollup(admin, rows, paidCabs);
+  // ยอดทั้งชิปเม้น — เฉพาะครอบครัวที่แถวบนใบนี้แตะ (อธิบายกำไรรายกล่องที่ติดลบ)
+  const byShipment = await buildShipmentRollup(
+    admin,
+    rows.map((r) => r.shipmentBase).filter((b): b is string => !!b),
+  );
 
   return {
     invoiceNo: parsed.invoiceNo,
     grandTotal: parsed.grandTotal,
     rows,
     byCabinet,
+    reconcile: buildReconcileTotals(rows),
+    byShipment,
     whtThb: parsed.whtThb,
     summary: {
       total: rows.length,

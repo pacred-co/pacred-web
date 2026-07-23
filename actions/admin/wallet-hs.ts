@@ -2244,7 +2244,29 @@ async function adminApproveWalletDepositImpl(
             forwarderIds: linkedForwarderIds,
           });
           if (!authoritative.ok) {
-            return { ok: false, error: `ตรวจสอบยอดรายการจริงไม่สำเร็จ (${authoritative.error})` };
+            // แปลรหัสเป็นภาษาคน + บอกว่าต้องไปทำอะไร (owner 2026-07-23: บัญชีเจอ
+            // "(corporate_billing_profile_incomplete)" ลอยๆ แล้วไปต่อไม่ถูก ทั้งที่ลูกค้าจ่ายมาแล้ว)
+            const raw = authoritative.error;
+            if (raw.startsWith("corporate_billing_profile_incomplete")) {
+              const fields = raw.split(":")[1];
+              return {
+                ok: false,
+                error:
+                  `ยังออกใบเสร็จนามนิติบุคคลไม่ได้ — ข้อมูลนิติของลูกค้า ${userid} ยังขาด: `
+                  + `${fields ? fields.split(",").join(" · ") : "ชื่อนิติบุคคล · เลขประจำตัวผู้เสียภาษี"}`
+                  + ` · ไปเพิ่มที่โปรไฟล์ลูกค้า /admin/customers/${userid} แล้วกดยืนยันใหม่`
+                  + ` (เงินที่ลูกค้าโอนมายังอยู่ครบ ไม่ต้องให้ลูกค้าโอนซ้ำ)`,
+              };
+            }
+            return { ok: false, error: `ตรวจสอบยอดรายการจริงไม่สำเร็จ (${raw})` };
+          }
+          if (authoritative.corporateProfileWarning) {
+            // ไม่บล็อก — ยอดเงินถูกต้องแล้ว แค่เอกสารจะไม่มีที่อยู่ (ดู linked-payment-batch)
+            logger.warn("wallet-hs", "corporate profile incomplete for document", {
+              wallet_hs_id: id,
+              userid,
+              warning: authoritative.corporateProfileWarning,
+            });
           }
           if (authoritative.missingIds.length > 0) {
             return { ok: false, error: `ไม่พบรายการฝากนำเข้า: ${authoritative.missingIds.join(", ")}` };

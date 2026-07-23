@@ -400,6 +400,13 @@ const submitForwarderPaymentSchema = z.object({
   // same bound. Reject before touching the database instead of relying on a
   // truncation/column error after the customer uploaded a slip.
   slipPath: z.string().trim().min(1).max(150),
+  /**
+   * สลิปใบที่ 2+ (owner 2026-07-23 · เคส PR172 โอน 2 ครั้งรวมเป็นยอดใบเดียว).
+   * `slipPath` ยังเป็น "ใบหลัก" ที่ลง tb_wallet_hs.imagesslip ตามเดิมทุกประการ —
+   * ใบพวกนี้ต่อท้ายลง slip_paths (mig 0275) เพื่อให้บัญชีตรวจได้ครบ.
+   * cap 4 = รวมใบหลักได้ 5 ใบ · มากกว่านี้แปลว่าควรแยกเป็นคนละการจ่าย.
+   */
+  extraSlipPaths: z.array(z.string().trim().min(1).max(150)).max(4).optional(),
   slipDate: z.string().trim().max(40).optional(),
   cashBackKey: z.number().nonnegative().optional(),
   quoteKey: z.string().regex(/^[a-f0-9]{64}$/),
@@ -430,7 +437,7 @@ async function submitForwarderPaymentImpl(
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
-  const { ids, slipPath, slipDate, cashBackKey, quoteKey } = parsed.data;
+  const { ids, slipPath, extraSlipPaths, slipDate, cashBackKey, quoteKey } = parsed.data;
   // This flow has no transactional cashback reservation yet. Merely reading
   // cbtotal before the payment RPC lets two concurrent submissions both claim
   // the same balance and leaves the second slip underfunded at approval. The
@@ -460,6 +467,19 @@ async function submitForwarderPaymentImpl(
   if (!slipCheck.ok) {
     return { ok: false, error: `slip_invalid:${slipCheck.error}` };
   }
+
+  // สลิปใบที่ 2+ ต้องผ่าน "ด่านเดียวกันเป๊ะ" กับใบหลัก — เจ้าของโฟลเดอร์ + magic-byte
+  // (หลักฐานที่บัญชีจะใช้ตรวจ ห้ามหละหลวมกว่ากันแค่เพราะเป็นใบที่สอง) + กันซ้ำใบเดิม.
+  const extraSlips: string[] = [];
+  for (const p of extraSlipPaths ?? []) {
+    if (p === slipPath || extraSlips.includes(p)) continue; // แนบไฟล์เดิมซ้ำ = ข้ามเงียบๆ
+    if (!p.startsWith(`${authUser.id}/`)) return { ok: false, error: "slip_path_mismatch" };
+    const chk = await validateStoredFile("slips", p, ["image", "pdf"]);
+    if (!chk.ok) return { ok: false, error: `slip_invalid:${chk.error}` };
+    extraSlips.push(p);
+  }
+  /** สลิปทุกใบ · ใบหลักมาก่อนเสมอ (ตรงกับ imagesslip ที่ RPC เขียน). */
+  const allSlipPaths = [slipPath, ...extraSlips];
 
   const admin = createAdminClient();
 
@@ -704,6 +724,26 @@ async function submitForwarderPaymentImpl(
         ? "payment_schema_not_ready — ระบบบันทึกกลุ่มชำระยังไม่พร้อม กรุณาติดต่อผู้ดูแล"
         : "payment_group_failed — ไม่สามารถบันทึกกลุ่มชำระได้ ข้อมูลยังไม่ถูกตัด กรุณาลองใหม่",
     };
+  }
+
+  // แนบสลิปหลายใบ (owner 2026-07-23 · PR172 โอน 2 ครั้งรวมเป็นยอดใบเดียว · mig 0275).
+  // เขียน "หลัง" RPC โดยตั้งใจ: RPC (0274) เป็นเส้นเงิน atomic ที่เพิ่งขึ้น prod วันนี้ —
+  // ไม่แตะ signature มัน. ใบหลักลง imagesslip ผ่าน RPC เหมือนเดิมทุกประการ ส่วน slip_paths
+  // เป็นหลักฐานเสริม → best-effort: ถ้าเขียนพลาด การจ่าย "ยังสมบูรณ์" และมีสลิปใบหลักครบ
+  // (degrade ไม่ใช่พัง) ห้าม fail การจ่ายที่ตัดเงินไปแล้วเพราะรูปแนบใบที่สอง.
+  if (allSlipPaths.length > 1) {
+    const { error: slipsErr } = await admin
+      .from("tb_wallet_hs")
+      .update({ slip_paths: allSlipPaths })
+      .eq("id", whID);
+    if (slipsErr) {
+      console.error("[submitForwarderPayment slip_paths] failed", {
+        code: slipsErr.code,
+        message: slipsErr.message,
+        whID,
+        count: allSlipPaths.length,
+      });
+    }
   }
 
   // The receipt fires at APPROVE (adminApproveWalletDeposit case-B →

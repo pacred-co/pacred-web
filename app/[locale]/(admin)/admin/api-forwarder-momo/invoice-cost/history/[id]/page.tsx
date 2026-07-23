@@ -18,6 +18,8 @@ import { MomoSettlementActions } from "./settlement-actions";
 export const dynamic = "force-dynamic";
 
 const baht = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const cbm = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+const num = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 
 export default async function MomoSettlementDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { roles } = await requireAdmin();
@@ -72,6 +74,36 @@ export default async function MomoSettlementDetailPage({ params }: { params: Pro
         </Link>
       </header>
 
+      {/* สรุปของใบนี้ — ค่าที่แช่ไว้ตอนตัดจ่าย (mig 0277) ตรงกับที่โชว์ในหน้าประวัติเป๊ะ */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
+        <h2 className="mb-3 text-sm font-semibold">สรุปของใบนี้</h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
+          {[
+            { k: "แทรคกิ้ง", v: String(s.lineCount) },
+            { k: "กล่อง", v: num(s.boxCount) },
+            { k: "คิว (CBM)", v: cbm(s.cbmTotal) },
+            { k: "กิโล", v: num(s.weightKg) },
+            { k: "ต้นทุน (จ่าย MOMO)", v: `฿${baht(s.totalThb)}`, strong: true },
+            { k: "ราคาขาย", v: s.sellThb > 0 ? `฿${baht(s.sellThb)}` : "—" },
+          ].map((c) => (
+            <div key={c.k} className="rounded-xl bg-surface-alt/50 px-3 py-2">
+              <div className="text-[11px] text-muted">{c.k}</div>
+              <div className={`mt-0.5 tabular-nums ${c.strong ? "text-base font-bold" : "text-sm font-semibold"}`}>{c.v}</div>
+            </div>
+          ))}
+          <div className="rounded-xl bg-surface-alt/50 px-3 py-2">
+            <div className="text-[11px] text-muted">กำไร</div>
+            <div className={`mt-0.5 text-base font-bold tabular-nums ${s.sellThb <= 0 ? "text-muted" : s.profitThb < 0 ? "text-red-700" : "text-emerald-700"}`}>
+              {s.sellThb > 0 ? `฿${baht(s.profitThb)}` : "—"}
+            </div>
+          </div>
+        </div>
+        <p className="mt-2 text-[11px] text-muted">
+          กล่อง · คิว · กิโล · ต้นทุน = ยอดที่ MOMO เรียกเก็บบนใบนี้ · ราคาขาย = ค่านำเข้าที่เก็บลูกค้า ·
+          ตัวเลขชุดนี้<strong>แช่ไว้ตอนกดตัดจ่าย</strong> จึงไม่เปลี่ยนย้อนหลังแม้มีการแก้ราคาทีหลัง
+        </p>
+      </section>
+
       {/* รายการที่ตัดจ่าย — ลิงก์กลับไปที่ชิปเม้น/แทรคกิ้ง (owner: "ลิงค์กลับไปที่ ชิปเม้น แทรคกิ้ง") */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold">รายการที่ตัดจ่าย ({s.lines.length})</h2>
@@ -111,20 +143,53 @@ export default async function MomoSettlementDetailPage({ params }: { params: Pro
         </div>
       </section>
 
-      {/* สลิป (ย้อนหลังได้) + ยกเลิก */}
+      {/* หลักฐาน 2 ชนิด (แนบย้อนหลังได้) + ยกเลิก — owner 2026-07-23 */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-4">
-        <h2 className="text-sm font-semibold">สลิปการโอน (แนบย้อนหลังได้)</h2>
-        {s.slipUrls.length > 0 ? (
-          <div className="flex flex-wrap gap-3">
-            {s.slipUrls.map((url, i) => (
-              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-40">
-                <SlipImage src={url} className="h-40 w-40 rounded-lg border border-border object-cover" pdfMode="tile" />
-              </a>
-            ))}
+        <h2 className="text-sm font-semibold">หลักฐานการจ่าย (แนบย้อนหลังได้)</h2>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* ใบเสร็จ MOMO — เอกสารภาษีที่ MOMO ออกกลับมาหลังเราจ่าย (REC-…) */}
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
+            <p className="text-xs font-bold text-emerald-800">
+              🧾 ใบเสร็จ / ใบกำกับภาษี จาก MOMO
+              <span className="ml-1 font-normal text-muted">({s.receiptFiles.length})</span>
+            </p>
+            {s.receiptFiles.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-3">
+                {s.receiptFiles.map((f) => (
+                  <a key={f.url} href={f.url} target="_blank" rel="noopener noreferrer" className="block w-36">
+                    <SlipImage src={f.url} className="h-36 w-36 rounded-lg border border-border object-cover" pdfMode="tile" />
+                    <p className="mt-1 truncate text-center font-mono text-[11px] text-emerald-800" title={f.name}>
+                      {f.name}
+                    </p>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1.5 text-[12px] text-muted">ยังไม่มีใบเสร็จ — MOMO มักส่งกลับมาหลังเราโอน</p>
+            )}
           </div>
-        ) : (
-          <p className="text-[12px] text-muted">ยังไม่มีสลิปแนบ — อัปโหลดด้านล่างเพื่อเก็บเป็นหลักฐานย้อนหลัง</p>
-        )}
+
+          {/* สลิปการโอน — หลักฐานฝั่งเรา */}
+          <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3">
+            <p className="text-xs font-bold text-sky-800">
+              📎 สลิปการโอน (ฝั่งเรา)
+              <span className="ml-1 font-normal text-muted">({s.slipUrls.length})</span>
+            </p>
+            {s.slipUrls.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-3">
+                {s.slipUrls.map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-36">
+                    <SlipImage src={url} className="h-36 w-36 rounded-lg border border-border object-cover" pdfMode="tile" />
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1.5 text-[12px] text-muted">ยังไม่มีสลิปแนบ</p>
+            )}
+          </div>
+        </div>
+
         <MomoSettlementActions settlementId={s.id} docNo={s.docNo} isVoid={s.status === "void"} />
       </section>
     </main>
