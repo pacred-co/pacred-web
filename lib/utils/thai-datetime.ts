@@ -155,3 +155,59 @@ export function formatThaiTimeWithSeconds(input: Date | string | number | null |
   const { hour, minute, second } = bangkokParts(d);
   return `${hour}:${minute}:${second} น.`;
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// วว/ดด/ปปปป ⇄ ISO — date-only form fields (owner 2026-07-23)
+//
+// WHY not `<input type="date">`: its DISPLAYED format follows the BROWSER/OS
+// locale, not the page. On an en-US browser it renders 04/24/2026 (MM/DD) which
+// Thai staff read as 4 April. There is no HTML/CSS way to force DD/MM on it, so
+// a date-only filter that must be unambiguous uses a text field + these helpers.
+//
+// Pure STRING arithmetic on purpose — a date-only value has no time and no zone,
+// so routing it through `new Date()` would drag Asia/Bangkok vs UTC into a field
+// that has neither (the classic "picked the 24th, saved the 23rd" bug).
+//
+// Year is ค.ศ. (2026), matching the existing dd/mm/yyyy entry on
+// `components/admin/api-forwarder-manual-form.tsx` and the legacy daterangepicker.
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** y-m-d is a date that really exists (leap years included). */
+function isRealYmd(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (year < 1000 || month < 1 || month > 12 || day < 1) return false;
+  // Day 0 of the NEXT month = last day of this one.
+  return day <= new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** "24/04/2026" → "2026-04-24". Rejects impossible dates (31/02) → null. */
+export function ddmmyyyyToIso(input: string | null | undefined): string | null {
+  if (typeof input !== "string") return null;
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(input.trim());
+  if (!m) return null;
+  const day = Number(m[1]), month = Number(m[2]), year = Number(m[3]);
+  if (!isRealYmd(year, month, day)) return null;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** "2026-04-24" → "24/04/2026". Non-ISO input → "" (renders an empty field). */
+export function isoToDdmmyyyy(iso: string | null | undefined): string {
+  if (typeof iso !== "string") return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso.trim());
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+}
+
+/** Accept EITHER "24/04/2026" or "2026-04-24" → ISO, else null. Lets an old
+ *  ISO bookmark/link keep working after a field switches to the Thai format. */
+export function anyDateToIso(input: string | null | undefined): string | null {
+  if (typeof input !== "string") return null;
+  const s = input.trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (iso) {
+    // NOT Date.parse — it ROLLS OVER instead of rejecting ("2026-02-31" comes
+    // back as 2026-03-03), which would silently filter a different day than the
+    // one in the URL. Validate the calendar day explicitly.
+    return isRealYmd(Number(iso[1]), Number(iso[2]), Number(iso[3])) ? s : null;
+  }
+  return ddmmyyyyToIso(s);
+}

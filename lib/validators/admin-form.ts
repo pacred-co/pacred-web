@@ -132,34 +132,29 @@ export const ROLE_LABELS: Record<AdminRoleEnum, string> = {
 };
 
 /**
- * ASSIGNABLE_ROLES — the roles the create/edit/change-role pickers OFFER
- * (owner ปอน 2026-06-27: "ลบ role ไปเลย แก้เป็นสิทธิ์การมองเห็นแทน · เดี๋ยว role
- * ทำเพิ่มมาอีกอัน"). The admin model is now THREE visibility tiers — every admin
- * is god-nav, differentiated only by what money they see:
- *   • ultra   → cost + profit + sales
- *   • super   → profit + sales (no cost)
- *   • normies → sales only (no cost, no profit)
+ * ASSIGNABLE_ROLES — the roles the create/edit/change-role pickers OFFER.
  *
- * The other AdminRole values still EXIST (operational requireAdmin([...]) gates
- * compile + god-nav bypasses them) but are no longer assignable from the UI. To
- * bring a functional role back, add it here. The dropdowns map over this list;
- * ROLE_LABELS stays exhaustive so any legacy/inert grant still renders a label.
+ * 🔴 2026-07-23 (owner ภูม) — RESTORE the functional roles. The 2026-06-27 (ปอน)
+ * narrowing to only the 3 money-visibility tiers (ultra/super/normies) BROKE staff
+ * onboarding: `driver`, `warehouse`, `accounting`, `sales`, `qa`, `interpreter`, …
+ * are NOT mere visibility labels — they are OPERATIONAL roles the system gates on
+ * via `admins.role` directly (e.g. `createDriverBatch` does `.eq("role","driver")`,
+ * warehouse scan-in checks `warehouse`, money paths check `accounting`). With them
+ * gone from the picker you literally could not create a คนขับรถ / warehouse / etc.
+ * account. So the picker offers the FULL role set again (= the original "expose ALL"
+ * design · the ADMIN_ROLES docstring above).
  *
- * 2026-07-06 (owner · mig 0242) — `purchaser` / `purchaser_lead` were REMOVED
- * from this picker: the purchaser work-function moved OFF the money-tier role
- * axis and ONTO the POSITION axis (the "ผู้สั่งซื้อ" / "หัวหน้าสั่งซื้อ" positions
- * under biz_cs · admin_positions.workspace_role). Assign a purchaser by giving
- * them a visibility role (e.g. normies) + the position, NOT the raw role. They
- * stay in ADMIN_ROLES / ROLE_LABELS / the AdminRole union (workspace-role keys +
- * back-compat with any existing raw grant) and in the DB CHECK (harmless
- * still-allowed value) — just not offered in the money-tier dropdown. Safe:
- * 0 admins currently hold either raw role.
+ * The two axes still coexist:
+ *   • MONEY VISIBILITY — enforced by `canViewCostProfit` (ultra/accounting/pricing
+ *     see cost; super sees profit; the rest see sales only) — independent of which
+ *     role you pick here, so picking a functional role does NOT leak money.
+ *   • WORK FUNCTION — the picked role + (optionally) an admin_positions POSITION
+ *     (mig 0242 · e.g. purchaser via the position axis). Both are still available.
+ *
+ * Referencing ADMIN_ROLES directly keeps the picker exhaustive + drift-proof
+ * (ROLE_LABELS is already exhaustive over ADMIN_ROLES).
  */
-export const ASSIGNABLE_ROLES = [
-  "ultra",
-  "super",
-  "normies",
-] as const satisfies readonly AdminRoleEnum[];
+export const ASSIGNABLE_ROLES = ADMIN_ROLES;
 export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
 
 /**
