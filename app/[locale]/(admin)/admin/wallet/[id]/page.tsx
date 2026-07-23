@@ -162,6 +162,7 @@ type WalletHsRow = {
   type: string | null;
   typeservice: string | null;
   imagesslip: string | null;
+  slip_paths: unknown;
   userid: string;
   note: string | null;
   nouserbank: string | null;
@@ -236,7 +237,7 @@ export default async function AdminWalletDetail({
   const { data: rowRaw, error: rowErr } = await admin
     .from("tb_wallet_hs")
     .select(
-      "id,date,dateslip,amount,status,type,typeservice,imagesslip,userid,note,nouserbank,nameuserbank,depositnamebank,adminidupdate,reforder,reforder2,reviewed_at,payment_group_id,quote_snapshot",
+      "id,date,dateslip,amount,status,type,typeservice,imagesslip,slip_paths,userid,note,nouserbank,nameuserbank,depositnamebank,adminidupdate,reforder,reforder2,reviewed_at,payment_group_id,quote_snapshot",
     )
     .eq("id", id)
     .maybeSingle();
@@ -359,6 +360,14 @@ export default async function AdminWalletDetail({
 
   // ── Resolve slip URL (the OWN slip of this row) ──
   const slipUrl = await resolveLegacyUrl(row.imagesslip, "slip");
+  // สลิปใบที่ 2+ ของการจ่ายเดียวกัน (owner 2026-07-23 · slip_paths mig 0275). ใบแรกใน
+  // slip_paths = ใบหลัก (= imagesslip) → ตัดออกเพื่อไม่ให้ซ้ำกับ slipUrl. ว่าง = โชว์ใบเดียวเหมือนเดิม.
+  const extraSlipPaths = Array.isArray(row.slip_paths)
+    ? (row.slip_paths as unknown[]).filter((p): p is string => typeof p === "string" && p !== row.imagesslip)
+    : [];
+  const extraSlipUrls = (
+    await Promise.all(extraSlipPaths.map((p) => resolveLegacyUrl(p, "slip")))
+  ).filter((u): u is string => !!u);
 
   // ── Wave 19 BUG #4: paydeposit join ──
   // For TOPUPS (type 1/2)  → look forward: what did this topup pay for?
@@ -914,6 +923,7 @@ export default async function AdminWalletDetail({
               customerSlipUrl={customerSlipUrl}
               customerSlipMissingReason={customerSlipMissingReason}
               customerName={customerName}
+              extraSlipUrls={extraSlipUrls}
               dups={similar.map((s) => ({
                 id: s.id,
                 slipUrl: s.slipUrl,
