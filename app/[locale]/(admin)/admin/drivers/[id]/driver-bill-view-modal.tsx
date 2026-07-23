@@ -55,16 +55,20 @@ const TRIGGER_DEFAULT =
   "inline-flex items-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100";
 
 /**
- * The legacy PCS badge-pill (Bootstrap `badge badge-danger`, #DC3545) — a
- * fully-rounded capsule in a brighter red than our brand #B30000.
+ * The legacy PCS badge-pill (Bootstrap `badge badge-danger` family) — a
+ * fully-rounded capsule in a brighter red than our brand #B30000, with a
+ * left-to-right gradient (ปอน 2026-07-23) so it reads as a raised control
+ * rather than a flat status chip.
  *
- * ONE constant shared by the header trigger AND the per-group print action
- * (ปอน 2026-07-23): they are the same control in the user's mind — open the
- * bills / print the bills — so they must never drift apart. Exported so the
- * batch page can dress its trigger with it too.
+ * ONE constant shared by the header trigger AND the per-group print action:
+ * they are the same control in the user's mind — open the bills / print the
+ * bills — so they must never drift apart. Exported so the batch page can dress
+ * its trigger with it too.
  */
 export const BILL_BADGE_CLASS =
-  "inline-flex items-center gap-1.5 rounded-full bg-[#DC3545] px-3 py-1 text-xs font-semibold text-white hover:bg-[#C82333]";
+  "inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#C82333] to-[#E85D6E] " +
+  "px-3 py-1 text-xs font-semibold text-white shadow-sm " +
+  "hover:from-[#B21F2D] hover:to-[#DC4C5D]";
 
 const PAGE_SIZES = [10, 25, 50, 100];
 /** Legacy tints the ที่อยู่ cell so the eye lands on it first. */
