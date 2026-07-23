@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Mark-paid + cancel + SLIP client island for /admin/billing-run/[id].
+ * Slip-upload + notify + cancel client island for /admin/billing-run/[id].
  *
  * Per AGENTS.md §0e — only renders the action panels when the underlying
  * server action can actually do something (status='issued'). Paid/cancelled
@@ -11,24 +11,25 @@
  * ภูม 2026-06-30 — slip flow รวมเป็นแบบเดียวกับหน้า wallet (A4 ตรวจ 2 รอบ):
  *   • SALES (หรือทุก role บนหน้านี้) แนบสลิป (ได้หลายรูป) → slip_status='pending'
  *     → โผล่ในคิว "ชำระเงิน" (dashboard) ให้บัญชี.
- *   • บัญชี (canSettle) "ตรวจสลิป รอบ 1" → "อนุมัติ + ตัดจ่าย (รอบ 2)" / "ปฏิเสธสลิป".
- *     markBillingRunPaid บังคับว่าต้องตรวจรอบ 1 ก่อนถึงจะตัดจ่ายได้.
+ *
+ * owner 2026-07-23 — the slip-VERIFY itself (ตรวจสลิป รอบ 1 → อนุมัติ ตัดจ่าย →
+ * ออกใบเสร็จ → ปฏิเสธสลิป) + the paid-state ↩ ย้อนการรับชำระ now live in the shared
+ * guided combo <BillingRunVerifyFlow> — the SAME UI/flow as /admin/wallet/[id]
+ * และ /admin/yuan-payments/[id] (page-1 ตรวจสลิป รอบ 1 · page-2 อนุมัติ ตัดจ่าย ·
+ * success popup นำพาไปออกใบเสร็จ · reject = preset picker). This island keeps only
+ * the surrounding concerns: แนบสลิป · แจ้งเตือนลูกค้า · ยกเลิกใบวางบิล.
  */
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  markBillingRunPaid,
   cancelBillingRunInvoice,
-  adminReverseBillingRunPaid,
   sendBillingRunNotification,
   uploadBillingRunSlip,
-  reviewBillingRunSlipRound1,
-  rejectBillingRunSlip,
 } from "@/actions/admin/billing-run";
 import { uploadSlip } from "@/lib/storage-upload";
 import { SlipImage } from "@/components/admin/slip-image";
-import { ReceiptDocNoEditor } from "@/components/admin/receipt-doc-no-editor";
+import { BillingRunVerifyFlow } from "./billing-run-verify-flow";
 
 type Props = {
   invoiceId: number;
@@ -64,23 +65,6 @@ const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm " +
   "focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
-function thbFmt(n: number): string {
-  return n.toLocaleString("th-TH", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
-function isoToday(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-/** เวลาปัจจุบันแบบ 24 ชม "HH:mm" (ไม่มี AM/PM) — default ของช่องเวลารับชำระ. */
-function nowHHmm(): string {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
 /** Pure given the iso string (deterministic) — safe in render. */
 function fmtDateTime(iso: string | null): string {
   if (!iso) return "—";
@@ -98,53 +82,14 @@ export function BillingRunActions({
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
-  const [paymentMethod, setPaymentMethod] =
-    useState<"bank_transfer" | "cheque" | "wallet" | "other">("bank_transfer");
-  const [paymentRef, setPaymentRef] = useState("");
-  const [paidAt, setPaidAt] = useState(isoToday());
-  // เวลาที่รับชำระ (24 ชม) — เหมือนหน้า wallet · default = เวลาปัจจุบัน
-  const [paidAtTime, setPaidAtTime] = useState(nowHHmm());
-
   const [cancelReason, setCancelReason] = useState("");
   const [showCancelDialog, setShowCancelDialog] = useState(false);
-  // ↩ ย้อนการรับชำระ (paid → issued · owner 2026-07-16)
-  const [reverseReason, setReverseReason] = useState("");
-  const [reversing, startReverse] = useTransition();
 
-  // STEP-2 doc-number panel (2026-07-07). null = keep the auto-mint suggestion;
-  // string = accounting hand-picked the ใบเสร็จ เลขที่ (passed as overrideRid).
-  const [overrideRid, setOverrideRid] = useState<string | null>(null);
-
-  // G7 (2026-07-08) — no-slip "ชำระนอกระบบ (ยืนยันจบการ)" acknowledgment. A bill with
-  // no reviewed slip may not settle until the ตัดจ่าย admin ticks this + gives a reason.
-  const [offlineAck, setOfflineAck] = useState(false);
-  const [offlineReason, setOfflineReason] = useState("");
-
-  // Slip upload (multi) + reject
+  // Slip upload (multi)
   const fileRef = useRef<HTMLInputElement>(null);
   const [slipBusy, setSlipBusy] = useState(false);
-  const [rejectMode, setRejectMode] = useState(false);
-  const [rejectReason, setRejectReason] = useState("");
 
   const hasPendingSlip = slipStatus === "pending";
-  const round1Done = !!slipReviewedAt;
-  const round1Pending = hasPendingSlip && !round1Done; // ต้องตรวจรอบ 1 ก่อนตัดจ่าย
-
-  // Step-3 ตรวจสลิปซ้ำ (เวียนเทียน) — ถ้าพบใบที่จ่ายแล้ว ยอดตรงกัน ลูกค้าคนเดียวกัน
-  // ต้องยืนยันชัดเจนก่อนออกใบเสร็จ (markBillingRunPaid). DISPLAY-only.
-  const hasDup = dupWarnings.length > 0;
-  const [dupAck, setDupAck] = useState(false);
-
-  // 3-step tracker state (ordered per owner spec §2):
-  //   1) ตรวจยอด/เวลา/วันที่  = ตรวจสลิป รอบ 1 (reviewBillingRunSlipRound1)
-  //   2) ออกเลขบิล (ห้ามซ้ำ · บุคคล=ปกติ · นิติ=หัก ณ ที่จ่าย 1%) — เลขบิลถูกออกตอน
-  //      สร้างใบวางบิลแล้ว (docNo) → ขั้นนี้ = ยืนยัน/แสดง WHT ให้บัญชีเห็นชัด
-  //   3) ตรวจสลิปซ้ำ → ออกใบเสร็จ (markBillingRunPaid)
-  const step1Done = round1Done || !hasPendingSlip; // ไม่มีสลิป pending = ข้ามรอบ 1 (จ่ายนอกระบบ)
-  const step1Active = round1Pending;
-  const step2Active = step1Done && !step1Active;
-  // ขั้น 3 เปิดเมื่อผ่านขั้น 1 (ตรวจสลิปแล้ว หรือ ไม่มีสลิป pending)
-  const step3Active = step1Done;
 
   async function onSlipPicked(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -186,31 +131,6 @@ export function BillingRunActions({
     </div>
   ) : null;
 
-  // ↩ ย้อนการรับชำระ handler — §0f confirm ก่อน · unwind ที่ server (adminReverseBillingRunPaid).
-  function onReversePaid() {
-    const reason = reverseReason.trim();
-    if (reason.length < 3) return;
-    if (
-      !confirm(
-        `↩ ย้อนการรับชำระ ${docNo}?\n\nระบบจะ: ถอยบิลเป็น "ออกแล้ว (ยังไม่ชำระ)" · ถอยออเดอร์กลับ รอชำระเงิน (5) · คืนวงเงินเครดิต (ถ้ามี) · ยกเลิกใบเสร็จอัตโนมัติ\n\nเหตุผล: ${reason}`,
-      )
-    )
-      return;
-    startReverse(async () => {
-      const res = await adminReverseBillingRunPaid({ invoiceId, reason });
-      if (res.ok && res.data) {
-        const d = res.data;
-        setMsg({
-          kind: "ok",
-          text: `↩ ย้อนการรับชำระแล้ว · ถอยออเดอร์ ${d.revertedForwarders} รายการ${d.creditRestored > 0 ? ` · คืนเครดิต ${d.creditRestored} รายการ` : ""}${d.receiptVoided ? ` · ยกเลิกใบเสร็จ ${d.receiptVoided}` : ""}`,
-        });
-        router.refresh();
-      } else {
-        setMsg({ kind: "err", text: res.ok ? "ไม่สามารถย้อนได้" : res.error });
-      }
-    });
-  }
-
   if (status === "paid") {
     return (
       <section className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
@@ -226,39 +146,23 @@ export function BillingRunActions({
             </div>
           </div>
         )}
-        {/* ↩ ย้อนการรับชำระ (owner 2026-07-16 "ยกเลิกเอกสารแล้วสถานะต้องถอยเป็นเส้นตรง") —
-            unwind ครบวงจร: บิล paid→issued · เครดิตคืน · ออเดอร์ 6→5 · ใบเสร็จที่ออก
-            อัตโนมัติถูก void → รายการกลับเข้าคิววางบิล เลือกรวมกับรายการอื่นได้. */}
+        {/* ↩ ย้อนการรับชำระ (owner 2026-07-16 "ยกเลิกเอกสารแล้วสถานะต้องถอยเป็นเส้นตรง" ·
+            owner 2026-07-23 "reject → จบ ต้องเป็น flow เดียว") — the reject/unwind story,
+            continued in the SAME guided combo the issued state uses. */}
         {canSettle && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2">
-            <p className="text-[13px] font-semibold text-amber-800">
-              ↩ ย้อนการรับชำระ (ถอยกลับ &ldquo;รอชำระเงิน&rdquo; เพื่อแก้ไข/วางบิลใหม่รวมกับรายการอื่น)
-            </p>
-            <p className="text-[12px] text-amber-700">
-              ระบบจะ: ถอยบิลเป็น &ldquo;ออกแล้ว (ยังไม่ชำระ)&rdquo; · ถอยออเดอร์ 6→5 · คืนวงเงินเครดิต (ถ้ามี) ·
-              ยกเลิกใบเสร็จที่ออกอัตโนมัติ — จากนั้นกด &ldquo;ยกเลิกใบวางบิล&rdquo; ต่อได้เลย
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                value={reverseReason}
-                onChange={(e) => setReverseReason(e.target.value)}
-                placeholder="เหตุผลที่ย้อน (อย่างน้อย 3 ตัวอักษร)"
-                className={inputCls + " max-w-xs !py-1.5 text-[13px]"}
-                disabled={reversing}
-              />
-              <button
-                type="button"
-                disabled={reversing || reverseReason.trim().length < 3}
-                onClick={onReversePaid}
-                className="rounded-lg bg-amber-600 px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-              >
-                {reversing ? "กำลังย้อน..." : "↩ ย้อนการรับชำระ"}
-              </button>
-            </div>
-            {msg && (
-              <p className={`text-[12px] font-medium ${msg.kind === "ok" ? "text-emerald-700" : "text-red-600"}`}>{msg.text}</p>
-            )}
-          </div>
+          <BillingRunVerifyFlow
+            invoiceId={invoiceId}
+            docNo={docNo}
+            status="paid"
+            customerId={customerId}
+            totalThb={totalThb}
+            netPayable={netPayable}
+            whtAmount={whtAmount}
+            isJuristic={isJuristic}
+            slipStatus={slipStatus}
+            slipReviewedAt={slipReviewedAt}
+            dupWarnings={dupWarnings}
+          />
         )}
       </section>
     );
@@ -271,98 +175,6 @@ export function BillingRunActions({
         </p>
       </section>
     );
-  }
-
-  function onMarkPaid(e: React.FormEvent) {
-    e.preventDefault();
-    setMsg(null);
-
-    // ขั้น 3 — ตรวจสลิปซ้ำ: ถ้าพบใบจ่ายแล้วยอดตรงกัน (เวียนเทียน) ต้องกดยอมรับ
-    // ความเสี่ยงก่อน (checkbox) แล้วจึงยืนยันอีกชั้น (§0f confirm-before-mutate).
-    if (hasDup && !dupAck) {
-      setMsg({
-        kind: "err",
-        text: `⚠️ พบใบวางบิลที่จ่ายแล้ว ยอดตรงกัน (${dupWarnings.map((d) => d.doc_no).join(", ")}) — กรุณาติ๊กยืนยัน "ตรวจสลิปซ้ำแล้ว" ในขั้นที่ 3 ก่อนออกใบเสร็จ`,
-      });
-      return;
-    }
-
-    // G7 — no-slip bill: require the "ชำระนอกระบบ (ยืนยันจบการ)" ack + reason first.
-    if (!hasPendingSlip && (!offlineAck || offlineReason.trim().length < 3)) {
-      setMsg({
-        kind: "err",
-        text: 'บิลนี้ไม่มีสลิป — กรุณาติ๊ก "ชำระนอกระบบ (ยืนยันจบการ)" + ระบุเหตุผล (อย่างน้อย 3 ตัวอักษร) ก่อนตัดจ่าย',
-      });
-      return;
-    }
-
-    const verb = hasPendingSlip ? "อนุมัติ + ตัดจ่าย (รอบ 2)" : "บันทึกการรับชำระ";
-    const dupNote = hasDup
-      ? `\n\n⚠️ เตือน: พบใบที่จ่ายแล้วยอดตรงกัน (${dupWarnings.map((d) => d.doc_no).join(", ")}) — ยืนยันว่าตรวจสลิปซ้ำแล้ว?`
-      : "";
-    if (!confirm(`${verb} ${docNo} จำนวน ฿${thbFmt(totalThb)}?${dupNote}`)) return;
-
-    startTransition(async () => {
-      const res = await markBillingRunPaid({
-        invoiceId,
-        paymentMethod,
-        paymentReference: paymentRef,
-        paidAt,
-        paidAtTime,
-        // STEP-2: hand-picked receipt เลขที่ (null → auto-mint MAX+1).
-        overrideRid: overrideRid ?? undefined,
-        // G7: no-slip settle needs an explicit "ชำระนอกระบบ" confirm + reason. On the
-        // slip-bearing path offlineAck stays false + reason "" → ignored server-side.
-        offlineConfirmed: offlineAck,
-        offlineReason: offlineReason.trim(),
-      });
-      if (res.ok) {
-        // ภูม 2026-07-09 — SURFACE the auto-receipt outcome. A best-effort receipt
-        // failure used to be invisible (staff saw only "✓ รับชำระแล้ว" while no ใบเสร็จ
-        // was created — the PR086/FRI2607-00015 case). Now warn + prompt a manual issue.
-        if (res.data?.receiptWarning) {
-          setMsg({ kind: "err", text: `✓ บันทึกการรับชำระแล้ว · ⚠️ ${res.data.receiptWarning}` });
-        } else if (res.data?.receiptRid) {
-          setMsg({ kind: "ok", text: `✓ บันทึกการรับชำระแล้ว · ออกใบเสร็จ ${res.data.receiptRid} อัตโนมัติแล้ว` });
-        } else {
-          setMsg({ kind: "ok", text: "✓ บันทึกการรับชำระแล้ว" });
-        }
-        router.refresh();
-      } else {
-        setMsg({ kind: "err", text: res.error });
-      }
-    });
-  }
-
-  function reviewRound1() {
-    setMsg(null);
-    startTransition(async () => {
-      const res = await reviewBillingRunSlipRound1({ invoiceId });
-      if (res.ok) {
-        setMsg({ kind: "ok", text: "✓ ตรวจสลิป รอบ 1 แล้ว — กดอนุมัติ + ตัดจ่าย (รอบ 2) ได้เลย" });
-        router.refresh();
-      } else {
-        setMsg({ kind: "err", text: res.error });
-      }
-    });
-  }
-
-  function rejectSlip() {
-    if (rejectReason.trim().length < 3) {
-      setMsg({ kind: "err", text: "เหตุผลปฏิเสธต้องอย่างน้อย 3 ตัวอักษร" });
-      return;
-    }
-    startTransition(async () => {
-      const res = await rejectBillingRunSlip({ invoiceId, reason: rejectReason.trim() });
-      if (res.ok) {
-        setMsg({ kind: "ok", text: "✕ ปฏิเสธสลิปแล้ว — เซลแนบสลิปใหม่ได้" });
-        setRejectMode(false);
-        setRejectReason("");
-        router.refresh();
-      } else {
-        setMsg({ kind: "err", text: res.error });
-      }
-    });
   }
 
   function onSendNotification() {
@@ -456,249 +268,22 @@ export function BillingRunActions({
         </div>
       </div>
 
-      {/* ตรวจ 2 รอบ + ตัดจ่าย — ACCOUNTING only (canSettle) */}
+      {/* ตรวจสลิป (รอบ 1) → ตัดจ่าย (รอบ 2) → ออกใบเสร็จ → ปฏิเสธ — the guided combo
+          (same UI/flow as /admin/wallet/[id]) · ACCOUNTING only (canSettle). */}
       {canSettle ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-4 space-y-3">
-          {/* ── ขั้นตอนตรวจสลิป 3 ขั้น (owner spec §2) ─────────────────────── */}
-          <div className="rounded-xl border border-emerald-200 bg-white/70 p-3 space-y-2.5">
-            <h4 className="text-sm font-bold text-emerald-900">🧾 ตรวจสลิป 3 ขั้น ก่อนออกใบเสร็จ</h4>
-
-            {/* ขั้น 1 — ตรวจยอด/เวลา/วันที่ (= ตรวจสลิป รอบ 1) */}
-            <div className={`rounded-lg border px-3 py-2 text-[12px] ${step1Done ? "border-emerald-200 bg-emerald-50 text-emerald-800" : step1Active ? "border-sky-300 bg-sky-50 text-sky-800" : "border-border bg-surface-alt/40 text-muted"}`}>
-              <div className="flex items-center gap-2 font-semibold">
-                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-bold border border-current">
-                  {step1Done ? "✓" : "1"}
-                </span>
-                <span>ขั้น 1 · ตรวจยอด / เวลา / วันที่</span>
-              </div>
-              <p className="mt-0.5 pl-7 text-[11px]">
-                {!hasPendingSlip
-                  ? "ไม่มีสลิปรอตรวจ (จ่ายนอกระบบ) — ข้ามไปบันทึกการรับชำระได้เลย"
-                  : step1Done
-                    ? `ตรวจสลิป รอบ 1 แล้ว${slipReviewedAt ? ` · ${fmtDateTime(slipReviewedAt)}` : ""}`
-                    : "กด “ตรวจสลิป รอบ 1” ด้านล่าง เพื่อยืนยันยอด/เวลา/วันที่บนสลิป"}
-              </p>
-            </div>
-
-            {/* ขั้น 2 — ออกเลขบิล (ห้ามซ้ำ) + WHT บุคคล/นิติ */}
-            <div className={`rounded-lg border px-3 py-2 text-[12px] ${step2Active ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-border bg-surface-alt/40 text-muted"}`}>
-              <div className="flex items-center gap-2 font-semibold">
-                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-bold border border-current">2</span>
-                <span>ขั้น 2 · เลขบิล (ไม่ซ้ำ) + หัก ณ ที่จ่าย</span>
-              </div>
-              <div className="mt-1 pl-7 space-y-0.5 text-[11px]">
-                <div>เลขบิล: <span className="font-mono font-semibold">{docNo}</span> · ประเภท: <span className="font-semibold">{isJuristic ? "นิติบุคคล" : "บุคคลธรรมดา"}</span></div>
-                {whtAmount > 0 ? (
-                  <div className="text-red-700">
-                    หัก ณ ที่จ่าย 1% = ฿{thbFmt(whtAmount)} → ยอดชำระสุทธิ <span className="font-semibold">฿{thbFmt(netPayable)}</span>
-                    <span className="text-muted"> (จากยอดรวม ฿{thbFmt(totalThb)})</span>
-                  </div>
-                ) : (
-                  <div>บุคคลธรรมดา — ไม่มีหัก ณ ที่จ่าย · ยอดชำระ <span className="font-semibold">฿{thbFmt(totalThb)}</span></div>
-                )}
-              </div>
-            </div>
-
-            {/* ขั้น 3 — ตรวจสลิปซ้ำ (เวียนเทียน) → ออกใบเสร็จ */}
-            <div className={`rounded-lg border px-3 py-2 text-[12px] ${hasDup ? "border-red-300 bg-red-50 text-red-800" : step3Active ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-border bg-surface-alt/40 text-muted"}`}>
-              <div className="flex items-center gap-2 font-semibold">
-                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-bold border border-current">3</span>
-                <span>ขั้น 3 · ตรวจสลิปซ้ำ → ออกใบเสร็จ</span>
-              </div>
-              {hasDup ? (
-                <div className="mt-1 pl-7 space-y-1.5 text-[11px]">
-                  <div className="font-semibold">⚠️ พบใบวางบิลที่จ่ายแล้ว ยอดตรงกัน (ลูกค้า {customerId}) — อาจเป็นสลิปเวียนเทียน:</div>
-                  <ul className="space-y-0.5">
-                    {dupWarnings.map((d) => (
-                      <li key={d.id}>
-                        • <span className="font-mono font-semibold">{d.doc_no}</span> · ฿{thbFmt(d.total_thb)}
-                        {d.paid_at ? <> · จ่าย {fmtDateTime(d.paid_at)}</> : null}
-                      </li>
-                    ))}
-                  </ul>
-                  <label className="mt-1 flex items-start gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={dupAck}
-                      onChange={(e) => setDupAck(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 shrink-0 accent-red-600"
-                    />
-                    <span className="font-semibold">ตรวจสลิปซ้ำแล้ว — ยืนยันว่าไม่ใช่สลิปเวียนเทียน จึงออกใบเสร็จได้</span>
-                  </label>
-                </div>
-              ) : (
-                <p className="mt-0.5 pl-7 text-[11px]">
-                  ไม่พบใบที่จ่ายแล้วยอดตรงกันของลูกค้ารายนี้ · กดออกใบเสร็จได้เลย (บันทึกการรับชำระด้านล่าง)
-                </p>
-              )}
-            </div>
-          </div>
-
-          {round1Pending ? (
-            /* รอบ 1: ตรวจสลิป / ปฏิเสธ (ยังตัดจ่ายไม่ได้) */
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={reviewRound1}
-                disabled={pending}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-3 py-2.5 text-sm font-bold text-white hover:bg-sky-700 disabled:opacity-50"
-              >
-                {pending ? "กำลังบันทึก…" : "✓ ตรวจสลิป รอบ 1"}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setRejectMode(true); setMsg(null); }}
-                disabled={pending}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-500 bg-white px-3 py-2.5 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
-              >
-                ✕ ปฏิเสธสลิป
-              </button>
-            </div>
-          ) : (
-            /* รอบ 2 (หรือไม่มีสลิป): บันทึกการรับชำระ + ตัดจ่าย */
-            <form onSubmit={onMarkPaid} className="space-y-3">
-              <h4 className="font-medium text-sm text-emerald-800">
-                ✓ บันทึกการรับชำระ {hasPendingSlip ? "(อนุมัติ + ตัดจ่าย · รอบ 2)" : ""}
-              </h4>
-
-              {/* G7 — no-slip settle gate: this bill has no reviewed slip, so it can't
-                  skip the "ยืนยันจบการ" step. Require an explicit ชำระนอกระบบ ack + reason. */}
-              {!hasPendingSlip && (
-                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 space-y-2">
-                  <label className="flex items-start gap-2 text-[13px] text-amber-900">
-                    <input
-                      type="checkbox"
-                      checked={offlineAck}
-                      onChange={(e) => setOfflineAck(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 shrink-0 accent-amber-600"
-                    />
-                    <span className="font-semibold">ชำระนอกระบบ (ยืนยันจบการ) — บิลนี้ไม่มีสลิปในระบบ · ยืนยันว่าได้รับชำระจริงแล้ว</span>
-                  </label>
-                  <textarea
-                    value={offlineReason}
-                    onChange={(e) => setOfflineReason(e.target.value)}
-                    rows={2}
-                    className={inputCls}
-                    placeholder="เหตุผล/ช่องทางการรับชำระ (เช่น 'โอนเข้าบัญชีบริษัท ยืนยันจากบัญชี', 'เงินสด') · อย่างน้อย 3 ตัวอักษร"
-                  />
-                </div>
-              )}
-
-              {/* STEP-2 — doc-number panel (ออกเลขที่ใบเสร็จ) before ตัดจ่าย. Mark-paid
-                  auto-creates the ใบเสร็จ; let accounting see/edit the เลขที่ + dup-check
-                  first. Absent override → auto-mint (MAX+1) unchanged. */}
-              <ReceiptDocNoEditor
-                key={`${customerId}:${paidAt ?? ""}`}
-                userid={customerId}
-                dateSlipIso={paidAt}
-                onOverrideRidChange={setOverrideRid}
-                disabled={pending}
-              />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                <label>
-                  <span className="block text-xs font-medium text-muted mb-1">วิธีการชำระ</span>
-                  <select
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
-                    className={inputCls}
-                  >
-                    <option value="bank_transfer">โอนเงินผ่านธนาคาร</option>
-                    <option value="cheque">เช็ค</option>
-                    <option value="wallet">หักจาก wallet</option>
-                    <option value="other">อื่นๆ</option>
-                  </select>
-                </label>
-                <label>
-                  <span className="block text-xs font-medium text-muted mb-1">วันที่รับชำระ</span>
-                  <input type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} className={inputCls} />
-                </label>
-                <label>
-                  {/* เวลาที่รับชำระ — 24 ชม (HH:mm · ไม่มี AM/PM) เหมือนหน้า wallet */}
-                  <span className="block text-xs font-medium text-muted mb-1">เวลาที่รับชำระ (24 ชม)</span>
-                  <input
-                    type="time"
-                    step={60}
-                    value={paidAtTime}
-                    onChange={(e) => setPaidAtTime(e.target.value)}
-                    className={inputCls}
-                    lang="en-GB"
-                  />
-                </label>
-                <label>
-                  <span className="block text-xs font-medium text-muted mb-1">หมายเลขอ้างอิง</span>
-                  <input
-                    type="text"
-                    value={paymentRef}
-                    onChange={(e) => setPaymentRef(e.target.value)}
-                    placeholder="เลขอ้างอิงการโอน / เช็ค"
-                    className={inputCls}
-                  />
-                </label>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="submit"
-                  disabled={
-                    pending ||
-                    (hasDup && !dupAck) ||
-                    (!hasPendingSlip && (!offlineAck || offlineReason.trim().length < 3))
-                  }
-                  title={
-                    hasDup && !dupAck
-                      ? "ติ๊กยืนยัน ‘ตรวจสลิปซ้ำแล้ว’ ในขั้นที่ 3 ก่อน"
-                      : !hasPendingSlip && (!offlineAck || offlineReason.trim().length < 3)
-                        ? "ติ๊กยืนยัน ‘ชำระนอกระบบ (ยืนยันจบการ)’ + ระบุเหตุผลก่อน"
-                        : undefined
-                  }
-                  className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
-                >
-                  {pending ? "กำลังบันทึก..." : `${hasPendingSlip ? "อนุมัติ + ตัดจ่าย" : "ออกใบเสร็จ · บันทึกการรับชำระ"} ฿${thbFmt(totalThb)}`}
-                </button>
-                {hasPendingSlip && (
-                  <button
-                    type="button"
-                    onClick={() => { setRejectMode(true); setMsg(null); }}
-                    disabled={pending}
-                    className="rounded-lg border border-red-500 bg-white px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"
-                  >
-                    ✕ ปฏิเสธสลิป
-                  </button>
-                )}
-              </div>
-            </form>
-          )}
-
-          {/* ปฏิเสธสลิป — เหตุผล */}
-          {rejectMode && (
-            <div className="space-y-2 rounded-xl border border-red-300 bg-red-50 p-3">
-              <span className="block text-xs font-medium text-red-800">เหตุผลที่ปฏิเสธสลิป <span className="text-red-500">*</span></span>
-              <textarea
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                rows={2}
-                className={inputCls}
-                placeholder="เช่น 'สลิปไม่ชัด', 'ยอดไม่ตรง', 'โอนผิดบัญชี'"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={rejectSlip}
-                  disabled={pending || rejectReason.trim().length < 3}
-                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                >
-                  {pending ? "กำลังบันทึก..." : "ยืนยันปฏิเสธ"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setRejectMode(false); setRejectReason(""); }}
-                  className="rounded-lg border border-border bg-white dark:bg-surface px-4 py-2 text-sm hover:bg-surface-alt"
-                >
-                  ปิด
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        <BillingRunVerifyFlow
+          invoiceId={invoiceId}
+          docNo={docNo}
+          status="issued"
+          customerId={customerId}
+          totalThb={totalThb}
+          netPayable={netPayable}
+          whtAmount={whtAmount}
+          isJuristic={isJuristic}
+          slipStatus={slipStatus}
+          slipReviewedAt={slipReviewedAt}
+          dupWarnings={dupWarnings}
+        />
       ) : (
         <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
           <h4 className="font-medium text-sm text-amber-800">🔒 รอบัญชีตรวจสลิป + ตัดจ่าย</h4>
