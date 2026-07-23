@@ -52,6 +52,8 @@ import {
   DOC_CREAM as CREAM,
   DOC_CREAM_BD as CREAM_BD,
   DOC_GOLD as GOLD,
+  DocMetaBox,
+  DocMetaRow,
   DocPrintStyles,
 } from "@/components/admin/driver-doc-paper";
 import { SITE_LEGAL_NAME_TH, SITE_URL, ADDRESSES, CONTACT } from "@/components/seo/site";
@@ -349,10 +351,12 @@ export default async function DeliverySlipPage({
             <p className="mt-1.5 text-right text-[10px] font-medium tracking-[0.25em] text-slate-400">
               DELIVERY NOTE
             </p>
-            <div className="mt-4">
-              <MetaLine k="เลขที่/No." v={`#${docNo}`} accent />
-              <MetaLine k="วันที่/Date" v={dateLabel} />
-            </div>
+            {/* Same tinted meta box the sibling บิลจัดส่ง uses — shared
+                component, not a look-alike, so the two can never drift. */}
+            <DocMetaBox>
+              <DocMetaRow k="เลขที่/No." v={`#${docNo}`} />
+              <DocMetaRow k="วันที่/Date" v={dateLabel} last />
+            </DocMetaBox>
           </div>
         </div>
 
@@ -486,21 +490,6 @@ export default async function DeliverySlipPage({
           กดปุ่ม &quot;พิมพ์ใบส่งสินค้า&quot; ด้านบนเพื่อพิมพ์ หรือใช้คีย์บอร์ด Ctrl+P
         </p>
       </main>
-    </div>
-  );
-}
-
-/** `label : value` line in the document meta block (เลขที่/No. · วันที่/Date). */
-function MetaLine({ k, v, accent }: { k: string; v: string; accent?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-slate-200 py-1.5">
-      <span className="shrink-0 text-slate-500">{k} :</span>
-      <span
-        className="min-w-0 break-words text-right font-semibold"
-        style={accent ? { color: GOLD } : undefined}
-      >
-        {v}
-      </span>
     </div>
   );
 }
