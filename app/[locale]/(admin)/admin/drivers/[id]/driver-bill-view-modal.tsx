@@ -39,14 +39,26 @@ export type BillGroup = {
   totalCbm: number;
 };
 
+/** Default look — the wide button used inside the bottom action row. */
+const TRIGGER_DEFAULT =
+  "inline-flex items-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100";
+
 export function DriverBillViewModal({
   groups,
   batchName,
   printHref,
+  triggerClassName = TRIGGER_DEFAULT,
 }: {
   groups: BillGroup[];
   batchName: string;
   printHref: string;
+  /**
+   * Override the trigger's look. The batch header renders this as a compact
+   * chip right under the run meta (ปอน 2026-07-23) — staff open the bills far
+   * more often than they print, so it belongs beside the run identity rather
+   * than buried in the print row at the bottom.
+   */
+  triggerClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -55,12 +67,8 @@ export function DriverBillViewModal({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100"
-      >
-        <ReceiptText className="h-4 w-4" />
+      <button type="button" onClick={() => setOpen(true)} className={triggerClassName}>
+        <ReceiptText className="h-3.5 w-3.5" />
         ดูบิลใบเสร็จในรายการนี้
       </button>
 
