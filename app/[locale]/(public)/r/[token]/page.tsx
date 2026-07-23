@@ -18,6 +18,7 @@ import QRCode from "qrcode";
 import { SITE_URL } from "@/components/seo/site";
 import { ReceiptPaper } from "@/components/receipt/receipt-paper";
 import { loadReceiptDocument } from "@/lib/receipt/load-receipt-document";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyReceiptToken } from "@/lib/receipt/receipt-token";
 import PublicReceiptToolbar from "./public-receipt-toolbar";
 import ReceiptWhtCertGate from "./receipt-wht-cert-gate";
@@ -25,10 +26,22 @@ import ReceiptWhtCertGate from "./receipt-wht-cert-gate";
 export const dynamic = "force-dynamic";
 
 // A money document must never be indexed.
-export const metadata = {
-  title: "ใบเสร็จรับเงิน — Pacred",
-  robots: { index: false, follow: false },
-};
+// 🔴 title = เลขที่เอกสาร เพราะ Chrome ใช้ document.title เป็น "ชื่อไฟล์ตั้งต้น" ตอน Save PDF
+//    + เป็นหัวกระดาษ. ต้องอยู่ใน metadata (ไม่ใช่ <title> ใน body) — ถ้าหน้ามี metadata อยู่แล้ว
+//    <title> ที่ใส่ใน body จะกลายเป็น title ตัวที่ 2 และเบราว์เซอร์ใช้ "ตัวแรก" เสมอ
+//    (เจอจริง 2026-07-24: PDF ออกมาชื่อ generic ทั้งที่ใส่ <title> ไว้แล้ว).
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
+  const id = verifyReceiptToken(token);
+  let rid: string | null = null;
+  if (id !== null) {
+    const { data, error } = await createAdminClient()
+      .from("tb_receipt").select("rid").eq("id", id).maybeSingle<{ rid: string | null }>();
+    if (error) console.error("[/r title] failed", { message: error.message });
+    rid = (data?.rid ?? "").trim() || null;
+  }
+  return { title: rid ? { absolute: rid } : "ใบเสร็จรับเงิน — Pacred", robots: { index: false, follow: false } };
+}
 
 export default async function PublicReceiptPage({
   params,
@@ -80,8 +93,6 @@ export default async function PublicReceiptPage({
 
   return (
     <div className="min-h-screen bg-slate-100 print:bg-white">
-      {/* ชื่อไฟล์ตอน Save PDF = เลขที่เอกสาร (กฎ print กลาง 2026-07-23) */}
-      <title>{doc.commonProps.rid}</title>
       <div className="px-2 pt-4 sm:px-4">
         {isCancelled && (
           <div className="mx-auto max-w-2xl rounded-2xl border-2 border-red-400 bg-red-50 p-4 text-center text-red-800 mb-3">

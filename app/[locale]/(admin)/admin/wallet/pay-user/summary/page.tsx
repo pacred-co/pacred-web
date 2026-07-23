@@ -101,6 +101,14 @@ type FwRow = {
   frefrate: number | string | null;
 };
 
+// 🔴 title = ชื่อไฟล์ตอน Save PDF + หัวกระดาษ. ต้องอยู่ใน metadata เท่านั้น —
+//    layout ออก <title> ให้ทุกหน้าอยู่แล้ว, <title> ที่ใส่ใน body จึงเป็นตัวที่ 2
+//    และเบราว์เซอร์ใช้ "ตัวแรก" เสมอ (เจอจริง 2026-07-24). `absolute` = ไม่ต่อท้าย "| Pacred".
+export async function generateMetadata({ searchParams }: { searchParams: Promise<{ rID?: string }> }) {
+  const { rID } = await searchParams;
+  return { title: { absolute: (rID ?? "").trim() || "ใบแจ้งหนี้" } };
+}
+
 export default async function PaymentSummaryPage({
   searchParams,
 }: {

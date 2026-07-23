@@ -22,6 +22,7 @@
  * ผู้หักเก็บสำเนา) · เนื้อความเงินได้ = ค่าบริการขนส่ง หัก 1% (มาตรา 3 เตรส).
  */
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound, redirect } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { verifyReceiptToken } from "@/lib/receipt/receipt-token";
@@ -56,7 +57,7 @@ function Party({
   address: string;
 }) {
   return (
-    <div className="border border-gray-800 p-2">
+    <div className="border border-gray-800 px-2 py-1">
       <p className="text-[11px] font-bold">{role}</p>
       <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11px]">
         <span className="text-gray-600">ชื่อ</span>
@@ -95,7 +96,7 @@ function WhtForm({
   receiptNo: string;
 }) {
   return (
-    <div className="wht-form bg-white p-4 text-black" style={{ fontSize: "11px", lineHeight: 1.45 }}>
+    <div className="wht-form bg-white px-4 py-2.5 text-black" style={{ fontSize: "11px", lineHeight: 1.3 }}>
       <div className="flex items-start justify-between">
         <p className="text-[10px]">เลขที่อ้างอิง: {receiptNo}</p>
         <div className="text-right text-[10px]">
@@ -109,7 +110,7 @@ function WhtForm({
       </h1>
       <p className="text-center text-[10.5px]">ตามมาตรา 50 ทวิ แห่งประมวลรัษฎากร</p>
 
-      <div className="mt-2 space-y-2">
+      <div className="mt-1.5 space-y-1.5">
         {/* ผู้จ่ายเงิน = นิติลูกค้า (คนหัก 1%) — กรอกให้จากข้อมูลใบเสร็จ */}
         <Party
           role="ผู้มีหน้าที่หักภาษี ณ ที่จ่าย (ผู้จ่ายเงิน)"
@@ -127,7 +128,7 @@ function WhtForm({
       </div>
 
       {/* ตารางเงินได้ */}
-      <table className="mt-2 w-full border-collapse text-[11px] [&_td]:border [&_td]:border-gray-800 [&_th]:border [&_th]:border-gray-800">
+      <table className="mt-1.5 w-full border-collapse text-[11px] [&_td]:border [&_td]:border-gray-800 [&_td]:px-1 [&_td]:py-0.5 [&_th]:border [&_th]:border-gray-800 [&_th]:px-1 [&_th]:py-0.5">
         <thead>
           <tr className="text-center">
             <th className="p-1">ประเภทเงินได้พึงประเมินที่จ่าย</th>
@@ -169,16 +170,16 @@ function WhtForm({
       </p>
 
       {/* เซ็น + ตรา — ส่วนเดียวที่ลูกค้าต้องลงมือ */}
-      <div className="mt-2 grid grid-cols-[1fr_120px] gap-2">
-        <div className="border border-gray-800 p-2 text-center">
+      <div className="mt-1.5 grid grid-cols-[1fr_120px] gap-2">
+        <div className="border border-gray-800 px-2 py-1.5 text-center">
           <p className="text-[10.5px]">
             ขอรับรองว่าข้อความและตัวเลขดังกล่าวข้างต้นถูกต้องตรงกับความจริงทุกประการ
           </p>
-          <p className="mt-6">
+          <p className="mt-5">
             ลงชื่อ ............................................................ ผู้จ่ายเงิน
           </p>
-          <p className="mt-1.5">( ............................................................ )</p>
-          <p className="mt-1.5">วันที่ ............ / ................... / ...............</p>
+          <p className="mt-1">( ............................................................ )</p>
+          <p className="mt-1">วันที่ ............ / ................... / ...............</p>
         </div>
         <div className="flex items-center justify-center border border-gray-800 p-2 text-center text-[10.5px] text-gray-500">
           ประทับตรา
@@ -189,12 +190,28 @@ function WhtForm({
         </div>
       </div>
 
-      <p className="mt-1 text-[9.5px] text-gray-600">
+      <p className="mt-0.5 text-[9.5px] leading-snug text-gray-600">
         คำเตือน: ผู้มีหน้าที่ออกหนังสือรับรองการหักภาษี ณ ที่จ่าย ฝ่าฝืนไม่ปฏิบัติตามมาตรา 50 ทวิ
         แห่งประมวลรัษฎากร ต้องรับโทษทางอาญาตามมาตรา 35 แห่งประมวลรัษฎากร
       </p>
     </div>
   );
+}
+
+// 🔴 title = ชื่อไฟล์ตอน Save PDF + หัวกระดาษ. ต้องอยู่ใน metadata เท่านั้น —
+//    layout ออก <title> ให้ทุกหน้าอยู่แล้ว, <title> ที่ใส่ใน body จึงเป็นตัวที่ 2
+//    และเบราว์เซอร์ใช้ "ตัวแรก" เสมอ (เจอจริง 2026-07-24). `absolute` = ไม่ต่อท้าย "| Pacred".
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
+  const id = verifyReceiptToken(token);
+  let rid: string | null = null;
+  if (id !== null) {
+    const { data, error } = await createAdminClient()
+      .from("tb_receipt").select("rid").eq("id", id).maybeSingle<{ rid: string | null }>();
+    if (error) console.error("[wht-form title] failed", { message: error.message });
+    rid = (data?.rid ?? "").trim() || null;
+  }
+  return { title: { absolute: rid ? `50ทวิ ${rid}` : "ฟอร์ม 50 ทวิ" }, robots: { index: false, follow: false } };
 }
 
 export default async function ReceiptWhtFormPage({
@@ -224,9 +241,18 @@ export default async function ReceiptWhtFormPage({
 
   return (
     <div className="min-h-screen bg-slate-100 print:bg-white">
-      {/* ชื่อไฟล์ตอน Save PDF = 50ทวิ-<เลขใบเสร็จ> (กฎ print กลาง 2026-07-23) */}
-      <title>{`50ทวิ ${doc.commonProps.rid}`}</title>
-      <style>{`@media print { @page { size: A4 portrait; margin: 8mm; } }`}</style>
+      <style>{`
+        @media print {
+          @page { size: A4 portrait; margin: 8mm; }
+          /* 🔴 ฟอร์มห้ามถูกตัดกลาง (owner 2026-07-24: PDF จริงตัดฟอร์มที่ 2 คาหน้า) —
+             break-inside: avoid ทำให้ถ้าฉบับที่ 2 ลงไม่พอในหน้าแรก มันจะย้ายไปหน้าถัดไป
+             "ทั้งใบ" แทนที่จะโดนผ่าครึ่ง. ไม่ใช้ break-after: page บังคับ เพราะจะได้ 2 หน้า
+             เสมอแม้ตอนที่ใส่หน้าเดียวได้ */
+          .wht-form { break-inside: avoid; page-break-inside: avoid; }
+          /* เส้นปะคั่นระหว่างฉบับ = ของบนจอเท่านั้น (ตอนพิมพ์มันคือเศษที่ทำให้ล้นหน้า) */
+          .wht-cut-line { display: none !important; }
+        }
+      `}</style>
 
       {/* แถบบน — หายตอนพิมพ์ (กฎ .no-print กลาง) */}
       <div className="no-print mx-auto max-w-[210mm] px-3 py-3">
@@ -261,7 +287,7 @@ export default async function ReceiptWhtFormPage({
           whtAmount={whtAmount}
           receiptNo={doc.commonProps.rid}
         />
-        <div className="border-t border-dashed border-gray-400" />
+        <div className="wht-cut-line border-t border-dashed border-gray-400" />
         <WhtForm
           copyLabel="ฉบับที่ 2"
           copyNote="(สำหรับผู้หักภาษี ณ ที่จ่าย เก็บไว้เป็นหลักฐาน)"

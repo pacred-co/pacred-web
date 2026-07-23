@@ -30,6 +30,19 @@ import BackfillItemsButton from "./backfill-items-button";
 
 export const dynamic = "force-dynamic";
 
+// 🔴 title = ชื่อไฟล์ตอน Save PDF + หัวกระดาษ. ต้องอยู่ใน metadata เท่านั้น —
+//    layout ออก <title> ให้ทุกหน้าอยู่แล้ว, <title> ที่ใส่ใน body จึงเป็นตัวที่ 2
+//    และเบราว์เซอร์ใช้ "ตัวแรก" เสมอ (เจอจริง 2026-07-24). `absolute` = ไม่ต่อท้าย "| Pacred".
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const n = Number(id);
+  if (!Number.isInteger(n) || n <= 0) return { title: { absolute: "ใบเสร็จ" } };
+  const { data, error } = await createAdminClient()
+    .from("tb_receipt").select("rid").eq("id", n).maybeSingle<{ rid: string | null }>();
+  if (error) console.error("[forwarder-invoice title] failed", { message: error.message });
+  return { title: { absolute: (data?.rid ?? "").trim() || "ใบเสร็จ" } };
+}
+
 export default async function ForwarderInvoicePrintPage({
   params,
   searchParams,

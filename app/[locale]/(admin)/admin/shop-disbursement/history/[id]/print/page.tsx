@@ -42,6 +42,14 @@ function dateThai543(iso: string | null): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+// 🔴 title = ชื่อไฟล์ตอน Save PDF + หัวกระดาษ. ต้องอยู่ใน metadata เท่านั้น —
+//    layout ออก <title> ให้ทุกหน้าอยู่แล้ว, <title> ที่ใส่ใน body จึงเป็นตัวที่ 2
+//    และเบราว์เซอร์ใช้ "ตัวแรก" เสมอ (เจอจริง 2026-07-24). `absolute` = ไม่ต่อท้าย "| Pacred".
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return { title: { absolute: `ภาษีขาย ชุดเบิกจ่าย ${id}` } };
+}
+
 export default async function ShopDisbursementPrintPage({
   params,
 }: {
@@ -72,8 +80,6 @@ export default async function ShopDisbursementPrintPage({
 
   return (
     <main className="min-h-screen bg-gray-100 p-4 text-black print:bg-white print:p-0">
-      {/* ชื่อไฟล์ตอน Save PDF + หัวกระดาษ = ชื่อเอกสาร (กฎ print กลาง 2026-07-23) */}
-      <title>{`ภาษีขาย ชุดเบิกจ่าย ${batch.id}`}</title>
       {/* Toolbar — hidden on print */}
       <div className="mx-auto mb-3 flex max-w-[297mm] items-center justify-between print:hidden">
         <Link

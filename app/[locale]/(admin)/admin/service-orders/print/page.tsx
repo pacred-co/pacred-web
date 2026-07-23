@@ -107,6 +107,11 @@ type SearchParams = {
   form?: string;
 };
 
+// 🔴 title = ชื่อไฟล์ตอน Save PDF + หัวกระดาษ. ต้องอยู่ใน metadata เท่านั้น —
+//    layout ออก <title> ให้ทุกหน้าอยู่แล้ว, <title> ที่ใส่ใน body จึงเป็นตัวที่ 2
+//    และเบราว์เซอร์ใช้ "ตัวแรก" เสมอ (เจอจริง 2026-07-24). `absolute` = ไม่ต่อท้าย "| Pacred".
+export const metadata = { title: { absolute: "ใบรายการฝากสั่งซื้อ" } };
+
 export default async function AdminServiceOrderPrintPage({
   searchParams,
 }: {
@@ -409,8 +414,6 @@ export default async function AdminServiceOrderPrintPage({
   // ── Legacy / PCS skin (default · UNCHANGED) ───────────────────────────
   return (
     <div className="print-fullscreen-overlay">
-      {/* ชื่อไฟล์ตอน Save PDF + หัวกระดาษ = ชื่อเอกสาร (กฎ print กลาง 2026-07-23) */}
-      <title>ใบรายการฝากสั่งซื้อ</title>
       {/* Faithful printShop.php L86-92 — mark hPrintBill/hPrintBill2='1' on print
           (Server Action on mount; the render itself stays a pure read). */}
       <MarkPrintedOnMount hNos={docs.map((d) => d.hNo)} isReceipt={isReceipt} />

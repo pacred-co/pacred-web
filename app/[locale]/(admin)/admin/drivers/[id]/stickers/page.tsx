@@ -103,6 +103,14 @@ function hasClearAddress(f: Forwarder): boolean {
   return street !== "" && district !== "";
 }
 
+// 🔴 title = ชื่อไฟล์ตอน Save PDF + หัวกระดาษ. ต้องอยู่ใน metadata เท่านั้น —
+//    layout ออก <title> ให้ทุกหน้าอยู่แล้ว, <title> ที่ใส่ใน body จึงเป็นตัวที่ 2
+//    และเบราว์เซอร์ใช้ "ตัวแรก" เสมอ (เจอจริง 2026-07-24). `absolute` = ไม่ต่อท้าย "| Pacred".
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return { title: { absolute: `สติกเกอร์ รอบ #${id}` } };
+}
+
 export default async function DriverStickerSheetPage({
   params,
   searchParams,
@@ -310,10 +318,6 @@ export default async function DriverStickerSheetPage({
 
   return (
     <div className="bg-white text-black min-h-screen">
-
-    {/* ชื่อไฟล์ตอน Save PDF + หัวกระดาษ = ชื่อเอกสาร (กฎ print กลาง 2026-07-23) */}
-
-    <title>{`สติกเกอร์ ${batch.fdname ?? `รอบ #${batchId}`}`}</title>
       {/* Print-only styles — A4 portrait, 2-across sticker grid. Each sticker
           is a fixed ~90mm × 55mm card (≈ a common 2-column A4 label sheet). */}
       <style>{`

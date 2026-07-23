@@ -282,6 +282,11 @@ type BoxQr = { detail: string; gateway: string; tracking: string | null };
 // ─────────────────────────────────────────────────────────────
 // Page
 // ─────────────────────────────────────────────────────────────
+// 🔴 title = ชื่อไฟล์ตอน Save PDF + หัวกระดาษ. ต้องอยู่ใน metadata เท่านั้น —
+//    layout ออก <title> ให้ทุกหน้าอยู่แล้ว, <title> ที่ใส่ใน body จึงเป็นตัวที่ 2
+//    และเบราว์เซอร์ใช้ "ตัวแรก" เสมอ (เจอจริง 2026-07-24). `absolute` = ไม่ต่อท้าย "| Pacred".
+export const metadata = { title: { absolute: "ใบงานนำเข้า" } };
+
 export default async function ForwarderLabelPrintPage({
   searchParams,
 }: {
@@ -299,8 +304,6 @@ export default async function ForwarderLabelPrintPage({
   if (ids.length === 0) {
     return (
       <main className="min-h-screen bg-gray-50 p-6 text-gray-900">
-      {/* ชื่อไฟล์ตอน Save PDF + หัวกระดาษ = ชื่อเอกสาร (กฎ print กลาง 2026-07-23) */}
-      <title>ใบงานนำเข้า</title>
         <div className="mx-auto max-w-3xl space-y-4">
           <div className="rounded-lg border border-amber-300 bg-amber-50 p-6 shadow-sm">
             <h1 className="mb-2 text-xl font-bold text-amber-900">

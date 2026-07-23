@@ -29,6 +29,7 @@ import QRCode from "qrcode";
 import { SITE_URL, ADDRESSES } from "@/components/seo/site";
 import { BillingRunPaper, type BillingRunPaperRow } from "@/components/billing-run/billing-run-paper";
 import { loadBillingRunDocument } from "@/lib/billing/load-billing-run-document";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyBillToken } from "@/lib/receipt/receipt-token";
 import { readThaiBaht } from "@/lib/utils/thai-number";
 import { BILL_ROWS_PER_PAGE } from "@/lib/receipt/rows-per-page";
@@ -40,10 +41,22 @@ import PublicBillPayBlock from "./public-bill-pay-block";
 export const dynamic = "force-dynamic";
 
 // A money document must never be indexed.
-export const metadata = {
-  title: "ใบวางบิล — Pacred",
-  robots: { index: false, follow: false },
-};
+// 🔴 title = เลขที่เอกสาร เพราะ Chrome ใช้ document.title เป็น "ชื่อไฟล์ตั้งต้น" ตอน Save PDF
+//    + เป็นหัวกระดาษ. ต้องอยู่ใน metadata (ไม่ใช่ <title> ใน body) — ถ้าหน้ามี metadata อยู่แล้ว
+//    <title> ที่ใส่ใน body จะกลายเป็น title ตัวที่ 2 และเบราว์เซอร์ใช้ "ตัวแรก" เสมอ
+//    (เจอจริง 2026-07-24: PDF ออกมาชื่อ generic ทั้งที่ใส่ <title> ไว้แล้ว).
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
+  const id = verifyBillToken(token);
+  let docNo: string | null = null;
+  if (id !== null) {
+    const { data, error } = await createAdminClient()
+      .from("tb_forwarder_invoice").select("doc_no").eq("id", id).maybeSingle<{ doc_no: string | null }>();
+    if (error) console.error("[/b title] failed", { message: error.message });
+    docNo = (data?.doc_no ?? "").trim() || null;
+  }
+  return { title: docNo ? { absolute: docNo } : "ใบวางบิล — Pacred", robots: { index: false, follow: false } };
+}
 
 // Paginate identically to the admin print page (shared BILL_ROWS_PER_PAGE=24).
 const ROWS_PER_PAGE = BILL_ROWS_PER_PAGE;
