@@ -12,6 +12,7 @@
  */
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { ReceiptText, X, Printer } from "lucide-react";
 
 export type BillGroupItem = {
@@ -60,6 +61,8 @@ export function DriverBillViewModal({
    */
   triggerClassName?: string;
 }) {
+  // No `mounted` guard needed: `open` starts false, so the portal branch is
+  // never evaluated during SSR — `document` is only touched after a click.
   const [open, setOpen] = useState(false);
 
   const grandBoxes = groups.reduce((s, g) => s + g.totalBoxes, 0);
@@ -72,25 +75,34 @@ export function DriverBillViewModal({
         ดูบิลใบเสร็จในรายการนี้
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/50 p-4">
-          <div className="my-6 w-full max-w-5xl rounded-2xl bg-white shadow-xl">
-            {/* Header */}
-            <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
-              <div>
-                <h3 className="text-base font-bold text-foreground">บิลรายการส่งสินค้า · {batchName}</h3>
+      {/* PORTAL TO BODY — load-bearing, not tidiness. This dialog lives deep
+          inside the page content, and an ancestor there opens its own stacking
+          context, so the overlay's z-index was only ever compared against its
+          SIBLINGS — never against the admin shell's `fixed z-[60]` header.
+          Result: the header painted over the dialog's top edge (worst on
+          mobile, where the title wraps to two lines) and NO z-index value
+          could have fixed it. Portaling to <body> puts the overlay in the root
+          stacking context, where z-[90] genuinely beats the header's 60. */}
+      {open && createPortal(
+        <div className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto overscroll-contain bg-black/50 p-3 sm:p-4">
+          <div className="my-4 w-full max-w-5xl rounded-2xl bg-white shadow-xl sm:my-6">
+            {/* Header — wraps on narrow screens so the action never gets
+                pushed off the edge (was a single non-wrapping row). */}
+            <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border px-3 py-3 sm:px-4">
+              <div className="min-w-0">
+                <h3 className="text-base font-bold text-foreground break-words">บิลรายการส่งสินค้า · {batchName}</h3>
                 <p className="text-[11px] text-muted">
                   {groups.length} จุดส่ง · {grandTracks} แทรคกิ้ง · {grandBoxes} กล่อง
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="ml-auto flex shrink-0 items-center gap-2">
                 <a
                   href={printHref}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 px-3 py-1.5 text-sm font-medium text-primary-700 hover:bg-primary-100"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700"
                 >
-                  <Printer className="h-4 w-4" /> พิมพ์บิลจัดส่ง
+                  <Printer className="h-4 w-4" /> พิมพ์และบันทึกบิลรวม
                 </a>
                 <button
                   type="button"
@@ -101,10 +113,14 @@ export function DriverBillViewModal({
                   <X className="h-4 w-4" />
                 </button>
               </div>
+              {/* legacy helper line that sits beside this action in PCS */}
+              <p className="w-full text-[11px] text-muted">
+                พิมพ์ใบค้นหาสินค้าหลังจากมอบหมายงานคนขับรถในหน้ารายละเอียดงาน
+              </p>
             </div>
 
             {/* Grouped body */}
-            <div className="max-h-[75vh] space-y-4 overflow-y-auto p-4">
+            <div className="max-h-[68vh] space-y-4 overflow-y-auto p-3 sm:max-h-[75vh] sm:p-4">
               {groups.map((g, gi) => (
                 <div key={g.key} className="rounded-xl border border-border overflow-hidden">
                   {/* group header — customer + carrier + address */}
@@ -159,7 +175,8 @@ export function DriverBillViewModal({
               ))}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
