@@ -44,6 +44,155 @@ const CBM_BASIS_LABEL: Record<string, string> = {
   per_box: "คิว = ต่อกล่อง (ต้นทุน = คิว × เรท × จำนวนกล่อง)",
 };
 
+/** คิว 4 ตำแหน่ง (เท่าที่ MOMO พิมพ์บนใบ) — 6 ตำแหน่งที่เราเก็บไว้ไม่ต้องโชว์ให้ตาลาย. */
+const cbm = (n: number | null) =>
+  n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+/** เติมเครื่องหมายเสมอ — ดิฟที่ไม่มีเครื่องหมายอ่านไม่ออกว่าบวกหรือลบ. */
+const signedBaht = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : "±"}฿${baht(Math.abs(n))}`;
+const signedCbm = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : "±"}${cbm(Math.abs(n))}`;
+
+/** ป้ายดิฟ — `good` บอกว่า "บวก" แปลว่าดีหรือแย่ (ต้นทุนบวก = แย่ · กำไรบวก = ดี). */
+function DiffPill({ value, text, good }: { value: number; text: string; good: "up" | "down" }) {
+  const nil = Math.abs(value) < 0.005;
+  const positive = value > 0;
+  const isGood = nil ? null : good === "up" ? positive : !positive;
+  const cls = nil
+    ? "bg-gray-100 text-gray-600"
+    : isGood
+      ? "bg-emerald-100 text-emerald-800"
+      : "bg-red-100 text-red-800";
+  return <span className={`rounded-full px-2 py-0.5 text-[12px] font-semibold tabular-nums ${cls}`}>{text}</span>;
+}
+
+/**
+ * สรุปเทียบทั้งใบ — owner 2026-07-23: *"เวลาบัญชีเขาเอาไฟล์ pdf มาใส่เทียบ ต้องขึ้น คิวในระบบ
+ * คิวที่ momo เรียกเก็บมา ดิฟกัน + - เท่าไร ต้นทุน MOMO เก็บเราเท่าไร ระบบเรา ขายเขาไปเท่าไร
+ * มีช่องแสดงผล diff กำไร + - ให้ดูด้วยครับ"*
+ *
+ * ทุกตัวเลขมาจาก `buildReconcileTotals` ฝั่ง server (lib/admin/momo-invoice-reconcile.ts)
+ * — หน้านี้ไม่คำนวณเงินเอง จะได้ไม่มีวันเพี้ยนจากตารางข้างล่างหรือยอดต่อตู้.
+ *
+ * Σ นับเฉพาะบรรทัดที่ "จับคู่กับระบบได้" เพราะบรรทัดที่หาแถวไม่เจอไม่มีคิว/ขาย/ต้นทุนของเรา
+ * ให้เทียบ — บรรทัดพวกนั้นรายงานแยกไว้ท้ายการ์ด (§0f อย่ามั่ว: ไม่กลืนหาย ไม่เอาไปปนยอด).
+ */
+function ReconcileSummary({ p }: { p: MomoIngestPreview }) {
+  const r = p.reconcile;
+  const partial = r.unmatchedLines > 0;
+
+  return (
+    <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
+      <div>
+        <h2 className="text-sm font-semibold">สรุปเทียบใบนี้กับระบบ</h2>
+        <p className="mt-0.5 text-[12px] text-muted">
+          เทียบ <strong>คิว</strong> · <strong>ต้นทุนที่ MOMO เก็บ</strong> · <strong>ราคาขาย</strong> ·{" "}
+          <strong>กำไรก่อน/หลังบันทึก</strong> — ตัวเลขชุดนี้คิดจาก {r.matchedLines} บรรทัดที่จับคู่กับระบบได้
+          {partial && <> (จากทั้งใบ {r.lines} บรรทัด)</>}
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {/* ── คิว ───────────────────────────────────────── */}
+        <div className="rounded-xl border border-border bg-surface-alt/40 p-3">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-muted">คิว (CBM)</div>
+          <dl className="mt-2 space-y-1 text-[13px]">
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted">ในระบบเรา</dt>
+              <dd className="font-semibold tabular-nums">{cbm(r.ourCbm)}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted">MOMO เรียกเก็บ</dt>
+              <dd className="font-semibold tabular-nums">{cbm(r.invoiceCbm)}</dd>
+            </div>
+          </dl>
+          <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2">
+            <span className="text-[12px] text-muted">ดิฟ</span>
+            <DiffPill value={r.cbmDiff} text={signedCbm(r.cbmDiff)} good="up" />
+          </div>
+          <p className="mt-1 text-[11px] text-muted">
+            + = ระบบเรามีคิวมากกว่าที่ใบเรียกเก็บ · − = MOMO เก็บคิวมากกว่าที่เรามี
+          </p>
+        </div>
+
+        {/* ── ต้นทุน ────────────────────────────────────── */}
+        <div className="rounded-xl border border-border bg-surface-alt/40 p-3">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-muted">ต้นทุน — MOMO เก็บเรา</div>
+          <div className="mt-1 text-xl font-bold tabular-nums">฿{baht(r.invoiceCost)}</div>
+          <dl className="mt-2 space-y-1 text-[13px]">
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted">ระบบบันทึกไว้ตอนนี้</dt>
+              <dd className="font-semibold tabular-nums">฿{baht(r.currentCost)}</dd>
+            </div>
+          </dl>
+          <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2">
+            <span className="text-[12px] text-muted">ดิฟ</span>
+            <DiffPill value={r.costDiff} text={signedBaht(r.costDiff)} good="down" />
+          </div>
+          <p className="mt-1 text-[11px] text-muted">+ = MOMO เก็บมากกว่าที่ระบบบันทึกไว้ (บันทึกแล้วต้นทุนเพิ่ม)</p>
+        </div>
+
+        {/* ── ขาย ───────────────────────────────────────── */}
+        <div className="rounded-xl border border-border bg-surface-alt/40 p-3">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-muted">ระบบเราขายไป</div>
+          <div className="mt-1 text-xl font-bold tabular-nums">฿{baht(r.sell)}</div>
+          <p className="mt-2 text-[11px] text-muted">
+            ค่านำเข้าจีน-ไทย ที่เก็บลูกค้า (ช่องเดียวกับ “ราคาขาย” ในหน้ารายงานตู้) —{" "}
+            <strong>ไม่รวม</strong>ค่าขนส่งในไทย · ตีลัง · อื่นๆ เพราะ MOMO ไม่ได้เก็บขาพวกนั้น
+          </p>
+          {r.sellMissingLines > 0 && (
+            <p className="mt-1 rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+              ⚠ ยังไม่ตั้งราคา {r.sellMissingLines} รายการ — กำไรด้านขวายังต่ำกว่าจริงอยู่
+            </p>
+          )}
+        </div>
+
+        {/* ── กำไร ──────────────────────────────────────── */}
+        <div className="rounded-xl border border-border bg-surface-alt/40 p-3">
+          <div className="text-[11px] font-medium uppercase tracking-wide text-muted">กำไร (ขาย − ต้นทุน)</div>
+          <dl className="mt-2 space-y-1 text-[13px]">
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted">ตอนนี้</dt>
+              <dd className="font-semibold tabular-nums">฿{baht(r.profitNow)}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted">หลังบันทึกใบนี้</dt>
+              <dd className={`font-semibold tabular-nums ${r.profitAfter < 0 ? "text-red-700" : ""}`}>
+                ฿{baht(r.profitAfter)}
+              </dd>
+            </div>
+          </dl>
+          <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2">
+            <span className="text-[12px] text-muted">ดิฟ</span>
+            <DiffPill value={r.profitDiff} text={signedBaht(r.profitDiff)} good="up" />
+          </div>
+          <p className="mt-1 text-[11px] text-muted">+ = บันทึกใบนี้แล้วกำไรเพิ่ม · − = กำไรลด</p>
+        </div>
+      </div>
+
+      {/* ยอดทั้งใบ vs ยอดที่เทียบได้ — ต้องเห็นว่ามีส่วนที่ยังเทียบไม่ได้เหลืออยู่ไหม */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-2 text-[12px]">
+        <span>
+          <span className="text-muted">ยอดทั้งใบ (Σ ทุกบรรทัด): </span>
+          <strong className="tabular-nums">฿{baht(r.invoiceCostAll)}</strong>
+        </span>
+        {p.whtThb != null && (
+          <span className="text-muted">
+            หัก ณ ที่จ่าย 1% บนใบ: <strong className="tabular-nums text-foreground">฿{baht(p.whtThb)}</strong>
+          </span>
+        )}
+        {partial ? (
+          <span className="rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-800">
+            ยังเทียบไม่ได้ {r.unmatchedLines} บรรทัด ฿{baht(r.unmatchedCost)} — จับคู่กับระบบไม่ได้ (ดูเหตุผลรายบรรทัดด้านล่าง)
+          </span>
+        ) : (
+          <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800">
+            เทียบได้ครบทุกบรรทัด
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /**
  * สรุป "ต่อตู้" + สะพานไปตัดจ่ายค่าตู้ — owner: "MOMO วางบิลเรามาเป็น Tracking ครับ แต่เรา
  * คิดเป็นตู้ ไปตรวจให้ตรงกันนะครับ" แล้ว "ทำตัดจ่ายต้นทุนตู้ในระบบเราได้เลย".
@@ -99,7 +248,9 @@ function CabinetRollupCard({ rollup, invoiceNo }: { rollup: MomoInvoiceCabinetRo
           <thead className="bg-surface-alt/50 text-[11px] uppercase tracking-wide text-muted">
             <tr>
               <th className="px-2 py-2 text-left">ตู้</th>
+              <th className="px-2 py-2 text-right">คิว เรา / ใบ · ดิฟ</th>
               <th className="px-2 py-2 text-right">ใบรอบนี้เรียกเก็บ</th>
+              <th className="px-2 py-2 text-right">ขาย · กำไรหลังบันทึก</th>
               <th className="px-2 py-2 text-right">ต้นทุนทั้งตู้ในระบบเรา</th>
               <th className="px-2 py-2 text-left">ผล / ต้องทำอะไร</th>
               <th className="px-2 py-2 text-right">ตัดจ่าย</th>
@@ -119,8 +270,21 @@ function CabinetRollupCard({ rollup, invoiceNo }: { rollup: MomoInvoiceCabinetRo
                   {c.paid && <span className="ml-1 rounded bg-gray-200 px-1 text-[11px] text-gray-700">จ่ายแล้ว</span>}
                 </td>
                 <td className="px-2 py-2 text-right whitespace-nowrap">
+                  <span className="tabular-nums">{cbm(c.ourCbm)}</span>
+                  <span className="text-muted"> / {cbm(c.invoiceCbm)}</span>
+                  <div className="mt-0.5">
+                    <DiffPill value={c.cbmDiff} text={signedCbm(c.cbmDiff)} good="up" />
+                  </div>
+                </td>
+                <td className="px-2 py-2 text-right whitespace-nowrap">
                   <span className="font-semibold">฿{baht(c.invoiceTotal)}</span>
                   <div className="text-[11px] text-muted">{c.invoiceLines} แทรคกิ้ง</div>
+                </td>
+                <td className="px-2 py-2 text-right whitespace-nowrap">
+                  <span className="tabular-nums">฿{baht(c.ourSell)}</span>
+                  <div className={`text-[11px] font-medium tabular-nums ${c.profitAfter < 0 ? "text-red-700" : "text-emerald-700"}`}>
+                    กำไร ฿{baht(c.profitAfter)}
+                  </div>
                 </td>
                 <td className="px-2 py-2 text-right whitespace-nowrap">
                   {c.ourCostSum == null ? (
@@ -436,18 +600,9 @@ export function MomoInvoiceCostClient() {
           }}
         />
 
-        {preview && preview.canApply && preview.summary.willApply > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => doApply()}
-              disabled={pending}
-              className="rounded-full bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
-            >
-              บันทึกต้นทุนทั้งหมด ({preview.summary.willApply} แทรคกิ้ง)
-            </button>
-          </div>
-        )}
+        {/* ปุ่ม "บันทึกต้นทุน" ไม่ได้อยู่ตรงนี้แล้ว — ย้ายลงไปเป็น "ขั้นที่ 1" ใต้สรุปเทียบ
+            (owner 2026-07-23: "แจงให้ถูก แล้วกดบันทึก ตาม step ได้เลย") เพราะปุ่มที่ลอยอยู่
+            เหนือสรุป ทำให้กดบันทึกได้ก่อนอ่านดิฟ = จุดประสงค์ของหน้านี้หายไปทั้งหน้า. */}
 
         {/* ทางสำรอง — เผื่อไฟล์เปิดไม่ได้/ยังไม่มีไฟล์ แต่มีข้อความ (ของเดิม ใช้ได้เหมือนเดิม) */}
         <details open={showPaste} onToggle={(e) => setShowPaste((e.currentTarget as HTMLDetailsElement).open)}>
@@ -512,6 +667,52 @@ export function MomoInvoiceCostClient() {
         )}
       </section>
 
+      {/* สรุปเทียบทั้งใบ — คิว/ต้นทุน/ขาย/กำไร + ดิฟ (owner 2026-07-23) · อยู่บนสุดของผลตรวจ */}
+      {preview && <ReconcileSummary p={preview} />}
+
+      {/* ── ขั้นที่ 1 · บันทึกต้นทุน ─────────────────────────────────────────
+          อยู่ "ใต้" สรุปโดยตั้งใจ: อ่านดิฟก่อน แล้วค่อยกดบันทึก (owner: แจงให้ถูก แล้วกดบันทึก
+          ตาม step). ปุ่มเรียก doApply() ตัวเดิมทุกประการ — server ยังแกะไฟล์ใหม่เองและเขียนแค่
+          fcosttotalprice เหมือนเดิม ไม่มีอะไรบนหน้าจอนี้ที่ส่งตัวเลขเงินไปให้ server. */}
+      {preview && preview.canApply && preview.summary.willApply > 0 && (
+        <section className="rounded-2xl border border-amber-300 bg-amber-50/60 dark:bg-surface p-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">
+                <span className="mr-1.5 rounded-full bg-amber-500 px-2 py-0.5 text-[12px] font-bold text-white">
+                  ขั้นที่ 1
+                </span>
+                บันทึกต้นทุนจากใบนี้
+              </h2>
+              <p className="mt-1 text-[12px] text-muted">
+                เขียนต้นทุนตามที่ MOMO เรียกเก็บ ลง {preview.summary.willApply} แทรคกิ้ง ·{" "}
+                {preview.reconcile.costDiff === 0 ? (
+                  <>ต้นทุนรวมเท่าเดิม</>
+                ) : (
+                  <>
+                    ต้นทุนรวมจะ{preview.reconcile.costDiff > 0 ? "เพิ่ม" : "ลด"}{" "}
+                    <strong className="tabular-nums">฿{baht(Math.abs(preview.reconcile.costDiff))}</strong> → กำไรจะ
+                    {preview.reconcile.profitDiff >= 0 ? "เพิ่ม" : "ลด"}{" "}
+                    <strong className="tabular-nums">฿{baht(Math.abs(preview.reconcile.profitDiff))}</strong>
+                  </>
+                )}
+                {preview.summary.blocked > 0 && (
+                  <> · ยังมี {preview.summary.blocked} บรรทัดที่ถูกบล็อก (ไม่ถูกบันทึก)</>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => doApply()}
+              disabled={pending}
+              className="rounded-full bg-amber-500 px-5 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+            >
+              บันทึกต้นทุนทั้งหมด ({preview.summary.willApply} แทรคกิ้ง)
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* สรุปต่อตู้ (ข้อมูลอ้างอิง) — MOMO วางบิลเป็นแทรคกิ้ง บางบิลมีหลายตู้ */}
       {preview && preview.rows.length > 0 && (
         <CabinetRollupCard rollup={preview.byCabinet} invoiceNo={preview.invoiceNo} />
@@ -529,7 +730,12 @@ export function MomoInvoiceCostClient() {
           <section className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-5 shadow-sm space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-sm font-semibold">ตัดจ่ายบิล MOMO</h2>
+                <h2 className="text-sm font-semibold">
+                  <span className="mr-1.5 rounded-full bg-emerald-600 px-2 py-0.5 text-[12px] font-bold text-white">
+                    ขั้นที่ 2
+                  </span>
+                  ตัดจ่ายบิล MOMO
+                </h2>
                 <p className="mt-0.5 text-[12px] text-muted">
                   ออกเลขเอกสารตัดจ่าย (MCS…) + เก็บประวัติ · แนบสลิปย้อนหลังได้ที่ “ประวัติการตัดจ่าย”
                   {settledCount > 0 && <> · ตัดจ่ายแล้ว {settledCount} รายการ</>}
@@ -602,8 +808,10 @@ export function MomoInvoiceCostClient() {
                   <th className="px-2 py-2 text-left">แทรคกิ้ง (บนใบ)</th>
                   <th className="px-2 py-2 text-left">ลูกค้า / ตู้ (ระบบเรา)</th>
                   <th className="px-2 py-2 text-right">คิว × เรท · กล่อง</th>
+                  <th className="px-2 py-2 text-right">คิว เรา / ใบ · ดิฟ</th>
                   <th className="px-2 py-2 text-right">ต้นทุนปัจจุบัน</th>
                   <th className="px-2 py-2 text-right">ต้นทุนใบแจ้งหนี้</th>
+                  <th className="px-2 py-2 text-right">ขาย · กำไร</th>
                   <th className="px-2 py-2 text-left">ผล / ต้องทำอะไร</th>
                 </tr>
               </thead>
@@ -658,8 +866,45 @@ export function MomoInvoiceCostClient() {
                     <td className="px-2 py-2 text-right text-muted whitespace-nowrap">
                       {r.cbm} × {baht(r.unitPrice)} · {r.qty} กล่อง
                     </td>
+                    <td className="px-2 py-2 text-right whitespace-nowrap">
+                      {r.matched ? (
+                        <>
+                          <span className="tabular-nums">{cbm(r.ourCbm)}</span>
+                          <span className="text-muted"> / {cbm(r.invoiceCbm)}</span>
+                          {r.cbmDiff != null && (
+                            <div className="mt-0.5">
+                              <DiffPill value={r.cbmDiff} text={signedCbm(r.cbmDiff)} good="up" />
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-muted">— / {cbm(r.invoiceCbm)}</span>
+                      )}
+                    </td>
                     <td className="px-2 py-2 text-right">{baht(r.currentCost)}</td>
                     <td className="px-2 py-2 text-right font-semibold">{baht(r.invoiceCost)}</td>
+                    <td className="px-2 py-2 text-right whitespace-nowrap">
+                      {r.ourSell == null ? (
+                        <span className="text-muted">—</span>
+                      ) : (
+                        <>
+                          <span className="tabular-nums">{baht(r.ourSell)}</span>
+                          {r.ourSell <= 0 && (
+                            <span className="ml-1 text-[11px] text-amber-700" title="แถวนี้ยังไม่ตั้งราคาขาย — กำไรที่โชว์จึงยังไม่ใช่ของจริง">
+                              (ยังไม่ตั้งราคา)
+                            </span>
+                          )}
+                          <div
+                            className={`text-[11px] font-medium tabular-nums ${
+                              (r.profitAfter ?? 0) < 0 ? "text-red-700" : "text-emerald-700"
+                            }`}
+                            title={`กำไรตอนนี้ ฿${baht(r.profitNow)} → หลังบันทึกต้นทุนจากใบนี้ ฿${baht(r.profitAfter)}`}
+                          >
+                            กำไร ฿{baht(r.profitAfter)}
+                          </div>
+                        </>
+                      )}
+                    </td>
                     <td className="px-2 py-2 text-[11px]">
                       <RowOutcome r={r} />
                       {r.blockReason && <div className="mt-0.5 text-muted">{r.blockReason}</div>}
