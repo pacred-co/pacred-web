@@ -39,9 +39,6 @@ export default async function MomoSettlementHistoryPage() {
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · MOMO · ตัดจ่าย</p>
           <h1 className="mt-1 text-2xl font-bold">ประวัติการตัดจ่ายบิล MOMO</h1>
-          <p className="mt-1.5 text-sm text-muted">
-            ทุกครั้งที่ตัดจ่ายบิล MOMO ระบบออกเลขเอกสาร (MCS…) เก็บไว้ที่นี่ — กดเข้าดูรายละเอียด แนบสลิปย้อนหลัง หรือยกเลิกได้.
-          </p>
         </div>
         <Link
           href="/admin/api-forwarder-momo/invoice-cost"
@@ -57,49 +54,99 @@ export default async function MomoSettlementHistoryPage() {
         </div>
       )}
 
-      <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm">
+      {/* ตารางสไตล์เดียวกับหน้ารายการมอบงานคนขับ (owner 2026-07-23: "อยากได้แบบหน้าที่ส่งรูป
+          ไปให้ ดูอ่านง่ายสบายตา") — แถวโปร่ง · ชื่อเอกสารตัวหนาสีแบรนด์ + แจงรายละเอียดใต้ชื่อ ·
+          สถานะเป็นแคปซูลมีจุดสี · ปุ่มเป็น pill outline สีตามงาน. */}
+      <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
         {rows.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted">ยังไม่มีการตัดจ่ายบิล MOMO</p>
+          <p className="py-10 text-center text-sm text-muted">ยังไม่มีการตัดจ่ายบิล MOMO</p>
         ) : (
           <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-xs">
-              <thead className="bg-surface-alt/50 text-[11px] uppercase tracking-wide text-muted">
-                <tr>
-                  <th className="px-2 py-2 text-left">เลขเอกสาร</th>
-                  <th className="px-2 py-2 text-left">ใบแจ้งหนี้ MOMO</th>
-                  <th className="px-2 py-2 text-right">ยอดรวม</th>
-                  <th className="px-2 py-2 text-right">รายการ</th>
-                  <th className="px-2 py-2 text-center">สลิป</th>
-                  <th className="px-2 py-2 text-left">สถานะ</th>
-                  <th className="px-2 py-2 text-left">ผู้ทำ / วันที่</th>
-                  <th className="px-2 py-2 text-right"></th>
+            <table className="w-full text-sm">
+              <thead className="bg-surface-alt/60 text-xs text-muted">
+                <tr className="[&>th]:px-4 [&>th]:py-3 [&>th]:font-semibold [&>th]:whitespace-nowrap">
+                  <th className="text-center">วันที่ตัดจ่าย</th>
+                  <th className="text-left">เอกสารตัดจ่าย</th>
+                  <th className="text-center">ผู้ทำรายการ</th>
+                  <th className="text-right">ยอดที่จ่าย</th>
+                  <th className="text-center">หลักฐาน</th>
+                  <th className="text-center">สถานะ</th>
+                  <th className="text-center">ตัวเลือก</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className={`border-t border-border align-top ${r.status === "void" ? "bg-gray-50 text-muted" : ""}`}>
-                    <td className="px-2 py-2 font-mono font-medium">{r.docNo}</td>
-                    <td className="px-2 py-2">{r.invoiceNo || "—"}</td>
-                    <td className="px-2 py-2 text-right font-semibold whitespace-nowrap">฿{baht(r.totalThb)}</td>
-                    <td className="px-2 py-2 text-right">{r.lineCount}</td>
-                    <td className="px-2 py-2 text-center">{r.slipCount > 0 ? `📎 ${r.slipCount}` : "—"}</td>
-                    <td className="px-2 py-2">
-                      {r.status === "void" ? (
-                        <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[11px] text-gray-700">ยกเลิกแล้ว</span>
-                      ) : (
-                        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">ตัดจ่ายแล้ว</span>
-                      )}
+                {rows.map((r, i) => (
+                  <tr
+                    key={r.id}
+                    className={`border-t border-border align-middle ${
+                      r.status === "void" ? "bg-gray-50/80 text-muted" : i % 2 === 1 ? "bg-surface-alt/25" : ""
+                    }`}
+                  >
+                    <td className="px-4 py-3 text-center text-xs whitespace-nowrap text-muted">
+                      {formatThaiDateTime(r.createdAt)}
                     </td>
-                    <td className="px-2 py-2 text-[11px] text-muted">
-                      {r.createdBy ?? "-"}
-                      <div>{formatThaiDateTime(r.createdAt)}</div>
-                    </td>
-                    <td className="px-2 py-2 text-right">
+
+                    {/* หัวแถว = แจงรายละเอียดของเอกสารให้ครบ (owner: "ให้มีรายละเอียดของทั้ง
+                        เอกสารแจงอยู่ตรงหัวแถว เหมือนเดิม เอามาแจงให้ครบ") */}
+                    <td className="px-4 py-3">
                       <Link
                         href={`/admin/api-forwarder-momo/invoice-cost/history/${r.id}`}
-                        className="rounded-full border border-border px-3 py-1 text-[11px] font-medium hover:bg-surface-alt"
+                        className={`font-mono text-base font-bold ${
+                          r.status === "void" ? "text-muted line-through" : "text-primary-600 hover:underline"
+                        }`}
                       >
-                        ดู / แนบสลิป →
+                        {r.docNo}
+                      </Link>
+                      <div className="mt-0.5 text-xs text-muted">
+                        ใบแจ้งหนี้ MOMO : <span className="font-medium text-foreground">{r.invoiceNo || "—"}</span>
+                        {r.invoiceDate && <> · ลงวันที่ {r.invoiceDate}</>}
+                      </div>
+                      <div className="text-xs text-muted">
+                        จำนวนรายการ : {r.lineCount} แทรคกิ้ง
+                        {r.status === "void" && r.voidReason && (
+                          <> · <span className="text-red-700">เหตุผลยกเลิก : {r.voidReason}</span></>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3 text-center text-xs whitespace-nowrap">
+                      <span className="font-medium text-foreground">{r.createdBy ?? "-"}</span>
+                    </td>
+
+                    <td className="px-4 py-3 text-right font-bold tabular-nums whitespace-nowrap">
+                      ฿{baht(r.totalThb)}
+                    </td>
+
+                    {/* หลักฐาน 2 ชนิด แยกกัน — ใบเสร็จ MOMO (REC) กับ สลิปการโอน */}
+                    <td className="px-4 py-3 text-center text-xs whitespace-nowrap">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className={r.receiptCount > 0 ? "text-emerald-700 font-medium" : "text-muted"}>
+                          {r.receiptCount > 0 ? `🧾 ใบเสร็จ ${r.receiptCount}` : "🧾 ยังไม่มีใบเสร็จ"}
+                        </span>
+                        <span className={r.slipCount > 0 ? "text-emerald-700 font-medium" : "text-muted"}>
+                          {r.slipCount > 0 ? `📎 สลิป ${r.slipCount}` : "📎 ยังไม่มีสลิป"}
+                        </span>
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-3 text-center whitespace-nowrap">
+                      {r.status === "void" ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> ยกเลิกแล้ว
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> ตัดจ่ายแล้ว
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3 text-center whitespace-nowrap">
+                      <Link
+                        href={`/admin/api-forwarder-momo/invoice-cost/history/${r.id}`}
+                        className="inline-flex items-center rounded-full border border-emerald-500 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                      >
+                        ดูรายละเอียด
                       </Link>
                     </td>
                   </tr>

@@ -28,6 +28,8 @@ import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { previewMomoInvoiceCost } from "./momo-invoice-ingest";
+import { extractMomoInvoicePdfText } from "@/lib/admin/momo-invoice-pdf";
+import { detectMomoDocNo, momoAttachmentBaseName } from "@/lib/admin/momo-doc-name";
 import { MOMO_INVOICE_PDF_MAX_BYTES } from "@/lib/admin/momo-invoice-pdf-text";
 import {
   nextMomoSettlementSeq,
@@ -301,36 +303,66 @@ export async function voidMomoInvoiceSettlement(input: unknown): Promise<AdminAc
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SLIP — attach a bank-slip retroactively (owner: "ช่องไว้ใส่สลิปย้อนหลังได้ด้วย"). The File
-// is uploaded server-side (uploadToBucket · same as cnt-payment) → appended to slip_paths.
+// ATTACH — a settlement doc's evidence, retroactively. owner 2026-07-23: "เปิด tag ประวัติ
+// … เอาไว้ใส่ แนบใบเสร็จ และ สลิป ได้ทีหลัง". Two KINDS, two columns (never mixed):
+//   · slip    = the bank transfer slip (proof we paid)       → slip_paths (0273/0275)
+//   · receipt = MOMO's ใบเสร็จ/ใบกำกับภาษี REC-… (proof they received) → receipt_paths (0276)
+// A PDF is named by its printed NO (REC-…/INV-…) so files stop colliding as "…(15).pdf".
+// The File is uploaded server-side (uploadToBucket) and appended to the right column.
 // ─────────────────────────────────────────────────────────────────────────────
-export async function uploadMomoSettlementSlip(input: { settlementId: number }, file: File | null): Promise<AdminActionResult<{ id: number; slipPath: string }>> {
+export async function uploadMomoSettlementDoc(
+  input: { settlementId: number; kind: "receipt" | "slip" },
+  file: File | null,
+): Promise<AdminActionResult<{ id: number; path: string; detectedNo: string | null }>> {
   const id = Number(input?.settlementId);
+  const kind = input?.kind === "receipt" ? "receipt" : "slip";
   if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "invalid_settlement_id" };
-  if (!file || !(file instanceof File) || file.size === 0) return { ok: false, error: "กรุณาเลือกไฟล์สลิป (รูป หรือ PDF)" };
+  if (!file || !(file instanceof File) || file.size === 0) {
+    return { ok: false, error: kind === "receipt" ? "กรุณาเลือกไฟล์ใบเสร็จ MOMO (รูป หรือ PDF)" : "กรุณาเลือกไฟล์สลิป (รูป หรือ PDF)" };
+  }
 
-  return withAdmin<{ id: number; slipPath: string }>([...COST_PROFIT_ROLES], async ({ adminId }) => {
+  return withAdmin<{ id: number; path: string; detectedNo: string | null }>([...COST_PROFIT_ROLES], async ({ adminId }) => {
     const denied = await assertCanEditCost();
     if (denied) return { ok: false, error: denied };
     const admin = createAdminClient();
 
+    const col = kind === "receipt" ? "receipt_paths" : "slip_paths";
     const { data: cur, error: curErr } = await admin
-      .from("momo_invoice_settlement").select("id, doc_no, slip_paths").eq("id", id).maybeSingle<{ id: number; doc_no: string; slip_paths: unknown }>();
-    if (curErr) { console.error("[momo-settlement slip load] failed", { message: curErr.message }); return { ok: false, error: curErr.message }; }
+      .from("momo_invoice_settlement").select(`id, doc_no, ${col}`).eq("id", id).maybeSingle<Record<string, unknown>>();
+    if (curErr) { console.error("[momo-settlement attach load] failed", { message: curErr.message }); return { ok: false, error: curErr.message }; }
     if (!cur) return { ok: false, error: "ไม่พบรายการตัดจ่าย" };
 
-    const upload = await uploadToBucket(file, SLIP_BUCKET, `admin/momo-settlement/${id}`);
+    // ตั้งชื่อไฟล์ตามเลขในเอกสาร (owner 2026-07-23) — อ่าน NO จาก PDF ถ้าเป็น PDF; รูปสลิป
+    // ไม่มี NO อยู่แล้ว → ใช้ label "slip". อ่านไม่ออก = ไม่พัง แค่ไม่มีชื่อสวย (uploadToBucket
+    // ยังเติม ms prefix กันชนอยู่ดี).
+    let detectedNo: string | null = null;
+    if (/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name)) {
+      try {
+        const ex = await extractMomoInvoicePdfText(new Uint8Array(await file.arrayBuffer()));
+        if (ex.ok) detectedNo = detectMomoDocNo(ex.text).no;
+      } catch (e) {
+        console.error("[momo-settlement attach pdf-no] failed", { message: (e as Error).message });
+      }
+    }
+    const baseName = momoAttachmentBaseName(kind, detectedNo);
+
+    const upload = await uploadToBucket(file, SLIP_BUCKET, `admin/momo-settlement/${id}`, baseName);
     if (!upload.ok) return { ok: false, error: upload.error };
 
-    const prev = Array.isArray(cur.slip_paths) ? cur.slip_paths.filter((p): p is string => typeof p === "string") : [];
+    const prev = Array.isArray(cur[col]) ? (cur[col] as unknown[]).filter((p): p is string => typeof p === "string") : [];
     const next = [...prev, upload.filename].slice(-10); // keep last 10
-    const { error: updErr } = await admin.from("momo_invoice_settlement").update({ slip_paths: next }).eq("id", id);
-    if (updErr) { console.error("[momo-settlement slip update] failed", { message: updErr.message }); return { ok: false, error: updErr.message }; }
+    const { error: updErr } = await admin.from("momo_invoice_settlement").update({ [col]: next }).eq("id", id);
+    if (updErr) { console.error("[momo-settlement attach update] failed", { message: updErr.message }); return { ok: false, error: updErr.message }; }
 
-    await logAdminAction(adminId, "momo_settlement.slip_upload", "momo_invoice_settlement", String(id), { docNo: cur.doc_no, slip_path: upload.filename });
+    await logAdminAction(adminId, `momo_settlement.${kind}_upload`, "momo_invoice_settlement", String(id), { docNo: cur.doc_no as string, path: upload.filename, detectedNo });
     revalidatePath("/admin/api-forwarder-momo/invoice-cost/history");
-    return { ok: true, data: { id, slipPath: upload.filename } };
+    return { ok: true, data: { id, path: upload.filename, detectedNo } };
   });
+}
+
+/** @deprecated ใช้ uploadMomoSettlementDoc({kind:'slip'}) — เก็บไว้กัน caller เดิมพัง. */
+export async function uploadMomoSettlementSlip(input: { settlementId: number }, file: File | null) {
+  return uploadMomoSettlementDoc({ settlementId: input?.settlementId, kind: "slip" }, file);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -341,10 +373,14 @@ export type MomoSettlementHeader = {
   id: number;
   docNo: string;
   invoiceNo: string;
+  /** วันที่บนใบแจ้งหนี้ MOMO (อาจว่างถ้าใบไม่พิมพ์). */
+  invoiceDate: string | null;
   totalThb: number;
   lineCount: number;
   status: "paid" | "void";
   slipCount: number;
+  /** จำนวนใบเสร็จ MOMO (REC-…) ที่แนบไว้ — แยกจาก slipCount (สลิปการโอน). */
+  receiptCount: number;
   createdBy: string | null;
   createdAt: string | null;
   voidReason: string | null;
@@ -358,7 +394,7 @@ export async function listMomoInvoiceSettlements(input?: { limit?: number }): Pr
     const admin = createAdminClient();
     const { data, error } = await admin
       .from("momo_invoice_settlement")
-      .select("id, doc_no, invoice_no, total_thb, line_count, status, slip_paths, created_by, created_at, void_reason")
+      .select("id, doc_no, invoice_no, invoice_date, total_thb, line_count, status, slip_paths, receipt_paths, created_by, created_at, void_reason")
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) { console.error("[momo-settlement list] failed", { message: error.message }); return { ok: false, error: error.message }; }
@@ -366,10 +402,12 @@ export async function listMomoInvoiceSettlements(input?: { limit?: number }): Pr
       id: r.id as number,
       docNo: (r.doc_no as string) ?? "",
       invoiceNo: (r.invoice_no as string) ?? "",
+      invoiceDate: (r.invoice_date as string | null) ?? null,
       totalThb: Number(r.total_thb ?? 0),
       lineCount: Number(r.line_count ?? 0),
       status: (r.status as "paid" | "void") ?? "paid",
       slipCount: Array.isArray(r.slip_paths) ? r.slip_paths.length : 0,
+      receiptCount: Array.isArray(r.receipt_paths) ? r.receipt_paths.length : 0,
       createdBy: (r.created_by as string | null) ?? null,
       createdAt: (r.created_at as string | null) ?? null,
       voidReason: (r.void_reason as string | null) ?? null,
@@ -380,7 +418,6 @@ export async function listMomoInvoiceSettlements(input?: { limit?: number }): Pr
 
 export type MomoSettlementLine = { fid: number; tracking: string; cabinet: string | null; amountThb: number; costWritten: boolean };
 export type MomoSettlementDetail = MomoSettlementHeader & {
-  invoiceDate: string | null;
   note: string | null;
   paidBy: string | null;
   paidAt: string | null;
@@ -389,6 +426,8 @@ export type MomoSettlementDetail = MomoSettlementHeader & {
   lines: MomoSettlementLine[];
   /** Signed URLs (1h) for the slip paths — for inline preview in the history detail. */
   slipUrls: string[];
+  /** Signed URLs (1h) + ชื่อไฟล์ ของใบเสร็จ MOMO (REC-…) — ชื่อไฟล์ = เลขในเอกสาร (0276). */
+  receiptFiles: { url: string; name: string }[];
 };
 
 export async function getMomoInvoiceSettlement(input: { id: number }): Promise<AdminActionResult<MomoSettlementDetail>> {
@@ -400,7 +439,7 @@ export async function getMomoInvoiceSettlement(input: { id: number }): Promise<A
     const admin = createAdminClient();
     const { data: h, error: hErr } = await admin
       .from("momo_invoice_settlement")
-      .select("id, doc_no, invoice_no, invoice_date, total_thb, line_count, status, slip_paths, note, created_by, created_at, paid_by, paid_at, void_by, void_at, void_reason")
+      .select("id, doc_no, invoice_no, invoice_date, total_thb, line_count, status, slip_paths, receipt_paths, note, created_by, created_at, paid_by, paid_at, void_by, void_at, void_reason")
       .eq("id", id).maybeSingle<Record<string, unknown>>();
     if (hErr) { console.error("[momo-settlement detail head] failed", { message: hErr.message }); return { ok: false, error: hErr.message }; }
     if (!h) return { ok: false, error: "ไม่พบรายการตัดจ่าย" };
@@ -420,6 +459,18 @@ export async function getMomoInvoiceSettlement(input: { id: number }): Promise<A
       if (signed?.signedUrl) slipUrls.push(signed.signedUrl);
     }
 
+    const receiptPaths = Array.isArray(h.receipt_paths) ? (h.receipt_paths as unknown[]).filter((p): p is string => typeof p === "string") : [];
+    const receiptFiles: { url: string; name: string }[] = [];
+    for (const p of receiptPaths) {
+      const { data: signed, error: sErr } = await admin.storage.from(SLIP_BUCKET).createSignedUrl(p, 3600);
+      if (sErr) { console.error("[momo-settlement receipt sign] failed", { path: p, message: sErr.message }); continue; }
+      if (signed?.signedUrl) {
+        // ชื่อที่โชว์ = เลขเอกสารที่เราตั้งไว้ตอนแนบ (ตัด ms prefix + นามสกุลออก)
+        const base = (p.split("/").pop() ?? "").replace(/^\d+-/, "").replace(/\.[A-Za-z0-9]{1,8}$/, "");
+        receiptFiles.push({ url: signed.signedUrl, name: base || "ใบเสร็จ" });
+      }
+    }
+
     return {
       ok: true,
       data: {
@@ -431,6 +482,8 @@ export async function getMomoInvoiceSettlement(input: { id: number }): Promise<A
         lineCount: Number(h.line_count ?? 0),
         status: (h.status as "paid" | "void") ?? "paid",
         slipCount: slipPaths.length,
+        receiptCount: receiptPaths.length,
+        receiptFiles,
         note: (h.note as string | null) ?? null,
         createdBy: (h.created_by as string | null) ?? null,
         createdAt: (h.created_at as string | null) ?? null,

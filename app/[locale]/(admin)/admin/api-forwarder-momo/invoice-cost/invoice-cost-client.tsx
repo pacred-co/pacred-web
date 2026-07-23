@@ -544,13 +544,7 @@ export function MomoInvoiceCostClient() {
     <div className="space-y-5">
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
         <label className="block text-sm font-medium">อัปโหลดใบแจ้งหนี้ MOMO (ฮุย ไท่ต๋า) — ไฟล์ PDF</label>
-        <p className="text-xs text-muted">
-          MOMO ส่งไฟล์ใบแจ้งหนี้มาเป็นรอบๆ — ลากไฟล์ PDF มาวาง หรือกดเลือกไฟล์ได้เลย (ไม่ต้องเปิดไฟล์ก๊อปข้อความแล้ว)
-          ระบบจะอ่านต้นทุนต่อแทรคกิ้ง (ราคา &quot;รวม (Total)&quot; = ต้นทุนจริงที่ MOMO เรียกเก็บ Pacred)
-          แล้ว<strong>ตรวจกับระบบเราว่าตรงกันไหม</strong>ก่อนให้กดบันทึก · MOMO วางบิลมาเป็น <strong>แทรคกิ้ง</strong>{" "}
-          แต่เราคิดเป็น <strong>ตู้</strong> — บรรทัดที่ตู้ไม่ตรงจะถูกบล็อกไว้ให้ตรวจก่อน
-          · <strong>อัปทีละใบ</strong> เสร็จแล้วอัปใบถัดไปได้เลย (ระบบตรวจยอดรวมของแต่ละใบกับ Sub-total ของใบนั้น จึงต้องแยกใบ)
-        </p>
+        <p className="text-xs text-muted">ลากไฟล์ PDF มาวาง หรือกดเลือกไฟล์ · อัปทีละใบ</p>
 
         {/* ทางเข้าหลัก — ลาก/วาง หรือ กดเลือกไฟล์ (§0d) */}
         <div

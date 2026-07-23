@@ -33,6 +33,11 @@ const ALLOWED_MIME = /^(image\/(jpeg|png|gif|webp)|application\/pdf)$/i;
  * @param bucket     Bucket id (e.g. "slips")
  * @param prefix     Path prefix inside the bucket (e.g. "admin/cnt-slip")
  *                   — final path = `<prefix>/<unix-ms>-<safe-name>`
+ * @param nameOverride  Optional clean base name to store the object as INSTEAD of
+ *                   the client's `file.name` (still sanitised + still prefixed with
+ *                   `<unix-ms>-` so it stays collision-proof). Used to name MOMO
+ *                   docs by their printed NO (REC-…/INV-…) instead of the
+ *                   duplicate "…(15).pdf" the browser hands us — owner 2026-07-23.
  * @returns          `{ ok: true, filename }` where `filename` is the path
  *                   inside the bucket (store this in the DB column), OR
  *                   `{ ok: false, error }` with a human-readable Thai message.
@@ -41,6 +46,7 @@ export async function uploadToBucket(
   file: File,
   bucket: string,
   prefix: string,
+  nameOverride?: string,
 ): Promise<UploadResult> {
   if (!file || !(file instanceof File)) {
     return { ok: false, error: "ไม่พบไฟล์" };
@@ -56,7 +62,12 @@ export async function uploadToBucket(
     return { ok: false, error: `ประเภทไฟล์ไม่รองรับ (${file.type || "unknown"}) — รับเฉพาะรูปภาพหรือ PDF` };
   }
 
-  const safeName = file.name
+  // Keep the client's extension (magic-byte-validated by the caller) but use the
+  // clean base name when one is given — so an attached MOMO doc lands as
+  // "REC-20260718-0002.pdf" not "REC-20260718-0002_15_.pdf".
+  const ext = (file.name.match(/\.[A-Za-z0-9]{1,8}$/)?.[0] ?? "").toLowerCase();
+  const rawName = nameOverride ? `${nameOverride}${ext}` : file.name;
+  const safeName = rawName
     .replace(/[^\w.\-]/g, "_")
     .slice(-80);                          // cap to avoid path-too-long errors
   const filename = `${prefix.replace(/\/+$/, "")}/${Date.now()}-${safeName}`;

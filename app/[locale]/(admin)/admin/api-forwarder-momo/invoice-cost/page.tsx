@@ -35,11 +35,7 @@ export default async function MomoInvoiceCostPage() {
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · MOMO · บิลต้นทุน</p>
           <h1 className="mt-1 text-2xl font-bold">บิลต้นทุน MOMO — ตรวจ · บันทึกต้นทุน · ตัดจ่าย</h1>
           <p className="mt-1.5 text-sm text-muted">
-            <strong>อัปไฟล์ PDF ใบแจ้งหนี้ที่ MOMO (ฮุย ไท่ต๋า) ส่งมาได้เลย</strong> →{" "}
-            <strong>ตรวจเทียบกับระบบ</strong> → กด <strong>“บันทึกต้นทุน”</strong> (ทีละรายการ หรือทั้งหมด) →{" "}
-            กด <strong>“ตัดจ่ายบิล”</strong> (ทีละรายการ หรือทั้งบิล) → ระบบออกเลขเอกสารตัดจ่าย + เก็บประวัติ + แนบสลิปย้อนหลังได้.
-            MOMO วางบิลมาเป็น <strong>แทรคกิ้ง</strong> (บางบิลมีหลายตู้) — ระบบจึงตัดจ่ายเป็น <strong>บิล</strong> ไม่ใช่ทั้งตู้.
-            เฉพาะสิทธิ์ ultra / accounting / pricing.
+            อัปไฟล์ PDF จาก MOMO → ตรวจเทียบกับระบบ → บันทึกต้นทุน → ตัดจ่ายบิล
           </p>
         </div>
         <Link

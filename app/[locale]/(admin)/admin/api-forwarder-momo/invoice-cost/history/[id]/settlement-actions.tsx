@@ -2,11 +2,16 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
-import { uploadMomoSettlementSlip, voidMomoInvoiceSettlement } from "@/actions/admin/momo-invoice-settlement";
+import { uploadMomoSettlementDoc, voidMomoInvoiceSettlement } from "@/actions/admin/momo-invoice-settlement";
 
 /**
- * Slip upload (retroactive) + void for one MOMO settlement doc. owner 2026-07-22:
- * "ช่องไว้ใส่สลิปย้อนหลังได้ด้วย" + a void that keeps history (append-only).
+ * แนบหลักฐานย้อนหลัง (ใบเสร็จ MOMO + สลิปการโอน) + ยกเลิกเอกสารตัดจ่าย.
+ *
+ * owner 2026-07-22 "ช่องไว้ใส่สลิปย้อนหลังได้ด้วย" → 2026-07-23 "เอาไว้ใส่ แนบใบเสร็จ และ
+ * สลิป ได้ทีหลังได้ด้วยครับ" — หลักฐาน 2 ชนิดคนละความหมาย จึงแยกปุ่ม/แยกที่เก็บ:
+ *   · ใบเสร็จ MOMO (REC-…) = เอกสารภาษีที่ MOMO ออกกลับมาหลังเราจ่าย
+ *   · สลิปการโอน           = หลักฐานฝั่งเราว่าโอนแล้ว
+ * ไฟล์ PDF จะถูกตั้งชื่อตามเลขในเอกสารเอง (REC-…/INV-…) จะได้ไม่ชนกันแบบ "…(15).pdf".
  */
 export function MomoSettlementActions({
   settlementId,
@@ -20,19 +25,26 @@ export function MomoSettlementActions({
   const router = useRouter();
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [reason, setReason] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
+  const receiptRef = useRef<HTMLInputElement>(null);
+  const slipRef = useRef<HTMLInputElement>(null);
   const [pending, start] = useTransition();
 
-  function onSlip(file: File) {
+  function onFile(kind: "receipt" | "slip", file: File) {
     if (!/\.(pdf|jpe?g|png|webp|gif)$/i.test(file.name)) {
       setMsg({ kind: "err", text: "รับเฉพาะรูป (jpg/png/webp) หรือ PDF" });
       return;
     }
     setMsg(null);
     start(async () => {
-      const res = await uploadMomoSettlementSlip({ settlementId }, file);
+      const res = await uploadMomoSettlementDoc({ settlementId, kind }, file);
       if (!res.ok) { setMsg({ kind: "err", text: res.error }); return; }
-      setMsg({ kind: "ok", text: "แนบสลิปแล้ว" });
+      const label = kind === "receipt" ? "ใบเสร็จ" : "สลิป";
+      setMsg({
+        kind: "ok",
+        text: res.data?.detectedNo
+          ? `แนบ${label}แล้ว · ตั้งชื่อไฟล์ตามเลขในเอกสาร: ${res.data.detectedNo}`
+          : `แนบ${label}แล้ว`,
+      });
       router.refresh();
     });
   }
@@ -52,28 +64,41 @@ export function MomoSettlementActions({
 
   return (
     <div className="space-y-3">
-      {/* slip upload (allowed even after void — evidence can arrive late) */}
+      {/* แนบหลักฐาน — ได้ทั้งก่อน/หลังยกเลิก (หลักฐานมาช้าได้) */}
       <div className="flex flex-wrap items-center gap-2">
         <input
-          ref={fileRef}
+          ref={receiptRef}
           type="file"
           accept="image/*,application/pdf"
           className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) onSlip(f);
-            e.target.value = "";
-          }}
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile("receipt", f); e.target.value = ""; }}
+        />
+        <input
+          ref={slipRef}
+          type="file"
+          accept="image/*,application/pdf"
+          className="hidden"
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile("slip", f); e.target.value = ""; }}
         />
         <button
           type="button"
           disabled={pending}
-          onClick={() => fileRef.current?.click()}
-          className="rounded-full bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 disabled:opacity-50"
+          onClick={() => receiptRef.current?.click()}
+          className="inline-flex items-center rounded-full border border-emerald-500 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
         >
-          {pending ? "กำลังอัปโหลด…" : "📎 แนบสลิป (ย้อนหลังได้)"}
+          🧾 แนบใบเสร็จ MOMO
         </button>
-        <span className="text-[11px] text-muted">รูป หรือ PDF · ไม่เกิน 5 MB</span>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => slipRef.current?.click()}
+          className="inline-flex items-center rounded-full border border-sky-500 px-4 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50 disabled:opacity-50"
+        >
+          📎 แนบสลิปการโอน
+        </button>
+        <span className="text-[11px] text-muted">
+          {pending ? "กำลังอัปโหลด…" : "รูป หรือ PDF · ไม่เกิน 5 MB · แนบย้อนหลังได้"}
+        </span>
       </div>
 
       {/* void */}

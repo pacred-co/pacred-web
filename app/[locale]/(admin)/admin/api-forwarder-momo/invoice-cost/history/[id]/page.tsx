@@ -111,20 +111,53 @@ export default async function MomoSettlementDetailPage({ params }: { params: Pro
         </div>
       </section>
 
-      {/* สลิป (ย้อนหลังได้) + ยกเลิก */}
+      {/* หลักฐาน 2 ชนิด (แนบย้อนหลังได้) + ยกเลิก — owner 2026-07-23 */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-4">
-        <h2 className="text-sm font-semibold">สลิปการโอน (แนบย้อนหลังได้)</h2>
-        {s.slipUrls.length > 0 ? (
-          <div className="flex flex-wrap gap-3">
-            {s.slipUrls.map((url, i) => (
-              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-40">
-                <SlipImage src={url} className="h-40 w-40 rounded-lg border border-border object-cover" pdfMode="tile" />
-              </a>
-            ))}
+        <h2 className="text-sm font-semibold">หลักฐานการจ่าย (แนบย้อนหลังได้)</h2>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          {/* ใบเสร็จ MOMO — เอกสารภาษีที่ MOMO ออกกลับมาหลังเราจ่าย (REC-…) */}
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
+            <p className="text-xs font-bold text-emerald-800">
+              🧾 ใบเสร็จ / ใบกำกับภาษี จาก MOMO
+              <span className="ml-1 font-normal text-muted">({s.receiptFiles.length})</span>
+            </p>
+            {s.receiptFiles.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-3">
+                {s.receiptFiles.map((f) => (
+                  <a key={f.url} href={f.url} target="_blank" rel="noopener noreferrer" className="block w-36">
+                    <SlipImage src={f.url} className="h-36 w-36 rounded-lg border border-border object-cover" pdfMode="tile" />
+                    <p className="mt-1 truncate text-center font-mono text-[11px] text-emerald-800" title={f.name}>
+                      {f.name}
+                    </p>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1.5 text-[12px] text-muted">ยังไม่มีใบเสร็จ — MOMO มักส่งกลับมาหลังเราโอน</p>
+            )}
           </div>
-        ) : (
-          <p className="text-[12px] text-muted">ยังไม่มีสลิปแนบ — อัปโหลดด้านล่างเพื่อเก็บเป็นหลักฐานย้อนหลัง</p>
-        )}
+
+          {/* สลิปการโอน — หลักฐานฝั่งเรา */}
+          <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3">
+            <p className="text-xs font-bold text-sky-800">
+              📎 สลิปการโอน (ฝั่งเรา)
+              <span className="ml-1 font-normal text-muted">({s.slipUrls.length})</span>
+            </p>
+            {s.slipUrls.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-3">
+                {s.slipUrls.map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-36">
+                    <SlipImage src={url} className="h-36 w-36 rounded-lg border border-border object-cover" pdfMode="tile" />
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1.5 text-[12px] text-muted">ยังไม่มีสลิปแนบ</p>
+            )}
+          </div>
+        </div>
+
         <MomoSettlementActions settlementId={s.id} docNo={s.docNo} isVoid={s.status === "void"} />
       </section>
     </main>
