@@ -199,32 +199,40 @@ section("(c) custom_user with zero rate → ignored, falls to general");
 }
 
 // ════════════════════════════════════════════════════════════════════
-// (d) Juristic 1% discount on subtotal ≥ 1000
+// (d) Juristic 1% withholding — owner 2026-07-22: NO minimum
 // ════════════════════════════════════════════════════════════════════
-section("(d) juristic discount thresholds");
+section("(d) juristic 1% — หักทุกยอด ไม่มีขั้นต่ำ");
 {
   // weight=35, tier2=32 → subtotal = 1120 → 1% = 11.20
   const r1 = calcPrice(buildInput({ is_juristic: true,  weight_kg: 35 }));
-  assertEq("juristic subtotal=1120 ≥1000 → discount 11.20", r1.juristic_discount, 11.2);
+  assertEq("juristic subtotal=1120 → หัก 11.20", r1.juristic_discount, 11.2);
 
   const r2 = calcPrice(buildInput({ is_juristic: false, weight_kg: 35 }));
-  assertEq("personal even at 1120 → no discount", r2.juristic_discount, 0);
+  assertEq("บุคคลธรรมดา แม้ยอด 1120 → ไม่หัก", r2.juristic_discount, 0);
 
-  // weight=20, tier2=32 → subtotal = 640 → under threshold
+  // 🔴 กฎที่ห้ามถอยกลับ — owner 2026-07-22 ยกเลิกขั้นต่ำ ฿1,000.
+  // weight=20, tier2=32 → subtotal = 640 (เดิมเคย "ต่ำกว่าขั้นต่ำ → ไม่หัก")
   const r3 = calcPrice(buildInput({ is_juristic: true,  weight_kg: 20 }));
-  assertEq("juristic subtotal=640 <1000 → no discount", r3.juristic_discount, 0);
+  assertEq("juristic subtotal=640 (<1000) → ยังต้องหัก 6.40", r3.juristic_discount, 6.4);
 }
 
-section("(d) juristic discount — boundary at exactly 1000");
+section("(d) juristic 1% — ยอดเล็กมากก็ยังหัก");
 {
-  // Use custom_user rate to hit exactly 1000 (10 kg × 100)
-  const at1000 = buildInput({
+  // 1 kg × custom 10 = 10 บาท → 1% = 0.10
+  const tiny = calcPrice(buildInput({
     is_juristic:      true,
-    weight_kg:        10,
+    weight_kg:        1,
+    rate_custom_user: { kg: 10 },
+  }));
+  assertEq("subtotal=10 → หัก 0.10 (ไม่มีขั้นต่ำ)", tiny.juristic_discount, 0.1);
+
+  // ยอด 0 → ไม่มีอะไรให้หัก
+  const zero = calcPrice(buildInput({
+    is_juristic:      true,
+    weight_kg:        0,
     rate_custom_user: { kg: 100 },
-  });
-  const r = calcPrice(at1000);
-  assertEq("subtotal=1000 (== threshold) → discount = 10.00", r.juristic_discount, 10);
+  }));
+  assertEq("subtotal=0 → ไม่หัก", zero.juristic_discount, 0);
 }
 
 section("(d) juristic — large subtotal scales linearly");

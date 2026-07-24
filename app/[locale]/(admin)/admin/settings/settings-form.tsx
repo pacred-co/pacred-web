@@ -77,9 +77,13 @@ export function SettingsForm(s: Props) {
           <ReadRow label="ค่าบริการต่อออเดอร์" value={thb(s.service_fee)} />
           <ReadRow label="ค่า QC ต่อชิ้น" value={thb(s.qc_fee_per_item)} />
           <ReadRow label="ค่าตีลังไม้ตั้งต้น" value={thb(s.crate_fee_base)} />
+          {/* owner 2026-07-22: ขั้นต่ำ ฿1,000 ถูกยกเลิก — นิติหัก 1% ทุกยอดที่มากกว่า 0.
+              จึงไม่โชว์ค่า juristic_discount_threshold อีก (ค่าในตารางยังอยู่แต่ไม่มีผล)
+              และเลิกเรียกว่า "ส่วนลด" — มันคือภาษีที่ลูกค้าหักไว้นำส่งสรรพากร
+              แล้วต้องออก 50 ทวิ ให้เรา (คนละเรื่องกับส่วนลดที่เราให้เอง). */}
           <ReadRow
-            label="ส่วนลดนิติบุคคล"
-            value={`${(Number(s.juristic_discount_pct) * 100).toFixed(2)}% เมื่อ ≥ ${thb(s.juristic_discount_threshold)}`}
+            label="หัก ณ ที่จ่าย นิติบุคคล"
+            value={`${(Number(s.juristic_discount_pct) * 100).toFixed(2)}% ทุกยอด (ไม่มีขั้นต่ำ)`}
           />
           <ReadRow
             label="โปรส่งฟรี"
