@@ -39,7 +39,7 @@ export const TRANSPORTS: { id: TransportId; label: string; short: string }[] = [
 export const PRODUCTS: { id: ProductId; label: string }[] = [
   { id: "1", label: "ทั่วไป" },
   { id: "2", label: "มอก." },
-  { id: "3", label: "อย./น้ำยา" },
+  { id: "3", label: "อย." },
   { id: "4", label: "พิเศษ" },
 ];
 

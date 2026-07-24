@@ -56,7 +56,7 @@ const TRANSPORT_OPTIONS = [
 const PRODUCT_TYPE_OPTIONS = [
   { value: "1" as const, label: "ทั่วไป" },
   { value: "2" as const, label: "มอก." },
-  { value: "3" as const, label: "อย./น้ำยา" },
+  { value: "3" as const, label: "อย." },
   { value: "4" as const, label: "พิเศษ" },
 ];
 

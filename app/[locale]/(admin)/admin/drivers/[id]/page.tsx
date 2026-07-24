@@ -610,45 +610,53 @@ export default async function AdminDriverBatchDetailPage({
           </div>
         </div>
 
-        {/* นับถอยหลัง — label + เวลา in-flow (ปอน 2026-07-24) ไม่ล้น = ไม่ทับแถวบน.
-            ปุ่ม "ดูใบส่งสินค้า" (popup) ถูกถอดออกจากมือถือ 2026-07-24 (ปอน).
-            §0d ยังผ่าน: บนมือถือเปิดใบเดียวกันได้ที่ปุ่ม "พิมพ์บิลจัดส่ง" ด้านล่าง
-            (ชี้ /print ตัวเดียวกับที่ popup ใช้) · popup ยังอยู่บนจอคอม. */}
-        {batch.endtime && (
-          <div className="flex items-end justify-end">
-            <div className="flex shrink-0 flex-col items-end">
-              <span className="mb-0.5 whitespace-nowrap text-[11px] leading-none text-muted">
-                ส่งของก่อนเวลา
-              </span>
-              <BatchCountdown endTimeIso={batch.endtime} status={fdstatus} size="lg" />
+        {/* 3 บทบาท (owner 2026-07-24): แถวบน = คนสร้าง (ซ้าย) + นับถอยหลัง "ส่งของก่อนเวลา"
+            (ขวา · แถวเดียวกัน แบบภาพ · ไม่ขึ้นบรรทัดใหม่) → แถวล่าง = คนเตรียมของ | คนขับรถ.
+            คนสร้าง = fdadmincreator (กีตาร์) · คนขับรถ = fdadminid (ben) · คนเตรียมของ (คนหา)
+            ยังไม่มีข้อมูล → ช่องกรอบประ "ยังไม่ระบุ". */}
+        <div className="space-y-2">
+          {/* แถวบน: คนสร้าง (flex-1) + นับถอยหลัง (ชิดขวา) */}
+          <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-border p-2">
+              {creatorAvatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={creatorAvatar} alt="" className="h-8 w-8 flex-shrink-0 rounded-full object-cover ring-1 ring-primary-200" />
+              ) : (
+                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary-500 text-xs font-bold text-white">{(creatorDisplayName || "?").trim().charAt(0)}</span>
+              )}
+              <div className="min-w-0">
+                <p className="text-[11px] text-muted">คนสร้าง</p>
+                <p className="truncate text-xs font-semibold">{creatorDisplayName || "—"}</p>
+              </div>
             </div>
-          </div>
-        )}
-
-        {/* ผู้ดำเนินงาน / มอบหมาย */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="flex items-center gap-2 rounded-lg border border-border p-2">
-            {driverAvatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={driverAvatar} alt="" className="h-8 w-8 flex-shrink-0 rounded-full object-cover ring-1 ring-primary-200" />
-            ) : (
-              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary-500 text-xs font-bold text-white">{(driverDisplayName || "?").trim().charAt(0)}</span>
+            {batch.endtime && (
+              <div className="flex shrink-0 flex-col items-end">
+                <span className="mb-0.5 whitespace-nowrap text-[11px] leading-none text-muted">ส่งของก่อนเวลา</span>
+                <BatchCountdown endTimeIso={batch.endtime} status={fdstatus} size="lg" />
+              </div>
             )}
-            <div className="min-w-0">
-              <p className="text-[11px] text-muted">ดำเนินงาน</p>
-              <p className="truncate text-xs font-semibold">{driverDisplayName || "—"}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {/* คนเตรียมของ (คนหา) — ยังไม่มีข้อมูล · ช่องกรอบประ */}
+            <div className="flex items-center gap-2 rounded-lg border border-dashed border-border p-2">
+              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-400">?</span>
+              <div className="min-w-0">
+                <p className="text-[11px] text-muted">คนเตรียมของ</p>
+                <p className="truncate text-xs font-semibold text-muted">— ยังไม่ระบุ</p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2 rounded-lg border border-border p-2">
-            {creatorAvatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={creatorAvatar} alt="" className="h-8 w-8 flex-shrink-0 rounded-full object-cover ring-1 ring-primary-200" />
-            ) : (
-              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary-500 text-xs font-bold text-white">{(creatorDisplayName || "?").trim().charAt(0)}</span>
-            )}
-            <div className="min-w-0">
-              <p className="text-[11px] text-muted">มอบหมาย</p>
-              <p className="truncate text-xs font-semibold">{creatorDisplayName || "—"}</p>
+            {/* คนขับรถ */}
+            <div className="flex items-center gap-2 rounded-lg border border-border p-2">
+              {driverAvatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={driverAvatar} alt="" className="h-8 w-8 flex-shrink-0 rounded-full object-cover ring-1 ring-primary-200" />
+              ) : (
+                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary-500 text-xs font-bold text-white">{(driverDisplayName || "?").trim().charAt(0)}</span>
+              )}
+              <div className="min-w-0">
+                <p className="text-[11px] text-muted">คนขับรถ</p>
+                <p className="truncate text-xs font-semibold">{driverDisplayName || "—"}</p>
+              </div>
             </div>
           </div>
         </div>

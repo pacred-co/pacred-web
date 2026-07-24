@@ -183,7 +183,7 @@ export function CostRateModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label={`เรทราคา ทั่วไป (บาท/${unit})`} value={p1} onChange={setP1} />
                 <Field label={`เรทราคา มอก. (บาท/${unit})`}   value={p2} onChange={setP2} />
-                <Field label={`เรทราคา อย./น้ำยา (บาท/${unit})`} value={p3} onChange={setP3} />
+                <Field label={`เรทราคา อย. (บาท/${unit})`} value={p3} onChange={setP3} />
                 <Field label={`เรทราคา พิเศษ (บาท/${unit})`}   value={p4} onChange={setP4} />
               </div>
 
