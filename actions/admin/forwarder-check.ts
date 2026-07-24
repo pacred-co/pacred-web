@@ -64,6 +64,11 @@ import {
   codBaseTrackings,
   diagnoseThShippingBlock,
 } from "@/lib/forwarder/domestic-shipping";
+import {
+  isDeliveryAddressMissing,
+  DELIVERY_ADDRESS_BLOCK_REASON,
+  DELIVERY_ADDRESS_BLOCK_NEXT_ACTION,
+} from "@/lib/forwarder/delivery-address-gate";
 import { baseTracking } from "@/lib/admin/momo-bill-header";
 import { logger, redactPhone } from "@/lib/logger";
 import { sendNotification } from "@/lib/notifications";
@@ -137,6 +142,11 @@ type ForwarderRow = {
   fwidth: number | string | null;
   flength: number | string | null;
   fheight: number | string | null;
+  // ด่านที่อยู่จัดส่งก่อน 4→5 (owner 2026-07-23 · delivery-address-gate).
+  // Read-only · never written by this action.
+  fidorco: string | null;
+  faddressprovince: string | null;
+  faddressno: string | null;
 };
 
 /**
@@ -152,6 +162,7 @@ export type BillFailure = {
   /** machine code — สำหรับ group/นับ. */
   code:
     | "zero_import_price"   // C1 ค่านำเข้า ฿0 (ยังไม่ตั้งราคา/วัด)
+    | "no_delivery_address" // ยังไม่มีที่อยู่จัดส่ง (owner 2026-07-23 · กระทบค่าส่งไทย + เอกสาร)
     | "th_shipping_missing" // C2 ยังไม่มีค่าส่งไทย (+ ระบบเติมอัตโนมัติไม่ได้)
     | "not_status_4"        // แถวไม่ได้อยู่สถานะ 4 → action อ่านไม่เจอ (เดิม = หายเงียบ)
     | "update_failed";      // UPDATE ไม่ผ่าน (race / DB error)
@@ -385,11 +396,13 @@ export async function adminCallPriceUser(
       const { data: forwarderRows, error: readErr } = await admin
         .from("tb_forwarder")
         .select(
-          "id, userid, fstatus, ftrackingchn, fshipby, paymethod, faddressdistrict, " +
+          "id, userid, fstatus, fidorco, ftrackingchn, fshipby, paymethod, faddressdistrict, " +
             "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
             "pricecrate, ftransportpricechnthb, priceother, fdiscount, " +
             // diagnosis-only (owner 2026-07-17) — never written here
-            "faddresszipcode, fweight, fwidth, flength, fheight",
+            "faddresszipcode, fweight, fwidth, flength, fheight, " +
+            // ด่านที่อยู่จัดส่งก่อน 4→5 (owner 2026-07-23) — never written here
+            "faddressprovince, faddressno",
         )
         .in("id", fids)
         .eq("fstatus", "4");
@@ -490,6 +503,23 @@ export async function adminCallPriceUser(
             code: "zero_import_price",
             reason: "ค่านำเข้า (ค่าขนส่งจีน-ไทย) ยังเป็น ฿0 — ยังไม่ได้วัด/ตั้งราคา ถ้าแจ้งชำระตอนนี้จะเก็บเงินขาด",
             nextAction: "ให้โกดังวัดขนาด+น้ำหนัก และให้ Pricing ตั้งเรท แล้วกดแจ้งชำระอีกครั้ง",
+          };
+          result.failed++;
+          result.failures.push(f);
+          result.errors.push(failureLine(f));
+          continue;
+        }
+
+        // 🔴 ด่านที่อยู่จัดส่ง ก่อน 4→5 (owner 2026-07-23 · MONEY) — ต้องมาก่อน
+        // auto-fill ค่าส่งไทย: ที่อยู่คือ input ของการคิดค่าส่ง และเป็นที่อยู่ผู้รับ
+        // บนเอกสารด้วย. แถวไม่มีปลายทาง = คิดค่าส่งไม่ได้ + ออกเอกสารผิด → ข้าม
+        // แถวนี้ (ไม่ล้มทั้ง batch) แล้วบอกให้ชัดว่าติดอะไร/แก้ที่ไหน.
+        if (isDeliveryAddressMissing(row)) {
+          const f: BillFailure = {
+            fid: row.id,
+            code: "no_delivery_address",
+            reason: DELIVERY_ADDRESS_BLOCK_REASON,
+            nextAction: DELIVERY_ADDRESS_BLOCK_NEXT_ACTION,
           };
           result.failed++;
           result.failures.push(f);

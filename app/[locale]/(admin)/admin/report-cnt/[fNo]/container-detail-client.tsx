@@ -1478,7 +1478,7 @@ function productTypeLabel(t: string | null): string {
   switch ((t ?? "").trim()) {
     case "1": return "ทั่วไป";
     case "2": return "มอก.";
-    case "3": return "อย./น้ำยา";
+    case "3": return "อย.";
     case "4": return "พิเศษ";
     default:  return "-";
   }

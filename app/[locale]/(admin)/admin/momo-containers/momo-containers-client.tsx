@@ -531,25 +531,26 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
   const sortIcon = (key: string) => (sort?.key === key ? (sort.dir === "asc" ? "↑" : "↓") : "⇅");
 
   // ── ติ๊กเลือก — เลือกได้เฉพาะแถวที่ "ยังไม่เข้าระบบ" และอยู่ในผลกรองปัจจุบัน ──
-  const allPendingIds = useMemo(
-    () => {
-      // owner 2026-07-23 — "เลือกทั้งหมด" + นำเข้าเป็นชุด ต้อง**ไม่**กวาดแถวรอตรวจ
-      // (ข้อมูลยังไม่ครบ) เข้าระบบ → คัด isNotReady ออกจากชุด select-all.
-      const pending = filtered.filter((t) => !t.committed && !rowResult[t.id]?.ok && !isNotReady(t));
-      // a family must commit ONE shape (the box rows OR the bare aggregate — the
-      // commit chokepoint refuses the other anyway). Select-all prefers the box
-      // rows (real per-box dims) → skip the bare when pending box siblings exist.
-      const suffixBases = new Set(
-        pending
-          .filter((t) => t.tracking && baseTracking(t.tracking) !== t.tracking)
-          .map((t) => baseTracking(t.tracking!) ?? ""),
-      );
-      return pending
-        .filter((t) => !(t.tracking && baseTracking(t.tracking) === t.tracking && suffixBases.has(t.tracking)))
-        .map((t) => t.id);
-    },
-    [filtered, rowResult],
-  );
+  // owner 2026-07-23 — "เลือกทั้งหมด" ต้อง**ไม่**กวาดแถวรอตรวจ (ข้อมูลไม่ครบ) เข้าระบบ.
+  // 2026-07-24 (ภูม · บัญชีติ๊กชิปเม้นไม่ได้ = ล็อต bare หลุด): เลือก "ล็อตจริง" ของแต่ละชิปเม้น
+  // = countable ของ famAgg (SOT เดียวกับ Σ กล่อง · ตัว isAdditiveLotBare).
+  //   • ทรง disjoint-lots (82665991155: bare 2กล่อง/35kg + "-2" 1กล่อง/9kg = คนละล็อตจริง)
+  //     → countable = ทั้งคู่ → เลือกครบ ไม่ตกล็อต 35kg.
+  //   • ทรง aggregate-header (bare ≈ Σ siblings) → countable = siblings → ตัด bare (placeholder)
+  //     ทิ้ง = ไม่ double-count.
+  // commit guard รับ disjoint bare อยู่แล้ว (commit-momo-row-core case-2/3 exception) → ปลดล็อก
+  // ฝั่ง UI ล้วน ไม่แตะ money/commit. plain const (ไม่ useMemo) เพราะเรียก famAgg — คำนวณเบา
+  // (iterate families ที่ memoized) + allSelected/someSelected ก็ recompute ทุก render อยู่แล้ว.
+  const allPendingIds = (() => {
+    const ids: string[] = [];
+    for (const fam of families) {
+      const countableIds = new Set(famAgg(fam).countable.map((x) => x.id));
+      for (const t of fam) {
+        if (!t.committed && !rowResult[t.id]?.ok && !isNotReady(t) && countableIds.has(t.id)) ids.push(t.id);
+      }
+    }
+    return ids;
+  })();
   const selectedTracks = useMemo(() => tracks.filter((t) => sel.has(t.id) && !t.committed), [tracks, sel]);
   const invalidSelected = useMemo(() => selectedTracks.filter((t) => t.userIdValid !== true).length, [selectedTracks]);
   const allSelected = allPendingIds.length > 0 && allPendingIds.every((id) => sel.has(id));
@@ -1255,10 +1256,14 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
               const grouped = fam.length > 1 || fam.some((x) => (x.tracking ?? "") !== base)
                 || (fam.length === 1 && fam[0].boxes.length > 0);
               const famFid = fam.map((x) => x.committedForwarderId).find((v) => v != null) ?? null;
-              // header checkbox = เลือกทั้งชิปเม้น (the selectable members · bare excluded —
-              // the box rows are the commit shape; the chokepoint guards the rest)
+              // header checkbox + member rows = "ล็อตจริง" ของชิปเม้น = countable ของ famAgg
+              // (SOT เดียวกับ Σ กล่อง · isAdditiveLotBare). disjoint bare (ล็อตแยกจริง · 82665991155
+              // bare 35kg + "-2" 9kg) อยู่ใน countable → ติ๊กนำเข้าได้ · aggregate-header bare (≈ Σ
+              // siblings) ไม่อยู่ → ตัดทิ้ง (2026-07-24 · ภูม: บัญชีติ๊กชิปเม้นแล้วล็อต bare หลุด =
+              // เก็บเงินขาด · commit guard รับ disjoint bare อยู่แล้ว [commit-momo-row-core case-2/3]).
+              const famCountableIds = new Set(countable.map((x) => x.id));
               const famSelectableIds = fam
-                .filter((x) => !x.committed && !rowResult[x.id]?.ok && !isNotReady(x) && !(hasSuffixMembers && (x.tracking ?? "") === base))
+                .filter((x) => !x.committed && !rowResult[x.id]?.ok && !isNotReady(x) && famCountableIds.has(x.id))
                 .map((x) => x.id);
               const famAllSel = famSelectableIds.length > 0 && famSelectableIds.every((id) => sel.has(id));
               const isOpen = !grouped || openFams.has(base);
@@ -1385,7 +1390,10 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                     })}
                   </tr>
                 )}
-                {isOpen && fam.filter((t) => !(hasSuffixMembers && (t.tracking ?? "") === base)).map((t) => {
+                {/* member rows = ล็อตจริงของชิปเม้น — ซ่อนเฉพาะ bare ที่เป็น aggregate-header
+                    (ไม่อยู่ใน countable) · disjoint bare (อยู่ใน countable) = โชว์เป็นแถวมี checkbox
+                    ให้ติ๊กนำเข้าได้ (2026-07-24 · ภูม: ล็อต bare 35kg เดิมไม่มี checkbox = ติ๊กไม่ได้) */}
+                {isOpen && fam.filter((t) => !(hasSuffixMembers && (t.tracking ?? "") === base && !famCountableIds.has(t.id))).map((t) => {
               const i = n++;
               const rr = rowResult[t.id];
               const done = t.committed || rr?.ok;

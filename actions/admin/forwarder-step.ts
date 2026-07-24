@@ -63,6 +63,7 @@ import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { FSTATUS_CFG } from "@/lib/admin/forwarder-status";
 import { canAdvanceCreditCustomer, isCreditRow } from "@/lib/forwarder/credit-advance-guard";
+import { evaluateDeliveryAddressGate } from "@/lib/forwarder/delivery-address-gate";
 import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
 import { sendNotification } from "@/lib/notifications";
 import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
@@ -349,6 +350,30 @@ export async function adminAdvanceForwarderToWaitPayment(
     const nowIso = new Date().toISOString();
     const advanced: number[] = [];
     const skipped: number[] = [];
+
+    // 🔴 ด่านที่อยู่จัดส่ง ก่อน 4→5 (owner 2026-07-23 · MONEY) — ที่อยู่กำหนด
+    // ค่าส่งไทยที่ขึ้นบิล + ที่อยู่ผู้รับบนเอกสาร. อ่านทีเดียวทั้งชุดแล้ว refuse ทั้ง
+    // action ก่อนเขียนอะไร (path นี้เป็นการกดยืนยันของคน → บอกให้ชัดดีกว่าข้ามเงียบ
+    // ปนกับ skipped ที่แปลว่า "ไม่ได้อยู่สถานะ 4").
+    const { data: addrRows, error: addrErr } = await admin
+      .from("tb_forwarder")
+      .select("id, fidorco, ftrackingchn, fshipby, faddressprovince, faddresszipcode, faddressno")
+      .in("id", fIds)
+      .eq("fstatus", "4"); // เฉพาะแถวที่จะถูกยกจริง
+    if (addrErr) {
+      console.error("[adminAdvanceForwarderToWaitPayment address-gate] failed", {
+        code: addrErr.code, message: addrErr.message,
+      });
+      return { ok: false, error: "โหลดที่อยู่จัดส่งไม่สำเร็จ — กรุณาลองใหม่" };
+    }
+    const addrGate = evaluateDeliveryAddressGate(addrRows ?? []);
+    if (!addrGate.ok) {
+      await logAdminAction(adminId, "tb_forwarder.advance_to_wait_payment_rejected", "tb_forwarder", fIds.join(","), {
+        reason: "no_delivery_address",
+        blocked_count: addrGate.blocked.length,
+      });
+      return { ok: false, error: addrGate.message };
+    }
 
     for (const fid of fIds) {
       // MONEY — refuse a flip-to-รอชำระเงิน(5) on a row that already has a

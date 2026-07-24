@@ -9,6 +9,7 @@ import { advanceLinkedShopOrder } from "@/lib/admin/advance-linked-shop-order";
 import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
 import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { canAdvanceCreditCustomer, isCreditRow } from "@/lib/forwarder/credit-advance-guard";
+import { evaluateDeliveryAddressGate } from "@/lib/forwarder/delivery-address-gate";
 import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
 import { sendNotification } from "@/lib/notifications";
 import { notify } from "@/lib/notifications/templates";
@@ -501,7 +502,11 @@ export async function adminBulkUpdateForwarderTbStatus(
     // the cabinet-lock audit (B4 · backlog #259 · 2026-06-08).
     const { data: before, error: readErr } = await admin
       .from("tb_forwarder")
-      .select("id, fstatus, userid, fidorco, fcabinetnumber, fdatecontainerclose, fcabinet_locked, reforder, ftrackingchn, fcredit")
+      .select(
+        "id, fstatus, userid, fidorco, fcabinetnumber, fdatecontainerclose, fcabinet_locked, reforder, ftrackingchn, fcredit, " +
+        // ด่านที่อยู่จัดส่งก่อนเข้า "รอชำระเงิน(5)" (owner 2026-07-23) — read-only
+        "fshipby, faddressprovince, faddresszipcode, faddressno",
+      )
       .in("id", fids);
     if (readErr) return { ok: false, error: readErr.message };
     if (!before || before.length === 0) return { ok: false, error: "not_found" };
@@ -517,6 +522,10 @@ export async function adminBulkUpdateForwarderTbStatus(
       reforder: string | null;
       ftrackingchn: string | null;
       fcredit: string | null;
+      fshipby: string | null;
+      faddressprovince: string | null;
+      faddresszipcode: string | null;
+      faddressno: string | null;
     }>;
     // Working fid set — narrowed below if the UNIT E credit-limit lock skips any
     // credit-blocked rows on a move to fstatus '6'. All downstream UPDATEs /
@@ -600,6 +609,26 @@ export async function adminBulkUpdateForwarderTbStatus(
         (r) => rankFs(r.fstatus) > rankFs(derivedFstatus),
       );
       if (wouldDemote) derivedFstatus = fstatus;
+    }
+
+    // 🔴 ด่านที่อยู่จัดส่ง ก่อนเข้า "รอชำระเงิน(5)" (owner 2026-07-23 · MONEY) —
+    // ทางนี้คือการเลื่อนสถานะเองของ Ultra Admin Z = ทางลัดที่ไม่ผ่านหน้าเก็บเงิน
+    // ปกติ. ที่อยู่กำหนดค่าส่งไทยที่ขึ้นบิล + ที่อยู่ผู้รับบนเอกสาร → ต้องมีก่อน.
+    // ยิงเฉพาะแถวที่ **กำลังเข้า** 5 จริง (ปัจจุบัน < 5) → การถอย 6→5 (ยกเลิกบิล/
+    // คืนเงิน) ไม่โดนบล็อก, และแถวที่อยู่ 5 อยู่แล้วก็ไม่โดนซ้ำ.
+    // หมายเหตุ: ไม่กันเป้าหมาย '6' เพราะทางนี้ไม่เขียนเงิน — ต่างจากการให้เครดิต
+    // (adminMarkForwarderCredit) ที่เขียนหนี้ tb_credit จริง จึงถูกกันแยกที่นั่น.
+    if (derivedFstatus === "5") {
+      const entering = beforeRows.filter((r) => rankFs(String(r.fstatus ?? "")) < 5);
+      const addrGate = evaluateDeliveryAddressGate(entering);
+      if (!addrGate.ok) {
+        await logAdminAction(adminId, "tb_forwarder.bulk_status_rejected", "tb_forwarder", fids.join(","), {
+          reason: "no_delivery_address",
+          target_status: derivedFstatus,
+          blocked_count: addrGate.blocked.length,
+        });
+        return { ok: false, error: addrGate.message };
+      }
     }
 
     // Wave 26 G5 (2026-05-28 ดึก) — status-transition role gate.

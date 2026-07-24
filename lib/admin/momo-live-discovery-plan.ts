@@ -86,15 +86,17 @@ export const DISCOVERY_BOARDS = MOMO_LIVE_STATUSES;
  * ตัวเดียว (ป้าย = เรท เสมอ · ห้ามมี map ป้ายตัวที่สอง).
  * The old default hardcoded '1' for every row (owner flag) — this maps the REAL MOMO type.
  */
+// 🔴 owner เคาะเอง 2026-07-23 (หลังกางตัวเลขผลกระทบให้ดู) — ยึดตามนี้ ห้ามสลับเอง:
+//     "control = อย. · special = พิเศษ · อย./น้ำยา ให้ display = อย. พอครับ"
+//   ผลเงินที่ owner รับทราบตอนเคาะ: control ย้าย 4→3 = ฿0 (ลูกค้าที่ใช้ตั้งเรท 3 กับ 4 เท่ากัน) ·
+//   special ย้าย 3→4 = **PR628 จ่ายเพิ่ม ฿12,414 · PR1665 +฿723** (ลูกค้า 735 รายทั้งระบบ
+//   ตั้งเรท อย.(3) ≠ พิเศษ(4) ต่างได้ถึง ฿11,000/คิว → map ตัวนี้เป็นเรื่องเงิน ไม่ใช่แค่ป้าย).
 const MOMO_TYPE_TO_PRODUCT: Record<string, "1" | "2" | "3" | "4"> = {
   general: "1",
   tis: "2", // มาตรฐาน มอก.
   fda: "3", // อย.
-  // "special" = น้ำยา/ของเหลว (2026-07-20 · prod มี 18 แถว): เดิมไม่อยู่ใน map →
-  // ตกไป '1' ทั่วไป = ผิดทั้งป้ายทั้ง tier เรทตั้งต้น. legacy tier '3' คือ
-  // "อย./น้ำยา" → น้ำยา price บน tier เดียวกับ อย. (default — admin แก้ได้ที่ review)
-  special: "3",
-  control: "4", // สินค้าควบคุม → พิเศษ
+  control: "3", // สินค้าควบคุม → อย. (owner 2026-07-23 · เดิมเป็น '4' พิเศษ)
+  special: "4", // พิเศษ (owner 2026-07-23 · เดิมเป็น '3' — MOMO ไม่ได้บอกว่า "น้ำยา" เราแปลเอง)
 };
 export function momoTypeToProductType(momoType: string | null | undefined): "1" | "2" | "3" | "4" {
   return MOMO_TYPE_TO_PRODUCT[(momoType ?? "").trim().toLowerCase()] ?? "1";
@@ -107,7 +109,9 @@ export function momoTypeToProductType(momoType: string | null | undefined): "1" 
 export const PRODUCT_TYPE_LABEL_TH: Record<"1" | "2" | "3" | "4", string> = {
   "1": "ทั่วไป",
   "2": "มอก.",
-  "3": "อย./น้ำยา",
+  // owner 2026-07-23: "อย./น้ำยา ให้เป็น display = อย. พอครับ" — tier เดิมชื่อ "อย./น้ำยา"
+  // ในการ์ดเรท/legacy แต่บนจอเรียก "อย." สั้นๆ พอ (ค่าที่เก็บใน DB ยังเป็น '3' เหมือนเดิม).
+  "3": "อย.",
   "4": "พิเศษ",
 };
 

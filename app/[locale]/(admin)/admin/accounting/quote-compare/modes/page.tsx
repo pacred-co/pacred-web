@@ -101,7 +101,7 @@ export default async function AdminQuoteCompareModesPage({
               <select name="productType" defaultValue={String(input.productType)} className="rounded-lg border border-border bg-white dark:bg-surface px-2 py-1.5 text-sm">
                 <option value="1">1 · ทั่วไป</option>
                 <option value="2">2 · มอก.</option>
-                <option value="3">3 · อย./น้ำยา</option>
+                <option value="3">3 · อย.</option>
                 <option value="4">4 · พิเศษ</option>
               </select>
             </Field>
