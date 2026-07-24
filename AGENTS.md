@@ -163,6 +163,24 @@ This is the typography arm of §0f (product-quality) — apply it whenever you t
 
 แตะหน้าที่มี `window.print()` / `PrintButton` / `@media print` → **รัน skill `print-verify`** ก่อนพูดว่าเสร็จ. และกฎที่กว้างกว่านั้น: **หลักฐานต้องเป็นสิ่งที่ผู้ใช้ได้รับจริง ไม่ใช่สัญญาณกลางทาง** — "มี `<title>` ในไฟล์" ≠ "ชื่อไฟล์เปลี่ยน" · "มี class `.no-print`" ≠ "ปุ่มหายจากกระดาษ" · "หน้าจอสวย" ≠ "PDF ถูก". ถามตัวเองว่า *ปลายทางผู้ใช้ถืออะไรอยู่* แล้วตรวจอันนั้น.
 
+## 0j. งานหน้าตา = ปรีวิวให้ดูก่อน แล้วค่อยเขียนโค้ดจริง (2026-07-24 · owner)
+
+owner: *"ก่อนขึ้นงานโค้ดจริง ทำให้เราแต่งและเห็นภาพแบบนี้ก่อนเริ่มงานจริงดีเลยครับ
+เอาไปใส่ skills ไว้เลยครับ ให้ทุกคนได้ใช้ด้วย"*
+
+การตัดสินเรื่อง **สี · gradient · ฟอนต์ · layout · หัวตาราง/การ์ด/ป้าย** ทำด้วย**ตา** —
+`tsc/lint/build` เขียวไม่ได้บอกอะไรเลยว่าสวยหรือใช้งานได้. รอบที่ทำหัวร้านค้าเป็นแดงทึบ
+ผ่าน gate ครบและ push ขึ้น main แล้ว owner เปิดดูถึงบอกว่า *"แสบตาเกินไป"* → เสียรอบทั้งรอบ.
+พอทำปรีวิวให้ดูก่อน owner เคาะจบใน 5 นาที.
+
+**แตะงานหน้าตา → รัน skill `mockup-first` ก่อนเขียนโค้ดจริง**: ปรีวิว HTML เดี่ยวๆ ที่ใช้
+**โทเค็นสีจริงจาก `app/globals.css` + ข้อมูลจริงจาก prod** (รวมเคสสุดขั้ว — ชื่อยาวสุด เลขเยอะสุด
+ค่าเป็น 0/ติดลบ) → render + ถ่ายรูป → ให้ owner เลือก → **แล้วค่อยแตะโค้ดแอป**.
+ทำ 2-3 ตัวเลือกในหน้าเดียวยิ่งดี จะจบใน 1 รอบ. ⚠️ ไฟล์ปรีวิวที่ copy เข้า `public/`
+**ต้องลบทันที**ในคำสั่งเดียวกับที่ถ่ายรูปเสร็จ (ไม่งั้นหลุดขึ้น prod).
+
+---
+
 ## 0. Current direction — D1: Pacred is a faithful PCS Cargo port
 
 On **2026-05-18 the owner rejected the rebuilt-from-scratch Pacred app** — its UI and workflow look nothing like the legacy **PCS Cargo** system that staff and ~8,898 customers use daily. The direction is now **D1: Pacred becomes the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`.** This is the canonical lens for every task. Three phases:
