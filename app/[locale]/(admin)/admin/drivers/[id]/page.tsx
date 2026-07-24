@@ -1224,19 +1224,25 @@ export default async function AdminDriverBatchDetailPage({
 
                 {/* รูป+แก้ภาพ | ลูกค้า+ที่อยู่+ติดต่อ */}
                 <div className="flex gap-3">
-                  <div className="w-20 flex-shrink-0 space-y-1.5">
+                  {/* คอลัมน์ซ้าย = รูป (ใหญ่ขึ้น · สูงเต็มคอลัมน์) + ปุ่มถ่ายส่งชิดล่าง
+                      (owner 2026-07-24 "ทำภาพใหญ่ขึ้น จนปุ่มถ่ายดันลงมาพอดีกับกรอบ").
+                      flex-col + รูป flex-1 → รูปยืดเต็มความสูงของคอลัมน์ข้อมูล (flex stretch)
+                      · ปุ่มถ่ายส่ง mt-auto ดันไปล่างสุด. min-h กันรูปเตี้ยเกินตอนข้อมูลสั้น. */}
+                  <div className="flex w-24 flex-shrink-0 flex-col gap-1.5">
                     {heroPhoto ? (
-                      <a href={heroPhoto} target="_blank" rel="noopener noreferrer" className="block">
+                      <a href={heroPhoto} target="_blank" rel="noopener noreferrer" className="relative block min-h-[5rem] flex-1">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={heroPhoto} alt="รูปส่งสินค้า" className="h-20 w-20 rounded-lg border border-border object-cover" />
+                        <img src={heroPhoto} alt="รูปส่งสินค้า" className="absolute inset-0 h-full w-full rounded-lg border border-border object-cover" />
                       </a>
                     ) : (
-                      <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-dashed border-border text-muted">
-                        <Camera className="h-5 w-5" />
+                      <div className="flex min-h-[5rem] w-full flex-1 items-center justify-center rounded-lg border border-dashed border-border text-muted">
+                        <Camera className="h-6 w-6" />
                       </div>
                     )}
                     {editableIds.length > 0 && (
-                      <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={deliveryPhotos.length > 0} gradient />
+                      <div className="mt-auto">
+                        <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={deliveryPhotos.length > 0} gradient />
+                      </div>
                     )}
                   </div>
 
