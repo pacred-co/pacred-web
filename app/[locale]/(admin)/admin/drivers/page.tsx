@@ -27,6 +27,7 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { parsePage, pageRange, parsePageSize } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { PageSizeSelect } from "@/components/admin/page-size-select";
+import { BatchCountdown } from "./[id]/batch-countdown";
 import { DriverSelectionProvider, SelectAllBox, RowBox } from "./row-selection";
 import { ThaiDateField } from "@/components/admin/thai-date-field";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
@@ -795,12 +796,10 @@ export default async function AdminDriversPage({
           rows.map((r) => {
             const fdstatus = (r.fdstatus ?? "1") as FdStatus;
             const agg      = itemAgg.get(r.id) ?? { itemCount: 0, boxSum: 0, doneCount: 0 };
-            const expired  = r.endtime && new Date(r.endtime) < new Date() && fdstatus === "1";
             const driver   = r.fdadminid ? driverDirectory.get(r.fdadminid) : null;
             return (
-              <div key={r.id} className="rounded-2xl border border-border bg-white shadow-sm p-3 space-y-2.5">
-                {/* วันที่สร้าง + ชื่อรอบ + สถานะ (owner 2026-07-24 · บางลง คอมแพ็ค แบบภาพ) */}
-                {/* หัว: ชื่อรอบ + สถานะ */}
+              <div key={r.id} className="rounded-2xl border border-border bg-white shadow-sm p-2.5 space-y-2">
+                {/* หัว: ชื่อรอบ + สถานะ (owner 2026-07-24 · เล็ก/คอมแพ็ค แบบภาพ) */}
                 <div className="flex items-start justify-between gap-2">
                   <Link href={`/admin/drivers/${r.id}`} className="whitespace-nowrap font-bold text-primary-600 hover:underline">
                     {r.fdname ?? `รอบ #${r.id}`}
@@ -812,27 +811,29 @@ export default async function AdminDriversPage({
 
                 {/* สถิติ 3 กล่อง แบบหน้า detail (owner 2026-07-24) — แทรคกิ้ง · จุดส่ง · กล่อง */}
                 <div className="grid grid-cols-3 divide-x divide-border rounded-xl border border-border">
-                  <div className="px-2 py-2 text-center">
+                  <div className="px-2 py-1.5 text-center">
                     <div className="flex items-center justify-center gap-1 text-[11px] text-muted"><Package className="h-3.5 w-3.5" /> แทรคกิ้ง</div>
                     <div className="mt-0.5 text-lg font-bold">{agg.itemCount}</div>
                   </div>
-                  <div className="px-2 py-2 text-center">
+                  <div className="px-2 py-1.5 text-center">
                     <div className="flex items-center justify-center gap-1 text-[11px] text-muted"><MapPin className="h-3.5 w-3.5" /> จุดส่ง</div>
                     <div className="mt-0.5 text-lg font-bold">{r.fdamount ?? 0}</div>
                   </div>
-                  <div className="px-2 py-2 text-center">
+                  <div className="px-2 py-1.5 text-center">
                     <div className="flex items-center justify-center gap-1 text-[11px] text-muted"><Boxes className="h-3.5 w-3.5" /> กล่อง</div>
                     <div className="mt-0.5 text-lg font-bold">{agg.boxSum}</div>
                   </div>
                 </div>
 
-                {/* ส่งแล้ว + กำหนดส่ง */}
-                <p className={`text-center text-[11px] ${expired ? "font-medium text-rose-600" : "text-muted"}`}>
-                  ส่งแล้ว {agg.doneCount}/{agg.itemCount}{r.endtime ? ` · ส่งก่อน ${formatThaiDateTime(r.endtime)}${expired ? " (เลย)" : ""}` : ""}
-                </p>
+                {/* นับถอยหลัง เด่นๆ (owner 2026-07-24 · แบบหน้า detail) */}
+                {r.endtime && (
+                  <div className="flex justify-center">
+                    <BatchCountdown endTimeIso={r.endtime} status={fdstatus} size="lg" />
+                  </div>
+                )}
 
                 {/* 3 คน: ผู้สร้าง · เตรียมของ · จัดส่ง (โชว์ชื่อ user · owner 2026-07-24) */}
-                <div className="grid grid-cols-3 gap-2 rounded-xl bg-surface-alt/30 p-2">
+                <div className="grid grid-cols-3 gap-2 rounded-xl bg-surface-alt/30 p-1.5">
                   <div className="flex min-w-0 items-center gap-1.5">
                     <AdminAvatar url={r.fdadmincreator ? avatarByCode.get(r.fdadmincreator) ?? null : null} code={r.fdadmincreator} />
                     <div className="min-w-0">
