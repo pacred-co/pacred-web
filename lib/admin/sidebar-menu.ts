@@ -433,6 +433,15 @@ const itemHsTriage: MenuItem = {
   icon: "ClipboardList",
 };
 
+/** owner 2026-07-24 — คิว/ประวัติใบหัก 50 ทวิ (ลูกค้านิติหัก 1% ต้องออกใบหักให้เรา).
+ *  sales/CS ดู+พิมพ์ฟอร์มได้ (page gate super/accounting/sales/sales_admin/ops ·
+ *  ตรวจรับ/ยกเว้น = super/accounting ใน action). */
+const itemWhtCerts: MenuItem = {
+  labelKey: "accFreight.whtCerts",
+  href: "/admin/accounting/wht-certs",
+  icon: "FileCheck",
+};
+
 /** G1 (2026-06-29 · owner operational-flow §8) — ad-hoc PRE-ORDER HS/พิกัด consult.
  *  Sale/CS posts a product photo + Thai name → Doc answers HS/อากร/ฟอร์มอี/stat/
  *  ใบกำกับ + เลี่ยงพิกัด, BEFORE an order exists (distinct from the order-bound
@@ -1351,6 +1360,7 @@ const wrapServiceCustoms: MenuItem = {
     // reading order: ปรึกษาก่อน → กรอกในออเดอร์).
     itemHsConsult,
     itemHsTriage,
+    itemWhtCerts,
     itemHsLibrary,
     itemCustomsDocKit,
     // 2026-06-10 (ปอน) — "ใบขนพ่วง" (combined/attached customs declaration ·
@@ -1619,6 +1629,7 @@ const menuAccounting: MenuSection[] = [
       // in the cargo taxdoc workspace → gate ["super","sales","sales_admin","ops"]
       // needs a nav entry here too, §0d).
       itemHsTriage,
+      itemWhtCerts,
       // 2026-06-12 (เดฟ · คลัง HS) — the HS-code duty library (อากร reference).
       itemHsLibrary,
       // 2026-06-09 (W11 · customs doc-kit) — accounting/Docs generate DO-LOI +

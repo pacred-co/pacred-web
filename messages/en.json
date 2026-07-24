@@ -3461,7 +3461,8 @@
       "cargoDeclarations": "Consolidated cargo declaration",
       "hsLibrary": "HS Code Library",
       "hsTriage": "HS queue (CS first)",
-      "hsConsult": "HS consult (pre-order)"
+      "hsConsult": "HS consult (pre-order)",
+      "whtCerts": "WHT certs (50 Tawi)"
     },
     "freightOps": {
       "title": "Freight Operations (AX JOB)"
@@ -5566,7 +5567,8 @@
     "freightService": "Freight (FCL/LCL)",
     "freightHub": "Overview + documents",
     "freightBook": "Book a shipment",
-    "freightShipments": "Track shipment status"
+    "freightShipments": "Track shipment status",
+    "whtCertHistory": "WHT certificates (50 Tawi)"
   },
   "homeRelatedTags": {
     "eyebrow": "RELATED TOPICS · POPULAR",

@@ -144,7 +144,7 @@ export async function createDriverBatch(
     // create overlapping batches.
     const { data: fwdRows, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, fstatus, paydeposit, famount")
+      .select("id, ftrackingchn, fstatus, paydeposit, famount, fshipby, faddressprovince, faddresszipcode, faddressno")
       .in("id", forwarderIds);
     if (fwdErr) {
       console.error("createDriverBatch: forwarder verify failed", fwdErr);
@@ -156,6 +156,31 @@ export async function createDriverBatch(
     });
     if (ineligible.length > 0) {
       return { ok: false, error: `${ineligible.length} รายการไม่อยู่สถานะเตรียมส่ง — ลองรีเฟรช` };
+    }
+
+    // 🔴 ด่านสุดท้าย: ห้ามมอบงานที่ "ไม่มีปลายทางเลย" ให้คนขับ (owner 2026-07-23).
+    // ที่ต้องมีด่านนี้: การกด "นำเข้าระบบ" ยอมให้งานที่ยังไม่รู้ที่อยู่เข้ามาได้แล้ว
+    // (owner "ให้งานที่ถูกต้อง มันเข้าไปก่อนเถอะ" · commit-momo-row-core EMPTY_ADDRESS) —
+    // ปกติคิวแจ้งชำระกันไว้ก่อนถึง fstatus 6 แต่ **การให้เครดิตเขียน fstatus='6' ตรงๆ**
+    // (forwarders-field-edits adminMarkForwarderCredit) = ทางลัดที่ข้ามด่านนั้น → ถ้าไม่กัน
+    // ตรงนี้ คนขับจะได้ใบงานที่ไม่มีปลายทาง.
+    //
+    // ⚠️ เกณฑ์ต้อง "หลวมพอ" — prod มี 15 แถว fstatus=6 ที่ **มีจังหวัดแต่ไม่มี zip** และ
+    // 7 แถวในนั้น **มอบคนขับไปแล้วสำเร็จ** (เหมาๆ PCSF กทม. · เอกชนต่างจังหวัด) → ถ้าบังคับ
+    // ต้องมี zip ด้วย = ไปทำงานที่ใช้ได้อยู่แล้วพัง. คนขับต้องการ "ที่ไปได้" ไม่ใช่ zip.
+    // ⇒ กันเฉพาะที่ไม่มีทั้ง จังหวัด และ บ้านเลขที่ = ส่งไม่ได้จริง · PCS รับเองที่โกดัง → ยกเว้น.
+    const noAddress = (fwdRows ?? []).filter((r) => {
+      const row = r as { fshipby: string | null; faddressprovince: string | null; faddressno: string | null };
+      if (String(row.fshipby ?? "").trim().toUpperCase() === "PCS") return false; // รับเองที่โกดัง
+      return !String(row.faddressprovince ?? "").trim() && !String(row.faddressno ?? "").trim();
+    });
+    if (noAddress.length > 0) {
+      const sample = noAddress.slice(0, 5).map((r) => (r as { ftrackingchn: string | null }).ftrackingchn ?? "-").join(", ");
+      const more = noAddress.length > 5 ? ` (และอีก ${noAddress.length - 5} รายการ)` : "";
+      return {
+        ok: false,
+        error: `${noAddress.length} รายการยังไม่มีที่อยู่จัดส่งเลย (ไม่มีทั้งจังหวัดและบ้านเลขที่) — ${sample}${more} · ใส่ที่อยู่ในหน้ารายการนำเข้าก่อนมอบงานคนขับ`,
+      };
     }
 
     // Check none of these forwarders are already in an open batch.

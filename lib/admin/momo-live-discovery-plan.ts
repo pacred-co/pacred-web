@@ -80,7 +80,10 @@ export const DISCOVERY_BOARDS = MOMO_LIVE_STATUSES;
 /**
  * MOMO product `type` → Pacred fProductsType. Pacred's legacy dropdown (review-client):
  *   '1' ทั่วไป · '2' มอก. · '3' อย./น้ำยา · '4' พิเศษ.
- * MOMO's `type` values seen on prod: general · tis (มอก.) · fda (อย.) · control (ควบคุม).
+ * MOMO's `type` values seen on prod (นับจริง 2026-07-23 · 750 แถว): general 597 · tis 90 ·
+ * control 29 · special 20 · fda 14. คำพวกนี้เป็น**ศัพท์ของ MOMO** ไม่ใช่ประเภทของ Pacred —
+ * map ตัวนี้คือที่แปลงเป็นประเภทจริงของเรา และ `momoTypeLabel` ก็ derive ป้ายบนจอจากตัวนี้
+ * ตัวเดียว (ป้าย = เรท เสมอ · ห้ามมี map ป้ายตัวที่สอง).
  * The old default hardcoded '1' for every row (owner flag) — this maps the REAL MOMO type.
  */
 const MOMO_TYPE_TO_PRODUCT: Record<string, "1" | "2" | "3" | "4"> = {
@@ -97,19 +100,98 @@ export function momoTypeToProductType(momoType: string | null | undefined): "1" 
   return MOMO_TYPE_TO_PRODUCT[(momoType ?? "").trim().toLowerCase()] ?? "1";
 }
 
-/** MOMO product `type` → readable Thai chip label (unknown → the raw string). */
-// owner 2026-07-20 "อย ก็ อย น้ำยา ก็ น้ำยา" — labels stay DISTINCT per MOMO code
-// (the legacy dropdown's lumped "อย./น้ำยา" is only the shared RATE tier, not the label).
-const MOMO_TYPE_LABEL: Record<string, string> = {
-  general: "ทั่วไป",
-  tis: "มอก.",
-  fda: "อย.",
-  special: "น้ำยา",
-  control: "ควบคุม",
+/**
+ * ประเภทสินค้าที่ Pacred มีจริง — มีแค่ 4 ตัวนี้ (legacy `nameProductsType` ตัวเดียวกับ
+ * ที่ dropdown ตอนนำเข้า/หน้าออเดอร์/การ์ดเรทใช้). ป้ายบนจอ **ต้อง**เป็น 1 ใน 4 นี้เสมอ.
+ */
+export const PRODUCT_TYPE_LABEL_TH: Record<"1" | "2" | "3" | "4", string> = {
+  "1": "ทั่วไป",
+  "2": "มอก.",
+  "3": "อย./น้ำยา",
+  "4": "พิเศษ",
 };
+
+/**
+ * MOMO product `type` → ป้ายไทย = **ประเภทที่แถวนี้จะถูกคิดเงินจริง**.
+ *
+ * 🔴 owner 2026-07-23 (SUPERSEDES the 2026-07-20 "อย ก็ อย น้ำยา ก็ น้ำยา" rule — ห้ามย้อน):
+ *   *"Type ควบคุมไม่มีนะครับ · มีแต่ อย. นะครับ · น้ำยานี่ คือเขายิงน้ำยามาหรอครับ หรือแค่ อย."*
+ * ป้ายเดิมโชว์คำที่ **ไม่มีอยู่จริงในระบบ Pacred** ("ควบคุม" · "น้ำยา" เดี่ยวๆ) — และที่แย่กว่า
+ * คือมัน **ขัดกับราคา**: แถวป้าย "น้ำยา" ถูกคิดเป็น tier '3' (อย./น้ำยา) ส่วนแถวป้าย "ควบคุม"
+ * ถูกคิดเป็น tier '4' (พิเศษ) → คนอ่านป้ายแล้วเข้าใจเรทผิด.
+ *
+ * FIX = ป้าย **derive จาก `momoTypeToProductType` ตัวเดียวกับที่ใช้คิดราคา** → ป้ายกับเรท
+ * drift กันไม่ได้เชิงโครงสร้าง (ไม่มี map ป้ายตัวที่สองให้หลุดอีก). คำดิบของ MOMO
+ * (general/tis/fda/special/control) ยังตามรอยได้ที่ tooltip บนหน้าจอ — ไม่ใช่ป้ายหลัก.
+ *
+ * ⚠️ นี่คือการแก้ **ป้าย** เท่านั้น — ไม่แตะ map เรท (`MOMO_TYPE_TO_PRODUCT`). ถ้าเจ้าของ
+ * ต้องการให้ MOMO `control` ถูก**คิดเงิน**เป็น อย. (tier 3) แทนพิเศษ (tier 4) = เปลี่ยนเรท
+ * ต้องให้เจ้าของเคาะแยก (แอดมินแก้รายแถวได้ที่ dropdown ตอนนำเข้าอยู่แล้ว).
+ *
+ * ค่าว่าง/ไม่มี type → "—" (MOMO ไม่ส่งมา) · type แปลกที่ไม่รู้จัก → "ทั่วไป" ตรงกับ tier '1'
+ * ที่ momoTypeToProductType จะคิดให้จริง (ไม่โชว์คำดิบเป็นป้ายอีกแล้ว).
+ */
 export function momoTypeLabel(momoType: string | null | undefined): string {
-  const t = (momoType ?? "").trim().toLowerCase();
-  return MOMO_TYPE_LABEL[t] ?? (t || "—");
+  const t = (momoType ?? "").trim();
+  if (!t) return "—";
+  return PRODUCT_TYPE_LABEL_TH[momoTypeToProductType(t)];
+}
+
+/** เลขแทรคกิ้งที่รูปทรงผิดปกติ — ป้ายเตือนให้พนักงานเช็คกับ MOMO (ไม่บล็อกอะไร). */
+export type MomoTrackingAnomaly = {
+  code: "bad_shape" | "too_short";
+  /** ป้ายสั้นบนแถว */
+  label: string;
+  /** คำอธิบายเต็มใน tooltip */
+  detail: string;
+};
+
+/**
+ * เลขที่สั้นกว่านี้ = สั้นผิดปกติ. **calibrate กับ prod จริง** (2026-07-23): เลขที่สั้นที่สุด
+ * ที่เป็นของจริงและถูกนำเข้าระบบไปแล้ว = **7 หลัก** (0001779 · 0004065 · 1191744 · 5886064 ·
+ * 6968866 — เลขทรง "SM" ของ MOMO) → ตั้งด่านที่ 7 เพื่อให้ false-positive = 0 กับข้อมูลจริง.
+ * ที่ต่ำกว่านี้บน prod มีตัวเดียวคือ `733` (3 หลัก) = ตัวที่เจ้าของถามถึง.
+ */
+const TRACKING_MIN_LEN = 7;
+
+/**
+ * ตรวจ "รูปทรง" ของเลขแทรคกิ้งที่ MOMO ส่งมา (owner 2026-07-23 · *"เลขแทรคกิ้ง 733 นี่มีจริง
+ * หรอครับ"*). PURE · display-only — **ไม่แก้เลข ไม่บล็อกการนำเข้า**: เลขที่ดูผิดอาจเป็นของจริง
+ * และการเดาแก้เลขพัสดุ = ของไปผิดเจ้าของ. หน้าที่ของมันคือทำให้พนักงานเห็นก่อนกดนำเข้า
+ * ว่า "เลขนี้น่าจะคีย์ตกหล่นมาจาก MOMO — เช็คก่อน".
+ *
+ * prod 2026-07-23 (uncommitted 20 แถว): จับได้ 2 ตัว —
+ *   • `733` (3 หลัก · PR594 · 31.5kg) = เลขเดียวที่สั้นกว่า 8 หลัก
+ *   • `JDX056872686153-1-1-` = ลงท้ายด้วยขีด → `baseTracking` ตัดท้ายไม่ได้ →
+ *     **จับกลุ่มเป็นชิปเม้นไม่ได้** และถ้า commit ไป ขีดท้ายจะติดไปกับ ftrackingchn เลย
+ *     (prod มีที่ commit ไปแล้วแบบนี้ 11 แถว — คลาสเดียวกัน).
+ */
+export function momoTrackingAnomaly(
+  tracking: string | null | undefined,
+): MomoTrackingAnomaly | null {
+  const t = (tracking ?? "").trim();
+  if (!t) return null; // ไม่มีเลขเลย = คนละปัญหา (ตัว commit ปฏิเสธเองอยู่แล้ว)
+  if (/(^-|-$|--|\s)/.test(t)) {
+    return {
+      code: "bad_shape",
+      label: "เลขรูปแบบแปลก",
+      detail:
+        `เลขแทรคกิ้ง "${t}" มีขีด/ช่องว่างเกินมา (ขึ้นต้น-ลงท้ายด้วยขีด หรือขีดซ้อน) — ` +
+        `MOMO น่าจะคีย์ตกหล่น · เลขทรงนี้ระบบจับกลุ่มเป็นชิปเม้นไม่ได้ และถ้านำเข้าไป ` +
+        `ขีดจะติดไปกับเลขพัสดุในระบบด้วย → เช็คเลขจริงกับ MOMO ก่อนนำเข้า`,
+    };
+  }
+  if (t.length < TRACKING_MIN_LEN) {
+    return {
+      code: "too_short",
+      label: "เลขสั้นผิดปกติ",
+      detail:
+        `เลขแทรคกิ้ง "${t}" มีแค่ ${t.length} หลัก — สั้นกว่าเลขพัสดุที่สั้นที่สุด` +
+        `ที่เคยเข้าระบบจริง (${TRACKING_MIN_LEN} หลัก) · น่าจะคีย์ตกหล่นมาจาก MOMO → ` +
+        `เอารูป + PR ไปเช็คเลขจริงกับ MOMO ก่อนนำเข้า (ระบบไม่แก้เลขให้เอง)`,
+    };
+  }
+  return null;
 }
 
 /** Normalize a Live memberCode → the PR#### form tb_users.userID uses. */

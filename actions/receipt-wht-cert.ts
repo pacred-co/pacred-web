@@ -116,7 +116,8 @@ export async function getReceiptCertQueue(): Promise<ReceiptCertRow[]> {
   // Admin-gate the read: a "use server" action is callable directly (not behind
   // the page's gate), so without this an unauthenticated POST could enumerate
   // pending receipt rids/userids/cert-numbers. requireAdmin redirects non-admins.
-  await requireAdmin(["super", "accounting"]);
+  // read-only — sales/CS เห็นคิวได้ (พิมพ์ฟอร์มให้ลูกค้า · owner 2026-07-24)
+  await requireAdmin(["super", "accounting", "sales", "sales_admin", "ops"]);
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("tb_receipt")
@@ -135,7 +136,8 @@ export async function getReceiptCertQueue(): Promise<ReceiptCertRow[]> {
 export async function getReceiptCertSignedUrl(
   receiptId: number,
 ): Promise<AdminActionResult<{ url: string }>> {
-  return withAdmin<{ url: string }>(["super", "accounting"], async () => {
+  // read-only ดูไฟล์ที่ลูกค้าแนบ — sales/CS ช่วยเช็คได้ · approve ยัง super/accounting
+  return withAdmin<{ url: string }>(["super", "accounting", "sales", "sales_admin", "ops"], async () => {
     const admin = createAdminClient();
     const { data: r, error } = await admin
       .from("tb_receipt").select("wht_cert_path").eq("id", receiptId)
@@ -216,4 +218,51 @@ export async function adminWaiveReceiptWhtCert(
     revalidatePath("/admin/accounting/wht-certs");
     return { ok: true, data };
   });
+}
+
+// ── 4. CUSTOMER: กรอก "เลขที่เอกสาร" ใบ 50 ทวิ เอง (owner 2026-07-24) ────────
+//
+// "มีช่องให้ลูกค้าสามารถกรอกเลขที่เอกสารได้เอง" — ลูกค้าออกใบหักจากระบบบัญชีของ
+// ตัวเอง แล้วเอาเลขมากรอกที่หน้าประวัติ 50 ทวิ (/wht-certs) โดยไม่ต้องรอแนบไฟล์.
+// เขียนแค่ wht_cert_no — ไม่แตะ status (การปลดล็อกพิมพ์ยังต้องผ่านบัญชีตรวจ
+// เหมือนเดิม) → ไม่มีทางใช้ช่องนี้ bypass gate.
+export async function customerSetReceiptWhtCertNo(
+  receiptId: number,
+  certNoRaw: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { getCurrentUserWithProfile } = await import("@/lib/auth/get-user");
+  const me = await getCurrentUserWithProfile();
+  const memberCode = me?.profile?.member_code ?? "";
+  if (!memberCode) return { ok: false, error: "กรุณาเข้าสู่ระบบ" };
+
+  const certNo = certNoRaw.trim().slice(0, 100);
+  const admin = createAdminClient();
+
+  // ownership — ใบเสร็จต้องเป็นของลูกค้าคนนี้เท่านั้น
+  const { data: rcpt, error: rErr } = await admin
+    .from("tb_receipt")
+    .select("id, userid, wht_cert_status")
+    .eq("id", receiptId)
+    .maybeSingle<{ id: number; userid: string | null; wht_cert_status: string | null }>();
+  if (rErr) {
+    console.error("[customerSetReceiptWhtCertNo load] failed", { code: rErr.code, message: rErr.message });
+    return { ok: false, error: "โหลดข้อมูลไม่สำเร็จ" };
+  }
+  if (!rcpt || (rcpt.userid ?? "").trim() !== memberCode) {
+    return { ok: false, error: "ไม่พบใบเสร็จของคุณ" };
+  }
+  // อนุมัติ/ยกเว้นแล้ว = เลขถูกบัญชียืนยันแล้ว — แก้ทับไม่ได้ (ติดต่อบัญชี)
+  if (rcpt.wht_cert_status === "approved" || rcpt.wht_cert_status === "waived") {
+    return { ok: false, error: "รายการนี้บัญชีตรวจยืนยันแล้ว — ต้องการแก้เลขให้ติดต่อบัญชี" };
+  }
+
+  const { error: updErr } = await admin
+    .from("tb_receipt")
+    .update({ wht_cert_no: certNo || null })
+    .eq("id", receiptId);
+  if (updErr) {
+    console.error("[customerSetReceiptWhtCertNo update] failed", { code: updErr.code, message: updErr.message });
+    return { ok: false, error: "บันทึกไม่สำเร็จ กรุณาลองใหม่" };
+  }
+  return { ok: true };
 }

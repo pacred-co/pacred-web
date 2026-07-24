@@ -84,6 +84,9 @@ function WhtForm({
   paidAmount,
   whtAmount,
   receiptNo,
+  certNo,
+  signatureUrl,
+  stampUrl,
 }: {
   copyLabel: string;
   copyNote: string;
@@ -94,11 +97,29 @@ function WhtForm({
   paidAmount: number;
   whtAmount: number;
   receiptNo: string;
+  /** เลขที่เอกสารที่ลูกค้ากรอกเอง (tb_receipt.wht_cert_no) — ช่อง "เลขที่" ของฟอร์มจริง */
+  certNo: string;
+  /** ลายเซ็น/ตรายางจาก profile ลูกค้า (mig 0278) — มี = แปะให้เลย ไม่มี = เว้นให้เซ็นมือ */
+  signatureUrl: string | null;
+  stampUrl: string | null;
 }) {
   return (
     <div className="wht-form bg-white px-4 py-2.5 text-black" style={{ fontSize: "11px", lineHeight: 1.3 }}>
       <div className="flex items-start justify-between">
-        <p className="text-[10px]">เลขที่อ้างอิง: {receiptNo}</p>
+        {/* หัวซ้ายตามฟอร์มจริง: เล่มที่/เลขที่ — เลขที่ = เลขเอกสารที่ระบบผู้หัก (ลูกค้า)
+            ออกเอง → ให้กรอกเองได้ที่หน้าประวัติ 50 ทวิ · ว่าง = จุดให้เขียนมือ */}
+        <div className="text-[10px] leading-tight">
+          <p>
+            เล่มที่ ..................{" "}
+            เลขที่{" "}
+            {certNo ? (
+              <span className="font-mono font-bold">{certNo}</span>
+            ) : (
+              ".................."
+            )}
+          </p>
+          <p className="text-gray-600">เลขที่อ้างอิง (ใบเสร็จ Pacred): {receiptNo}</p>
+        </div>
         <div className="text-right text-[10px]">
           <p className="font-bold">{copyLabel}</p>
           <p>{copyNote}</p>
@@ -126,6 +147,16 @@ function WhtForm({
           address={ADDRESSES.office.full}
         />
       </div>
+
+      {/* ลำดับที่ในแบบ — นิติจ่ายนิติ ค่าบริการ/ขนส่ง = นำส่งด้วย ภ.ง.ด.53 (ติ๊กให้เลย) */}
+      <p className="mt-1 text-[10.5px]">
+        ลำดับที่ .......... ในแบบ{" "}
+        <span className="text-gray-600">
+          ☐ ภ.ง.ด.1ก &nbsp;☐ ภ.ง.ด.1ก พิเศษ &nbsp;☐ ภ.ง.ด.2 &nbsp;☐ ภ.ง.ด.3 &nbsp;☐
+          ภ.ง.ด.2ก &nbsp;☐ ภ.ง.ด.3ก
+        </span>{" "}
+        <span className="font-bold">☑ ภ.ง.ด.53</span>
+      </p>
 
       {/* ตารางเงินได้ */}
       <table className="mt-1.5 w-full border-collapse text-[11px] [&_td]:border [&_td]:border-gray-800 [&_td]:px-1 [&_td]:py-0.5 [&_th]:border [&_th]:border-gray-800 [&_th]:px-1 [&_th]:py-0.5">
@@ -169,25 +200,49 @@ function WhtForm({
         <span className="ml-3 text-gray-600">☐ (2) ออกให้ตลอดไป ☐ (3) ออกให้ครั้งเดียว ☐ (4) อื่น ๆ</span>
       </p>
 
-      {/* เซ็น + ตรา — ส่วนเดียวที่ลูกค้าต้องลงมือ */}
+      {/* เซ็น + ตรา — ลูกค้าตั้งลายเซ็น/ตรายางใน profile แล้ว = แปะให้เลย ·
+          ยังไม่ตั้ง = เว้นช่องให้เซ็นมือเหมือนเดิม */}
       <div className="mt-1.5 grid grid-cols-[1fr_120px] gap-2">
         <div className="border border-gray-800 px-2 py-1.5 text-center">
           <p className="text-[10.5px]">
             ขอรับรองว่าข้อความและตัวเลขดังกล่าวข้างต้นถูกต้องตรงกับความจริงทุกประการ
           </p>
-          <p className="mt-5">
+          {/* ลายเซ็น = overlay ทับเส้นจุด (absolute · สูง +0) — ห้าม stack เพิ่มความสูง
+              ไม่งั้นฟอร์ม ×2 ล้น 281mm → ฉบับที่ 2 กระเด็นไปหน้า 2 (print-verify L-2) */}
+          <p className="relative mt-5">
+            {signatureUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={signatureUrl}
+                alt=""
+                className="absolute bottom-0 left-1/2 h-9 -translate-x-1/2 object-contain"
+                style={{ mixBlendMode: "multiply" }}
+              />
+            ) : null}
             ลงชื่อ ............................................................ ผู้จ่ายเงิน
           </p>
-          <p className="mt-1">( ............................................................ )</p>
+          <p className="mt-1">( {payerName || "............................................................"} )</p>
           <p className="mt-1">วันที่ ............ / ................... / ...............</p>
         </div>
-        <div className="flex items-center justify-center border border-gray-800 p-2 text-center text-[10.5px] text-gray-500">
-          ประทับตรา
-          <br />
-          นิติบุคคล
-          <br />
-          (ถ้ามี)
-        </div>
+        {stampUrl ? (
+          <div className="relative flex items-center justify-center border border-gray-800 p-1">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={stampUrl}
+              alt="ตรายางนิติบุคคล"
+              className="max-h-[84px] object-contain"
+              style={{ mixBlendMode: "multiply" }}
+            />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center border border-gray-800 p-2 text-center text-[10.5px] text-gray-500">
+            ประทับตรา
+            <br />
+            นิติบุคคล
+            <br />
+            (ถ้ามี)
+          </div>
+        )}
       </div>
 
       <p className="mt-0.5 text-[9.5px] leading-snug text-gray-600">
@@ -239,6 +294,36 @@ export default async function ReceiptWhtFormPage({
   const paidAmount = doc.commonProps.preTaxTotal ?? 0;
   const payDate = thaiDate(doc.commonProps.issueDate);
 
+  // เลขที่เอกสาร (ลูกค้ากรอกเองที่หน้าประวัติ 50 ทวิ) + ลายเซ็น/ตรายางจาก profile
+  // (mig 0278) — โหลดเสริมจากใบเสร็จ → เจ้าของใบ (ไม่แตะชุด FROZEN identity ข้างบน)
+  const admin = createAdminClient();
+  const { data: certRow, error: certErr } = await admin
+    .from("tb_receipt")
+    .select("wht_cert_no, userid")
+    .eq("id", id)
+    .maybeSingle<{ wht_cert_no: string | null; userid: string | null }>();
+  if (certErr) console.error("[wht-form certNo] failed", { message: certErr.message });
+  const certNo = (certRow?.wht_cert_no ?? "").trim();
+
+  let signatureUrl: string | null = null;
+  let stampUrl: string | null = null;
+  const ownerId = (certRow?.userid ?? "").trim();
+  if (ownerId) {
+    const { data: esign, error: esignErr } = await admin
+      .from("tb_users")
+      .select("signature_path, stamp_path")
+      .eq("userID", ownerId)
+      .maybeSingle<{ signature_path: string | null; stamp_path: string | null }>();
+    if (esignErr) console.error("[wht-form esign] failed", { message: esignErr.message });
+    const sign = async (p: string | null) => {
+      if (!p) return null;
+      const { data: s, error: sErr } = await admin.storage.from("member-docs").createSignedUrl(p, 600);
+      if (sErr) console.error("[wht-form esign url] failed", { p, message: sErr.message });
+      return s?.signedUrl ?? null;
+    };
+    [signatureUrl, stampUrl] = await Promise.all([sign(esign?.signature_path ?? null), sign(esign?.stamp_path ?? null)]);
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 print:bg-white">
       <style>{`
@@ -286,6 +371,9 @@ export default async function ReceiptWhtFormPage({
           paidAmount={paidAmount}
           whtAmount={whtAmount}
           receiptNo={doc.commonProps.rid}
+          certNo={certNo}
+          signatureUrl={signatureUrl}
+          stampUrl={stampUrl}
         />
         <div className="wht-cut-line border-t border-dashed border-gray-400" />
         <WhtForm
@@ -298,6 +386,9 @@ export default async function ReceiptWhtFormPage({
           paidAmount={paidAmount}
           whtAmount={whtAmount}
           receiptNo={doc.commonProps.rid}
+          certNo={certNo}
+          signatureUrl={signatureUrl}
+          stampUrl={stampUrl}
         />
       </div>
     </div>

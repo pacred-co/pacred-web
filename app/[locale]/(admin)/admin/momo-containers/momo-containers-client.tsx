@@ -12,7 +12,7 @@
 import { Fragment, useMemo, useState, useTransition, type ReactNode } from "react";
 import { ALL_WORKBOOK_CARRIER_OPTIONS } from "@/lib/cart/ship-by-eligibility";
 import { baseTracking, isAdditiveLotBare } from "@/lib/admin/momo-bill-header";
-import { momoTypeLabel } from "@/lib/admin/momo-live-discovery-plan";
+import { momoTypeLabel, momoTrackingAnomaly, PRODUCT_TYPE_LABEL_TH } from "@/lib/admin/momo-live-discovery-plan";
 import { cgMatchesQty } from "@/lib/forwarder/cg-range";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -168,6 +168,23 @@ function notReadyReasons(t: IngestTrack): string[] {
   return r;
 }
 
+/**
+ * 🚩 ย้อนแย้ง: MOMO บอก "ปิดรอบรถแล้ว" แต่ไม่ส่งเลขตู้มา (owner 2026-07-23 · *"บางอัน status
+ * ข้างหลังเป็น ปิดรอบรถแล้ว แต่ยังไม่มีเลขตู้ นี่มันย้อนแย้งกันอยู่นะครับ"*).
+ * prod 2026-07-23: **12 แถวที่ยังไม่นำเข้า** อยู่ในสภาพนี้จริง (จาก 20 แถวที่ยังไม่นำเข้าทั้งหมด).
+ *
+ * โชว์เป็นป้ายเตือนเฉยๆ — **ไม่กุเลขตู้ให้ · ไม่บล็อกการนำเข้า** (แถวแบบนี้ commit ได้ปกติ
+ * แล้วลงเป็น fstatus '2' รอ propagate เติมเลขตู้จริงทีหลัง — ดู commit-momo-row-core §4).
+ * เดิมช่องตู้ขึ้นแค่ "⏳ ยังไม่เข้าตู้ปิด" เฉยๆ ทำให้ดูเหมือนปกติ ทั้งที่สถานะข้างหลังบอกว่าปิดรอบไปแล้ว.
+ *
+ * scope = แถวที่**ยังไม่นำเข้า**เท่านั้น (แถวที่เข้าระบบแล้วเลขตู้ไปอยู่บน tb_forwarder แล้ว ·
+ * ช่อง staging ที่ว่างอยู่เป็นแค่ร่องรอย ไม่ใช่ปัญหาหน้างาน — prod มี 573 แถวแบบนั้น ถ้าเตือนด้วย
+ * จะกลายเป็นเสียงรบกวนล้วน).
+ */
+function roundClosedNoContainer(t: IngestTrack): boolean {
+  return !t.committed && !t.container && /ปิดรอบ/.test(t.adminStatusText ?? "");
+}
+
 // 🔴 CLOSED CARRIER LIST (owner 2026-07-14) — "บังคับให้เลือกให้ใส่แค่ที่มีในไฟล์ที่ส่งให้เท่านั้น".
 // The hardcoded list here used to offer DHL (1) · Kerry (4) · Nim Express (5) · ไปรษณีย์ไทย (11) —
 // none of which are in the owner's workbook → gone. At MOMO-commit time the delivery address is
@@ -180,18 +197,26 @@ const SHIP_BY_OPTIONS: { value: string; label: string }[] = [
   { value: "PCS", label: "รับเองโกดัง Pacred (สมุทรสาคร)" },
   ...ALL_WORKBOOK_CARRIER_OPTIONS.map((c) => ({ value: c.id, label: c.name })),
 ];
-const PRODUCT_TYPE_OPTIONS: { value: "1" | "2" | "3" | "4"; label: string }[] = [
-  { value: "1", label: "ทั่วไป" },
-  { value: "2", label: "มอก." },
-  { value: "3", label: "อย./น้ำยา" },
-  { value: "4", label: "พิเศษ" },
-];
-const PRODUCT_TYPE_TH: Record<string, string> = { "1": "ทั่วไป", "2": "มอก.", "3": "อย./น้ำยา", "4": "พิเศษ" };
-// ── ประเภทสินค้า (owner 2026-07-20 "อย ก็ อย น้ำยา ก็ น้ำยา") — ป้ายจาก MOMO's raw
-//    type ตรงๆ (ทั่วไป/มอก./อย./น้ำยา/ควบคุม · momoTypeLabel SOT); PRODUCT_TYPE_TH
-//    ('3' = ป้ายรวม legacy) เหลือเป็น fallback เมื่อไม่มี raw type เท่านั้น. ──
+// ตัวเลือกประเภทสินค้าตอนยืนยันนำเข้า = **4 ประเภทจริงของ Pacred** ตัวเดียวกับป้ายในตาราง
+// (PRODUCT_TYPE_LABEL_TH SOT · owner 2026-07-23 "ควบคุมไม่มี มีแต่ อย.") — ไม่มี "ควบคุม"/"น้ำยา"
+// เป็นตัวเลือกแยก เพราะระบบเราไม่มีประเภทนั้น (น้ำยา = อยู่ในกลุ่ม อย. tier '3').
+const PRODUCT_TYPE_OPTIONS: { value: "1" | "2" | "3" | "4"; label: string }[] = (
+  ["1", "2", "3", "4"] as const
+).map((v) => ({ value: v, label: PRODUCT_TYPE_LABEL_TH[v] }));
+const PRODUCT_TYPE_TH = PRODUCT_TYPE_LABEL_TH;
+// ── ประเภทสินค้า (owner 2026-07-23 "Type ควบคุมไม่มีนะครับ · มีแต่ อย.") ──
+//    ป้ายต้องเป็น 1 ใน **4 ประเภทจริงของ Pacred** (ทั่วไป/มอก./อย./น้ำยา/พิเศษ) เท่านั้น และ
+//    ต้อง**ตรงกับเรทที่แถวนั้นจะถูกคิดจริง** → momoTypeLabel derive จาก momoTypeToProductType
+//    ตัวเดียวกับที่ commit ใช้ (ป้าย = เรท · drift ไม่ได้). คำดิบของ MOMO (special/control)
+//    ไม่เป็นป้ายอีกแล้ว — ย้ายไปอยู่ tooltip ให้ตามรอยได้ (typeTitle ข้างล่าง).
+//    ⚠️ SUPERSEDES ป้ายเดิม 2026-07-20 ("น้ำยา"/"ควบคุม") — ห้ามย้อน.
 const typeTh = (t: IngestTrack): string =>
   t.momoType ? momoTypeLabel(t.momoType) : (PRODUCT_TYPE_TH[t.guessedProductType] ?? "—");
+/** tooltip ประเภท — บอกทั้งเรทที่จะถูกคิด และคำดิบที่ MOMO ส่งมา (ไว้ไล่ปัญหากับ MOMO). */
+const typeTitle = (t: IngestTrack): string =>
+  `จะถูกคิดเป็นประเภท "${PRODUCT_TYPE_TH[t.guessedProductType] ?? "ทั่วไป"}" (เรทตามการ์ดราคา)` +
+  (t.momoType ? ` · MOMO ส่งมาเป็น "${t.momoType}"` : " · MOMO ไม่ได้ส่งประเภทมา (ตั้งเป็นทั่วไป)") +
+  " · แก้ได้ที่หน้ายืนยันก่อนนำเข้า";
 const TRANSPORT_TH: Record<string, string> = { "1": "🚚 รถ", "2": "🚢 เรือ", "3": "✈️ อากาศ" };
 
 const n2 = (v: number) => (v > 0 ? v.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—");
@@ -729,7 +754,9 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
               <tr key={t.id}>
                 <td className="px-2 py-1 font-mono font-semibold">{t.tracking}</td>
                 <td className="px-2 py-1 font-mono">{t.container ?? <span className="text-amber-600">ยังไม่เข้าตู้</span>}</td>
-                <td className="px-2 py-1 font-mono">{t.guessedUserId}</td>
+                <td className="px-2 py-1 font-mono">
+                  {t.guessedUserId ?? <span className="font-sans font-bold text-amber-700" title="MOMO ไม่ได้ส่งรหัสลูกค้า (PR) มา">NO CODE</span>}
+                </td>
                 <td className="px-2 py-1 text-right font-mono">{t.weightKg > 0 ? n2(t.weightKg) : <span className="text-amber-600">รอชั่ง</span>}</td>
                 <td className="px-2 py-1 text-right font-mono">{n6(t.cbm)}</td>
                 <td className="px-2 py-1 text-right">{t.qty ?? "—"}</td>
@@ -881,6 +908,15 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
         <>
           {t.container ? (
             <Link href={`/admin/momo-containers/${encodeURIComponent(t.container)}`} className="font-mono font-semibold text-sky-700 hover:underline">{t.container}</Link>
+          ) : roundClosedNoContainer(t) ? (
+            /* owner 2026-07-23 — สถานะบอกปิดรอบแล้ว แต่ไม่มีเลขตู้ = ขัดกันเอง ต้องเห็นชัด
+               ไม่ใช่ปล่อยช่องว่างให้ดูเหมือนปกติ (prod 12 แถว) */
+            <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[11px] font-bold text-amber-800"
+              title={`ย้อนแย้ง: MOMO แจ้งสถานะ "${t.adminStatusText}" แต่ยังไม่ส่งเลขตู้มา` +
+                `${t.routingBatch ? ` (มีแต่รอบขนส่ง ${t.routingBatch} ซึ่งไม่ใช่เลขตู้)` : ""}` +
+                ` — นำเข้าระบบได้ปกติ (จะลงเป็น "กำลังส่งมาไทย" รอเลขตู้จริงจาก MOMO) · ถ้าค้างนาน ให้ทวงเลขตู้กับ MOMO`}>
+              ⚠️ ปิดรอบแล้วแต่ยังไม่มีเลขตู้
+            </span>
           ) : (<span className="text-[11px] text-amber-600" title={t.routingBatch ?? ""}>⏳ ยังไม่เข้าตู้ปิด</span>)}
           {t.sack && <div className="text-[11px] text-muted">กระสอบ: {t.sack}</div>}
           {t.momoGarbage && (
@@ -911,6 +947,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     dum: { label: "Dum", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
     type: {
       label: "Type", sortKey: "type", tdClass: "px-2 py-1.5 text-center whitespace-nowrap",
+      tdTitle: (t) => typeTitle(t),
       td: (t) => {
         const label = typeTh(t);
         return (<span className={label !== "ทั่วไป" ? "font-semibold text-amber-700" : undefined}>{label}</span>);
@@ -920,7 +957,14 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
       label: "Code", sortKey: "pr", tdClass: "px-2 py-1.5 whitespace-nowrap",
       td: (t) => (
         <>
-          {editableCell(t, "pr", t.guessedUserId ? <span className="font-mono font-semibold">{t.guessedUserId}</span> : <span className="text-[11px] text-amber-600">MOMO ไม่ส่ง PR</span>)}
+          {/* owner 2026-07-23 "ตรงคำว่า MOMO ไม่ส่ง PR ให้ขึ้นเป็น NO CODE เลยครับ" —
+              ใช้คำเดียวกับแท็บ ❓ NO CODE + คำอธิบายอยู่ใน tooltip (ไม่ใช่ในป้าย) */}
+          {editableCell(t, "pr", t.guessedUserId
+            ? <span className="font-mono font-semibold">{t.guessedUserId}</span>
+            : <span className="rounded bg-amber-100 px-1 py-0.5 text-[11px] font-bold text-amber-700"
+                title="NO CODE = MOMO ไม่ได้ส่งรหัสลูกค้า (PR) มากับพัสดุนี้ — ของยังไม่มีเจ้าของในระบบ · กด ✎ เพื่อใส่ PR เมื่อหาเจ้าของเจอ">
+                NO CODE
+              </span>)}
           {t.userCode && <span className="ml-1 text-[11px] text-muted" title="รหัสลูกค้าดิบจาก MOMO (user_code)">({t.userCode})</span>}
           {!t.committed && t.userIdValid === false && t.guessedUserId && (<div className="mt-0.5 inline-flex items-center gap-1 rounded bg-red-100 px-1 py-0.5 text-[11px] font-bold text-red-700"><AlertCircle className="h-2.5 w-2.5" /> ไม่มีในระบบ</div>)}
           {!t.committed && t.userIdValid === true && (<div className="mt-0.5 inline-flex items-center gap-1 rounded bg-emerald-100 px-1 py-0.5 text-[11px] font-bold text-emerald-700"><CheckCircle2 className="h-2.5 w-2.5" /> พบในระบบ</div>)}
@@ -928,7 +972,26 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
         </>
       ),
     },
-    tracking: { label: "Tracking", sortKey: "tracking", tdClass: "px-2 py-1.5 font-mono font-semibold text-foreground whitespace-nowrap", td: (t) => t.tracking ?? "—" },
+    tracking: {
+      label: "Tracking", sortKey: "tracking", tdClass: "px-2 py-1.5 font-mono font-semibold text-foreground whitespace-nowrap",
+      td: (t) => {
+        // owner 2026-07-23 "เลขแทรคกิ้ง 733 นี่มีจริงหรอครับ" — เลขที่รูปทรงผิดปกติ (สั้นเกิน /
+        // มีขีดเกิน) ต้องสะดุดตาก่อนกดนำเข้า. DISPLAY-ONLY: ไม่แก้เลขให้เอง ไม่บล็อกการนำเข้า
+        // (เดาแก้เลขพัสดุ = ของไปผิดเจ้าของ) · เตือนเฉพาะแถวที่ยังไม่นำเข้า = ที่ยังแก้ทันเท่านั้น.
+        const anomaly = t.committed ? null : momoTrackingAnomaly(t.tracking);
+        return (
+          <>
+            {t.tracking ?? "—"}
+            {anomaly && (
+              <span className="ml-1 inline-flex items-center gap-0.5 rounded bg-rose-100 px-1 py-0.5 font-sans text-[10px] font-bold text-rose-700"
+                title={`${anomaly.detail} · (ระบบไม่แก้เลขให้เอง — แก้ที่ MOMO แล้วกด "🔄 ดึง Live")`}>
+                ⚠️ {anomaly.label}
+              </span>
+            )}
+          </>
+        );
+      },
+    },
     w: { label: "W.", sortKey: "w", thTitle: "กว้าง (ซม.) ต่อกล่อง · แก้ไขได้", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => editableCell(t, "width", t.width > 0 ? t.width : DASH) },
     l: { label: "L.", sortKey: "l", thTitle: "ยาว (ซม.) ต่อกล่อง · แก้ไขได้", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => editableCell(t, "length", t.length > 0 ? t.length : DASH) },
     h: { label: "H.", sortKey: "h", thTitle: "สูง (ซม.) ต่อกล่อง · แก้ไขได้", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => editableCell(t, "height", t.height > 0 ? t.height : DASH) },
@@ -1251,9 +1314,34 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                               ) : (
                                 <span className="font-mono text-[13px] font-bold text-foreground">{base}</span>
                               )}
-                              <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-600">
-                                {famQty > 0 ? `${famQty} กล่อง` : fam.length > 1 ? `${fam.length} แทรค` : `${fam[0].boxes.length} กล่อง`}
+                              {/* owner 2026-07-23 "แทรคกิ้งกรุ๊ปรวมเป็นชิปเม้น และการแสดงผล" —
+                                  หัวชิปเม้นต้องอ่านจบในบรรทัดเดียว (§0g): กี่แทรคกิ้ง · Σ กล่อง ·
+                                  Σ น้ำหนัก · Σ คิว. เดิม Σ น้ำหนัก/คิว อยู่ในคอลัมน์ Total Wt./Vol.
+                                  ซึ่งต้องเลื่อนตารางไปขวาสุด (กว้าง 2400px) กว่าจะเห็น → คนอ่านหัว
+                                  ชิปเม้นแล้วไม่รู้ว่ารวมได้เท่าไร. Σ = famAgg/familyTruth ตัวเดิม
+                                  (ยอดทั้งชิปเม้น · ไม่ใช่เฉพาะที่แท็บโชว์) — ไม่มีสูตรรวมตัวที่สอง. */}
+                              {truth && truth.members > 1 && (
+                                <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10.5px] font-bold text-sky-700"
+                                  title="ชิปเม้นนี้รวมมาจากหลายเลขแทรคกิ้ง (MOMO แตกกล่อง/แตกล็อต) — กดเพื่อกางดูทีละแทรค">
+                                  {truth.members} แทรคกิ้ง
+                                </span>
+                              )}
+                              <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10.5px] font-semibold text-slate-600"
+                                title="จำนวนกล่องรวมทั้งชิปเม้น">
+                                {famQty > 0 ? `Σ ${famQty} กล่อง` : fam.length > 1 ? `${fam.length} แทรค` : `Σ ${fam[0].boxes.length} กล่อง`}
                               </span>
+                              {famWt > 0 && (
+                                <span className="rounded-full bg-slate-200 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-slate-600"
+                                  title="น้ำหนักรวมทั้งชิปเม้น (กก.) — ค่าที่ใช้คิดเงิน">
+                                  Σ {famWt.toLocaleString("en-US", { maximumFractionDigits: 2 })} กก.
+                                </span>
+                              )}
+                              {famCbm > 0 && (
+                                <span className="rounded-full bg-slate-200 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-slate-600"
+                                  title="ปริมาตรรวมทั้งชิปเม้น (คิว) — ค่าที่ใช้คิดเงิน">
+                                  Σ {famCbm.toLocaleString("en-US", { maximumFractionDigits: 6 })} คิว
+                                </span>
+                              )}
                               {/* owner 2026-07-21 "ฝั่ง API นำเข้าก็แก้ได้เหมือนกัน" — jump into the
                                   shipment editor (แทรคกิ้ง/เลขชิปเม้น/กล่อง แก้ได้หลังปลดล็อก + ↺ reset) */}
                               {famFid && (
