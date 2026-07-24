@@ -12,8 +12,9 @@
 import { useState, type ReactNode } from "react";
 import { Printer, Tag, ChevronDown } from "lucide-react";
 
+// ปุ่มบาง (owner 2026-07-24 "บางลง · แบบในภาพ") — pill เตี้ยลง py-1.5 · ไอคอนเล็ก h-3.5
 const BTN =
-  "inline-flex items-center justify-center gap-1 rounded-full px-2 py-2.5 text-[11px] " +
+  "inline-flex items-center justify-center gap-1 rounded-full px-2 py-1.5 text-[11px] " +
   "font-semibold text-white shadow-sm text-center leading-tight active:scale-95 transition";
 
 export function DriverStopActions({
@@ -36,7 +37,7 @@ export function DriverStopActions({
           rel="noopener noreferrer"
           className={`${BTN} bg-gradient-to-r from-[#A01824] to-[#C82333] hover:from-[#87141E] hover:to-[#B21F2D]`}
         >
-          <Printer className="h-4 w-4 shrink-0" /> ใบส่งสินค้า
+          <Printer className="h-3.5 w-3.5 shrink-0" /> ใบส่งสินค้า
         </a>
         <a
           href={stickersHref}
@@ -44,7 +45,7 @@ export function DriverStopActions({
           rel="noopener noreferrer"
           className={`${BTN} bg-gradient-to-r from-sky-600 to-sky-500 hover:from-sky-700 hover:to-sky-600`}
         >
-          <Tag className="h-4 w-4 shrink-0" /> สติกเกอร์
+          <Tag className="h-3.5 w-3.5 shrink-0" /> สติกเกอร์
         </a>
         <button
           type="button"
@@ -52,7 +53,7 @@ export function DriverStopActions({
           aria-expanded={open}
           className={`${BTN} bg-gradient-to-r from-slate-600 to-slate-500 hover:from-slate-700 hover:to-slate-600`}
         >
-          <ChevronDown className={`h-4 w-4 shrink-0 transition ${open ? "rotate-180" : ""}`} />
+          <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition ${open ? "rotate-180" : ""}`} />
           เพิ่มเติม
         </button>
       </div>
