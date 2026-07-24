@@ -59,6 +59,7 @@ import {
   getContainerCompletenessBatch,
   type ContainerCompleteness,
 } from "@/lib/warehouse/container-completeness";
+import { getContainerCostRollupBatch } from "@/lib/admin/container-cost-rollup";
 import {
   resolveMomoContainerInfo,
   type MomoContainerInfo,
@@ -415,12 +416,26 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
     }
   }
 
+  // 🔴 ต้นทุนตู้ — ใช้ "เครื่องเดียวกับหน้าในตู้" (owner 2026-07-23)
+  // เดิมหน้านี้ Σ `fcosttotalprice` ที่เก็บใน DB (จาก RPC sum_cost) ส่วนหน้า
+  // /admin/report-cnt/[fNo] คิดสด เรท × คิว → ค่าที่เก็บผิดเมื่อไหร่ สองจอพูดคนละเรื่อง
+  // (GZE260720-1: LIST ต้นทุน 391,437 กำไร −330,786 · DETAIL ต้นทุน 25,068 กำไร +35,584
+  // เพราะ 4 แถวเก็บต้นทุนเป็น น้ำหนัก×เรท). getContainerCostRollupBatch เรียก
+  // container-cost-engine ตัวเดียวกับ DETAIL → drift ไม่ได้เชิงโครงสร้าง.
+  // ตู้ที่จ่ายค่าตู้แล้วยังล็อกค่าที่เก็บไว้เหมือน DETAIL. อ่านอย่างเดียว ไม่เขียน DB.
+  const costByCab =
+    !queryFailed && visibleCabs.length > 0
+      ? await getContainerCostRollupBatch(admin, visibleCabs, paidSet)
+      : {};
+
   let grouped: Grouped[] = queryFailed
     ? []
     : groupedNoPaid.map((g) => ({
         ...g,
         fwarehousechina: g.fwarehousechina || (podByCab.get(g.fcabinetnumber) ?? ""),
         isPaid: paidSet.has(g.fcabinetnumber),
+        // fail-soft: rollup ล่ม/ไม่มีข้อมูลตู้นั้น → ใช้ค่าที่ RPC ให้มาแบบเดิม
+        costSum: costByCab[g.fcabinetnumber]?.costSum ?? g.costSum,
       }));
 
   if (actionPay === "1") grouped = grouped.filter((g) => !g.isPaid);

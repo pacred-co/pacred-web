@@ -20,6 +20,8 @@ import {
   normalizeMemberCode,
   momoTypeToProductType,
   momoTypeLabel,
+  momoTrackingAnomaly,
+  PRODUCT_TYPE_LABEL_TH,
   pickSuggestedCarrier,
   payMethodForCarrier,
   DISCOVERY_BOARDS,
@@ -186,12 +188,49 @@ check("momoTypeToProductType maps MOMO type → fProductsType (general/tis/fda/c
   assert.equal(momoTypeToProductType(null), "1");
 });
 
-check("momoTypeLabel renders a Thai chip label", () => {
-  assert.equal(momoTypeLabel("tis"), "มอก.");
-  assert.equal(momoTypeLabel("fda"), "อย.");
+// owner 2026-07-23 "Type ควบคุมไม่มีนะครับ มีแต่ อย." — ป้ายต้องเป็น 1 ใน 4 ประเภทจริงของ
+// Pacred เสมอ และต้อง**ตรงกับเรทที่แถวนั้นจะถูกคิด** (derive จาก momoTypeToProductType ตัวเดียว).
+check("momoTypeLabel renders ONLY Pacred's 4 real product types (label == priced tier)", () => {
   assert.equal(momoTypeLabel("general"), "ทั่วไป");
-  assert.equal(momoTypeLabel("xyz"), "xyz", "unknown → raw");
-  assert.equal(momoTypeLabel(""), "—");
+  assert.equal(momoTypeLabel("tis"), "มอก.");
+  assert.equal(momoTypeLabel("fda"), "อย./น้ำยา");
+  // เลิกใช้คำที่ไม่มีในระบบ: "น้ำยา" เดี่ยวๆ + "ควบคุม" (ป้ายเก่า 2026-07-20 · ห้ามย้อน)
+  assert.equal(momoTypeLabel("special"), "อย./น้ำยา", "special = อยู่ในกลุ่ม อย. ไม่ใช่ 'น้ำยา' แยก");
+  assert.equal(momoTypeLabel("control"), "พิเศษ", "control ถูกคิดเป็น tier 4 → ป้ายต้องว่า พิเศษ");
+  assert.equal(momoTypeLabel("CONTROL"), "พิเศษ", "case-insensitive");
+  assert.equal(momoTypeLabel("xyz"), "ทั่วไป", "unknown → ป้ายตามเรทจริง (tier 1) ไม่ใช่คำดิบ");
+  assert.equal(momoTypeLabel(""), "—", "MOMO ไม่ส่ง type มา");
+  assert.equal(momoTypeLabel(null), "—");
+});
+
+// ป้ายกับเรท drift กันไม่ได้ — ทุก type ที่ MOMO ส่งมาจริงบน prod ต้องได้ป้าย = ป้ายของ tier ตัวเอง
+check("momoTypeLabel is ALWAYS the label of momoTypeToProductType (no second map)", () => {
+  for (const t of ["general", "tis", "fda", "special", "control", "weird-new-type"]) {
+    assert.equal(
+      momoTypeLabel(t),
+      PRODUCT_TYPE_LABEL_TH[momoTypeToProductType(t)],
+      `label ต้องตรง tier ของ ${t}`,
+    );
+  }
+});
+
+// ── (i2) เลขแทรคกิ้งรูปทรงผิดปกติ (owner 2026-07-23 "เลขแทรคกิ้ง 733 นี่มีจริงหรอครับ") ──
+check("momoTrackingAnomaly flags the short + malformed trackings MOMO really sent", () => {
+  // เคสจริงบน prod (uncommitted 2026-07-23)
+  const short = momoTrackingAnomaly("733");
+  assert.equal(short?.code, "too_short");
+  assert.ok(short!.detail.includes("3 หลัก"), "บอกความยาวจริง");
+  const bad = momoTrackingAnomaly("JDX056872686153-1-1-");
+  assert.equal(bad?.code, "bad_shape", "ลงท้ายด้วยขีด = จับกลุ่มชิปเม้นไม่ได้");
+  // เลขปกติ → ไม่เตือน (กัน false-positive บนแถวส่วนใหญ่)
+  assert.equal(momoTrackingAnomaly("SF5114055357046"), null);
+  assert.equal(momoTrackingAnomaly("82665991155-2"), null, "ท้าย -N ปกติ = ไม่ใช่ความผิดปกติ");
+  assert.equal(momoTrackingAnomaly("302098539663-1/7"), null, "ท้าย -N/M ปกติ");
+  assert.equal(momoTrackingAnomaly("0001779"), null, "7 หลัก = ผ่าน (prod มีของจริงที่นำเข้าไปแล้ว)");
+  // ไม่มีเลข = คนละปัญหา (commit ปฏิเสธเองอยู่แล้ว) → ไม่เตือนซ้ำ
+  assert.equal(momoTrackingAnomaly(""), null);
+  assert.equal(momoTrackingAnomaly(null), null);
+  assert.equal(momoTrackingAnomaly("  "), null);
 });
 
 // ── (j) discovery scans ALL boards (owner: "เอาของทุกสถานะมาเลย") ──

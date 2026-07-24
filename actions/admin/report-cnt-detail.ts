@@ -32,8 +32,11 @@ import { sendNotification } from "@/lib/notifications";
 import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
 import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
 import { logger } from "@/lib/logger";
-import { costBasisMode } from "@/lib/forwarder/resolve-cost";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
+import {
+  costBasisForWarehouse,
+  checkCostWritePlausible,
+} from "@/lib/forwarder/container-cost-engine";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shipping";
@@ -276,20 +279,52 @@ export async function adminReportCntCustomRate(input: CustomRateInput): Promise<
       p4: fProductsType4,
     };
 
-    // Pass 1 — compute the per-row cost plan (carrier basis wins over the modal
-    // toggle; unknown wh → modal default) + a sanity backstop BEFORE any write.
+    // Pass 1 — compute the per-row cost plan + guards BEFORE any write.
+    //
+    // 🔴 2026-07-23 (owner "ตู้นี้ทำไมไปโชว์ −เป็นแสนบาท") — ฐานคิดต้นทุนตัดสินด้วย
+    // **CARRIER เท่านั้น** (costBasisForWarehouse). ของเดิมเขียนว่า
+    //     basis = VALID_WH.has(wh) ? costBasisMode(wh) : mode
+    // คือ carrier ชนะ *ยกเว้น* ตอนที่ `fwarehousename` ว่าง/ไม่รู้จัก แล้วตกไปใช้
+    // ปุ่ม "คิว/น้ำหนัก" บน modal แทน. เคสจริง GZE260720-1 (audit log
+    // report_cnt.custom_rate · mode:"weight" · เรท 4,700/คิว · 83 แถว):
+    //   80 แถว fwarehousename='8' (MOMO) → carrier ชนะ → คิว → ถูกต้อง
+    //    4 แถว fwarehousename=''         → ตกไปใช้ modal → **น้ำหนัก × เรทต่อคิว**
+    //   ⇒ 78.50 กก. × 4,700 = ฿368,950 (ที่ถูกคือ 0.5276 คิว × 4,700 = ฿2,480)
+    //   ⇒ รายการตู้โชว์กำไร −330,786 ขณะที่หน้าในตู้โชว์ +35,584
+    // เรททุกตัวในระบบเป็น "ต่อคิว" (prod: tb_cost_container 42/42 = 2,500-4,700 ·
+    // tb_settings 2,400-6,500 · ไม่มีเรทต่อกิโล) → โกดังว่าง = ห้ามเดาเป็นน้ำหนักเด็ดขาด.
+    // ปุ่ม modal ยังถูกบันทึกลง audit log ไว้ดูเจตนา แต่ไม่ใช่ตัวตัดสินเงินอีกต่อไป.
     const plan: Array<{ id: number; cost: number; frefprice: string }> = [];
     let plannedTotal = 0;
+    const implausible: string[] = [];
     for (const r of (rows ?? []) as Array<{ id: number; fvolume: number | null; fweight: number | null; famount: number | string | null; famountcount: number | string | null; fproductstype: string | null; fwarehousename: string | null }>) {
       const rate = pickRate(rates, r.fproductstype);
       const wh = r.fwarehousename ?? "";
-      const basis = VALID_WH.has(wh) ? costBasisMode(wh as WarehouseDigit) : mode; // carrier wins; unknown wh → modal default
+      const basis = costBasisForWarehouse(wh);
       // CBM basis = row-TOTAL CBM (totalCbmOf honours famountcount: '1'=total,
       // else per-box × famount) — raw fvolume under-costed per-box rows ×famount.
-      const dim = basis === "weight" ? r.fweight : totalCbmOf(r);
+      const totalCbm = totalCbmOf(r);
+      const dim = basis === "weight" ? r.fweight : totalCbm;
       const cost = calcRowCost(dim, rate);
+      // ด่านสุดท้ายก่อนเขียน — ต้นทุนต่อคิว ต้องไม่โตเกินเรทแบบผิดหน่วย.
+      const plausible = checkCostWritePlausible({ rate, basis, warehouse: wh, totalCbm, cost });
+      if (!plausible.ok) {
+        implausible.push(`#${r.id} (฿${cost.toLocaleString("th-TH")} — ${plausible.reason})`);
+        continue;
+      }
       plannedTotal += cost;
       plan.push({ id: r.id, cost, frefprice: basis === "weight" ? "1" : "2" });
+    }
+    // ถ้ามีแถวที่คิดออกมาแล้วไม่สมเหตุสมผล → ไม่เขียนทั้งตู้ (all-or-nothing) และ
+    // บอกไปเลยว่าแถวไหน เพราะอะไร — ดีกว่าเขียนบางแถวแล้วยอดตู้เพี้ยนเงียบๆ.
+    if (implausible.length > 0) {
+      return {
+        ok: false,
+        error:
+          `ไม่ได้บันทึก — คิดต้นทุนบางแถวออกมาผิดปกติ (${implausible.length} แถว): ` +
+          `${implausible.slice(0, 5).join(" · ")}${implausible.length > 5 ? " …" : ""}. ` +
+          `ตรวจสอบเรท (ต่อคิว) และข้อมูล คิว/น้ำหนัก/โกดัง ของแถวเหล่านี้ก่อน`,
+      };
     }
     // Sanity backstop — refuse an absurd total (a basis/rate error) instead of
     // persisting garbage that reads as a −hundreds-of-millions กำไรตู้.
@@ -393,11 +428,22 @@ export async function adminReportCntResetRate(fCabinetNumber: string): Promise<A
       // Reset fRefPrice to the carrier default (Wave 16 Follow-up C):
       //   MX (4) + Sang (1) → '1' (weight) — historical default
       //   others             → '2' (CBM)
-      // Then compute cost using the matching dimension.
-      const carrierDefaultMode: "weight" | "cbm" = (wh === "1" || wh === "4") ? "weight" : "cbm";
+      // 2026-07-23 — ใช้ costBasisForWarehouse (SOT เดียวกับ custom-rate + หน้าจอ)
+      // แทนการ inline เงื่อนไข wh==='1'||'4' ซ้ำอีกที่ (ก๊อปกฎ = drift รอเกิด).
+      const carrierDefaultMode = costBasisForWarehouse(wh);
       const refPriceValue = carrierDefaultMode === "weight" ? "1" : "2";
-      const dim = carrierDefaultMode === "weight" ? r.fweight : totalCbmOf(r); // row-TOTAL CBM (famountcount rule)
+      const totalCbm = totalCbmOf(r); // row-TOTAL CBM (famountcount rule)
+      const dim = carrierDefaultMode === "weight" ? r.fweight : totalCbm;
       const cost = calcRowCost(dim, rate);
+      // ด่านเดียวกับ custom-rate — ที่นี่ข้ามเฉพาะแถวที่ผิด (ไม่ใช่ all-or-nothing)
+      // เพราะ reset เป็นการล้างกลับเป็นค่า default ทีละแถวอยู่แล้ว.
+      const plausible = checkCostWritePlausible({ rate, basis: carrierDefaultMode, warehouse: wh, totalCbm, cost });
+      if (!plausible.ok) {
+        console.error(`[report-cnt reset_rate] ข้ามแถวที่ต้นทุนผิดปกติ`, {
+          fid: r.id, cabinet: parsed.data.fCabinetNumber, rate, cost, totalCbm, warehouse: wh, reason: plausible.reason,
+        });
+        continue;
+      }
       const { error: updErr } = await admin
         .from("tb_forwarder")
         .update({ fcosttotalprice: cost, frefprice: refPriceValue })
