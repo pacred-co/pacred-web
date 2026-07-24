@@ -30,11 +30,9 @@ import { loadReceiptDocument } from "@/lib/receipt/load-receipt-document";
 import { readThaiBaht } from "@/lib/utils/thai-number";
 import { PrintButton } from "@/components/print-button";
 import { SITE_LEGAL_NAME_TH, TAX_ID, ADDRESSES } from "@/components/seo/site";
+import { WhtFormPaper } from "@/components/wht-form-paper";
 
 export const dynamic = "force-dynamic";
-
-const baht = (n: number) =>
-  n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** วันที่ไทยแบบสั้นบนฟอร์ม (เช่น 18 กรกฎาคม 2569). */
 function thaiDate(iso: string | null): string {
@@ -42,215 +40,6 @@ function thaiDate(iso: string | null): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" });
-}
-
-/** ช่องข้อมูลฝั่งบน (ผู้หัก/ผู้ถูกหัก) — คู่ label + ค่า ในกรอบมาตรฐานฟอร์ม. */
-function Party({
-  role,
-  name,
-  taxId,
-  address,
-}: {
-  role: string;
-  name: string;
-  taxId: string;
-  address: string;
-}) {
-  return (
-    <div className="border border-gray-800 px-2 py-1">
-      <p className="text-[11px] font-bold">{role}</p>
-      <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11px]">
-        <span className="text-gray-600">ชื่อ</span>
-        <span className="border-b border-dotted border-gray-500 font-medium">{name || " "}</span>
-        <span className="text-gray-600">เลขประจำตัวผู้เสียภาษีอากร</span>
-        <span className="border-b border-dotted border-gray-500 font-mono tracking-wider">
-          {taxId || " "}
-        </span>
-        <span className="text-gray-600">ที่อยู่</span>
-        <span className="border-b border-dotted border-gray-500">{address || " "}</span>
-      </div>
-    </div>
-  );
-}
-
-/** ฟอร์ม 50 ทวิ 1 ฉบับ (ครึ่งหน้า A4) — copyLabel = ฉบับที่ 1 / ฉบับที่ 2. */
-function WhtForm({
-  copyLabel,
-  copyNote,
-  payerName,
-  payerTaxId,
-  payerAddress,
-  payDate,
-  paidAmount,
-  whtAmount,
-  receiptNo,
-  certNo,
-  signatureUrl,
-  stampUrl,
-}: {
-  copyLabel: string;
-  copyNote: string;
-  payerName: string;
-  payerTaxId: string;
-  payerAddress: string;
-  payDate: string;
-  paidAmount: number;
-  whtAmount: number;
-  receiptNo: string;
-  /** เลขที่เอกสารที่ลูกค้ากรอกเอง (tb_receipt.wht_cert_no) — ช่อง "เลขที่" ของฟอร์มจริง */
-  certNo: string;
-  /** ลายเซ็น/ตรายางจาก profile ลูกค้า (mig 0278) — มี = แปะให้เลย ไม่มี = เว้นให้เซ็นมือ */
-  signatureUrl: string | null;
-  stampUrl: string | null;
-}) {
-  return (
-    <div className="wht-form bg-white px-4 py-2.5 text-black" style={{ fontSize: "11px", lineHeight: 1.3 }}>
-      <div className="flex items-start justify-between">
-        {/* หัวซ้ายตามฟอร์มจริง: เล่มที่/เลขที่ — เลขที่ = เลขเอกสารที่ระบบผู้หัก (ลูกค้า)
-            ออกเอง → ให้กรอกเองได้ที่หน้าประวัติ 50 ทวิ · ว่าง = จุดให้เขียนมือ */}
-        <div className="text-[10px] leading-tight">
-          <p>
-            เล่มที่ ..................{" "}
-            เลขที่{" "}
-            {certNo ? (
-              <span className="font-mono font-bold">{certNo}</span>
-            ) : (
-              ".................."
-            )}
-          </p>
-          <p className="text-gray-600">เลขที่อ้างอิง (ใบเสร็จ Pacred): {receiptNo}</p>
-        </div>
-        <div className="text-right text-[10px]">
-          <p className="font-bold">{copyLabel}</p>
-          <p>{copyNote}</p>
-        </div>
-      </div>
-
-      <h1 className="mt-1 text-center text-[13px] font-bold">
-        หนังสือรับรองการหักภาษี ณ ที่จ่าย
-      </h1>
-      <p className="text-center text-[10.5px]">ตามมาตรา 50 ทวิ แห่งประมวลรัษฎากร</p>
-
-      <div className="mt-1.5 space-y-1.5">
-        {/* ผู้จ่ายเงิน = นิติลูกค้า (คนหัก 1%) — กรอกให้จากข้อมูลใบเสร็จ */}
-        <Party
-          role="ผู้มีหน้าที่หักภาษี ณ ที่จ่าย (ผู้จ่ายเงิน)"
-          name={payerName}
-          taxId={payerTaxId}
-          address={payerAddress}
-        />
-        {/* ผู้รับเงิน = Pacred — ค่าคงที่บริษัทจาก SOT site.ts */}
-        <Party
-          role="ผู้ถูกหักภาษี ณ ที่จ่าย (ผู้รับเงิน)"
-          name={SITE_LEGAL_NAME_TH}
-          taxId={TAX_ID}
-          address={ADDRESSES.office.full}
-        />
-      </div>
-
-      {/* ลำดับที่ในแบบ — นิติจ่ายนิติ ค่าบริการ/ขนส่ง = นำส่งด้วย ภ.ง.ด.53 (ติ๊กให้เลย) */}
-      <p className="mt-1 text-[10.5px]">
-        ลำดับที่ .......... ในแบบ{" "}
-        <span className="text-gray-600">
-          ☐ ภ.ง.ด.1ก &nbsp;☐ ภ.ง.ด.1ก พิเศษ &nbsp;☐ ภ.ง.ด.2 &nbsp;☐ ภ.ง.ด.3 &nbsp;☐
-          ภ.ง.ด.2ก &nbsp;☐ ภ.ง.ด.3ก
-        </span>{" "}
-        <span className="font-bold">☑ ภ.ง.ด.53</span>
-      </p>
-
-      {/* ตารางเงินได้ */}
-      <table className="mt-1.5 w-full border-collapse text-[11px] [&_td]:border [&_td]:border-gray-800 [&_td]:px-1 [&_td]:py-0.5 [&_th]:border [&_th]:border-gray-800 [&_th]:px-1 [&_th]:py-0.5">
-        <thead>
-          <tr className="text-center">
-            <th className="p-1">ประเภทเงินได้พึงประเมินที่จ่าย</th>
-            <th className="w-[92px] p-1">วัน เดือน ปี ที่จ่าย</th>
-            <th className="w-[110px] p-1">จำนวนเงินที่จ่าย</th>
-            <th className="w-[110px] p-1">ภาษีที่หักและนำส่งไว้</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td className="p-1">
-              ค่าบริการขนส่ง — หักภาษี ณ ที่จ่าย 1%
-              <span className="text-gray-600"> (คำสั่งกรมสรรพากร ท.ป.4/2528 · มาตรา 3 เตรส)</span>
-            </td>
-            <td className="p-1 text-center">{payDate}</td>
-            <td className="p-1 text-right tabular-nums">{baht(paidAmount)}</td>
-            <td className="p-1 text-right tabular-nums">{baht(whtAmount)}</td>
-          </tr>
-          <tr className="font-bold">
-            <td className="p-1 text-right" colSpan={2}>
-              รวมเงินที่จ่ายและภาษีที่หักนำส่ง
-            </td>
-            <td className="p-1 text-right tabular-nums">{baht(paidAmount)}</td>
-            <td className="p-1 text-right tabular-nums">{baht(whtAmount)}</td>
-          </tr>
-          <tr>
-            <td className="p-1" colSpan={4}>
-              รวมเงินภาษีที่หักนำส่ง (ตัวอักษร):{" "}
-              <span className="font-medium">{readThaiBaht(whtAmount)}</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      {/* วิธีนำส่ง — เคสเราคือ หัก ณ ที่จ่าย เสมอ */}
-      <p className="mt-1.5 text-[11px]">
-        ผู้จ่ายเงิน: <span className="font-bold">☑ (1) หัก ณ ที่จ่าย</span>
-        <span className="ml-3 text-gray-600">☐ (2) ออกให้ตลอดไป ☐ (3) ออกให้ครั้งเดียว ☐ (4) อื่น ๆ</span>
-      </p>
-
-      {/* เซ็น + ตรา — ลูกค้าตั้งลายเซ็น/ตรายางใน profile แล้ว = แปะให้เลย ·
-          ยังไม่ตั้ง = เว้นช่องให้เซ็นมือเหมือนเดิม */}
-      <div className="mt-1.5 grid grid-cols-[1fr_120px] gap-2">
-        <div className="border border-gray-800 px-2 py-1.5 text-center">
-          <p className="text-[10.5px]">
-            ขอรับรองว่าข้อความและตัวเลขดังกล่าวข้างต้นถูกต้องตรงกับความจริงทุกประการ
-          </p>
-          {/* ลายเซ็น = overlay ทับเส้นจุด (absolute · สูง +0) — ห้าม stack เพิ่มความสูง
-              ไม่งั้นฟอร์ม ×2 ล้น 281mm → ฉบับที่ 2 กระเด็นไปหน้า 2 (print-verify L-2) */}
-          <p className="relative mt-5">
-            {signatureUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={signatureUrl}
-                alt=""
-                className="absolute bottom-0 left-1/2 h-9 -translate-x-1/2 object-contain"
-                style={{ mixBlendMode: "multiply" }}
-              />
-            ) : null}
-            ลงชื่อ ............................................................ ผู้จ่ายเงิน
-          </p>
-          <p className="mt-1">( {payerName || "............................................................"} )</p>
-          <p className="mt-1">วันที่ ............ / ................... / ...............</p>
-        </div>
-        {stampUrl ? (
-          <div className="relative flex items-center justify-center border border-gray-800 p-1">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={stampUrl}
-              alt="ตรายางนิติบุคคล"
-              className="max-h-[84px] object-contain"
-              style={{ mixBlendMode: "multiply" }}
-            />
-          </div>
-        ) : (
-          <div className="flex items-center justify-center border border-gray-800 p-2 text-center text-[10.5px] text-gray-500">
-            ประทับตรา
-            <br />
-            นิติบุคคล
-            <br />
-            (ถ้ามี)
-          </div>
-        )}
-      </div>
-
-      <p className="mt-0.5 text-[9.5px] leading-snug text-gray-600">
-        คำเตือน: ผู้มีหน้าที่ออกหนังสือรับรองการหักภาษี ณ ที่จ่าย ฝ่าฝืนไม่ปฏิบัติตามมาตรา 50 ทวิ
-        แห่งประมวลรัษฎากร ต้องรับโทษทางอาญาตามมาตรา 35 แห่งประมวลรัษฎากร
-      </p>
-    </div>
-  );
 }
 
 // 🔴 title = ชื่อไฟล์ตอน Save PDF + หัวกระดาษ. ต้องอยู่ใน metadata เท่านั้น —
@@ -361,34 +150,46 @@ export default async function ReceiptWhtFormPage({
 
       {/* กระดาษ A4: 2 ฉบับในหน้าเดียว (ฉบับผู้ถูกหัก + สำเนาผู้หัก) ตามธรรมเนียมฟอร์ม */}
       <div className="mx-auto max-w-[210mm] space-y-3 bg-white p-4 shadow print:max-w-none print:space-y-4 print:p-0 print:shadow-none">
-        <WhtForm
+        <WhtFormPaper
           copyLabel="ฉบับที่ 1"
           copyNote="(สำหรับผู้ถูกหักภาษี ณ ที่จ่าย ใช้แนบพร้อมกับแบบแสดงรายการภาษี)"
-          payerName={payerName}
-          payerTaxId={payerTaxId}
-          payerAddress={payerAddress}
+          withholderName={payerName}
+          withholderTaxId={payerTaxId}
+          withholderAddress={payerAddress}
+          recipientName={SITE_LEGAL_NAME_TH}
+          recipientTaxId={TAX_ID}
+          recipientAddress={ADDRESSES.office.full}
+          incomeLabel={<>ค่าบริการขนส่ง — หักภาษี ณ ที่จ่าย 1%<span className="text-gray-600"> (คำสั่งกรมสรรพากร ท.ป.4/2528 · มาตรา 3 เตรส)</span></>}
           payDate={payDate}
           paidAmount={paidAmount}
           whtAmount={whtAmount}
-          receiptNo={doc.commonProps.rid}
+          whtAmountText={readThaiBaht(whtAmount)}
+          refLine={`เลขที่อ้างอิง (ใบเสร็จ Pacred): ${doc.commonProps.rid}`}
           certNo={certNo}
           signatureUrl={signatureUrl}
           stampUrl={stampUrl}
+          signerName={payerName}
         />
         <div className="wht-cut-line border-t border-dashed border-gray-400" />
-        <WhtForm
+        <WhtFormPaper
           copyLabel="ฉบับที่ 2"
           copyNote="(สำหรับผู้หักภาษี ณ ที่จ่าย เก็บไว้เป็นหลักฐาน)"
-          payerName={payerName}
-          payerTaxId={payerTaxId}
-          payerAddress={payerAddress}
+          withholderName={payerName}
+          withholderTaxId={payerTaxId}
+          withholderAddress={payerAddress}
+          recipientName={SITE_LEGAL_NAME_TH}
+          recipientTaxId={TAX_ID}
+          recipientAddress={ADDRESSES.office.full}
+          incomeLabel={<>ค่าบริการขนส่ง — หักภาษี ณ ที่จ่าย 1%<span className="text-gray-600"> (คำสั่งกรมสรรพากร ท.ป.4/2528 · มาตรา 3 เตรส)</span></>}
           payDate={payDate}
           paidAmount={paidAmount}
           whtAmount={whtAmount}
-          receiptNo={doc.commonProps.rid}
+          whtAmountText={readThaiBaht(whtAmount)}
+          refLine={`เลขที่อ้างอิง (ใบเสร็จ Pacred): ${doc.commonProps.rid}`}
           certNo={certNo}
           signatureUrl={signatureUrl}
           stampUrl={stampUrl}
+          signerName={payerName}
         />
       </div>
     </div>
