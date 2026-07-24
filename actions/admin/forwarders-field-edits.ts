@@ -89,6 +89,7 @@ import { propagateShipmentEdit } from "@/lib/admin/forwarder-siblings";
 import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
 import { checkCarrierForProvince, isOwnFleetCarrier } from "@/lib/forwarder/carrier-coverage-guard";
 import { isMaoCarrier } from "@/lib/forwarder/mao-fee";
+import { evaluateDeliveryAddressGate } from "@/lib/forwarder/delivery-address-gate";
 import { canonicalProvince } from "@/lib/forwarder/carrier-province-coverage";
 import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { isGodRole } from "@/lib/admin/god-role";
@@ -1514,12 +1515,18 @@ export async function adminMarkForwarderCredit(
     // 1. Read the forwarder price components + state (legacy L1402-1404).
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, userid, fstatus, fcredit, ftotalprice, ftransportprice, paymethod, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount")
+      .select(
+        "id, userid, fstatus, fcredit, ftotalprice, ftransportprice, paymethod, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, " +
+        // ด่านที่อยู่จัดส่ง (owner 2026-07-23) — read-only
+        "fidorco, ftrackingchn, fshipby, faddressprovince, faddresszipcode, faddressno",
+      )
       .eq("id", d.fId)
       .maybeSingle<{
         id: number; userid: string; fstatus: string | null; fcredit: string | null;
         ftotalprice: number | string | null; ftransportprice: number | string | null;
         paymethod: string | null;
+        fidorco: string | null; ftrackingchn: string | null; fshipby: string | null;
+        faddressprovince: string | null; faddresszipcode: string | null; faddressno: string | null;
         fpriceupdate: number | string | null; fshippingservice: number | string | null;
         pricecrate: number | string | null; ftransportpricechnthb: number | string | null;
         priceother: number | string | null; fdiscount: number | string | null;
@@ -1541,6 +1548,21 @@ export async function adminMarkForwarderCredit(
     // import onto the customer's credit line. Fail-CLOSED.
     const noRebill = await assertNotRefunded(admin, d.fId);
     if (!noRebill.ok) return { ok: false, error: noRebill.error };
+
+    // 🔴 ด่านที่อยู่จัดส่ง (owner 2026-07-23 · MONEY) — การให้เครดิตคือ "การเก็บตัง"
+    // เหมือนกัน: มันเขียนหนี้ลง tb_credit (AR จริง) แล้วข้าม 5 ไป fstatus='6' ตรงๆ
+    // = **ทางลัดที่ไม่ผ่านด่าน 4→5**. ถ้าไม่กันตรงนี้ จะเกิดหนี้ + เอกสารที่ไม่มี
+    // ที่อยู่ผู้รับ และค่าส่งไทยคิดไม่ได้. กันก่อนเขียนทั้ง flip และ tb_credit.
+    {
+      const addrGate = evaluateDeliveryAddressGate([fwd]);
+      if (!addrGate.ok) {
+        await logAdminAction(adminId, "tb_forwarder.mark_credit_rejected", "tb_forwarder", String(d.fId), {
+          reason: "no_delivery_address",
+          from_status: fwd.fstatus,
+        });
+        return { ok: false, error: addrGate.message };
+      }
+    }
 
     // 2. Read the customer's credit LIMIT + corporate flag (tb_users · camelCase).
     const { data: u, error: uErr } = await admin

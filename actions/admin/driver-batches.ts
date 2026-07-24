@@ -144,7 +144,7 @@ export async function createDriverBatch(
     // create overlapping batches.
     const { data: fwdRows, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, ftrackingchn, fstatus, paydeposit, famount, fshipby, faddressprovince, faddresszipcode, faddressno")
+      .select("id, fstatus, paydeposit, famount")
       .in("id", forwarderIds);
     if (fwdErr) {
       console.error("createDriverBatch: forwarder verify failed", fwdErr);
@@ -158,30 +158,11 @@ export async function createDriverBatch(
       return { ok: false, error: `${ineligible.length} รายการไม่อยู่สถานะเตรียมส่ง — ลองรีเฟรช` };
     }
 
-    // 🔴 ด่านสุดท้าย: ห้ามมอบงานที่ "ไม่มีปลายทางเลย" ให้คนขับ (owner 2026-07-23).
-    // ที่ต้องมีด่านนี้: การกด "นำเข้าระบบ" ยอมให้งานที่ยังไม่รู้ที่อยู่เข้ามาได้แล้ว
-    // (owner "ให้งานที่ถูกต้อง มันเข้าไปก่อนเถอะ" · commit-momo-row-core EMPTY_ADDRESS) —
-    // ปกติคิวแจ้งชำระกันไว้ก่อนถึง fstatus 6 แต่ **การให้เครดิตเขียน fstatus='6' ตรงๆ**
-    // (forwarders-field-edits adminMarkForwarderCredit) = ทางลัดที่ข้ามด่านนั้น → ถ้าไม่กัน
-    // ตรงนี้ คนขับจะได้ใบงานที่ไม่มีปลายทาง.
-    //
-    // ⚠️ เกณฑ์ต้อง "หลวมพอ" — prod มี 15 แถว fstatus=6 ที่ **มีจังหวัดแต่ไม่มี zip** และ
-    // 7 แถวในนั้น **มอบคนขับไปแล้วสำเร็จ** (เหมาๆ PCSF กทม. · เอกชนต่างจังหวัด) → ถ้าบังคับ
-    // ต้องมี zip ด้วย = ไปทำงานที่ใช้ได้อยู่แล้วพัง. คนขับต้องการ "ที่ไปได้" ไม่ใช่ zip.
-    // ⇒ กันเฉพาะที่ไม่มีทั้ง จังหวัด และ บ้านเลขที่ = ส่งไม่ได้จริง · PCS รับเองที่โกดัง → ยกเว้น.
-    const noAddress = (fwdRows ?? []).filter((r) => {
-      const row = r as { fshipby: string | null; faddressprovince: string | null; faddressno: string | null };
-      if (String(row.fshipby ?? "").trim().toUpperCase() === "PCS") return false; // รับเองที่โกดัง
-      return !String(row.faddressprovince ?? "").trim() && !String(row.faddressno ?? "").trim();
-    });
-    if (noAddress.length > 0) {
-      const sample = noAddress.slice(0, 5).map((r) => (r as { ftrackingchn: string | null }).ftrackingchn ?? "-").join(", ");
-      const more = noAddress.length > 5 ? ` (และอีก ${noAddress.length - 5} รายการ)` : "";
-      return {
-        ok: false,
-        error: `${noAddress.length} รายการยังไม่มีที่อยู่จัดส่งเลย (ไม่มีทั้งจังหวัดและบ้านเลขที่) — ${sample}${more} · ใส่ที่อยู่ในหน้ารายการนำเข้าก่อนมอบงานคนขับ`,
-      };
-    }
+    // 📍 ที่อยู่จัดส่ง: **ไม่ตรวจตรงนี้** — owner 2026-07-23 ย้ายด่านไปไว้ที่
+    // "ถึงไทยแล้ว(4) → รอชำระเงิน(5)" แทน (`lib/forwarder/delivery-address-gate.ts`):
+    // *"ด่านใส่ที่อยู่ต้องกันไว้ตรงก่อนส่งไปรอชำระต่างหาก เพราะกระทบเรื่องเงิน
+    // กับ เก็บตังออกเอกสาร"* — ที่อยู่กำหนดค่าส่งไทยที่ขึ้นบิล + ที่อยู่บนเอกสาร
+    // ดังนั้นต้องกันตั้งแต่ก่อนออกบิล. มากันตอนมอบงานคนขับ = สายไป (บิลออกไปแล้ว).
 
     // Check none of these forwarders are already in an open batch.
     const { data: existingItems, error: itemErr } = await admin

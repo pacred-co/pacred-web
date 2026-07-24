@@ -50,6 +50,7 @@ import {
   type TransportMode,
 } from "@/lib/forwarder/cabinet-transport";
 import { evaluateRateModeGuard, type RateModeGuard } from "@/lib/forwarder/rate-mode-guard";
+import { evaluateDeliveryAddressGate } from "@/lib/forwarder/delivery-address-gate";
 import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shipping";
 import { getMinSellFloors } from "@/lib/pricing/min-sell-config";
 import {
@@ -348,6 +349,8 @@ export async function adminUpdateForwarderDimensions(
           "fproductstype, frefprice, fnote, fstatus, fcredit, " +
           // ── rate-mode guard inputs (decode transport mode from the ตู้ name) ──
           "fcabinetnumber, ftrackingchn, " +
+          // ── ด่านที่อยู่จัดส่งก่อน 4→5 (owner 2026-07-23 · delivery-address-gate) ──
+          "fshipby, faddressprovince, faddresszipcode, faddressno, " +
           // ── pricing-context columns (legacy update_data reads these) ──
           "fwarehousechina, ftransporttype, famount, famountcount, reforder, " +
           "customrate, customratekg, customratecbm, fdiscount, " +
@@ -375,6 +378,10 @@ export async function adminUpdateForwarderDimensions(
         id: number;
         fidorco: string | null;
         userid: string;
+        fshipby: string | null;
+        faddressprovince: string | null;
+        faddresszipcode: string | null;
+        faddressno: string | null;
         fweight: number | string;
         fwidth: number | string;
         flength: number | string;
@@ -730,6 +737,17 @@ export async function adminUpdateForwarderDimensions(
         d.advanceToPayment !== false &&
         String(before.fstatus ?? "") === "4" &&
         newFTotalPrice > 0;
+
+      // 🔴 ด่านที่อยู่จัดส่ง ก่อน 4→5 (owner 2026-07-23 · MONEY) — ที่อยู่กำหนด
+      // ค่าส่งไทยที่ขึ้นบิล + ที่อยู่ผู้รับบนเอกสาร → ห้ามให้ไปถึง "รอชำระเงิน"
+      // โดยยังไม่มีปลายทาง. REFUSE ก่อนเขียน (ยังไม่มีอะไรลง DB = ไม่มีสถานะครึ่งๆ).
+      // ยิงเฉพาะตอนที่ save นี้จะ advance จริง → **การกด "บันทึกขนาด (ยังไม่ส่งรอชำระ)"
+      // ของโกดังไม่กระทบเลย** และเป็นทางออกให้เซฟงานไว้ก่อนถ้าที่อยู่ยังไม่มา.
+      if (advancedToFive) {
+        const addrGate = evaluateDeliveryAddressGate([before]);
+        if (!addrGate.ok) return { ok: false, error: addrGate.message };
+      }
+
       if (advancedToFive) {
         update.fstatus = "5";
         update.fdatestatus5 = nowIso;
