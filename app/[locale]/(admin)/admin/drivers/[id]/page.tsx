@@ -24,7 +24,7 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import {
   Truck, Clock, CheckCircle2, XCircle, MapPin, Phone,
-  Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2, ClipboardList, Tag, ChevronDown,
+  Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2, ClipboardList, Tag,
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
@@ -33,6 +33,7 @@ import { BILL_BADGE_CLASS, DriverBillViewModal } from "./driver-bill-view-modal"
 import { BatchManage, RemoveItemButton } from "./batch-manage";
 import { PinLocationButton } from "./pin-location-button";
 import { ExpandableText } from "@/components/admin/expandable-text";
+import { DriverStopActions } from "./driver-stop-actions";
 import { CourierUrlInput } from "./courier-url-input";
 import { TruckBookingCopyBox } from "./truck-booking-copy-box";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
@@ -1170,7 +1171,7 @@ export default async function AdminDriverBatchDetailPage({
           + "แสดงเพิ่มเติม" (กางตารางออเดอร์ + ปุ่มพิมพ์). จอ ≥lg ใช้ตารางเดิม (บล็อกด้านบน). */}
       {stopsWithPhotos.length > 0 && (
         <div className="lg:hidden space-y-3">
-          {stopsWithPhotos.map((stop, idx) => {
+          {stopsWithPhotos.map((stop) => {
             const f = stop.forwarder;
             const total = stop.items.length;
             const delivered = stop.items.filter((e) => e.item.fdistatus === "2").length;
@@ -1192,12 +1193,8 @@ export default async function AdminDriverBatchDetailPage({
               <div key={stop.addressKey} className="rounded-2xl border border-border bg-white shadow-sm p-4 space-y-3">
                 {/* ลำดับส่ง (ปอน 2026-07-24 · = ลำดับการจัดส่งตามเส้นทาง) + สถานะ + จำนวน */}
                 <div className="flex items-center gap-2">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-500 text-base font-bold text-white shadow-sm">
-                    {idx + 1}
-                  </span>
-                  {/* วงกลมสถานะ (เขียว/แดง) ถูกถอดออก 2026-07-24 (owner) — มันซ้ำกับ
-                      badge "สำเร็จ/ส่งแล้ว" ในแถวล่าง. สถานะงานอยู่ที่แถว badge ที่เดียว
-                      (ขนส่ง + สถานะ) เพื่อไม่ให้ซ้ำซ้อน. */}
+                  {/* วงกลมเลขลำดับ + วงกลมสถานะ (เขียว/แดง) ถูกถอดออก 2026-07-24 (owner
+                      "เอาลำดับตรงนี้ออก") — สถานะงานอยู่ที่แถว badge ที่เดียว (ขนส่ง+สถานะ). */}
                   <div className="leading-tight">
                     <p className="text-[11px] text-muted">ลำดับส่ง</p>
                     <p className="text-base font-bold">{total} รายการ</p>
@@ -1296,63 +1293,41 @@ export default async function AdminDriverBatchDetailPage({
                   </table>
                 </div>
 
-                {/* แสดงเพิ่มเติม — กางตารางออเดอร์ (ขึ้นก่อนปุ่มพิมพ์ · ปอน 2026-07-24) */}
-                <details className="group">
-                  <summary className="flex w-full cursor-pointer list-none items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#A01824] to-[#C82333] px-5 py-2.5 text-sm font-bold text-white shadow-sm hover:from-[#87141E] hover:to-[#B21F2D] active:scale-95">
-                    <ChevronDown className="h-4 w-4 transition group-open:rotate-180" /> แสดงเพิ่มเติม
-                  </summary>
-                  <div className="mt-2 space-y-2">
-                    <div className="overflow-x-auto rounded-lg border border-border">
-                      <table className="w-full text-[11px]">
-                        <thead className="bg-surface-alt/50 text-left text-muted">
-                          <tr>
-                            <th className="px-2 py-1">ออเดอร์</th>
-                            <th className="px-2 py-1">แทรคกิ้ง</th>
-                            <th className="px-2 py-1 text-right">กล่อง</th>
-                            <th className="px-2 py-1 text-right">CBM</th>
-                            <th className="px-2 py-1 text-right">KG</th>
+                {/* 3 ปุ่มแถวเดียว (owner 2026-07-24): ใบส่งสินค้า · สติกเกอร์ · เพิ่มเติม.
+                    "เพิ่มเติม" กางตารางออเดอร์ (per-stop fids). */}
+                <DriverStopActions
+                  slipHref={`/admin/drivers/${batch.id}/delivery-slip?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
+                  stickersHref={`/admin/drivers/${batch.id}/stickers?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
+                >
+                  <div className="overflow-x-auto rounded-lg border border-border">
+                    <table className="w-full text-[11px]">
+                      <thead className="bg-surface-alt/50 text-left text-muted">
+                        <tr>
+                          <th className="px-2 py-1">ออเดอร์</th>
+                          <th className="px-2 py-1">แทรคกิ้ง</th>
+                          <th className="px-2 py-1 text-right">กล่อง</th>
+                          <th className="px-2 py-1 text-right">CBM</th>
+                          <th className="px-2 py-1 text-right">KG</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stop.items.map(({ item, forwarder }) => (
+                          <tr key={item.id} className="border-t border-border align-top">
+                            <td className="px-2 py-1">
+                              <Link href={`/admin/forwarders/${forwarder.id}`} className="font-mono text-primary-600">
+                                {forwarder.fidorco ?? `#${forwarder.id}`}
+                              </Link>
+                            </td>
+                            <td className="px-2 py-1 font-mono break-all">{forwarder.ftrackingchn ?? "—"}</td>
+                            <td className="px-2 py-1 text-right">{forwarder.famount ?? 0}</td>
+                            <td className="px-2 py-1 text-right">{Number(forwarder.fvolume ?? 0).toFixed(5)}</td>
+                            <td className="px-2 py-1 text-right">{Number(forwarder.fweight ?? 0).toFixed(2)}</td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {stop.items.map(({ item, forwarder }) => (
-                            <tr key={item.id} className="border-t border-border align-top">
-                              <td className="px-2 py-1">
-                                <Link href={`/admin/forwarders/${forwarder.id}`} className="font-mono text-primary-600">
-                                  {forwarder.fidorco ?? `#${forwarder.id}`}
-                                </Link>
-                              </td>
-                              <td className="px-2 py-1 font-mono break-all">{forwarder.ftrackingchn ?? "—"}</td>
-                              <td className="px-2 py-1 text-right">{forwarder.famount ?? 0}</td>
-                              <td className="px-2 py-1 text-right">{Number(forwarder.fvolume ?? 0).toFixed(5)}</td>
-                              <td className="px-2 py-1 text-right">{Number(forwarder.fweight ?? 0).toFixed(2)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                </details>
-
-                {/* ปุ่มพิมพ์ 2 อันคู่กัน เฉพาะจุดนี้ (per-stop fids · ปอน 2026-07-24)
-                    — ใบส่งสินค้า (delivery-slip?fids=) + สติกเกอร์ (stickers?fids=). */}
-                <div className="grid grid-cols-2 gap-2">
-                  <a
-                    href={`/admin/drivers/${batch.id}/delivery-slip?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`${PRINT_BADGE_CLS} justify-center px-2.5 py-2.5 text-xs`}
-                  >
-                    <Printer className="h-4 w-4 shrink-0" /> พิมพ์ใบส่งสินค้า
-                  </a>
-                  <a
-                    href={`/admin/drivers/${batch.id}/stickers?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-sky-600 to-sky-500 px-2.5 py-2.5 text-xs font-semibold text-white shadow-sm hover:from-sky-700 hover:to-sky-600"
-                  >
-                    <Tag className="h-4 w-4 shrink-0" /> พิมพ์สติกเกอร์
-                  </a>
-                </div>
+                </DriverStopActions>
               </div>
             );
           })}

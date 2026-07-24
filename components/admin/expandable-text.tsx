@@ -38,17 +38,29 @@ export function ExpandableText({
   }, [children, expanded]);
 
   return (
-    <div>
+    <div className="relative">
       <p ref={ref} className={`${className ?? ""} ${expanded ? "" : "line-clamp-2"}`}>
         {children}
+        {/* กางแล้ว: "ย่อ" ต่อท้ายข้อความ inline (บรรทัดสุดท้าย) */}
+        {expanded && overflowing && (
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            className="ml-1 align-baseline text-[11px] font-semibold text-primary-600 hover:underline"
+          >
+            {lessLabel}
+          </button>
+        )}
       </p>
-      {(overflowing || expanded) && (
+      {/* ยังไม่กาง + ล้น: "เพิ่มเติม" ทับมุมขวาล่างของบรรทัดที่ 2 (inline · ไม่ตกบรรทัด 3)
+          — ไล่เฉดขาว (การ์ดพื้นขาว) ให้ตัวหนังสือใต้ปุ่มค่อยๆ จางไม่ทับกันมั่ว. */}
+      {!expanded && overflowing && (
         <button
           type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-0.5 text-[11px] font-semibold text-primary-600 hover:underline"
+          onClick={() => setExpanded(true)}
+          className="absolute bottom-0 right-0 bg-gradient-to-l from-white from-70% to-transparent pl-8 text-[11px] font-semibold text-primary-600 hover:underline"
         >
-          {expanded ? lessLabel : moreLabel}
+          …{moreLabel}
         </button>
       )}
     </div>
