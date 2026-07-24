@@ -72,6 +72,7 @@ import { formatCartPriceDisplay } from "@/lib/forwarder/cart-price-display";
 // shared order-currency detection + FIXED ¥/foreign ratio (same helper the
 // items editor + /edit page use · no per-surface drift).
 import { deriveOrderCurrencyInfo, yuanToForeign } from "@/lib/forwarder/usd-order-pricing";
+import { ShopCollapseAll } from "./shop-collapse-all";
 
 // ── inline-edits labels mirrored here for read-only display (the editor in
 // inline-edits.tsx owns the canonical maps; we duplicate the 3 small ones
@@ -828,6 +829,20 @@ function foreignSubtotal(rows: EditorItem[]): number {
   return rows.reduce((s, it) => s + (it.crewallet === "1" ? 0 : it.inputPrice * it.camount), 0);
 }
 
+/** จำนวน "ชิ้น" จริงของร้าน (Σ camount) — คนละตัวกับ "รายการ" (จำนวนบรรทัด).
+ *  owner 2026-07-24: *"หัวแถวร้านค้า เพิ่ม จำนวนรวมทั้งหมดกี่ชิ้น ราคาเฉลี่ยต่อชิ้นของทั้งร้าน"*
+ *  แถวที่คืนเงินแล้วนับเป็น 0 ทั้งเงินและชิ้น (ตรงกับ `lineOf`/`foreignSubtotal`)
+ *  → เฉลี่ย × ชิ้น = ยอดรวมที่โชว์ เสมอ (ไม่มีทางเพี้ยนเชิงโครงสร้าง). */
+function shopPieces(rows: EditorItem[]): { pieces: number; refundedPieces: number } {
+  let pieces = 0;
+  let refundedPieces = 0;
+  for (const it of rows) {
+    if (it.crewallet === "1") refundedPieces += it.camount;
+    else pieces += it.camount;
+  }
+  return { pieces, refundedPieces };
+}
+
 /** Big original-currency figure + a small secondary line.
  *  `hideYuan` (owner 2026-07-13 — a foreign-currency ORDER shows no ¥ anywhere)
  *  swaps the shared "≈ ¥… · ฿…" secondary for a ฿-only one. Built LOCALLY so the
@@ -839,12 +854,15 @@ function ForeignPrice({
   yuan,
   rate,
   hideYuan,
+  onDark,
 }: {
   cur: string;
   amount: number;
   yuan: number;
   rate: number;
   hideYuan?: boolean;
+  /** วางบนพื้นสีเข้ม (หัวร้านสีแบรนด์) → สลับสีตัวอักษรเป็นขาว ไม่งั้นอ่านไม่ออก */
+  onDark?: boolean;
 }) {
   const d = formatCartPriceDisplay({ inputCurrency: cur, inputPrice: amount, cpriceYuan: yuan, rsDefault: rate });
   const secondary = hideYuan
@@ -852,8 +870,8 @@ function ForeignPrice({
     : d.secondary;
   return (
     <span className="inline-flex flex-col items-end leading-tight">
-      <span className="font-semibold text-foreground">{d.primary}</span>
-      <span className="text-[11px] font-normal text-muted">{secondary}</span>
+      <span className={`font-semibold ${onDark ? "text-white" : "text-foreground"}`}>{d.primary}</span>
+      <span className={`text-[11px] font-normal ${onDark ? "text-white/80" : "text-muted"}`}>{secondary}</span>
     </span>
   );
 }
@@ -909,11 +927,24 @@ function ItemSummary({
   for (const pg of providers) for (const sg of pg.shops) for (const it of sg.rows) seqById.set(it.id, ++seq);
   const totalShops = providers.reduce((s, pg) => s + pg.shops.length, 0);
 
+  // "ร้านที่ N" — เดินเลขข้ามมาร์เก็ตเพลสตามลำดับที่เห็นบนจอ (owner 2026-07-24:
+  // ออเดอร์เดียวมี 25 ร้าน · ต้องมาร์คให้คนทำงานอ้างอิงกันได้ว่า "ร้านที่ 12").
+  const shopNoByRef = new Map<ShopGroup, number>();
+  let shopNo = 0;
+  for (const pg of providers) for (const sg of pg.shops) shopNoByRef.set(sg, ++shopNo);
+  const orderPieces = shopPieces(items).pieces;
+
   return (
     <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 sm:p-5 shadow-sm space-y-4">
-      <h3 className="font-bold text-sm">
-        รายการสินค้า ({items.length}) · {totalShops} ร้าน{completed ? " · สำเร็จ" : ""}
-      </h3>
+      <ShopCollapseAll
+        title={
+          <h3 className="text-sm font-bold">
+            รายการสินค้า ({items.length.toLocaleString()} รายการ ·{" "}
+            <span className="text-primary-600">{orderPieces.toLocaleString()} ชิ้น</span>) ·{" "}
+            {totalShops} ร้าน{completed ? " · สำเร็จ" : ""}
+          </h3>
+        }
+      >
       {providers.map((pg) => (
         <div key={pg.provider} className="space-y-2">
           {/* ── ป้ายมาร์เก็ตเพลส (legacy nameProvider · level-1) ── */}
@@ -930,30 +961,79 @@ function ItemSummary({
             // Any row at all carrying an original currency → the price columns must
             // widen + drop the "(¥)" header unit (a MIXED group still hits this).
             const groupAnyForeign = g.rows.some((it) => foreignCurrencyOf(it) !== "");
+
+            // ── หัวร้าน: ตัวเลขที่คนทำงานต้องใช้ (owner 2026-07-24) ──
+            // ชิ้น = Σ camount (≠ "รายการ" = จำนวนบรรทัด) · เฉลี่ย/ชิ้น = ยอดที่โชว์ ÷ ชิ้น
+            // → คิดจาก "ยอดเดียวกับที่ตาเห็น" ทุกโหมดสกุลเงิน จึงไม่มีทางเล่าคนละเรื่อง
+            const { pieces, refundedPieces } = shopPieces(g.rows);
+            const shopTotalShown = groupForeign
+              ? foreignSubtotal(g.rows)
+              : orderForeign
+                ? yuanToForeign(shopYuan, oypu)
+                : shopYuan;
+            const unitSuffix = groupForeign ? ` ${groupCur}` : orderForeign ? ` ${orderCur}` : "";
+            const unitPrefix = groupForeign || orderForeign ? "" : "¥";
+            const avgPerPiece =
+              pieces > 0
+                ? `${unitPrefix}${groupForeign || orderForeign ? fcur(shopTotalShown / pieces) : cny(shopTotalShown / pieces)}${unitSuffix}`
+                : "—";
+
             return (
-              <details key={g.shop} open className="rounded-lg border border-border overflow-hidden">
-                <summary className="flex items-center justify-between gap-2 cursor-pointer select-none bg-surface-alt/60 px-3 py-2 text-xs">
-                  <span className="font-semibold truncate">
-                    🏪 {g.shop}
-                    <span className="ml-1.5 text-muted font-normal">({g.rows.length} รายการ)</span>
-                  </span>
-                  {groupForeign ? (
-                    <span className="font-mono tabular-nums text-primary-600 shrink-0 text-right">
-                      <span className="text-muted font-sans font-normal mr-1">รวม</span>
-                      <ForeignPrice cur={groupCur} amount={foreignSubtotal(g.rows)} yuan={shopYuan} rate={rate} hideYuan={orderForeign} />
+              <details
+                key={g.shop}
+                open
+                data-shop-group
+                className="group rounded-lg border border-primary-600/40 overflow-hidden"
+              >
+                {/* แถบหัวร้าน — สีแบรนด์แดง (owner: "ทำสีสันให้เข้มขึ้น เอาสีแดงแบรนดิ้งมาใส่")
+                    + เครื่องหมาย ▸ หมุนได้ + คำว่า ย่อ/กาง = บอกชัดว่ากดได้ (§0f/§0g) */}
+                <summary className="cursor-pointer select-none bg-primary-600 px-3 py-2 text-white marker:content-none [&::-webkit-details-marker]:hidden">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <svg
+                        viewBox="0 0 20 20"
+                        aria-hidden
+                        className="size-4 shrink-0 transition-transform duration-150 group-open:rotate-90"
+                        fill="currentColor"
+                      >
+                        <path d="M7 4l7 6-7 6V4z" />
+                      </svg>
+                      <span className="shrink-0 rounded-md bg-white/25 px-1.5 py-0.5 text-[11px] font-bold tabular-nums">
+                        ร้านที่ {shopNoByRef.get(g)}
+                      </span>
+                      <span className="truncate text-sm font-bold">🏪 {g.shop}</span>
                     </span>
-                  ) : orderForeign ? (
-                    /* Foreign ORDER but the group carries ค่าขนส่งจีน (so the pure
-                       original subtotal ≠ this money) → convert the ¥ group total
-                       ÷ the FIXED ratio. Still no ¥ shown (owner 2026-07-13). */
-                    <span className="font-mono tabular-nums font-semibold text-primary-600 shrink-0">
-                      รวม {fcur(yuanToForeign(shopYuan, oypu))} {orderCur}
+                    <span className="shrink-0 text-right font-mono text-sm font-bold tabular-nums">
+                      {groupForeign ? (
+                        <>
+                          <span className="mr-1 font-sans text-[11px] font-normal text-white/80">รวม</span>
+                          <ForeignPrice cur={groupCur} amount={foreignSubtotal(g.rows)} yuan={shopYuan} rate={rate} hideYuan={orderForeign} onDark />
+                        </>
+                      ) : orderForeign ? (
+                        /* Foreign ORDER but the group carries ค่าขนส่งจีน (so the pure
+                           original subtotal ≠ this money) → convert the ¥ group total
+                           ÷ the FIXED ratio. Still no ¥ shown (owner 2026-07-13). */
+                        <>รวม {fcur(yuanToForeign(shopYuan, oypu))} {orderCur}</>
+                      ) : (
+                        <>รวม ¥{cny(shopYuan)}</>
+                      )}
                     </span>
-                  ) : (
-                    <span className="font-mono tabular-nums font-semibold text-primary-600 shrink-0">
-                      รวม ¥{cny(shopYuan)}
+                  </div>
+                  {/* แถวสรุปของร้าน — รายการ / ชิ้น / เฉลี่ยต่อชิ้น */}
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-[22px] text-[11px] text-white/90">
+                    <span className="tabular-nums">{g.rows.length.toLocaleString()} รายการ</span>
+                    <span className="tabular-nums font-bold">
+                      {pieces.toLocaleString()} ชิ้น
                     </span>
-                  )}
+                    <span className="tabular-nums">เฉลี่ย {avgPerPiece}/ชิ้น</span>
+                    {refundedPieces > 0 ? (
+                      <span className="rounded bg-white/20 px-1.5 py-0.5 tabular-nums">
+                        คืนเงินแล้ว {refundedPieces.toLocaleString()} ชิ้น (ไม่นับรวม)
+                      </span>
+                    ) : null}
+                    <span className="ml-auto opacity-80 group-open:hidden">▸ กดเพื่อกางรายการ</span>
+                    <span className="ml-auto hidden opacity-80 group-open:inline">กดหัวร้านเพื่อย่อ</span>
+                  </div>
                 </summary>
                 <div className="overflow-x-auto scrollbar-x-visible">
                   <table className="w-full min-w-[720px] text-xs border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
@@ -1066,6 +1146,7 @@ function ItemSummary({
           })}
         </div>
       ))}
+      </ShopCollapseAll>
     </div>
   );
 }
