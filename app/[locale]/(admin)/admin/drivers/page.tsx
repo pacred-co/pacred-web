@@ -35,7 +35,7 @@ import { BatchDeleteInline } from "./batch-delete-inline";
 import { exportDriversAll } from "@/actions/admin/export/drivers";
 import { countPendingDispatch } from "@/lib/admin/pending-dispatch";
 import { formatThaiDate, formatThaiDateTime, formatThaiTime, anyDateToIso } from "@/lib/utils/thai-datetime";
-import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock, Printer, ClipboardList, MonitorSpeaker, Search, Calendar, FileText } from "lucide-react";
+import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock, Printer, ClipboardList, MonitorSpeaker, Search, FileText, Package, MapPin, Boxes } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -310,17 +310,22 @@ export default async function AdminDriversPage({
     new Set(rows.flatMap((r) => [r.fdadminid, r.fdadmincreator]).filter(Boolean) as string[]),
   );
   const avatarByCode = new Map<string, string | null>();
+  // ชื่อ user (login admin_xxx → เอาเฉพาะส่วนหลัง "_") เหมือนหน้า detail (owner 2026-07-24)
+  const driverUsernameByCode = new Map<string, string>();
   if (adminCodes.length > 0) {
     const { data: profRows, error: profErr } = await admin
       .from("profiles")
-      .select("member_code, avatar_url")
+      .select("member_code, avatar_url, admin_login_id")
       .in("member_code", adminCodes);
     if (profErr) {
       console.error("/admin/drivers: admin avatar lookup failed", profErr);
     }
-    const rawByCode = new Map(
-      ((profRows ?? []) as { member_code: string; avatar_url: string | null }[]).map((p) => [p.member_code, p.avatar_url]),
-    );
+    const rawByCode = new Map<string, string | null>();
+    for (const p of (profRows ?? []) as { member_code: string; avatar_url: string | null; admin_login_id: string | null }[]) {
+      rawByCode.set(p.member_code, p.avatar_url);
+      const login = (p.admin_login_id ?? "").trim().replace(/^admin_/i, "");
+      if (login) driverUsernameByCode.set(p.member_code, login);
+    }
     await Promise.all(
       adminCodes.map(async (code) => {
         const raw = rawByCode.get(code);
@@ -560,13 +565,16 @@ export default async function AdminDriversPage({
         {/* PageSizeSelect เขียนคำว่า "แสดง … แถว/หน้า" มาในตัวแล้ว — ห้ามใส่ซ้ำ.
             allowAll=false: หน้านี้ owner สั่งให้ "จำกัดการแสดงผล" → ไม่ควรมีปุ่ม
             ดึง 5,000 แถวรวดเดียวให้กดตั้งแต่แรก. */}
-        <PageSizeSelect
-          basePath="/admin/drivers"
-          current={pageSize}
-          sizes={PAGE_SIZES}
-          allowAll={false}
-          params={{ status: sp.status, view: sp.view, range: sp.range, from: sp.from, to: sp.to, q: sp.q }}
-        />
+        {/* ซ่อนตัวเลือกจำนวนแถวในมือถือ (owner 2026-07-24 "แค่ซ่อนในมือถือพอ") · เดสก์ท็อปเหมือนเดิม */}
+        <div className="hidden lg:block">
+          <PageSizeSelect
+            basePath="/admin/drivers"
+            current={pageSize}
+            sizes={PAGE_SIZES}
+            allowAll={false}
+            params={{ status: sp.status, view: sp.view, range: sp.range, from: sp.from, to: sp.to, q: sp.q }}
+          />
+        </div>
 
         {/* GET form — Enter ค้นหาได้เลย. hidden inputs พาตัวกรองอื่นไปด้วย ไม่งั้น
             การกดค้นหาจะล้างช่วงวันที่/มุมมองที่เลือกไว้ทิ้ง. */}
@@ -698,7 +706,7 @@ export default async function AdminDriversPage({
                         <div className="flex items-center gap-2">
                           <AdminAvatar url={avatarByCode.get(r.fdadminid) ?? null} code={r.fdadminid} />
                           <div className="min-w-0">
-                            <div className="font-medium text-foreground">{driver?.name ?? r.fdadminid}</div>
+                            <div className="font-medium text-foreground">{driverUsernameByCode.get(r.fdadminid) ?? driver?.name ?? r.fdadminid}</div>
                             <div className="font-mono text-[11px] text-muted">{r.fdadminid}</div>
                           </div>
                         </div>
@@ -790,72 +798,74 @@ export default async function AdminDriversPage({
             const expired  = r.endtime && new Date(r.endtime) < new Date() && fdstatus === "1";
             const driver   = r.fdadminid ? driverDirectory.get(r.fdadminid) : null;
             return (
-              <div key={r.id} className="rounded-2xl border border-border bg-white shadow-sm p-4 space-y-3">
-                {/* วันที่สร้าง + ชื่อรอบ + สรุป */}
-                <div className="flex items-start gap-3">
-                  <div className="shrink-0 rounded-xl border border-border bg-surface-alt/40 px-3 py-2 text-center leading-tight">
-                    <div className="flex items-center justify-center gap-1 text-[11px] text-muted">
-                      <Calendar className="h-3.5 w-3.5" /> วันที่สร้าง
-                    </div>
-                    <div className="mt-1 text-sm font-bold text-foreground">{r.fddate ? formatThaiDate(r.fddate) : "—"}</div>
-                    <div className="text-[11px] text-muted">{r.fddate ? formatThaiTime(r.fddate) : ""}</div>
+              <div key={r.id} className="rounded-2xl border border-border bg-white shadow-sm p-3 space-y-2.5">
+                {/* วันที่สร้าง + ชื่อรอบ + สถานะ (owner 2026-07-24 · บางลง คอมแพ็ค แบบภาพ) */}
+                {/* หัว: ชื่อรอบ + สถานะ */}
+                <div className="flex items-start justify-between gap-2">
+                  <Link href={`/admin/drivers/${r.id}`} className="whitespace-nowrap font-bold text-primary-600 hover:underline">
+                    {r.fdname ?? `รอบ #${r.id}`}
+                  </Link>
+                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CLS[fdstatus]}`}>
+                    {STATUS_ICON[fdstatus]} {STATUS_LABEL[fdstatus]}
+                  </span>
+                </div>
+
+                {/* สถิติ 3 กล่อง แบบหน้า detail (owner 2026-07-24) — แทรคกิ้ง · จุดส่ง · กล่อง */}
+                <div className="grid grid-cols-3 divide-x divide-border rounded-xl border border-border">
+                  <div className="px-2 py-2 text-center">
+                    <div className="flex items-center justify-center gap-1 text-[11px] text-muted"><Package className="h-3.5 w-3.5" /> แทรคกิ้ง</div>
+                    <div className="mt-0.5 text-lg font-bold">{agg.itemCount}</div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <Link href={`/admin/drivers/${r.id}`} className="block break-words font-bold text-primary-600 hover:underline">
-                      {r.fdname ?? `รอบ #${r.id}`}
-                    </Link>
-                    <p className="mt-1 text-[11px] text-muted">
-                      จำนวนแทรคกิ้ง : {agg.itemCount}, จำนวนกล่อง : {agg.boxSum}, จำนวนจุดที่ส่ง : {r.fdamount ?? 0}
-                    </p>
-                    {r.endtime && (
-                      <p className={`text-[11px] ${expired ? "font-medium text-rose-600" : "text-muted"}`}>
-                        ส่งก่อนเวลา : {formatThaiDateTime(r.endtime)}{expired ? " (เลย)" : ""}
-                      </p>
-                    )}
+                  <div className="px-2 py-2 text-center">
+                    <div className="flex items-center justify-center gap-1 text-[11px] text-muted"><MapPin className="h-3.5 w-3.5" /> จุดส่ง</div>
+                    <div className="mt-0.5 text-lg font-bold">{r.fdamount ?? 0}</div>
+                  </div>
+                  <div className="px-2 py-2 text-center">
+                    <div className="flex items-center justify-center gap-1 text-[11px] text-muted"><Boxes className="h-3.5 w-3.5" /> กล่อง</div>
+                    <div className="mt-0.5 text-lg font-bold">{agg.boxSum}</div>
                   </div>
                 </div>
 
-                {/* ผู้รับผิดชอบ / ผู้สร้าง / ส่งแล้ว / สถานะ (2×2) */}
-                <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-xl border border-border bg-surface-alt/30 p-3">
-                  <div>
-                    <p className="text-[11px] text-muted">ผู้รับผิดชอบ</p>
-                    <div className="mt-0.5 flex items-center gap-1.5">
-                      <AdminAvatar url={r.fdadminid ? avatarByCode.get(r.fdadminid) ?? null : null} code={r.fdadminid} />
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-foreground">{driver?.name ?? r.fdadminid ?? "—"}</p>
-                        {r.fdadminid && <p className="font-mono text-[11px] text-muted">{r.fdadminid}</p>}
-                      </div>
+                {/* ส่งแล้ว + กำหนดส่ง */}
+                <p className={`text-center text-[11px] ${expired ? "font-medium text-rose-600" : "text-muted"}`}>
+                  ส่งแล้ว {agg.doneCount}/{agg.itemCount}{r.endtime ? ` · ส่งก่อน ${formatThaiDateTime(r.endtime)}${expired ? " (เลย)" : ""}` : ""}
+                </p>
+
+                {/* 3 คน: ผู้สร้าง · เตรียมของ · จัดส่ง (โชว์ชื่อ user · owner 2026-07-24) */}
+                <div className="grid grid-cols-3 gap-2 rounded-xl bg-surface-alt/30 p-2">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <AdminAvatar url={r.fdadmincreator ? avatarByCode.get(r.fdadmincreator) ?? null : null} code={r.fdadmincreator} />
+                    <div className="min-w-0">
+                      <p className="whitespace-nowrap text-[11px] text-muted">ผู้สร้าง</p>
+                      <p className="truncate text-xs font-semibold text-foreground">{(r.fdadmincreator ? driverUsernameByCode.get(r.fdadmincreator) : undefined) ?? r.fdadmincreator ?? "—"}</p>
                     </div>
                   </div>
-                  <div>
-                    <p className="text-[11px] text-muted">ผู้สร้างรายการ</p>
-                    <div className="mt-0.5 flex items-center gap-1.5">
-                      <AdminAvatar url={r.fdadmincreator ? avatarByCode.get(r.fdadmincreator) ?? null : null} code={r.fdadmincreator} />
-                      <p className="truncate text-xs font-semibold text-foreground">{r.fdadmincreator ?? "—"}</p>
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-400">?</span>
+                    <div className="min-w-0">
+                      <p className="whitespace-nowrap text-[11px] text-muted">เตรียมของ</p>
+                      <p className="truncate text-xs font-semibold text-muted">ยังไม่ระบุ</p>
                     </div>
                   </div>
-                  <div>
-                    <p className="text-[11px] text-muted">ส่งแล้ว</p>
-                    <p className="text-sm font-bold tabular-nums text-foreground">{agg.doneCount} / {agg.itemCount}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-muted">สถานะ</p>
-                    <span className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${STATUS_CLS[fdstatus]}`}>
-                      {STATUS_ICON[fdstatus]} {STATUS_LABEL[fdstatus]}
-                    </span>
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <AdminAvatar url={r.fdadminid ? avatarByCode.get(r.fdadminid) ?? null : null} code={r.fdadminid} />
+                    <div className="min-w-0">
+                      <p className="whitespace-nowrap text-[11px] text-muted">จัดส่ง</p>
+                      <p className="truncate text-xs font-semibold text-foreground">{(r.fdadminid ? driverUsernameByCode.get(r.fdadminid) : undefined) ?? driver?.name ?? r.fdadminid ?? "—"}</p>
+                    </div>
                   </div>
                 </div>
 
-                {/* 3 ปุ่ม: รายละเอียด / บิลหาสินค้า / บิลจัดส่ง */}
-                <div className="grid grid-cols-3 gap-2">
-                  <Link href={`/admin/drivers/${r.id}`} className={`${ACTION_BTN_BASE} ${ACTION_BTN_HUE.detail} px-1.5 py-2 text-[11px]`}>
-                    <FileText className="h-3.5 w-3.5 shrink-0" /> รายละเอียด
+                {/* 3 ปุ่ม: รายละเอียด / บิลหาสินค้า / บิลจัดส่ง — ไอคอน+ตัวอักษรสี ไม่มีพื้น (owner 2026-07-24 · แบบ detail) */}
+                <div className="grid grid-cols-3 gap-2 border-t border-border pt-2">
+                  <Link href={`/admin/drivers/${r.id}`} className="flex items-center justify-center gap-1 whitespace-nowrap py-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700">
+                    <FileText className="h-4 w-4 shrink-0" /> รายละเอียด
                   </Link>
-                  <Link href={`/admin/drivers/${r.id}/picking-list`} target="_blank" className={`${ACTION_BTN_BASE} ${ACTION_BTN_HUE.picking} px-1.5 py-2 text-[11px]`}>
-                    <ClipboardList className="h-3.5 w-3.5 shrink-0" /> บิลหาสินค้า
+                  <Link href={`/admin/drivers/${r.id}/picking-list`} target="_blank" className="flex items-center justify-center gap-1 whitespace-nowrap py-1 text-[11px] font-semibold text-amber-600 hover:text-amber-700">
+                    <ClipboardList className="h-4 w-4 shrink-0" /> บิลหาสินค้า
                   </Link>
-                  <Link href={`/admin/drivers/${r.id}/print`} target="_blank" className={`${ACTION_BTN_BASE} ${ACTION_BTN_HUE.delivery} px-1.5 py-2 text-[11px]`}>
-                    <Printer className="h-3.5 w-3.5 shrink-0" /> บิลจัดส่ง
+                  <Link href={`/admin/drivers/${r.id}/print`} target="_blank" className="flex items-center justify-center gap-1 whitespace-nowrap py-1 text-[11px] font-semibold text-sky-600 hover:text-sky-700">
+                    <Printer className="h-4 w-4 shrink-0" /> บิลจัดส่ง
                   </Link>
                 </div>
 

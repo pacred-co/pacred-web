@@ -35,7 +35,7 @@ export function DriverBottomNav({ noteBadge, todoBadge }: { noteBadge?: number; 
     { href: "/admin/drivers?view=todo", match: "/admin/drivers", label: "หน้าแรก", icon: Home },
     // badge = จำนวนงานที่ต้องส่ง (รอบเปิดของคนขับคนนี้) เหมือน legacy footer โชว์ "1"
     // (owner 2026-07-24) — ตัวเลขมาจาก countDriverOpenBatches (ตรงหน้า view=todo).
-    { href: "/admin/drivers?view=todo", match: "/admin/drivers", label: "งานที่ต้องส่ง", icon: Truck, badge: todoBadge },
+    { href: "/admin/drivers?view=todo", match: "/admin/drivers", label: "จัดส่ง", icon: Truck, badge: todoBadge },
     { href: "/admin/drivers?view=history", match: "/admin/drivers", label: "ประวัติงาน", icon: History },
     { href: "/admin/incidents", match: "/admin/incidents", label: "หมายเหตุ", icon: StickyNote, badge: noteBadge },
     // "เมนู" (owner 2026-07-24: "มันคือเมนู · ใช้ไอคอนเดียวกันได้เลย") — ปุ่มเปิด

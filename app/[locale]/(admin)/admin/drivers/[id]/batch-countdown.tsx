@@ -46,7 +46,7 @@ export function BatchCountdown({
   const ic = isLg ? "h-6 w-6" : "h-3.5 w-3.5";
   // lg (หัวมือถือ · ปอน 2026-07-24) = ข้อความล้วน ไม่มีกรอบ/พื้นหลัง ตัวใหญ่
   // (text-2xl · พอดีกับปุ่ม "ดูใบส่งสินค้า" ข้างๆ) · sm = pill กลมเหมือนเดิม.
-  const box = isLg ? "text-2xl" : "rounded-full border px-3 py-1 text-xs";
+  const box = isLg ? "whitespace-nowrap text-2xl" : "whitespace-nowrap rounded-full border px-3 py-1 text-xs";
 
   // ── Closed run → a STATIC terminal label (frozen), never a live clock. ──
   if (status === "2") {
@@ -55,7 +55,7 @@ export function BatchCountdown({
         isLg ? "text-emerald-700" : "bg-emerald-50 border-emerald-200 text-emerald-700"
       }`}>
         <CheckCircle2 className={ic} />
-        จบงานแล้ว
+        เสร็จสิ้น
       </span>
     );
   }
