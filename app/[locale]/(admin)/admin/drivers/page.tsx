@@ -56,13 +56,34 @@ const STATUS_LABEL: Record<FdStatus, string> = {
   "3": "ไม่สำเร็จ",
 };
 
-// Solid legacy PCS badge pills (badge-warning/success/danger) — white text on a
-// vivid fill, matching forwarder-driver.php (owner: "สีจี๊ดจ๊าด ไม่เอาสีจืด").
+// Badge สถานะ — พื้นสีสด (ไม่ใช้ gradient · ไม่ตัวหนา) + ตัวอักษรขาว
+// (ปอน 2026-07-24: "ขอสี plain ปกติ แค่ทำให้เห็น text ชัดๆ" → "อยากได้สีสว่าง
+// สีทึบแล้วไม่สวย") ทั้งจอคอมและมือถือ.
+// เฉดคง legacy PCS เดิม (ส้ม/เขียว/แดง = badge-warning/success/danger ของ
+// forwarder-driver.php) และยัง "จี๊ดจ๊าดไม่จืด" ตามที่ owner สั่งไว้ — แต่ขยับ
+// จาก #ff9149 / #28d094 / #ff4961 มาเป็นระดับ 600 เพราะสีเดิมให้ contrast กับ
+// ตัวอักษรขาวแค่ 2.2 / 2.0 / 3.3:1 ซึ่งอ่านยากที่ขนาด 11px (เหตุผลที่ "ต้องเพ่ง").
+// ระดับ 600 = 3.6 / 3.8 / 4.7:1 — สว่างสด แต่ยังชัดกว่าเดิมเกือบเท่าตัว.
+// ⚠️ อย่าลดกลับไปอ่อนกว่า 600 (500 ลงไปตกใต้ 3:1 = กลับไปเพ่งเหมือนเดิม).
 const STATUS_CLS: Record<FdStatus, string> = {
-  "1": "bg-[#ff9149] text-white",  // กำลังดำเนินการ · badge-warning
-  "2": "bg-[#28d094] text-white",  // สำเร็จ · badge-success (verified live #28d094)
-  "3": "bg-[#ff4961] text-white",  // ไม่สำเร็จ · badge-danger
+  "1": "bg-orange-600 text-white",   // กำลังดำเนินการ · badge-warning
+  "2": "bg-emerald-600 text-white",  // สำเร็จ · badge-success
+  "3": "bg-rose-600 text-white",     // ไม่สำเร็จ · badge-danger
 };
+
+// ปุ่มทางเข้า 3 ตัวท้ายแถว (ดูรายละเอียด · บิลหาสินค้า · บิลจัดส่ง) — พื้นสีสด
+// + ตัวขาว ชุดเดียวกับ badge สถานะ. เฉดคงเดิม (เขียว/เหลือง/ฟ้า) เพื่อไม่ให้ชน
+// กับปุ่ม "ลบ" ที่เป็น rose และให้บิลหาสินค้าสีเดียวกับหน้ารายละเอียดรอบ.
+// เก็บเป็นค่าคงที่ตัวเดียว = จอคอมกับมือถือ drift กันไม่ได้ (ของเดิมก๊อปคนละชุด).
+const ACTION_BTN_BASE =
+  "inline-flex items-center justify-center gap-1 rounded-full font-medium " +
+  "text-white transition-colors";
+
+const ACTION_BTN_HUE = {
+  detail:   "bg-emerald-600 hover:bg-emerald-700",
+  picking:  "bg-amber-600 hover:bg-amber-700",
+  delivery: "bg-sky-600 hover:bg-sky-700",
+} as const;
 
 const STATUS_ICON: Record<FdStatus, React.ReactNode> = {
   "1": <Clock className="h-3 w-3" />,
@@ -470,13 +491,13 @@ export default async function AdminDriversPage({
         </div>
         <button
           type="submit"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 min-h-[38px]"
+          className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400 bg-emerald-50 px-3.5 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 min-h-[38px]"
         >
           <Search className="h-4 w-4" /> ค้นหาข้อมูล
         </button>
         <Link
           href={buildHref({ status, view, range: "all", from: null, to: null })}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-100 min-h-[38px]"
+          className="inline-flex items-center gap-1.5 rounded-full border border-sky-400 bg-sky-50 px-3.5 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100 min-h-[38px]"
         >
           <Search className="h-4 w-4" /> ค้นหาข้อมูลทั้งหมด
         </Link>
@@ -702,7 +723,7 @@ export default async function AdminDriversPage({
                     </td>
                     {/* สถานะ */}
                     <td className="px-3 py-3 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_CLS[fdstatus]}`}>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${STATUS_CLS[fdstatus]}`}>
                         {STATUS_ICON[fdstatus]}
                         {STATUS_LABEL[fdstatus]}
                       </span>
@@ -713,21 +734,21 @@ export default async function AdminDriversPage({
                       <div className="inline-flex flex-wrap items-center justify-center gap-1.5">
                         <Link
                           href={`/admin/drivers/${r.id}`}
-                          className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+                          className={`${ACTION_BTN_BASE} ${ACTION_BTN_HUE.detail} px-2.5 py-1 text-[11px]`}
                         >
                           ดูรายละเอียด
                         </Link>
                         <Link
                           href={`/admin/drivers/${r.id}/picking-list`}
                           target="_blank"
-                          className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-800 hover:bg-amber-100"
+                          className={`${ACTION_BTN_BASE} ${ACTION_BTN_HUE.picking} px-2.5 py-1 text-[11px]`}
                         >
                           <ClipboardList className="h-3 w-3" /> บิลหาสินค้า
                         </Link>
                         <Link
                           href={`/admin/drivers/${r.id}/print`}
                           target="_blank"
-                          className="inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-2.5 py-1 text-[11px] font-medium text-sky-700 hover:bg-sky-100"
+                          className={`${ACTION_BTN_BASE} ${ACTION_BTN_HUE.delivery} px-2.5 py-1 text-[11px]`}
                         >
                           <Printer className="h-3 w-3" /> บิลจัดส่ง
                         </Link>
@@ -819,7 +840,7 @@ export default async function AdminDriversPage({
                   </div>
                   <div>
                     <p className="text-[11px] text-muted">สถานะ</p>
-                    <span className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_CLS[fdstatus]}`}>
+                    <span className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${STATUS_CLS[fdstatus]}`}>
                       {STATUS_ICON[fdstatus]} {STATUS_LABEL[fdstatus]}
                     </span>
                   </div>
@@ -827,13 +848,13 @@ export default async function AdminDriversPage({
 
                 {/* 3 ปุ่ม: รายละเอียด / บิลหาสินค้า / บิลจัดส่ง */}
                 <div className="grid grid-cols-3 gap-2">
-                  <Link href={`/admin/drivers/${r.id}`} className="inline-flex items-center justify-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-1.5 py-2 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100">
+                  <Link href={`/admin/drivers/${r.id}`} className={`${ACTION_BTN_BASE} ${ACTION_BTN_HUE.detail} px-1.5 py-2 text-[11px]`}>
                     <FileText className="h-3.5 w-3.5 shrink-0" /> รายละเอียด
                   </Link>
-                  <Link href={`/admin/drivers/${r.id}/picking-list`} target="_blank" className="inline-flex items-center justify-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-2 text-[11px] font-medium text-amber-800 hover:bg-amber-100">
+                  <Link href={`/admin/drivers/${r.id}/picking-list`} target="_blank" className={`${ACTION_BTN_BASE} ${ACTION_BTN_HUE.picking} px-1.5 py-2 text-[11px]`}>
                     <ClipboardList className="h-3.5 w-3.5 shrink-0" /> บิลหาสินค้า
                   </Link>
-                  <Link href={`/admin/drivers/${r.id}/print`} target="_blank" className="inline-flex items-center justify-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-1.5 py-2 text-[11px] font-medium text-sky-700 hover:bg-sky-100">
+                  <Link href={`/admin/drivers/${r.id}/print`} target="_blank" className={`${ACTION_BTN_BASE} ${ACTION_BTN_HUE.delivery} px-1.5 py-2 text-[11px]`}>
                     <Printer className="h-3.5 w-3.5 shrink-0" /> บิลจัดส่ง
                   </Link>
                 </div>

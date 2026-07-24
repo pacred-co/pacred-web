@@ -16,6 +16,7 @@ import { getStafferPositionInfo } from "@/lib/admin/positions";
 import { departmentLabel } from "@/lib/admin/departments";
 import { AdminSidebar } from "@/components/sections/admin-sidebar";
 import { DriverBottomNav } from "@/components/sections/driver-bottom-nav";
+import { countDriverOpenBatches } from "@/lib/admin/driver-todo-count";
 import { CollapseAdminSidebar } from "@/components/sections/collapse-admin-sidebar";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -76,6 +77,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const isDriverView = displayRoles.length > 0 && displayRoles.every((r) => r === "driver");
 
   const profile = withProfile?.profile ?? null;
+
+  // แถบล่างคนขับ badge "งานที่ต้องส่ง" = รอบเปิดที่มอบให้คนขับคนนี้ (member_code) —
+  // นับเฉพาะตอน isDriverView (ไม่เพิ่ม query ให้ role อื่น). best-effort → 0.
+  const driverTodoCount = isDriverView
+    ? await countDriverOpenBatches(profile?.member_code ?? null)
+    : 0;
   const adminLabel =
     [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim() ||
     profile?.member_code ||
@@ -151,7 +158,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <CostRevealProvider bypass={hasRole(displayRoles, ["accounting", "pricing"])}>
           <RouteFade>{children}</RouteFade>
         </CostRevealProvider>
-        {isDriverView && <DriverBottomNav />}
+        {isDriverView && <DriverBottomNav todoBadge={driverTodoCount} />}
       </div>
     </div>
     </AdminHeaderNavProvider>

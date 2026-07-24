@@ -1,0 +1,56 @@
+"use client";
+
+/**
+ * <ExpandableText> — ข้อความยาวจำกัดไว้ N บรรทัด (default 2) · ถ้าเกินจะขึ้น "…"
+ * ท้าย + ปุ่ม "เพิ่มเติม" กดแล้วกางเต็ม (กดซ้ำ "ย่อ" กลับ). ปุ่มจะโชว์เฉพาะตอนที่
+ * ข้อความล้นจริง (วัดด้วย scrollHeight > clientHeight) — ข้อความสั้นที่พอดีอยู่แล้ว
+ * ไม่มีปุ่มมากวนตา (ปอน 2026-07-24 · การ์ดที่อยู่จัดส่งของคนขับบนมือถือ).
+ *
+ * รับ children เป็น ReactNode (รองรับที่อยู่ที่มี <span> ไฮไลต์อำเภอข้างใน).
+ * clamp ใช้คลาส line-clamp-2 คงที่ (Tailwind purge คลาส dynamic ไม่ได้ · ตอนนี้
+ * ต้องการแค่ 2 บรรทัดตามที่ owner สั่ง).
+ */
+
+import { useEffect, useRef, useState, type ReactNode } from "react";
+
+export function ExpandableText({
+  children,
+  className,
+  moreLabel = "เพิ่มเติม",
+  lessLabel = "ย่อ",
+}: {
+  children: ReactNode;
+  className?: string;
+  moreLabel?: string;
+  lessLabel?: string;
+}) {
+  const ref = useRef<HTMLParagraphElement | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+
+  // วัดว่าล้นไหม "ตอนถูก clamp" เท่านั้น (ตอนกางเต็ม scrollHeight==clientHeight
+  // จะอ่านว่าไม่ล้น) — จึงวัดเฉพาะตอน !expanded และเก็บค่าไว้ให้ปุ่มคงอยู่.
+  useEffect(() => {
+    if (expanded) return;
+    const el = ref.current;
+    if (!el) return;
+    setOverflowing(el.scrollHeight > el.clientHeight + 1);
+  }, [children, expanded]);
+
+  return (
+    <div>
+      <p ref={ref} className={`${className ?? ""} ${expanded ? "" : "line-clamp-2"}`}>
+        {children}
+      </p>
+      {(overflowing || expanded) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-0.5 text-[11px] font-semibold text-primary-600 hover:underline"
+        >
+          {expanded ? lessLabel : moreLabel}
+        </button>
+      )}
+    </div>
+  );
+}

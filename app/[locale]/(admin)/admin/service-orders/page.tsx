@@ -132,6 +132,7 @@ type SearchParams = {
   n?: string;                   // page size: 25|50|100|200
   page?: string;                // 1-based page number (server-side pagination)
   purchaser?: string;           // owner ④ — filter by assigned ผู้สั่งซื้อ (tb_admin.adminID)
+  filter?: string;              // "note" = เฉพาะรายการที่มีหมายเหตุ (sidebar หมายเหตุฝากสั่ง)
 };
 
 // Raw row shape from tb_header_order — the columns we read.
@@ -205,6 +206,11 @@ export default async function AdminServiceOrdersPage({
     "accounting",
     "purchaser",
     "purchaser_lead",
+    // driver/warehouse — sidebar ของคนขับ/คลังโชว์ลิงก์ "หมายเหตุฝากสั่ง" (มาที่นี่
+    // ผ่าน ?filter=note) ตาม legacy PCS ที่ warehouse/driver เห็นหน้าหมายเหตุได้ →
+    // ต้องเข้าถึงได้ ไม่งั้น notFound()=404 (owner 2026-07-24 · §0d reachability).
+    "driver",
+    "warehouse",
   ]);
 
   const sp = await searchParams;
@@ -252,6 +258,12 @@ export default async function AdminServiceOrdersPage({
   const keywordRaw = sp.search ?? (qIsStatus ? undefined : qParam.trim() || undefined);
   const keyword = keywordRaw ? keywordRaw.trim() : undefined;
 
+  // ?filter=note — "หมายเหตุฝากสั่ง" (sidebar). Faithful to legacy
+  // forwarder-action.php?action=NoteShop = the SAME rich order table, filtered
+  // to rows that carry a note (staff hnote OR customer hnoteuser). Owner
+  // 2026-07-24: the plain /notes page → reuse this full rich list instead.
+  const noteOnly = sp.filter === "note";
+
   // ── Date window — legacy default = 90 days back; ?historyTableAll=1
   // overrides to "all rows"; explicit ?date_from/?date_to overrides both.
   const today = new Date();
@@ -260,7 +272,9 @@ export default async function AdminServiceOrdersPage({
   const defaultFromIso = defaultFrom.toISOString().slice(0, 10);
   const defaultToIso = today.toISOString().slice(0, 10);
 
-  const showAll = sp.historyTableAll === "1";
+  // note-mode ค้นทุกช่วงเวลาโดยปริยาย (เหมือนหน้า /notes เดิม — หมายเหตุเก่ากว่า
+  // 90 วันก็ต้องเห็น) เว้นแต่ผู้ใช้ระบุ date_from/date_to เอง.
+  const showAll = sp.historyTableAll === "1" || noteOnly;
   const effectiveFrom = sp.date_from ?? (showAll ? null : defaultFromIso);
   const effectiveTo = sp.date_to ?? (showAll ? null : defaultToIso);
 
@@ -310,6 +324,12 @@ export default async function AdminServiceOrdersPage({
 
   if (statusFilter) {
     q = q.eq("hstatus", statusFilter);
+  }
+
+  // note-mode — เฉพาะแถวที่มีหมายเหตุพนักงาน (hnote) หรือหมายเหตุลูกค้า (hnoteuser).
+  // neq. ตัดทั้ง NULL และ '' (marker "ไม่มีหมายเหตุ" ของ legacy) ให้เอง.
+  if (noteOnly) {
+    q = q.or("hnote.neq.,hnoteuser.neq.");
   }
 
   // ── Per-order purchaser scope (owner ④) ─────────────────────────────────
@@ -668,9 +688,10 @@ export default async function AdminServiceOrdersPage({
       <main className="p-6 lg:p-8 space-y-5">
         <PageHeader
           eyebrow="ADMIN · ฝากสั่งซื้อ"
-          title="รายการฝากสั่งสินค้า"
+          title={noteOnly ? "หมายเหตุฝากสั่ง" : "รายการฝากสั่งสินค้า"}
           subtitle={
             <>
+              {noteOnly && <span className="font-semibold text-amber-700">เฉพาะรายการที่มีหมายเหตุ · </span>}
               {rows.length.toLocaleString("th-TH")} รายการ (จากทั้งหมด{" "}
               {counts.total.toLocaleString("th-TH")}) ·{" "}
               <span className="text-red-600">{windowMessage}</span>
@@ -693,6 +714,21 @@ export default async function AdminServiceOrdersPage({
         {headerErr && (
           <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             โหลดข้อมูลไม่สำเร็จ: {headerErr.message}
+          </div>
+        )}
+
+        {/* note-mode banner — บอกว่ากำลังกรองเฉพาะที่มีหมายเหตุ + ทางออกไปดูทั้งหมด */}
+        {noteOnly && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+            <span className="inline-flex items-center gap-1.5 font-medium">
+              📝 กำลังแสดงเฉพาะรายการฝากสั่งที่มีหมายเหตุ (พนักงาน/ลูกค้า)
+            </span>
+            <Link
+              href="/admin/service-orders"
+              className="rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+            >
+              × ดูทั้งหมด
+            </Link>
           </div>
         )}
 
