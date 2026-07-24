@@ -40,7 +40,7 @@ import { ImportScannerPanel } from "./import-scanner-panel";
 export const dynamic = "force-dynamic";
 
 export default async function BarcodeDriverImportPage() {
-  await requireAdmin(["super", "ops", "warehouse"]);
+  await requireAdmin(["super", "ops", "warehouse", "driver"]);
 
   return (
     <div className="min-h-screen bg-slate-50">

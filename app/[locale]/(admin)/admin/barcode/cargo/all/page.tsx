@@ -20,7 +20,7 @@ import { CameraScanner } from "@/components/admin/camera-scanner";
 export const dynamic = "force-dynamic";
 
 export default async function BarcodeCargoAllPage() {
-  await requireAdmin(["super", "ops", "warehouse"]);
+  await requireAdmin(["super", "ops", "warehouse", "driver"]);
 
   // เพรียว/กะทัดรัด + เอา TopMenuBarcode ออก (ปอน 2026-07-24) — เข้าชุดกับหน้า
   // "ด้วยเครื่องสแกน" (driver/all). legacy barcode-c-all.php ก็ไม่มีแถบแท็บนี้.

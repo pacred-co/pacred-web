@@ -20,7 +20,7 @@ import { TopMenuBarcode } from "@/components/admin/top-menu-barcode";
 export const dynamic = "force-dynamic";
 
 export default async function BarcodeCargoImportPage() {
-  await requireAdmin(["super", "ops", "warehouse"]);
+  await requireAdmin(["super", "ops", "warehouse", "driver"]);
 
   return (
     <>
