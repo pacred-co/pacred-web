@@ -152,6 +152,7 @@ export type SearchParams = {
   all?: string;         // Wave 18-B — '1' = escape default 30-day window
   nofilter?: string;    // clears the role default-queue redirect
   purchaser?: string;   // owner ④ — filter by assigned ผู้สั่งซื้อ (tb_admin.adminID)
+  filter?: string;      // "note" = เฉพาะรายการที่มีหมายเหตุ (sidebar หมายเหตุนำเข้า)
 };
 
 // Wave 18-B — Default date window helpers (port of legacy `forwarder.php`
@@ -484,7 +485,9 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
   }
   const serviceLabel = service === "cargo" ? "Cargo" : service === "freight" ? "Freight" : null;
   const containerLabel = container === "fcl" ? "FCL" : container === "lcl" ? "LCL" : null;
-  const headerSuffix = [serviceLabel, containerLabel].filter(Boolean).join(" · ");
+  // note-mode (?filter=note) → หัวข้อ "หมายเหตุนำเข้า" + banner (ดูข้อความ ↓)
+  const noteOnly = sp.filter === "note";
+  const headerSuffix = [noteOnly ? "หมายเหตุ" : null, serviceLabel, containerLabel].filter(Boolean).join(" · ");
 
   return (
     <>
@@ -517,6 +520,15 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
         }
         actions={
           <>
+            {noteOnly && (
+              <Link
+                href="/admin/forwarders"
+                className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+                title="กำลังกรองเฉพาะรายการที่มีหมายเหตุ — กดเพื่อดูทั้งหมด"
+              >
+                📝 เฉพาะที่มีหมายเหตุ · × ดูทั้งหมด
+              </Link>
+            )}
             <Link
               href="/admin/forwarders/bulk-search"
               className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium hover:bg-surface-alt"
@@ -1040,6 +1052,12 @@ export async function fetchForwarderList(
   const { from, to } = pageRange(page);
   const hasPostFetchFilter = !!(sp.q || sp.q_multi || sp.status === "6" || sp.status === "6.1");
 
+  // ?filter=note — "หมายเหตุนำเข้า" (sidebar). Faithful to legacy
+  // forwarder-action.php?action=Note = the SAME rich forwarder list, filtered
+  // to rows carrying a note (fnote). Owner 2026-07-24: the plain /forwarders/notes
+  // page → reuse this full rich list instead.
+  const noteOnly = sp.filter === "note";
+
   // ─── Main query against tb_forwarder ──────────────────────────────────
   // Note: PostgREST cannot reliably auto-join the legacy `tb_users` table
   // (the FK is by `userid` text not a true relational FK). We pull the
@@ -1096,8 +1114,10 @@ export async function fetchForwarderList(
   // ภูม 2026-07-22 — ค้นหา "หลายเลข" (q_multi · ปุ่มบน search-bar) ก็ต้องข้ามกรอบ 30 วัน
   // เหมือนค้นเลขเดียว (sp.q) — ไม่งั้นเลขที่เก่ากว่า 30 วันหาไม่เจอ (คืนค่าว่างเงียบๆ · บั๊ก
   // คลาสเดียวกับที่เคยแก้ให้ sp.q แต่ลืมต่อยอดมา q_multi).
+  // note-mode ก็ข้ามกรอบ 30 วันเหมือนการค้นหา — หมายเหตุเก่ากว่า 30 วันต้องเห็นด้วย
+  // (เหมือนหน้า /forwarders/notes เดิมที่ไม่จำกัดช่วงเวลา).
   const skipDateWindow = !!(
-    (sp.q && sp.q.trim().length > 0) || (sp.q_multi && sp.q_multi.trim().length > 0)
+    (sp.q && sp.q.trim().length > 0) || (sp.q_multi && sp.q_multi.trim().length > 0) || noteOnly
   );
   if (!skipDateWindow) {
     if (dateWindow.from) q = q.gte("fdate", dateWindow.from);
@@ -1165,6 +1185,10 @@ export async function fetchForwarderList(
   } else if (sp.status && /^[1-7]$/.test(sp.status)) {
     q = q.eq("fstatus", sp.status);
   }
+
+  // note-mode — เฉพาะแถวที่มีหมายเหตุนำเข้า (fnote). neq. ตัดทั้ง NULL และ ''
+  // (marker "ไม่มีหมายเหตุ" ของ legacy) ให้เอง.
+  if (noteOnly) q = q.neq("fnote", "");
 
   // ── Per-order purchaser scope (owner ④) ─────────────────────────────────
   // A `purchaser`-only viewer is hard-scoped to their own assigned orders; a

@@ -187,7 +187,7 @@ const ITEMS: { key: CountKey | "history" | "sacks"; label: string; href: string 
   // generic queues) to the dedicated /admin/forwarders/notes page
   // which has filter chips + cleaner Tailwind chrome and survives
   // bookmarking. The audit-queue URL still works as a fallback.
-  { key: "note",                   label: "หมายเหตุนำเข้า",      href: "/admin/forwarders/notes" },
+  { key: "note",                   label: "หมายเหตุนำเข้า",      href: "/admin/forwarders?filter=note" },
   { key: "notPhoto",               label: "ไม่ได้ถ่ายสินค้า",    href: "/admin/forwarder-action?q=4&action=notPhoto" },
   { key: "notPortage",             label: "ไม่ใส่ค่าขนส่ง",      href: "/admin/forwarder-action?q=4&action=notPortage" },
   { key: "notContainer",           label: "ไม่ใส่เบอร์ตู้",      href: "/admin/forwarder-action?q=2&action=notContainer" },

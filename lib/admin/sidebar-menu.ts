@@ -1328,7 +1328,7 @@ const wrapServiceImport: MenuItem = {
         { labelKey: "forwarder.listAdd",     href: "/admin/forwarders/new",        icon: "Plus" },
       ],
     },
-    { labelKey: "forwarder.note",         href: "/admin/forwarders/notes",               icon: "FileText" },
+    { labelKey: "forwarder.note",         href: "/admin/forwarders?filter=note",         icon: "FileText" },
     { labelKey: "forwarder.checkCntCost", href: "/admin/forwarders/container-cost-check", icon: "Calculator" },
     { labelKey: "warehouse.containers",   href: "/admin/report-cnt",                     icon: "Package" },
     { labelKey: "forwarder.whHistory",    href: "/admin/forwarders/warehouse-history",   icon: "PackageCheck", badge: "forwarderWhError" },
@@ -1830,10 +1830,12 @@ const menuDriver: MenuSection[] = [
           { labelKey: "barcode.byCamera",  href: "/admin/barcode/cargo/all",  icon: "Camera"   },
         ],
       },
-      // หมายเหตุฝากสั่ง — `/admin/service-orders/notes` existed but was an
-      // orphan (no sidebar entry anywhere · §0d). Wired here.
-      { labelKey: "purchasing.note",  href: "/admin/service-orders/notes", icon: "MessageSquare", badge: "shopNote"       },
-      { labelKey: "forwarder.note",   href: "/admin/forwarders/notes",     icon: "FileText",      badge: "forwarderNote"  },
+      // หมายเหตุฝากสั่ง/นำเข้า — ชี้ไปตารางหลัก (rich list) พร้อม filter=note แทนหน้า
+      // /notes เรียบๆ (owner 2026-07-24: "ดึงหน้ารายการเต็มของ PCS มาใช้ ทั้งฝากสั่ง+นำเข้า").
+      // = faithful ตาม legacy forwarder-action.php?action=NoteShop/Note ที่เป็นตารางเต็ม
+      // กรองเฉพาะแถวที่มีหมายเหตุ. หน้า /notes เก่า redirect มาที่นี่.
+      { labelKey: "purchasing.note",  href: "/admin/service-orders?filter=note", icon: "MessageSquare", badge: "shopNote"       },
+      { labelKey: "forwarder.note",   href: "/admin/forwarders?filter=note",     icon: "FileText",      badge: "forwarderNote"  },
       // ออกรายงาน — accordion with the ONE driver report (legacy shape), NOT the
       // flat `itemReportsAll` link into the 37-report hub: a driver has no
       // business browsing sales/profit/AR reports. `/admin/reports/delivery-history`
