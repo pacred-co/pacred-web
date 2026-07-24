@@ -173,7 +173,10 @@ export default async function AdminDeliveryHistoryPage({
 }) {
   // Cargo-report gate — matches /admin/reports/containers-awaiting-th plus
   // 'ultra' (the god role from mig 0193).
-  await requireAdmin(["super", "ultra", "accounting", "ops", "warehouse"]);
+  // + driver (owner 2026-07-24) — menuDriver โชว์ลิงก์ "รายงานคนขับ/ประวัติจัดส่ง"
+  // มาที่นี่ · เดิม gate ไม่มี driver → คนขับกดแล้ว notFound()=404. หน้านี้คือรายงาน
+  // คนขับโดยตรง (ประวัติการจัดส่ง) คนขับดูได้ (§0d reachability · READ-ONLY).
+  await requireAdmin(["super", "ultra", "accounting", "ops", "warehouse", "driver"]);
 
   const sp = await searchParams;
   const { value: statusValue, codes: statusCodes } = resolveStatusCodes(sp.fstatus);
