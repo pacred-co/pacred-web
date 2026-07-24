@@ -1191,17 +1191,10 @@ export default async function AdminDriverBatchDetailPage({
             const heroPhoto = deliveryPhotos[0] ?? stop.items.find((e) => e.coverUrl)?.coverUrl ?? null;
             return (
               <div key={stop.addressKey} className="rounded-2xl border border-border bg-white shadow-sm p-4 space-y-3">
-                {/* ลำดับส่ง (ปอน 2026-07-24 · = ลำดับการจัดส่งตามเส้นทาง) + สถานะ + จำนวน */}
-                <div className="flex items-center gap-2">
-                  {/* วงกลมเลขลำดับ + วงกลมสถานะ (เขียว/แดง) ถูกถอดออก 2026-07-24 (owner
-                      "เอาลำดับตรงนี้ออก") — สถานะงานอยู่ที่แถว badge ที่เดียว (ขนส่ง+สถานะ). */}
-                  <div className="leading-tight">
-                    <p className="text-[11px] text-muted">ลำดับส่ง</p>
-                    <p className="text-base font-bold">{total} รายการ</p>
-                  </div>
-                  {/* ปักหมุด — อยู่แถวหัวการ์ด ชิดขวา (ปอน 2026-07-24). จอนี้คือจอ
-                      ที่คนขับใช้ตอนยืนหน้าบ้านลูกค้าจริง จึงวางไว้ให้เห็นตั้งแต่
-                      หัวการ์ด ไม่ต้องกวาดตาหาในแถวแท็ก. */}
+                {/* แถวหัว = ปักหมุดชิดขวา. ป้าย "ลำดับส่ง / N รายการ" + วงกลมเลข/สถานะ
+                    ถูกถอดออก 2026-07-24 (owner "เอาออก") — จำนวนดูได้จากตารางย่อ · สถานะ
+                    อยู่แถว badge. ปักหมุดวางไว้ให้เห็นตั้งแต่หัวการ์ด (คนขับใช้หน้าบ้านลูกค้า). */}
+                <div className="flex items-center">
                   <div className="ml-auto shrink-0">
                     <PinLocationButton fids={stopFids} addressText={addrText} hasPin={hasPin} />
                   </div>
