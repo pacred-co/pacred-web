@@ -73,6 +73,7 @@ import { formatCartPriceDisplay } from "@/lib/forwarder/cart-price-display";
 // items editor + /edit page use · no per-surface drift).
 import { deriveOrderCurrencyInfo, yuanToForeign } from "@/lib/forwarder/usd-order-pricing";
 import { ShopCollapseAll } from "./shop-collapse-all";
+import { shopPieces, shopAveragePerPiece, formatAveragePerPiece } from "@/lib/shop-order/shop-group-summary";
 
 // ── inline-edits labels mirrored here for read-only display (the editor in
 // inline-edits.tsx owns the canonical maps; we duplicate the 3 small ones
@@ -829,20 +830,6 @@ function foreignSubtotal(rows: EditorItem[]): number {
   return rows.reduce((s, it) => s + (it.crewallet === "1" ? 0 : it.inputPrice * it.camount), 0);
 }
 
-/** จำนวน "ชิ้น" จริงของร้าน (Σ camount) — คนละตัวกับ "รายการ" (จำนวนบรรทัด).
- *  owner 2026-07-24: *"หัวแถวร้านค้า เพิ่ม จำนวนรวมทั้งหมดกี่ชิ้น ราคาเฉลี่ยต่อชิ้นของทั้งร้าน"*
- *  แถวที่คืนเงินแล้วนับเป็น 0 ทั้งเงินและชิ้น (ตรงกับ `lineOf`/`foreignSubtotal`)
- *  → เฉลี่ย × ชิ้น = ยอดรวมที่โชว์ เสมอ (ไม่มีทางเพี้ยนเชิงโครงสร้าง). */
-function shopPieces(rows: EditorItem[]): { pieces: number; refundedPieces: number } {
-  let pieces = 0;
-  let refundedPieces = 0;
-  for (const it of rows) {
-    if (it.crewallet === "1") refundedPieces += it.camount;
-    else pieces += it.camount;
-  }
-  return { pieces, refundedPieces };
-}
-
 /** Big original-currency figure + a small secondary line.
  *  `hideYuan` (owner 2026-07-13 — a foreign-currency ORDER shows no ¥ anywhere)
  *  swaps the shared "≈ ¥… · ฿…" secondary for a ฿-only one. Built LOCALLY so the
@@ -970,10 +957,13 @@ function ItemSummary({
                 : shopYuan;
             const unitSuffix = groupForeign ? ` ${groupCur}` : orderForeign ? ` ${orderCur}` : "";
             const unitPrefix = groupForeign || orderForeign ? "" : "¥";
+            // ปัดผ่าน SOT ที่มีเทสคุม (lib/shop-order/shop-group-summary) — ของถูกมาก
+            // หลักสตางค์ต้องได้ 4 ตำแหน่ง ไม่งั้นราคาผิดเป็น % (เจอจริง 3 เคสบน prod)
+            const avgRaw = shopAveragePerPiece(shopTotalShown, pieces);
             const avgPerPiece =
-              pieces > 0
-                ? `${unitPrefix}${groupForeign || orderForeign ? fcur(shopTotalShown / pieces) : cny(shopTotalShown / pieces)}${unitSuffix}`
-                : "—";
+              avgRaw == null
+                ? "—"
+                : `${unitPrefix}${formatAveragePerPiece(avgRaw, groupForeign || orderForeign ? "en-US" : "th-TH")}${unitSuffix}`;
 
             return (
               <details
