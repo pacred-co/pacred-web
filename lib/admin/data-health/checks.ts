@@ -173,6 +173,11 @@ const CHECKS: CheckDef[] = [
         const sufs = rows.filter((r) => suffixOf(r.ftrackingchn) > 0);
         if (!bare || sufs.length === 0) continue;
         if (Math.min(...sufs.map((r) => suffixOf(r.ftrackingchn))) !== 1) continue;
+        // calibration 2026-07-24 (52047 · owner "งานนี้มีแค่ 8 กล่อง เบิ้ลอีกแล้ว"):
+        // bare ที่ถูกล้างเป็น header เปล่าแล้ว (น้ำหนัก 0 + ไม่มีเงินขาย) = จบเคสนี้แล้ว —
+        // display SOT ตัดออกจากทุก Σ · ไม่เบิ้ลอะไรอีก · มี check `empty_bare_headers`
+        // (เหลือง) เฝ้าทรงนี้อยู่แล้ว → แดงซ้ำที่นี่ = noise ที่ทำให้จอไม่เคยเขียว.
+        if (bare.fweight <= 0.005 && bare.ftotalprice <= 0.005) continue;
         out.push({ base, userid: bare.userid, bareId: bare.id, bareWeight: bare.fweight, sufs: sufs.length });
       }
       return { count: out.length, sample: cap(out) };
