@@ -100,6 +100,27 @@ export const PCS_PICKUP_ADDRESS: ResolvedAddress = {
   addressnote:        "",
 };
 
+/**
+ * ที่อยู่ว่าง — ใช้เมื่อ "ลูกค้าคนนี้ยังไม่มีที่อยู่ที่ใช้ได้" (owner 2026-07-23 · ดู §3 ข้างล่าง).
+ *
+ * ⚠️ ห้ามใช้ PCS_PICKUP_ADDRESS แทน: ที่อยู่โกดังแปลว่า "ลูกค้ามารับเอง" ซึ่งเป็น**ข้อมูลเท็จ**
+ * ถ้าลูกค้าไม่ได้เลือกรับเอง (เคยเป็นบั๊กจริง — auto-commit v1 ยัดโกดังให้ทุกงานที่หาที่อยู่ไม่เจอ
+ * จนคนขับไม่มีปลายทาง). ว่าง = ว่างจริง → data-health `live_forwarder_missing_delivery` (แดง)
+ * จับได้ + ด่านที่อยู่ก่อนเข้าคิวแจ้งชำระ (report-cnt) กันไม่ให้ไหลไปเก็บเงิน/จัดส่ง.
+ */
+export const EMPTY_ADDRESS: ResolvedAddress = {
+  addressname:        "",
+  addresslastname:    "",
+  addresstel:         "",
+  addresstel2:        "",
+  addressno:          "",
+  addresssubdistrict: "",
+  addressdistrict:    "",
+  addressprovince:    "",
+  addresszipcode:     "",
+  addressnote:        "",
+};
+
 // ────────────────────────────────────────────────────────────
 // Zod schema — admin-supplied overrides for a single MOMO commit.
 // The base row data (tracking · cabinet · dates) comes from
@@ -333,7 +354,28 @@ export async function commitMomoRowCore(
     if (!usable.data) return { ok: false, error: `ที่อยู่ของสมาชิกไม่ครบถ้วน: ${usable.error}` };
     addr = usable.data;
   } else {
-    // Fallback: tb_address_main → tb_address.
+    // ── 🔴 ที่อยู่ยังไม่รู้ = ยังนำเข้าได้ (owner 2026-07-23) ──────────────────
+    // *"บางงานยังไม่รู้ที่จัดส่ง แต่กดเข้าระบบไม่ได้ครับ ไปแก้ข้างในก็ได้ครับ
+    //   ให้งานที่ถูกต้อง มันเข้าไปก่อนเถอะครับ"*
+    //
+    // เดิม: ลูกค้าไม่มีที่อยู่หลัก / ที่อยู่ไม่ครบ → **ปฏิเสธการนำเข้าทั้งแถว** → งานที่ข้อมูล
+    // ขนส่งถูกต้องครบ (แทรคกิ้ง · PR · น้ำหนัก · คิว · ตู้) เข้าระบบไม่ได้เลย ทั้งที่ที่อยู่เป็น
+    // ข้อมูลปลายทางที่ CS เติมทีหลังได้ตลอด (และลูกค้าใหม่หลายรายยังไม่เคยตั้งที่อยู่).
+    // ตอนนี้: นำเข้าด้วย **ที่อยู่ว่าง** แล้วให้พนักงานเติมที่หน้า /admin/forwarders/[fNo].
+    //
+    // ปลอดภัยเพราะยังมี 3 ด่านหลังบ้านกันไม่ให้ของไหลไปถึงคนขับโดยไม่มีปลายทาง:
+    //   1. ด่านที่อยู่ก่อนเข้าคิวแจ้งชำระ — `adminReportCntAddCheck` (actions/admin/report-cnt-detail.ts)
+    //      ปฏิเสธทุกแถวที่ไม่มี จังหวัด/รหัสไปรษณีย์ (ยกเว้น fshipby='PCS' รับเองโกดัง).
+    //   2. ด่านค่าส่งไทย — `isThShippingCostMissing` ที่ billing-run + forwarder-check: แถวขนส่ง
+    //      ว่าง/ต้นทาง ที่ค่าส่งไทย ฿0 (ซึ่งเป็นสภาพของแถวไม่มีที่อยู่) วางบิลไม่ผ่าน.
+    //   3. data-health `live_forwarder_missing_delivery` (แดง · cron รายชั่วโมง) จับทุกแถว
+    //      fstatus 1-6 ที่ไม่ใช่ PCS แล้วช่องที่อยู่ว่าง → ขึ้น /admin/incidents ให้ตามเก็บ.
+    // ⚠️ ยัง**ไม่มี**ด่านที่ตัวมอบงานคนขับเอง (actions/admin/driver-batches.ts ไม่เช็คที่อยู่) —
+    //    ป้องกันด้วย 3 ด่านบนก่อนถึงสถานะ 6 เท่านั้น (ดูรายงานส่งหัวหน้า).
+    //
+    // ที่ยัง **ปฏิเสธเหมือนเดิม**: อ่าน DB ไม่ได้ (db_error) · แอดมินเลือก addressID มาเองแล้วใช้
+    // ไม่ได้ (สาขาข้างบน) · ไม่มีเลขแทรคกิ้ง · PR ไม่มีใน tb_users · ขนส่งไม่วิ่งจังหวัดนั้น ·
+    // กันนำเข้าซ้ำ/กันชนกับพี่น้องในชิปเม้น — ทั้งหมดไม่ถูกแตะ.
     const { data: main, error: mainErr } = await admin
       .from("tb_address_main")
       .select("addressid")
@@ -344,44 +386,63 @@ export async function commitMomoRowCore(
       return { ok: false, error: `db_error:${mainErr.code ?? "unknown"}` };
     }
     if (!main?.addressid) {
-      return { ok: false, error: "ลูกค้ายังไม่มีที่อยู่หลัก — บันทึกที่อยู่ก่อนสร้างงานนำเข้า" };
+      console.warn(
+        `[commit-momo] ${customer.userID} ยังไม่มีที่อยู่หลัก → นำเข้าด้วยที่อยู่ว่าง (CS เติมทีหลัง)`,
+      );
+      addr = { ...EMPTY_ADDRESS };
+    } else {
+      const { data: addrRow, error: addrRowErr } = await admin
+        .from("tb_address")
+        .select(
+          "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote, addresstel, addresstel2",
+        )
+        .eq("addressid", main.addressid)
+        .eq("userid", customer.userID)
+        .eq("addressstatus", "1")
+        .maybeSingle<{
+          addressname:        string;
+          addresslastname:    string | null;
+          addressno:          string;
+          addresssubdistrict: string;
+          addressdistrict:    string;
+          addressprovince:    string;
+          addresszipcode:     string;
+          addressnote:        string | null;
+          addresstel:         string;
+          addresstel2:        string | null;
+        }>();
+      if (addrRowErr) {
+        console.error(`[tb_address main fallback lookup] failed`, { code: addrRowErr.code, message: addrRowErr.message });
+        return { ok: false, error: `db_error:${addrRowErr.code ?? "unknown"}` };
+      }
+      if (!addrRow) {
+        // ที่อยู่หลักชี้ไปแถวที่ปิด/ถูกลบ — ที่อยู่ยัง "ไม่รู้" อยู่ดี → ปล่อยงานเข้าด้วยที่อยู่ว่าง
+        console.warn(
+          `[commit-momo] ${customer.userID} ที่อยู่หลัก (addressid=${main.addressid}) ใช้ไม่ได้ → นำเข้าด้วยที่อยู่ว่าง`,
+        );
+        addr = { ...EMPTY_ADDRESS };
+      } else {
+        const usable = parseCustomerAddressRow(addrRow);
+        if (!usable.data) {
+          // ที่อยู่มีอยู่แต่กรอกไม่ครบ (เช่น ไม่มีเบอร์/รหัสไปรษณีย์) — ห้ามเอาที่อยู่ครึ่งๆ ไปใช้
+          // (จะกลายเป็นปลายทางที่ส่งไม่ได้จริงและดูเหมือนครบ) → ว่างไว้ให้ด่านหลังบ้านจับ
+          console.warn(
+            `[commit-momo] ${customer.userID} ที่อยู่หลักไม่ครบ (${usable.error}) → นำเข้าด้วยที่อยู่ว่าง`,
+          );
+          addr = { ...EMPTY_ADDRESS };
+        } else {
+          addr = usable.data;
+        }
+      }
     }
-    const { data: addrRow, error: addrRowErr } = await admin
-      .from("tb_address")
-      .select(
-        "addressname, addresslastname, addressno, addresssubdistrict, addressdistrict, addressprovince, addresszipcode, addressnote, addresstel, addresstel2",
-      )
-      .eq("addressid", main.addressid)
-      .eq("userid", customer.userID)
-      .eq("addressstatus", "1")
-      .maybeSingle<{
-        addressname:        string;
-        addresslastname:    string | null;
-        addressno:          string;
-        addresssubdistrict: string;
-        addressdistrict:    string;
-        addressprovince:    string;
-        addresszipcode:     string;
-        addressnote:        string | null;
-        addresstel:         string;
-        addresstel2:        string | null;
-      }>();
-    if (addrRowErr) {
-      console.error(`[tb_address main fallback lookup] failed`, { code: addrRowErr.code, message: addrRowErr.message });
-      return { ok: false, error: `db_error:${addrRowErr.code ?? "unknown"}` };
-    }
-    if (!addrRow) {
-      return { ok: false, error: "ที่อยู่หลักของลูกค้าไม่พร้อมใช้งาน — กรุณาเลือก/บันทึกใหม่" };
-    }
-    const usable = parseCustomerAddressRow(addrRow);
-    if (!usable.data) return { ok: false, error: `ที่อยู่หลักของลูกค้าไม่ครบถ้วน: ${usable.error}` };
-    addr = usable.data;
   }
 
   // 🔴 CLOSED LIST (owner 2026-07-14) — a ขนส่งเอกชน chosen at commit time must be in the
   // owner's workbook, and must run in the resolved delivery province. An empty
-  // carrier is still allowed for later assignment, but a reusable address is no
-  // longer optional: address-less MOMO rows fail before this coverage check.
+  // carrier is still allowed for later assignment. ที่อยู่ที่ยังไม่รู้ = จังหวัดว่าง →
+  // checkCarrierForProvince ข้ามการเช็คพื้นที่ให้เอง (กติกา "จังหวัดไม่รู้ → ไม่เช็ค" ·
+  // รายชื่อขนส่งปิด (closed list) ยังบังคับอยู่) — ด่านนี้จึงไม่บล็อกงานที่ยังไม่มีที่อยู่
+  // แต่ยังกันการพิมพ์ชื่อขนส่งมั่วเหมือนเดิม.
   {
     const coverage = checkCarrierForProvince(dShip.fShipBy, addr.addressprovince);
     if (!coverage.ok) return { ok: false, error: coverage.error };

@@ -100,22 +100,30 @@ export function DriverPhotoEditDialog({
         aria-hidden="true"
       />
 
+      {/* gradient = การ์ดมือถือ (ใต้รูป · คอลัมน์กว้าง 80px). ปอน 2026-07-24:
+          "ไม่เป็นก้อนกลมๆ · เห็นชัดว่าเป็น ถ่ายส่ง" → ปุ่มสี่เหลี่ยม (rounded-lg)
+          เต็มความกว้าง จัดกึ่งกลาง ไอคอนกล้องใหญ่ขึ้น = ดูออกทันทีว่ากดถ่ายได้.
+          non-gradient = เดสก์ท็อป (แถวปุ่มในตาราง) ยังเป็น pill เล็กเหมือนเดิม. */}
       <button
         type="button"
         onClick={openPicker}
         disabled={disabled || pending}
-        className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition disabled:opacity-50 ${
+        className={`inline-flex items-center justify-center gap-1 border font-semibold transition disabled:opacity-50 ${
           gradient
-            ? hasPhoto
-              ? "border-transparent bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow-sm hover:from-amber-700 hover:to-amber-600"
-              : "border-transparent bg-gradient-to-r from-[#A01824] to-[#C82333] text-white shadow-sm hover:from-[#87141E] hover:to-[#B21F2D]"
-            : hasPhoto
-              ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
-              : "border-primary-300 bg-primary-50 text-primary-700 hover:bg-primary-100"
+            ? "w-full rounded-lg px-2 py-1.5 text-xs " +
+              (hasPhoto
+                ? "border-amber-600 bg-amber-600 text-white shadow-sm hover:bg-amber-700"
+                : "border-[#C82333] bg-[#C82333] text-white shadow-sm hover:bg-[#B21F2D]")
+            : "rounded-full px-2.5 py-1 text-[11px] " +
+              (hasPhoto
+                ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                : "border-primary-300 bg-primary-50 text-primary-700 hover:bg-primary-100")
         }`}
       >
-        {hasPhoto ? <Pencil className="h-3 w-3" /> : <Camera className="h-3 w-3" />}
-        {hasPhoto ? "แก้ภาพ" : "ถ่ายส่งสินค้า"}
+        {hasPhoto
+          ? <Pencil className={gradient ? "h-4 w-4" : "h-3 w-3"} />
+          : <Camera className={gradient ? "h-4 w-4" : "h-3 w-3"} />}
+        {hasPhoto ? "แก้ภาพ" : gradient ? "ถ่ายส่ง" : "ถ่ายส่งสินค้า"}
       </button>
 
       {/* Modal — legacy "ถ่ายภาพสินค้าที่ส่ง" (ถ่ายใหม่ / บันทึกภาพ). */}

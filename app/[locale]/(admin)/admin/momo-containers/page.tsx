@@ -127,7 +127,10 @@ export default async function MomoContainersPage() {
       serviceFee: raw && typeof raw === "object" && raw.extra_cost != null ? num(raw.extra_cost) : null,
       guessedShipBy: str("ship_by"),
       guessedProductType: momoTypeToProductType(str("type")),
-      momoType: str("type") || null, // raw MOMO type — labels stay distinct (อย. ≠ น้ำยา)
+      // raw MOMO type (general/tis/fda/special/control) — เก็บไว้ตามรอย/ทำ tooltip เท่านั้น.
+      // ป้ายบนจอ derive จาก momoTypeToProductType (= ประเภทจริงของ Pacred 4 ตัว · ป้าย = เรท ·
+      // owner 2026-07-23 "ควบคุมไม่มี มีแต่ อย." — ดู momoTypeLabel).
+      momoType: str("type") || null,
       qty: colQ > 0 ? colQ : (numFromRaw("quantity") || null),
       weightKg: colW > 0 ? colW : numFromRaw("kg"),
       cbm: colV > 0 ? colV : numFromRaw("cbm"),
@@ -360,7 +363,7 @@ export default async function MomoContainersPage() {
     const lv = base ? liveByBase.get(base) : undefined;
     // LIVE fallback (see liveMetaByBase above): staging blanks fill from the Live
     // web-board truth — container ("ยังไม่เข้าตู้ปิด" that Live already assigned),
-    // PR ("MOMO ไม่ส่ง PR" rows whose Live board carries the member code).
+    // PR (แถว "NO CODE" ที่บอร์ด Live มีรหัสลูกค้าอยู่ → เติมให้ ไม่ต้องให้ CS ตามหาเอง).
     const lm = base ? liveMetaByBase.get(base) : undefined;
     const mergedContainer = r.container || (lm?.container ?? null);
     const mergedUserId = r.guessedUserId || (lm?.memberCode ? lm.memberCode.toUpperCase() : null);

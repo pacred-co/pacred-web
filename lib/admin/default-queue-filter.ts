@@ -288,7 +288,7 @@ export function pickFilterRole(roles: AdminRole[]): AdminRole | null {
  * future, add it here too.
  */
 const KEYS_PER_PAGE: Record<FilterablePage, readonly string[]> = {
-  "/admin/forwarders":     ["status", "q", "q_multi", "date_from", "date_to", "mode", "create", "all", "service", "container", "segment"],
+  "/admin/forwarders":     ["status", "q", "q_multi", "date_from", "date_to", "mode", "create", "all", "service", "container", "segment", "filter"],
   "/admin/forwarder-check": ["q"],
   "/admin/cnt-hs":          ["q", "search", "offset"],
   "/admin/customers":       ["q", "type", "group", "segment", "adminidsale"],

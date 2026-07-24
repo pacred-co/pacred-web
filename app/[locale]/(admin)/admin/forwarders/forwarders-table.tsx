@@ -444,6 +444,36 @@ type DisplayUnit =
   | { kind: "group"; key: string; main: Row; members: Row[] };
 
 /**
+ * ผลรวมของ "หน้านี้" — จำนวนกล่อง / น้ำหนัก / คิว (owner 2026-07-23:
+ * "หัวแถว พวกผลรวมสรุป ... ยังไม่มีจำนวนกล่องรวม แสดงขึ้นมาด้วยเลยครับ").
+ *
+ * หัวแถวของแต่ละชิปเม้นโชว์ "Σ N กล่อง" อยู่แล้ว แต่ทั้งหน้าไม่เคยมียอดรวม —
+ * พนักงานต้องไล่บวกเอง. ตัวนี้เติมแถบสรุปท้ายตาราง.
+ *
+ * 🔴 ใช้ `countableGroupMembers` (SOT เดียวกับหัวแถว) เสมอ — หัวบิล MOMO
+ * (แถว bare ที่ famount = จำนวนกล่องที่ "ประกาศ" ไว้) ต้องไม่ถูกนับซ้อนกับแถวกล่อง
+ * ลูกของมัน ไม่งั้นพัสดุ 6 กล่องจะรวมได้ 12. แถวเดี่ยวไม่มีพี่น้อง → นับตัวเองตรงๆ.
+ * CBM ใช้ cbmTotal (กฎ famountcount) เหมือนช่องในตาราง.
+ *
+ * display-only — ไม่แตะเงิน ไม่เขียน DB.
+ */
+function sumDisplayUnits(units: DisplayUnit[]): {
+  trackings: number; boxes: number; weightKg: number; cbm: number;
+} {
+  let trackings = 0, boxes = 0, weightKg = 0, cbm = 0;
+  for (const u of units) {
+    const members = u.kind === "single" ? [u.row] : countableGroupMembers(u.members);
+    trackings += members.length;
+    for (const m of members) {
+      boxes += m.amount_count || 0;
+      weightKg += m.weight_kg || 0;
+      cbm += cbmTotal(m.volume_cbm || 0, m.amount_count, m.amount_count_flag);
+    }
+  }
+  return { trackings, boxes, weightKg, cbm: Math.round(cbm * 1e6) / 1e6 };
+}
+
+/**
  * Collapse the page's rows into display units, preserving input order.
  * A group forms only when ≥2 rows share (baseTracking, userid); the group
  * unit is emitted at the MAIN row's original position and the sibling
@@ -1680,6 +1710,49 @@ export function ForwardersTable({
             </table>
           </div>
         )}
+
+        {/* ผลรวมหน้านี้ (owner 2026-07-23 "ยังไม่มีจำนวนกล่องรวม แสดงขึ้นมาด้วยเลย")
+            — หัวแถวชิปเม้นมี Σ กล่อง อยู่แล้ว แต่ทั้งหน้าไม่เคยมียอดรวมให้เห็น.
+            นับด้วยกฎเดียวกับหัวแถว (ไม่นับหัวบิล MOMO ซ้ำ) → เลขบนแถบนี้กับเลขบน
+            หัวแถวบวกกันได้ตรงเสมอ. "หน้านี้" = เฉพาะแถวที่แสดงอยู่ (ไม่ใช่ทุกหน้า). */}
+        {viewUnits.length > 0 && (() => {
+          const t = sumDisplayUnits(viewUnits);
+          return (
+            <div className="mt-2 rounded-lg border border-border bg-surface-alt/60 px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+              <span className="font-medium text-muted">
+                รวมหน้านี้ · {viewUnits.length.toLocaleString("th-TH")} รายการ
+                {" · "}
+                {t.trackings.toLocaleString("th-TH")} แทรคกิ้ง
+              </span>
+              <span className="text-muted">
+                จำนวนกล่องรวม{" "}
+                <strong className="text-foreground">{t.boxes.toLocaleString("th-TH")}</strong> กล่อง
+              </span>
+              {t.weightKg > 0 && (
+                <span className="text-muted">
+                  น้ำหนักรวม{" "}
+                  <strong className="text-foreground">
+                    {t.weightKg.toLocaleString("th-TH", { maximumFractionDigits: 2 })}
+                  </strong>{" "}
+                  Kg
+                </span>
+              )}
+              {t.cbm > 0 && (
+                <span className="text-muted inline-flex items-center gap-1">
+                  ปริมาตรรวม{" "}
+                  <strong className="text-foreground">
+                    {t.cbm.toLocaleString("th-TH", { maximumFractionDigits: 4 })}
+                  </strong>{" "}
+                  CBM
+                  <Explain
+                    def="ผลรวมของรายการที่แสดงอยู่หน้านี้เท่านั้น (ไม่ใช่ทุกหน้า) — นับกล่องแบบไม่นับหัวบิล MOMO ซ้ำ จึงตรงกับ Σ บนหัวแถวแต่ละชิปเม้น"
+                    align="right"
+                  />
+                </span>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Inline status banners (visible above the fixed bar) */}

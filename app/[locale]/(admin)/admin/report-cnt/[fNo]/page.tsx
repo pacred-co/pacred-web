@@ -34,6 +34,10 @@
 
 import { notFound } from "next/navigation";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
+import {
+  resolveContainerWarehouse,
+  resolveRowContainerCost,
+} from "@/lib/forwarder/container-cost-engine";
 import { ChevronDown, Truck } from "lucide-react";
 import { requireAdmin, hasRole } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
@@ -202,7 +206,12 @@ export default async function AdminReportCntDetailPage({
 
   type CntRow = (typeof cntRows)[number];
   const firstRow = cntRows[0] as CntRow;
-  const fWarehouseName = String(firstRow.fwarehousename ?? "");
+  // โกดังของตู้ = ตัวแรกที่ "ไม่ว่าง" (ไม่ใช่แถวแรกดื้อๆ) — owner 2026-07-23.
+  // prod มีแถวที่ fwarehousename ว่าง (เช่น GZE260720-1 มี 4 จาก 84 แถว); ถ้าแถวว่าง
+  // มาเป็นแถวแรก ตู้ทั้งตู้จะกลายเป็น "ไม่รู้โกดัง" → หาเรทมาตรฐานไม่เจอ → ไม่คิดต้นทุนสด
+  // + ป้ายโกดังว่าง. ใช้ SOT ตัวเดียวกับหน้า รายการตู้ (LIST) เพื่อให้สองจอตัดสิน
+  // "ฐานคิดต้นทุน" เหมือนกันเป๊ะ.
+  const fWarehouseName = resolveContainerWarehouse(cntRows);
   const fWarehouseChina = String(firstRow.fwarehousechina ?? "");
   // Transport mode is decoded from the cabinet NAME (GZS=เรือ · GZE/EK=รถ · GZA=อากาศ),
   // which is authoritative — the stored ftransporttype can be wrong (owner
@@ -484,14 +493,20 @@ export default async function AdminReportCntDetailPage({
     // page self-consistent + correct without a prod rewrite, and self-heals when
     // the cost is next recomputed. Paid containers keep their LOCKED stored cost
     // (may be a manual adjustment); an unfilled rate (0) also keeps the stored value.
-    const storedCost            = Number(r.fcosttotalprice ?? 0);
-    const costBasisIsWeight     = WEIGHT_DEFAULT_WAREHOUSES.has(fWarehouseName);
+    // 2026-07-23 — กฎทั้งหมดย้ายไป lib/forwarder/container-cost-engine ตัวเดียว
+    // เพื่อให้หน้า รายการตู้ (LIST) กับหน้านี้ (DETAIL) คิดต้นทุนด้วยเครื่องเดียวกัน
+    // (owner: "ทำไมไปโชว์ −เป็นแสนบาท แต่พอกดข้างในบวกสามหมื่นห้า"). พฤติกรรมคงเดิม:
+    // ตู้ที่จ่ายค่าตู้แล้ว/ไม่มีเรท → ล็อกค่าที่เก็บไว้ · นอกนั้นคิดสด เรท × ฐานตาม carrier.
+    const rowCost               = resolveRowContainerCost(r, {
+      rates: { p1, p2, p3, p4 },
+      containerWarehouse: fWarehouseName,
+      cabinetIsPaid,
+    });
     // row-TOTAL CBM (famountcount rule · quantities.ts SOT) — raw fvolume on a
     // per-box row under-computed BOTH live cost and live sell by ×famount.
     const rowTotalCbm           = totalCbmOf(r);
-    const costDim               = costBasisIsWeight ? Number(r.fweight ?? 0) : rowTotalCbm;
-    const liveCost              = Math.round(rate * costDim * 100) / 100;
-    const fCostTotalPrice       = (!cabinetIsPaid && rate > 0) ? liveCost : storedCost;
+    const costDim               = rowCost.dimension;
+    const fCostTotalPrice       = rowCost.cost;
 
     // SELL (ราคาขาย) self-heal — mirror the live-COST above (ภูม 2026-06-30). A
     // MOMO/auto-imported row carries the resolved SELL rate (frefrate) but its
