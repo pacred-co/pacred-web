@@ -909,10 +909,10 @@ export default async function AdminDriverBatchDetailPage({
                     </div>
                     <div className="flex flex-wrap gap-1">
                       <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
-                        allDone ? ITEM_STATUS_CLS["2"] : delivered > 0 ? ITEM_STATUS_CLS["1"] : ITEM_STATUS_CLS[""]
+                        allDone ? ITEM_STATUS_CLS["2"] : delivered > 0 ? ITEM_STATUS_CLS["1"] : "bg-amber-500 text-white border-transparent"
                       }`}>
                         {allDone ? <CheckCircle2 className="h-3 w-3" /> : <Truck className="h-3 w-3" />}
-                        {allDone ? "ส่งสำเร็จ" : `ส่งแล้ว ${delivered}/${total}`}
+                        {allDone ? "ส่งสำเร็จ" : delivered > 0 ? `ส่งแล้ว ${delivered}/${total}` : "กำลังจัดส่ง"}
                       </span>
                       {failed > 0 && (
                         <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${ITEM_STATUS_CLS["3"]}`}>
@@ -1191,28 +1191,28 @@ export default async function AdminDriverBatchDetailPage({
             const heroPhoto = deliveryPhotos[0] ?? stop.items.find((e) => e.coverUrl)?.coverUrl ?? null;
             return (
               <div key={stop.addressKey} className="rounded-2xl border border-border bg-white shadow-sm p-4 space-y-3">
-                {/* แถวหัว = ปักหมุดชิดขวา. ป้าย "ลำดับส่ง / N รายการ" + วงกลมเลข/สถานะ
-                    ถูกถอดออก 2026-07-24 (owner "เอาออก") — จำนวนดูได้จากตารางย่อ · สถานะ
-                    อยู่แถว badge. ปักหมุดวางไว้ให้เห็นตั้งแต่หัวการ์ด (คนขับใช้หน้าบ้านลูกค้า). */}
-                <div className="flex items-center">
-                  <div className="ml-auto shrink-0">
-                    <PinLocationButton fids={stopFids} addressText={addrText} hasPin={hasPin} />
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {/* แท็กประเภทขนส่ง (ปอน 2026-07-24 · แถวเดียวกับสถานะ) — PRF/เหมาๆ ฯลฯ */}
+                {/* แถวเดียว (owner 2026-07-24 "ทำให้เป็นแถวเดียว") — badge ขนส่ง+สถานะ ชิดซ้าย
+                    · ปักหมุด ชิดขวา. ป้าย "ลำดับส่ง / N รายการ" + วงกลมเลข/สถานะ ถอดออกแล้ว. */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {/* แท็กประเภทขนส่ง — PRF/เหมาๆ ฯลฯ */}
                   <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${isSelfDelivery(f.fshipby) ? "bg-rose-600 text-white" : "border border-slate-300 bg-slate-200 text-slate-700"}`}>
                     <Truck className="h-3 w-3" /> {shipByLabel(f.fshipby)}
                   </span>
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${allDone ? ITEM_STATUS_CLS["2"] : delivered > 0 ? ITEM_STATUS_CLS["1"] : ITEM_STATUS_CLS[""]}`}>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${allDone ? ITEM_STATUS_CLS["2"] : delivered > 0 ? ITEM_STATUS_CLS["1"] : "bg-amber-500 text-white border-transparent"}`}>
                     {allDone ? <CheckCircle2 className="h-3 w-3" /> : <Truck className="h-3 w-3" />}
-                    {allDone ? "สำเร็จ" : `ส่งแล้ว ${delivered}/${total}`}
+                    {/* ยังไม่ส่งเลย = กำลังจัดส่ง (ออกรถแล้ว/ระหว่างทาง) · ส่งบางส่วน = ส่งแล้ว X/M
+                        · ครบ = สำเร็จ (owner 2026-07-24). */}
+                    {allDone ? "สำเร็จ" : delivered > 0 ? `ส่งแล้ว ${delivered}/${total}` : "กำลังจัดส่ง"}
                   </span>
                   {failed > 0 && (
                     <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${ITEM_STATUS_CLS["3"]}`}>
                       <AlertTriangle className="h-3 w-3" /> ส่งไม่ได้ {failed}
                     </span>
                   )}
+                  {/* ปักหมุด ชิดขวาสุดของแถวเดียวกัน */}
+                  <div className="ml-auto shrink-0">
+                    <PinLocationButton fids={stopFids} addressText={addrText} hasPin={hasPin} />
+                  </div>
                 </div>
 
                 {/* รูป+แก้ภาพ | ลูกค้า+ที่อยู่+ติดต่อ */}
@@ -1270,22 +1270,23 @@ export default async function AdminDriverBatchDetailPage({
 
                     {/* ตารางย่อ — อยู่ในคอลัมน์ข้อมูล (ขวา) เยื้องเริ่มตรงกับช่องเบอร์โทร
                         แทนการกินเต็มความกว้างใต้รูป (owner 2026-07-24). */}
+                    {/* ตารางบางลง (owner 2026-07-24) — cell เตี้ยลง py-1→0.5 · หัว text-[10px] */}
                     <div className="overflow-hidden rounded-lg border border-border">
-                      <table className="w-full text-center text-xs">
-                        <thead className="bg-surface-alt/60 text-[11px] text-muted">
+                      <table className="w-full text-center text-[11px]">
+                        <thead className="bg-surface-alt/60 text-[10px] text-muted">
                           <tr>
-                            <th className="px-2 py-1 font-semibold">แทรคกิ้ง</th>
-                            <th className="px-2 py-1 font-semibold">กล่อง</th>
-                            <th className="px-2 py-1 font-semibold">CBM</th>
-                            <th className="px-2 py-1 font-semibold">KG</th>
+                            <th className="px-2 py-0.5 font-semibold">แทรคกิ้ง</th>
+                            <th className="px-2 py-0.5 font-semibold">กล่อง</th>
+                            <th className="px-2 py-0.5 font-semibold">CBM</th>
+                            <th className="px-2 py-0.5 font-semibold">KG</th>
                           </tr>
                         </thead>
                         <tbody>
                           <tr className="font-semibold">
-                            <td className="border-t border-border px-2 py-1.5">{total}</td>
-                            <td className="border-t border-border px-2 py-1.5">{stop.totalBoxes}</td>
-                            <td className="border-t border-border px-2 py-1.5">{stop.totalVolume.toFixed(5)}</td>
-                            <td className="border-t border-border px-2 py-1.5">{stop.totalWeight.toFixed(2)}</td>
+                            <td className="border-t border-border px-2 py-0.5">{total}</td>
+                            <td className="border-t border-border px-2 py-0.5">{stop.totalBoxes}</td>
+                            <td className="border-t border-border px-2 py-0.5">{stop.totalVolume.toFixed(5)}</td>
+                            <td className="border-t border-border px-2 py-0.5">{stop.totalWeight.toFixed(2)}</td>
                           </tr>
                         </tbody>
                       </table>
