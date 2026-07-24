@@ -16,7 +16,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
-import { Pin, LocateFixed, ExternalLink, Loader2 } from "lucide-react";
+import { MapPin, LocateFixed, ExternalLink, Loader2 } from "lucide-react";
 import { PacredDialog } from "@/components/ui/pacred-dialog";
 import { pinDeliveryLocation } from "@/actions/admin/driver-pin-location";
 
@@ -123,21 +123,24 @@ export function PinLocationButton({
 
   return (
     <>
-      {/* ไม่ใช้ badge (พื้นทึบ+ขอบมน) แล้ว — ปอน 2026-07-24 "เอา badge ออก ทำตัว
-          ใหญ่ขึ้น ไอคอนด้วย ให้รู้ว่ากดได้ชัดๆ" → "เอาเป็นสีแดงเลย ตัวใหญ่กว่านี้".
-          เป็นปุ่มไอคอน+ตัวหนังสือสีแดง (rose-600) ตัวหนา · underline-on-hover =
-          สัญญาณ "กดได้". ไอคอน Pin (เข็มหมุด/หมุดปัก) ใหญ่ h-5 ต่างจาก MapPin
-          (หมุดแผนที่) ของปุ่ม "แผนที่/GoogleMaps" → มองแวบเดียวรู้ว่าอันไหน
-          "ดู" อันไหน "ปัก". */}
+      {/* ปุ่มไอคอน+ตัวหนังสือสีแดง (rose-600) ตัวหนา · underline-on-hover = สัญญาณ
+          "กดได้" (ปอน 2026-07-24 "เอา badge ออก · สีแดง · ตัวใหญ่"). ไอคอน MapPin
+          (หมุดตำแหน่ง · owner "ใช้ไอคอนแบบนี้") h-5. */}
       <button
         type="button"
         onClick={requestFix}
         className={
           className ??
-          "inline-flex shrink-0 items-center gap-1 text-[15px] font-bold text-rose-600 underline-offset-2 hover:underline"
+          "group inline-flex shrink-0 items-center gap-1.5 text-rose-600 hover:underline"
         }
       >
-        <Pin className="h-5 w-5" /> {hasPin ? "ปักหมุดใหม่" : "ปักหมุด"}
+        <MapPin className="h-5 w-5 shrink-0" />
+        {/* 2 บรรทัดคู่ไอคอน (owner 2026-07-24) — "ปักหมุด" หนาแดง · "ที่อยู่ลูกค้า"
+            เล็กบางลง ให้บาลานซ์ความสูงกับไอคอน h-5. */}
+        <span className="flex flex-col items-start gap-0.5 leading-none">
+          <span className="text-[15px] font-bold">{hasPin ? "ปักหมุดใหม่" : "ปักหมุด"}</span>
+          <span className="text-[10px] font-semibold text-rose-600">ที่อยู่ลูกค้า</span>
+        </span>
       </button>
 
       <PacredDialog dialogRef={dialogRef} title="ปักหมุดตำแหน่งจัดส่ง" onClose={close}>
@@ -217,7 +220,7 @@ export function PinLocationButton({
                   disabled={!fix || locating || pending}
                   className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300"
                 >
-                  <Pin className="h-4 w-4" />
+                  <MapPin className="h-4 w-4" />
                   {pending ? "กำลังบันทึก…" : "ยืนยันปักหมุด"}
                 </button>
               </>
