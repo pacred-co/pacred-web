@@ -12,12 +12,13 @@
 | [`README.md`](README.md) | ✅ index + document-model + 20-collection map + 68-revenue-article map + "ยืนยันจากภาพจริง" (stepper/doc-codes/GL-per-line) |
 | [`revenue-documents.md`](revenue-documents.md) | ✅ **เต็ม · image-informed** — ฝั่งรับเงิน 8 หมวด (68 บทความ · ดูรูป 126+รูป) · รหัสเอกสาร QO/DR/DRT/IV/IVT/RE/RT/TIV/CN(T)/DBN(T)/BN · GL จริง (212104/215102↔215101/115403/113101/410101/510103) · ตาราง Dr/Cr · สรุปสร้างระบบเรา |
 | [`expense-documents.md`](expense-documents.md) | ✅ **core money-flow เก็บเต็ม image-informed** (2026-07-24 · 15 บทความ · 1.68M tok) — GL Dr/Cr จริงทุกใบ (PO/DP/EXP/บันทึกซื้อ+FX¥/รับใบเสร็จ+VAT/WHT/เงินเดือน/ใบกำกับซื้อ/ใบรวมจ่าย/ลดหนี้-เพิ่มหนี้) + **chart of accounts (21 GL)** + สรุปพิมพ์เขียว · 🟡 peripheral ~77 บทความ ยัง map-only (map อยู่ท้ายไฟล์) |
+| [`tax-documents.md`](tax-documents.md) | ✅ **ภาษี PEAK Tax core เก็บเต็ม image-informed** (2026-07-24 · 16 บทความ · 1.64M tok) — **ปิด gap VAT period-close แล้ว!** สถาปัตย์ 2-layer (bookkeeping GL vs tax-filing form-prep) · ภ.พ.30 JVTX ปิดงวด (Dr 215101/Cr 115401/Cr **215351 เจ้าหนี้สรรพากร ภพ.30 รอชำระ**) + input>output (ยกไป/ขอคืน) · ภ.ง.ด.1/3/53 GL 2 จังหวะ (reclass 215201-204→**215352/355** → จ่าย) · ใบ 50-ทวิ form-only + ฟิลด์ครบ · chart of accounts ภาษี + doc-series + พิมพ์เขียว |
 
 ## 🔴 ยังไม่เก็บ (ลุยต่อ · เรียงลำดับ)
 1. ✅ **ฝั่งจ่าย core เก็บแล้ว** (2026-07-24) — เหลือ peripheral ~77 บทความ (variant/edge/settings · ลงบัญชี pattern ซ้ำ core · **optional** · map ท้าย `expense-documents.md`)
-2. 🔴 **ภาษี PEAK Tax (36 บทความ) = priority ถัดไป** — คอลเลกชัน `collections/3474326-จัดการภาษี-peak-tax` (ภพ.30/ภงด/e-tax) → `tax-documents.md` · ⚠️ ปิด gap ที่ core expense เจอ: การ **offset 215101 ภาษีขาย vs 115401 ภาษีซื้อ → เจ้าหนี้สรรพากร ภพ.30** (ปิดงวด VAT) + กรณี input>output (ขอคืน)
-3. **ข้อมูลการเงิน-บัญชี (56)** — ผังบัญชี/สมุดรายวัน/งบ/ปิดงวด (หา collection id จาก `intercom.help/peak/en/`)
-4. (option) expense peripheral 77 · สินค้า/ผู้ติดต่อ/รายงาน/ตั้งค่า
+2. ✅ **ภาษี PEAK Tax core เก็บแล้ว** (2026-07-24 → `tax-documents.md`) — **ปิด gap VAT period-close + WHT period-close + input>output** ครบ · เหลือ peripheral ~20 บทความ (ภพ.36/ภาษีต่างประเทศ/e-tax variant/settings · **optional**)
+3. **ข้อมูลการเงิน-บัญชี (56) = priority ถัดไป** — ผังบัญชี/สมุดรายวัน/งบการเงิน/ปิดงวดบัญชี (หา collection id จาก `intercom.help/peak/en/`) — เป็นชิ้นสุดท้ายของ core (bookkeeping foundation: ผังบัญชี + งบ + ปิดงวดปี)
+4. (option) expense peripheral 77 + tax peripheral 20 · สินค้า/ผู้ติดต่อ/รายงาน/ตั้งค่า
 
 ---
 
@@ -49,11 +50,12 @@
 ## 🧭 คำสั่ง resume (คอมบ้าน)
 ```bash
 git fetch origin && git checkout Poom-pacred && git pull origin Poom-pacred
-# อ่าน README.md + revenue-documents.md (ดู format เป้าหมาย) + expense-documents.md (article-ids)
-# แล้ว: รัน Workflow เก็บ expense (ตาม method ข้างบน · batch จาก expense-documents.md) → เขียนทับ expense-documents.md
-# ต่อด้วย tax (collections/3474326) → tax-documents.md
+# อ่าน README.md + revenue/expense/tax-documents.md (ดู format เป้าหมาย)
+# ชิ้นสุดท้ายของ core: การเงิน-บัญชี (56) — ผังบัญชี/สมุดรายวัน/งบ/ปิดงวดปี
+#   หา collection id: curl intercom.help/peak/en/ แล้ว grep collections → resolve URL (ตาม method)
+#   รัน Workflow (5-6 agent) เก็บ → accounting-documents.md
 ```
-> **ก่อนเริ่ม:** `ls supabase/migrations | tail` (NEXT-FREE mig · ตอนนี้ 0265) · งานนี้ไม่แตะ code/mig — เก็บ docs อย่างเดียว push Poom-pacred.
+> **ก่อนเริ่ม:** `ls supabase/migrations | tail` (NEXT-FREE mig) · งานนี้ไม่แตะ code/mig — เก็บ docs อย่างเดียว push Poom-pacred.
 
 ## 💎 สิ่งที่ล็อกได้แล้ว (พิมพ์เขียวระบบบัญชี Pacred)
 1. ทุกเอกสารมี **doc-code + running series แยกต่อชนิด** (`<CODE>-YYYYMM#####`)
@@ -62,3 +64,6 @@ git fetch origin && git checkout Poom-pacred && git pull origin Poom-pacred
 4. **ใบวางบิล (BN) = billing-run เรา** · **ใบแจ้งหนี้ = ใบส่งของ = บันทึกลูกหนี้** (ใบเดียว)
 5. **ใบลดหนี้/เพิ่มหนี้** = ปรับยอดหลังออกเอกสาร (เราไม่มี — ต้องเพิ่ม) · **มัดจำ** พัก 212104 แล้วตัดตอนออกบิลจริง
 6. ฝั่งจ่าย = mirror (PO↔QO · บันทึกซื้อ↔IV · จ่ายชำระ↔RE · ใบกำกับภาษีซื้อ↔TIV · ใบรวมจ่าย↔BN) + input VAT(ขอคืน) + WHT(หักคู่ค้า/ออกแทน/50ทวิ)
+7. **สถาปัตย์ 2-layer (tax):** bookkeeping GL (post ตอนออกเอกสาร) แยกจาก tax-filing form-prep (ดึง SOT มาประกอบแบบ · ไม่ post ซ้ำ) — **ยกเว้น closing-JV ปิดงวด**
+8. **VAT period-close (JVTX):** Dr 215101 / Cr 115401 / Cr **215351 เจ้าหนี้สรรพากร ภพ.30 รอชำระ** (สุทธิ) → จ่าย Dr 215351/Cr ธนาคาร · input>output = ยกไปข้อ10 หรือขอคืน
+9. **WHT period-close:** reclass 215201-204 ค้างจ่าย → **215352/353/355 รอชำระ** ตอนปิดแบบ ภ.ง.ด. → จ่ายเข้าธนาคาร · ใบ 50-ทวิ = form-only
