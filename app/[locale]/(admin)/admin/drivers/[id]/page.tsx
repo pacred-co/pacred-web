@@ -1194,9 +1194,9 @@ export default async function AdminDriverBatchDetailPage({
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-500 text-base font-bold text-white shadow-sm">
                     {idx + 1}
                   </span>
-                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 ${allDone ? "border-[#28d094] bg-[#28d094] text-white" : "border-[#ff4961] text-[#ff4961]"}`}>
-                    {allDone ? <CheckCircle2 className="h-5 w-5" /> : <Truck className="h-4 w-4" />}
-                  </span>
+                  {/* วงกลมสถานะ (เขียว/แดง) ถูกถอดออก 2026-07-24 (owner) — มันซ้ำกับ
+                      badge "สำเร็จ/ส่งแล้ว" ในแถวล่าง. สถานะงานอยู่ที่แถว badge ที่เดียว
+                      (ขนส่ง + สถานะ) เพื่อไม่ให้ซ้ำซ้อน. */}
                   <div className="leading-tight">
                     <p className="text-[11px] text-muted">ลำดับส่ง</p>
                     <p className="text-base font-bold">{total} รายการ</p>
@@ -1243,9 +1243,11 @@ export default async function AdminDriverBatchDetailPage({
                   </div>
 
                   <div className="min-w-0 flex-1 space-y-1.5">
-                    <div className="leading-tight">
-                      {f.userid && <span className="font-mono text-sm font-bold text-primary-600">{f.userid} </span>}
-                      <span className="text-sm font-bold text-foreground">{customerNameOf(f.userid)}</span>
+                    {/* รหัส + ชื่อ บรรทัดเดียว (owner 2026-07-24) — ชื่อบริษัทยาวตัด …
+                        ท้าย (truncate) แทนการตกไปบรรทัด 2. */}
+                    <div className="flex items-baseline gap-1 leading-tight">
+                      {f.userid && <span className="shrink-0 font-mono text-sm font-bold text-primary-600">{f.userid}</span>}
+                      <span className="truncate text-sm font-bold text-foreground">{customerNameOf(f.userid)}</span>
                     </div>
                     {placeholder ? (
                       <p className="inline-block rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800">⚠️ ยังไม่ระบุที่อยู่จัดส่ง</p>
