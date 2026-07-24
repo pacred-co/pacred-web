@@ -396,6 +396,10 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
     "warehouse",
     "purchaser",
     "purchaser_lead",
+    // driver — sidebar ของคนขับโชว์ลิงก์ "หมายเหตุนำเข้า" (มาที่นี่ผ่าน ?filter=note)
+    // ตาม legacy PCS ที่ warehouse/driver เห็นหน้าหมายเหตุนำเข้าได้ → ต้องเข้าถึงได้
+    // ไม่งั้น notFound()=404 (owner 2026-07-24 · §0d reachability).
+    "driver",
   ]);
 
   const sp = await searchParams;

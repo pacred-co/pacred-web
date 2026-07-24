@@ -206,6 +206,11 @@ export default async function AdminServiceOrdersPage({
     "accounting",
     "purchaser",
     "purchaser_lead",
+    // driver/warehouse — sidebar ของคนขับ/คลังโชว์ลิงก์ "หมายเหตุฝากสั่ง" (มาที่นี่
+    // ผ่าน ?filter=note) ตาม legacy PCS ที่ warehouse/driver เห็นหน้าหมายเหตุได้ →
+    // ต้องเข้าถึงได้ ไม่งั้น notFound()=404 (owner 2026-07-24 · §0d reachability).
+    "driver",
+    "warehouse",
   ]);
 
   const sp = await searchParams;

@@ -18,7 +18,7 @@
  *   Audit source: docs/research/d1-fidelity-admin.md §1
  */
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -568,6 +568,15 @@ export function AdminSidebar({
   };
 
   const closeMobile = () => setOpenMobile(false);
+
+  // แถบล่างมือถือของคนขับ (DriverBottomNav) มีปุ่ม "เมนู" ที่ต้องเปิด sidebar ตัวนี้
+  // (เหมือนปุ่มแฮมเบอร์เกอร์บนซ้าย · owner 2026-07-24). ทั้งสองอยู่คนละคอมโพเนนต์ →
+  // สื่อสารผ่าน custom window event แทนการยก state ขึ้น layout (เบา ไม่แตะโครง).
+  useEffect(() => {
+    const openFromBottomNav = () => setOpenMobile(true);
+    window.addEventListener("pacred:open-admin-sidebar", openFromBottomNav);
+    return () => window.removeEventListener("pacred:open-admin-sidebar", openFromBottomNav);
+  }, []);
 
   // Pin / collapse the desktop icon rail (owner 2026-06-13 "กดปุ่ม pr แล้วแถบ
   // ขึ้นค้างไว้"): clicking the PR brand logo toggles body.admin-sidebar-rail
