@@ -32,6 +32,7 @@ import { routeOrderOf } from "@/lib/admin/driver-route-order";
 import { BILL_BADGE_CLASS, DriverBillViewModal } from "./driver-bill-view-modal";
 import { BatchManage, RemoveItemButton } from "./batch-manage";
 import { PinLocationButton } from "./pin-location-button";
+import { ExpandableText } from "@/components/admin/expandable-text";
 import { CourierUrlInput } from "./courier-url-input";
 import { TruckBookingCopyBox } from "./truck-booking-copy-box";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
@@ -1252,11 +1253,12 @@ export default async function AdminDriverBatchDetailPage({
                     {placeholder ? (
                       <p className="inline-block rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800">⚠️ ยังไม่ระบุที่อยู่จัดส่ง</p>
                     ) : (
-                      <p className="text-xs leading-relaxed text-foreground/80">
+                      // ที่อยู่จำกัด 2 บรรทัด · ยาวเกินมี … + ปุ่มเพิ่มเติม กางเต็ม (owner 2026-07-24)
+                      <ExpandableText className="text-xs leading-relaxed text-foreground/80">
                         {f.faddressno ?? ""} ตำบล/แขวง {f.faddresssubdistrict ?? ""} อำเภอ/เขต{" "}
                         <span className="rounded bg-amber-100 px-1 text-amber-800">{f.faddressdistrict ?? ""}</span>{" "}
                         จังหวัด {f.faddressprovince ?? ""} {f.faddresszipcode ?? ""}
-                      </p>
+                      </ExpandableText>
                     )}
                     <div className="flex items-center gap-1.5">
                       {phones.map((p) => (
