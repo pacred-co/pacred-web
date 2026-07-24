@@ -1,13 +1,23 @@
 /**
  * ล็อกกฎ "จำนวนชิ้น + ราคาเฉลี่ยต่อชิ้น" ของหัวร้านค้า ฝากสั่งซื้อ.
  *
- * เคสตัวเลขจริงทั้งหมดมาจาก prod (สแกนทุกกลุ่มร้าน ทุกออเดอร์ 2026-07-24) —
- * โดยเฉพาะ 3 เคสร้านขายส่งราคาต่ำที่พิสูจน์ว่า 2 ตำแหน่งไม่พอ.
+ * 🔴 กฎเหล็ก (owner 2026-07-24): *"ถ้าคำนวณกลับ คำนวณย้อนกลับสลับไปมาในแต่ละค่า
+ * ของชิปเม้นนั้น เลขต้องกลับมาตรงกันทั้งหมดครับ ขยายทศนิยมเป็นตามจริงเลยครับ
+ * มันกระทบกับเรื่องเงินเรื่องบัญชีครับ"*
+ * → เกณฑ์คือ **เฉลี่ย × ชิ้น = ยอดรวม เป๊ะถึงสตางค์** ไม่ใช่ "คลาดน้อย"
+ *
+ * ตัวเลขทุกเคสมาจาก prod จริง (สแกนทุกกลุ่มร้าน ทุกออเดอร์ 2026-07-24).
  *
  * Run: tsx lib/shop-order/shop-group-summary.test.ts
  */
 import assert from "node:assert/strict";
-import { shopPieces, shopAveragePerPiece, formatAveragePerPiece } from "./shop-group-summary";
+import {
+  shopPieces,
+  shopAveragePerPiece,
+  formatAveragePerPiece,
+  reconcilableDecimals,
+  splitAveragePerPiece,
+} from "./shop-group-summary";
 
 let passed = 0;
 function ok(name: string, fn: () => void) {
@@ -16,13 +26,19 @@ function ok(name: string, fn: () => void) {
   console.log(`  ✓ ${name}`);
 }
 
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+/** คูณกลับจากเลขที่หน้าจอโชว์จริง — ต้องได้ยอดรวมเดิมเป๊ะ. */
+function multiplyBack(total: number, pieces: number): number {
+  const shown = Number(formatAveragePerPiece(total, pieces).replace(/,/g, ""));
+  return round2(shown * pieces);
+}
+
 console.log("shopPieces — ชิ้น ≠ รายการ");
 
-ok("Σ camount ไม่ใช่จำนวนบรรทัด (เคสจริง 祥超饰品168: 52 บรรทัด = 756 ชิ้น)", () => {
+ok("Σ camount ไม่ใช่จำนวนบรรทัด (52 บรรทัด × 12 = 624 ชิ้น)", () => {
   const rows = Array.from({ length: 52 }, () => ({ camount: 12 }));
-  rows[0]!.camount = 12;
-  const { pieces } = shopPieces(rows);
-  assert.equal(pieces, 624, "52 บรรทัด × 12 = 624 ชิ้น (ไม่ใช่ 52)");
+  assert.equal(shopPieces(rows).pieces, 624);
 });
 
 ok("แถวคืนเงินไม่นับเป็นชิ้น แต่รายงานแยกให้เห็น", () => {
@@ -36,12 +52,9 @@ ok("แถวคืนเงินไม่นับเป็นชิ้น แ
 });
 
 ok("camount เพี้ยน/ว่าง → นับ 0 ไม่พัง", () => {
-  const { pieces } = shopPieces([
-    { camount: Number.NaN },
-    { camount: 3 },
-    { camount: undefined as unknown as number },
-  ]);
-  assert.equal(pieces, 3);
+  assert.equal(
+    shopPieces([{ camount: Number.NaN }, { camount: 3 }, { camount: undefined as unknown as number }]).pieces,
+    3);
 });
 
 console.log("\nshopAveragePerPiece — ห้ามหารศูนย์");
@@ -55,92 +68,104 @@ ok("ชิ้นติดลบ / ค่าไม่ใช่ตัวเลข 
   assert.equal(shopAveragePerPiece(Number.NaN, 10), null);
 });
 
-ok("เคสจริง 嘉立饰品厂 (P22453): ¥3,686.50 ÷ 1,140 ชิ้น", () => {
-  const avg = shopAveragePerPiece(3686.5, 1140)!;
-  assert.ok(Math.abs(avg - 3.23377) < 0.0001, `ได้ ${avg}`);
-  assert.equal(formatAveragePerPiece(avg), "3.23");
+console.log("\n🔴 reconcilableDecimals — ทศนิยมต้องพอให้คูณกลับได้เป๊ะ");
+
+ok("ยิ่งชิ้นเยอะ ยิ่งต้องละเอียด (ความละเอียดขึ้นกับจำนวนชิ้น ไม่ใช่ขนาดของราคา)", () => {
+  const dSmall = reconcilableDecimals(36.5, 20);
+  const dBig = reconcilableDecimals(9851.19, 19900);
+  assert.ok(dBig > dSmall, `20 ชิ้นใช้ ${dSmall} ตำแหน่ง · 19,900 ชิ้นใช้ ${dBig}`);
 });
 
-ok("เคสจริง 祥超饰品168 (P22453): ¥1,716.20 ÷ 756 ชิ้น", () => {
-  const avg = shopAveragePerPiece(1716.2, 756)!;
-  assert.equal(formatAveragePerPiece(avg), "2.27");
+ok("หารลงตัว → 2 ตำแหน่งพอ ไม่ขยายเกินจำเป็น", () => {
+  assert.equal(reconcilableDecimals(247.5, 165), 2); // = 1.50 พอดี
+  assert.equal(formatAveragePerPiece(247.5, 165), "1.50");
 });
 
-console.log("\nformatAveragePerPiece — 🔴 ทศนิยมต้องพอ (วัดเป็น % ไม่ใช่บาท)");
-
-/** ความคลาดเคลื่อนสัมพัทธ์ของเลขที่โชว์ เทียบค่าจริง (เป็น %). */
-function relErrPct(shown: string, exact: number): number {
-  return (Math.abs(Number(shown.replace(/,/g, "")) - exact) / exact) * 100;
-}
-
-ok("🔴 P22352 ¥1,838.70 ÷ 10,000 → 0.1839 (2 ตำแหน่งคลาด 2.1% = ราคาผิด)", () => {
-  const exact = shopAveragePerPiece(1838.7, 10000)!;
-  assert.equal(formatAveragePerPiece(exact), "0.1839");
-  assert.ok(relErrPct("0.1839", exact) < 0.05, "4 ตำแหน่ง ต้องคลาด < 0.05%");
-  assert.ok(relErrPct("0.18", exact) > 2, "พิสูจน์ว่า 2 ตำแหน่งใช้ไม่ได้จริง (นี่คือเหตุผลของกฎ)");
+ok("ยอด 0 → 2 ตำแหน่ง", () => {
+  assert.equal(reconcilableDecimals(0, 100), 2);
+  assert.equal(formatAveragePerPiece(0, 100), "0.00");
 });
 
-ok("🔴 P22367 ¥9,851.19 ÷ 19,900 → 0.495 (2 ตำแหน่งคลาด ~1%)", () => {
-  const exact = shopAveragePerPiece(9851.19, 19900)!;
-  assert.equal(formatAveragePerPiece(exact), "0.495");
-  assert.ok(relErrPct("0.495", exact) < 0.05);
-  assert.ok(relErrPct("0.50", exact) > 0.9);
-});
+console.log("\n🔴 INVARIANT — เฉลี่ยที่โชว์ × ชิ้น = ยอดรวม เป๊ะถึงสตางค์");
 
-ok("🔴 P22349 ¥3,412.39 ÷ 6,000 → 0.5687", () => {
-  const exact = shopAveragePerPiece(3412.39, 6000)!;
-  assert.equal(formatAveragePerPiece(exact), "0.5687");
-  assert.ok(relErrPct("0.5687", exact) < 0.05);
-});
+/** 15 กลุ่มร้านจริงบน prod — ครอบตั้งแต่ของถูกหลักสตางค์ ถึงของแพงหลักหมื่น. */
+const REAL: Array<[number, number, string]> = [
+  [3686.5, 1140, "嘉立饰品厂 P22453"],
+  [1716.2, 756, "祥超饰品168 P22453"],
+  [2279, 380, "义乌市卿闻饰品厂 P22453"],
+  [1838.7, 10000, "泰州市固卓不锈钢 P22352 (เคยโชว์ 0.18 → 1,800)"],
+  [9851.19, 19900, "广州海帝博斯 P22367 (เคยโชว์ 0.50 → 9,950)"],
+  [3412.39, 6000, "广州海帝博斯 P22349"],
+  [36764, 240, "抹香鲸电子 P22359"],
+  [38310, 195, "抹香鲸电子 P22324"],
+  [247.5, 165, "顺成饰品电子 P22328"],
+  [593, 1200, "海帝博斯 P22326"],
+  [2249.13, 4200, "海帝博斯 P22331"],
+  [1506.7, 630, "新之叶电子 P22328"],
+  [36.5, 20, "董妈百货 P22322"],
+  [1198.8, 17 * 10, "宸迎饰品"],
+  [477.9, 9 * 30, "涵锜饰品"],
+];
 
-ok("ค่า ≥ 1 คงที่ 2 ตำแหน่งเสมอ (เงินปกติไม่รกตา)", () => {
-  assert.equal(formatAveragePerPiece(153.18333), "153.18");
-  assert.equal(formatAveragePerPiece(1), "1.00");
-  assert.equal(formatAveragePerPiece(196.4615), "196.46");
-});
-
-ok("0 → 0.00 (ไม่ใช่ 0.0000)", () => {
-  assert.equal(formatAveragePerPiece(0), "0.00");
-});
-
-ok("null / NaN → — (ไม่โชว์เลขมั่ว)", () => {
-  assert.equal(formatAveragePerPiece(null), "—");
-  assert.equal(formatAveragePerPiece(Number.NaN), "—");
-});
-
-ok("สกุลต่างประเทศใช้ en-US (ตรงกับ helper fcur บนหน้าจอ)", () => {
-  assert.equal(formatAveragePerPiece(1234.5, "en-US"), "1,234.50");
-  assert.equal(formatAveragePerPiece(0.1839, "en-US"), "0.1839");
-});
-
-console.log("\ninvariant — ราคาที่โชว์ต้องเชื่อได้ ≤ 0.5% ทุกเคสจริงบน prod");
-
-ok("ทุกกลุ่มร้านจริงที่สแกนมา: เลขที่โชว์คลาดจากค่าจริง ≤ 0.5%", () => {
-  // 12 กลุ่มร้านจริงจาก prod (ครอบทั้งของถูกมากหลักสตางค์ → ของแพงหลักหมื่น)
-  const real: Array<[number, number]> = [
-    [3686.5, 1140], [1716.2, 756], [2279, 380], [1838.7, 10000],
-    [9851.19, 19900], [3412.39, 6000], [36764, 240], [38310, 195],
-    [247.5, 165], [593, 1200], [2249.13, 4200], [1506.7, 630],
-  ];
-  for (const [total, pieces] of real) {
-    const exact = shopAveragePerPiece(total, pieces)!;
-    const shown = formatAveragePerPiece(exact);
-    assert.ok(
-      relErrPct(shown, exact) <= 0.5,
-      `${total} ÷ ${pieces} → โชว์ ${shown} · จริง ${exact} · คลาด ${relErrPct(shown, exact).toFixed(3)}%`,
+ok("ทุกเคสจริง 15 กลุ่ม: คูณกลับได้ยอดรวมเดิมเป๊ะ (ไม่ใช่ใกล้เคียง)", () => {
+  for (const [total, pieces, label] of REAL) {
+    const back = multiplyBack(total, pieces);
+    assert.equal(
+      back, round2(total),
+      `${label}: ${total} ÷ ${pieces} → โชว์ ${formatAveragePerPiece(total, pieces)} · คูณกลับ ${back}`,
     );
   }
 });
 
+ok("🔴 กันถอยหลัง: 2 ตำแหน่งตายตัว จะ FAIL เคสพวกนี้ (เหตุผลที่ต้องขยาย)", () => {
+  const twoDp = (t: number, p: number) => round2(Number((t / p).toFixed(2)) * p);
+  assert.notEqual(twoDp(1838.7, 10000), round2(1838.7));  // 1,800.00
+  assert.notEqual(twoDp(9851.19, 19900), round2(9851.19)); // 9,950.00
+  assert.notEqual(twoDp(3686.5, 1140), round2(3686.5));    // 3,682.20
+});
+
+ok("สุ่มตรวจ 3,000 ชุด (ยอด × จำนวนชิ้น หลากหลาย) — คูณกลับตรงทุกชุด", () => {
+  let seed = 20260724;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  for (let i = 0; i < 3000; i += 1) {
+    const pieces = 1 + Math.floor(rnd() * 25000);
+    const total = round2(rnd() * 50000);
+    if (total === 0) continue;
+    assert.equal(
+      multiplyBack(total, pieces), round2(total),
+      `${total} ÷ ${pieces} → ${formatAveragePerPiece(total, pieces)}`,
+    );
+  }
+});
+
+console.log("\nการแสดงผล");
+
 ok("ตัวส่วนต้องมาจากชุดแถวเดียวกับตัวเศษ (แถวคืนเงินตัดทั้งคู่)", () => {
-  // ร้านมี 3 บรรทัด · 1 บรรทัดคืนเงิน → เงินและชิ้นต้องตัดบรรทัดเดียวกัน
-  const rows = [{ camount: 10 }, { camount: 90, crewallet: "1" }, { camount: 10 }];
-  const { pieces } = shopPieces(rows);
-  const totalExcludingRefund = 200; // = lineOf ของ 2 บรรทัดที่เหลือ
+  const { pieces } = shopPieces([{ camount: 10 }, { camount: 90, crewallet: "1" }, { camount: 10 }]);
   assert.equal(pieces, 20, "ชิ้นต้องไม่รวม 90 ที่คืนเงิน");
-  assert.equal(shopAveragePerPiece(totalExcludingRefund, pieces), 10);
+  assert.equal(shopAveragePerPiece(200, pieces), 10);
   // ถ้าเผลอเอา 110 ชิ้น (รวมคืนเงิน) มาหาร จะได้ 1.82 = ราคาผิดเกือบ 6 เท่า
-  assert.ok(shopAveragePerPiece(totalExcludingRefund, 110)! < 2);
+  assert.ok(shopAveragePerPiece(200, 110)! < 2);
+});
+
+ok("ชิ้น = 0 → — (ไม่โชว์เลขมั่ว)", () => {
+  assert.equal(formatAveragePerPiece(500, 0), "—");
+  assert.deepEqual(splitAveragePerPiece(500, 0), { head: "—", tail: "" });
+});
+
+ok("splitAveragePerPiece: หัว = 2 ตำแหน่งแรก (อ่านเร็ว) · หาง = ที่เหลือ (ให้บัญชีกระทบยอด)", () => {
+  const s = splitAveragePerPiece(1838.7, 10000);
+  assert.equal(s.head + s.tail, formatAveragePerPiece(1838.7, 10000));
+  assert.ok(s.head.endsWith("18"), `head=${s.head}`);
+  assert.ok(s.tail.length > 0, "เคสนี้ต้องมีหาง");
+});
+
+ok("หารลงตัว → ไม่มีหาง (ไม่รกตาโดยไม่จำเป็น)", () => {
+  assert.deepEqual(splitAveragePerPiece(247.5, 165), { head: "1.50", tail: "" });
+});
+
+ok("สกุลต่างประเทศใช้ en-US (ตรงกับ helper fcur บนหน้าจอ)", () => {
+  assert.equal(formatAveragePerPiece(2469, 2, "en-US"), "1,234.50");
 });
 
 console.log(`\n✅ shop-group-summary: ${passed} assertions passed`);

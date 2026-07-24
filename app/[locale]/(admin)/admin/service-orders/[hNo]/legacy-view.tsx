@@ -73,7 +73,7 @@ import { formatCartPriceDisplay } from "@/lib/forwarder/cart-price-display";
 // items editor + /edit page use · no per-surface drift).
 import { deriveOrderCurrencyInfo, yuanToForeign } from "@/lib/forwarder/usd-order-pricing";
 import { ShopCollapseAll } from "./shop-collapse-all";
-import { shopPieces, shopAveragePerPiece, formatAveragePerPiece } from "@/lib/shop-order/shop-group-summary";
+import { shopPieces, splitAveragePerPiece } from "@/lib/shop-order/shop-group-summary";
 
 // ── inline-edits labels mirrored here for read-only display (the editor in
 // inline-edits.tsx owns the canonical maps; we duplicate the 3 small ones
@@ -957,13 +957,11 @@ function ItemSummary({
                 : shopYuan;
             const unitSuffix = groupForeign ? ` ${groupCur}` : orderForeign ? ` ${orderCur}` : "";
             const unitPrefix = groupForeign || orderForeign ? "" : "¥";
-            // ปัดผ่าน SOT ที่มีเทสคุม (lib/shop-order/shop-group-summary) — ของถูกมาก
-            // หลักสตางค์ต้องได้ 4 ตำแหน่ง ไม่งั้นราคาผิดเป็น % (เจอจริง 3 เคสบน prod)
-            const avgRaw = shopAveragePerPiece(shopTotalShown, pieces);
-            const avgPerPiece =
-              avgRaw == null
-                ? "—"
-                : `${unitPrefix}${formatAveragePerPiece(avgRaw, groupForeign || orderForeign ? "en-US" : "th-TH")}${unitSuffix}`;
+            // 🔴 ทศนิยม "ตามจริง" ผ่าน SOT ที่มีเทสคุม — เฉลี่ย × ชิ้น ต้องกลับมาได้
+            // ยอดรวมเดิมเป๊ะถึงสตางค์ (owner 2026-07-24: บัญชีต้องกระทบยอดได้)
+            // head = 2 ตำแหน่งแรก (กวาดตาอ่านเร็ว) · tail = หางความละเอียด (โชว์จางกว่า)
+            const avgParts = splitAveragePerPiece(
+              shopTotalShown, pieces, groupForeign || orderForeign ? "en-US" : "th-TH");
 
             return (
               <details
@@ -1014,7 +1012,12 @@ function ItemSummary({
                     <span className="tabular-nums font-bold">
                       {pieces.toLocaleString()} ชิ้น
                     </span>
-                    <span className="tabular-nums">เฉลี่ย {avgPerPiece}/ชิ้น</span>
+                    <span className="tabular-nums">
+                      เฉลี่ย {unitPrefix}
+                      {avgParts.head}
+                      {avgParts.tail ? <span className="opacity-60">{avgParts.tail}</span> : null}
+                      {unitSuffix}/ชิ้น
+                    </span>
                     {refundedPieces > 0 ? (
                       <span className="rounded bg-primary-600/10 px-1.5 py-0.5 tabular-nums">
                         คืนเงินแล้ว {refundedPieces.toLocaleString()} ชิ้น (ไม่นับรวม)

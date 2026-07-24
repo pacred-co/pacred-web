@@ -9,17 +9,22 @@
  * 1. **ชิ้น ≠ รายการ** — "รายการ" = จำนวนบรรทัด · "ชิ้น" = Σ camount
  * 2. **แถวคืนเงิน = 0 ทั้งเงินและชิ้น** (ตรงกับ `lineOf`/`foreignSubtotal` บนหน้าจอ)
  *    → ตัวเศษกับตัวส่วนมาจากชุดแถวเดียวกันเสมอ เฉลี่ยจึงไม่มีทางเพี้ยนเชิงโครงสร้าง
- * 3. **ทศนิยมต้องพอ (วัดเป็น % ไม่ใช่บาท)** — ค่าเฉลี่ยเป็นเลขปัดเศษโดยธรรมชาติ
- *    "คูณกลับให้ตรงบาท" จึงเป็นไปไม่ได้และไม่ใช่เกณฑ์ที่ถูก. เกณฑ์ที่ถูกคือ
- *    **มันต้องเป็นราคาต่อชิ้นที่เชื่อได้ = คลาดเคลื่อนสัมพัทธ์ ≤ 0.5%**
+ * 3. **🔴 ทศนิยมต้อง "คูณกลับได้เป๊ะ" — ไม่ใช่แค่คลาดน้อย** (owner 2026-07-24, verbatim:
+ *    *"ถ้าคำนวณกลับ คำนวณย้อนกลับสลับไปมาในแต่ละค่า ของชิปเม้นนั้น เลขต้องกลับมาตรงกัน
+ *    ทั้งหมดครับ ขยายทศนิยมเป็นตามจริงเลยครับ มันกระทบกับเรื่องเงินเรื่องบัญชีครับ
+ *    ขนาด คิวยังต้องทศนิยมละเอียดเลยครับ"*)
  *
- *    ตรวจ prod ทั้งระบบเจอของจริง 3 เคสที่ 2 ตำแหน่ง **ไม่ผ่าน**เกณฑ์นี้ —
- *    ร้านขายส่งราคาชิ้นละไม่ถึง ¥1:
- *      P22352  ¥1,838.70 ÷ 10,000 = ¥0.18387 → "0.18" คลาด **2.1%**  (0.1839 = 0.02% ✓)
- *      P22367  ¥9,851.19 ÷ 19,900 = ¥0.49504 → "0.50" คลาด **1.0%**  (0.495  = 0.01% ✓)
- *      P22349  ¥3,412.39 ÷ 6,000  = ¥0.56873 → "0.57" คลาด 0.22%     (0.5687 = 0.01% ✓)
- *    ส่วนค่า ≥ 1 นั้น 2 ตำแหน่งพอเสมอ (¥3.2338 → "3.23" คลาดแค่ 0.12%)
- *    → กฎ: **< 1 ใช้ 4 ตำแหน่ง · ≥ 1 ใช้ 2 ตำแหน่ง**
+ *    ⛔ เกณฑ์ "คลาด ≤ 0.5%" ที่เคยตั้งไว้ = **ผิด · owner ตีตก** — บัญชีเอาตัวเลขไปกระทบยอด
+ *    เฉลี่ย × ชิ้น ต้องได้ยอดรวมเดิม **ถึงสตางค์** ไม่งั้นงบไม่ลง.
+ *    (precedent: คิว/CBM ก็ถูกขยายเป็น 6 ตำแหน่งด้วยเหตุผลเดียวกัน — mig 0192)
+ *
+ *    → `reconcilableDecimals` หาจำนวนทศนิยม **น้อยที่สุดที่ยังคูณกลับได้เป๊ะ**
+ *      แล้วโชว์เท่านั้น (ไม่ยัด 10 ตำแหน่งรกตาโดยไม่จำเป็น)
+ *
+ *    เคสจริงบน prod ที่พิสูจน์ว่า 2 ตำแหน่งใช้ไม่ได้:
+ *      P22352  ¥1,838.70 ÷ 10,000 → "0.18" คูณกลับได้ 1,800.00  (ห่าง ฿38.70)
+ *      P22367  ¥9,851.19 ÷ 19,900 → "0.50" คูณกลับได้ 9,950.00  (ห่าง ฿98.81)
+ *      P22453  ¥3,686.50 ÷  1,140 → "3.23" คูณกลับได้ 3,682.20  (ห่าง  ฿4.30)
  */
 
 export type ShopSummaryRow = {
@@ -47,19 +52,64 @@ export function shopAveragePerPiece(total: number, pieces: number): number | nul
   return total / pieces;
 }
 
+/** ปัดเป็นสตางค์ (หน่วยที่บัญชีกระทบยอด). */
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+/** ปัดที่ d ตำแหน่ง. */
+const roundTo = (n: number, d: number) => {
+  const f = 10 ** d;
+  return Math.round((n + Number.EPSILON) * f) / f;
+};
+
+/** เพดานทศนิยม — พอสำหรับ ชิ้น ระดับหลักล้าน (ยังไม่เคยต้องใช้ถึงขนาดนี้บน prod). */
+export const MAX_AVG_DECIMALS = 10;
+
 /**
- * ฟอร์แมตราคาเฉลี่ยให้ "คูณกลับแล้วยังใกล้ยอดจริง".
+ * จำนวนทศนิยม **น้อยที่สุด** ที่ทำให้ `เฉลี่ย × ชิ้น` กลับมาได้ยอดรวมเดิมเป๊ะ (ถึงสตางค์).
  *
- * ≥ 1  → 2 ตำแหน่ง (เงินปกติ)
- * < 1  → ถึง 4 ตำแหน่ง (สินค้าขายส่งราคาต่ำ · 2 ตำแหน่งทำให้เพี้ยนหลักสิบบาท)
+ * นี่คือหัวใจของกฎ owner: บัญชีต้องคูณ/หารย้อนไปมาแล้วเลขตรงกันหมด.
+ * เริ่มจาก 2 แล้วไล่ขึ้น → ตัวเลขปกติยังได้ 2-3 ตำแหน่งสวยๆ ส่วนเคสที่ต้องการ
+ * ความละเอียดจริงๆ ก็จะขยายให้เอง โดยไม่ต้องยัด 10 ตำแหน่งรกตาทุกร้าน.
+ */
+export function reconcilableDecimals(total: number, pieces: number, max = MAX_AVG_DECIMALS): number {
+  if (!Number.isFinite(total) || !Number.isFinite(pieces) || pieces <= 0) return 2;
+  const target = round2(total);
+  for (let d = 2; d <= max; d += 1) {
+    if (round2(roundTo(total / pieces, d) * pieces) === target) return d;
+  }
+  return max;
+}
+
+/**
+ * ฟอร์แมตราคาเฉลี่ยด้วยทศนิยม "ตามจริง" — คูณกลับด้วยจำนวนชิ้นแล้วต้องได้ยอดรวมเดิม.
+ *
+ * ต้องส่ง `total` + `pieces` มาด้วย (ไม่ใช่แค่ค่าเฉลี่ย) เพราะความละเอียดที่ต้องใช้
+ * ขึ้นกับ **จำนวนชิ้น** — ยิ่งชิ้นเยอะ ยิ่งต้องละเอียด (19,900 ชิ้น ต้องการมากกว่า 20 ชิ้น).
  *
  * @param locale "th-TH" สำหรับ ¥ (ตรงกับ helper `cny`) · "en-US" สำหรับสกุลต่างประเทศ (ตรง `fcur`)
  */
-export function formatAveragePerPiece(avg: number | null, locale: "th-TH" | "en-US" = "th-TH"): string {
-  if (avg == null || !Number.isFinite(avg)) return "—";
-  const abs = Math.abs(avg);
-  return avg.toLocaleString(locale, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: abs > 0 && abs < 1 ? 4 : 2,
-  });
+export function formatAveragePerPiece(
+  total: number,
+  pieces: number,
+  locale: "th-TH" | "en-US" = "th-TH",
+): string {
+  const avg = shopAveragePerPiece(total, pieces);
+  if (avg == null) return "—";
+  const d = reconcilableDecimals(total, pieces);
+  return avg.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: d });
+}
+
+/**
+ * แยกส่วน "อ่านเร็ว" (2 ตำแหน่งแรก) กับ "หางความละเอียด" ที่มีไว้ให้บัญชีกระทบยอด —
+ * หน้าจอโชว์หางด้วยสีจางกว่า เพื่อให้กวาดตาอ่านราคาได้เร็วเหมือนเดิม แต่เลขยังครบ.
+ */
+export function splitAveragePerPiece(
+  total: number,
+  pieces: number,
+  locale: "th-TH" | "en-US" = "th-TH",
+): { head: string; tail: string } {
+  const full = formatAveragePerPiece(total, pieces, locale);
+  if (full === "—") return { head: "—", tail: "" };
+  const dot = full.indexOf(".");
+  if (dot < 0) return { head: full, tail: "" };
+  return { head: full.slice(0, dot + 3), tail: full.slice(dot + 3) };
 }
