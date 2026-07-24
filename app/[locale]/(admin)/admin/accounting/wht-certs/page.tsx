@@ -57,7 +57,9 @@ export default async function AdminWhtCertsPage({
 }: {
   searchParams: Promise<{ status?: string; userid?: string }>;
 }) {
-  await requireAdmin(["super", "accounting"]);
+  // owner 2026-07-24: "sales cs สามารถปริ้นได้" — ดู+พิมพ์ฟอร์ม 50 ทวิ เปิดให้ sales/CS
+  // แต่ปุ่ม "ตรวจรับ/ยกเว้น" (mutate) ยัง gate super/accounting ใน action ของมันเอง
+  await requireAdmin(["super", "accounting", "sales", "sales_admin", "ops"]);
   const sp = await searchParams;
   const status = sp.status === "received" || sp.status === "waived" || sp.status === "all" ? sp.status : "pending";
   const userid = (sp.userid ?? "").trim() || undefined;
