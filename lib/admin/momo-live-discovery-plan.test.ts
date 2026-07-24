@@ -181,7 +181,10 @@ check("momoTypeToProductType maps MOMO type → fProductsType (general/tis/fda/c
   assert.equal(momoTypeToProductType("general"), "1"); // ทั่วไป
   assert.equal(momoTypeToProductType("tis"), "2"); // มอก.
   assert.equal(momoTypeToProductType("fda"), "3"); // อย.
-  assert.equal(momoTypeToProductType("control"), "4"); // พิเศษ
+  // 🔴 owner เคาะเอง 2026-07-23 (หลังเห็นตัวเลขผลกระทบ): control = อย.(3) · special = พิเศษ(4)
+  //    ห้ามสลับกลับโดยไม่ได้ถาม — เป็นเรื่องเงิน (ลูกค้า 735 ราย ตั้งเรท 3 ≠ 4 ต่างได้ถึง ฿11,000/คิว)
+  assert.equal(momoTypeToProductType("control"), "3"); // อย.
+  assert.equal(momoTypeToProductType("special"), "4"); // พิเศษ
   assert.equal(momoTypeToProductType("FDA"), "3", "case-insensitive");
   assert.equal(momoTypeToProductType("weird"), "1", "unknown → ทั่วไป");
   assert.equal(momoTypeToProductType(""), "1");
@@ -193,11 +196,12 @@ check("momoTypeToProductType maps MOMO type → fProductsType (general/tis/fda/c
 check("momoTypeLabel renders ONLY Pacred's 4 real product types (label == priced tier)", () => {
   assert.equal(momoTypeLabel("general"), "ทั่วไป");
   assert.equal(momoTypeLabel("tis"), "มอก.");
-  assert.equal(momoTypeLabel("fda"), "อย./น้ำยา");
+  // owner 2026-07-23: "อย./น้ำยา ให้เป็น display = อย. พอครับ"
+  assert.equal(momoTypeLabel("fda"), "อย.");
   // เลิกใช้คำที่ไม่มีในระบบ: "น้ำยา" เดี่ยวๆ + "ควบคุม" (ป้ายเก่า 2026-07-20 · ห้ามย้อน)
-  assert.equal(momoTypeLabel("special"), "อย./น้ำยา", "special = อยู่ในกลุ่ม อย. ไม่ใช่ 'น้ำยา' แยก");
-  assert.equal(momoTypeLabel("control"), "พิเศษ", "control ถูกคิดเป็น tier 4 → ป้ายต้องว่า พิเศษ");
-  assert.equal(momoTypeLabel("CONTROL"), "พิเศษ", "case-insensitive");
+  assert.equal(momoTypeLabel("control"), "อย.", "owner 2026-07-23: control = อย.");
+  assert.equal(momoTypeLabel("special"), "พิเศษ", "owner 2026-07-23: special = พิเศษ");
+  assert.equal(momoTypeLabel("CONTROL"), "อย.", "case-insensitive");
   assert.equal(momoTypeLabel("xyz"), "ทั่วไป", "unknown → ป้ายตามเรทจริง (tier 1) ไม่ใช่คำดิบ");
   assert.equal(momoTypeLabel(""), "—", "MOMO ไม่ส่ง type มา");
   assert.equal(momoTypeLabel(null), "—");
