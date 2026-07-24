@@ -1,0 +1,129 @@
+{
+  "at": "2026-07-24T01:01:54.287Z",
+  "fix": [
+    {
+      "id": "52089",
+      "userid": "PR10190",
+      "tracking": "616035273",
+      "cabinet": "GZS260528-1",
+      "fstatus": "7",
+      "fvolume": 0.06618,
+      "famount": 2,
+      "totalCbm": 0.13236,
+      "rate": 2500,
+      "costBefore": 165.45,
+      "costAfter": 330.9,
+      "gap": 165.45,
+      "sell": 378,
+      "profitBefore": 212.55,
+      "profitAfter": 47.1
+    },
+    {
+      "id": "52108",
+      "userid": "PR005",
+      "tracking": "60527103087-2",
+      "cabinet": "GZS260529-1",
+      "fstatus": "7",
+      "fvolume": 0.036,
+      "famount": 12,
+      "totalCbm": 0.432,
+      "rate": 2500,
+      "costBefore": 90,
+      "costAfter": 1080,
+      "gap": 990,
+      "sell": 1560,
+      "profitBefore": 1470,
+      "profitAfter": 480
+    },
+    {
+      "id": "52126",
+      "userid": "PR050",
+      "tracking": "800020986676",
+      "cabinet": "GZS260626-1",
+      "fstatus": "7",
+      "fvolume": 0.0744,
+      "famount": 2,
+      "totalCbm": 0.1488,
+      "rate": 2500,
+      "costBefore": 186,
+      "costAfter": 372,
+      "gap": 186,
+      "sell": 495,
+      "profitBefore": 309,
+      "profitAfter": 123
+    },
+    {
+      "id": "52127",
+      "userid": "PR075",
+      "tracking": "KY4001041630124",
+      "cabinet": "GZE260627-1",
+      "fstatus": "6",
+      "fvolume": 0.1638,
+      "famount": 2,
+      "totalCbm": 0.3276,
+      "rate": 4700,
+      "costBefore": 769.86,
+      "costAfter": 1539.72,
+      "gap": 769.86,
+      "sell": 1605.24,
+      "profitBefore": 835.38,
+      "profitAfter": 65.52
+    }
+  ],
+  "skip": [
+    {
+      "id": "52176",
+      "tracking": "X9002717",
+      "cost": 2613.73,
+      "เหตุผล": "ไม่ตรง fvolume×4700 (คีย์มือ/ใบ MOMO)"
+    },
+    {
+      "id": "52177",
+      "tracking": "X9002653-1",
+      "cost": 3331.51,
+      "เหตุผล": "ไม่ตรง fvolume×2500 (คีย์มือ/ใบ MOMO)"
+    },
+    {
+      "id": "52178",
+      "tracking": "X9002653-2",
+      "cost": 2002,
+      "เหตุผล": "ไม่ตรง fvolume×2500 (คีย์มือ/ใบ MOMO)"
+    },
+    {
+      "id": "52179",
+      "tracking": "X9002653-3",
+      "cost": 8925.1,
+      "เหตุผล": "ไม่ตรง fvolume×2500 (คีย์มือ/ใบ MOMO)"
+    },
+    {
+      "id": "52181",
+      "tracking": "X9002661-1",
+      "cost": 3508.44,
+      "เหตุผล": "ไม่ตรง fvolume×2500 (คีย์มือ/ใบ MOMO)"
+    },
+    {
+      "id": "52317",
+      "tracking": "X9002751-1/2",
+      "cost": 5113.76,
+      "เหตุผล": "ไม่ตรง fvolume×4700 (คีย์มือ/ใบ MOMO)"
+    },
+    {
+      "id": "52358",
+      "tracking": "X9002769-1/3",
+      "cost": 3439.8,
+      "เหตุผล": "ไม่ตรง fvolume×4700 (คีย์มือ/ใบ MOMO)"
+    },
+    {
+      "id": "52359",
+      "tracking": "X9002769-2/3",
+      "cost": 4835.77,
+      "เหตุผล": "ไม่ตรง fvolume×4700 (คีย์มือ/ใบ MOMO)"
+    },
+    {
+      "id": "52360",
+      "tracking": "X9002769-3/3",
+      "cost": 2026.23,
+      "เหตุผล": "ไม่ตรง fvolume×4700 (คีย์มือ/ใบ MOMO)"
+    }
+  ]
+}

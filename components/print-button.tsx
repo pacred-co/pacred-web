@@ -1,6 +1,6 @@
 "use client";
 
-export function PrintButton({ label = "🖨 พิมพ์ / Save PDF" }: { label?: string }) {
+export function PrintButton({ label = "🖨 พิมพ์" }: { label?: string }) {
   return (
     <button
       type="button"

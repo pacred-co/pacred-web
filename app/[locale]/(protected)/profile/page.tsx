@@ -10,6 +10,7 @@ import { CustomerCoverUpload } from "./customer-cover-upload";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { getBusinessConfig } from "@/lib/business-config";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
+import { CustomerEsignPanel } from "@/components/customer-esign-panel";
 import { PROFILE_COVER_BUCKET, PROFILE_COVER_KEY, customerCoverKey } from "@/actions/admin/profile-cover-keys";
 import { MobileLaunchpad } from "../m/dashboard/mobile-launchpad";
 import {
@@ -149,7 +150,7 @@ export default async function ProfilePage() {
   const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
     .select(
-      "userName, userLastName, userCompany, userEmail, userTel, userPicture, userSex, userBirthday, userFacebook, userLineID",
+      "userName, userLastName, userCompany, userEmail, userTel, userPicture, userSex, userBirthday, userFacebook, userLineID, signature_path, stamp_path",
     )
     .eq("userID", memberCode)
     .maybeSingle<{
@@ -163,6 +164,8 @@ export default async function ProfilePage() {
       userBirthday: string | null;
       userFacebook: string | null;
       userLineID: string | null;
+      signature_path: string | null;
+      stamp_path: string | null;
     }>();
   if (userRowErr) {
     // Server page — surface real DB errors via throw (Next renders error
@@ -301,6 +304,12 @@ export default async function ProfilePage() {
   // bare filename → reference it under the legacy images path; prefer
   // the Pacred avatar_url when set. (account-settings.php uses the same
   // resolution.)
+  // ✍️ ลายเซ็น/ตรายาง (mig 0278) — bucket private → preview ผ่าน signed URL
+  const [signatureUrl, stampUrl] = await Promise.all([
+    userRow?.signature_path ? getSignedBucketUrl("member-docs", userRow.signature_path, 600) : null,
+    userRow?.stamp_path ? getSignedBucketUrl("member-docs", userRow.stamp_path, 600) : null,
+  ]);
+
   const userPictureFile = userRow?.userPicture ?? "user.jpg";
   const userPicture =
     profile.avatar_url ||
@@ -867,6 +876,13 @@ export default async function ProfilePage() {
             {/* / eCommerce statistic */}
           </section>
           {/* Basic Carousel end — L399 */}
+
+          {/* ✍️ ลายเซ็น + ตรายางอิเล็กทรอนิกส์ (owner 2026-07-24) — data ประจำบัญชี
+              ให้เอกสารดึงไปใช้ (ฟอร์ม 50 ทวิ แปะให้อัตโนมัติ). Pacred-native เพิ่มจาก
+              legacy (ไม่ใช่ divergence ของ faithful port — legacy ไม่มีระบบเอกสารนี้). */}
+          <section className="mt-4">
+            <CustomerEsignPanel signatureUrl={signatureUrl} stampUrl={stampUrl} />
+          </section>
 
           {/* LINE Notify panel REMOVED 2026-05-26 — service EOL'd
               2025-03-31. LIFF + Messaging API replacement pending

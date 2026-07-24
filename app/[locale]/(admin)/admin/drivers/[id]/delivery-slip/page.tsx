@@ -124,6 +124,22 @@ function fmt(n: number | string | null | undefined, decimals = 0): string {
   });
 }
 
+/**
+ * เบอร์โทรที่ "ใช้ได้จริง" → รูปแบบไทยอ่านง่าย 0XX-XXX-XXXX, ใช้ไม่ได้ → "".
+ *
+ * ต้องกรองเพราะ prod มีค่าขยะปนอยู่จริงในช่องเบอร์ (`na-230`, `0`) — ถ้าพิมพ์ตรงๆ
+ * ลงเอกสารที่ยื่นให้ลูกค้าจะกลายเป็นเบอร์มั่ว. เกณฑ์: ต้องมีตัวเลขอย่างน้อย 9 ตัว.
+ * `+66…` แปลงกลับเป็น `0…` ให้อ่านแบบไทย (ในระบบเก็บทั้ง 2 แบบปนกัน).
+ */
+function displayThaiPhone(raw: string | null | undefined): string {
+  const digits = (raw ?? "").replace(/\D/g, "");
+  if (digits.length < 9) return "";
+  const local = digits.startsWith("66") ? `0${digits.slice(2)}` : digits;
+  if (local.length === 10) return `${local.slice(0, 3)}-${local.slice(3, 6)}-${local.slice(6)}`;
+  if (local.length === 9) return `${local.slice(0, 2)}-${local.slice(2, 5)}-${local.slice(5)}`;
+  return local;
+}
+
 /** `?fids=1,2,3` → unique positive ints (bad tokens are dropped, never throw). */
 function parseFids(raw: string | string[] | undefined): number[] {
   const s = Array.isArray(raw) ? raw.join(",") : (raw ?? "");
@@ -293,13 +309,16 @@ export default async function DeliverySlipPage({
   // บนหน้ารายการรอบโชว์รหัสดิบแทนชื่อ. ชื่อจริงอยู่ที่ `profiles` + ชื่อเล่นอยู่ที่
   // `admin_contact_extras`.
   let driverName = "";
+  let driverPhone = "";
   if (batch.fdadminid) {
     const { data: drv, error: drvErr } = await admin
       .from("profiles")
-      .select("first_name, last_name, member_code, admin_login_id")
+      .select("id, first_name, last_name, phone, member_code, admin_login_id")
       .or(`member_code.eq.${batch.fdadminid},admin_login_id.eq.${batch.fdadminid}`)
       .limit(1)
-      .maybeSingle<{ first_name: string | null; last_name: string | null }>();
+      .maybeSingle<{
+        id: string; first_name: string | null; last_name: string | null; phone: string | null;
+      }>();
     if (drvErr) {
       // ชื่อคนขับเป็นข้อมูลประกอบ — อ่านไม่ได้ให้พิมพ์เอกสารต่อได้ ไม่ทำทั้งใบล้ม
       console.error(`/admin/drivers/${id}/delivery-slip: driver name lookup failed`, {
@@ -311,18 +330,39 @@ export default async function DeliverySlipPage({
       .map((s) => (s ?? "").trim())
       .filter(Boolean)
       .join(" ");
+
+    // เบอร์คนขับ — prod เก็บคนละช่องกันแล้วแต่คน (Ben อยู่ extras.work_phone ·
+    // ปอนด์อยู่ profiles.phone) จึงต้องไล่หลายช่อง. ไม่ใช้ tb_admin.adminTel
+    // เพราะมีค่าขยะ ('na-230' / '0') ปนอยู่.
+    if (drv?.id) {
+      const { data: ex, error: exErr } = await admin
+        .from("admin_contact_extras")
+        .select("work_phone, direct_phone")
+        .eq("profile_id", drv.id)
+        .maybeSingle<{ work_phone: string | null; direct_phone: string | null }>();
+      if (exErr) {
+        console.error(`/admin/drivers/${id}/delivery-slip: driver phone lookup failed`, {
+          code: exErr.code,
+          message: exErr.message,
+        });
+      }
+      driverPhone =
+        displayThaiPhone(ex?.work_phone) ||
+        displayThaiPhone(ex?.direct_phone) ||
+        displayThaiPhone(drv.phone);
+    }
   }
   // หาชื่อไม่เจอ → โชว์รหัสไว้ ดีกว่าเว้นว่างจนไม่รู้ว่าใครขับ
   const driverLabel = driverName || batch.fdadminid || "—";
 
   const docNo = forwarders.map((f) => f.id).join(",");
+  // วันที่อย่างเดียว ไม่เอาเวลา (owner 2026-07-23) — ใบส่งสินค้าเป็นเอกสารราย "วัน"
+  // เวลาที่สร้างรอบไม่ได้ให้ข้อมูลอะไรกับคนรับของ. ใช้ทั้งกล่องเลขที่และใต้ลายเซ็น.
   const dateLabel = batch.fddate
-    ? new Date(batch.fddate).toLocaleString("th-TH", {
+    ? new Date(batch.fddate).toLocaleDateString("th-TH", {
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
       })
     : "—";
 
@@ -388,17 +428,21 @@ export default async function DeliverySlipPage({
         </div>
         <PrintButton label="🖨 พิมพ์ใบส่งสินค้า" />
       </div>
-      {/* หน้าเป็นคอลัมน์ยืดได้ + สูงขั้นต่ำเท่าพื้นที่พิมพ์จริง (A4 297mm − ขอบ
-          @page 1cm สองด้าน = 277mm) → ตัวคั่น flex-1 ใต้ตารางจะดันบล็อกล่าง
-          (สรุป · หมายเหตุ · ลายเซ็น) ลงไปติดก้นหน้า แทนที่จะลอยอยู่กลางกระดาษ
-          เวลารายการน้อย. ใช้ min-height ไม่ใช่ height เพื่อให้รายการเยอะๆ ไหลลง
-          หน้าถัดไปได้ (ไม่โดนตัด) — สูตรเดียวกับใบแจ้งหนี้ (owner 2026-07-23). */}
-      <main
-        className="print-area mx-auto my-6 flex max-w-[820px] flex-col bg-white p-8 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_6px_20px_rgba(0,0,0,0.06)]"
-        style={{ minHeight: "277mm" }}
-      >
+      {/* หน้าเป็นคอลัมน์ยืดได้ — ตัวคั่น flex-1 ใต้ตารางดันบล็อกล่าง (สรุป ·
+          หมายเหตุ · ลายเซ็น) ลงไปติดก้นกระดาษ.
+          ⚠️ ความสูงเท่าหน้า A4 ใส่ไว้ "เฉพาะตอนพิมพ์" (ดู <style> ด้านบน) ไม่ใส่
+          บนจอ — owner 2026-07-23 "จัดฟอร์มให้กลางๆ มันเคลื่อนแปลกๆ": ถ้าบังคับ
+          สูง 277mm บนจอด้วย รายการน้อยๆ จะเกิดช่องว่างยักษ์กลางเอกสาร อ่านแล้ว
+          เหมือนของหลุดลอย. บนจอปล่อยให้การ์ดสูงเท่าเนื้อหา (กระชับ อยู่กลาง)
+          ส่วนตอนพิมพ์ยังได้บล็อกล่างติดก้นหน้าเหมือนเดิม. */}
+      {/* 📱 mobile-first (AGENTS.md §6) — คนขับเปิดใบนี้บนมือถือหน้างานจริง.
+          ที่ 375px เนื้อที่เหลือ 311px แต่ของเดิมล็อกคอลัมน์ขวาไว้ 300px + gap 24
+          = 324px → ล้น คอลัมน์ซ้ายถูกบีบจนแบน. ทุกจุดที่ล็อกความกว้างจึงปลดเป็น
+          "เต็มแถวบนมือถือ · ค่าเดิมตั้งแต่ sm ขึ้นไป" — จอใหญ่และตอนพิมพ์ (กระดาษ
+          A4 ≈ 794px = ผ่าน sm) หน้าตาเหมือนเดิมทุกประการ. */}
+      <main className="print-area mx-auto my-6 flex max-w-[820px] flex-col bg-white p-4 sm:p-8 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_6px_20px_rgba(0,0,0,0.06)]">
         {/* Header — sender (left) · document title + no./date (right) */}
-        <div className="flex items-start justify-between gap-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
           <div className="min-w-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={LOGO} alt="Pacred" className="h-10 w-auto" />
@@ -418,9 +462,34 @@ export default async function DeliverySlipPage({
                 {CONTACT.email}
               </span>
             </div>
+
+            {/* Recipient — legacy's เรียน / Attention block.
+                owner 2026-07-23 "จัดซ้ายหน่อย ขยับขึ้นหน่อย ให้ชิดๆ กับข้างบน
+                Pacred มันห่างไป" → ย้ายก้อนนี้ "เข้ามาอยู่ในคอลัมน์ซ้าย" ใต้ที่อยู่
+                Pacred เลย. เดิมมันเป็นบล็อกเต็มความกว้าง "ใต้" แถวหัวเอกสาร ซึ่ง
+                ความสูงของแถวถูกกำหนดโดยคอลัมน์ขวา (กล่องเลขที่ 4 บรรทัด + เบอร์
+                คนขับ) ที่สูงกว่า → ต่อให้ลด margin เท่าไรก็ยังลอยห่าง เพราะช่องว่าง
+                มาจากความสูงของอีกคอลัมน์ ไม่ใช่ margin. */}
+            <div className="mt-3 text-[12px] leading-snug">
+              <p>
+                <span className="text-slate-500">เรียน / Attention :</span>{" "}
+                <span className="font-mono font-semibold">{head.userid ?? "—"}</span>
+              </p>
+              {consigneeName ? <p className="font-semibold">คุณ{consigneeName}</p> : null}
+              <p className="text-slate-700">{consigneeAddress || "—"}</p>
+              {consigneePhones.length > 0 ? (
+                <p className="inline-flex items-center gap-1 text-slate-700">
+                  <Phone className="h-3 w-3 shrink-0" style={{ color: GOLD }} /> โทร. {consigneePhones.join(", ")}
+                </p>
+              ) : null}
+              <p className="mt-1">
+                <span className="text-slate-500">ขนส่งโดย :</span>{" "}
+                <span className="font-semibold">{nameShipBy(head.fshipby)}</span>
+              </p>
+            </div>
           </div>
 
-          <div className="w-[300px] shrink-0">
+          <div className="w-full sm:w-[300px] sm:shrink-0">
             <h1
               className="text-right text-[26px] font-black leading-none"
               style={{ color: GOLD }}
@@ -437,30 +506,45 @@ export default async function DeliverySlipPage({
             <div className="mt-3 rounded-[3px]" style={{ background: TINT_BG }}>
               <MetaRow k="เลขที่/No." v={`#${docNo}`} />
               <MetaRow k="วันที่/Date" v={dateLabel} />
-              <MetaRow k="ผู้ขับ/Driver" v={driverLabel} last />
+              {/* ชื่อ + เบอร์คนขับ อยู่ "แถวเดียวกัน" (owner 2026-07-23) — ชื่อบรรทัดบน
+                  เบอร์บรรทัดล่างพร้อมไอคอน ไม่แยกไปลอยนอกกล่องอีกแล้ว */}
+              <MetaRow
+                k="ผู้ขับ/Driver"
+                v={
+                  // inline-flex (ไม่ใช่ flex) → ชื่อกับเบอร์อยู่ "บรรทัดเดียวกัน"
+                  // flex-wrap ไว้เผื่อชื่อไทยยาวๆ จนไม่พอ ให้เบอร์ตกบรรทัดเองอย่าง
+                  // เรียบร้อย ดีกว่าดันล้นออกนอกกล่อง
+                  <span className="inline-flex flex-wrap items-baseline justify-end gap-x-2">
+                    <span>{driverLabel}</span>
+                    {/* ไอคอนโทร กลับมาแล้ว (ปอน 2026-07-24 · ให้เบอร์ทุกที่ในใบมีไอคอน 📞
+                        เหมือนบล็อกผู้ส่ง) — reverses owner 2026-07-23 ที่เคยถอดออกว่า "ของเกิน". */}
+                    {driverPhone && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-normal text-slate-600">
+                        <Phone className="h-3 w-3 shrink-0" style={{ color: GOLD }} /> {driverPhone}
+                      </span>
+                    )}
+                  </span>
+                }
+              />
+              {/* ทะเบียนรถ — owner 2026-07-23. ค้นทั้ง DB แล้วไม่มีที่เก็บทะเบียน
+                  รถเลย (ไม่มีคอลัมน์ใน tb_forwarder_driver / tb_admin และไม่มี
+                  ตารางรถ) จึงพิมพ์เป็น "ช่องเขียนมือ" ให้กรอกตอนส่งของ —
+                  คนขับสลับคันได้ ทะเบียนจึงผูกกับ "รอบ" ไม่ใช่ "คน".
+                  ถ้าจะให้พิมพ์มาจากระบบ ต้องมีที่เก็บก่อน (ดูสรุปที่คุยกับ owner). */}
+              <MetaRow
+                k="ทะเบียนรถ/Plate"
+                v={<span className="inline-block w-[38mm] border-b border-dotted border-slate-400 align-bottom">&nbsp;</span>}
+                last
+              />
             </div>
+
+            {/* (เบอร์คนขับย้ายเข้าไปอยู่ในแถว "ผู้ขับ/Driver" แล้ว 2026-07-23
+                 ตาม owner — ไม่มีบรรทัดลอยนอกกล่องอีก) */}
           </div>
         </div>
 
         {/* ไม่มีเส้นปิดหัวเอกสารแล้ว (owner 2026-07-23) — ระยะห่างแยกหัวเอกสาร
             ออกจากบล็อกผู้รับเองอยู่แล้ว เส้นย้ายลงไปใต้ "ขนส่งโดย" แทน */}
-
-        {/* Recipient — legacy's เรียน / Attention block */}
-        <div className="mt-4 text-[12px] leading-relaxed">
-          <p>
-            <span className="text-slate-500">เรียน / Attention :</span>{" "}
-            <span className="font-mono font-semibold">{head.userid ?? "—"}</span>
-          </p>
-          {consigneeName ? <p className="font-semibold">คุณ{consigneeName}</p> : null}
-          <p className="text-slate-700">{consigneeAddress || "—"}</p>
-          {consigneePhones.length > 0 ? (
-            <p className="text-slate-700">โทร. {consigneePhones.join(", ")}</p>
-          ) : null}
-          <p className="mt-1">
-            <span className="text-slate-500">ขนส่งโดย :</span>{" "}
-            <span className="font-semibold">{nameShipBy(head.fshipby)}</span>
-          </p>
-        </div>
 
         {/* เส้นแบ่ง — คั่น "ใครรับ / ส่งด้วยอะไร" ออกจาก "ของอะไรบ้าง"
             (owner 2026-07-23 "เอาเส้นมาขั้นตรงนี้แทน") */}
@@ -470,7 +554,9 @@ export default async function DeliverySlipPage({
         {/* Peak style (owner 2026-07-23 "ผมอยากได้แบบ peak") — ตารางไม่มีกรอบนอก
             ไม่มีเส้นทุกช่อง: พื้นอ่อนทั้งตาราง + เส้นผมคั่นแถวเท่านั้น เหมือน
             ใบแจ้งหนี้ (`summary-doc.tsx` tdC/tdNum ใช้ borderTop 0.5px อย่างเดียว). */}
-        <div className="mt-5 overflow-hidden rounded-[3px]" style={{ background: TINT_BG }}>
+        {/* overflow-x-AUTO ไม่ใช่ hidden — บนมือถือถ้าตาราง 6 คอลัมน์แคบเกินจะได้
+            "เลื่อนดูได้" แทนที่จะโดนตัดหายไปเงียบๆ */}
+        <div className="mt-5 overflow-x-auto rounded-[3px]" style={{ background: TINT_BG }}>
           <table className="w-full border-collapse text-[12px]">
             <thead>
               <tr className="text-center" style={{ background: CREAM }}>
@@ -489,19 +575,19 @@ export default async function DeliverySlipPage({
                   <td className="border-t border-slate-200 px-2 py-1.5 text-center font-mono">
                     {i + 1}:{f.id}
                   </td>
-                  <td className="border-t border-slate-200 px-2 py-1.5 break-words">
+                  <td className="border-t border-slate-200 px-2 py-1.5 text-center break-words">
                     {f.ftrackingchn || "—"}
                   </td>
                   <td className="border-t border-slate-200 px-2 py-1.5 text-center">
                     {f.fpallet || "—"}
                   </td>
-                  <td className="border-t border-slate-200 px-2 py-1.5 text-right">
+                  <td className="border-t border-slate-200 px-2 py-1.5 text-center tabular-nums">
                     {fmt(f.fweight, 2)}
                   </td>
-                  <td className="border-t border-slate-200 px-2 py-1.5 text-right">
+                  <td className="border-t border-slate-200 px-2 py-1.5 text-center tabular-nums">
                     {fmt(f.fvolume, 3)}
                   </td>
-                  <td className="border-t border-slate-200 px-2 py-1.5 text-right">
+                  <td className="border-t border-slate-200 px-2 py-1.5 text-center tabular-nums">
                     {fmt(f.famount, 0)}
                   </td>
                 </tr>
@@ -510,13 +596,13 @@ export default async function DeliverySlipPage({
                 <td className="border-t border-slate-200 px-2 py-1.5 text-right" colSpan={3}>
                   รวม
                 </td>
-                <td className="border-t border-slate-200 px-2 py-1.5 text-right">
+                <td className="border-t border-slate-200 px-2 py-1.5 text-center tabular-nums">
                   {fmt(totalWeight, 2)}
                 </td>
-                <td className="border-t border-slate-200 px-2 py-1.5 text-right">
+                <td className="border-t border-slate-200 px-2 py-1.5 text-center tabular-nums">
                   {fmt(totalCbm, 3)}
                 </td>
-                <td className="border-t border-slate-200 px-2 py-1.5 text-right">
+                <td className="border-t border-slate-200 px-2 py-1.5 text-center tabular-nums">
                   {fmt(totalBoxes, 0)}
                 </td>
               </tr>
@@ -533,7 +619,9 @@ export default async function DeliverySlipPage({
         <div style={{ breakInside: "avoid" }}>
 
         {/* สรุป box + QR */}
-        <div className="mt-5 flex items-stretch gap-4">
+        {/* มือถือ: สรุปเต็มแถว แล้ว QR ลงมาอยู่ข้างล่าง (ของเดิม QR ล็อก 120px
+            ทำให้กล่องสรุปเหลือ ~175px จนตัวเลขตกบรรทัด) */}
+        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-stretch">
           {/* กล่องสรุป = พื้นเปล่า ไม่มีสี ไม่มีขอบ (owner 2026-07-23 "เอาสีออก") —
               ตรงกับใบแจ้งหนี้ด้วย: ที่นั่นแถวสรุปก็พื้นเปล่า มีแค่บรรทัดยอดสุดท้าย
               บรรทัดเดียวที่ได้แถบสี ไม่ใช่ทั้งกล่อง. */}
@@ -546,7 +634,7 @@ export default async function DeliverySlipPage({
           </div>
 
           {qr ? (
-            <div className="flex w-[120px] shrink-0 flex-col items-center justify-center">
+            <div className="flex w-full flex-col items-center justify-center sm:w-[120px] sm:shrink-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={qr}

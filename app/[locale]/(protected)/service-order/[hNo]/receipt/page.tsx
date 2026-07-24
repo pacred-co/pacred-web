@@ -31,6 +31,14 @@ import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
  * T-D1 cargo flow end-to-end smoke test. "ขอใบกำกับภาษี" CTA wires in
  * Phase G2b per ADR-0006 (depends on 0034_tax_invoices.sql).
  */
+// 🔴 title = ชื่อไฟล์ตอน Save PDF + หัวกระดาษ. ต้องอยู่ใน metadata เท่านั้น —
+//    layout ออก <title> ให้ทุกหน้าอยู่แล้ว, <title> ที่ใส่ใน body จึงเป็นตัวที่ 2
+//    และเบราว์เซอร์ใช้ "ตัวแรก" เสมอ (เจอจริง 2026-07-24). `absolute` = ไม่ต่อท้าย "| Pacred".
+export async function generateMetadata({ params }: { params: Promise<{ hNo: string }> }) {
+  const { hNo } = await params;
+  return { title: { absolute: `เอกสาร ${hNo}` } };
+}
+
 export default async function ShopOrderReceiptPage({
   params,
   searchParams,

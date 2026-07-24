@@ -159,7 +159,7 @@ export function CertsSlideshow() {
           role="dialog"
           aria-modal="true"
           aria-label={t("lightboxAria", { caption: t(`slide${lightboxIdx}.caption`) })}
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 md:p-8 animate-in fade-in duration-200"
+          className="print:hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 md:p-8 animate-in fade-in duration-200"
           onClick={close}
         >
           {/* Image container — stops click propagation so clicks on image don't close */}

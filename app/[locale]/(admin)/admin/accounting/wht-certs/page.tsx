@@ -1,4 +1,5 @@
 import { Link } from "@/i18n/navigation";
+import { signReceiptToken } from "@/lib/receipt/receipt-token";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 
@@ -56,7 +57,9 @@ export default async function AdminWhtCertsPage({
 }: {
   searchParams: Promise<{ status?: string; userid?: string }>;
 }) {
-  await requireAdmin(["super", "accounting"]);
+  // owner 2026-07-24: "sales cs สามารถปริ้นได้" — ดู+พิมพ์ฟอร์ม 50 ทวิ เปิดให้ sales/CS
+  // แต่ปุ่ม "ตรวจรับ/ยกเว้น" (mutate) ยัง gate super/accounting ใน action ของมันเอง
+  await requireAdmin(["super", "accounting", "sales", "sales_admin", "ops"]);
   const sp = await searchParams;
   const status = sp.status === "received" || sp.status === "waived" || sp.status === "all" ? sp.status : "pending";
   const userid = (sp.userid ?? "").trim() || undefined;
@@ -144,7 +147,21 @@ export default async function AdminWhtCertsPage({
                       </td>
                       <td className="px-3 py-2 font-mono text-[11px] text-muted">{r.certNo || "—"}</td>
                       <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{fmtDate(r.uploadedAt)}</td>
-                      <td className="px-3 py-2"><ReceiptCertRowActions receiptId={r.id} certNo={r.certNo} /></td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center justify-end gap-2">
+                          {/* ฟอร์ม 50 ทวิ กรอกให้แล้ว — เปิดส่ง/พิมพ์ให้ลูกค้าได้จากคิวตรวจเลย
+                              (owner 2026-07-24 "อำนวยทั้งลูกค้าและพนักงาน · ไม่ใช่หาใช้กันไม่เจอ") */}
+                          <a
+                            href={`/r/${signReceiptToken(r.id)}/wht-form`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="whitespace-nowrap rounded-full border border-emerald-500 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50"
+                          >
+                            📄 ฟอร์ม 50 ทวิ
+                          </a>
+                          <ReceiptCertRowActions receiptId={r.id} certNo={r.certNo} />
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -188,6 +188,8 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             <CardSubLink href="/service-import/estimate">{t("estimateImport")}</CardSubLink>
             <CardSubLink href="/service-import?q=7">{t("importHistory")}</CardSubLink>
             <CardSubLink href="/service-import/receipts">{t("importReceiptHistory")}</CardSubLink>
+            {/* ใบหัก ณ ที่จ่าย 50 ทวิ — ประวัติ + กรอกเลขที่เอกสารเอง (owner 2026-07-24) */}
+            <CardSubLink href="/wht-certs">{t("whtCertHistory")}</CardSubLink>
             <CardSubLink href="/billing-run">{t("billingRunNav")}</CardSubLink>
             <CardSubLink href="/shipments">{t("shipmentTracking")}</CardSubLink>
           </MenuRow>

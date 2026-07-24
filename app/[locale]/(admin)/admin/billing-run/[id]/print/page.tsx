@@ -11,6 +11,7 @@
  * opens the customer-side bill page.
  */
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
 import QRCode from "qrcode";
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -31,6 +32,19 @@ export const dynamic = "force-dynamic";
 // on the items box pushes it to the bottom, so a short bill's summary sits at the
 // page bottom, not mid-page).
 const ROWS_PER_PAGE = BILL_ROWS_PER_PAGE;
+
+// 🔴 title = ชื่อไฟล์ตอน Save PDF + หัวกระดาษ. ต้องอยู่ใน metadata เท่านั้น —
+//    layout ออก <title> ให้ทุกหน้าอยู่แล้ว, <title> ที่ใส่ใน body จึงเป็นตัวที่ 2
+//    และเบราว์เซอร์ใช้ "ตัวแรก" เสมอ (เจอจริง 2026-07-24). `absolute` = ไม่ต่อท้าย "| Pacred".
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const n = Number(id);
+  if (!Number.isInteger(n) || n <= 0) return { title: { absolute: "ใบวางบิล" } };
+  const { data, error } = await createAdminClient()
+    .from("tb_forwarder_invoice").select("doc_no").eq("id", n).maybeSingle<{ doc_no: string | null }>();
+  if (error) console.error("[billing-run print title] failed", { message: error.message });
+  return { title: { absolute: (data?.doc_no ?? "").trim() || "ใบวางบิล" } };
+}
 
 export default async function BillingRunPrintPage({
   params,
@@ -96,7 +110,7 @@ export default async function BillingRunPrintPage({
 
   return (
     <>
-      <title>{`พิมพ์ใบวางบิล ${header.doc_no} | PR Admin`}</title>
+      <title>{header.doc_no}</title>
 
       <div className="no-print bg-gray-100 p-4 text-center print:hidden">
         <PrintButton />

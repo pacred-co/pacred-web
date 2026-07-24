@@ -15,6 +15,7 @@ import { getSidebarCounts } from "@/actions/admin/sidebar-counts";
 import { getStafferPositionInfo } from "@/lib/admin/positions";
 import { departmentLabel } from "@/lib/admin/departments";
 import { AdminSidebar } from "@/components/sections/admin-sidebar";
+import { DriverBottomNav } from "@/components/sections/driver-bottom-nav";
 import { CollapseAdminSidebar } from "@/components/sections/collapse-admin-sidebar";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -70,6 +71,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const viewAsRole = canPreviewRole ? await resolveViewAsRole(roles) : null;
   const displayRoles = viewAsRole ? [viewAsRole] : roles;
   const displayWorkspaceRole = viewAsRole ? null : workspaceRole;
+  // แถบเมนูล่างมือถือ ของ role คนขับ (ปอน 2026-07-24) — โชว์เฉพาะตอน effective role
+  // = driver ล้วน (คนขับจริง หรือ god ที่ view-as-driver) · ติดทุกหน้าผ่าน layout นี้.
+  const isDriverView = displayRoles.length > 0 && displayRoles.every((r) => r === "driver");
 
   const profile = withProfile?.profile ?? null;
   const adminLabel =
@@ -147,6 +151,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <CostRevealProvider bypass={hasRole(displayRoles, ["accounting", "pricing"])}>
           <RouteFade>{children}</RouteFade>
         </CostRevealProvider>
+        {isDriverView && <DriverBottomNav />}
       </div>
     </div>
     </AdminHeaderNavProvider>

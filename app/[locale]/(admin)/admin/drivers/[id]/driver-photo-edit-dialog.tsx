@@ -25,12 +25,15 @@ export function DriverPhotoEditDialog({
   itemIds,
   hasPhoto,
   disabled = false,
+  gradient = false,
 }: {
   /** tb_forwarder_driver_item.id(s) covered by this delivery point. */
   itemIds: number[];
   /** A delivery photo already exists → the button reads "แก้ภาพ". */
   hasPhoto: boolean;
   disabled?: boolean;
+  /** ปุ่มพื้นหลัง gradient + text ขาว (หัวการ์ดมือถือ · ปอน 2026-07-24) · default = outline เดิม (เดสก์ท็อป zone-3 ไม่เปลี่ยน). */
+  gradient?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -102,9 +105,13 @@ export function DriverPhotoEditDialog({
         onClick={openPicker}
         disabled={disabled || pending}
         className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition disabled:opacity-50 ${
-          hasPhoto
-            ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
-            : "border-primary-300 bg-primary-50 text-primary-700 hover:bg-primary-100"
+          gradient
+            ? hasPhoto
+              ? "border-transparent bg-gradient-to-r from-amber-600 to-amber-500 text-white shadow-sm hover:from-amber-700 hover:to-amber-600"
+              : "border-transparent bg-gradient-to-r from-[#A01824] to-[#C82333] text-white shadow-sm hover:from-[#87141E] hover:to-[#B21F2D]"
+            : hasPhoto
+              ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+              : "border-primary-300 bg-primary-50 text-primary-700 hover:bg-primary-100"
         }`}
       >
         {hasPhoto ? <Pencil className="h-3 w-3" /> : <Camera className="h-3 w-3" />}

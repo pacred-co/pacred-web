@@ -21,9 +21,14 @@
  *    config; for now we use sensible defaults (10 / 50 kg, 0.5 / 3 cbm)
  *    until admin Phase G ships configurable thresholds.
  *
- * 4. **Juristic discount** — when profile.account_type='juristic' and
- *    transport subtotal ≥ settings.juristic_discount_threshold (default
- *    1000 baht), apply settings.juristic_discount_pct (default 1%).
+ * 4. **Juristic withholding (หัก ณ ที่จ่าย)** — when profile.account_type='juristic',
+ *    deduct settings.juristic_discount_pct (default 1%) from the transport subtotal.
+ *    ⚠️ owner 2026-07-22 ABOLISHED the ฿1,000 minimum → it now fires on ANY positive
+ *    subtotal. `settings.juristic_discount_threshold` is therefore NO LONGER READ
+ *    (the column survives for history only). Same rule as the live money SOT
+ *    `legacyReceiptAmount` (lib/tax/wht.ts) — keep the two in step.
+ *    NOTE the legacy column name says "discount", but this is a WITHHOLDING the
+ *    customer remits to the Revenue Department and must issue a 50-ทวิ for.
  *
  * 5. **Adders** (added on top of transport subtotal):
  *      service_fee (default 50 THB — Pacred handling)
@@ -223,12 +228,10 @@ export function calcPrice(input: CalcPriceInput): CalcPriceBreakdown {
   const quantity = basis === "kg" ? input.weight_kg : input.volume_cbm;
   const transportSubtotal = round2(rate * quantity);
 
-  // 2. Juristic discount
+  // 2. Juristic withholding 1% — owner 2026-07-22: NO minimum. Fires on any
+  //    positive subtotal (the old `>= juristic_discount_threshold` gate is gone).
   let juristicDiscount = 0;
-  if (
-    input.is_juristic
-    && transportSubtotal >= input.settings.juristic_discount_threshold
-  ) {
+  if (input.is_juristic && transportSubtotal > 0) {
     juristicDiscount = round2(transportSubtotal * input.settings.juristic_discount_pct);
   }
 

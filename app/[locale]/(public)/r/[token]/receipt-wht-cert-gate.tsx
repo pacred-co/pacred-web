@@ -1,16 +1,17 @@
 "use client";
 
 /**
- * ReceiptWhtCertGate (ภูม flag 2026-06-10 · un-blocked 2026-06-14) — the 50-ทวิ
- * upload PROMPT shown on the public receipt page when the receipt withholds WHT
- * and the cert isn't yet approved/waived (corporate + WHT).
+ * ReceiptWhtCertGate (ภูม 2026-06-10 · un-blocked 2026-06-14 · 🔒 RE-BLOCKED
+ * 2026-07-24 — owner เคาะ: "ต้องตรวจ 50 ทวิก่อนปริ้น · สร้างรอไว้แล้วแค่ block การพิมพ์").
  *
- * ❗ This is now a NON-BLOCKING nudge: the receipt is always viewable + printable
- * (legacy PCS never gated the customer print on the cert — verified against the
- * legacy PHP). We still OFFER the upload here so the customer can return their
- * 50-ทวิ and the admin cert-chase status (AR signal) advances — but the print is
- * no longer withheld. This resolves the chicken-and-egg (the customer needs the
- * receipt in hand to *issue* their 50-ทวิ).
+ * ใบเสร็จนิติที่หัก 1%: ดูบนจอได้ (เช็คยอด/ใช้ออก 50 ทวิ) แต่ **พิมพ์/ดาวน์โหลดไม่ได้**
+ * จนกว่าบัญชีจะตรวจรับใบ 50 ทวิ (approve/waive ที่ /admin/accounting/wht-certs).
+ * การซ่อนกระดาษตอนพิมพ์ทำที่หน้าแม่ (print:hidden + หน้าแจ้ง print-only) — กด Cmd+P
+ * เองก็ไม่ได้ใบเสร็จ. legacy PCS ไม่มี gate ในระบบ (จัดการนอกระบบ) — นี่คือ improvement
+ * ที่ owner สั่ง.
+ *
+ * ไก่-กับ-ไข่ (เหตุที่เคยปลด 2026-06-14: ลูกค้าต้องเห็นยอดก่อนถึงออก 50 ทวิ ได้) แก้แล้ว
+ * ด้วยฟอร์มกรอกให้ที่ /r/[token]/wht-form — ลูกค้าแค่ พิมพ์ฟอร์ม → เซ็น+ประทับตรา → แนบ.
  *
  * Images are compressed client-side (canvas, ≤1600px, q0.82) BEFORE base64 so we
  * never hit the 1MB server-action body limit (the documented Wave-23 trap). PDFs
@@ -94,8 +95,11 @@ export default function ReceiptWhtCertGate({
         <div className="flex items-start gap-3">
           <Clock className="h-5 w-5 mt-0.5 shrink-0" />
           <div className="text-sm">
-            <p className="font-semibold">แนบใบ 50 ทวิ แล้ว · รอแอดมินตรวจรับ</p>
-            <p className="mt-0.5 text-amber-800">ใบเสร็จนี้พิมพ์/ดาวน์โหลดได้เลย ไม่ต้องรอ — ทางเราจะตรวจรับใบ 50 ทวิ ให้เรียบร้อยเอง</p>
+            <p className="font-semibold">แนบใบ 50 ทวิ แล้ว · รอบัญชีตรวจรับ</p>
+            <p className="mt-0.5 text-amber-800">
+              ตรวจผ่านเมื่อไร <b>ใบเสร็จจะพิมพ์/ดาวน์โหลดได้ทันที</b> — ไม่ต้องทำอะไรเพิ่ม
+              ถ้าเอกสารไม่ผ่านเจ้าหน้าที่จะติดต่อกลับ
+            </p>
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
@@ -118,13 +122,23 @@ export default function ReceiptWhtCertGate({
       <div className="flex items-start gap-3">
         <ShieldCheck className="h-6 w-6 mt-0.5 shrink-0 text-amber-600" />
         <div className="flex-1 text-sm">
-          <p className="font-semibold text-amber-900">พิมพ์ใบเสร็จได้เลย · เมื่อออกใบ 50 ทวิ แล้วรบกวนแนบกลับมาด้วย</p>
+          <p className="font-semibold text-amber-900">🔒 ใบเสร็จฉบับนี้ยังพิมพ์ไม่ได้ — ต้องแนบใบ 50 ทวิ ให้บัญชีตรวจก่อน</p>
           <p className="mt-0.5 text-amber-800">
-            ใบเสร็จนี้มีการหักภาษี ณ ที่จ่าย 1% — เมื่อท่านออก<b>หนังสือรับรองการหักภาษี (50 ทวิ)</b> แล้ว
-            รบกวนแนบกลับมาให้บริษัทเพื่อใช้ยื่นภาษี (ไม่บังคับ · ไม่กระทบการพิมพ์ใบเสร็จ)
+            ใบเสร็จนี้มีการหักภาษี ณ ที่จ่าย 1% จึงต้องมี<b>หนังสือรับรองการหักภาษี (50 ทวิ)</b>
+            ประกอบก่อนออกฉบับจริง · ดูยอดบนจอได้เลย · <b>3 ขั้น</b>: พิมพ์ฟอร์มด้านล่าง →
+            เซ็นชื่อ+ประทับตรา → ถ่ายรูป/สแกนแนบกลับตรงนี้ — บัญชีตรวจแล้วพิมพ์ได้ทันที
           </p>
 
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <a
+            href={`/r/${token}/wht-form`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg border-2 border-emerald-500 bg-white px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
+          >
+            📄 พิมพ์ฟอร์ม 50 ทวิ (กรอกข้อมูลให้แล้ว — แค่เซ็น+ประทับตรา)
+          </a>
+
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
             <input
               type="text"
               value={certNo}

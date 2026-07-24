@@ -178,7 +178,7 @@ export function FloatingTabs({
   return (
     <>
       {/* Vertical floating tabs — right center (desktop only) */}
-      <div className="hidden md:flex fixed right-0 top-1/2 -translate-y-1/2 z-50 flex-col shadow-xl">
+      <div className="hidden md:flex print:hidden fixed right-0 top-1/2 -translate-y-1/2 z-50 flex-col shadow-xl">
         {desktopTabs.map((item, i) => {
           const isAnchor = item.href.startsWith("#");
           const cls = "group w-[64px] xl:w-[72px] py-3 bg-white dark:bg-surface border border-border flex flex-col items-center justify-center gap-1.5 text-[11px] font-medium text-muted hover:text-foreground transition-colors first:rounded-tl-xl last:rounded-bl-xl";
@@ -246,7 +246,7 @@ export function FloatingTabs({
           Layout: [หน้าแรก] [บริการ] [ออเดอร์] [📞 FAB] [ชำระ] [แชท] [เมนู]
           3 tabs | FAB | 3 tabs — per ปอน 2026-05-22 redesign */}
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-surface/95 backdrop-blur-md border-t border-border shadow-[0_-4px_15px_rgba(0,0,0,0.06)]"
+        className="md:hidden print:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-surface/95 backdrop-blur-md border-t border-border shadow-[0_-4px_15px_rgba(0,0,0,0.06)]"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         {/*
@@ -357,7 +357,7 @@ export function FloatingTabs({
           ·  Gated off in the customer back-office via `hideLineBubble`
              (shown only on the public site / home page). */}
       {!hideLineBubble && (
-        <div className="pacred-line-bubble group fixed bottom-[84px] right-3 z-[48] md:bottom-6 md:right-6">
+        <div className="pacred-line-bubble group print:hidden fixed bottom-[84px] right-3 z-[48] md:bottom-6 md:right-6">
           {/* LINE + Messenger — fan out above on hover (desktop) / tap (mobile).
               `pb-3` (not mb-3) keeps a hover BRIDGE: the panel box touches the main
               button so moving the mouse up into LINE/Messenger never crosses a dead

@@ -43,10 +43,14 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
-import { SITE_NAME, CONTACT } from "@/components/seo/site";
+import { SITE_NAME, SITE_LEGAL_NAME_TH, CONTACT, ADDRESSES } from "@/components/seo/site";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
-import { code128SvgDataUrl } from "@/lib/barcode";
+import { code128SvgDataUrl, qrSvgDataUrl } from "@/lib/barcode";
+import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
 import { routeOrderOf } from "@/lib/admin/driver-route-order";
+
+// รถ/เรือ/อากาศ ตามโหมดตู้ (ประเภทขนส่ง บนสติกเกอร์ · ปอน 2026-07-24)
+const MODE_LABEL: Record<string, string> = { "1": "รถ", "2": "เรือ", "3": "อากาศ" };
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +68,9 @@ type Forwarder = {
   ftrackingchn: string | null;
   fshipby: string | null;
   famount: number | string | null;
+  fweight: number | string | null;
+  fvolume: number | string | null;
+  fcabinetnumber: string | null;
   fpallet: string | null;
   faddressname: string | null;
   faddresslastname: string | null;
@@ -77,7 +84,7 @@ type Forwarder = {
 };
 
 const FORWARDER_COLS =
-  "id, fidorco, userid, ftrackingchn, fshipby, famount, fpallet, " +
+  "id, fidorco, userid, ftrackingchn, fshipby, famount, fweight, fvolume, fcabinetnumber, fpallet, " +
   "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
   "faddressdistrict, faddressprovince, faddresszipcode, faddresstel, faddresstel2";
 
@@ -96,15 +103,26 @@ function hasClearAddress(f: Forwarder): boolean {
   return street !== "" && district !== "";
 }
 
+// 🔴 title = ชื่อไฟล์ตอน Save PDF + หัวกระดาษ. ต้องอยู่ใน metadata เท่านั้น —
+//    layout ออก <title> ให้ทุกหน้าอยู่แล้ว, <title> ที่ใส่ใน body จึงเป็นตัวที่ 2
+//    และเบราว์เซอร์ใช้ "ตัวแรก" เสมอ (เจอจริง 2026-07-24). `absolute` = ไม่ต่อท้าย "| Pacred".
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return { title: { absolute: `สติกเกอร์ รอบ #${id}` } };
+}
+
 export default async function DriverStickerSheetPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ fids?: string }>;
 }) {
   // Same gate as the sibling driver print pages — warehouse peels the stickers,
   // plus ops/super/driver. isGodRole covers ultra+super.
   const { user, roles } = await requireAdmin(["ops", "super", "driver", "warehouse"]);
   const { id } = await params;
+  const { fids: fidsParam } = await searchParams;
   const batchId = Number.parseInt(id, 10);
   if (!Number.isFinite(batchId) || batchId <= 0) notFound();
 
@@ -158,9 +176,22 @@ export default async function DriverStickerSheetPage({
     });
     throw new Error(`ไม่สามารถอ่านรายการในรอบ: ${itemsErr.message}`);
   }
-  const fwdIds = Array.from(
+  const fwdIdsAll = Array.from(
     new Set(((itemsData ?? []) as { fid: number }[]).map((it) => it.fid)),
   );
+  // Optional ?fids= filter (per-stop print · ปอน 2026-07-24) — intersect with the
+  // run's own fids so a caller can only ever print rows that belong to THIS batch.
+  let fwdIds = fwdIdsAll;
+  if (fidsParam) {
+    const requested = new Set(
+      fidsParam
+        .split(",")
+        .map((s) => Number.parseInt(s.trim(), 10))
+        .filter((n) => Number.isFinite(n)),
+    );
+    const filtered = fwdIdsAll.filter((fid) => requested.has(fid));
+    if (filtered.length > 0) fwdIds = filtered;
+  }
 
   // 3. Forwarder rows.
   let forwarders: Forwarder[] = [];
@@ -217,6 +248,9 @@ export default async function DriverStickerSheetPage({
     trackings: string[];
     fNos: string[];
     totalBoxes: number;
+    totalWeight: number;
+    totalVolume: number;
+    cabinet: string | null;
   };
   const byKey = new Map<string, Sticker>();
   for (const f of forwarders) {
@@ -232,14 +266,19 @@ export default async function DriverStickerSheetPage({
     if (existing) {
       if (tracking) existing.trackings.push(tracking);
       existing.fNos.push(fNo);
-      existing.totalBoxes += Number(f.famount ?? 0);
+      existing.totalBoxes  += Number(f.famount ?? 0);
+      existing.totalWeight += Number(f.fweight ?? 0);
+      existing.totalVolume += Number(f.fvolume ?? 0);
     } else {
       byKey.set(key, {
         key,
         forwarder: f,
         trackings: tracking ? [tracking] : [],
         fNos: [fNo],
-        totalBoxes: Number(f.famount ?? 0),
+        totalBoxes:  Number(f.famount ?? 0),
+        totalWeight: Number(f.fweight ?? 0),
+        totalVolume: Number(f.fvolume ?? 0),
+        cabinet: (f.fcabinetnumber ?? "").trim() || null,
       });
     }
   }
@@ -263,6 +302,7 @@ export default async function DriverStickerSheetPage({
       ...s,
       seq: idx + 1,
       barcode: primaryTracking ? code128SvgDataUrl(primaryTracking) : null,
+      qr: primaryTracking ? qrSvgDataUrl(primaryTracking) : null,
     };
   });
 
@@ -291,7 +331,7 @@ export default async function DriverStickerSheetPage({
           border: 1.5px solid #000;
           border-radius: 2mm;
           padding: 3mm;
-          min-height: 55mm;
+          min-height: 70mm;
           display: flex;
           flex-direction: column;
           break-inside: avoid;
@@ -376,8 +416,12 @@ export default async function DriverStickerSheetPage({
           <div className="sticker-grid">
             {stickers.map((s) => {
               const f = s.forwarder;
-              const recipient =
-                `คุณ${(f.faddressname ?? "").trim()} ${(f.faddresslastname ?? "").trim()}`.trim();
+              // ชื่อผู้รับ = ชื่อต้นเท่านั้น (ไม่มีนามสกุล · ปอน 2026-07-24 · ลด PII บนกล่อง).
+              const custFirst = customerNameOf(f.userid).split(/\s+/)[0];
+              const recipientName =
+                (f.faddressname ?? "").trim() ||
+                (custFirst && custFirst !== "—" ? custFirst : "");
+              const recipient = recipientName ? `คุณ${recipientName}` : "ลูกค้า";
               const address = [
                 f.faddressno,
                 f.faddresssubdistrict && `ต.${f.faddresssubdistrict}`,
@@ -387,86 +431,67 @@ export default async function DriverStickerSheetPage({
               ]
                 .filter(Boolean)
                 .join(" ");
-              const phones = Array.from(
-                new Set(
-                  [f.faddresstel, f.faddresstel2]
-                    .map((p) => (p ?? "").trim())
-                    .filter((p) => p !== "" && p !== "-"),
-                ),
-              ).join(" / ");
               const trackingList = Array.from(new Set(s.trackings));
+              const primaryTracking = trackingList[0] ?? "";
+              const primaryFNo = s.fNos[0] ?? `#${f.id}`;
+              const modeCode = s.cabinet ? transportModeFromCabinetName(s.cabinet) : null;
+              const typeLabel = modeCode ? MODE_LABEL[modeCode] : null;
               return (
                 <div key={s.key} className="sticker">
-                  {/* Top row: sequence badge + PR + carrier */}
-                  <div className="flex items-start justify-between gap-2 border-b border-black/70 pb-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-black px-1.5 text-[13px] font-black text-white">
-                        {s.seq}
-                      </span>
-                      <div className="leading-tight">
-                        <div className="font-mono text-sm font-bold">
-                          {f.userid ?? "—"}
-                        </div>
-                        <div className="text-[10px] text-gray-600">
-                          {customerNameOf(f.userid)}
-                        </div>
+                  {/* ── หัว: โลโก้ Pacred + ผู้ส่ง | เลขที่ + แทรคกิ้งตัวใหญ่ (ปอน 2026-07-24 · ตามภาพ) ── */}
+                  <div className="flex items-start justify-between gap-2 border-b border-black pb-1.5">
+                    <div className="flex min-w-0 items-start gap-1.5">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src="/images/pacred-logo-red.png" alt="Pacred" className="h-[11mm] w-auto shrink-0 object-contain" />
+                      <div className="min-w-0 leading-tight">
+                        <div className="text-[8px] font-semibold text-gray-500">ผู้ส่ง / From</div>
+                        <div className="text-[10px] font-bold leading-snug">{SITE_LEGAL_NAME_TH}</div>
+                        <div className="text-[8px] leading-snug text-gray-600">{ADDRESSES.office.full}</div>
+                        <div className="text-[8px] text-gray-600">โทร. {CONTACT.phoneCompanyDisplay}</div>
                       </div>
                     </div>
-                    <div className="text-right text-[10px] leading-tight">
-                      <div className="font-semibold">{nameShipBy(f.fshipby)}</div>
-                      <div className="text-gray-600">
-                        {s.totalBoxes} กล่อง
-                      </div>
+                    <div className="shrink-0 text-right leading-none">
+                      <div className="text-[9px] text-gray-500">เลขที่ #{primaryFNo}</div>
+                      <div className="mt-0.5 break-all font-mono text-[15px] font-black tracking-tight">{primaryTracking || "—"}</div>
+                      <div className="text-[9px] font-semibold text-gray-500">แทร็กกิ้ง</div>
                     </div>
                   </div>
 
-                  {/* Recipient + full address (the load-bearing part) */}
-                  <div className="mt-1.5 flex-1">
-                    <div className="text-[13px] font-bold leading-snug">
-                      {recipient || customerNameOf(f.userid)}
-                    </div>
-                    <div className="mt-0.5 text-[12px] leading-snug">
-                      {address}
-                    </div>
-                    {phones && (
-                      <div className="mt-1 text-[12px] font-semibold">
-                        โทร. {phones}
-                      </div>
-                    )}
-                    {f.fpallet && (
-                      <div className="mt-0.5 text-[10px] text-gray-600">
-                        location: {f.fpallet}
-                      </div>
-                    )}
+                  {/* ── ถึง / TO — ผู้รับ + รหัส + จำนวนกล่อง ── */}
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <span className="shrink-0 rounded bg-black px-1.5 py-0.5 text-[11px] font-bold text-white">ถึง / TO</span>
+                    <span className="font-mono text-[13px] font-bold">{f.userid ?? "—"}</span>
+                    <span className="ml-auto shrink-0 text-[12px] font-bold">{s.totalBoxes} กล่อง</span>
+                  </div>
+                  <div className="mt-1 flex-1">
+                    <div className="text-[13px] font-bold leading-snug">{recipient}</div>
+                    <div className="mt-0.5 text-[12px] font-medium leading-snug">{address}</div>
                   </div>
 
-                  {/* Tracking(s) + barcode */}
-                  <div className="mt-1.5 border-t border-black/40 pt-1.5">
-                    <div className="text-[11px] leading-tight break-all">
-                      {trackingList.length > 0 ? (
-                        trackingList.map((t) => (
-                          <div key={t} className="font-mono">
-                            {t}
-                          </div>
-                        ))
+                  {/* ── ล่าง: ขนส่ง/บาร์โค้ด + น้ำหนัก/ปริมาตร | QR ── */}
+                  <div className="mt-1.5 flex items-end justify-between gap-2 border-t border-black pt-1.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] leading-tight">
+                        บริษัทขนส่ง : <span className="font-bold">{nameShipBy(f.fshipby)}</span>
+                        {typeLabel && <> · ประเภท : <span className="font-bold">{typeLabel}</span></>}
+                      </div>
+                      <div className="text-[10px] leading-tight text-gray-700">
+                        เลขแทรกกิ้ง : <span className="font-mono">{primaryTracking || "—"}</span> · จำนวน : {s.totalBoxes} กล่อง
+                      </div>
+                      {s.barcode ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={s.barcode} alt="barcode" className="mt-1 h-[9mm] w-full max-w-[52mm] object-contain" />
                       ) : (
-                        <span className="text-gray-500">— ไม่มีเลขแทรคกิง —</span>
+                        <div className="mt-1 text-[10px] text-gray-500">— ไม่มีเลขแทรคกิง —</div>
                       )}
-                      {s.fNos.length > 1 && (
-                        <div className="text-[10px] text-gray-600">
-                          {s.fNos.length} รายการในจุดนี้
-                        </div>
-                      )}
-                    </div>
-                    {s.barcode && (
-                      <div className="mt-1 flex justify-center">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={s.barcode}
-                          alt="tracking barcode"
-                          className="h-[10mm] w-full max-w-[70mm] object-contain"
-                        />
+                      <div className="mt-1 text-[10px] leading-tight text-gray-700">
+                        น้ำหนัก : {s.totalWeight.toFixed(2)} kg · ปริมาตร : {s.totalVolume.toFixed(5)} CBM
+                        {f.fpallet ? <> · location : <span className="font-semibold">{f.fpallet}</span></> : null}
                       </div>
+                    </div>
+                    {s.qr && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={s.qr} alt="qr" className="h-[18mm] w-[18mm] shrink-0 object-contain" />
                     )}
                   </div>
                 </div>

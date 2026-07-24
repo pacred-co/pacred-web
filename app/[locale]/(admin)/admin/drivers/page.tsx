@@ -23,6 +23,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { parsePage, pageRange, parsePageSize } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { PageSizeSelect } from "@/components/admin/page-size-select";
@@ -34,7 +35,7 @@ import { BatchDeleteInline } from "./batch-delete-inline";
 import { exportDriversAll } from "@/actions/admin/export/drivers";
 import { countPendingDispatch } from "@/lib/admin/pending-dispatch";
 import { formatThaiDate, formatThaiDateTime, formatThaiTime, anyDateToIso } from "@/lib/utils/thai-datetime";
-import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock, Printer, ClipboardList, MonitorSpeaker, Search } from "lucide-react";
+import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock, Printer, ClipboardList, MonitorSpeaker, Search, Calendar, FileText } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -279,6 +280,31 @@ export default async function AdminDriversPage({
         u.userID,
         { member_code: u.userID, name: `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() || "—" },
       ]),
+    );
+  }
+
+  // อวาตาร์ ผู้รับผิดชอบ (fdadminid) + ผู้สร้าง (fdadmincreator) — profiles.avatar_url
+  // by member_code · resolve ผ่าน resolveLegacyUrl (ปอน 2026-07-24 · มือถือ+เดสก์ท็อป).
+  const adminCodes = Array.from(
+    new Set(rows.flatMap((r) => [r.fdadminid, r.fdadmincreator]).filter(Boolean) as string[]),
+  );
+  const avatarByCode = new Map<string, string | null>();
+  if (adminCodes.length > 0) {
+    const { data: profRows, error: profErr } = await admin
+      .from("profiles")
+      .select("member_code, avatar_url")
+      .in("member_code", adminCodes);
+    if (profErr) {
+      console.error("/admin/drivers: admin avatar lookup failed", profErr);
+    }
+    const rawByCode = new Map(
+      ((profRows ?? []) as { member_code: string; avatar_url: string | null }[]).map((p) => [p.member_code, p.avatar_url]),
+    );
+    await Promise.all(
+      adminCodes.map(async (code) => {
+        const raw = rawByCode.get(code);
+        avatarByCode.set(code, raw ? await resolveLegacyUrl(raw, "admin-avatar") : null);
+      }),
     );
   }
 
@@ -564,7 +590,8 @@ export default async function AdminDriversPage({
           list mode L269-348: ☑ · วันที่สร้าง · ชื่อรายการ (+meta) · ผู้รับผิดชอบ ·
           ผู้สร้างรายการ · สถานะ · ตัวเลือก). No driver grouping — 1 row = 1 รอบ. */}
       <DriverSelectionProvider>
-      <div className="overflow-x-auto scrollbar-x-visible">
+      {/* ตารางแบบเต็ม — เดสก์ท็อป (≥lg) เท่านั้น · มือถือใช้การ์ดด้านล่าง (ปอน 2026-07-24) */}
+      <div className="hidden lg:block overflow-x-auto scrollbar-x-visible">
         <table className="w-full text-sm border-collapse min-w-[1000px] [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
           <thead className="bg-surface-alt/60 text-center text-[13px] font-bold tracking-wide text-[#6b6f82]">
             <tr>
@@ -647,16 +674,28 @@ export default async function AdminDriversPage({
                     {/* ผู้รับผิดชอบ (คนขับ = fdadminid) */}
                     <td className="px-3 py-3 text-xs">
                       {r.fdadminid ? (
-                        <>
-                          <div className="font-medium text-foreground">{driver?.name ?? r.fdadminid}</div>
-                          <div className="font-mono text-[11px] text-muted">{r.fdadminid}</div>
-                        </>
+                        <div className="flex items-center gap-2">
+                          <AdminAvatar url={avatarByCode.get(r.fdadminid) ?? null} code={r.fdadminid} />
+                          <div className="min-w-0">
+                            <div className="font-medium text-foreground">{driver?.name ?? r.fdadminid}</div>
+                            <div className="font-mono text-[11px] text-muted">{r.fdadminid}</div>
+                          </div>
+                        </div>
                       ) : (
                         <span className="text-muted">— ยังไม่ระบุคนขับ —</span>
                       )}
                     </td>
                     {/* ผู้สร้างรายการ */}
-                    <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">{r.fdadmincreator ?? "—"}</td>
+                    <td className="px-3 py-3 text-xs whitespace-nowrap">
+                      {r.fdadmincreator ? (
+                        <div className="flex items-center gap-2">
+                          <AdminAvatar url={avatarByCode.get(r.fdadmincreator) ?? null} code={r.fdadmincreator} />
+                          <span className="text-foreground">{r.fdadmincreator}</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
                     {/* ส่งแล้ว / ทั้งหมด */}
                     <td className="px-3 py-3 text-xs text-right whitespace-nowrap">
                       <div className="font-semibold text-foreground tabular-nums">{agg.doneCount} / {agg.itemCount}</div>
@@ -709,6 +748,108 @@ export default async function AdminDriversPage({
       </div>
       </DriverSelectionProvider>
 
+      {/* ── การ์ดมือถือ (ปอน 2026-07-24 · ตามภาพ) — จอ <lg: การ์ดต่อรอบแทนตารางแคบ.
+          ข้อมูลชุดเดียวกับตาราง · พื้นเทา #f4f5fa ให้การ์ดขาวลอยเด่น. */}
+      <div className="lg:hidden space-y-3 bg-[#f4f5fa] px-4 py-4">
+        {rows.length === 0 ? (
+          <div className="rounded-2xl border border-border bg-white p-8 text-center">
+            <AlertCircle className="mx-auto mb-3 h-8 w-8 text-muted/50" />
+            <p className="text-sm text-muted">
+              {selfOnly
+                ? (view === "history"
+                    ? "ยังไม่มีงานที่ปิดแล้วในช่วงนี้"
+                    : "ตอนนี้ไม่มีงานที่ต้องส่ง — รอแอดมินมอบงานให้")
+                : "ยังไม่มีรอบจัดส่งในช่วงนี้"}
+            </p>
+          </div>
+        ) : (
+          rows.map((r) => {
+            const fdstatus = (r.fdstatus ?? "1") as FdStatus;
+            const agg      = itemAgg.get(r.id) ?? { itemCount: 0, boxSum: 0, doneCount: 0 };
+            const expired  = r.endtime && new Date(r.endtime) < new Date() && fdstatus === "1";
+            const driver   = r.fdadminid ? driverDirectory.get(r.fdadminid) : null;
+            return (
+              <div key={r.id} className="rounded-2xl border border-border bg-white shadow-sm p-4 space-y-3">
+                {/* วันที่สร้าง + ชื่อรอบ + สรุป */}
+                <div className="flex items-start gap-3">
+                  <div className="shrink-0 rounded-xl border border-border bg-surface-alt/40 px-3 py-2 text-center leading-tight">
+                    <div className="flex items-center justify-center gap-1 text-[11px] text-muted">
+                      <Calendar className="h-3.5 w-3.5" /> วันที่สร้าง
+                    </div>
+                    <div className="mt-1 text-sm font-bold text-foreground">{r.fddate ? formatThaiDate(r.fddate) : "—"}</div>
+                    <div className="text-[11px] text-muted">{r.fddate ? formatThaiTime(r.fddate) : ""}</div>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <Link href={`/admin/drivers/${r.id}`} className="block break-words font-bold text-primary-600 hover:underline">
+                      {r.fdname ?? `รอบ #${r.id}`}
+                    </Link>
+                    <p className="mt-1 text-[11px] text-muted">
+                      จำนวนแทรคกิ้ง : {agg.itemCount}, จำนวนกล่อง : {agg.boxSum}, จำนวนจุดที่ส่ง : {r.fdamount ?? 0}
+                    </p>
+                    {r.endtime && (
+                      <p className={`text-[11px] ${expired ? "font-medium text-rose-600" : "text-muted"}`}>
+                        ส่งก่อนเวลา : {formatThaiDateTime(r.endtime)}{expired ? " (เลย)" : ""}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* ผู้รับผิดชอบ / ผู้สร้าง / ส่งแล้ว / สถานะ (2×2) */}
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-xl border border-border bg-surface-alt/30 p-3">
+                  <div>
+                    <p className="text-[11px] text-muted">ผู้รับผิดชอบ</p>
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                      <AdminAvatar url={r.fdadminid ? avatarByCode.get(r.fdadminid) ?? null : null} code={r.fdadminid} />
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold text-foreground">{driver?.name ?? r.fdadminid ?? "—"}</p>
+                        {r.fdadminid && <p className="font-mono text-[11px] text-muted">{r.fdadminid}</p>}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted">ผู้สร้างรายการ</p>
+                    <div className="mt-0.5 flex items-center gap-1.5">
+                      <AdminAvatar url={r.fdadmincreator ? avatarByCode.get(r.fdadmincreator) ?? null : null} code={r.fdadmincreator} />
+                      <p className="truncate text-xs font-semibold text-foreground">{r.fdadmincreator ?? "—"}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted">ส่งแล้ว</p>
+                    <p className="text-sm font-bold tabular-nums text-foreground">{agg.doneCount} / {agg.itemCount}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted">สถานะ</p>
+                    <span className={`mt-0.5 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${STATUS_CLS[fdstatus]}`}>
+                      {STATUS_ICON[fdstatus]} {STATUS_LABEL[fdstatus]}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3 ปุ่ม: รายละเอียด / บิลหาสินค้า / บิลจัดส่ง */}
+                <div className="grid grid-cols-3 gap-2">
+                  <Link href={`/admin/drivers/${r.id}`} className="inline-flex items-center justify-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 px-1.5 py-2 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100">
+                    <FileText className="h-3.5 w-3.5 shrink-0" /> รายละเอียด
+                  </Link>
+                  <Link href={`/admin/drivers/${r.id}/picking-list`} target="_blank" className="inline-flex items-center justify-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-1.5 py-2 text-[11px] font-medium text-amber-800 hover:bg-amber-100">
+                    <ClipboardList className="h-3.5 w-3.5 shrink-0" /> บิลหาสินค้า
+                  </Link>
+                  <Link href={`/admin/drivers/${r.id}/print`} target="_blank" className="inline-flex items-center justify-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-1.5 py-2 text-[11px] font-medium text-sky-700 hover:bg-sky-100">
+                    <Printer className="h-3.5 w-3.5 shrink-0" /> บิลจัดส่ง
+                  </Link>
+                </div>
+
+                {/* ลบรายการ (planner · รอบเปิดที่ยังไม่มีของส่งสำเร็จ) — คนขับลบไม่ได้ */}
+                {isPlanner && fdstatus === "1" && agg.doneCount === 0 && (
+                  <div className="flex justify-end">
+                    <BatchDeleteInline batchId={r.id} />
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
       {/* หน้า (pagination) อยู่ในกรอบขาวใบเดียวกับตาราง — ปิดท้ายการ์ด */}
       <div className="border-t border-border px-4 py-3">
         <Pagination
@@ -721,16 +862,20 @@ export default async function AdminDriversPage({
       </div>
 
       </div>{/* ── ปิดกรอบขาว ── */}
-
-      <p className="text-[11px] text-muted">
-        ฐานข้อมูล: legacy <code className="rounded bg-surface-alt px-1">tb_forwarder_driver</code>{" "}
-        + <code className="rounded bg-surface-alt px-1">tb_forwarder_driver_item</code>{" "}
-        — ทั้งหมด {(tallyData ?? []).length} รอบในช่วง{" "}
-        {hasCustomRange
-          ? `${fromIso ? formatThaiDate(fromIso) : "เริ่มแรก"} – ${toIso ? formatThaiDate(toIso) : "ปัจจุบัน"}`
-          : unbounded ? "ทั้งหมด" : "90 วัน"}
-      </p>
     </main>
+  );
+}
+
+// รูปโปรไฟล์แอดมิน (ผู้รับผิดชอบ/ผู้สร้าง) — มีรูป = <img> · ไม่มี = ตัวย่อวงกลม (ปอน 2026-07-24).
+function AdminAvatar({ url, code }: { url: string | null; code: string | null | undefined }) {
+  const initial = (code ?? "?").trim().charAt(0).toUpperCase() || "?";
+  return url ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={url} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-border" />
+  ) : (
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-500 text-[11px] font-bold text-white">
+      {initial}
+    </span>
   );
 }
 

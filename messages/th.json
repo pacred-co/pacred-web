@@ -1151,7 +1151,7 @@
     "basisUsed": "คิดตาม",
     "rateUsed": "เรท",
     "transportSubtotal": "ค่าขนส่ง (ยอดย่อย)",
-    "juristicDiscount": "ส่วนลดนิติบุคคล 1%",
+    "juristicDiscount": "หัก ณ ที่จ่าย นิติบุคคล 1%",
     "serviceFee": "ค่าบริการ Pacred",
     "crateFee": "ค่าตีลังไม้",
     "qcFee": "ค่า QC",
@@ -3461,7 +3461,8 @@
       "cargoDeclarations": "ใบขนรวม (CARGO)",
       "hsLibrary": "คลัง HS CODE LIBRARY",
       "hsTriage": "คิว HS (CS กรอกก่อน)",
-      "hsConsult": "ปรึกษาพิกัด HS (ก่อนออเดอร์)"
+      "hsConsult": "ปรึกษาพิกัด HS (ก่อนออเดอร์)",
+      "whtCerts": "ใบหัก 50 ทวิ (WHT)"
     },
     "freightOps": {
       "title": "Freight Operations (AX JOB)"
@@ -5566,7 +5567,8 @@
     "freightService": "Freight (FCL/LCL)",
     "freightHub": "ภาพรวม + เอกสาร",
     "freightBook": "จองงานขนส่ง",
-    "freightShipments": "ติดตามสถานะงาน"
+    "freightShipments": "ติดตามสถานะงาน",
+    "whtCertHistory": "ใบหัก ณ ที่จ่าย (50 ทวิ)"
   },
   "homeRelatedTags": {
     "eyebrow": "RELATED TOPICS · หัวข้อยอดนิยม",
