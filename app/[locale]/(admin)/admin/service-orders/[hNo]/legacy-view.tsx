@@ -854,15 +854,12 @@ function ForeignPrice({
   yuan,
   rate,
   hideYuan,
-  onDark,
 }: {
   cur: string;
   amount: number;
   yuan: number;
   rate: number;
   hideYuan?: boolean;
-  /** วางบนพื้นสีเข้ม (หัวร้านสีแบรนด์) → สลับสีตัวอักษรเป็นขาว ไม่งั้นอ่านไม่ออก */
-  onDark?: boolean;
 }) {
   const d = formatCartPriceDisplay({ inputCurrency: cur, inputPrice: amount, cpriceYuan: yuan, rsDefault: rate });
   const secondary = hideYuan
@@ -870,8 +867,8 @@ function ForeignPrice({
     : d.secondary;
   return (
     <span className="inline-flex flex-col items-end leading-tight">
-      <span className={`font-semibold ${onDark ? "text-white" : "text-foreground"}`}>{d.primary}</span>
-      <span className={`text-[11px] font-normal ${onDark ? "text-white/80" : "text-muted"}`}>{secondary}</span>
+      <span className="font-semibold text-foreground">{d.primary}</span>
+      <span className="text-[11px] font-normal text-muted">{secondary}</span>
     </span>
   );
 }
@@ -983,31 +980,33 @@ function ItemSummary({
                 key={g.shop}
                 open
                 data-shop-group
-                className="group rounded-lg border border-primary-600/40 overflow-hidden"
+                className="group overflow-hidden rounded-xl border border-primary-100 dark:border-primary-900/40"
               >
-                {/* แถบหัวร้าน — สีแบรนด์แดง (owner: "ทำสีสันให้เข้มขึ้น เอาสีแดงแบรนดิ้งมาใส่")
-                    + เครื่องหมาย ▸ หมุนได้ + คำว่า ย่อ/กาง = บอกชัดว่ากดได้ (§0f/§0g) */}
-                <summary className="cursor-pointer select-none bg-primary-600 px-3 py-2 text-white marker:content-none [&::-webkit-details-marker]:hidden">
+                {/* แถบหัวร้าน — แดงพาสเทลไล่เฉด + ตัวอักษรแดงเข้ม (owner 2026-07-24:
+                    "สีแดงแสบตาเกินไป · เอาแดงพาสเทล ไล่ gradient · อ่านง่าย สบายตา ดูสมัยใหม่")
+                    แบรนด์ย้ายไปอยู่ที่ "รางซ้าย + ป้ายร้านที่ N" = จุดแดงเข้มเล็กๆ พอให้จำได้
+                    โดยไม่ต้องเทสีทึบเต็มแถบ × 24 ร้าน. ▸ หมุน + คำว่าย่อ/กาง = บอกว่ากดได้ (§0f/§0g) */}
+                <summary className="cursor-pointer select-none border-l-4 border-primary-500 bg-gradient-to-r from-primary-100 via-primary-50 to-transparent px-3 py-2 transition-colors marker:content-none hover:from-primary-200 hover:via-primary-100 dark:from-primary-900/30 dark:via-primary-900/15 [&::-webkit-details-marker]:hidden">
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex min-w-0 items-center gap-1.5">
                       <svg
                         viewBox="0 0 20 20"
                         aria-hidden
-                        className="size-4 shrink-0 transition-transform duration-150 group-open:rotate-90"
+                        className="size-4 shrink-0 text-primary-500 transition-transform duration-150 group-open:rotate-90"
                         fill="currentColor"
                       >
                         <path d="M7 4l7 6-7 6V4z" />
                       </svg>
-                      <span className="shrink-0 rounded-md bg-white/25 px-1.5 py-0.5 text-[11px] font-bold tabular-nums">
+                      <span className="shrink-0 rounded-md bg-primary-600 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-white">
                         ร้านที่ {shopNoByRef.get(g)}
                       </span>
-                      <span className="truncate text-sm font-bold">🏪 {g.shop}</span>
+                      <span className="truncate text-sm font-bold text-primary-800 dark:text-primary-200">🏪 {g.shop}</span>
                     </span>
-                    <span className="shrink-0 text-right font-mono text-sm font-bold tabular-nums">
+                    <span className="shrink-0 text-right font-mono text-sm font-bold tabular-nums text-primary-700 dark:text-primary-300">
                       {groupForeign ? (
                         <>
-                          <span className="mr-1 font-sans text-[11px] font-normal text-white/80">รวม</span>
-                          <ForeignPrice cur={groupCur} amount={foreignSubtotal(g.rows)} yuan={shopYuan} rate={rate} hideYuan={orderForeign} onDark />
+                          <span className="mr-1 font-sans text-[11px] font-normal opacity-70">รวม</span>
+                          <ForeignPrice cur={groupCur} amount={foreignSubtotal(g.rows)} yuan={shopYuan} rate={rate} hideYuan={orderForeign} />
                         </>
                       ) : orderForeign ? (
                         /* Foreign ORDER but the group carries ค่าขนส่งจีน (so the pure
@@ -1020,19 +1019,19 @@ function ItemSummary({
                     </span>
                   </div>
                   {/* แถวสรุปของร้าน — รายการ / ชิ้น / เฉลี่ยต่อชิ้น */}
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-[22px] text-[11px] text-white/90">
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-[22px] text-[11px] text-primary-700/85 dark:text-primary-300/85">
                     <span className="tabular-nums">{g.rows.length.toLocaleString()} รายการ</span>
                     <span className="tabular-nums font-bold">
                       {pieces.toLocaleString()} ชิ้น
                     </span>
                     <span className="tabular-nums">เฉลี่ย {avgPerPiece}/ชิ้น</span>
                     {refundedPieces > 0 ? (
-                      <span className="rounded bg-white/20 px-1.5 py-0.5 tabular-nums">
+                      <span className="rounded bg-primary-600/10 px-1.5 py-0.5 tabular-nums">
                         คืนเงินแล้ว {refundedPieces.toLocaleString()} ชิ้น (ไม่นับรวม)
                       </span>
                     ) : null}
-                    <span className="ml-auto opacity-80 group-open:hidden">▸ กดเพื่อกางรายการ</span>
-                    <span className="ml-auto hidden opacity-80 group-open:inline">กดหัวร้านเพื่อย่อ</span>
+                    <span className="ml-auto opacity-75 group-open:hidden">▸ กดเพื่อกางรายการ</span>
+                    <span className="ml-auto hidden opacity-75 group-open:inline">กดหัวร้านเพื่อย่อ</span>
                   </div>
                 </summary>
                 <div className="overflow-x-auto scrollbar-x-visible">
