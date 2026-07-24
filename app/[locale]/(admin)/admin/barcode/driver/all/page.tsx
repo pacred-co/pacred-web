@@ -2,7 +2,6 @@ import { Link } from "@/i18n/navigation";
 import { ScanLine } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { ScannerInput } from "@/components/admin/scanner-input";
-import { TopMenuBarcode } from "@/components/admin/top-menu-barcode";
 
 /**
  * Admin > สแกนทั้งหมด (เครื่องสแกน) — workflow ported 1:1 from the legacy
@@ -26,27 +25,28 @@ export default async function BarcodeDriverAllPage() {
 
   return (
     <>
-      <TopMenuBarcode activeHref="/admin/barcode/driver/all" />
+      {/* กะทัดรัด/เพรียว (ปอน 2026-07-24) — ดันขึ้น: py เล็กลง · หัวข้อ+ไอคอนเล็กลง
+          · ระยะห่างแคบลง. ให้ช่องสแกนอยู่สูง มือถือเห็นครบในหน้าเดียวไม่ต้องเลื่อน. */}
       <div className="min-h-screen bg-slate-50">
-        <div className="mx-auto max-w-2xl px-4 py-6 sm:py-8">
-          <nav className="mb-3 text-sm text-slate-500" aria-label="breadcrumb">
+        <div className="mx-auto max-w-2xl px-4 py-3 sm:py-4">
+          <nav className="mb-2 text-xs text-slate-500" aria-label="breadcrumb">
             <Link href="/admin" className="hover:text-primary-700">หน้าแรก</Link>
             <span className="mx-1.5">/</span>
             <span className="text-slate-700">สแกนทั้งหมด (เครื่องสแกน)</span>
           </nav>
 
-          <div className="mb-5 flex items-center gap-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600">
-              <ScanLine className="h-7 w-7" aria-hidden="true" />
+          <div className="mb-3 flex items-center gap-2.5">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+              <ScanLine className="h-5 w-5" aria-hidden="true" />
             </span>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 sm:text-3xl">สแกนทั้งหมด</h1>
-              <p className="mt-1 text-sm text-slate-600">ด้วยเครื่องสแกน USB · ค้นหาได้ทุกสถานะ</p>
+              <h1 className="text-lg font-bold text-slate-900 sm:text-xl">สแกนทั้งหมด</h1>
+              <p className="text-xs text-slate-600">ด้วยเครื่องสแกน USB · ค้นหาได้ทุกสถานะ</p>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="p-4 sm:p-6">
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="p-3 sm:p-4">
               <ScannerInput type="all" />
             </div>
           </div>

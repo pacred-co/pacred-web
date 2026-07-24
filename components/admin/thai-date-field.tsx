@@ -73,8 +73,10 @@ export function ThaiDateField({
         pattern="\d{1,2}/\d{1,2}/\d{4}"
         title="รูปแบบ วว/ดด/ปปปป เช่น 24/04/2026"
         aria-label={ariaLabel}
-        className={`w-[8.5rem] rounded-lg border border-border bg-white py-2 pl-2.5 text-sm min-h-[38px] tabular-nums ${
-          canPick ? "pr-8 cursor-pointer" : "pr-2.5"
+        // ขอบมนแบบ pill ให้เข้าชุดกับ badge/ปุ่มในแถบกรองเดียวกัน (ปอน 2026-07-24).
+        // pl กว้างขึ้นเล็กน้อยเพราะขอบมนกินพื้นที่ซ้ายของตัวอักษร.
+        className={`w-[8.5rem] rounded-full border border-border bg-white py-2 pl-3.5 text-sm min-h-[38px] tabular-nums ${
+          canPick ? "pr-8 cursor-pointer" : "pr-3.5"
         }`}
       />
 

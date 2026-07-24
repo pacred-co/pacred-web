@@ -31,6 +31,7 @@ import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
 import { routeOrderOf } from "@/lib/admin/driver-route-order";
 import { BILL_BADGE_CLASS, DriverBillViewModal } from "./driver-bill-view-modal";
 import { BatchManage, RemoveItemButton } from "./batch-manage";
+import { PinLocationButton } from "./pin-location-button";
 import { CourierUrlInput } from "./courier-url-input";
 import { TruckBookingCopyBox } from "./truck-booking-copy-box";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
@@ -607,27 +608,20 @@ export default async function AdminDriverBatchDetailPage({
           </div>
         </div>
 
-        {/* ปุ่มดูใบส่งของ (popup) + นับถอยหลัง · items-end = เวลา bottom-align กับ badge */}
-        <div className="flex items-end gap-2">
-          <DriverBillViewModal
-            groups={billGroups}
-            batchName={batch.fdname ?? `#${batch.id}`}
-            printHref={`/admin/drivers/${batch.id}/print`}
-            slipHref={`/admin/drivers/${batch.id}/delivery-slip`}
-            label="ดูใบส่งสินค้า"
-            triggerClassName="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#e02424] px-4 py-2 text-sm font-bold text-white shadow-md active:scale-95"
-          />
-          {batch.endtime && (
-            // label + เวลา in-flow (ปอน 2026-07-24) — ไม่ล้น = ไม่ทับแถวด้านบน ·
-            // row = items-end → เวลา bottom-align กับ badge "ดูใบส่งสินค้า" (ไม่ขยับ).
-            <div className="ml-auto flex shrink-0 flex-col items-end">
+        {/* นับถอยหลัง — label + เวลา in-flow (ปอน 2026-07-24) ไม่ล้น = ไม่ทับแถวบน.
+            ปุ่ม "ดูใบส่งสินค้า" (popup) ถูกถอดออกจากมือถือ 2026-07-24 (ปอน).
+            §0d ยังผ่าน: บนมือถือเปิดใบเดียวกันได้ที่ปุ่ม "พิมพ์บิลจัดส่ง" ด้านล่าง
+            (ชี้ /print ตัวเดียวกับที่ popup ใช้) · popup ยังอยู่บนจอคอม. */}
+        {batch.endtime && (
+          <div className="flex items-end justify-end">
+            <div className="flex shrink-0 flex-col items-end">
               <span className="mb-0.5 whitespace-nowrap text-[11px] leading-none text-muted">
                 ส่งของก่อนเวลา
               </span>
               <BatchCountdown endTimeIso={batch.endtime} status={fdstatus} size="lg" />
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* ผู้ดำเนินงาน / มอบหมาย */}
         <div className="grid grid-cols-2 gap-2">
@@ -888,6 +882,9 @@ export default async function AdminDriverBatchDetailPage({
             const mapHref = hasPin
               ? `https://www.google.com/maps/search/${f.faddresslatitude},${f.faddresslongitude}`
               : `https://www.google.com/maps/search/${encodeURIComponent(addrText)}`;
+            // ทุก tb_forwarder ที่อยู่ในจุดส่งนี้ (จุด = ลูกค้า+ที่อยู่เดียวกัน · ดู
+            // stopsByKey ด้านบน) — ใช้เป็นเป้าของการปักหมุดให้ติดทั้งจุดในครั้งเดียว.
+            const stopFids = Array.from(new Set(stop.items.map((e) => e.forwarder.id)));
             // delivery photos for this stop (the driver's drop-off shots)
             const deliveryPhotos = Array.from(
               new Set(stop.items.map((e) => e.photoOffUrl).filter((u): u is string => Boolean(u))),
@@ -981,6 +978,15 @@ export default async function AdminDriverBatchDetailPage({
                       >
                         <MapPin className="h-3 w-3" /> {hasPin ? "แผนที่" : "ค้นที่อยู่"}
                       </a>
+                      {/* ปักหมุด — บันทึกพิกัดที่ยืนอยู่จริงเป็นที่อยู่จัดส่งของจุดนี้
+                          (ปอน 2026-07-24). ส่ง fid ของ "ทุกแถวในจุดนี้" ไม่ใช่แค่แถวแรก
+                          เพราะ 1 จุดส่ง = ลูกค้า+ที่อยู่เดียว แต่มีได้หลายแทรคกิ้ง —
+                          ปักติดไม่ครบ = แถวพี่น้องยังนำทางด้วยข้อความ ไปคนละที่กัน. */}
+                      <PinLocationButton
+                        fids={stopFids}
+                        addressText={addrText}
+                        hasPin={hasPin}
+                      />
                     </div>
                     {isWarehousePlaceholder(f.faddressname) ? (
                       <>
@@ -1176,6 +1182,8 @@ export default async function AdminDriverBatchDetailPage({
               : `https://www.google.com/maps/search/${encodeURIComponent(addrText)}`;
             const deliveryPhotos = Array.from(new Set(stop.items.map((e) => e.photoOffUrl).filter((u): u is string => Boolean(u))));
             const editableIds = stop.items.filter((e) => e.item.fdistatus !== "3").map((e) => e.item.id);
+            // เป้าของการปักหมุด = ทุกแถวในจุดนี้ (เหมือนฝั่งเดสก์ท็อป · ค่าเดียวกัน)
+            const stopFids = Array.from(new Set(stop.items.map((e) => e.forwarder.id)));
             const phones = [f.faddresstel, f.faddresstel2].map((p) => (p ?? "").trim()).filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
             const placeholder = isWarehousePlaceholder(f.faddressname);
             const heroPhoto = deliveryPhotos[0] ?? stop.items.find((e) => e.coverUrl)?.coverUrl ?? null;
@@ -1192,6 +1200,12 @@ export default async function AdminDriverBatchDetailPage({
                   <div className="leading-tight">
                     <p className="text-[11px] text-muted">ลำดับส่ง</p>
                     <p className="text-base font-bold">{total} รายการ</p>
+                  </div>
+                  {/* ปักหมุด — อยู่แถวหัวการ์ด ชิดขวา (ปอน 2026-07-24). จอนี้คือจอ
+                      ที่คนขับใช้ตอนยืนหน้าบ้านลูกค้าจริง จึงวางไว้ให้เห็นตั้งแต่
+                      หัวการ์ด ไม่ต้องกวาดตาหาในแถวแท็ก. */}
+                  <div className="ml-auto shrink-0">
+                    <PinLocationButton fids={stopFids} addressText={addrText} hasPin={hasPin} />
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
@@ -1251,6 +1265,7 @@ export default async function AdminDriverBatchDetailPage({
                       <a href={mapHref} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
                         <MapPin className="h-3 w-3" /> GoogleMaps
                       </a>
+                      {/* (ปุ่มปักหมุดย้ายขึ้นไปแถวหัวการ์ดแล้ว — ปอน 2026-07-24) */}
                     </div>
                   </div>
                 </div>

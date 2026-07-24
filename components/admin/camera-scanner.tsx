@@ -300,7 +300,7 @@ export function CameraScanner({
               ref={inputRef}
               value={manual}
               onChange={(e) => setManual(e.target.value)}
-              className="min-h-[44px] flex-1 rounded-xl border-2 border-primary-300 bg-white px-4 py-2.5 text-base font-mono focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100"
+              className="min-h-[44px] flex-1 rounded-full border-2 border-primary-300 bg-white px-5 py-2.5 text-base font-mono focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100"
               placeholder="เลข tracking / บาร์โค้ด…"
               autoComplete="off"
               inputMode="text"
@@ -308,7 +308,7 @@ export function CameraScanner({
             <button
               type="submit"
               disabled={!manual.trim()}
-              className="inline-flex min-h-[44px] items-center rounded-xl bg-primary-600 px-5 text-sm font-bold text-white transition-colors hover:bg-primary-700 disabled:opacity-40"
+              className="inline-flex min-h-[44px] items-center rounded-full bg-primary-600 px-5 text-sm font-bold text-white transition-colors hover:bg-primary-700 disabled:opacity-40"
             >
               OK
             </button>
