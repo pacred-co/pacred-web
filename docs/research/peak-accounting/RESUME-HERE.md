@@ -11,13 +11,13 @@
 |---|---|
 | [`README.md`](README.md) | ✅ index + document-model + 20-collection map + 68-revenue-article map + "ยืนยันจากภาพจริง" (stepper/doc-codes/GL-per-line) |
 | [`revenue-documents.md`](revenue-documents.md) | ✅ **เต็ม · image-informed** — ฝั่งรับเงิน 8 หมวด (68 บทความ · ดูรูป 126+รูป) · รหัสเอกสาร QO/DR/DRT/IV/IVT/RE/RT/TIV/CN(T)/DBN(T)/BN · GL จริง (212104/215102↔215101/115403/113101/410101/510103) · ตาราง Dr/Cr · สรุปสร้างระบบเรา |
-| [`expense-documents.md`](expense-documents.md) | 🟡 **map-only** — ฝั่งจ่าย 92 บทความ 10 หมวด (article-ids + document-model + GL sketch) · **เนื้อหาเต็ม+รูป ยังไม่เก็บ** |
+| [`expense-documents.md`](expense-documents.md) | ✅ **core money-flow เก็บเต็ม image-informed** (2026-07-24 · 15 บทความ · 1.68M tok) — GL Dr/Cr จริงทุกใบ (PO/DP/EXP/บันทึกซื้อ+FX¥/รับใบเสร็จ+VAT/WHT/เงินเดือน/ใบกำกับซื้อ/ใบรวมจ่าย/ลดหนี้-เพิ่มหนี้) + **chart of accounts (21 GL)** + สรุปพิมพ์เขียว · 🟡 peripheral ~77 บทความ ยัง map-only (map อยู่ท้ายไฟล์) |
 
 ## 🔴 ยังไม่เก็บ (ลุยต่อ · เรียงลำดับ)
-1. **ฝั่งจ่ายเงิน (Expense · 92 บทความ)** — capture เนื้อหาเต็ม+รูป ตาม article-ids ใน `expense-documents.md` → เขียนทับไฟล์เดิม
-2. **ภาษี PEAK Tax (36 บทความ)** — คอลเลกชัน `collections/3474326-จัดการภาษี-peak-tax` (ภพ.30/ภงด/e-tax) → `tax-documents.md`
-3. **ข้อมูลการเงิน-บัญชี (56)** — ผังบัญชี/สมุดรายวัน/งบ (หา collection id จาก `intercom.help/peak/en/` — ยังไม่ได้ id)
-4. (option) สินค้า/ผู้ติดต่อ/รายงาน/ตั้งค่า
+1. ✅ **ฝั่งจ่าย core เก็บแล้ว** (2026-07-24) — เหลือ peripheral ~77 บทความ (variant/edge/settings · ลงบัญชี pattern ซ้ำ core · **optional** · map ท้าย `expense-documents.md`)
+2. 🔴 **ภาษี PEAK Tax (36 บทความ) = priority ถัดไป** — คอลเลกชัน `collections/3474326-จัดการภาษี-peak-tax` (ภพ.30/ภงด/e-tax) → `tax-documents.md` · ⚠️ ปิด gap ที่ core expense เจอ: การ **offset 215101 ภาษีขาย vs 115401 ภาษีซื้อ → เจ้าหนี้สรรพากร ภพ.30** (ปิดงวด VAT) + กรณี input>output (ขอคืน)
+3. **ข้อมูลการเงิน-บัญชี (56)** — ผังบัญชี/สมุดรายวัน/งบ/ปิดงวด (หา collection id จาก `intercom.help/peak/en/`)
+4. (option) expense peripheral 77 · สินค้า/ผู้ติดต่อ/รายงาน/ตั้งค่า
 
 ---
 
