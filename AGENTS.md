@@ -157,6 +157,12 @@ This is the typography arm of §0f (product-quality) — apply it whenever you t
 
 ---
 
+## 0i. เอกสารที่พิมพ์ = ต้องพิสูจน์ด้วยกระดาษ (2026-07-24 · owner)
+
+`@media print` เป็นโลกที่ **tsc / lint / build / การ render ปกติ ไม่แตะเลย** — gate ทุกตัวเขียวได้ทั้งที่ของที่พิมพ์ออกมาพัง. รอบ 2026-07-24 หลุด 3 อย่างพร้อมกันโดยผ่าน gate ครบ: เมนูแอปติดไปในกระดาษ · หน้าขาวแทรกทุกหน้า (2 แผ่นออกมา 4) · ชื่อไฟล์ PDF ที่ตั้งไว้แล้วแต่ไม่เคยถูกใช้.
+
+แตะหน้าที่มี `window.print()` / `PrintButton` / `@media print` → **รัน skill `print-verify`** ก่อนพูดว่าเสร็จ. และกฎที่กว้างกว่านั้น: **หลักฐานต้องเป็นสิ่งที่ผู้ใช้ได้รับจริง ไม่ใช่สัญญาณกลางทาง** — "มี `<title>` ในไฟล์" ≠ "ชื่อไฟล์เปลี่ยน" · "มี class `.no-print`" ≠ "ปุ่มหายจากกระดาษ" · "หน้าจอสวย" ≠ "PDF ถูก". ถามตัวเองว่า *ปลายทางผู้ใช้ถืออะไรอยู่* แล้วตรวจอันนั้น.
+
 ## 0. Current direction — D1: Pacred is a faithful PCS Cargo port
 
 On **2026-05-18 the owner rejected the rebuilt-from-scratch Pacred app** — its UI and workflow look nothing like the legacy **PCS Cargo** system that staff and ~8,898 customers use daily. The direction is now **D1: Pacred becomes the legacy PCS Cargo system, faithfully — rebranded `PCS` → `PR`.** This is the canonical lens for every task. Three phases:

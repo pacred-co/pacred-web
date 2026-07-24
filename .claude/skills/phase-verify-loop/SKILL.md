@@ -101,6 +101,12 @@ git status --short                     # working tree state
 pnpm exec next build                   # only if a route boundary changed (slow)
 ```
 
+## Print gate (เอกสารที่พิมพ์ได้)
+
+ถ้า diff แตะหน้าไหนที่มี `window.print()` / `PrintButton` / `@media print` / `<title>` / `position: fixed|sticky` บนหน้า customer → **รัน skill `print-verify` ก่อนบอกว่าเสร็จ**.
+
+`@media print` ไม่ถูกแตะโดย tsc/lint/build/render เลย — gate อื่นเขียวได้ทั้งที่กระดาษพัง (2026-07-24: เมนูติดกระดาษ · หน้าขาวเบิ้ล 2→4 แผ่น · ชื่อไฟล์ที่ไม่เคยทำงาน — ทั้งหมดผ่าน gate ครบ).
+
 ## Production smoke gate — MANDATORY before any deploy to `main`
 
 `pnpm verify` + `pnpm build` passing does NOT prove pages work in production.
