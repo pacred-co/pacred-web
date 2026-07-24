@@ -33,6 +33,7 @@ import { appendStatusLog } from "@/lib/notifications/status-flip-helper";
 import { resolveProfileIdForLegacyUserid } from "@/lib/auth/tb-users-resolver";
 import { logger } from "@/lib/logger";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
+import { evaluateDeliveryAddressGate } from "@/lib/forwarder/delivery-address-gate";
 import {
   costBasisForWarehouse,
   checkCostWritePlausible,
@@ -787,7 +788,9 @@ export async function adminReportCntBillToCustomer(
       const { data: row, error: rowErr } = await admin
         .from("tb_forwarder")
         .select(
-          "id, fstatus, userid, fidorco, ftrackingchn, fshipby, paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, fdiscount",
+          "id, fstatus, userid, fidorco, ftrackingchn, fshipby, paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, fdiscount, " +
+            // ด่านที่อยู่จัดส่งก่อน 4→5 (owner 2026-07-23) — read-only
+            "faddressprovince, faddresszipcode, faddressno",
         )
         .eq("id", fID)
         .maybeSingle<{
@@ -798,6 +801,9 @@ export async function adminReportCntBillToCustomer(
           ftrackingchn: string | null;
           fshipby: string | null;       // C2 — carrier, for the ค่าส่งไทย gate
           paymethod: string | null;     // C2 — '2'=COD → domestic leg exempt
+          faddressprovince: string | null;
+          faddresszipcode: string | null;
+          faddressno: string | null;
           ftotalprice: number | null;
           ftransportprice: number | null;
           fpriceupdate: number | null;
@@ -855,6 +861,22 @@ export async function adminReportCntBillToCustomer(
           error:
             "ค่านำเข้า ฿0 — ยังไม่ได้วัด/ตั้งราคา · อาจเก็บเงินขาด (กรุณาตั้งเรท/วัดขนาดที่โกดังก่อนแจ้งหนี้ลูกค้า)",
         };
+      }
+
+      // ── 🔴 (a1½) ด่านที่อยู่จัดส่ง ก่อน 4→5 (owner 2026-07-23 · MONEY) ──
+      // ที่อยู่กำหนดค่าส่งไทยที่ขึ้นบิล + ที่อยู่ผู้รับบนเอกสาร → ต้องมีก่อนแจ้งหนี้.
+      // วางไว้ก่อน auto-fill ค่าส่งไทย เพราะที่อยู่คือ input ของการคิดค่าส่ง.
+      // (ด่านเดียวกันนี้มีที่ "เพิ่มเข้าคิวตรวจสอบ" อยู่แล้ว — แต่ทางนี้เข้าถึง 4→5
+      //  ได้โดยไม่ผ่านคิว จึงต้องกันซ้ำตรงนี้ด้วย.)
+      {
+        const addrGate = evaluateDeliveryAddressGate([row]);
+        if (!addrGate.ok) {
+          await logAdminAction(adminId, "report_cnt.bill_to_customer_rejected", "tb_forwarder", String(fID), {
+            reason: "no_delivery_address",
+            from_status: fromStatus,
+          });
+          return { ok: false, error: addrGate.message };
+        }
       }
 
       // ── (a2) #7 auto-fill ค่าส่งไทย (owner 2026-07-08 "ต้อง auto") ──

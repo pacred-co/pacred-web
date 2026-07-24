@@ -49,6 +49,7 @@ import {
 import { computeForwarderDebitBatch } from "@/lib/forwarder/forwarder-debit-total";
 import { resolveMaoAnchorIds } from "@/lib/forwarder/mao-anchor";
 import { isThShippingCostMissing, codBaseTrackings } from "@/lib/forwarder/domestic-shipping";
+import { evaluateDeliveryAddressGate } from "@/lib/forwarder/delivery-address-gate";
 import { getContainerCompletenessBatch } from "@/lib/warehouse/container-completeness";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
@@ -181,7 +182,9 @@ const FWD_BILLING_SELECT =
   "id, fshipby, paymethod, ftrackingchn, fdate, famount, fweight, fvolume, fstatus, " +
   "fcredit, paydeposit, fusercompany, advance_bill_confirmed, fcabinetnumber, " +
   "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, " +
-  "ftransportpricechnthb, priceother, fdiscount";
+  "ftransportpricechnthb, priceother, fdiscount, " +
+  // ด่านที่อยู่จัดส่งก่อน 4→5 (owner 2026-07-23 · delivery-address-gate) — read-only
+  "fidorco, faddressprovince, faddresszipcode, faddressno";
 
 /** Raw row shape the eligibility queries return (all price cols + flags). */
 type FwdBillingRaw = ForwarderPriceFields &
@@ -195,6 +198,11 @@ type FwdBillingRaw = ForwarderPriceFields &
     fweight: number | string | null;
     fvolume: number | string | null;
     fcabinetnumber: string | null; // G1 combo-flow — the container, for the packing-reconcile gate
+    // ด่านที่อยู่จัดส่งก่อน 4→5 (owner 2026-07-23) — read-only, never written here
+    fidorco: string | null;
+    faddressprovince: string | null;
+    faddresszipcode: string | null;
+    faddressno: string | null;
   };
 
 // ────────────────────────────────────────────────────────────────────────
@@ -1380,6 +1388,17 @@ async function createBillingRunInvoiceImpl(
               error: "บทบาทนี้ยืนยันสถานะ 4→5 (แจ้งชำระเงิน) ไม่ได้ — ให้บัญชี/แอดมินดำเนินการ",
             };
           }
+          // 🔴 ด่านที่อยู่จัดส่ง ก่อน 4→5 (owner 2026-07-23 · MONEY) — เฉพาะแถวที่
+          // กำลังจะถูกยก 4→5 ในบิลใบนี้ (แถวที่อยู่ 5 อยู่แล้วผ่านด่านมาก่อนหน้า).
+          // ที่อยู่กำหนดค่าส่งไทยที่ขึ้นบิล + ที่อยู่ผู้รับบนใบวางบิล → refuse ทั้งใบ
+          // ก่อนเขียนอะไร (ถ้าปล่อยผ่าน แถวจะยกไม่ขึ้นแล้วไปตายที่ wrongStatus guard
+          // ข้างล่างด้วยข้อความที่ไม่บอกสาเหตุจริง).
+          const liftRows = fwd.filter((f) => toLift.includes(f.id));
+          const liftAddrGate = evaluateDeliveryAddressGate(liftRows);
+          if (!liftAddrGate.ok) {
+            return { ok: false, error: liftAddrGate.message };
+          }
+
           const nowIso = new Date().toISOString();
           const liftLegacyAdminId = safeLegacyAdminId(await resolveLegacyAdminId(), 10);
           for (const id of toLift) {
