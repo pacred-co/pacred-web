@@ -1268,29 +1268,30 @@ export default async function AdminDriverBatchDetailPage({
                       </a>
                       {/* (ปุ่มปักหมุดย้ายขึ้นไปแถวหัวการ์ดแล้ว — ปอน 2026-07-24) */}
                     </div>
-                  </div>
-                </div>
 
-                {/* ตารางย่อ */}
-                <div className="overflow-hidden rounded-lg border border-border">
-                  <table className="w-full text-center text-xs">
-                    <thead className="bg-surface-alt/60 text-[11px] text-muted">
-                      <tr>
-                        <th className="px-2 py-1 font-semibold">แทรคกิ้ง</th>
-                        <th className="px-2 py-1 font-semibold">กล่อง</th>
-                        <th className="px-2 py-1 font-semibold">CBM</th>
-                        <th className="px-2 py-1 font-semibold">KG</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="font-semibold">
-                        <td className="border-t border-border px-2 py-1.5">{total}</td>
-                        <td className="border-t border-border px-2 py-1.5">{stop.totalBoxes}</td>
-                        <td className="border-t border-border px-2 py-1.5">{stop.totalVolume.toFixed(5)}</td>
-                        <td className="border-t border-border px-2 py-1.5">{stop.totalWeight.toFixed(2)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                    {/* ตารางย่อ — อยู่ในคอลัมน์ข้อมูล (ขวา) เยื้องเริ่มตรงกับช่องเบอร์โทร
+                        แทนการกินเต็มความกว้างใต้รูป (owner 2026-07-24). */}
+                    <div className="overflow-hidden rounded-lg border border-border">
+                      <table className="w-full text-center text-xs">
+                        <thead className="bg-surface-alt/60 text-[11px] text-muted">
+                          <tr>
+                            <th className="px-2 py-1 font-semibold">แทรคกิ้ง</th>
+                            <th className="px-2 py-1 font-semibold">กล่อง</th>
+                            <th className="px-2 py-1 font-semibold">CBM</th>
+                            <th className="px-2 py-1 font-semibold">KG</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="font-semibold">
+                            <td className="border-t border-border px-2 py-1.5">{total}</td>
+                            <td className="border-t border-border px-2 py-1.5">{stop.totalBoxes}</td>
+                            <td className="border-t border-border px-2 py-1.5">{stop.totalVolume.toFixed(5)}</td>
+                            <td className="border-t border-border px-2 py-1.5">{stop.totalWeight.toFixed(2)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
 
                 {/* 3 ปุ่มแถวเดียว (owner 2026-07-24): ใบส่งสินค้า · สติกเกอร์ · เพิ่มเติม.
