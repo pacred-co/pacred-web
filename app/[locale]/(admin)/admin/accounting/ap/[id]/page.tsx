@@ -167,6 +167,16 @@ export default async function ApDisbursementDetailPage({
                   {row.amount_gross != null && <div>ฐาน gross: ฿{fmt2(row.amount_gross)}</div>}
                   {row.wht_pct != null && <div>อัตราหัก: {row.wht_pct}%</div>}
                   {row.wht_cert_no && <div>ใบหัก: {row.wht_cert_no}</div>}
+                  {row.wht_pct != null && Number(row.wht_pct) > 0 && (
+                    <a
+                      href={`/admin/accounting/ap/${row.id}/wht-form`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1.5 inline-block rounded-lg border border-sky-300 bg-white px-2.5 py-1 text-xs font-bold text-sky-700 hover:bg-sky-50"
+                    >
+                      📄 ฟอร์ม 50 ทวิ (Pacred เป็นผู้หัก)
+                    </a>
+                  )}
                 </div>
               )}
             </dl>
