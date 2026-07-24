@@ -199,14 +199,14 @@ export function ScannerInput({
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={onKeyDown}
           onKeyUp={onKeyUp}
-          className="min-h-[44px] flex-1 rounded-full border-2 border-primary-300 bg-white px-5 py-2.5 text-base font-mono text-slate-900 placeholder:text-slate-400 focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100"
+          className="min-h-[44px] min-w-0 flex-1 rounded-full border-2 border-primary-300 bg-white px-5 py-2.5 text-base font-mono text-slate-900 placeholder:text-slate-400 focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-100"
           placeholder={placeholder}
           inputMode="text"
         />
         <button
           type="submit"
           aria-label="ค้นหา"
-          className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-full bg-primary-600 px-5 text-sm font-bold text-white transition-colors hover:bg-primary-700"
+          className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-primary-600 px-5 text-sm font-bold text-white transition-colors hover:bg-primary-700"
         >
           <Search className="h-5 w-5" aria-hidden="true" />
           <span className="hidden sm:inline">ค้นหา</span>
