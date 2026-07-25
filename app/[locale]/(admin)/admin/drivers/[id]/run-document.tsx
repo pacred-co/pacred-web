@@ -335,7 +335,7 @@ export async function DriverRunDocument({
       }
       g.boxes += Number(f.famount ?? 0);
       g.weight += Number(f.fweight ?? 0);
-      g.volume += Number(f.fvolume ?? 0);
+      g.volume += totalCbmOf(f);   // กฎ famountcount (SOT · ยามจับตอน merge งานปอน)
       const t = (f.ftrackingchn ?? "").trim();
       if (t && !g.trackings.includes(t)) g.trackings.push(t);
       const c = nameShipBy(f.fshipby);
