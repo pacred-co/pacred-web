@@ -41,6 +41,7 @@
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
 import { SITE_NAME, SITE_LEGAL_NAME_TH, CONTACT, ADDRESSES } from "@/components/seo/site";
@@ -68,6 +69,7 @@ type Forwarder = {
   ftrackingchn: string | null;
   fshipby: string | null;
   famount: number | string | null;
+  famountcount: string | null;
   fweight: number | string | null;
   fvolume: number | string | null;
   fcabinetnumber: string | null;
@@ -84,7 +86,7 @@ type Forwarder = {
 };
 
 const FORWARDER_COLS =
-  "id, fidorco, userid, ftrackingchn, fshipby, famount, fweight, fvolume, fcabinetnumber, fpallet, " +
+  "id, fidorco, userid, ftrackingchn, fshipby, famount, famountcount, fweight, fvolume, fcabinetnumber, fpallet, " +
   "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
   "faddressdistrict, faddressprovince, faddresszipcode, faddresstel, faddresstel2";
 
@@ -268,7 +270,7 @@ export default async function DriverStickerSheetPage({
       existing.fNos.push(fNo);
       existing.totalBoxes  += Number(f.famount ?? 0);
       existing.totalWeight += Number(f.fweight ?? 0);
-      existing.totalVolume += Number(f.fvolume ?? 0);
+      existing.totalVolume += totalCbmOf(f);
     } else {
       byKey.set(key, {
         key,

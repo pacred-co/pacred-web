@@ -18,6 +18,7 @@
 import { Link } from "@/i18n/navigation";
 import { notFound } from "next/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
@@ -123,6 +124,7 @@ type Forwarder = {
   ftrackingchn:             string | null;
   fshipby:                  string | null;
   famount:                  number | null;
+  famountcount:             string | null;
   fweight:                  number | null;
   fvolume:                  number | null;
   fpallet:                  string | null;
@@ -211,7 +213,7 @@ export default async function AdminDriverBatchDetailPage({
     const { data: fwdData, error: fwdErr } = await admin
       .from("tb_forwarder")
       .select(
-        "id, fidorco, fstatus, ftrackingchn, fshipby, famount, fweight, fvolume, " +
+        "id, fidorco, fstatus, ftrackingchn, fshipby, famount, famountcount, fweight, fvolume, " +
         "fpallet, fnote, fphotoend, fcabinetnumber, fcover, userid, courier_tracking_url, " +
         "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
         "faddressdistrict, faddressprovince, faddresszipcode, " +
@@ -393,7 +395,7 @@ export default async function AdminDriverBatchDetailPage({
       existing.items.push({ item: it, forwarder: f });
       existing.totalBoxes  += Number(f.famount  ?? 0);
       existing.totalWeight += Number(f.fweight  ?? 0);
-      existing.totalVolume += Number(f.fvolume  ?? 0);
+      existing.totalVolume += totalCbmOf(f);
     } else {
       stopsByKey.set(key, {
         addressKey:  key,

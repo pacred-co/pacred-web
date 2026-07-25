@@ -28,27 +28,43 @@ prod (2026-07-24): **937 แถว fac='1'** (ในนั้น **224 แถว
 - [x] `admin/forwarders/print/page.tsx` — ใบพิมพ์โกดัง · เดิมคูณเกิน
 - [x] ทั้ง 2 ไฟล์ **ไม่เคย select `famountcount`** → เติมเข้า select + type แล้ว
 
-## 🔴 ยังไม่ทำ — 8 จุด Σ ดิบ (ฝั่งคนขับ/จัดส่ง · นับขาดกับแถวคีย์มือ)
+## ✅ เสร็จรอบ 2 (push ถัดไป) — 10 จุดฝั่งคนขับ/จัดส่ง/CSV
 
-แก้ทีละไฟล์ + เปิดดูจริง **ห้าม sed รวด** (เส้นจัดส่ง — พังแล้วคนขับทำงานไม่ได้)
+- [x] `admin/drivers/new/page.tsx` (2 จุด) + `self-pickup-form.tsx` (3 จุด: Σ · sort · แสดงผล)
+- [x] `admin/drivers/[id]/page.tsx` · `stickers` · `delivery-slip` · `run-document`
+- [x] `admin/driver-runs/page.tsx` · `admin/printAll/page.tsx`
+- [x] `actions/admin/export/warehouse-history.ts` — **CSV โกดัง คูณเกิน = บั๊กจริง** (ยามจับได้)
+- [x] `actions/admin/pay-user-view.ts` — กฎถูกแต่ก๊อปสูตร → ต่อ SOT
+- [x] ทุกไฟล์เติม `famountcount` เข้า select + type แล้ว
 
-- [ ] `admin/drivers/new/page.tsx:238` + `:312` — `existing.totalVolume += item.fvolume`
-- [ ] `admin/drivers/new/self-pickup-form.tsx:237` — `volume += it.fvolume`
-- [ ] `admin/drivers/[id]/page.tsx:396`
-- [ ] `admin/drivers/[id]/stickers/page.tsx:271`
-- [ ] `admin/drivers/[id]/delivery-slip/page.tsx:370` — `reduce(... f.fvolume)`
-- [ ] `admin/driver-runs/page.tsx:311` — `g.volume += num(fwd.fvolume)`
-- [ ] `admin/printAll/page.tsx:245` — `reduce(... f.fvolume)`
-- [ ] `admin/drivers/[id]/run-document.tsx` (ตรวจว่ามี Σ ไหม)
+## 🔴 ยังเหลือ — 9 จุด (ยาม `cbm-sot-guard.test.ts` ชี้ให้ครบแล้ว)
 
-**วิธีแก้ต่อไฟล์:** (1) เติม `famountcount` เข้า select + type (2) `import { totalCbmOf }`
-(3) แทน `+= fvolume` ด้วย `+= totalCbmOf(row)` (4) tsc + build (5) เปิดหน้าดูจริง
+**รอบแรกลองแก้ 4 ตัวแรกแล้วใส่ type ผิดตำแหน่ง → ถอยกลับหมด** (ไม่ดันต่อตอน context เหลือน้อย
+= กติกาห้ามทำงานบัค) · แก้ทีละไฟล์ ตรวจ type ให้ตรง struct จริงก่อนเสมอ
 
-## 🔴 ยังไม่ทำ — ยาม กันกลับมาอีก
+- [ ] `actions/admin/export/report-cnt.ts:114` — `existing.volumeSum += Number(r.fvolume ?? 0)`
+- [ ] `actions/admin/reports.ts:322` — `a.volume_cbm += Number(fw.fvolume ?? 0)`
+- [ ] `actions/admin/forwarder-tran-th.ts:268` — `totalVolume += it.forwarder.fvolume`
+- [ ] `(protected)/service-import/table/page.tsx:460` — `sumVolume += Number(row.fvolume ?? 0)`
+- [ ] `admin/cnt-hs/[id]/page.tsx`
+- [ ] `admin/reports/containers-awaiting-th/page.tsx`
+- [ ] `admin/reports/forwarder-volume/page.tsx`
+- [ ] `(protected)/service-import/_tracking/tracking-page.tsx`
+- [ ] `(protected)/service-import/forwarder-interactivity.tsx`
 
-- [ ] data-health check / test ที่จับว่า "มีหน้าไหนคิดคิวเองโดยไม่ผ่าน SOT"
-      (แนวคิด: unit test อ่านไฟล์ .tsx แล้ว fail ถ้าเจอ `fvolume *` หรือ `+= *fvolume`
-       นอก allowlist — ถูกกว่าไล่ตรวจด้วยตาทุกรอบ)
+**⚠️ ยามยังไม่ได้ลงทะเบียนใน `test:unit`** — จะแดงจนกว่า 9 จุดนี้จบ
+รันเองด้วย `npx tsx lib/forwarder/cbm-sot-guard.test.ts` (มันจะพิมพ์รายชื่อที่เหลือให้)
+**พอครบแล้วต้องเติมเข้า `package.json` test + test:unit ทันที** ไม่งั้นยามไม่ทำงานจริง
+
+## ✅ ยาม กันกลับมาอีก — ทำแล้ว
+
+- [x] `lib/forwarder/cbm-sot-guard.test.ts` — สแกนทุกไฟล์ใน app/lib/actions/components
+      จับ 2 ทิศ: `fvolume * famount` (คูณเกิน) และ `+= fvolume` ดิบ (นับขาด)
+      · ตัดคอมเมนต์ก่อนตรวจ (เอกสารพูดถึงสูตรได้ โค้ดห้ามเขียน)
+      · allowlist = ไฟล์ที่เป็นเจ้าของกฎ + `split-box-rows-plan` (แถว momo_box_detail
+        คือ 1 กล่องจริง ไม่มี famountcount ให้ยึด → Σ ดิบถูกแล้ว)
+      🔴 **ยามนี้คือตัวที่หา 2 จุดที่ผมมองข้ามเจอ** (CSV โกดัง + pay-user-view)
+         = พิสูจน์แล้วว่าคุ้มกว่าไล่ดูด้วยตา
 
 ## 🔴 ยังไม่ตอบ owner 1 ข้อ
 

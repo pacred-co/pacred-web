@@ -76,6 +76,7 @@
 import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
 import { PrintAllPicker, AutoPrintOnLoad } from "./print-all-picker";
@@ -105,6 +106,7 @@ type ForwarderRow = {
   ftrackingchn: string | null;
   fshipby: string | null;
   famount: number | string | null;
+  famountcount: string | null;
   fweight: number | string | null;
   fvolume: number | string | null;
   fpallet: string | null;
@@ -123,7 +125,7 @@ type ForwarderRow = {
 };
 
 const FORWARDER_COLS =
-  "id, userid, ftrackingchn, fshipby, famount, fweight, fvolume, fpallet, " +
+  "id, userid, ftrackingchn, fshipby, famount, famountcount, fweight, fvolume, fpallet, " +
   "faddressnote, fcabinetnumber, fwarehousename, " +
   "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
   "faddressdistrict, faddressprovince, faddresszipcode, faddresstel, faddresstel2";
@@ -242,7 +244,7 @@ export default async function PrintAllPage({
   // Aggregates for the on-screen summary chip.
   const totalBoxes = rows.reduce((s, f) => s + Number(f.famount ?? 0), 0);
   const totalWeight = rows.reduce((s, f) => s + Number(f.fweight ?? 0), 0);
-  const totalVolume = rows.reduce((s, f) => s + Number(f.fvolume ?? 0), 0);
+  const totalVolume = rows.reduce((s, f) => s + totalCbmOf(f), 0);
 
   // printAll.php prints ONE label per box (`fAmount` copies). Build the
   // flat list of label "pages" up front (one entry per physical box).

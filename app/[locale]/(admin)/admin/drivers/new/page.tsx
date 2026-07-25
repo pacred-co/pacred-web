@@ -27,6 +27,7 @@
 
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ArrowLeft, Truck, Home, Send, CheckCircle2, Zap, Package } from "lucide-react";
 import { CreateBatchForm } from "./create-batch-form";
@@ -43,6 +44,7 @@ type ForwarderRow = {
   fidorco:                  string | null;
   fshipby:                  string | null;
   famount:                  number | null;
+  famountcount:             string | null;
   fweight:                  number | null;
   fvolume:                  number | null;
   fpallet:                  string | null;
@@ -175,7 +177,7 @@ type Stop = {
   };
   items: {
     id: number; fidorco: string; ftrackingchn: string; userid: string;
-    famount: number; fweight: number; fvolume: number; fpallet: string; fnote: string;
+    famount: number; famountcount: string | null; fweight: number; fvolume: number; fpallet: string; fnote: string;
   }[];
   forwarderIds: number[];
   totalBoxes:   number;
@@ -194,7 +196,7 @@ function isWarehousePlaceholderName(name: string | null | undefined): boolean {
 
 type PickupItem = {
   id: number; fidorco: string; ftrackingchn: string;
-  famount: number; fweight: number; fvolume: number; fpallet: string; fnote: string;
+  famount: number; famountcount: string | null; fweight: number; fvolume: number; fpallet: string; fnote: string;
 };
 
 /** A self-pickup group — ONE customer (รหัสลูกค้า / userid), their own parcels,
@@ -226,7 +228,7 @@ function buildPickupGroups(
     const userid = (f.userid ?? "").trim() || "—";
     const item: PickupItem = {
       id: f.id, fidorco: f.fidorco ?? `#${f.id}`, ftrackingchn: f.ftrackingchn ?? "—",
-      famount: Number(f.famount ?? 0), fweight: Number(f.fweight ?? 0),
+      famount: Number(f.famount ?? 0), famountcount: f.famountcount ?? null, fweight: Number(f.fweight ?? 0),
       fvolume: Number(f.fvolume ?? 0), fpallet: f.fpallet ?? "", fnote: f.fnote ?? "",
     };
     const existing = groupMap.get(userid);
@@ -235,7 +237,7 @@ function buildPickupGroups(
       existing.forwarderIds.push(f.id);
       existing.totalBoxes  += item.famount;
       existing.totalWeight += item.fweight;
-      existing.totalVolume += item.fvolume;
+      existing.totalVolume += totalCbmOf(item);
     } else {
       const cust = customerById.get(userid);
       // Fallback name: the address name on the row, else the userid itself.
@@ -303,13 +305,13 @@ function buildStops(
     if (existing) {
       existing.items.push({
         id: f.id, fidorco: f.fidorco ?? `#${f.id}`, ftrackingchn: f.ftrackingchn ?? "—",
-        userid: f.userid ?? "—", famount: Number(f.famount ?? 0), fweight: Number(f.fweight ?? 0),
+        userid: f.userid ?? "—", famount: Number(f.famount ?? 0), famountcount: f.famountcount ?? null, fweight: Number(f.fweight ?? 0),
         fvolume: Number(f.fvolume ?? 0), fpallet: f.fpallet ?? "", fnote: f.fnote ?? "",
       });
       existing.forwarderIds.push(f.id);
       existing.totalBoxes  += Number(f.famount ?? 0);
       existing.totalWeight += Number(f.fweight ?? 0);
-      existing.totalVolume += Number(f.fvolume ?? 0);
+      existing.totalVolume += totalCbmOf(f);
     } else {
       const cust = customerById.get(userid);
       const customerName = cust?.name || "";
@@ -328,7 +330,7 @@ function buildStops(
         addressMissing: addrMissing,
         items: [{
           id: f.id, fidorco: f.fidorco ?? `#${f.id}`, ftrackingchn: f.ftrackingchn ?? "—",
-          userid: f.userid ?? "—", famount: Number(f.famount ?? 0), fweight: Number(f.fweight ?? 0),
+          userid: f.userid ?? "—", famount: Number(f.famount ?? 0), famountcount: f.famountcount ?? null, fweight: Number(f.fweight ?? 0),
           fvolume: Number(f.fvolume ?? 0), fpallet: f.fpallet ?? "", fnote: f.fnote ?? "",
         }],
         forwarderIds: [f.id],
@@ -398,7 +400,7 @@ export default async function CreateDriverBatchPage({
   const { data: eligibleData, error: eligibleErr } = await admin
     .from("tb_forwarder")
     .select(
-      "id, fidorco, fshipby, famount, fweight, fvolume, fpallet, ftrackingchn, fnote, userid, " +
+      "id, fidorco, fshipby, famount, famountcount, fweight, fvolume, fpallet, ftrackingchn, fnote, userid, " +
       "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
       "faddressdistrict, faddressprovince, faddresszipcode, faddresstel, paydeposit",
     )

@@ -36,6 +36,7 @@ import { Link } from "@/i18n/navigation";
 import { Camera, CheckCircle2, Phone, ChevronsUpDown, ChevronUp, ChevronDown } from "lucide-react";
 import { markForwarderSelfPickupDelivered } from "@/actions/admin/forwarder-self-pickup";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { compressImageFile } from "@/lib/image-compress";
 
 type PickupItem = {
@@ -45,6 +46,7 @@ type PickupItem = {
   famount:      number;
   fweight:      number;
   fvolume:      number;
+  famountcount: string | null;
   fpallet:      string;
   fnote:        string;
 };
@@ -234,7 +236,7 @@ function CustomerPickupCard({
         ids.push(it.id);
         boxes += it.famount;
         weight += it.fweight;
-        volume += it.fvolume;
+        volume += totalCbmOf(it);
       }
     }
     return { ids, count: ids.length, boxes, weight, volume };
@@ -260,7 +262,7 @@ function CustomerPickupCard({
         case "tracking": return a.ftrackingchn.localeCompare(b.ftrackingchn, "th") * d;
         case "box":      return (a.famount - b.famount) * d;
         case "weight":   return (a.fweight - b.fweight) * d;
-        case "volume":   return (a.fvolume - b.fvolume) * d;
+        case "volume":   return (totalCbmOf(a) - totalCbmOf(b)) * d;
         default:         return 0;
       }
     });
@@ -444,7 +446,7 @@ function CustomerPickupCard({
                   </td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{it.famount}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{it.fweight.toFixed(2)}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{it.fvolume.toFixed(3)}</td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">{totalCbmOf(it).toFixed(3)}</td>
                 </tr>
               );
             })}

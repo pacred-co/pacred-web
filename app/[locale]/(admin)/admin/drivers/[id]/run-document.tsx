@@ -17,6 +17,7 @@ import { notFound } from "next/navigation";
 import { MapPin, Package, Truck } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { PrintButton } from "@/components/print-button";
@@ -86,6 +87,7 @@ type Forwarder = {
   famount: number | string | null;
   fweight: number | string | null;
   fvolume: number | string | null;
+  famountcount: string | null;
   fpallet: string | null;
   faddressname: string | null;
   faddresslastname: string | null;
@@ -100,7 +102,7 @@ type Forwarder = {
 };
 
 const FORWARDER_COLS =
-  "id, userid, ftrackingchn, fshipby, famount, fweight, fvolume, fpallet, " +
+  "id, userid, ftrackingchn, fshipby, famount, famountcount, fweight, fvolume, fpallet, " +
   "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
   "faddressdistrict, faddressprovince, faddresszipcode, faddresstel, faddresstel2, " +
   "fcover";
@@ -415,7 +417,7 @@ export async function DriverRunDocument({
                       <br />
                       Kg: {fmt(f.fweight, 2)}
                       <br />
-                      CBM: {fmt(f.fvolume, 3)}
+                      CBM: {fmt(totalCbmOf(f), 3)}
                       <br />
                       Location: {f.fpallet || "—"}
                     </div>

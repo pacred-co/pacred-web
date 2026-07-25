@@ -31,6 +31,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { logAdminExport } from "@/actions/admin/export-log";
 import { isGeneralCoid } from "@/lib/forwarder/coid";
@@ -142,6 +143,7 @@ type ForwarderRow = {
   fdiscount: number | null;
   fweight: number | null;
   fvolume: number | null;
+  famountcount: string | null;
   reforder: string | null;
   adminidkey: string | null;
 };
@@ -246,7 +248,7 @@ export async function exportWarehouseHistoryAll(
         "id, fstatus, famount, userid, ftrackingchn, fcabinetnumber, " +
           "fdatecontainerclose, fdatestatus2, fproductstype, ftransporttype, " +
           "fwarehousechina, fdetail, ftotalprice, ftransportprice, fpriceupdate, " +
-          "fshippingservice, fdiscount, fweight, fvolume, reforder, adminidkey",
+          "fshippingservice, fdiscount, fweight, fvolume, famountcount, reforder, adminidkey",
       )
       .in("id", fIds);
     if (fwdErr) {
@@ -325,7 +327,7 @@ export async function exportWarehouseHistoryAll(
         Number(f?.fshippingservice ?? 0)) -
       Number(f?.fdiscount ?? 0);
     const volumeTotal =
-      f?.fvolume && f?.famount ? Number(f.fvolume) * Number(f.famount) : null;
+      f?.fvolume != null ? totalCbmOf(f) : null;   // กฎ famountcount (SOT) — เดิมคูณเสมอ
     return {
       section: "เชื่อมแล้ว (matched)",
       f_id: f?.id ?? "",

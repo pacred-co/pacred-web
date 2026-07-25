@@ -18,6 +18,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { withAdmin, type AdminActionResult } from "./common";
 import {
   computeForwarderDebitBatch,
@@ -371,10 +372,8 @@ export async function getPayUserForwarderView(
         : creator
           ? `ฝากนำเข้า : ${creator}`
           : "ฝากนำเข้าจาก : ลูกค้า";
-      // CBM: if famountcount==1 the fvolume is already the whole-box total.
-      const cbm = String(r.famountcount ?? "") === "1"
-        ? num(r.fvolume)
-        : num(r.fvolume) * (num(r.famount) || 1);
+      // CBM = กฎ famountcount ผ่าน SOT (เดิมก๊อปสูตรไว้ที่นี่ — เสี่ยง drift)
+      const cbm = totalCbmOf(r);
       return {
         fid: String(r.id),
         fdate: r.fdate,

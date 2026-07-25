@@ -44,6 +44,7 @@
 import type { ReactNode } from "react";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { PageHeader } from "@/components/admin/page-header";
@@ -82,6 +83,7 @@ type ForwarderRow = {
   id: number;
   userid: string | null;
   famount: number | string | null;
+  famountcount: string | null;
   fweight: number | string | null;
   fvolume: number | string | null;
   fshipby: string | null;
@@ -256,7 +258,7 @@ export default async function DriverRunsPage({
   const forwarders = fwdIds.length
     ? await fetchByIds<ForwarderRow>(
         admin, "tb_forwarder",
-        "id, userid, famount, fweight, fvolume, fshipby, fdatestatus7, fidorco, " +
+        "id, userid, famount, famountcount, fweight, fvolume, fshipby, fdatestatus7, fidorco, " +
           "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
           "faddressdistrict, faddressprovince, faddresszipcode, faddresstel, faddresstel2",
         "id", fwdIds, "tb_forwarder report",
@@ -308,7 +310,7 @@ export default async function DriverRunsPage({
     g.countF += 1;
     g.boxes += num(fwd.famount);
     g.weight += num(fwd.fweight);
-    g.volume += num(fwd.fvolume);
+    g.volume += totalCbmOf(fwd);
     // Keep the latest delivered timestamp in the group (legacy picks one arbitrarily).
     if (fwd.fdatestatus7) {
       if (!g.deliveredAt || fwd.fdatestatus7 > g.deliveredAt) g.deliveredAt = fwd.fdatestatus7;
