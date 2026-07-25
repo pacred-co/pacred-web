@@ -623,9 +623,14 @@ async function tryRenderTbForwarder(
   // (forwarder-6.png) had a "PCS cargo" crate baked in. 2026-06-11 (owner "cart
   // เปลี่ยนเป็นภาพนี้") → use the Pacred-branded cart icon. The <PackageCheck>
   // fallback stays for any future null-img step.
+  // 🐛 2026-07-25 (owner "สถานะแรกมันคือ รอเข้าโกดังจีนไม่ใช่หรอครับ"): ขั้น 1 เคยเขียน
+  // "เข้าโกดังจีน" ทั้งที่วันที่คือ fdate = วันเปิดงาน → บนจอเลยเห็น "เข้าโกดังจีน 27/06"
+  // มาก่อน "อยู่โกดังจีน 26/06" (MOMO คีย์งานย้อนหลังได้ = fdate มาทีหลังวันถึงโกดังจริง).
+  // ป้ายต้องตรง SOT เดียวกับหน้า edit + หน้าลูกค้า + legacy-status-map:
+  // ขั้น 1 = "รอเข้าโกดังจีน" (สถานะตั้งต้น · วันเปิดงาน) · ขั้น 2 = "ถึงโกดังจีน" (fdatestatus2).
   const TIMELINE: Array<{ key: number; rank: number; label: string; date: string | null; img: string | null }> = [
-    { key: 1, rank: 1,   label: "เข้าโกดังจีน",  date: r.fdate ?? null,         img: `${STEP_ICON_BASE}forwarder-1.png` },
-    { key: 2, rank: 2,   label: "อยู่โกดังจีน",  date: r.fdatestatus2 ?? null,  img: `${STEP_ICON_BASE}forwarder-2.png` },
+    { key: 1, rank: 1,   label: "รอเข้าโกดังจีน", date: r.fdate ?? null,        img: `${STEP_ICON_BASE}forwarder-1.png` },
+    { key: 2, rank: 2,   label: "ถึงโกดังจีน",   date: r.fdatestatus2 ?? null,  img: `${STEP_ICON_BASE}forwarder-2.png` },
     { key: 3, rank: 3,   label: "ส่งมาไทย",      date: r.fdatestatus3 ?? null,  img: `${STEP_ICON_BASE}forwarder-3.png` },
     { key: 4, rank: 4,   label: "ถึงไทย",         date: r.fdatestatus4 ?? null,  img: `${STEP_ICON_BASE}forwarder-4.png` },
     { key: 5, rank: 5,   label: "รอชำระเงิน",    date: r.fdatestatus5 ?? null,  img: `${STEP_ICON_BASE}forwarder-5.png` },
