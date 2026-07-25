@@ -418,7 +418,7 @@ export default async function AdminDriversPage({
                 driver board · รูป/เบอร์/ชื่อเล่น + ความคืบหน้า). §0d reach. */}
             <Link
               href="/admin/drivers/monitor"
-              className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 min-h-[44px]"
+              className="inline-flex items-center gap-2 rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 min-h-[44px]"
             >
               <MonitorSpeaker className="h-4 w-4" />
               จอมอนิเตอร์ (กำลังจัดส่ง)
@@ -434,7 +434,7 @@ export default async function AdminDriversPage({
             />
             <Link
               href="/admin/drivers/new"
-              className="inline-flex items-center gap-2 rounded-lg bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-600 min-h-[44px]"
+              className="inline-flex items-center gap-2 rounded-full bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-primary-600 min-h-[44px]"
             >
               <Plus className="h-4 w-4" />
               สร้างรายการขนส่ง
@@ -456,26 +456,6 @@ export default async function AdminDriversPage({
         </div>
       )}
 
-      {/* 🚐 Pending-dispatch alert — paid/ready forwarders with no driver yet. */}
-      {readyCount > 0 && (
-        <div className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-blue-400 bg-blue-50 px-4 py-3">
-          <p className="text-sm text-blue-900">
-            <Truck className="inline h-4 w-4 mr-1" />
-            <strong>{readyCount}</strong> รายการชำระแล้ว/เตรียมส่ง{" "}
-            <Explain
-              label={<strong>รอจัดรถ</strong>}
-              def="รอจัดรถ = ออเดอร์ที่ชำระเงินแล้ว (สถานะเตรียมส่ง) แต่ยังไม่ถูกมอบให้คนขับคนไหน — ต้องกดจัดรถ + เฟิมบันทึก เพื่อให้คนขับไปส่ง"
-            />{" "}
-            (ยังไม่มอบงานคนขับ) — กดจัดรถแล้ว <strong>เฟิมบันทึก</strong> เพื่อมอบงาน
-          </p>
-          <Link
-            href="/admin/drivers/new"
-            className="inline-flex items-center gap-1.5 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4" /> จัดรถ (เฟิมบันทึก)
-          </Link>
-        </div>
-      )}
 
       {/* ── ตัวกรองวันที่ (legacy "วันที่บันทึกรายการ" + ค้นหาข้อมูล / ทั้งหมด) ──────
           A plain GET form (no `action` → submits to the current path, keeping the

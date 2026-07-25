@@ -74,7 +74,7 @@ export function CsvButton({
   }
 
   const btnCls =
-    "flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-sm hover:bg-surface-alt disabled:opacity-40 shrink-0";
+    "flex items-center gap-1.5 rounded-full border border-border bg-white px-3.5 py-2 text-sm hover:bg-surface-alt disabled:opacity-40 shrink-0";
 
   return (
     <div className="flex items-center gap-1.5 shrink-0">

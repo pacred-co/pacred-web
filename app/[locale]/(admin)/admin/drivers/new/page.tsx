@@ -433,6 +433,18 @@ export default async function CreateDriverBatchPage({
   const postCount    = postEligible.length;
   const expressCount = expressEligible.length;
 
+  // ตัวเลขบนแท็บ = จำนวน "จุดส่ง/ลูกค้า" (กลุ่มที่อยู่) ไม่ใช่จำนวนแทรคกิ้ง (owner 2026-07-25
+  // "ตัวเลขนี้เป็นตัวเลขนับจุด"). buildStops/buildPickupGroups group ด้วย fshipby+userid+ที่อยู่
+  // (ไม่พึ่ง customerById) → count ถูกต้องแม้ยังไม่มี map ชื่อลูกค้า. *Count (แถว) ด้านบน
+  // ยังใช้กับ badge ผลรวม N/N ที่ต้องเทียบกับจำนวนแถวทั้งหมด.
+  const noNames = new Map<string, { name: string; tel: string }>();
+  const driverStops  = buildStops(driverEligible, noNames).length;
+  const pickupStops  = buildPickupGroups(pickupEligible, noNames).length;
+  const flashStops   = buildStops(flashEligible, noNames).length;
+  const jtStops      = buildStops(jtEligible, noNames).length;
+  const postStops    = buildStops(postEligible, noNames).length;
+  const expressStops = buildStops(expressEligible, noNames).length;
+
   const eligible =
     activeTab === "pickup"  ? pickupEligible  :
     activeTab === "flash"   ? flashEligible   :
@@ -558,12 +570,12 @@ export default async function CreateDriverBatchPage({
           tab is Pacred's own (ภูม's 3-way carrier split · kept). */}
       <div className="overflow-x-auto scrollbar-x-visible border-b border-[#dcdfe4]">
         <ul className="flex flex-nowrap items-stretch -mb-px min-w-max">
-          <li><PcsDriverTab href="/admin/drivers/new" active={activeTab === "driver"} icon={<Truck className="h-4 w-4" />} label="มอบงานให้คนขับรถ" count={driverCount} /></li>
-          <li><PcsDriverTab href="/admin/drivers/new?tab=pickup" active={activeTab === "pickup"} icon={<Home className="h-4 w-4" />} label="รายการรับเองหน้าโกดัง" count={pickupCount} /></li>
-          <li><PcsDriverTab href="/admin/drivers/new?tab=flash" active={activeTab === "flash"} icon={<Package className="h-4 w-4" />} label="Flash Express" count={flashCount} /></li>
-          <li><PcsDriverTab href="/admin/drivers/new?tab=jt" active={activeTab === "jt"} icon={<Package className="h-4 w-4" />} label="J&T Express" count={jtCount} /></li>
-          <li><PcsDriverTab href="/admin/drivers/new?tab=post" active={activeTab === "post"} icon={<Package className="h-4 w-4" />} label="ไปรษณีย์ไทย" count={postCount} /></li>
-          <li><PcsDriverTab href="/admin/drivers/new?tab=express" active={activeTab === "express"} icon={<Zap className="h-4 w-4" />} label="Express (ขนส่งภายนอก)" count={expressCount} /></li>
+          <li><PcsDriverTab href="/admin/drivers/new" active={activeTab === "driver"} icon={<Truck className="h-4 w-4" />} label="มอบงานให้คนขับรถ" count={driverStops} /></li>
+          <li><PcsDriverTab href="/admin/drivers/new?tab=pickup" active={activeTab === "pickup"} icon={<Home className="h-4 w-4" />} label="รายการรับเองหน้าโกดัง" count={pickupStops} /></li>
+          <li><PcsDriverTab href="/admin/drivers/new?tab=flash" active={activeTab === "flash"} icon={<Package className="h-4 w-4" />} label="Flash Express" count={flashStops} /></li>
+          <li><PcsDriverTab href="/admin/drivers/new?tab=jt" active={activeTab === "jt"} icon={<Package className="h-4 w-4" />} label="J&T Express" count={jtStops} /></li>
+          <li><PcsDriverTab href="/admin/drivers/new?tab=post" active={activeTab === "post"} icon={<Package className="h-4 w-4" />} label="ไปรษณีย์ไทย" count={postStops} /></li>
+          <li><PcsDriverTab href="/admin/drivers/new?tab=express" active={activeTab === "express"} icon={<Zap className="h-4 w-4" />} label="Express (ขนส่งภายนอก)" count={expressStops} /></li>
           <li><PcsDriverTab href="/admin/drivers" active={false} icon={<Send className="h-4 w-4" />} label="กำลังจัดส่ง" count={inProgress} /></li>
           {/* Legacy tab (forwarder-driver.php:762) — a health/stat indicator: are all
               payment-approved ready-to-ship rows accounted for? numerator = ยังไม่มอบ +

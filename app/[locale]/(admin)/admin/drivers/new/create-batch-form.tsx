@@ -29,7 +29,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
-import { Truck, ChevronsUpDown, ChevronUp, ChevronDown } from "lucide-react";
+import { Truck, ChevronsUpDown, ChevronUp, ChevronDown, ChevronRight } from "lucide-react";
 import { createDriverBatch } from "@/actions/admin/driver-batches";
 import { exportFlashPickupCsv } from "@/actions/admin/export/flash-pickup";
 import { recommendVehicle } from "@/lib/admin/vehicle-recommendation";
@@ -389,7 +389,7 @@ export function CreateBatchForm({
       {/* ── The dense legacy PCS table — ONE ROW per delivery group ──
           Columns (legacy forwarder-driver.php?page=add): [☑] · จำนวน · บริษัทขนส่ง ·
           เลขแทรคกิ้ง (nested sub-table) · ลำดับส่ง · ที่อยู่. */}
-      <div className="overflow-x-auto scrollbar-x-visible rounded border border-border bg-white">
+      <div className="overflow-x-auto scrollbar-x-visible rounded-2xl border border-border bg-white">
         {/* table-bordered — full gridlines (เส้นตัดทุกช่อง แนวตั้ง+แนวนอน) like legacy
             forwarder-driver.php add-page. Child combinators keep the rule scoped to
             THIS table's cells (the nested per-tracking table gets its own below). */}
@@ -490,8 +490,21 @@ export function CreateBatchForm({
                         table: # / เลขออเดอร์ / รหัสสมาชิก / เลขแทรคกิ้ง+location /
                         กล่อง / น้ำหนัก / ปริมาตร → รวม row) */}
                     <td className="p-0 align-top" onClick={(e) => e.stopPropagation()}>
-                      {/* table-fixed + % widths → EVERY nested table shares the same
-                          column layout → columns line up across all rows (แก้เบี้ยว). */}
+                      {/* หุบเป็นสรุป กดกาง (owner 2026-07-25 · แบบหน้า detail) — หัวชมพู = ยอดรวม
+                          (กดได้ · พับไว้ก่อน) · table-fixed + % widths ให้คอลัมน์ตรงกันทุกแถว */}
+                      <details className="group m-1.5 overflow-hidden rounded-lg border border-[#dcdfe4]">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 bg-[#f5aab0] px-2 py-1.5 font-semibold text-[#7a0012] [&::-webkit-details-marker]:hidden">
+                          <span className="flex items-center gap-1.5 text-xs">
+                            <ChevronRight className="h-3.5 w-3.5 transition group-open:rotate-90" />
+                            รวม {g.items.length} รายการ
+                          </span>
+                          <span className="flex items-center gap-2.5 text-[11px] font-medium">
+                            <span>แทรคกิ้ง <b className="tabular-nums">{new Set(g.items.map((i) => (i.ftrackingchn ?? "").trim()).filter(Boolean)).size}</b></span>
+                            <span>กล่อง <b className="tabular-nums">{g.totalBoxes}</b></span>
+                            <span>น้ำหนัก <b className="tabular-nums">{g.totalWeight.toFixed(2)}</b></span>
+                            <span>ปริมาตร <b className="tabular-nums">{g.totalVolume.toFixed(3)}</b></span>
+                          </span>
+                        </summary>
                       <table className="w-full text-xs border-collapse table-fixed [&>thead>tr>th]:border [&>thead>tr>th]:border-[#dcdfe4] [&>tbody>tr>td]:border [&>tbody>tr>td]:border-[#dcdfe4]">
                         <thead>
                           <tr className="bg-surface-alt/40 text-left text-[11px] font-bold text-[#6b6f82]">
@@ -534,16 +547,9 @@ export function CreateBatchForm({
                               <td className="px-1.5 py-1 text-right tabular-nums">{it.fvolume.toFixed(3)}</td>
                             </tr>
                           ))}
-                          {/* รวม summary row — legacy PINK (alert-danger · #f5aab0/#960014),
-                              matches forwarder-driver.php add-page (owner 2026-07-16) */}
-                          <tr className="bg-[#f5aab0] font-semibold text-[#7a0012]">
-                            <td colSpan={4} className="px-1.5 py-1 text-right">รวม</td>
-                            <td className="px-1.5 py-1 text-right tabular-nums">{g.totalBoxes}</td>
-                            <td className="px-1.5 py-1 text-right tabular-nums">{g.totalWeight.toFixed(2)}</td>
-                            <td className="px-1.5 py-1 text-right tabular-nums">{g.totalVolume.toFixed(3)}</td>
-                          </tr>
                         </tbody>
                       </table>
+                      </details>
                     </td>
 
                     {/* ลำดับส่ง — district route order (legacy $arrPositF index) ·
