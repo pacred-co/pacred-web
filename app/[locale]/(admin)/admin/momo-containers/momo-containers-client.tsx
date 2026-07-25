@@ -34,6 +34,9 @@ export type IngestTrack = {
   /** เลขที่ถูกต้อง (แอดมินแก้จากรูปป้าย · mig 0281 · เคส 733) — commit ใช้เลขนี้ ·
    *  tracking ด้านบนคงเป็นเลขดิบ MOMO (กุญแจ sync) เสมอ */
   trackingOverride: string | null;
+  /** เลขดิบของ "แถวตัวจริง" ที่เคลมว่าแถวนี้คือพัสดุใบเดียวกัน (MOMO เปิดเรคคอร์ดซ้ำ) —
+   *  มีค่า = แถวนี้เป็นตัวซ้ำ ห้ามนำเข้า (ของอยู่ในแถวที่ชั่งแล้ว) */
+  supersededBy: string | null;
   container: string | null; // real cabinet (GZS/GZE) — link target
   transport: "1" | "2" | "3" | null;
   routingBatch: string | null;
@@ -149,6 +152,7 @@ function isNotReady(t: IngestTrack): boolean {
   // lifecycle (เลขตู้ Live เติมให้ทีหลังตอน commit เป็น fstatus 3) — ไม่ใช่ "ข้อมูลผิด".
   // หน้ามีป้าย "⏳ ยังไม่เข้าตู้ปิด" โชว์แยกทุกแถวอยู่แล้ว. hold = ข้อมูลผิด/ไม่ครบจริงเท่านั้น.
   return (
+    t.supersededBy != null ||   // MOMO เปิดเรคคอร์ดซ้ำ — ของอยู่ในแถวที่ชั่งแล้ว
     t.weightKg <= 0 ||
     t.cbm <= 0 ||
     (t.guessedUserId ?? "").trim() === "" ||
@@ -161,6 +165,8 @@ function isNotReady(t: IngestTrack): boolean {
 function notReadyReasons(t: IngestTrack): string[] {
   if (t.committed || inTransit(t)) return [];
   const r: string[] = [];
+  if (t.supersededBy != null)
+    r.push(`ซ้ำกับแถว "${t.supersededBy}" ที่ชั่งแล้ว (MOMO เปิด 2 เรคคอร์ดให้พัสดุใบเดียว) — นำเข้าแถวนั้นแทน`);
   if (t.weightKg <= 0) r.push("ไม่มีน้ำหนัก");
   if (t.cbm <= 0) r.push("ไม่มีคิว");
   if ((t.guessedUserId ?? "").trim() === "") r.push("ไม่มีรหัสลูกค้า");
@@ -998,6 +1004,15 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
             {t.trackingOverride && (
               <div className="text-[11px] font-normal text-muted" title="เลขดิบที่ MOMO ส่งมา (ใช้ตามรอย/จับคู่บิล MOMO — ระบบเชื่อมให้อัตโนมัติ)">
                 MOMO: {t.tracking ?? "—"} <span className="text-sky-600">✎ แก้แล้ว</span>
+              </div>
+            )}
+            {/* MOMO เปิด 2 เรคคอร์ดให้พัสดุใบเดียว (ร้านประกาศเลขเต็ม 0kg + โกดังชั่งแล้วคีย์เลขสั้น)
+                → พอแก้เลขให้ตรงกัน 2 แถวจะโชว์เลขเดียวกัน = ดูเหมือนเบิ้ล. ป้ายนี้บอกว่าแถวไหน
+                คือตัวจริง + แถวนี้ถูก hold ไม่ให้นำเข้า (ไม่งั้นได้แถวเก็บเงิน ฿0 มาอีกใบ). */}
+            {t.supersededBy && (
+              <div className="mt-0.5 inline-flex items-center gap-1 rounded bg-amber-100 px-1 py-0.5 font-sans text-[11px] font-bold text-amber-800"
+                title={`MOMO เปิดเรคคอร์ดซ้ำให้พัสดุใบเดียวกัน — ตัวจริงคือแถวเลข "${t.supersededBy}" (ชั่งแล้ว มีรูป/CG/ตู้) · แถวนี้ระบบกันไว้ ไม่ให้นำเข้าซ้ำ`}>
+                🔁 ซ้ำ — ใช้แถว {t.supersededBy}
               </div>
             )}
             {anomaly && (

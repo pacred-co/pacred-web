@@ -454,6 +454,34 @@ export async function commitMomoRowCore(
   // MOMO คีย์ตกหล่นแต่รูปป้ายมีเลขเต็ม) ก่อนเลขดิบจาก MOMO เสมอ. ทุก dedup/family
   // guard ข้างล่างวิ่งบนเลขนี้ = เลขที่จะกลายเป็น ftrackingchn จริง.
   const trackingNo  = (srcRow.tracking_override ?? "").trim() || srcRow.momo_tracking_no;
+
+  // 🔒 กันนำเข้า "เรคคอร์ดซ้ำของ MOMO" (owner 2026-07-25 · เคส 733 · fail-CLOSED)
+  // MOMO เปิดได้ 2 เรคคอร์ดต่อพัสดุใบเดียว: ร้านประกาศเลขเต็ม (0kg ค้างตลอด) +
+  // โกดังชั่งแล้วคีย์เลขสั้น (มีน้ำหนัก/CG/ตู้/รูป). พอแอดมินแก้เลขแถวที่ชั่งแล้ว
+  // ให้ตรงป้าย ทั้งคู่จะชี้เลขเดียวกัน — ถ้าเผลอนำเข้า "แถวประกาศ" ก่อน จะได้แถว
+  // เก็บเงิน 0kg/฿0 มาใบหนึ่ง แล้วแถวจริงถูกด่าน dup ปฏิเสธตามมา = ของถูกคิดเงินผิดใบ.
+  // ด่านนี้ refuse ฝั่ง "แถวที่ถูกเคลม" เสมอ — ไม่ว่ากดจากจอไหน/ทาง cron.
+  if (!srcRow.tracking_override) {
+    const { data: claimant, error: claimErr } = await admin
+      .from("momo_import_tracks")
+      .select("momo_tracking_no, weight_kg")
+      .eq("tracking_override", trackingNo)
+      .neq("id", srcRow.id)
+      .limit(1)
+      .maybeSingle<{ momo_tracking_no: string | null; weight_kg: number | string | null }>();
+    if (claimErr) {
+      console.error(`[momo commit superseded-check] failed`, { code: claimErr.code, message: claimErr.message });
+      return { ok: false, error: `db_error:${claimErr.code ?? "unknown"}` };
+    }
+    if (claimant) {
+      return {
+        ok: false,
+        error:
+          `แถวนี้ซ้ำ — MOMO เปิด 2 เรคคอร์ดให้พัสดุใบเดียวกัน · ตัวจริงคือแถวเลข "${claimant.momo_tracking_no}" ` +
+          `(ชั่งแล้ว ${Number(claimant.weight_kg ?? 0)} กก.) ที่แอดมินแก้เลขให้ตรงป้ายแล้ว → นำเข้าแถวนั้นแทน`,
+      };
+    }
+  }
   // ภูม flag 2026-05-30 (bug 2c): use ONLY the joined REAL cabinet (cid from
   // container_closed · e.g. "GZS260525-2"), what `container_batch_no` holds.
   //

@@ -86,6 +86,18 @@ export default async function MomoContainersPage() {
     return Number.isFinite(n) ? n : 0;
   };
 
+  // แผนที่ "เลขนี้มีแถวอื่นเคลมเป็นเลขที่ถูกต้องแล้ว" (tracking_override · mig 0281).
+  // เคส 733: MOMO เปิด 2 เรคคอร์ดให้พัสดุใบเดียว — ร้านประกาศเลขเต็ม (0kg ค้าง) +
+  // โกดังชั่งแล้วคีย์ 3 ตัวท้าย (มีน้ำหนัก/CG/ตู้/รูป). พอแอดมินแก้เลขแถวที่ชั่งแล้ว
+  // ทั้งคู่จะโชว์เลขเดียวกัน → ต้องบอกให้ชัดว่าแถวไหนคือตัวจริง ไม่งั้นดูเหมือนเบิ้ล
+  // และมีสิทธิ์กดนำเข้าผิดแถว (แถวผี 0kg = แถวเก็บเงิน ฿0).
+  const supersededTargets = new Map<string, string>(); // เลขที่ถูกเคลม → เลขดิบของแถวที่เคลม
+  for (const row of rowsRaw ?? []) {
+    const ov = ((row.tracking_override as string | null) ?? "").trim();
+    const own = ((row.momo_tracking_no as string | null) ?? "").trim();
+    if (ov && own && ov !== own) supersededTargets.set(ov, own);
+  }
+
   const intermediate = (rowsRaw ?? []).map((row) => {
     const raw = row.raw as Record<string, unknown> | null;
     const str = (k: string): string | null =>
@@ -111,6 +123,10 @@ export default async function MomoContainersPage() {
       id: row.id as string,
       tracking: row.momo_tracking_no ?? null,
       trackingOverride: (row.tracking_override as string | null) ?? null,
+      // แถวนี้ถูกแถวอื่น (ที่ชั่งแล้ว) เคลมว่าเป็นพัสดุใบเดียวกัน → ห้ามนำเข้าซ้ำ
+      supersededBy: row.committed_at
+        ? null
+        : supersededTargets.get(((row.momo_tracking_no as string | null) ?? "").trim()) ?? null,
       container: (row.container_batch_no as string | null) ?? null, // real cabinet (GZS/GZE)
       transport: resolveTransportMode((row.container_batch_no as string | null) ?? "", null),
       routingBatch: row.momo_container_no ?? null,                   // MOMO routing batch (audit)
