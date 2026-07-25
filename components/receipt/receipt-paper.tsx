@@ -55,6 +55,8 @@ export type ReceiptPageRow = {
   no:           number;
   fid:          string;
   tracking:     string;
+  /** แทรคกิ้งพี่น้องที่บรรทัดนี้เก็บเงินแทน (owner 2026-07-24) — ว่าง = แจงแยกอยู่แล้ว */
+  coveredTrackings?: string[];
   cabinet:      string;
   transport:    string;
   rateBasis:    string;
@@ -515,7 +517,14 @@ export function ReceiptPage({
                       >
                         <td style={{ padding: "3px 3px", fontSize: "9px", textAlign: "center", borderTop: "0.5px solid #e5e7eb" }}>{row.no}</td>
                         <td style={{ padding: "3px 3px", fontSize: "8px", textAlign: "center", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>#{row.fid}</td>
-                        <td style={{ padding: "3px 3px", fontSize: "8px", wordBreak: "break-all", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{row.tracking}</td>
+                        <td style={{ padding: "3px 3px", fontSize: "8px", wordBreak: "break-all", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>
+                          {row.tracking}
+                          {row.coveredTrackings && row.coveredTrackings.length > 0 ? (
+                            <span style={{ display: "block", fontSize: "7px", lineHeight: 1.3, opacity: 0.75 }}>
+                              + {row.coveredTrackings.join(" · ")}
+                            </span>
+                          ) : null}
+                        </td>
                         <td style={{ padding: "3px 3px", fontSize: "8px", wordBreak: "break-all", fontFamily: "monospace", color: "#374151", borderTop: "0.5px solid #e5e7eb" }}>{row.cabinet || "—"}</td>
                         <td style={{ padding: "3px 3px", fontSize: "8px", textAlign: "center", fontWeight: "bold", color: row.transport === "SEA" ? "#1d4ed8" : "#b45309", borderTop: "0.5px solid #e5e7eb" }}>{row.transport || "—"}</td>
                         <td style={{ padding: "3px 3px", fontSize: "9px", textAlign: "right", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{fmt0(row.famount)}</td>

@@ -1,5 +1,6 @@
 import "server-only";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
+import { baseTrackingOf, resolveLineCoverage, type CoverageRow } from "./shipment-line-coverage";
 
 /**
  * Billing-run (ใบวางบิล) document loader (FAITHFUL PORT) — the SINGLE source of
@@ -120,6 +121,11 @@ export type BillingRunInvoiceDetail = {
       /** "KG" | "CBM" | "" */
       rate_basis: string;
       rate: number;
+      /** บรรทัดนี้เก็บเงินแทนทั้งชิปเม้น → กล่อง/น้ำหนัก/คิว ข้างบนเป็นยอด "ทั้งชิปเม้น"
+       *  (owner 2026-07-24 · lib/billing/shipment-line-coverage.ts) */
+      covers_shipment: boolean;
+      /** แทรคกิ้งพี่น้องที่บรรทัดนี้ครอบคลุม (ว่าง = แจงแยกบรรทัดอยู่แล้ว) */
+      covered_trackings: string[];
       /** ค่าขนส่งสินค้า (freight · ftotalprice) — the FREIGHT-only amount so the
        *  row's Amount reconciles with Rate × Kg (owner 2026-07-07). The stored
        *  amount_thb (GROSS incl ค่าขนส่งในไทย etc.) is unchanged; this is display. */
@@ -312,6 +318,62 @@ export async function loadBillingRunDocument(
     }
   }
 
+  // ── บรรทัดที่เก็บเงินแทน "ทั้งชิปเม้น" (owner 2026-07-24) ──────────────────
+  // เครื่องคิดเงินคิดเป็นชิปเม้น แล้วเขียนบรรทัดเดียวชี้แถว anchor → ตัวเรนเดอร์เดิม
+  // พิมพ์กล่อง/น้ำหนักของ "แถว anchor แถวเดียว" ทั้งที่เก็บเงินทั้งชิปเม้น
+  // (FRI2607-00071: พิมพ์ 3 กล่อง/46.5kg แต่ลูกค้าได้ 13 กล่อง/249kg).
+  // เงิน (amount_thb) แช่อยู่แล้ว ไม่แตะ — ตรงนี้แก้เฉพาะ "ตัวเลขที่แจง"
+  // → ใบเก่าที่จ่ายไปแล้วก็แจงถูกทันที. best-effort: โหลดพลาด = พฤติกรรมเดิมเป๊ะ.
+  const familyByBase = new Map<string, CoverageRow[]>();
+  const lineBases = Array.from(
+    new Set([...fwdByID.values()].map((f) => baseTrackingOf(f.ftrackingchn ?? "")).filter(Boolean)),
+  );
+  if (lineBases.length > 0) {
+    const { data: famRaw, error: famErr } = await admin
+      .from("tb_forwarder")
+      .select("id, ftrackingchn, famount, famountcount, fweight, fvolume, ftotalprice")
+      .eq("userid", hdrRaw.userid)
+      .or(lineBases.map((b) => `ftrackingchn.like.${b}*`).join(","))
+      .limit(5_000);
+    if (famErr) {
+      console.error("[loadBillingRunDocument family coverage] failed (degrading to per-row)", {
+        code: famErr.code, message: famErr.message,
+      });
+    } else {
+      for (const r of ((famRaw ?? []) as unknown as FwdHydRow[])) {
+        // `like base*` อาจลากเลขที่ขึ้นต้นเหมือนกันแต่คนละชิปเม้นมาด้วย → เช็ค base ซ้ำ
+        const base = baseTrackingOf(r.ftrackingchn ?? "");
+        if (!lineBases.includes(base)) continue;
+        const row: CoverageRow = {
+          id: r.id,
+          ftrackingchn: r.ftrackingchn ?? "",
+          famount: Number(r.famount ?? 0),
+          fweight: Number(r.fweight ?? 0),
+          totalCbm: r.fvolume != null ? totalCbmOf(r) : 0,
+          freight: Number(r.ftotalprice ?? 0),
+        };
+        familyByBase.set(base, [...(familyByBase.get(base) ?? []), row]);
+      }
+    }
+  }
+  const coverage = resolveLineCoverage({
+    lines: items.map((i) => ({ forwarderId: i.forwarder_id, amountThb: Number(i.amount_thb) })),
+    lineRows: new Map(
+      [...fwdByID.values()].map((f) => [
+        f.id,
+        {
+          id: f.id,
+          ftrackingchn: f.ftrackingchn ?? "",
+          famount: Number(f.famount ?? 0),
+          fweight: Number(f.fweight ?? 0),
+          totalCbm: f.fvolume != null ? totalCbmOf(f) : 0,
+          freight: Number(f.ftotalprice ?? 0),
+        } satisfies CoverageRow,
+      ]),
+    ),
+    familyByBase,
+  });
+
   // ขนาดกล่อง (ก×ย×ส) fallback via momo_box_detail (owner 2026-07-23) — a MULTI-BOX
   // MOMO row leaves ก×ย×ส BLANK on its aggregate row on purpose (its boxes differ in
   // size · propagate-live-data.ts), and a single-box row can be blank before Live
@@ -439,6 +501,7 @@ export async function loadBillingRunDocument(
     },
     items: items.map((i) => {
       const f = fwdByID.get(i.forwarder_id) ?? null;
+      const cov = coverage.get(i.forwarder_id) ?? null;
       return {
         id:           i.id,
         forwarder_id: i.forwarder_id,
@@ -446,9 +509,11 @@ export async function loadBillingRunDocument(
         forwarder:    f
           ? {
               ftrackingchn: f.ftrackingchn ?? "",
-              famount:      f.famount != null ? Number(f.famount) : null,
-              fweight:      f.fweight != null ? Number(f.fweight) : null,
-              fvolume:      f.fvolume != null ? totalCbmOf(f) : null, // row-TOTAL CBM (famountcount rule)
+              // กล่อง/น้ำหนัก/คิว = ของแถวเอง · เว้นแต่บรรทัดนี้เก็บเงินแทนทั้งชิปเม้น
+              // → ใช้ยอดทั้งชิปเม้น (shipment-line-coverage · เงินไม่ถูกแตะ)
+              famount:      cov ? cov.famount  : f.famount != null ? Number(f.famount) : null,
+              fweight:      cov ? cov.fweight  : f.fweight != null ? Number(f.fweight) : null,
+              fvolume:      cov ? cov.totalCbm : f.fvolume != null ? totalCbmOf(f) : null, // row-TOTAL CBM (famountcount rule)
               fdate:        f.fdate,
               fstatus:      f.fstatus,
               cabinet:      f.fcabinetnumber ?? "",
@@ -458,7 +523,9 @@ export async function loadBillingRunDocument(
               rate_basis:   f.frefprice === "2" ? "CBM" : f.frefprice === "1" ? "KG" : "",
               rate:         f.frefrate != null ? Number(f.frefrate) : 0,
               // ค่าขนส่งสินค้า (freight-only) — the row Amount so Rate × Kg reconciles.
-              freight:      f.ftotalprice != null ? Number(f.ftotalprice) : 0,
+              freight:      cov ? cov.freight : f.ftotalprice != null ? Number(f.ftotalprice) : 0,
+              covers_shipment:   cov?.folded ?? false,
+              covered_trackings: cov?.coveredTrackings ?? [],
               // ประเภท (รหัส g/m/a/s) — owner 2026-07-18. ขนาดกล่อง ก×ย×ส — owner 2026-07-23
               // via resolveDimsDisplay: the row's own dim, else the real per-box sizes from
               // momo_box_detail (blank on multi-box aggregate rows), else "—".

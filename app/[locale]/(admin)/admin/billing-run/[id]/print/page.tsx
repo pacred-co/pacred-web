@@ -68,6 +68,7 @@ export default async function BillingRunPrintPage({
     no:          idx + 1,
     fid:         String(it.forwarder_id),
     tracking:    it.forwarder?.ftrackingchn ?? "",
+    coveredTrackings: it.forwarder?.covered_trackings ?? [],
     productType: it.forwarder?.product_type ?? "",
     cabinet:     it.forwarder?.cabinet ?? "",
     transport:   it.forwarder?.transport ?? "",

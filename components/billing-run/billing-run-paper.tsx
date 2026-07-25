@@ -46,6 +46,10 @@ export type BillingRunPaperRow = {
   no:          number;
   fid:         string;
   tracking:    string;
+  /** แทรคกิ้งพี่น้องที่บรรทัดนี้เก็บเงินแทน — ว่าง = แจงแยกบรรทัดอยู่แล้ว.
+   *  owner 2026-07-24: บรรทัดที่คิดเงิน "ทั้งชิปเม้น" ต้องพิมพ์เลขแทรคกิ้งให้ครบ
+   *  ไม่งั้นลูกค้าจ่ายค่า 13 กล่อง แต่บนกระดาษเห็นแทรคเดียว/3 กล่อง. */
+  coveredTrackings?: string[];
   /** ประเภทสินค้า — ทั่วไป/มอก./อย./พิเศษ (owner 2026-07-18). */
   productType: string;
   cabinet:     string;
@@ -284,7 +288,14 @@ function BillingRunPage({
                   <tr key={row.no} style={{ background: "#fff", breakInside: "avoid", pageBreakInside: "avoid" }}>
                     <td style={tdC}>{row.no}</td>
                     <td style={tdMonoC}>#{row.fid}</td>
-                    <td style={tdMono}>{row.tracking}</td>
+                    <td style={tdMono}>
+                      {row.tracking}
+                      {row.coveredTrackings && row.coveredTrackings.length > 0 ? (
+                        <span style={{ display: "block", fontSize: "8.5px", lineHeight: 1.35, opacity: 0.75 }}>
+                          + {row.coveredTrackings.join(" · ")}
+                        </span>
+                      ) : null}
+                    </td>
                     <td style={{ ...tdC, fontSize: "8px", color: "#374151" }}>{row.productType || "—"}</td>
                     <td style={{ ...tdMono, color: "#374151" }}>{row.cabinet || "—"}</td>
                     <td style={{ ...tdMonoC, fontWeight: "bold", color: row.transport === "SEA" ? "#1d4ed8" : "#b45309" }}>{row.transport || "—"}</td>
