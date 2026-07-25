@@ -212,6 +212,29 @@ prod (2026-07-24): **937 แถว fac='1'** (ในนั้น **224 แถว
       จำนวน กล่อง คิว รูป CG status — ต้องซิงค์จากที่เดียวกัน สถานะเส้นตรง การเปลี่ยนแปลง
       เชื่อมตามกันทั้งหมด"** — tracking_override + pointer คือ instalment แรกของกติกานี้
 
+## ✅ 2026-07-26 รอบ 2 — ยุบเมนูเหลือหน้าเดียว + กรุ๊ปชิปเม้น + 🖥 local-first
+
+- [x] **เมนู "อัปเดตฝากนำเข้า" 6 ลูก → 1 entry** (hub `/admin/momo-containers`) ·
+      ทางเข้าเครื่องมือย้ายเป็นปุ่มบนหัว hub เรียงตามโฟลว์ (MOMO sync→packing→manual→
+      บิลต้นทุน · อี้อู CS → TTW DOC · WeChat · MOMO Live) · ❌ ตัด momo-lcl = หน้าตาย
+      (อ่าน `tb_tmp_forwarder_item_momo` ที่ไม่มีในฐานแล้ว — probe ยืนยัน)
+- [x] 🔴 **เจอรูสิทธิ์ตอนยุบ (ของเดิมก็เป็น):** hub gate = super/ops/warehouse (ปุ่มนำเข้า =
+      เขียนแถวเก็บเงิน) แต่ sidebar โชว์เมนูนี้ให้ **sales + manager** ด้วย → คลิกแล้ว
+      "ไม่มีสิทธิ์" · manager เดิมเห็นลิงก์ตาย 6 อันรวด
+      → `retargetImportUpdateEntry`: CS/เซล ชี้ **TTW** (หน้าที่เขาใช้จริง · gate มี sales) ·
+      manager/accounting ที่เปิดไม่ได้สักหน้า = ตัดเมนูออก · **ไม่แตะสิทธิ์หน้าใด**
+      verify per role: super/ops/warehouse→hub · sales→TTW · manager/accounting→ไม่มีเมนู
+- [x] **กรุ๊ปชิปเม้น**: ปุ่ม "กาง/ย่อทุกชิปเม้น" + โมดัลยืนยันนำเข้าจัดกลุ่มตามชิปเม้น
+      (หัวกลุ่ม Σ กล่อง/นน./คิว · แทรคย่อย ↳ · โชว์เลขที่แก้พร้อมเลขเดิม MOMO)
+- [x] 🖥 **VERIFY บนจอจริงครั้งแรก (owner เปิด login ค้างให้)** — sidebar เหลือ 1 entry ✓ ·
+      chips 8 ปุ่มครบ ✓ · คอลัมน์ 30 ตัวเรียงตาม default ที่ owner จัด ✓ ·
+      **ปุ่มกาง/ย่อทำงานจริง: 1,064 ↔ 563 แถว (ซ่อน/กางแทรคย่อย 501 แถว)** ✓
+- 📌 **กติกาใหม่ (owner · ทุกเครื่องทุกคน):** รัน dev ค้างไว้ · ตรวจ/โชว์ draft บน localhost
+      ก่อนเสมอ · **push `main` เฉพาะตอน owner สั่ง** (deploy = เสียเงิน) · `dave-pacred2`
+      push ได้ปกติ → AGENTS §0k + memory `local-first-verify-no-frequent-deploy`
+- ⚠️ **dev server รันจาก worktree ไหน = เห็นโค้ดของ worktree นั้น** (รอบนี้หลงไป 1 รอบ:
+      เห็นเมนูเก่าเพราะ server รันคนละ worktree) → `lsof -p <pid> | grep cwd` เช็คก่อน
+
 ## 📌 งานที่ทำจบไปแล้วใน session นี้ (อย่าทำซ้ำ)
 
 1. ต้นทุนขาด ฿2,111.31 (famountcount ฝั่ง cost) — applied prod
