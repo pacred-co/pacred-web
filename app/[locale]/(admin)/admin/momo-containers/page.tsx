@@ -140,6 +140,13 @@ export default async function MomoContainersPage() {
       smDate: str("created_date"),        // C "SM Date" — วันที่ MOMO รับเข้าโกดัง
       userCode: userCodeRaw,              // I "Code" — รหัสลูกค้าฝั่ง MOMO (ที่ derive เป็น PR)
       cgNo: str("CG_NO"),                 // T "CG." — เลข CG ของ MOMO
+      // owner 2026-07-25 "แก้ได้ทุกคอลัมน์ — docs มีข้อมูลเพิ่ม เดี๋ยวกรอกเอง" — ช่องที่
+      // MOMO ไม่ส่ง (no-feed) เปิดให้แอดมินกรอกเก็บใน raw · Product/Rem ไหลเข้า fdetail/fnote
+      branch: str("branch"),
+      productName: str("product_name"),
+      remark: str("remark"),
+      noteText: str("note"),
+      dum: str("dum"),
       // V "Service fee." — MOMO ส่งมาเป็น extra_cost (ค่าตีลังไม้/ค่าใช้จ่ายเพิ่ม · extractCrateFromMomoRaw)
       serviceFee: raw && typeof raw === "object" && raw.extra_cost != null ? num(raw.extra_cost) : null,
       guessedShipBy: str("ship_by"),

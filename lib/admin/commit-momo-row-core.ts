@@ -935,11 +935,20 @@ export async function commitMomoRowCore(
       smpcs:                 smPCS,
 
       // ── safe defaults for other NOT NULL cols ─────────
-      fdetail:               "",
+      // owner 2026-07-25 "ด่านนำเข้าแก้ได้ทุกคอลัมน์ — ข้อมูลที่กรอกต้องนำไปใช้งานจริง":
+      // Product/Rem ที่แอดมินกรอกบนตารางนำเข้า (raw.product_name / raw.remark) ไหลเข้า
+      // แถวจริงตรงนี้ — เดิม hardcode ""/null = กรอกแล้วหายเงียบ. MOMO ไม่เคยส่ง 2 คีย์นี้
+      // (จอโชว์ "—" no-feed มาตลอด) → ค่า default เดิมไม่เปลี่ยนสำหรับแถวที่ไม่ได้กรอก.
+      fdetail:               (typeof (srcRow.raw as Record<string, unknown> | null)?.product_name === "string"
+                                ? String((srcRow.raw as Record<string, unknown>).product_name).slice(0, 300)
+                                : ""),
       paydeposit:            "0",
       ftrackingth:           "-",
       ffreeshipping:         "0",
-      fnote:                 null,
+      fnote:                 (typeof (srcRow.raw as Record<string, unknown> | null)?.remark === "string" &&
+                              String((srcRow.raw as Record<string, unknown>).remark).trim() !== ""
+                                ? String((srcRow.raw as Record<string, unknown>).remark).slice(0, 500)
+                                : null),
       fnoteuser:             "0",
       fnoteuserread:         "0",
       fcover:                momoCover,

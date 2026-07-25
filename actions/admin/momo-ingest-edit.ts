@@ -41,7 +41,25 @@ const schema = z.object({
   // tracking_override (mig 0281) เท่านั้น ห้ามแตะ momo_tracking_no (กุญแจ sync ของ MOMO
   // — rename แล้วรอบถัดไป sync จะปั๊มแถวเลขเก่ากลับมาเป็น dup). "" = เคลียร์กลับเลขเดิม
   tracking: z.string().trim().max(40, "เลขแทรคยาวเกินไป").optional(),
+  // ── owner 2026-07-25 "ด่านนำเข้า แก้ได้ทุกคอลัมน์ — docs มีข้อมูลเพิ่ม เดี๋ยวกรอกเอง" ──
+  // เก็บลง raw คีย์เดียวกับที่ MOMO ใช้/ที่ commit อ่าน → ของที่กรอกไหลเข้าแถวจริง ไม่ใช่แค่จอ
+  smDate: z.string().trim().regex(/^\d{4}[-/]\d{2}[-/]\d{2}$/, "วันที่ต้องเป็น ปปปป-ดด-วว").or(z.literal("")).optional(),
+  branch: z.string().trim().max(60, "ยาวเกินไป").optional(),
+  productName: z.string().trim().max(300, "ยาวเกินไป").optional(),   // → fdetail ตอนนำเข้า
+  remark: z.string().trim().max(500, "ยาวเกินไป").optional(),        // → fnote ตอนนำเข้า
+  noteText: z.string().trim().max(500, "ยาวเกินไป").optional(),      // Note. (อ้างอิงบน staging)
+  dum: z.string().trim().max(120, "ยาวเกินไป").optional(),
+  cgNo: z.string().trim().max(40, "ยาวเกินไป").optional(),
+  // ค่าตีลังไม้/ค่าใช้จ่ายเพิ่ม (extra_cost) — ไหลเข้า pricecrate ตอนนำเข้า (เงิน · bound + log)
+  serviceFee: z.number().min(0, "ต้อง ≥ 0").max(1_000_000, "เกินพิสัย").optional(),
+  // ประเภทสินค้า = เรทที่ใช้คิดเงิน — ตัวเลือกตายตัว 4 ค่า (กัน user error)
+  productType: z.enum(["1", "2", "3", "4"]).optional(),
 });
+
+/** ประเภทสินค้าเรา → momo type string (ตัวแทน deterministic ของ map ขาไป). */
+const PRODUCT_TYPE_TO_MOMO: Record<"1" | "2" | "3" | "4", string> = {
+  "1": "general", "2": "tis", "3": "fda", "4": "special",
+};
 
 export async function updateMomoImportTrackFields(input: unknown): Promise<AdminActionResult<{ updated: boolean }>> {
   const parsed = schema.safeParse(input);
@@ -96,7 +114,10 @@ export async function updateMomoImportTrackFields(input: unknown): Promise<Admin
     //    pending-only guarded (committed_at IS NULL · TOCTOU-safe). ───────────────────────
     const logDetail: Record<string, unknown> = { ...patch };
     const touchesRaw =
-      d.width !== undefined || d.length !== undefined || d.height !== undefined || d.memberCode !== undefined;
+      d.width !== undefined || d.length !== undefined || d.height !== undefined || d.memberCode !== undefined ||
+      d.smDate !== undefined || d.branch !== undefined || d.productName !== undefined ||
+      d.remark !== undefined || d.noteText !== undefined || d.dum !== undefined ||
+      d.cgNo !== undefined || d.serviceFee !== undefined || d.productType !== undefined;
     if (touchesRaw) {
       const { data: cur, error: selErr } = await admin
         .from("momo_import_tracks")
@@ -113,6 +134,23 @@ export async function updateMomoImportTrackFields(input: unknown): Promise<Admin
       if (d.width !== undefined) { raw.width = d.width; logDetail.width = d.width; }
       if (d.length !== undefined) { raw.length = d.length; logDetail.length = d.length; }
       if (d.height !== undefined) { raw.height = d.height; logDetail.height = d.height; }
+      // ── ช่องข้อมูลเพิ่มจาก docs (owner 2026-07-25) — คีย์เดียวกับที่ commit/จออ่าน ──
+      if (d.smDate !== undefined) { raw.created_date = d.smDate; logDetail.smDate = d.smDate; }
+      if (d.branch !== undefined) { raw.branch = d.branch; logDetail.branch = d.branch; }
+      if (d.productName !== undefined) { raw.product_name = d.productName; logDetail.productName = d.productName; }
+      if (d.remark !== undefined) { raw.remark = d.remark; logDetail.remark = d.remark; }
+      if (d.noteText !== undefined) { raw.note = d.noteText; logDetail.noteText = d.noteText; }
+      if (d.dum !== undefined) { raw.dum = d.dum; logDetail.dum = d.dum; }
+      if (d.cgNo !== undefined) {
+        raw.CG_NO = d.cgNo;
+        patch.momo_cg_no = d.cgNo || null; // คอลัมน์จริงมีอยู่แล้ว — เขียนคู่กัน
+        logDetail.cgNo = d.cgNo;
+      }
+      if (d.serviceFee !== undefined) { raw.extra_cost = d.serviceFee; logDetail.serviceFee = d.serviceFee; }
+      if (d.productType !== undefined) {
+        raw.type = PRODUCT_TYPE_TO_MOMO[d.productType]; // ผ่าน map เดิมกลับมาเป็น tier เดิมเป๊ะ
+        logDetail.productType = d.productType;
+      }
       if (d.memberCode !== undefined) {
         const mc = d.memberCode.trim().toUpperCase();
         if (mc === "") {

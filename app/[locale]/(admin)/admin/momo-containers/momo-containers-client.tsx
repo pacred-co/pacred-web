@@ -50,6 +50,12 @@ export type IngestTrack = {
   smDate: string | null;      // C "SM Date"
   userCode: string | null;    // I "Code"
   cgNo: string | null;        // T "CG."
+  // owner 2026-07-25 "แก้ได้ทุกคอลัมน์" — ช่อง no-feed เปิดกรอก (เก็บใน raw · Product/Rem → fdetail/fnote)
+  branch: string | null;
+  productName: string | null;
+  remark: string | null;
+  noteText: string | null;
+  dum: string | null;
   momoType: string | null;    // raw MOMO type (general/tis/fda/special/control) — อย. ≠ น้ำยา
   serviceFee: number | null;  // V "Service fee." (= extra_cost ของ MOMO)
   etd: string | null;         // Y — จาก packing list ระดับตู้ (taem_container_etd_eta)
@@ -328,7 +334,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
   const [dragKey, setDragKey] = useState<string | null>(null);
   const { order: colOrder, move: moveCol, reset: resetCols } = useColumnOrder(DATA_KEYS);
   // ✎ inline-edit น้ำหนัก/คิว/จำนวน (pending only · updateMomoImportTrackFields · แก้ก่อนนำเข้า)
-  const [editing, setEditing] = useState<{ id: string; field: "weightKg" | "cbm" | "qty" | "width" | "length" | "height" | "pr" | "tracking"; value: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; field: "weightKg" | "cbm" | "qty" | "width" | "length" | "height" | "pr" | "tracking" | "smDate" | "branch" | "productName" | "remark" | "noteText" | "dum" | "cgNo" | "serviceFee" | "type"; value: string } | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editErr, setEditErr] = useState<string | null>(null);
   // per-row result after commit (so a just-imported row flips without waiting for refresh)
@@ -831,6 +837,26 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
       payload.memberCode = editing.value.trim().toUpperCase(); // "" = เคลียร์ PR
     } else if (editing.field === "tracking") {
       payload.tracking = editing.value.trim().toUpperCase(); // "" = เคลียร์ กลับเลขเดิม MOMO
+    } else if (editing.field === "smDate") {
+      payload.smDate = editing.value.trim();
+    } else if (editing.field === "branch") {
+      payload.branch = editing.value.trim();
+    } else if (editing.field === "productName") {
+      payload.productName = editing.value.trim();
+    } else if (editing.field === "remark") {
+      payload.remark = editing.value.trim();
+    } else if (editing.field === "noteText") {
+      payload.noteText = editing.value.trim();
+    } else if (editing.field === "dum") {
+      payload.dum = editing.value.trim();
+    } else if (editing.field === "cgNo") {
+      payload.cgNo = editing.value.trim().toUpperCase();
+    } else if (editing.field === "type") {
+      payload.productType = editing.value; // select 1/2/3/4 — ตายตัว กัน user error
+    } else if (editing.field === "serviceFee") {
+      const fee = Number(editing.value);
+      if (!Number.isFinite(fee) || fee < 0) { setEditErr("ค่าไม่ถูกต้อง"); return; }
+      payload.serviceFee = fee;
     } else {
       const numVal = Number(editing.value);
       if (!Number.isFinite(numVal) || numVal < 0) { setEditErr("ค่าไม่ถูกต้อง"); return; }
@@ -859,6 +885,15 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     switch (field) {
       case "pr": return t.guessedUserId ?? "";
       case "tracking": return t.trackingOverride ?? t.tracking ?? "";
+      case "smDate": return (t.smDate ?? "").slice(0, 10);
+      case "branch": return t.branch ?? "";
+      case "productName": return t.productName ?? "";
+      case "remark": return t.remark ?? "";
+      case "noteText": return t.noteText ?? "";
+      case "dum": return t.dum ?? "";
+      case "cgNo": return t.cgNo ?? "";
+      case "type": return t.guessedProductType;
+      case "serviceFee": return t.serviceFee != null ? String(t.serviceFee) : "";
       case "weightKg": return t.weightKg > 0 ? String(t.weightKg) : "";
       case "cbm": return t.cbm > 0 ? String(t.cbm) : "";
       case "qty": return t.qty != null ? String(t.qty) : "";
@@ -875,16 +910,31 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     const isEditing = editing?.id === t.id && editing.field === field;
     const isPr = field === "pr";
     const isTracking = field === "tracking";
-    const isText = isPr || isTracking;
+    // ช่องคำตอบตายตัว → <select> กัน user error (owner 2026-07-25)
+    const selectOptions: { value: string; label: string }[] | null =
+      field === "type"
+        ? (Object.entries(PRODUCT_TYPE_LABEL_TH) as [string, string][]).map(([value, label]) => ({ value, label }))
+        : null;
+    const isWideText = field === "productName" || field === "remark" || field === "noteText";
+    const isText = isPr || isTracking || isWideText ||
+      field === "smDate" || field === "branch" || field === "dum" || field === "cgNo";
     if (isEditing) {
       return (
         <span className="inline-flex flex-col items-end gap-0.5">
           <span className="inline-flex items-center gap-0.5">
+            {selectOptions ? (
+              <select autoFocus value={editing.value} disabled={savingEdit}
+                onChange={(e) => setEditing((ed) => (ed ? { ...ed, value: e.target.value } : ed))}
+                className="rounded border border-primary-400 px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary-300">
+                {selectOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            ) : (
             <input autoFocus type={isText ? "text" : "number"} step={isText ? undefined : "any"} value={editing.value} disabled={savingEdit}
               placeholder={isPr ? "PR545" : isTracking ? "เลขเต็มจากรูปป้าย" : undefined}
-              onChange={(e) => setEditing((ed) => (ed ? { ...ed, value: isText ? e.target.value.toUpperCase() : e.target.value } : ed))}
+              onChange={(e) => setEditing((ed) => (ed ? { ...ed, value: (isPr || isTracking || field === "cgNo") ? e.target.value.toUpperCase() : e.target.value } : ed))}
               onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); else if (e.key === "Escape") { setEditing(null); setEditErr(null); } }}
-              className={`${isTracking ? "w-44 text-left" : isPr ? "w-20 text-left uppercase" : "w-16 text-right"} rounded border border-primary-400 px-1 py-0.5 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary-300`} />
+              className={`${isTracking ? "w-44 text-left" : isWideText ? "w-52 text-left" : isPr ? "w-20 text-left uppercase" : isText ? "w-28 text-left" : "w-16 text-right"} rounded border border-primary-400 px-1 py-0.5 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary-300`} />
+            )}
             <button type="button" onClick={saveEdit} disabled={savingEdit} className="text-emerald-600 hover:text-emerald-700" title="บันทึก"><Check className="h-3.5 w-3.5" /></button>
             <button type="button" onClick={() => { setEditing(null); setEditErr(null); }} className="text-gray-400 hover:text-gray-600" title="ยกเลิก"><X className="h-3 w-3" /></button>
           </span>
@@ -954,19 +1004,23 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
       ),
     },
     trans: { label: "Trans", tdClass: "px-2 py-1.5 text-center whitespace-nowrap", td: (t) => (t.transport && TRANSPORT_TH[t.transport]) || DASH },
-    smDate: { label: "SM Date", sortKey: "smDate", tdClass: "px-2 py-1.5 text-center tabular-nums whitespace-nowrap", tdTitle: (t) => t.smDate ?? "", td: (t) => dateOnly(t.smDate) ?? DASH },
+    smDate: { label: "SM Date", sortKey: "smDate", tdClass: "px-2 py-1.5 text-center tabular-nums whitespace-nowrap", tdTitle: (t) => t.smDate ?? "", td: (t) => editableCell(t, "smDate", dateOnly(t.smDate) ?? DASH) },
     // SM Number — MOMO API ไม่ส่ง (ตรวจ raw ครบทุก status 2026-07-19: ไม่มี field นี้) →
     // owner: ใช้เลขหัวบิล/ชิปเม้น (base tracking) เป็นเลขออเดอร์ในช่องนี้แทน.
     smNumber: { label: "SM Number", tdClass: "px-2 py-1.5 font-mono whitespace-nowrap", td: (t) => baseTracking(t.tracking ?? "") ?? DASH },
-    branch: { label: "Branch", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
-    product: { label: "Product", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
-    dum: { label: "Dum", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
+    // owner 2026-07-25 "docs มีข้อมูลเพิ่ม เดี๋ยวกรอกเอง" — 3 ช่องนี้ MOMO ไม่ส่ง แต่เปิดกรอกได้
+    // (Product ไหลเข้า fdetail ของแถวจริงตอนนำเข้า · ที่เหลือเก็บบน staging เป็นอ้างอิง)
+    branch: { label: "Branch", tdClass: "px-2 py-1.5 whitespace-nowrap text-[11px]", td: (t) => editableCell(t, "branch", t.branch?.trim() ? t.branch : DASH) },
+    product: { label: "Product", thTitle: "ชื่อสินค้า — กรอกได้ · ไหลเข้ารายละเอียดสินค้า (fdetail) ตอนนำเข้าระบบ", tdClass: "px-2 py-1.5 text-[11px] max-w-[14rem] truncate", tdTitle: (t) => t.productName ?? "", td: (t) => editableCell(t, "productName", t.productName?.trim() ? t.productName : DASH) },
+    dum: { label: "Dum", tdClass: "px-2 py-1.5 whitespace-nowrap text-[11px]", td: (t) => editableCell(t, "dum", t.dum?.trim() ? t.dum : DASH) },
     type: {
       label: "Type", sortKey: "type", tdClass: "px-2 py-1.5 text-center whitespace-nowrap",
       tdTitle: (t) => typeTitle(t),
       td: (t) => {
         const label = typeTh(t);
-        return (<span className={label !== "ทั่วไป" ? "font-semibold text-amber-700" : undefined}>{label}</span>);
+        // ประเภท = เรทคิดเงิน → ตัวเลือกตายตัว 4 ค่า (dropdown · กัน user error) — ยืนยันซ้ำ
+        // อีกครั้งใน popup ตอนกดนำเข้าเหมือนเดิม
+        return editableCell(t, "type", <span className={label !== "ทั่วไป" ? "font-semibold text-amber-700" : undefined}>{label}</span>);
       },
     },
     code: {
@@ -1051,10 +1105,10 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
         </>
       ),
     },
-    rem: { label: "Rem", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
-    cg: { label: "CG.", tdClass: "px-2 py-1.5 text-center font-mono text-[11px] whitespace-nowrap", td: (t) => t.cgNo ?? DASH },
-    note: { label: "Note.", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
-    serviceFee: { label: "Service Fee", thTitle: "MOMO ส่งมาเป็น extra_cost (ค่าตีลังไม้ / ค่าใช้จ่ายเพิ่ม)", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", tdTitle: () => "extra_cost จาก MOMO (ค่าตีลังไม้ / ค่าใช้จ่ายเพิ่ม)", td: (t) => fx(t.serviceFee, 2) ?? DASH },
+    rem: { label: "Rem", thTitle: "หมายเหตุ — กรอกได้ · ไหลเข้าโน้ตงาน (fnote) ตอนนำเข้าระบบ", tdClass: "px-2 py-1.5 text-[11px] max-w-[12rem] truncate", tdTitle: (t) => t.remark ?? "", td: (t) => editableCell(t, "remark", t.remark?.trim() ? t.remark : DASH) },
+    cg: { label: "CG.", tdClass: "px-2 py-1.5 text-center font-mono text-[11px] whitespace-nowrap", td: (t) => editableCell(t, "cgNo", t.cgNo ?? DASH) },
+    note: { label: "Note.", thTitle: "โน้ตภายใน — เก็บบนตารางนำเข้า (อ้างอิง)", tdClass: "px-2 py-1.5 text-[11px] max-w-[10rem] truncate", tdTitle: (t) => t.noteText ?? "", td: (t) => editableCell(t, "noteText", t.noteText?.trim() ? t.noteText : DASH) },
+    serviceFee: { label: "Service Fee", thTitle: "extra_cost (ค่าตีลังไม้ / ค่าใช้จ่ายเพิ่ม) — แก้ได้ · ไหลเข้าค่าตีลัง (pricecrate) ตอนนำเข้าระบบ", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", tdTitle: () => "extra_cost — แก้ได้ · ไหลเข้าค่าตีลัง (pricecrate) ตอนนำเข้าระบบ", td: (t) => editableCell(t, "serviceFee", fx(t.serviceFee, 2) ?? DASH) },
     status: { label: "Status", tdClass: "px-2 py-1.5 text-[11px] text-muted whitespace-nowrap max-w-[10rem] truncate", tdTitle: (t) => t.adminStatusText ?? "", td: (t) => t.adminStatusText ?? t.phase ?? "—" },
     return: { label: "Return", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
     etd: { label: "ETD", thTitle: "วันออกจากจีน — จากไฟล์ packing list (ระดับตู้)", tdClass: "px-2 py-1.5 text-center tabular-nums text-[11px] whitespace-nowrap", td: (t) => t.etd ?? DASH },

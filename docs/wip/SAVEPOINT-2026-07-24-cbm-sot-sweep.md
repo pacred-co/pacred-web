@@ -119,6 +119,26 @@ prod (2026-07-24): **937 แถว fac='1'** (ในนั้น **224 แถว
       → #fid" เอง (**replay planner จริงกับ prod = exact match ✓**) → ไม่ค้างโชว์ผิด
 - ⚠️ ถ้าเผลอนำเข้าแถวผีก่อน (0kg) = ได้แถวเก็บเงิน ฿0 → ตอนนี้เกิดไม่ได้แล้ว (ชั้น 2)
 - 🔴 **ค้าง CS ตรวจ:** X9002745 staged=PR213 แต่แถวจริง #52319=PR647 (ขัดกัน ห้ามเดา)
+
+## ✅ 2026-07-25 รอบเย็น — ด่านนำเข้า MOMO แก้ได้ทุกคอลัมน์ (owner)
+
+- [x] owner: *"ด่านของการนำข้อมูลเข้าระบบ แก้ไขได้หมด — docs มีข้อมูลเพิ่ม เดี๋ยวกรอกเอง ·
+      คอลัมน์คำตอบตายตัวทำเป็นตัวเลือก ลด user error"*
+- [x] เปิดแก้เพิ่ม: **SM Date · Branch · Product · Type (dropdown 4 ค่า) · Rem · Note ·
+      Dum · CG. · Service Fee** (+ ของเดิม: PR · Tracking · W/L/H · Parcel · Wt · Vol)
+- [x] **ของที่กรอกไหลเข้าแถวจริง ไม่ใช่แค่จอ**: Product → `fdetail` · Rem → `fnote`
+      (commit เดิม hardcode ""/null — แก้แล้ว) · Service Fee → `raw.extra_cost` →
+      `pricecrate` (ค่าตีลังไม้ · เส้นเดิม extractCrateFromMomoRaw) · Type → `raw.type`
+      ผ่าน map เดิม (เรทคิดเงิน — ยืนยันซ้ำใน popup ตอนนำเข้าเหมือนเดิม) · CG → คอลัมน์
+      `momo_cg_no` + raw คู่กัน
+- [x] ทุกช่องเขียนผ่าน `updateMomoImportTrackFields` เดิม (pending-only · zod bound ·
+      audit log) — ห้าม uppercase ข้อความไทย/จีน (เฉพาะรหัส PR/tracking/CG)
+- ⚪ ตั้งใจไม่เปิดแก้: **Trans** (เรือ/รถ auto จากชื่อตู้จริง + ราคา reconcile ตาม physical
+      เอง) · **Status** (state ของ MOMO) · **SM Number** (= เลขชิปเม้น derive จาก tracking
+      ที่แก้ได้แล้ว — แก้เลขแทรค = เลขชิปเม้นตามเอง) · **ETD/ETA** (ระดับตู้จากไฟล์ packing) ·
+      **Return** (มี flow ตีกลับ G7 แยก)
+- ⚠️ ยังไม่ authed-click-test — owner/ทีมกดจริง: แก้ Product/Rem แล้วนำเข้า → ดู fdetail/fnote
+      บนแถวจริง + แก้ Service Fee → ดูค่าตีลังตอนนำเข้า
 - 📌 กติกา owner (มาระหว่าง session · จดเป็น standing): **"ทุกอย่างจาก api — ชิปเม้น แทรคกิ้ง
       จำนวน กล่อง คิว รูป CG status — ต้องซิงค์จากที่เดียวกัน สถานะเส้นตรง การเปลี่ยนแปลง
       เชื่อมตามกันทั้งหมด"** — tracking_override + pointer คือ instalment แรกของกติกานี้
