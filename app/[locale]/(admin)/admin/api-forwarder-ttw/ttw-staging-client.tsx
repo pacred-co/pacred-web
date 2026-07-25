@@ -33,7 +33,7 @@ const TRANSPORT_PILL: Record<string, { label: string; cls: string }> = {
 const num = (v: number | string | null, dp = 0) =>
   v == null ? "—" : Number(v).toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
 
-type Filter = "all" | "no_pr" | "has_pr";
+type Filter = "all" | "no_pr" | "pending" | "committed";
 
 export function TtwStagingClient({
   rows,
@@ -56,7 +56,7 @@ export function TtwStagingClient({
   const [saved, setSaved] = useState<Record<string, { pr: string | null; found: boolean; name: string | null }>>({});
   const [busyMap, setBusy] = useState<Record<string, boolean>>({});
   const [, startT] = useTransition();
-  const [filter, setFilter] = useState<Filter>("no_pr");
+  const [filter, setFilter] = useState<Filter>("all");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<Record<string, boolean>>({});
   // Last-save notice — surfaces the mark-family propagation ("ติดให้ทั้งมาร์คอีก N แถว").
@@ -71,13 +71,17 @@ export function TtwStagingClient({
   const assignedPr = (r: TtwLine) => (r.id in saved ? saved[r.id].pr : r.member_code) ?? "";
   // The INPUT value (live buffer · seeded from the saved PR).
   const inputVal = (r: TtwLine) => edits[r.id] ?? assignedPr(r);
+  // In the system yet? (committed to a billable tb_forwarder · owner ภูม 2026-07-25).
+  const isCommitted = (r: TtwLine) => r.committed_forwarder_id != null || r.id in committedLocal;
 
   const filtered = useMemo(() => {
     const needle = q.trim().toUpperCase();
     return rows.filter((r) => {
       const pr = assignedPr(r);
+      const committed = isCommitted(r);
       if (filter === "no_pr" && pr) return false;
-      if (filter === "has_pr" && !pr) return false;
+      if (filter === "pending" && (!pr || committed)) return false;
+      if (filter === "committed" && !committed) return false;
       if (needle) {
         const hay = `${r.base_tracking} ${r.shipping_mark ?? ""} ${pr} ${r.product_name ?? ""}`.toUpperCase();
         if (!hay.includes(needle)) return false;
@@ -85,7 +89,7 @@ export function TtwStagingClient({
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, filter, q, saved]);
+  }, [rows, filter, q, saved, committedLocal]);
 
   // Group the FILTERED rows by container.
   const groups = useMemo(() => {
@@ -99,19 +103,21 @@ export function TtwStagingClient({
       // Summary over ALL lines of this container (not just filtered) for accurate PR-progress.
       const allLines = rows.filter((r) => r.container_no === container);
       const withPr = allLines.filter((r) => assignedPr(r)).length;
+      const committedCount = allLines.filter((r) => isCommitted(r)).length;
       const boxes = allLines.reduce((s, r) => s + (r.boxes ?? 0), 0);
       const wt = allLines.reduce((s, r) => s + Number(r.weight_kg ?? 0), 0);
       const cbm = allLines.reduce((s, r) => s + Number(r.cbm ?? 0), 0);
       const first = allLines[0];
-      return { container, lines, allCount: allLines.length, withPr, boxes, wt, cbm, first };
+      return { container, lines, allCount: allLines.length, withPr, committedCount, boxes, wt, cbm, first };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered, rows, saved]);
+  }, [filtered, rows, saved, committedLocal]);
 
   const totalTracks = rows.length;
   const totalNoPr = rows.filter((r) => !assignedPr(r)).length;
   const totalContainers = new Set(rows.map((r) => r.container_no)).size;
-  const totalCommitted = rows.filter((r) => r.committed_forwarder_id != null).length;
+  const totalCommitted = rows.filter((r) => isCommitted(r)).length;
+  const totalPending = rows.filter((r) => assignedPr(r) && !isCommitted(r)).length;
   // The REAL CS workload: distinct 唛头 marks among the no-PR rows — one assignment per
   // MARK fills its whole family (438 แถว ≠ 438 ลูกค้า · จริงๆ ~123 มาร์ค).
   const totalNoPrMarks = new Set(
@@ -155,8 +161,8 @@ export function TtwStagingClient({
       `ยืนยันเอา ${r.base_tracking} เข้าระบบ?\n\n` +
       `• ลูกค้า: ${pr}\n` +
       `• ${r.boxes ?? "?"} กล่อง · ${num(r.weight_kg, 1)} กก. · ${num(r.cbm, 4)} คิว` +
-      (r.container_no ? `\n• ตู้: ${r.container_no}` : "") +
-      `\n• สถานะเริ่มต้น: ถึงโกดังจีนแล้ว (อี้อู) — ระบบตั้งราคาให้อัตโนมัติ\n\n` +
+      (r.container_no ? `\n• ผูกเลขตู้: ${r.container_no}` : "") +
+      `\n• สถานะ: กำลังเดินทางมาไทย — ระบบตั้งราคาให้อัตโนมัติ\n\n` +
       `ถ้าเลขนี้มีในระบบแล้ว ระบบจะเชื่อมให้ (กันสร้างซ้ำ).`,
     );
     if (!ok) return;
@@ -198,8 +204,9 @@ export function TtwStagingClient({
       {/* Filter + search */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {([
+          ["pending", `มี PR · ยังไม่เข้าระบบ (${totalPending})`],
           ["no_pr", `ยังไม่มี PR (${totalNoPr})`],
-          ["has_pr", `ใส่ PR แล้ว (${totalTracks - totalNoPr})`],
+          ["committed", `เข้าระบบแล้ว (${totalCommitted})`],
           ["all", `ทั้งหมด (${totalTracks})`],
         ] as [Filter, string][]).map(([f, label]) => (
           <button
@@ -235,7 +242,7 @@ export function TtwStagingClient({
               <th className="!text-right">กล่อง</th>
               <th className="!text-right">น้ำหนัก</th>
               <th className="!text-right">CBM</th>
-              <th className="!text-center">ใส่ PR แล้ว</th>
+              <th className="!text-center">เข้าระบบ</th>
             </tr>
           </thead>
           <tbody>
@@ -246,7 +253,7 @@ export function TtwStagingClient({
               <td className="text-right">{num(groups.reduce((s, g) => s + g.boxes, 0))}</td>
               <td className="text-right">{num(groups.reduce((s, g) => s + g.wt, 0), 1)}</td>
               <td className="text-right">{num(groups.reduce((s, g) => s + g.cbm, 0), 4)}</td>
-              <td className="text-center">{groups.reduce((s, g) => s + g.withPr, 0)}/{groups.reduce((s, g) => s + g.allCount, 0)}</td>
+              <td className="text-center">{groups.reduce((s, g) => s + g.committedCount, 0)}/{groups.reduce((s, g) => s + g.allCount, 0)}</td>
             </tr>
 
             {groups.length === 0 && (
@@ -255,14 +262,14 @@ export function TtwStagingClient({
 
             {groups.map((g) => {
               const isOpen = open[g.container] ?? false; // collapsed by default (owner: ย่อมาก่อน)
-              const donePct = g.allCount ? Math.round((g.withPr / g.allCount) * 100) : 0;
-              const complete = g.withPr === g.allCount;
+              const donePct = g.allCount ? Math.round((g.committedCount / g.allCount) * 100) : 0;
+              const complete = g.committedCount === g.allCount; // ทุกรายการเข้าระบบแล้ว → ขาว · ยังไม่ครบ → แดง
               const pill = TRANSPORT_PILL[g.first?.transport_mode ?? "2"] ?? TRANSPORT_PILL["2"];
               return (
                 <Fragment key={g.container}>
                   <tr
                     onClick={() => setOpen((o) => ({ ...o, [g.container]: !isOpen }))}
-                    className={`cursor-pointer border-t border-border ${isOpen ? "bg-amber-50" : complete ? "bg-white dark:bg-surface hover:bg-surface-alt/60" : "bg-rose-50/60 hover:bg-rose-50"}`}
+                    className={`cursor-pointer border-t border-border ${isOpen ? "bg-amber-50" : complete ? "bg-white dark:bg-surface hover:bg-surface-alt/60" : "bg-rose-100 hover:bg-rose-200"}`}
                   >
                     <td className="px-2 font-mono">
                       <span className="flex items-center gap-1.5">
@@ -279,7 +286,7 @@ export function TtwStagingClient({
                     <td className="px-2 text-right">{num(g.cbm, 4)}</td>
                     <td className="px-2 text-center">
                       <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-bold text-white ${complete ? "bg-emerald-600" : "bg-rose-600"}`}>
-                        {g.withPr}/{g.allCount} ({donePct}%)
+                        {g.committedCount}/{g.allCount} ({donePct}%)
                       </span>
                     </td>
                   </tr>
@@ -322,7 +329,7 @@ export function TtwStagingClient({
                             <td>
                               {committed ? (
                                 <span className="rounded bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                                  ✓ {committedPr || "—"} (commit แล้ว)
+                                  ✓ {committedPr || "—"} · เข้าระบบแล้ว
                                 </span>
                               ) : (
                                 <div className="flex flex-col gap-1">
