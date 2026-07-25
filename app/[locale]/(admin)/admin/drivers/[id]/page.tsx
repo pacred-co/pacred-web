@@ -24,7 +24,7 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import {
   Truck, Clock, CheckCircle2, XCircle, MapPin, Phone,
-  Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2, ClipboardList, Tag,
+  Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2, ClipboardList, Tag, ChevronRight,
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
@@ -897,6 +897,10 @@ export default async function AdminDriverBatchDetailPage({
             const delivered = stop.items.filter((e) => e.item.fdistatus === "2").length;
             const failed = stop.items.filter((e) => e.item.fdistatus === "3").length;
             const allDone = total > 0 && delivered === total;
+            // จำนวนเลขแทรคกิ้ง (ไม่ซ้ำ) ในจุดนี้ — โชว์คู่กับ "รายการ" ในหัวสรุป (owner 2026-07-25)
+            const trackingCount = new Set(
+              stop.items.map((e) => (e.forwarder.ftrackingchn ?? "").trim()).filter(Boolean),
+            ).size;
             const self = isSelfDelivery(f.fshipby);
             const hasPin = Boolean(f.faddresslatitude && f.faddresslongitude);
             const addrText = [f.faddressno, f.faddresssubdistrict, f.faddressdistrict, f.faddressprovince, f.faddresszipcode]
@@ -1038,7 +1042,22 @@ export default async function AdminDriverBatchDetailPage({
                     {/* กรอบมนๆ (ปอน 2026-07-24) — ตารางออเดอร์อยู่ในกรอบขาวมุมโค้ง เหมือนใน
                         popup "ดูบิลใบส่งสินค้า": เลิกเส้นกริดทุกช่อง เหลือเส้นคั่นแถว + พื้นขาว
                         มุมโค้ง (rounded-xl). table-fixed + % widths คงไว้ให้คอลัมน์ทุกจุดตรงกัน. */}
-                    <div className="mx-3 mt-3 overflow-x-auto scrollbar-x-visible rounded-xl border border-[#dcdfe4] bg-white">
+                    {/* สรุปขึ้นบน กดกางเป็นดร็อปดาวน์ (owner 2026-07-25 "ดูง่ายๆ") — <details>
+                        ล้วน ไม่ต้อง client JS · หัว = ยอดรวม (กดได้) · กางแล้วเห็นตารางรายการ · พับไว้ก่อน */}
+                    <details className="group mx-3 mt-3 overflow-hidden rounded-xl border border-[#dcdfe4] bg-white">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 bg-[#f5aab0] px-3 py-2 font-semibold text-[#7a0012] [&::-webkit-details-marker]:hidden">
+                        <span className="flex items-center gap-1.5">
+                          <ChevronRight className="h-4 w-4 transition group-open:rotate-90" />
+                          รวม {stop.items.length} รายการ
+                        </span>
+                        <span className="flex items-center gap-3 text-xs font-medium">
+                          <span>แทรคกิ้ง <b className="tabular-nums">{trackingCount}</b></span>
+                          <span>กล่อง <b className="tabular-nums">{stop.totalBoxes}</b></span>
+                          <span>น้ำหนัก <b className="tabular-nums">{stop.totalWeight.toFixed(2)}</b></span>
+                          <span>ปริมาตร <b className="tabular-nums">{stop.totalVolume.toFixed(5)}</b></span>
+                        </span>
+                      </summary>
+                      <div className="overflow-x-auto scrollbar-x-visible border-t border-[#dcdfe4]">
                       <table className="w-full text-xs border-collapse table-fixed [&>tbody>tr]:border-t [&>tbody>tr]:border-[#dcdfe4]">
                         <thead className="bg-surface-alt/60 text-left text-[11px] font-bold text-[#6b6f82]">
                           <tr>
@@ -1101,17 +1120,10 @@ export default async function AdminDriverBatchDetailPage({
                               </tr>
                             );
                           })}
-                          {/* รวม — legacy PINK summary row (alert-danger #f5aab0/#7a0012) */}
-                          <tr className="bg-[#f5aab0] font-semibold text-[#7a0012]">
-                            <td className="px-2 py-1.5 text-right" colSpan={4}>รวม</td>
-                            <td className="px-2 py-1.5 text-right">{stop.totalBoxes}</td>
-                            <td className="px-2 py-1.5 text-right">{stop.totalWeight.toFixed(2)}</td>
-                            <td className="px-2 py-1.5 text-right">{stop.totalVolume.toFixed(5)}</td>
-                            {isOpsOverride && <td className="px-2 py-1.5" />}
-                          </tr>
                         </tbody>
                       </table>
-                    </div>
+                      </div>
+                    </details>
 
                     {/* พิมพ์ใบส่งสินค้าเฉพาะจุดนี้ (ปอน 2026-07-24) — ปุ่มเดียวกับใน popup
                         "ดูบิลใบส่งสินค้า" (พิมพ์และบันทึกบิลรวม → delivery-slip?fids= ของจุดนี้). */}
