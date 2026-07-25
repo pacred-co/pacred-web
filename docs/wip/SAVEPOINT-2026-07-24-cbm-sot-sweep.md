@@ -139,6 +139,31 @@ prod (2026-07-24): **937 แถว fac='1'** (ในนั้น **224 แถว
       **Return** (มี flow ตีกลับ G7 แยก)
 - ⚠️ ยังไม่ authed-click-test — owner/ทีมกดจริง: แก้ Product/Rem แล้วนำเข้า → ดู fdetail/fnote
       บนแถวจริง + แก้ Service Fee → ดูค่าตีลังตอนนำเข้า
+
+## ✅ 2026-07-25 รอบ 3 — ด่านนำเข้าครบทุกคอลัมน์ + mig 0282 admin_patch (กัน sync ทับ)
+
+- 🔴 **เจอระเบิดก่อนลงมือ:** sync MOMO (ทุก ~5 นาที) **upsert ทับ `raw` ทั้งก้อน + คอลัมน์
+      weight_kg/cbm/quantity/shipment_status/etd/eta** ของแถวที่ยังอยู่ใน feed window →
+      ของที่แอดมินกรอกลง raw (รอบ 2!) จะถูกลบเงียบทุกรอบ
+- [x] **mig 0282 `admin_patch` jsonb** (applied prod) = ที่เก็บของแอดมินโดยเฉพาะ · sync
+      ไม่แตะ · **จอ + ตัวนำเข้า overlay patch ทับเสมอ** (แก้ทีเดียวที่ srcRow ก่อน derive
+      → โค้ด valuation/dedup ข้างล่างไม่ต้องรู้จัก patch)
+- [x] เปิดแก้ครบตามที่ owner สั่ง: **ETD · ETA · Return · Status (dropdown 4 สถานะจริงบน
+      prod) · Trans (dropdown รถ/เรือ/อากาศ) · Wt./Vol. ต่อกล่อง (คูณกลับเป็นยอดรวมให้
+      อัตโนมัติ — ยอดรวมยังเป็น SOT ที่คิดเงิน) · SM Number · Container Name (ผ่าน
+      cabinetWriteGuard) · รูป (ปุ่ม + เพิ่มได้เรื่อยๆ ต่อให้มีแล้ว · cap 12)**
+- [x] **ลำดับความจริง (ไม่ให้ patch ทับของจริง):** ตู้ MOMO cid ชนะ patch · Trans จากตู้จริง
+      ชนะ patch (GZS=เรือ GZE=รถ) · patch ชนะ raw/เดา · ETD/ETA รายแทรค ชนะไฟล์ packing ระดับตู้
+- [x] **รูปที่เพิ่ม** → bucket `forwarder-covers` (admin/momo-staging/<rowId>) → ตอนนำเข้า
+      ลง **fimages** ของแถวจริง (แกลเลอรี mig 0176) + เป็น fcover เมื่อ MOMO ไม่มีรูป ·
+      ย่อรูปในเบราว์เซอร์ก่อนส่ง (กัน bodySizeLimit — บทเรียน juristic upload)
+- [x] **ซ่อนแถวซ้ำ** (owner "แถวที่ไม่ใช้เอาหลบออกไปเลย เกะกะ") — แถว superseded ซ่อนจาก
+      ทุกแท็บ เหลือเห็นใน "ทั้งหมด" (ตามรอยได้ ไม่ลบข้อมูล) + **ตัวเลขบนแท็บไม่นับมันด้วย**
+      (§0f badge อย่ามั่ว)
+- [x] ลบ `tdNoFeed` (ไม่มีคอลัมน์ no-feed เหลือแล้ว) · gate: tsc 0 · lint 0 · test:unit 0 · build 0
+- ⚪ ยังไม่เปิดแก้: SM Date เปิดแล้ว · เหลือ Basket/Sort (MOMO ไม่ส่ง + ไม่มีที่ใช้ต่อ)
+- ⚠️ authed-click-test ยังไม่ได้ทำ — ฝากกดจริง: กรอก ETD/ETA + เพิ่มรูป + แก้ Wt.ต่อกล่อง
+      → รอ sync 1 รอบ (5 นาที) แล้วเช็คว่า **ค่าไม่หาย** (นี่คือจุดที่ mig 0282 แก้)
 - 📌 กติกา owner (มาระหว่าง session · จดเป็น standing): **"ทุกอย่างจาก api — ชิปเม้น แทรคกิ้ง
       จำนวน กล่อง คิว รูป CG status — ต้องซิงค์จากที่เดียวกัน สถานะเส้นตรง การเปลี่ยนแปลง
       เชื่อมตามกันทั้งหมด"** — tracking_override + pointer คือ instalment แรกของกติกานี้

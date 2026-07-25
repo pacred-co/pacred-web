@@ -253,13 +253,14 @@ export async function commitMomoRowCore(
       // sync.ts aggregateTrackDetailMetrics) — ภูม 2026-07-13: value the row from THESE,
       // not the first-box `raw` (raw carried only box-1 when MOMO's feed dropped the
       // -2..-N siblings → ~5× under-bill · e.g. 800206224068 raw.kg=46.5 vs true 249).
-      "id, momo_tracking_no, tracking_override, momo_container_no, container_batch_no, momo_sack_no, shipment_status, raw, weight_kg, cbm, quantity, momo_updated_at, committed_at, committed_forwarder_id",
+      "id, momo_tracking_no, tracking_override, admin_patch, momo_container_no, container_batch_no, momo_sack_no, shipment_status, raw, weight_kg, cbm, quantity, momo_updated_at, committed_at, committed_forwarder_id",
     )
     .eq("id", d.rowId)
     .maybeSingle<{
       id:                     string;
       momo_tracking_no:       string | null;
       tracking_override:      string | null;
+      admin_patch:            Record<string, unknown> | null;
       momo_container_no:      string | null;
       container_batch_no:     string | null;
       momo_sack_no:           string | null;
@@ -288,6 +289,46 @@ export async function commitMomoRowCore(
   if (!srcRow.momo_tracking_no) {
     return { ok: false, error: "row นี้ไม่มี momo_tracking_no" };
   }
+
+  // ── admin_patch OVERLAY (mig 0282 · owner "ข้อมูลที่กรอกต้องนำไปใช้จริง") ────
+  // sync ทับ raw/คอลัมน์ metric ได้ทุก 5 นาที → ค่าที่แอดมินกรอกเก็บใน admin_patch
+  // (sync ไม่แตะ) และ **ชนะเสมอ** ตอนนำเข้า: ทับลง srcRow ตรงนี้ที่เดียว แล้วโค้ด
+  // valuation/metrics/dedup ข้างล่างทั้งหมดใช้ค่าที่ทับแล้วโดยไม่ต้องรู้จัก patch.
+  const adminPatch: Record<string, unknown> =
+    srcRow.admin_patch && typeof srcRow.admin_patch === "object" ? srcRow.admin_patch : {};
+  {
+    const apNum = (k: string): number | null => {
+      const v = adminPatch[k];
+      const n = Number(v);
+      return v != null && Number.isFinite(n) ? n : null;
+    };
+    if (apNum("weight_kg") != null) srcRow.weight_kg = apNum("weight_kg");
+    if (apNum("cbm") != null) srcRow.cbm = apNum("cbm");
+    if (apNum("quantity") != null) srcRow.quantity = apNum("quantity");
+    const rawObj = srcRow.raw && typeof srcRow.raw === "object" ? { ...(srcRow.raw as Record<string, unknown>) } : {};
+    for (const [apKey, rawKey] of [
+      ["width", "width"], ["length", "length"], ["height", "height"],
+      ["product_name", "product_name"], ["remark", "remark"], ["extra_cost", "extra_cost"],
+      ["cg_no", "CG_NO"],
+    ] as const) {
+      if (adminPatch[apKey] !== undefined) rawObj[rawKey] = adminPatch[apKey];
+    }
+    // ประเภทสินค้า (เรทคิดเงิน) — จอส่ง d.fProductsType จาก modal อยู่แล้ว; ตัวนี้แค่ทำให้
+    // raw สอดคล้องเผื่อ path ที่ derive จาก raw.type (auto-commit prefill)
+    if (typeof adminPatch.product_type === "string") {
+      const typeMap: Record<string, string> = { "1": "general", "2": "tis", "3": "fda", "4": "special" };
+      rawObj.type = typeMap[adminPatch.product_type] ?? rawObj.type;
+    }
+    srcRow.raw = rawObj;
+    // เลขตู้จาก docs (ผ่าน cabinetWriteGuard ตอนกรอกแล้ว) — ใช้เมื่อ MOMO ยังไม่ผูก cid จริง
+    if (!((srcRow.container_batch_no ?? "").trim()) && typeof adminPatch.container === "string" && adminPatch.container.trim()) {
+      srcRow.container_batch_no = adminPatch.container.trim();
+    }
+  }
+  /** รูปที่แอดมินเพิ่มบนด่านนำเข้า (key ใน bucket forwarder-covers) → fimages ของแถวจริง. */
+  const stagingExtraImages: string[] = Array.isArray(adminPatch.extra_images)
+    ? (adminPatch.extra_images as unknown[]).filter((x): x is string => typeof x === "string" && x.trim() !== "")
+    : [];
 
   // ── 2. Verify customer (tb_users) ─────────────────────────
   const userID = d.userID.toUpperCase();
@@ -551,6 +592,10 @@ export async function commitMomoRowCore(
   const fTransportType =
     d.fTransportType
     ?? deriveTransportTypeFromCabinet(srcRow.container_batch_no)
+    // Trans ที่แอดมินเลือกบนด่านนำเข้า (admin_patch · dropdown) — ชนะ ship_by เดา
+    // แต่แพ้ตู้จริง (ตู้ = physical truth · GZS=เรือ GZE=รถ)
+    ?? (adminPatch.transport_mode === "1" || adminPatch.transport_mode === "2" || adminPatch.transport_mode === "3"
+        ? (adminPatch.transport_mode as "1" | "2" | "3") : null)
     ?? deriveTransportTypeFromMomoRaw(srcRow.raw);
 
   // Legacy "feel automatic" atomicity:
@@ -951,7 +996,11 @@ export async function commitMomoRowCore(
                                 : null),
       fnoteuser:             "0",
       fnoteuserread:         "0",
-      fcover:                momoCover,
+      // รูปที่แอดมินเพิ่มบนด่านนำเข้า (admin_patch.extra_images = key ใน bucket
+      // forwarder-covers) → แกลเลอรีของแถวจริง (fimages · mig 0176 · JSON array of keys
+      // convention เดียวกับ adminAddForwarderImage) · เป็นปกหน้าเมื่อ MOMO ไม่มีรูปเลย.
+      fcover:                momoCover || (stagingExtraImages[0] ?? ""),
+      fimages:               stagingExtraImages.length > 0 ? JSON.stringify(stagingExtraImages) : null,
       fbox_mark:             momoCg,
       fphotoend:             "",
       fcostrefrate:          0,

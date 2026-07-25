@@ -9,7 +9,7 @@
  * กดเลขตู้ → หน้า detail /[cabinet] (เก็บไว้).
  */
 
-import { Fragment, useMemo, useState, useTransition, type ReactNode } from "react";
+import { Fragment, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { ALL_WORKBOOK_CARRIER_OPTIONS } from "@/lib/cart/ship-by-eligibility";
 import { baseTracking, isAdditiveLotBare } from "@/lib/admin/momo-bill-header";
 import { momoTypeLabel, momoTrackingAnomaly, PRODUCT_TYPE_LABEL_TH } from "@/lib/admin/momo-live-discovery-plan";
@@ -21,7 +21,8 @@ import { CheckCircle2, AlertCircle, RefreshCw, X, PackageCheck, Truck, Check } f
 import { commitMomoRowToForwarder } from "@/actions/admin/momo-commit";
 import { propagateMomoLiveStatusNow } from "@/actions/admin/momo-web-live";
 import { addMissingMomoParcelsBulk } from "@/actions/admin/momo-add-missing";
-import { updateMomoImportTrackFields } from "@/actions/admin/momo-ingest-edit";
+import { updateMomoImportTrackFields, adminAddMomoStagingImage } from "@/actions/admin/momo-ingest-edit";
+import { compressImageFile } from "@/lib/image-compress";
 import { confirm } from "@/components/ui/confirm";
 import { useColumnOrder } from "@/lib/hooks/use-column-order";
 // Import the input TYPE from the auth-agnostic core, NOT the "use server" file
@@ -56,6 +57,18 @@ export type IngestTrack = {
   remark: string | null;
   noteText: string | null;
   dum: string | null;
+  // รอบ 2 (owner 2026-07-25) — เก็บใน admin_patch (mig 0282 · sync ไม่ทับ)
+  smNumber: string | null;        // เลขชิปเม้นที่กรอกเอง (ว่าง = derive จากเลขแทรค)
+  returnNote: string | null;      // Return — บันทึกของตีกลับ
+  containerOverride: string | null;  // เลขตู้จาก docs (ใช้เมื่อ MOMO ยังไม่ผูก cid)
+  transportOverride: "1" | "2" | "3" | null;
+  statusOverride: string | null;
+  etdOverride: string | null;
+  etaOverride: string | null;
+  /** รูปที่แอดมินเพิ่ม (key ใน bucket forwarder-covers) → fimages ตอนนำเข้า */
+  extraImageKeys: string[];
+  /** URL ที่ sign แล้วของ extraImageKeys (page.tsx เตรียมให้) */
+  extraImageUrls: string[];
   momoType: string | null;    // raw MOMO type (general/tis/fda/special/control) — อย. ≠ น้ำยา
   serviceFee: number | null;  // V "Service fee." (= extra_cost ของ MOMO)
   etd: string | null;         // Y — จาก packing list ระดับตู้ (taem_container_etd_eta)
@@ -233,6 +246,13 @@ const typeTitle = (t: IngestTrack): string =>
   (t.momoType ? ` · MOMO ส่งมาเป็น "${t.momoType}"` : " · MOMO ไม่ได้ส่งประเภทมา (ตั้งเป็นทั่วไป)") +
   " · แก้ได้ที่หน้ายืนยันก่อนนำเข้า";
 const TRANSPORT_TH: Record<string, string> = { "1": "🚚 รถ", "2": "🚢 เรือ", "3": "✈️ อากาศ" };
+/** สถานะที่มีจริงบน prod (probe 2026-07-25) — ตัวเลือกตายตัว กัน user error พิมพ์เอง. */
+const MOMO_STATUS_OPTIONS = [
+  { value: "WAITING_SELLER_SHIP", label: "รอร้านส่ง" },
+  { value: "AT_WAREHOUSE_CN", label: "ถึงโกดังจีน" },
+  { value: "TRUCK_CLOSED", label: "ปิดตู้แล้ว" },
+  { value: "กำลังส่งมาไทย", label: "กำลังส่งมาไทย" },
+] as const;
 
 const n2 = (v: number) => (v > 0 ? v.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "—");
 const n6 = (v: number) => (v > 0 ? v.toLocaleString("en-US", { maximumFractionDigits: 6 }) : "—");
@@ -246,7 +266,7 @@ const dateOnly = (s: string | null) => (s ? s.slice(0, 10) : null);
 /** คอลัมน์ที่มีในไฟล์ packing list แต่ MOMO API ไม่ส่งมา — โชว์ไว้ให้ครบฟอร์ม (ไม่เดาค่า) */
 const NO_FEED = "MOMO API ไม่ส่งคอลัมน์นี้มา — มีเฉพาะในไฟล์ packing list ของแต้ม";
 const thNoFeed = "px-2 py-2 text-center font-normal italic text-muted/50";
-const tdNoFeed = "px-2 py-1.5 text-center text-gray-300";
+// (tdNoFeed ถูกลบ 2026-07-25 — ทุกคอลัมน์กรอกได้แล้ว ไม่มีช่อง "no-feed" ที่ตายตัวอีก)
 const DASH = <span className="text-gray-300">—</span>;
 
 // กล่องย่อย (box sub-row) → ค่าที่โชว์ต่อคอลัมน์ (ตาม colOrder เพื่อให้ตรงหลักกับแถวหลัก).
@@ -334,7 +354,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
   const [dragKey, setDragKey] = useState<string | null>(null);
   const { order: colOrder, move: moveCol, reset: resetCols } = useColumnOrder(DATA_KEYS);
   // ✎ inline-edit น้ำหนัก/คิว/จำนวน (pending only · updateMomoImportTrackFields · แก้ก่อนนำเข้า)
-  const [editing, setEditing] = useState<{ id: string; field: "weightKg" | "cbm" | "qty" | "width" | "length" | "height" | "pr" | "tracking" | "smDate" | "branch" | "productName" | "remark" | "noteText" | "dum" | "cgNo" | "serviceFee" | "type"; value: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; field: "weightKg" | "cbm" | "qty" | "width" | "length" | "height" | "pr" | "tracking" | "smDate" | "branch" | "productName" | "remark" | "noteText" | "dum" | "cgNo" | "serviceFee" | "type" | "trans" | "statusMomo" | "smNumber" | "containerName" | "returnNote" | "etd" | "eta" | "wtPerBox" | "volPerBox"; value: string } | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editErr, setEditErr] = useState<string | null>(null);
   // per-row result after commit (so a just-imported row flips without waiting for refresh)
@@ -348,18 +368,23 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkResult, setBulkResult] = useState<null | { ok: number; errors: { tracking: string; message: string }[]; heldSkipped?: number }>(null);
 
-  const counts = useMemo(() => ({
+  const counts = useMemo(() => {
+    // แถวซ้ำ (MOMO เปิด 2 เรคคอร์ด) ถูกซ่อนจากทุกแท็บยกเว้น "ทั้งหมด" → ตัวเลขบนแท็บ
+    // ต้องไม่นับมันด้วย ไม่งั้น badge โกหก (§0f "badge อย่ามั่ว")
+    const v = tracks.filter((t) => t.supersededBy == null);
+    return {
     all: tracks.length,
-    pending: tracks.filter((t) => !t.committed).length,
-    committed: tracks.filter((t) => t.committed).length,
-    mismatch: tracks.filter((t) => pkWtDiff(t) || pkVolDiff(t) || liveWtDiff(t) || liveVolDiff(t)).length,
-    garbage: tracks.filter((t) => t.momoGarbage).length,
+    pending: v.filter((t) => !t.committed).length,
+    committed: v.filter((t) => t.committed).length,
+    mismatch: v.filter((t) => pkWtDiff(t) || pkVolDiff(t) || liveWtDiff(t) || liveVolDiff(t)).length,
+    garbage: v.filter((t) => t.momoGarbage).length,
     // NO CODE (owner 2026-07-21) — MOMO ไม่แนบรหัสลูกค้า = ของไม่มีเจ้าของในระบบ.
     // นับเฉพาะที่ยังไม่ commit (แถวที่ commit แล้ว = CS หาเจ้าของเจอแล้วตอนนำเข้า).
-    nocode: tracks.filter((t) => !t.committed && (t.guessedUserId ?? "").trim() === "").length,
+    nocode: v.filter((t) => !t.committed && (t.guessedUserId ?? "").trim() === "").length,
     // รอตรวจ · ยังไม่พร้อม (owner 2026-07-23) — มาถึงแล้วแต่ข้อมูลผิด/ไม่ครบ (in-transit ไม่นับ).
-    notready: tracks.filter(isNotReady).length,
-  }), [tracks]);
+    notready: v.filter(isNotReady).length,
+    };
+  }, [tracks]);
   const invalidPr = useMemo(() => tracks.filter((t) => !t.committed && t.userIdValid === false).length, [tracks]);
 
   const filtered = useMemo(() => {
@@ -373,6 +398,9 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
       list = list.filter((t) => !t.committed && (t.guessedUserId ?? "").trim() === "");
     // รอตรวจ = มาถึงแล้วแต่ข้อมูลผิด/ไม่ครบ — กรองรอไว้ให้ตรวจก่อนนำเข้า (owner 2026-07-23)
     else if (tab === "notready") list = list.filter(isNotReady);
+    // owner 2026-07-25 "แถวที่ไม่ใช้เอาหลบออกไปเลย เกะกะ" — แถวที่ถูกเคลมว่าซ้ำ (MOMO เปิด
+    // 2 เรคคอร์ด) ซ่อนจากทุกแท็บ เหลือเห็นเฉพาะ "ทั้งหมด" (ตามรอยได้ · ไม่ลบข้อมูล)
+    if (tab !== "all") list = list.filter((t) => t.supersededBy == null);
     const term = q.trim().toLowerCase();
     if (term)
       list = list.filter((t) =>
@@ -829,6 +857,39 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
 
   const modalUserValid = modal ? /^PR\d+$/i.test(modal.userID.trim()) : false;
 
+  // ── เพิ่มรูปบนแถวนำเข้า (owner 2026-07-25) — input เดียว reuse ทุกแถว (rowId ใน state) ──
+  const imgInputRef = useRef<HTMLInputElement | null>(null);
+  const [imgBusy, setImgBusy] = useState<string | null>(null);
+  const [imgRowId, setImgRowId] = useState<string | null>(null);
+  const [imgErr, setImgErr] = useState<string | null>(null);
+  function openImagePicker(rowId: string) {
+    setImgErr(null);
+    setImgRowId(rowId);
+    imgInputRef.current?.click();
+  }
+  async function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // เลือกไฟล์เดิมซ้ำได้
+    if (!file || !imgRowId) return;
+    setImgBusy(imgRowId);
+    setImgErr(null);
+    try {
+      // ย่อในเบราว์เซอร์ก่อน (กัน bodySizeLimit — บทเรียนเดิม §juristic upload)
+      const small = await compressImageFile(file);
+      const fd = new FormData();
+      fd.append("rowId", imgRowId);
+      fd.append("file", small);
+      const res = await adminAddMomoStagingImage(fd);
+      if (res.ok) startTransition(() => router.refresh());
+      else setImgErr(res.error);
+    } catch (err) {
+      setImgErr(err instanceof Error ? err.message : "เพิ่มรูปไม่สำเร็จ");
+    } finally {
+      setImgBusy(null);
+      setImgRowId(null);
+    }
+  }
+
   // ✎ บันทึกการแก้ไข น้ำหนัก/คิว/จำนวน — wrap updateMomoImportTrackFields (pending-only · money-safe)
   async function saveEdit() {
     if (!editing) return;
@@ -853,6 +914,28 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
       payload.cgNo = editing.value.trim().toUpperCase();
     } else if (editing.field === "type") {
       payload.productType = editing.value; // select 1/2/3/4 — ตายตัว กัน user error
+    } else if (editing.field === "trans") {
+      payload.transportMode = editing.value; // select รถ/เรือ/อากาศ
+    } else if (editing.field === "statusMomo") {
+      payload.statusMomo = editing.value;    // select สถานะ MOMO
+    } else if (editing.field === "smNumber") {
+      payload.smNumber = editing.value.trim();
+    } else if (editing.field === "containerName") {
+      payload.containerName = editing.value.trim();
+    } else if (editing.field === "returnNote") {
+      payload.returnNote = editing.value.trim();
+    } else if (editing.field === "wtPerBox" || editing.field === "volPerBox") {
+      const per = Number(editing.value);
+      if (!Number.isFinite(per) || per < 0) { setEditErr("ค่าไม่ถูกต้อง"); return; }
+      const row = tracks.find((x) => x.id === editing.id);
+      const boxes = Math.max(1, Math.round(Number(row?.qty ?? 1) || 1));
+      const total = Number((per * boxes).toFixed(editing.field === "wtPerBox" ? 2 : 6));
+      if (editing.field === "wtPerBox") payload.weightKg = total;
+      else payload.cbm = total;
+    } else if (editing.field === "etd") {
+      payload.etd = editing.value.trim();
+    } else if (editing.field === "eta") {
+      payload.eta = editing.value.trim();
     } else if (editing.field === "serviceFee") {
       const fee = Number(editing.value);
       if (!Number.isFinite(fee) || fee < 0) { setEditErr("ค่าไม่ถูกต้อง"); return; }
@@ -894,6 +977,15 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
       case "cgNo": return t.cgNo ?? "";
       case "type": return t.guessedProductType;
       case "serviceFee": return t.serviceFee != null ? String(t.serviceFee) : "";
+      case "trans": return t.transportOverride ?? t.transport ?? "2";
+      case "statusMomo": return t.statusOverride ?? t.status ?? "TRUCK_CLOSED";
+      case "smNumber": return t.smNumber ?? baseTracking(t.trackingOverride ?? t.tracking ?? "") ?? "";
+      case "containerName": return t.containerOverride ?? t.container ?? "";
+      case "returnNote": return t.returnNote ?? "";
+      case "wtPerBox": return t.weightKg > 0 ? String(perBox(t.weightKg, t.qty)) : "";
+      case "volPerBox": return t.cbm > 0 ? String(perBox(t.cbm, t.qty)) : "";
+      case "etd": return (t.etd ?? "").slice(0, 10);
+      case "eta": return (t.eta ?? "").slice(0, 10);
       case "weightKg": return t.weightKg > 0 ? String(t.weightKg) : "";
       case "cbm": return t.cbm > 0 ? String(t.cbm) : "";
       case "qty": return t.qty != null ? String(t.qty) : "";
@@ -914,10 +1006,15 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     const selectOptions: { value: string; label: string }[] | null =
       field === "type"
         ? (Object.entries(PRODUCT_TYPE_LABEL_TH) as [string, string][]).map(([value, label]) => ({ value, label }))
+        : field === "trans"
+        ? (Object.entries(TRANSPORT_TH) as [string, string][]).map(([value, label]) => ({ value, label }))
+        : field === "statusMomo"
+        ? MOMO_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))
         : null;
-    const isWideText = field === "productName" || field === "remark" || field === "noteText";
+    const isWideText = field === "productName" || field === "remark" || field === "noteText" || field === "returnNote";
     const isText = isPr || isTracking || isWideText ||
-      field === "smDate" || field === "branch" || field === "dum" || field === "cgNo";
+      field === "smDate" || field === "branch" || field === "dum" || field === "cgNo" ||
+      field === "smNumber" || field === "containerName" || field === "etd" || field === "eta";
     if (isEditing) {
       return (
         <span className="inline-flex flex-col items-end gap-0.5">
@@ -931,7 +1028,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
             ) : (
             <input autoFocus type={isText ? "text" : "number"} step={isText ? undefined : "any"} value={editing.value} disabled={savingEdit}
               placeholder={isPr ? "PR545" : isTracking ? "เลขเต็มจากรูปป้าย" : undefined}
-              onChange={(e) => setEditing((ed) => (ed ? { ...ed, value: (isPr || isTracking || field === "cgNo") ? e.target.value.toUpperCase() : e.target.value } : ed))}
+              onChange={(e) => setEditing((ed) => (ed ? { ...ed, value: (isPr || isTracking || field === "cgNo" || field === "containerName" || field === "smNumber") ? e.target.value.toUpperCase() : e.target.value } : ed))}
               onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); else if (e.key === "Escape") { setEditing(null); setEditErr(null); } }}
               className={`${isTracking ? "w-44 text-left" : isWideText ? "w-52 text-left" : isPr ? "w-20 text-left uppercase" : isText ? "w-28 text-left" : "w-16 text-right"} rounded border border-primary-400 px-1 py-0.5 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary-300`} />
             )}
@@ -959,14 +1056,33 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     tdClass: string; tdTitle?: (t: IngestTrack) => string | undefined; td: (t: IngestTrack) => ReactNode;
   }> = {
     image: {
-      label: "รูป", tdClass: "px-2 py-1.5 text-center",
-      td: (t) => t.images.length > 0 ? (
-        <button type="button" onClick={() => setZoom({ urls: t.images, tracking: t.tracking ?? "—" })} className="relative inline-block" title="คลิกดูรูปป้าย (ตรวจ PR)">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={t.images[0]} alt="ป้าย MOMO" loading="lazy" className="h-9 w-9 rounded border border-border object-cover hover:ring-2 hover:ring-primary-400" />
-          {t.images.length > 1 && <span className="absolute -top-1.5 -right-1.5 rounded-full bg-primary-500 px-1 text-[11px] font-bold text-white">+{t.images.length - 1}</span>}
-        </button>
-      ) : <span className="text-gray-300">—</span>,
+      // owner 2026-07-25 "รูปสามารถกดเพิ่มได้ด้วย ต่อให้มีแล้วก็กดบวกเพิ่มได้" —
+      // รูป MOMO (t.images) + รูปที่เราเพิ่มเอง (extraImageUrls · ไปลงแกลเลอรี fimages
+      // ของแถวจริงตอนนำเข้า) โชว์รวมกัน · ปุ่ม + อยู่ข้างๆ เสมอ (แถวที่ยังไม่นำเข้า)
+      label: "รูป", thTitle: "รูปป้ายจาก MOMO + รูปที่เราเพิ่มเอง · กด + เพื่อเพิ่มรูป (ไปแกลเลอรีของงานตอนนำเข้า)",
+      tdClass: "px-2 py-1.5 text-center",
+      td: (t) => {
+        const all = [...t.images, ...(t.extraImageUrls ?? [])];
+        return (
+          <span className="inline-flex items-center gap-1">
+            {all.length > 0 ? (
+              <button type="button" onClick={() => setZoom({ urls: all, tracking: t.trackingOverride ?? t.tracking ?? "—" })} className="relative inline-block" title="คลิกดูรูป (ตรวจ PR)">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={all[0]} alt="รูปพัสดุ" loading="lazy" className="h-9 w-9 rounded border border-border object-cover hover:ring-2 hover:ring-primary-400" />
+                {all.length > 1 && <span className="absolute -top-1.5 -right-1.5 rounded-full bg-primary-500 px-1 text-[11px] font-bold text-white">+{all.length - 1}</span>}
+              </button>
+            ) : <span className="text-gray-300">—</span>}
+            {!t.committed && !rowResult[t.id]?.ok && (
+              <button type="button" onClick={() => openImagePicker(t.id)}
+                disabled={imgBusy === t.id}
+                className="rounded border border-dashed border-primary-300 px-1 text-[11px] font-bold text-primary-600 hover:bg-primary-50 disabled:opacity-50"
+                title="เพิ่มรูป (เก็บไปกับงานตอนนำเข้าระบบ)">
+                {imgBusy === t.id ? "…" : "+"}
+              </button>
+            )}
+          </span>
+        );
+      },
     },
     container: {
       label: "Container Name", sortKey: "container", tdClass: "px-2 py-1.5 whitespace-nowrap",
@@ -983,7 +1099,13 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                 ` — นำเข้าระบบได้ปกติ (จะลงเป็น "กำลังส่งมาไทย" รอเลขตู้จริงจาก MOMO) · ถ้าค้างนาน ให้ทวงเลขตู้กับ MOMO`}>
               ⚠️ ปิดรอบแล้วแต่ยังไม่มีเลขตู้
             </span>
-          ) : (<span className="text-[11px] text-amber-600" title={t.routingBatch ?? ""}>⏳ ยังไม่เข้าตู้ปิด</span>)}
+          ) : (
+            /* owner 2026-07-25 "Container Name แก้ได้" — MOMO ยังไม่ผูกตู้ → กรอกจาก docs ได้
+               (ผ่าน cabinetWriteGuard กันเลขกระสอบ/placeholder) · พอ MOMO ส่ง cid จริงมา
+               ตัวจริงชนะเสมอ ไม่ต้องลบของที่กรอก */
+            editableCell(t, "containerName",
+              <span className="text-[11px] text-amber-600" title={t.routingBatch ?? ""}>⏳ ยังไม่เข้าตู้ปิด</span>)
+          )}
           {t.sack && <div className="text-[11px] text-muted">กระสอบ: {t.sack}</div>}
           {t.momoGarbage && (
             <div className="mt-0.5 inline-flex items-center gap-0.5 rounded bg-red-600 px-1 py-0.5 text-[11px] font-bold text-white"
@@ -1003,11 +1125,11 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
         </>
       ),
     },
-    trans: { label: "Trans", tdClass: "px-2 py-1.5 text-center whitespace-nowrap", td: (t) => (t.transport && TRANSPORT_TH[t.transport]) || DASH },
+    trans: { label: "Trans", thTitle: "รถ/เรือ/อากาศ — ตู้จริงตัดสินก่อน (GZS=เรือ GZE=รถ) · ยังไม่มีตู้ เลือกเองได้", tdClass: "px-2 py-1.5 text-center whitespace-nowrap", td: (t) => editableCell(t, "trans", <>{(t.transport && TRANSPORT_TH[t.transport]) || DASH}</>) },
     smDate: { label: "SM Date", sortKey: "smDate", tdClass: "px-2 py-1.5 text-center tabular-nums whitespace-nowrap", tdTitle: (t) => t.smDate ?? "", td: (t) => editableCell(t, "smDate", dateOnly(t.smDate) ?? DASH) },
     // SM Number — MOMO API ไม่ส่ง (ตรวจ raw ครบทุก status 2026-07-19: ไม่มี field นี้) →
     // owner: ใช้เลขหัวบิล/ชิปเม้น (base tracking) เป็นเลขออเดอร์ในช่องนี้แทน.
-    smNumber: { label: "SM Number", tdClass: "px-2 py-1.5 font-mono whitespace-nowrap", td: (t) => baseTracking(t.tracking ?? "") ?? DASH },
+    smNumber: { label: "SM Number", thTitle: "เลขชิปเม้น — ปกติ derive จากเลขแทรค · กรอกทับได้ถ้า docs ระบุ", tdClass: "px-2 py-1.5 font-mono whitespace-nowrap", td: (t) => editableCell(t, "smNumber", <>{t.smNumber ?? baseTracking(t.trackingOverride ?? t.tracking ?? "") ?? DASH}</>) },
     // owner 2026-07-25 "docs มีข้อมูลเพิ่ม เดี๋ยวกรอกเอง" — 3 ช่องนี้ MOMO ไม่ส่ง แต่เปิดกรอกได้
     // (Product ไหลเข้า fdetail ของแถวจริงตอนนำเข้า · ที่เหลือเก็บบน staging เป็นอ้างอิง)
     branch: { label: "Branch", tdClass: "px-2 py-1.5 whitespace-nowrap text-[11px]", td: (t) => editableCell(t, "branch", t.branch?.trim() ? t.branch : DASH) },
@@ -1083,8 +1205,10 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     l: { label: "L.", sortKey: "l", thTitle: "ยาว (ซม.) ต่อกล่อง · แก้ไขได้", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => editableCell(t, "length", t.length > 0 ? t.length : DASH) },
     h: { label: "H.", sortKey: "h", thTitle: "สูง (ซม.) ต่อกล่อง · แก้ไขได้", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => editableCell(t, "height", t.height > 0 ? t.height : DASH) },
     totalParcel: { label: "Total Parcel", sortKey: "qty", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", td: (t) => editableCell(t, "qty", t.qty ?? DASH) },
-    wt: { label: "Wt.", thTitle: "น้ำหนักต่อกล่อง = Total Wt. ÷ Total Parcel", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono text-muted", td: (t) => t.weightKg > 0 ? fx(perBox(t.weightKg, t.qty), 2) : DASH },
-    vol: { label: "Vol.", thTitle: "คิวต่อกล่อง = W×L×H", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono text-muted", td: (t) => t.cbm > 0 ? fx(perBox(t.cbm, t.qty), 6) : DASH },
+    // owner 2026-07-25 "wt. vol. แก้ได้" — กรอก "ต่อกล่อง" แล้วระบบคูณจำนวนกล่องกลับเป็น
+    // ยอดรวม (Total Wt./Vol. = ค่าที่คิดเงินจริง · SOT เดียว ไม่มีเลขลอย)
+    wt: { label: "Wt.", thTitle: "น้ำหนักต่อกล่อง — แก้ได้ · ระบบคูณจำนวนกล่องเป็นยอดรวมให้", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono text-muted", td: (t) => editableCell(t, "wtPerBox", <>{t.weightKg > 0 ? fx(perBox(t.weightKg, t.qty), 2) : DASH}</>) },
+    vol: { label: "Vol.", thTitle: "คิวต่อกล่อง — แก้ได้ · ระบบคูณจำนวนกล่องเป็นยอดรวมให้", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono text-muted", td: (t) => editableCell(t, "volPerBox", <>{t.cbm > 0 ? fx(perBox(t.cbm, t.qty), 6) : DASH}</>) },
     totalWt: {
       label: "Total Wt.", sortKey: "weight", thTitle: "น้ำหนักรวมทั้งแทรค — ค่าที่ใช้คิดเงิน", tdClass: "px-2 py-1.5 text-right tabular-nums",
       td: (t) => (
@@ -1109,14 +1233,19 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     cg: { label: "CG.", tdClass: "px-2 py-1.5 text-center font-mono text-[11px] whitespace-nowrap", td: (t) => editableCell(t, "cgNo", t.cgNo ?? DASH) },
     note: { label: "Note.", thTitle: "โน้ตภายใน — เก็บบนตารางนำเข้า (อ้างอิง)", tdClass: "px-2 py-1.5 text-[11px] max-w-[10rem] truncate", tdTitle: (t) => t.noteText ?? "", td: (t) => editableCell(t, "noteText", t.noteText?.trim() ? t.noteText : DASH) },
     serviceFee: { label: "Service Fee", thTitle: "extra_cost (ค่าตีลังไม้ / ค่าใช้จ่ายเพิ่ม) — แก้ได้ · ไหลเข้าค่าตีลัง (pricecrate) ตอนนำเข้าระบบ", tdClass: "px-2 py-1.5 text-right tabular-nums font-mono", tdTitle: () => "extra_cost — แก้ได้ · ไหลเข้าค่าตีลัง (pricecrate) ตอนนำเข้าระบบ", td: (t) => editableCell(t, "serviceFee", fx(t.serviceFee, 2) ?? DASH) },
-    status: { label: "Status", tdClass: "px-2 py-1.5 text-[11px] text-muted whitespace-nowrap max-w-[10rem] truncate", tdTitle: (t) => t.adminStatusText ?? "", td: (t) => t.adminStatusText ?? t.phase ?? "—" },
-    return: { label: "Return", noFeed: true, tdClass: tdNoFeed, td: () => "—" },
-    etd: { label: "ETD", thTitle: "วันออกจากจีน — จากไฟล์ packing list (ระดับตู้)", tdClass: "px-2 py-1.5 text-center tabular-nums text-[11px] whitespace-nowrap", td: (t) => t.etd ?? DASH },
-    eta: { label: "ETA", thTitle: "วันถึงไทย — จากไฟล์ packing list (ระดับตู้)", tdClass: "px-2 py-1.5 text-center tabular-nums text-[11px] whitespace-nowrap", td: (t) => t.eta ?? DASH },
+    status: { label: "Status", thTitle: "สถานะฝั่ง MOMO — เลือกจากรายการ (กันพิมพ์มั่ว)", tdClass: "px-2 py-1.5 text-[11px] text-muted whitespace-nowrap max-w-[10rem] truncate", tdTitle: (t) => t.adminStatusText ?? t.status ?? "", td: (t) => editableCell(t, "statusMomo", <>{MOMO_STATUS_OPTIONS.find((o) => o.value === t.status)?.label ?? t.adminStatusText ?? t.phase ?? "—"}</>) },
+    return: { label: "Return", thTitle: "ของตีกลับ — บันทึกไว้บนด่านนำเข้า (flow ตีกลับเต็มอยู่ที่ /admin/forwarders/exceptions)", tdClass: "px-2 py-1.5 text-[11px] max-w-[10rem] truncate", tdTitle: (t) => t.returnNote ?? "", td: (t) => editableCell(t, "returnNote", t.returnNote?.trim() ? t.returnNote : DASH) },
+    etd: { label: "ETD", thTitle: "วันออกจากจีน — ไฟล์ packing (ระดับตู้) · กรอกทับรายแทรคได้", tdClass: "px-2 py-1.5 text-center tabular-nums text-[11px] whitespace-nowrap", td: (t) => editableCell(t, "etd", <>{t.etd ?? DASH}</>) },
+    eta: { label: "ETA", thTitle: "วันถึงไทย — ไฟล์ packing (ระดับตู้) · กรอกทับรายแทรคได้", tdClass: "px-2 py-1.5 text-center tabular-nums text-[11px] whitespace-nowrap", td: (t) => editableCell(t, "eta", <>{t.eta ?? DASH}</>) },
   };
 
   return (
     <div className="space-y-3">
+      {/* input เดียวใช้ทุกแถว (ปุ่ม + บนคอลัมน์รูป) */}
+      <input ref={imgInputRef} type="file" accept="image/*" className="hidden" onChange={onPickImage} />
+      {imgErr && (
+        <div className="rounded border border-red-200 bg-red-50 px-3 py-1.5 text-[11px] text-red-700">เพิ่มรูปไม่สำเร็จ: {imgErr}</div>
+      )}
       {/* tabs + search */}
       <div className="flex flex-wrap items-center gap-2">
         {([["pending", "🟡 ยังไม่เข้าระบบ"], ["committed", "✅ เข้าระบบแล้ว"], ["nocode", "❓ NO CODE (ไม่รู้เจ้าของ)"], ["notready", "🛑 รอตรวจ · ยังไม่พร้อม"], ["mismatch", "❗ ไม่ตรง (Packing/Live)"], ["all", "ทั้งหมด"]] as [Tab, string][]).map(([k, label]) => (

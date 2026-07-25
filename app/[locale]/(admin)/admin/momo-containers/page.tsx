@@ -18,6 +18,7 @@ import { momoTypeToProductType } from "@/lib/admin/momo-live-discovery-plan";
 import { deriveMomoMemberCode, baseTrackingOf, aggregateTrackDetailMetrics } from "@/lib/admin/momo-raw-helpers";
 import { deriveMomoBoxConsistency, type BoxConsistencyInput } from "@/lib/admin/momo-box-consistency";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
+import { getSignedBucketUrl } from "@/lib/storage/upload";
 import type { PackingUploadSnapshot } from "@/actions/admin/momo-packing-history";
 import { MomoIngestClient, type IngestTrack, type IngestBoxRow, type MissingParcel } from "./momo-containers-client";
 import { MomoGuideButton } from "./momo-guide-button";
@@ -73,7 +74,7 @@ export default async function MomoContainersPage() {
   const { data: rowsRaw, error } = await admin
     .from("momo_import_tracks")
     .select(
-      "id, momo_tracking_no, tracking_override, momo_container_no, container_batch_no, momo_sack_no, shipment_status, phase, admin_status_text, raw, weight_kg, cbm, quantity, committed_at, committed_forwarder_id, commit_userid, last_synced_at",
+      "id, momo_tracking_no, tracking_override, admin_patch, momo_container_no, container_batch_no, momo_sack_no, shipment_status, phase, admin_status_text, raw, weight_kg, cbm, quantity, committed_at, committed_forwarder_id, commit_userid, last_synced_at",
     )
     .order("last_synced_at", { ascending: false })
     .limit(2000);
@@ -103,6 +104,15 @@ export default async function MomoContainersPage() {
     const str = (k: string): string | null =>
       raw && typeof raw === "object" && typeof raw[k] === "string" ? (raw[k] as string) : null;
     const numFromRaw = (k: string): number => (raw && typeof raw === "object" ? num(raw[k]) : 0);
+    // ── admin_patch (mig 0282) = ค่าที่แอดมินกรอก · sync ไม่แตะ → **ชนะเสมอ** บนจอ
+    //    (เดิมกรอกลง raw แล้ว sync ทับทุก 5 นาที = ของหายเงียบ) ─────────────────
+    const ap = (row.admin_patch as Record<string, unknown> | null) ?? {};
+    const apStr = (k: string): string | null =>
+      typeof ap[k] === "string" && (ap[k] as string).trim() !== "" ? (ap[k] as string) : null;
+    const apNum = (k: string): number | null => {
+      const n = Number(ap[k]);
+      return ap[k] != null && Number.isFinite(n) ? n : null;
+    };
 
     const userGroupRaw = str("user_group");
     const userCodeRaw = str("user_code");
@@ -110,9 +120,9 @@ export default async function MomoContainersPage() {
       userGroupRaw && userCodeRaw ? deriveMomoMemberCode(userGroupRaw, userCodeRaw) : null;
 
     // column-first, raw-fallback (mirror commitMomoRowCore's valuation).
-    const colW = num(row.weight_kg);
-    const colV = num(row.cbm);
-    const colQ = num(row.quantity);
+    const colW = apNum("weight_kg") ?? num(row.weight_kg);
+    const colV = apNum("cbm") ?? num(row.cbm);
+    const colQ = apNum("quantity") ?? num(row.quantity);
 
     const images: string[] =
       raw && typeof raw === "object" && Array.isArray(raw.images)
@@ -127,26 +137,41 @@ export default async function MomoContainersPage() {
       supersededBy: row.committed_at
         ? null
         : supersededTargets.get(((row.momo_tracking_no as string | null) ?? "").trim()) ?? null,
-      container: (row.container_batch_no as string | null) ?? null, // real cabinet (GZS/GZE)
-      transport: resolveTransportMode((row.container_batch_no as string | null) ?? "", null),
+      // ตู้: MOMO cid จริงชนะเสมอ · ถ้ายังไม่มี ใช้เลขตู้ที่แอดมินกรอกจาก docs (ผ่าน guard แล้ว)
+      container: ((row.container_batch_no as string | null) ?? "").trim() || apStr("container"),
+      // Trans: ตู้จริง (GZS=เรือ/GZE=รถ) ชนะ → ไม่มีตู้ ค่อยใช้ที่แอดมินเลือก
+      transport:
+        resolveTransportMode((row.container_batch_no as string | null) ?? "", null) ??
+        ((["1", "2", "3"] as const).find((v) => ap.transport_mode === v) ?? null),
       routingBatch: row.momo_container_no ?? null,                   // MOMO routing batch (audit)
       sack: row.momo_sack_no ?? null,
-      status: row.shipment_status ?? null,
+      status: apStr("status_momo") ?? row.shipment_status ?? null,
       phase: row.phase ?? null,
       adminStatusText: (row.admin_status_text as string | null) ?? null,
       guessedUserId,
       // packing-list (Shipment Report) columns MOMO DOES feed — the grid mirrors
       // แต้ม's sheet layout (owner ปอน 2026-07-14 · CANON in lib/admin/taem-reconcile-parser).
-      smDate: str("created_date"),        // C "SM Date" — วันที่ MOMO รับเข้าโกดัง
+      smDate: apStr("sm_date") ?? str("created_date"),  // C "SM Date" — วันที่ MOMO รับเข้าโกดัง
       userCode: userCodeRaw,              // I "Code" — รหัสลูกค้าฝั่ง MOMO (ที่ derive เป็น PR)
-      cgNo: str("CG_NO"),                 // T "CG." — เลข CG ของ MOMO
+      cgNo: apStr("cg_no") ?? str("CG_NO"),            // T "CG." — เลข CG
       // owner 2026-07-25 "แก้ได้ทุกคอลัมน์ — docs มีข้อมูลเพิ่ม เดี๋ยวกรอกเอง" — ช่องที่
-      // MOMO ไม่ส่ง (no-feed) เปิดให้แอดมินกรอกเก็บใน raw · Product/Rem ไหลเข้า fdetail/fnote
-      branch: str("branch"),
-      productName: str("product_name"),
-      remark: str("remark"),
-      noteText: str("note"),
-      dum: str("dum"),
+      // MOMO ไม่ส่ง (no-feed) เปิดกรอก · เก็บใน admin_patch (sync-proof) · Product/Rem
+      // ไหลเข้า fdetail/fnote ของแถวจริงตอนนำเข้า
+      branch: apStr("branch"),
+      productName: apStr("product_name") ?? str("product_name"),
+      remark: apStr("remark") ?? str("remark"),
+      noteText: apStr("note"),
+      dum: apStr("dum"),
+      smNumber: apStr("sm_number"),
+      returnNote: apStr("return_note"),
+      etdOverride: apStr("etd"),
+      etaOverride: apStr("eta"),
+      containerOverride: apStr("container"),
+      transportOverride: (["1", "2", "3"] as const).find((v) => ap.transport_mode === v) ?? null,
+      statusOverride: apStr("status_momo"),
+      extraImageKeys: Array.isArray(ap.extra_images)
+        ? (ap.extra_images as unknown[]).filter((x): x is string => typeof x === "string")
+        : [],
       // V "Service fee." — MOMO ส่งมาเป็น extra_cost (ค่าตีลังไม้/ค่าใช้จ่ายเพิ่ม · extractCrateFromMomoRaw)
       serviceFee: raw && typeof raw === "object" && raw.extra_cost != null ? num(raw.extra_cost) : null,
       guessedShipBy: str("ship_by"),
@@ -414,10 +439,26 @@ export default async function MomoContainersPage() {
       liveCbm: lv?.cbm ?? null,
       momoGarbage: base ? garbageByBase.get(base) ?? null : null,
       boxes: displayBoxesOf(base ? boxesByBase.get(base) : undefined),
-      etd: (mergedContainer && etaByCabinet.get(mergedContainer)?.etd) || null,
-      eta: (mergedContainer && etaByCabinet.get(mergedContainer)?.eta) || null,
+      // ETD/ETA: ที่แอดมินกรอกจาก docs (รายแทรค) ชนะไฟล์ packing (ระดับตู้) — owner
+      // 2026-07-25 "docs มีข้อมูลเพิ่ม เดี๋ยวกรอกเอง"
+      extraImageUrls: [],   // เติมทีหลัง (sign เป็นชุดเดียว ลด round-trip)
+      etd: r.etdOverride ?? ((mergedContainer && etaByCabinet.get(mergedContainer)?.etd) || null),
+      eta: r.etaOverride ?? ((mergedContainer && etaByCabinet.get(mergedContainer)?.eta) || null),
     };
   });
+
+  // รูปที่แอดมินเพิ่ม (key ใน bucket) → signed URL สำหรับแสดงบนตาราง (bucket ไม่ public)
+  const signedByKey = new Map<string, string>();
+  {
+    const allKeys = Array.from(new Set(tracks.flatMap((t) => t.extraImageKeys ?? [])));
+    await Promise.all(
+      allKeys.map(async (k) => {
+        const url = await getSignedBucketUrl("forwarder-covers", k);
+        if (url) signedByKey.set(k, url);
+      }),
+    );
+    for (const t of tracks) t.extraImageUrls = (t.extraImageKeys ?? []).map((k) => signedByKey.get(k) ?? "").filter(Boolean);
+  }
 
   // เฟส C — พัสดุขาด: bases in the packing list but NOT in the MOMO API feed
   // (MOMO API drops advanced parcels · the ฿294k recovery). Packing carries the PR

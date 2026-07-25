@@ -25,6 +25,7 @@
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { momoTrackingAnomaly } from "@/lib/admin/momo-live-discovery-plan";
+import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 const schema = z.object({
@@ -54,6 +55,14 @@ const schema = z.object({
   serviceFee: z.number().min(0, "ต้อง ≥ 0").max(1_000_000, "เกินพิสัย").optional(),
   // ประเภทสินค้า = เรทที่ใช้คิดเงิน — ตัวเลือกตายตัว 4 ค่า (กัน user error)
   productType: z.enum(["1", "2", "3", "4"]).optional(),
+  // ── รอบ 2 (owner 2026-07-25): etd/eta/return/status/trans/SM/container ──
+  transportMode: z.enum(["1", "2", "3"]).optional(),          // รถ/เรือ/อากาศ (dropdown)
+  statusMomo: z.enum(["WAITING_SELLER_SHIP", "AT_WAREHOUSE_CN", "TRUCK_CLOSED", "กำลังส่งมาไทย"]).optional(),
+  smNumber: z.string().trim().max(40, "ยาวเกินไป").optional(),
+  containerName: z.string().trim().max(40, "ยาวเกินไป").optional(), // ผ่าน cabinetWriteGuard
+  returnNote: z.string().trim().max(300, "ยาวเกินไป").optional(),
+  etd: z.string().trim().regex(/^\d{4}[-/]\d{2}[-/]\d{2}$/, "วันที่ต้องเป็น ปปปป-ดด-วว").or(z.literal("")).optional(),
+  eta: z.string().trim().regex(/^\d{4}[-/]\d{2}[-/]\d{2}$/, "วันที่ต้องเป็น ปปปป-ดด-วว").or(z.literal("")).optional(),
 });
 
 /** ประเภทสินค้าเรา → momo type string (ตัวแทน deterministic ของ map ขาไป). */
@@ -107,65 +116,104 @@ export async function updateMomoImportTrackFields(input: unknown): Promise<Admin
       }
     }
 
-    // ── dims (ก×ย×ส) + PR (member_code) live in the raw JSON, not dedicated columns.
-    //    Patching raw flows to the bill: commitMomoRowCore reads dims via
-    //    extractMetricsFromMomoRaw(raw) → fwidth/flength/fheight, and the grid + bulk-import
-    //    re-derive the PR from raw.user_group+user_code. Read-merge-write; the WRITE stays
-    //    pending-only guarded (committed_at IS NULL · TOCTOU-safe). ───────────────────────
+    // ── ที่เก็บ 2 ชั้น (mig 0282 · owner "ข้อมูลที่กรอกต้องนำไปใช้จริง") ─────────────
+    // sync MOMO upsert ทับ raw ทั้งก้อน + คอลัมน์ metric ทุก ~5 นาที (แถวใน feed window)
+    // → ค่าใน raw/คอลัมน์ = "ผลทันที" แต่ไม่ถาวร · **admin_patch = SOT ของค่าที่แอดมินกรอก**
+    // (sync ไม่แตะ) — จอ + commit overlay patch ทับเสมอ. เขียนทั้ง 2 ชั้น:
+    // ชั้นคอลัมน์/raw เพื่อพฤติกรรมเดิม + ชั้น patch เพื่อกัน sync ลบของที่คนกรอก.
     const logDetail: Record<string, unknown> = { ...patch };
-    const touchesRaw =
+    const ap: Record<string, unknown> = {};
+
+    const wantsRowRead =
       d.width !== undefined || d.length !== undefined || d.height !== undefined || d.memberCode !== undefined ||
       d.smDate !== undefined || d.branch !== undefined || d.productName !== undefined ||
       d.remark !== undefined || d.noteText !== undefined || d.dum !== undefined ||
-      d.cgNo !== undefined || d.serviceFee !== undefined || d.productType !== undefined;
-    if (touchesRaw) {
+      d.cgNo !== undefined || d.serviceFee !== undefined || d.productType !== undefined ||
+      d.transportMode !== undefined || d.statusMomo !== undefined || d.smNumber !== undefined ||
+      d.containerName !== undefined || d.returnNote !== undefined || d.etd !== undefined || d.eta !== undefined ||
+      d.weightKg !== undefined || d.cbm !== undefined || d.quantity !== undefined;
+
+    if (wantsRowRead) {
       const { data: cur, error: selErr } = await admin
         .from("momo_import_tracks")
-        .select("raw")
+        .select("raw, admin_patch")
         .eq("id", d.rowId)
         .is("committed_at", null)
-        .maybeSingle<{ raw: Record<string, unknown> | null }>();
+        .maybeSingle<{ raw: Record<string, unknown> | null; admin_patch: Record<string, unknown> | null }>();
       if (selErr) {
-        console.error("[updateMomoImportTrackFields] raw read failed", { code: selErr.code, message: selErr.message });
+        console.error("[updateMomoImportTrackFields] row read failed", { code: selErr.code, message: selErr.message });
         return { ok: false, error: `db_error:${selErr.code ?? "unknown"}` };
       }
       if (!cur) return { ok: false, error: "แก้ไขไม่ได้ — แถวนี้เข้าระบบไปแล้ว หรือไม่พบรายการ" };
       const raw = cur.raw && typeof cur.raw === "object" ? { ...(cur.raw as Record<string, unknown>) } : {};
-      if (d.width !== undefined) { raw.width = d.width; logDetail.width = d.width; }
-      if (d.length !== undefined) { raw.length = d.length; logDetail.length = d.length; }
-      if (d.height !== undefined) { raw.height = d.height; logDetail.height = d.height; }
-      // ── ช่องข้อมูลเพิ่มจาก docs (owner 2026-07-25) — คีย์เดียวกับที่ commit/จออ่าน ──
-      if (d.smDate !== undefined) { raw.created_date = d.smDate; logDetail.smDate = d.smDate; }
-      if (d.branch !== undefined) { raw.branch = d.branch; logDetail.branch = d.branch; }
-      if (d.productName !== undefined) { raw.product_name = d.productName; logDetail.productName = d.productName; }
-      if (d.remark !== undefined) { raw.remark = d.remark; logDetail.remark = d.remark; }
-      if (d.noteText !== undefined) { raw.note = d.noteText; logDetail.noteText = d.noteText; }
-      if (d.dum !== undefined) { raw.dum = d.dum; logDetail.dum = d.dum; }
+      Object.assign(ap, cur.admin_patch && typeof cur.admin_patch === "object" ? cur.admin_patch : {});
+
+      // helper: text "" = เคลียร์คีย์ออกจาก patch · อื่น = ตั้งค่า
+      const setText = (key: string, v: string, log: string) => {
+        if (v === "") delete ap[key];
+        else ap[key] = v;
+        logDetail[log] = v;
+      };
+
+      // ── metric columns → เก็บใน patch ด้วย (sync ทับคอลัมน์ได้) ──
+      if (d.weightKg !== undefined) ap.weight_kg = d.weightKg;
+      if (d.cbm !== undefined) ap.cbm = d.cbm;
+      if (d.quantity !== undefined) ap.quantity = d.quantity;
+
+      if (d.width !== undefined) { raw.width = d.width; ap.width = d.width; logDetail.width = d.width; }
+      if (d.length !== undefined) { raw.length = d.length; ap.length = d.length; logDetail.length = d.length; }
+      if (d.height !== undefined) { raw.height = d.height; ap.height = d.height; logDetail.height = d.height; }
+
+      // ── ช่องข้อมูลจาก docs — เก็บใน patch เท่านั้น (จอ+commit อ่านจาก patch ก่อน raw) ──
+      if (d.smDate !== undefined) setText("sm_date", d.smDate, "smDate");
+      if (d.branch !== undefined) setText("branch", d.branch, "branch");
+      if (d.productName !== undefined) setText("product_name", d.productName, "productName");
+      if (d.remark !== undefined) setText("remark", d.remark, "remark");
+      if (d.noteText !== undefined) setText("note", d.noteText, "noteText");
+      if (d.dum !== undefined) setText("dum", d.dum, "dum");
       if (d.cgNo !== undefined) {
-        raw.CG_NO = d.cgNo;
-        patch.momo_cg_no = d.cgNo || null; // คอลัมน์จริงมีอยู่แล้ว — เขียนคู่กัน
-        logDetail.cgNo = d.cgNo;
+        setText("cg_no", d.cgNo, "cgNo");
+        patch.momo_cg_no = d.cgNo || null; // คอลัมน์จริง — best-effort (sync อาจทับ · patch คือ SOT)
       }
-      if (d.serviceFee !== undefined) { raw.extra_cost = d.serviceFee; logDetail.serviceFee = d.serviceFee; }
-      if (d.productType !== undefined) {
-        raw.type = PRODUCT_TYPE_TO_MOMO[d.productType]; // ผ่าน map เดิมกลับมาเป็น tier เดิมเป๊ะ
-        logDetail.productType = d.productType;
+      if (d.serviceFee !== undefined) { ap.extra_cost = d.serviceFee; logDetail.serviceFee = d.serviceFee; }
+      if (d.productType !== undefined) { ap.product_type = d.productType; logDetail.productType = d.productType; }
+
+      // ── รอบ 2 ──
+      if (d.transportMode !== undefined) { ap.transport_mode = d.transportMode; logDetail.transportMode = d.transportMode; }
+      if (d.statusMomo !== undefined) { ap.status_momo = d.statusMomo; logDetail.statusMomo = d.statusMomo; }
+      if (d.smNumber !== undefined) setText("sm_number", d.smNumber.toUpperCase(), "smNumber");
+      if (d.returnNote !== undefined) setText("return_note", d.returnNote, "returnNote");
+      if (d.etd !== undefined) setText("etd", d.etd, "etd");
+      if (d.eta !== undefined) setText("eta", d.eta, "eta");
+      if (d.containerName !== undefined) {
+        const cn = d.containerName.toUpperCase();
+        if (cn !== "") {
+          // เลขตู้ต้องผ่านด่านเดิม (กันกระสอบ CBX/placeholder ลงช่องตู้ — chokepoint ครบทุกทาง)
+          const guard = cabinetWriteGuard({ next: cn, current: "" });
+          if (!guard.ok) return { ok: false, error: guard.reason };
+        }
+        setText("container", cn, "containerName");
       }
+
       if (d.memberCode !== undefined) {
         const mc = d.memberCode.trim().toUpperCase();
         if (mc === "") {
           raw.user_group = ""; raw.user_code = "";
           patch.momo_user_group = ""; patch.momo_user_code = "";
+          delete ap.user_group; delete ap.user_code;
         } else {
           // deriveMomoMemberCode = prefix(letters) + code(digits) → parse the typed PR back.
           const m = mc.match(/^([A-Z]+)(\d+)$/);
           if (!m) return { ok: false, error: "รูปแบบ PR ต้องเป็นตัวอักษรตามด้วยตัวเลข เช่น PR545" };
           raw.user_group = m[1]; raw.user_code = m[2];
           patch.momo_user_group = m[1]; patch.momo_user_code = m[2];
+          ap.user_group = m[1]; ap.user_code = m[2];
         }
         logDetail.memberCode = mc;
       }
+
       patch.raw = raw;
+      patch.admin_patch = ap;
     }
 
     if (Object.keys(patch).length === 0) return { ok: true, data: { updated: false } };
@@ -185,5 +233,75 @@ export async function updateMomoImportTrackFields(input: unknown): Promise<Admin
 
     await logAdminAction(adminId, "momo_ingest.edit_staging", "momo_import_tracks", d.rowId, logDetail);
     return { ok: true, data: { updated: true } };
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// adminAddMomoStagingImage — เพิ่มรูปบนแถวนำเข้า (owner 2026-07-25: "รูปสามารถกด
+// เพิ่มได้ด้วย ต่อให้มีแล้วก็กดบวกเพิ่มได้").
+//
+// รูปจาก MOMO (raw.images = URL ฝั่งเขา) แตะไม่ได้/ไม่แตะ — รูปที่เราเพิ่มเก็บเป็น
+// KEY ใน bucket `forwarder-covers` (prefix admin/momo-staging/<rowId>) ลง
+// admin_patch.extra_images (sync ไม่ทับ) · ตอนนำเข้า commit จะพาไปลง fimages
+// (แกลเลอรีของแถวจริง mig 0176 · JSON array of keys convention เดียวกัน) +
+// เป็น fcover เมื่อ MOMO ไม่มีรูปเลย. pending-only · cap 12 เท่าแกลเลอรี.
+// ─────────────────────────────────────────────────────────────────────────────
+const STAGING_IMAGE_CAP = 12;
+const STAGING_IMAGE_BUCKET = "forwarder-covers";
+
+export async function adminAddMomoStagingImage(formData: FormData): Promise<AdminActionResult<{ key: string }>> {
+  const rowId = String(formData.get("rowId") ?? "");
+  const file = formData.get("file");
+  if (!/^[0-9a-f-]{36}$/i.test(rowId)) return { ok: false, error: "rowId ไม่ถูกต้อง" };
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "กรุณาเลือกไฟล์รูป" };
+  if (file.size > 8 * 1024 * 1024) return { ok: false, error: "ไฟล์ใหญ่เกิน 8MB — ระบบย่อรูปให้แล้ว ลองเลือกใหม่" };
+
+  return withAdmin<{ key: string }>(["ops", "super", "warehouse"], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const { data: cur, error: selErr } = await admin
+      .from("momo_import_tracks")
+      .select("admin_patch")
+      .eq("id", rowId)
+      .is("committed_at", null)
+      .maybeSingle<{ admin_patch: Record<string, unknown> | null }>();
+    if (selErr) {
+      console.error("[adminAddMomoStagingImage] read failed", { code: selErr.code, message: selErr.message });
+      return { ok: false, error: `db_error:${selErr.code ?? "unknown"}` };
+    }
+    if (!cur) return { ok: false, error: "เพิ่มรูปไม่ได้ — แถวนี้เข้าระบบไปแล้ว หรือไม่พบรายการ" };
+
+    const ap = cur.admin_patch && typeof cur.admin_patch === "object" ? { ...cur.admin_patch } : {};
+    const existing = Array.isArray(ap.extra_images)
+      ? (ap.extra_images as unknown[]).filter((x): x is string => typeof x === "string")
+      : [];
+    if (existing.length >= STAGING_IMAGE_CAP)
+      return { ok: false, error: `รูปเพิ่มได้สูงสุด ${STAGING_IMAGE_CAP} รูปต่อแถว` };
+
+    const ext = (file.name.split(".").pop() ?? "jpg").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "jpg";
+    const key = `admin/momo-staging/${rowId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const { error: upErr } = await admin.storage
+      .from(STAGING_IMAGE_BUCKET)
+      .upload(key, bytes, { contentType: file.type || "image/jpeg", upsert: false });
+    if (upErr) {
+      console.error("[adminAddMomoStagingImage] upload failed", { key, message: upErr.message });
+      return { ok: false, error: `อัพโหลดไม่สำเร็จ: ${upErr.message}` };
+    }
+
+    ap.extra_images = [...existing, key];
+    const { data: upd, error: updErr } = await admin
+      .from("momo_import_tracks")
+      .update({ admin_patch: ap, updated_at: new Date().toISOString() })
+      .eq("id", rowId)
+      .is("committed_at", null)
+      .select("id")
+      .maybeSingle<{ id: string }>();
+    if (updErr || !upd) {
+      console.error("[adminAddMomoStagingImage] patch write failed", { code: updErr?.code, message: updErr?.message });
+      return { ok: false, error: updErr ? `db_error:${updErr.code ?? "unknown"}` : "แถวนี้เข้าระบบไปแล้ว" };
+    }
+
+    await logAdminAction(adminId, "momo_ingest.add_staging_image", "momo_import_tracks", rowId, { key });
+    return { ok: true, data: { key } };
   });
 }
