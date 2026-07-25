@@ -19,6 +19,7 @@
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { addYiwuDeliveryNoteShipments } from "./yiwu-delivery-note";
 import { revalidatePath } from "next/cache";
 
@@ -262,9 +263,17 @@ export async function adminCreateForwarderFromTtwStaging(
     if (forwarderId != null && container) {
       const escB = escapeLike(base);
       const orFilter = `ftrackingchn.eq.${base},ftrackingchn.like.${escB}-%`;
-      const { error: cabErr } = await admin
-        .from("tb_forwarder").update({ fcabinetnumber: container }).or(orFilter).eq("fcabinetnumber", "");
-      if (cabErr) console.error("[ttw create] cabinet link failed", { code: cabErr.code, message: cabErr.message });
+      // integrator 2026-07-25: ทุก write path ของ fcabinetnumber ต้องผ่าน cabinetWriteGuard
+      // (กติกา cabinet-class 2026-07-20 · กันเลขกระสอบ CBX/placeholder หลุดลงช่องตู้ —
+      // container จาก staging มาจากชื่อไฟล์ TTW ปกติผ่านเสมอ แต่ chokepoint ต้องครบ).
+      const tierGuard = cabinetWriteGuard({ next: container, current: "" });
+      if (!tierGuard.ok) {
+        console.error("[ttw create] cabinet guard refused", { container, reason: tierGuard.reason });
+      } else {
+        const { error: cabErr } = await admin
+          .from("tb_forwarder").update({ fcabinetnumber: container }).or(orFilter).eq("fcabinetnumber", "");
+        if (cabErr) console.error("[ttw create] cabinet link failed", { code: cabErr.code, message: cabErr.message });
+      }
       const { data: adv, error: stErr } = await admin
         .from("tb_forwarder")
         .update({ fstatus: "3", fdatestatus3: new Date().toISOString().slice(0, 10) })

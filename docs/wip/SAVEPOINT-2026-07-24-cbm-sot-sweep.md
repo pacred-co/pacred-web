@@ -74,6 +74,26 @@ prod (2026-07-24): **937 แถว fac='1'** (ในนั้น **224 แถว
       = ตรงหน้า edit + หน้าลูกค้า (stepWaitChinaWarehouse) + legacy-status-map แล้ว.
       หน้าอื่น sweep แล้วไม่มี class เดียวกัน (edit ถูกอยู่แล้ว · pay-user ใช้ fdatestatus2 ถูก).
 
+## ✅ 2026-07-25 — ตู้อี้อู 4 ตู้ใหม่ (owner ส่งไฟล์) + integrate ภูม TTW
+
+- [x] **integrate ภูม 716197c2** (ปุ่มสร้าง+ผูกตู้+เลื่อนสถานะ + ตู้แดง/ขาว + tabs) —
+      review-fix 1 จุด: เขียน fcabinetnumber ต้องผ่าน `cabinetWriteGuard` (chokepoint ที่ 13)
+- [x] **ingest 4 ตู้** YWS260720-9T · YWS260722-10T · YWS260723-1T · YWS260724-2T →
+      `ttw_packing_line` **209 แทรค** (script `ingest-ttw-packing-2026-07-25.ts` · backup แล้ว)
+- [x] **จับคู่ PR ได้ 7 ราย** (verify กับ tb_users ทุกตัว): มาร์ค PR### 6 + **PCS10830→PR10830**
+      (โค้ด PCS เก่า = PR เลขเดิมตาม migration) · ที่เหลือ 202 = มาร์คบริษัทอื่นใน TTW รวมตู้
+      (SPK/SP/MG/KD/…) — ของเราเท่านั้นที่แตะ ห้ามเดา
+- [x] **อัพเดทแถวที่มีในระบบแล้ว 4 แทรค / 5 แถว** (X9002888=PR032 · X9002904-1/2,-2/2=PR609 ·
+      X9002914=PR594 · X9002920=PR613): ผูกตู้จริง (ผ่าน guard · เฉพาะช่องว่าง) + เลื่อน 2→3
+      กำลังส่งมาไทย + stamp fdatestatus3 + link staging (`link-ttw-staged-to-forwarder-2026-07-25.ts`
+      = logic ปุ่มภูม 100% · money-free · re-run = 0 · userid ตรงมาร์คครบ ไม่มี mismatch)
+- 🔵 **เหลือให้ DOC กดสร้าง 3 ราย** (ยังไม่มี tb_forwarder · สร้าง = auto-price = คนกดตามโฟลว์ภูม):
+      X9002898 = **PR269** (ตู้ 9T · 1 กล่อง 1.3kg) · X9002936 = **PR596** (ตู้ 1T · 1 กล่อง 11kg) ·
+      X9002962 = **PR10830** (ตู้ 2T · 5 กล่อง 32kg) → หน้า `/admin/api-forwarder-ttw` ปุ่ม "＋ เอาเข้าระบบ"
+- ⚠️ **X9002904 (PR609) น้ำหนักในระบบ 32.59kg vs packing 2,015kg/62กล่อง** — แถว -1/2 (61 กล่อง)
+      fweight=0 · ให้ DOC อัพไฟล์ packing บนหน้า TTW ให้ reconcile เติม (เส้น audited · แตะราคา)
+- data-health หลัง apply: ไม่มีของใหม่พัง · ttw_staged_uncommitted 447→651 = แถว ingest ใหม่ตามคาด
+
 ## 📌 งานที่ทำจบไปแล้วใน session นี้ (อย่าทำซ้ำ)
 
 1. ต้นทุนขาด ฿2,111.31 (famountcount ฝั่ง cost) — applied prod
