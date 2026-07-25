@@ -201,3 +201,44 @@ export function resolveReceiptLineCoverage(input: {
   }
   return out;
 }
+
+/**
+ * ย่อรายการแทรคกิ้งพี่น้องให้ "คนอ่านออก" บนเอกสาร.
+ *
+ * 🔴 owner 2026-07-24 (รอบ 2): *"ได้ดูไหมครับเนี่ยว่าทำอะไรออกมา ให้เอาเอกสาร
+ * ไปส่งสภาพนี้หรอครับ"* — รอบแรกผมพิมพ์เลขเต็มทั้ง 7 ตัว ในคอลัมน์แคบ ผลคือ
+ * เลขฐานซ้ำ 7 รอบ (84 ตัวอักษรขยะ) + `break-all` ตัดกลางตัวเลข ("800↵206224068-3")
+ * = เอกสารส่งลูกค้าที่อ่านไม่รู้เรื่อง.
+ *
+ * ตัดเลขฐานที่ซ้ำออก เหลือแต่ท้าย แล้วยุบเลขที่ติดกันเป็นช่วง:
+ *   -2 -3 -4 -5 -6 -7 -8        → "รวม 8 กล่องย่อย: -2 ถึง -8"
+ *   -2 -3 -7                    → "รวม 4 กล่องย่อย: -2 ถึง -3, -7"
+ *   ท้ายไม่ใช่ตัวเลข (คนละแบบ)  → ขึ้นเลขเต็ม (ไม่เดา)
+ *
+ * @param total จำนวนแทรคกิ้งทั้งชิปเม้น (รวมตัวหลัก) — ใช้บอก "รวม N"
+ */
+export function formatCoveredTrackings(base: string, covered: string[], total: number): string {
+  if (covered.length === 0) return "";
+  const label = `รวม ${total} กล่องย่อย`;
+
+  const sfx = covered.map((t) => (t.startsWith(base) ? t.slice(base.length) : t));
+  const nums = sfx.map((s) => {
+    const m = /^-(\d+)(?:\/\d+)?$/.exec(s);
+    return m ? Number(m[1]) : Number.NaN;
+  });
+  // มีตัวที่ไม่ใช่รูป -N → ไม่ยุบ พิมพ์ท้ายที่มีตามจริง (ยังตัดเลขฐานซ้ำออกให้)
+  if (nums.some((n) => !Number.isFinite(n))) return `${label}: ${sfx.join(", ")}`;
+
+  const sorted = [...new Set(nums)].sort((a, b) => a - b);
+  const parts: string[] = [];
+  let start = sorted[0]!;
+  let prev = start;
+  for (const n of sorted.slice(1)) {
+    if (n === prev + 1) { prev = n; continue; }
+    parts.push(start === prev ? `-${start}` : `-${start} ถึง -${prev}`);
+    start = n;
+    prev = n;
+  }
+  parts.push(start === prev ? `-${start}` : `-${start} ถึง -${prev}`);
+  return `${label}: ${parts.join(", ")}`;
+}

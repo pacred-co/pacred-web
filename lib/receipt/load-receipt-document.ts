@@ -1,7 +1,7 @@
 import "server-only";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
 import {
-  baseTrackingOf, resolveReceiptLineCoverage, type CoverageRow,
+  baseTrackingOf, formatCoveredTrackings, resolveReceiptLineCoverage, type CoverageRow,
 } from "@/lib/billing/shipment-line-coverage";
 
 /**
@@ -411,7 +411,11 @@ export async function loadReceiptDocument(
         fweight:      cov ? cov.fweight  : toNumber(f.fweight),
         fvolume:      cov ? cov.totalCbm : totalCbmOf(f), // row-TOTAL CBM (famountcount rule)
         ftotalprice:  cov ? cov.freight  : fTotalPrice,
-        coveredTrackings: cov?.coveredTrackings ?? [],
+        coveredNote: cov
+          ? formatCoveredTrackings(
+              baseTrackingOf(f.ftrackingchn ?? ""), cov.coveredTrackings,
+              cov.coveredTrackings.length + 1)
+          : "",
       };
 
       return {

@@ -55,8 +55,8 @@ export type ReceiptPageRow = {
   no:           number;
   fid:          string;
   tracking:     string;
-  /** แทรคกิ้งพี่น้องที่บรรทัดนี้เก็บเงินแทน (owner 2026-07-24) — ว่าง = แจงแยกอยู่แล้ว */
-  coveredTrackings?: string[];
+  /** ข้อความย่อของกล่องย่อย เช่น "รวม 8 กล่องย่อย: -2 ถึง -8" (owner 2026-07-24) */
+  coveredNote?: string;
   cabinet:      string;
   transport:    string;
   rateBasis:    string;
@@ -519,9 +519,12 @@ export function ReceiptPage({
                         <td style={{ padding: "3px 3px", fontSize: "8px", textAlign: "center", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>#{row.fid}</td>
                         <td style={{ padding: "3px 3px", fontSize: "8px", wordBreak: "break-all", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>
                           {row.tracking}
-                          {row.coveredTrackings && row.coveredTrackings.length > 0 ? (
-                            <span style={{ display: "block", fontSize: "7px", lineHeight: 1.3, opacity: 0.75 }}>
-                              + {row.coveredTrackings.join(" · ")}
+                          {row.coveredNote ? (
+                            <span style={{
+                              display: "block", fontSize: "7px", lineHeight: 1.3, opacity: 0.75,
+                              whiteSpace: "nowrap", fontFamily: "inherit",
+                            }}>
+                              {row.coveredNote}
                             </span>
                           ) : null}
                         </td>

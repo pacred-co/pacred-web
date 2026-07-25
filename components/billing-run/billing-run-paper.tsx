@@ -46,10 +46,10 @@ export type BillingRunPaperRow = {
   no:          number;
   fid:         string;
   tracking:    string;
-  /** แทรคกิ้งพี่น้องที่บรรทัดนี้เก็บเงินแทน — ว่าง = แจงแยกบรรทัดอยู่แล้ว.
-   *  owner 2026-07-24: บรรทัดที่คิดเงิน "ทั้งชิปเม้น" ต้องพิมพ์เลขแทรคกิ้งให้ครบ
-   *  ไม่งั้นลูกค้าจ่ายค่า 13 กล่อง แต่บนกระดาษเห็นแทรคเดียว/3 กล่อง. */
-  coveredTrackings?: string[];
+  /** ข้อความย่อของกล่องย่อย เช่น "รวม 8 กล่องย่อย: -2 ถึง -8" (ว่าง = แจงแยกบรรทัดแล้ว).
+   *  owner 2026-07-24: บรรทัดที่คิดเงิน "ทั้งชิปเม้น" ต้องบอกให้ครบว่าคลุมกี่กล่อง
+   *  แต่ต้อง "อ่านออก" — พิมพ์เลขเต็ม 7 ตัวในคอลัมน์แคบ = เลขฐานซ้ำ + ตัดกลางตัวเลข. */
+  coveredNote?: string;
   /** ประเภทสินค้า — ทั่วไป/มอก./อย./พิเศษ (owner 2026-07-18). */
   productType: string;
   cabinet:     string;
@@ -290,9 +290,12 @@ function BillingRunPage({
                     <td style={tdMonoC}>#{row.fid}</td>
                     <td style={tdMono}>
                       {row.tracking}
-                      {row.coveredTrackings && row.coveredTrackings.length > 0 ? (
-                        <span style={{ display: "block", fontSize: "8.5px", lineHeight: 1.35, opacity: 0.75 }}>
-                          + {row.coveredTrackings.join(" · ")}
+                      {row.coveredNote ? (
+                        <span style={{
+                          display: "block", fontSize: "8.5px", lineHeight: 1.35, opacity: 0.75,
+                          whiteSpace: "nowrap", fontFamily: "inherit",
+                        }}>
+                          {row.coveredNote}
                         </span>
                       ) : null}
                     </td>

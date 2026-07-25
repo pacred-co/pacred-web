@@ -1,6 +1,8 @@
 import "server-only";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
-import { baseTrackingOf, resolveLineCoverage, type CoverageRow } from "./shipment-line-coverage";
+import {
+  baseTrackingOf, formatCoveredTrackings, resolveLineCoverage, type CoverageRow,
+} from "./shipment-line-coverage";
 
 /**
  * Billing-run (ใบวางบิล) document loader (FAITHFUL PORT) — the SINGLE source of
@@ -124,8 +126,9 @@ export type BillingRunInvoiceDetail = {
       /** บรรทัดนี้เก็บเงินแทนทั้งชิปเม้น → กล่อง/น้ำหนัก/คิว ข้างบนเป็นยอด "ทั้งชิปเม้น"
        *  (owner 2026-07-24 · lib/billing/shipment-line-coverage.ts) */
       covers_shipment: boolean;
-      /** แทรคกิ้งพี่น้องที่บรรทัดนี้ครอบคลุม (ว่าง = แจงแยกบรรทัดอยู่แล้ว) */
-      covered_trackings: string[];
+      /** ข้อความย่อของกล่องย่อยที่บรรทัดนี้ครอบคลุม เช่น "รวม 8 กล่องย่อย: -2 ถึง -8"
+       *  (ว่าง = แจงแยกบรรทัดอยู่แล้ว) — ย่อมาแล้วเพราะเอกสารคอลัมน์แคบ */
+      covered_note: string;
       /** ค่าขนส่งสินค้า (freight · ftotalprice) — the FREIGHT-only amount so the
        *  row's Amount reconciles with Rate × Kg (owner 2026-07-07). The stored
        *  amount_thb (GROSS incl ค่าขนส่งในไทย etc.) is unchanged; this is display. */
@@ -524,8 +527,12 @@ export async function loadBillingRunDocument(
               rate:         f.frefrate != null ? Number(f.frefrate) : 0,
               // ค่าขนส่งสินค้า (freight-only) — the row Amount so Rate × Kg reconciles.
               freight:      cov ? cov.freight : f.ftotalprice != null ? Number(f.ftotalprice) : 0,
-              covers_shipment:   cov?.folded ?? false,
-              covered_trackings: cov?.coveredTrackings ?? [],
+              covers_shipment: cov?.folded ?? false,
+              covered_note: cov
+                ? formatCoveredTrackings(
+                    baseTrackingOf(f.ftrackingchn ?? ""), cov.coveredTrackings,
+                    cov.coveredTrackings.length + 1)
+                : "",
               // ประเภท (รหัส g/m/a/s) — owner 2026-07-18. ขนาดกล่อง ก×ย×ส — owner 2026-07-23
               // via resolveDimsDisplay: the row's own dim, else the real per-box sizes from
               // momo_box_detail (blank on multi-box aggregate rows), else "—".

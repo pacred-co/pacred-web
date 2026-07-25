@@ -12,7 +12,7 @@
  */
 import assert from "node:assert/strict";
 import {
-  baseTrackingOf, resolveLineCoverage, resolveReceiptLineCoverage, type CoverageRow,
+  baseTrackingOf, formatCoveredTrackings, resolveLineCoverage, resolveReceiptLineCoverage, type CoverageRow,
 } from "./shipment-line-coverage";
 
 let passed = 0;
@@ -229,6 +229,45 @@ ok("ไม่รู้ยอดเอกสาร (0) → ไม่ยุบ (de
     lineTotalOf,
   });
   assert.equal(cov.get(52305)!.folded, false);
+});
+
+console.log("\n🔴 formatCoveredTrackings — เอกสารส่งลูกค้าต้องอ่านออก");
+
+ok("เคสจริง 7 ตัวติดกัน → ย่อเป็นช่วง ไม่พิมพ์เลขฐานซ้ำ", () => {
+  const s = formatCoveredTrackings(
+    "800206224068",
+    ["800206224068-2","800206224068-3","800206224068-4","800206224068-5",
+     "800206224068-6","800206224068-7","800206224068-8"],
+    8);
+  assert.equal(s, "รวม 8 กล่องย่อย: -2 ถึง -8");
+  assert.ok(!s.includes("800206224068"), "ห้ามพิมพ์เลขฐานซ้ำ (รอบแรกยาว 84 ตัวอักษร)");
+  assert.ok(s.length < 30, `ยาวไป: ${s.length}`);
+});
+
+ok("ไม่ติดกัน → แยกช่วง", () => {
+  assert.equal(
+    formatCoveredTrackings("X", ["X-2","X-3","X-7"], 4),
+    "รวม 4 กล่องย่อย: -2 ถึง -3, -7");
+});
+
+ok("ตัวเดียว → ไม่ทำเป็นช่วง", () => {
+  assert.equal(formatCoveredTrackings("X", ["X-5"], 2), "รวม 2 กล่องย่อย: -5");
+});
+
+ok("รูปแบบ -N/M ก็ยุบได้", () => {
+  assert.equal(
+    formatCoveredTrackings("Y", ["Y-2/3","Y-3/3"], 3),
+    "รวม 3 กล่องย่อย: -2 ถึง -3");
+});
+
+ok("ท้ายไม่ใช่ตัวเลข → ไม่เดา พิมพ์ท้ายตามจริง", () => {
+  assert.equal(
+    formatCoveredTrackings("Z", ["Z-A","Z-B"], 3),
+    "รวม 3 กล่องย่อย: -A, -B");
+});
+
+ok("ไม่มีพี่น้อง → ว่าง (ไม่โผล่บนเอกสาร)", () => {
+  assert.equal(formatCoveredTrackings("X", [], 1), "");
 });
 
 console.log(`\n✅ shipment-line-coverage: ${passed} assertions passed`);
