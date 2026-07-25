@@ -25,7 +25,7 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import {
   Truck, Clock, CheckCircle2, XCircle, MapPin, Phone,
-  Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2, ClipboardList, Tag,
+  Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2, ClipboardList, Tag, ChevronRight,
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
@@ -576,7 +576,9 @@ export default async function AdminDriverBatchDetailPage({
   });
 
   return (
-    <main className="p-4 sm:p-6 lg:p-8 space-y-5">
+    // พื้นเทา #f4f5fa เหมือนหน้า list — กันพื้นขาวโผล่ท้ายหน้า/ใต้แถบเมนูล่างบนมือถือ
+    // (ปอน 2026-07-25) · min-h กันพื้นขาวเวลาเนื้อหาสั้น
+    <main className="p-4 sm:p-6 lg:p-8 space-y-5 bg-[#f4f5fa] min-h-[calc(100vh-3.5rem)]">
       {/* Breadcrumb */}
       <Link href="/admin/drivers" className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline">
         <ArrowLeft className="h-3 w-3" />
@@ -598,11 +600,14 @@ export default async function AdminDriverBatchDetailPage({
                 {BATCH_STATUS_LABEL[fdstatus]}
               </span>
             </div>
-            {/* บรรทัด 2: วันที่สร้าง (ซ้าย) + นับถอยหลัง (ขวา · owner 2026-07-24 "เอาเวลามาบรรทัด 2") */}
+            {/* บรรทัด 2: วันที่สร้าง (ซ้าย) + นับถอยหลัง (ขวา · owner 2026-07-24 "เอาเวลามาบรรทัด 2")
+                — ชิดขอบสองข้าง (justify-between) ให้ล้อกันพอดี ไม่ล้นกรอบ (ปอน 2026-07-25) */}
             {(batch.fddate || batch.endtime) && (
-              <div className="flex items-center justify-center gap-6">
-                {batch.fddate && (
-                  <p className="whitespace-nowrap text-xs text-muted">สร้าง {formatThaiDateTime(batch.fddate)}</p>
+              <div className="flex items-center justify-between gap-2">
+                {batch.fddate ? (
+                  <p className="min-w-0 truncate text-xs text-muted">สร้าง {formatThaiDateTime(batch.fddate)}</p>
+                ) : (
+                  <span />
                 )}
                 {batch.endtime && <BatchCountdown endTimeIso={batch.endtime} status={fdstatus} size="lg" />}
               </div>
@@ -894,6 +899,10 @@ export default async function AdminDriverBatchDetailPage({
             const delivered = stop.items.filter((e) => e.item.fdistatus === "2").length;
             const failed = stop.items.filter((e) => e.item.fdistatus === "3").length;
             const allDone = total > 0 && delivered === total;
+            // จำนวนเลขแทรคกิ้ง (ไม่ซ้ำ) ในจุดนี้ — โชว์คู่กับ "รายการ" ในหัวสรุป (owner 2026-07-25)
+            const trackingCount = new Set(
+              stop.items.map((e) => (e.forwarder.ftrackingchn ?? "").trim()).filter(Boolean),
+            ).size;
             const self = isSelfDelivery(f.fshipby);
             const hasPin = Boolean(f.faddresslatitude && f.faddresslongitude);
             const addrText = [f.faddressno, f.faddresssubdistrict, f.faddressdistrict, f.faddressprovince, f.faddresszipcode]
@@ -1035,7 +1044,22 @@ export default async function AdminDriverBatchDetailPage({
                     {/* กรอบมนๆ (ปอน 2026-07-24) — ตารางออเดอร์อยู่ในกรอบขาวมุมโค้ง เหมือนใน
                         popup "ดูบิลใบส่งสินค้า": เลิกเส้นกริดทุกช่อง เหลือเส้นคั่นแถว + พื้นขาว
                         มุมโค้ง (rounded-xl). table-fixed + % widths คงไว้ให้คอลัมน์ทุกจุดตรงกัน. */}
-                    <div className="mx-3 mt-3 overflow-x-auto scrollbar-x-visible rounded-xl border border-[#dcdfe4] bg-white">
+                    {/* สรุปขึ้นบน กดกางเป็นดร็อปดาวน์ (owner 2026-07-25 "ดูง่ายๆ") — <details>
+                        ล้วน ไม่ต้อง client JS · หัว = ยอดรวม (กดได้) · กางแล้วเห็นตารางรายการ · พับไว้ก่อน */}
+                    <details className="group mx-3 mt-3 overflow-hidden rounded-xl border border-[#dcdfe4] bg-white">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 bg-[#f5aab0] px-3 py-2 font-semibold text-[#7a0012] [&::-webkit-details-marker]:hidden">
+                        <span className="flex items-center gap-1.5">
+                          <ChevronRight className="h-4 w-4 transition group-open:rotate-90" />
+                          รวม {stop.items.length} รายการ
+                        </span>
+                        <span className="flex items-center gap-3 text-xs font-medium">
+                          <span>แทรคกิ้ง <b className="tabular-nums">{trackingCount}</b></span>
+                          <span>กล่อง <b className="tabular-nums">{stop.totalBoxes}</b></span>
+                          <span>น้ำหนัก <b className="tabular-nums">{stop.totalWeight.toFixed(2)}</b></span>
+                          <span>ปริมาตร <b className="tabular-nums">{stop.totalVolume.toFixed(5)}</b></span>
+                        </span>
+                      </summary>
+                      <div className="overflow-x-auto scrollbar-x-visible border-t border-[#dcdfe4]">
                       <table className="w-full text-xs border-collapse table-fixed [&>tbody>tr]:border-t [&>tbody>tr]:border-[#dcdfe4]">
                         <thead className="bg-surface-alt/60 text-left text-[11px] font-bold text-[#6b6f82]">
                           <tr>
@@ -1098,17 +1122,10 @@ export default async function AdminDriverBatchDetailPage({
                               </tr>
                             );
                           })}
-                          {/* รวม — legacy PINK summary row (alert-danger #f5aab0/#7a0012) */}
-                          <tr className="bg-[#f5aab0] font-semibold text-[#7a0012]">
-                            <td className="px-2 py-1.5 text-right" colSpan={4}>รวม</td>
-                            <td className="px-2 py-1.5 text-right">{stop.totalBoxes}</td>
-                            <td className="px-2 py-1.5 text-right">{stop.totalWeight.toFixed(2)}</td>
-                            <td className="px-2 py-1.5 text-right">{stop.totalVolume.toFixed(5)}</td>
-                            {isOpsOverride && <td className="px-2 py-1.5" />}
-                          </tr>
                         </tbody>
                       </table>
-                    </div>
+                      </div>
+                    </details>
 
                     {/* พิมพ์ใบส่งสินค้าเฉพาะจุดนี้ (ปอน 2026-07-24) — ปุ่มเดียวกับใน popup
                         "ดูบิลใบส่งสินค้า" (พิมพ์และบันทึกบิลรวม → delivery-slip?fids= ของจุดนี้). */}
@@ -1223,19 +1240,22 @@ export default async function AdminDriverBatchDetailPage({
                 }))}
                 badges={
                   <>
-                    {/* แท็กประเภทขนส่ง — PRF/เหมาๆ ฯลฯ (badge มนๆ pill เหมือนเดิม) */}
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${isSelfDelivery(f.fshipby) ? "bg-rose-600 text-white" : "border border-slate-300 bg-slate-200 text-slate-700"}`}>
-                      <Truck className="h-3 w-3" /> {shipByLabel(f.fshipby)}
+                    {/* แท็กประเภทขนส่ง — PRF/เหมาๆ ฯลฯ · ย่อ+ตัดได้ถ้ายาว (min-w-0 truncate)
+                        เพื่ออยู่แถวเดียวกับ "N รายการ"+สถานะ เสมอ (owner 2026-07-25) */}
+                    <span className={`inline-flex min-w-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${isSelfDelivery(f.fshipby) ? "bg-rose-600 text-white" : "border border-slate-300 bg-slate-200 text-slate-700"}`}>
+                      <Truck className="h-3 w-3 shrink-0" /> <span className="truncate">{shipByLabel(f.fshipby)}</span>
                     </span>
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${allDone ? ITEM_STATUS_CLS["2"] : delivered > 0 ? ITEM_STATUS_CLS["1"] : "bg-amber-500 text-white border-transparent"}`}>
-                      {allDone ? <CheckCircle2 className="h-3 w-3" /> : <Truck className="h-3 w-3" />}
-                      {allDone ? "สำเร็จ" : delivered > 0 ? `ส่งแล้ว ${delivered}/${total}` : "กำลังจัดส่ง"}
+                    {/* สถานะ (แท็กที่ 2) — เอาแค่ 2 แท็กพอ (owner 2026-07-25): พับ "ส่งไม่ได้"
+                        เข้าแท็กสถานะกรณีตกทั้งจุด (ไม่งั้นจะโชว์ "กำลังจัดส่ง" หลอก) · shrink-0 อยู่ครบเสมอ */}
+                    <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      allDone ? ITEM_STATUS_CLS["2"]
+                        : delivered > 0 ? ITEM_STATUS_CLS["1"]
+                        : failed > 0 ? ITEM_STATUS_CLS["3"]
+                        : "bg-amber-500 text-white border-transparent"
+                    }`}>
+                      {allDone ? <CheckCircle2 className="h-3 w-3" /> : (failed > 0 && delivered === 0) ? <AlertTriangle className="h-3 w-3" /> : <Truck className="h-3 w-3" />}
+                      {allDone ? "สำเร็จ" : delivered > 0 ? `ส่งแล้ว ${delivered}/${total}` : failed > 0 ? `ส่งไม่ได้ ${failed}` : "กำลังจัดส่ง"}
                     </span>
-                    {failed > 0 && (
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${ITEM_STATUS_CLS["3"]}`}>
-                        <AlertTriangle className="h-3 w-3" /> ส่งไม่ได้ {failed}
-                      </span>
-                    )}
                   </>
                 }
               />

@@ -45,13 +45,20 @@ import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { legacyForwarderStatusThai } from "@/lib/legacy-status-map";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
+import { Pagination } from "@/components/admin/pagination";
 
 export const dynamic = "force-dynamic";
+
+/** จำนวนแถวต่อหน้า — จำกัดการโหลด/แสดงผล กัน query หนัก (owner 2026-07-25) */
+const PAGE_SIZE = 50;
+/** เพดานความปลอดภัยของ query สถิติ (นับ/ยอดรวมทั้งชุดที่กรอง) */
+const STATS_CAP = 5000;
 
 type SP = {
   fstatus?: string;
   date_from?: string;
   date_to?: string;
+  page?: string;
 };
 
 // One forwarder row — the delivery-history-relevant subset of tb_forwarder.
@@ -186,10 +193,43 @@ export default async function AdminDeliveryHistoryPage({
   const usingDefaultRange = !sp.date_from && !sp.date_to;
 
   const admin = createAdminClient();
+  const page = Math.max(1, Number.parseInt(sp.page ?? "1", 10) || 1);
 
-  // ── 1) forwarder delivery rows (filtered) ──
-  //   Filter on fdate (always present) for the date window; restrict to the
-  //   chosen fstatus codes; newest first; cap 500.
+  // ── 1) สถิติทั้งชุดที่กรอง (นับ + ยอดรวม) — query เบา: เลือกเฉพาะสถานะ + คอลัมน์ราคา
+  //   (ไม่ join ลูกค้า / ไม่สร้าง CSV) เพื่อให้การ์ดสรุปยังถูกครบทั้งชุด แม้จะแสดงทีละหน้า.
+  type StatsRow = Pick<
+    ForwarderRow,
+    | "fstatus" | "ftotalprice" | "ftransportprice" | "fpriceupdate" | "fshippingservice"
+    | "pricecrate" | "ftransportpricechnthb" | "priceother" | "fdiscount" | "fusercompany"
+  >;
+  const { data: statsRaw, error: statsErr, count: matchCount } = await admin
+    .from("tb_forwarder")
+    .select(
+      "fstatus, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+        "pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany",
+      { count: "exact" },
+    )
+    .in("fstatus", statusCodes)
+    .gte("fdate", `${dateFrom}T00:00:00`)
+    .lte("fdate", `${dateTo}T23:59:59`)
+    .limit(STATS_CAP);
+  if (statsErr) {
+    console.error("[admin delivery-history stats] failed", {
+      code: statsErr.code,
+      message: statsErr.message,
+      statusCodes,
+      dateFrom,
+      dateTo,
+    });
+  }
+  const statsRows = (statsRaw ?? []) as unknown as StatsRow[];
+  const totalCount = matchCount ?? statsRows.length;
+  const deliveredCount = statsRows.filter((r) => r.fstatus === "7").length;
+  const preparingCount = statsRows.filter((r) => r.fstatus === "6").length;
+  const totalAmount = statsRows.reduce((s, r) => s + calcForwarderOutstanding(r), 0);
+
+  // ── 2) แถวสำหรับแสดงผล — เฉพาะหน้าปัจจุบันเท่านั้น (.range) · newest first ──
+  const offset = (page - 1) * PAGE_SIZE;
   const { data: fwdRaw, error: fwdErr } = await admin
     .from("tb_forwarder")
     .select(
@@ -202,7 +242,7 @@ export default async function AdminDeliveryHistoryPage({
     .gte("fdate", `${dateFrom}T00:00:00`)
     .lte("fdate", `${dateTo}T23:59:59`)
     .order("fdate", { ascending: false, nullsFirst: false })
-    .limit(500);
+    .range(offset, offset + PAGE_SIZE - 1);
   if (fwdErr) {
     console.error("[admin delivery-history list] failed", {
       code: fwdErr.code,
@@ -238,15 +278,11 @@ export default async function AdminDeliveryHistoryPage({
   // account holders show the company, not the contact person.
   const corpNames = await fetchCorporateNameMap(admin, userIds);
 
-  // ── 3) compute amounts + stats ──
+  // ── 3) ยอดต่อแถว (เฉพาะหน้านี้ · ใช้แสดงในตาราง + CSV) ──
   const amountById = new Map<number, number>();
   for (const r of rows) {
     amountById.set(r.id, calcForwarderOutstanding(r));
   }
-  const totalCount = rows.length;
-  const deliveredCount = rows.filter((r) => r.fstatus === "7").length;
-  const preparingCount = rows.filter((r) => r.fstatus === "6").length;
-  const totalAmount = rows.reduce((s, r) => s + (amountById.get(r.id) ?? 0), 0);
 
   // ── 4) CSV rows (current view) ──
   const csvRows: CsvRow[] = rows.map((r) => {
@@ -433,8 +469,18 @@ export default async function AdminDeliveryHistoryPage({
         </table>
       </section>
 
+      {/* จำกัดการแสดงผล 50 แถว/หน้า กัน query หนัก · การ์ดสรุปยังนับ/รวมทั้งชุดที่กรอง (owner 2026-07-25) */}
+      <Pagination
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={totalCount}
+        basePath="/admin/reports/delivery-history"
+        params={{ fstatus: sp.fstatus, date_from: sp.date_from, date_to: sp.date_to }}
+      />
+
       <p className="text-[11px] text-muted">
-        แสดงสูงสุด 500 รายการ · ใช้ filter (สถานะ / ช่วงวันที่) เพื่อแคบลง · ยอดรวม = ยอดค้างชำระรวม
+        แสดงทีละ {PAGE_SIZE} รายการ/หน้า (กัน query หนัก) · การ์ดสรุป/ยอดรวม = ทั้งชุดที่กรอง ·
+        ปุ่ม CSV = เฉพาะหน้านี้ · ใช้ filter (สถานะ / ช่วงวันที่) เพื่อแคบลง · ยอดรวม = ยอดค้างชำระรวม
         (calcForwarderOutstanding) · รายงานนี้อ่านอย่างเดียว
       </p>
     </main>

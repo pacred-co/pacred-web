@@ -50,6 +50,9 @@ export type RunDocVariant = {
   crossLinkLabel: string;
   /** คำเรียกเอกสารในแถบเครื่องมือ + ท้ายหน้า */
   shortName: string;
+  /** true = รวมเป็น 1 ที่อยู่ = 1 แถว (สรุป · บิลจัดส่งคนขับ) · false/undefined =
+   *  แจกแจงทุกแทรคกิ้ง 1 แถว/ชิ้น (บิลหาสินค้าคลัง ต้องหาของรายชิ้น) — owner 2026-07-25 */
+  summaryByAddress?: boolean;
 };
 
 export const RUN_DOC_DELIVERY: RunDocVariant = {
@@ -59,6 +62,7 @@ export const RUN_DOC_DELIVERY: RunDocVariant = {
   crossLinkHref: (id) => `/admin/drivers/${id}/picking-list`,
   crossLinkLabel: "บิลหาสินค้า (คลัง) →",
   shortName: "บิลจัดส่ง",
+  summaryByAddress: true,
 };
 
 export const RUN_DOC_PICKING: RunDocVariant = {
@@ -303,6 +307,44 @@ export async function DriverRunDocument({
   const totalTrackings = forwarders.length;
   const totalStops = batch.fdamount ?? 0;
 
+  // จัดกลุ่มตามที่อยู่จัดส่ง (สรุป 1 ที่อยู่ = 1 แถว · owner 2026-07-25) — ใช้เฉพาะบิลจัดส่ง.
+  type AddrGroup = {
+    key: string;
+    sample: Forwarder;      // แถวตัวแทน (ที่อยู่ + ลูกค้า)
+    trackings: string[];    // เลขแทรคกิ้งไม่ซ้ำในจุดนี้
+    carriers: string[];     // ชื่อบริษัทขนส่งไม่ซ้ำ
+    boxes: number;
+    weight: number;
+    volume: number;
+    locations: string[];    // ตำแหน่งชั้นวางไม่ซ้ำ
+  };
+  const addrKeyOf = (f: Forwarder) =>
+    [f.userid, f.faddressname, f.faddresslastname, f.faddressno, f.faddresssubdistrict,
+     f.faddressdistrict, f.faddressprovince, f.faddresszipcode]
+      .map((x) => (x ?? "").trim()).join("|");
+  const addrGroups: AddrGroup[] = [];
+  if (variant.summaryByAddress) {
+    const m = new Map<string, AddrGroup>();
+    for (const f of forwarders) {
+      const key = addrKeyOf(f);
+      let g = m.get(key);
+      if (!g) {
+        g = { key, sample: f, trackings: [], carriers: [], boxes: 0, weight: 0, volume: 0, locations: [] };
+        m.set(key, g);
+        addrGroups.push(g);
+      }
+      g.boxes += Number(f.famount ?? 0);
+      g.weight += Number(f.fweight ?? 0);
+      g.volume += Number(f.fvolume ?? 0);
+      const t = (f.ftrackingchn ?? "").trim();
+      if (t && !g.trackings.includes(t)) g.trackings.push(t);
+      const c = nameShipBy(f.fshipby);
+      if (c && !g.carriers.includes(c)) g.carriers.push(c);
+      const loc = (f.fpallet ?? "").trim();
+      if (loc && !g.locations.includes(loc)) g.locations.push(loc);
+    }
+  }
+
   const dateLabel = batch.fddate
     ? new Date(batch.fddate).toLocaleString("th-TH", {
         year: "numeric",
@@ -402,6 +444,39 @@ export async function DriverRunDocument({
                   ไม่มีรายการในรอบนี้
                 </td>
               </tr>
+            ) : variant.summaryByAddress ? (
+              /* บิลจัดส่ง — สรุป 1 ที่อยู่ = 1 แถว (owner 2026-07-25 "รวมกัน · 1 ที่อยู่ 1 แถว") */
+              addrGroups.map((g, idx) => (
+                <tr key={g.key} className="align-top">
+                  <td className="border border-slate-200 px-1 py-1 text-center font-mono">{idx + 1}</td>
+                  {/* รหัสลูกค้า + ยอดรวมของจุดนี้ (box/Kg/CBM/Location) */}
+                  <td className="border border-slate-200 px-2 py-1">
+                    <div className="font-bold font-mono">{g.sample.userid ?? "—"}</div>
+                    <div className="text-[11px] text-gray-600 leading-tight">
+                      box: {fmt(g.boxes, 0)}
+                      <br />
+                      Kg: {fmt(g.weight, 2)}
+                      <br />
+                      CBM: {fmt(g.volume, 3)}
+                      <br />
+                      Location: {g.locations.join(", ") || "—"}
+                    </div>
+                  </td>
+                  <td className="border border-slate-200 px-2 py-1 leading-snug">
+                    <ShipToAddress f={g.sample} />
+                  </td>
+                  <td className="border border-slate-200 px-2 py-1 text-center">
+                    {g.carriers.join(", ") || "—"}
+                  </td>
+                  {/* สรุปจำนวนแทรคกิ้งในจุดนี้ (แทนการแจกแจงทีละเลข) */}
+                  <td className="border border-slate-200 px-2 py-1 text-center align-middle font-bold">
+                    {fmt(g.trackings.length, 0)} แทรคกิ้ง
+                  </td>
+                  <td className="border border-slate-200 px-2 py-1 text-center align-middle text-slate-300">
+                    ____________
+                  </td>
+                </tr>
+              ))
             ) : (
               forwarders.map((f, idx) => (
                 <tr key={f.id} className="align-top">
