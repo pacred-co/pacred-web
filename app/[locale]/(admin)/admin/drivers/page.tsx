@@ -388,10 +388,14 @@ export default async function AdminDriversPage({
       {/* ── กรอบขาวใบเดียวคลุมทั้งแผง: หัวข้อ → ตัวกรองวันที่ → แถบกรอง → ตาราง → หน้า
           (owner 2026-07-23) เหมือน legacy PCS ที่ทุกอย่างอยู่ในแผงขาวบนพื้น #f4f5fa
           `overflow-hidden` กันมุมตารางทะลุขอบโค้งของการ์ด. */}
-      <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden">
+      <div className="lg:rounded-2xl lg:border lg:border-border lg:bg-white lg:shadow-sm lg:overflow-hidden">
+
+      {/* ก้อนหัว (หัวข้อ + ค้นหา) = การ์ดขาวใบเดียวลอยบนพื้นเทาบนมือถือ (owner 2026-07-25
+          "ทำเป็นกรอบแบบอันอื่น · เอาเส้นขอบออก") · เดสก์ท็อป lg:contents = ไหลรวมเป็นแผงเดียวเหมือนเดิม */}
+      <div className="lg:contents rounded-2xl border border-border bg-white shadow-sm overflow-hidden mb-4">
 
       {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-3 px-4 py-4 border-b border-border">
+      <div className="flex items-start justify-between flex-wrap gap-3 px-4 py-4 max-lg:pb-1 lg:border-b lg:border-border">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-500">
             {selfOnly ? "DRIVER · งานของฉัน" : "CARGO · มอบงานคนขับ"}
@@ -477,7 +481,7 @@ export default async function AdminDriversPage({
           A plain GET form (no `action` → submits to the current path, keeping the
           locale prefix) — same pattern as /admin/drivers/work. The form REPLACES
           the query string, so `view`/`status` ride along as hidden inputs. */}
-      <form method="GET" className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 border-b border-border">
+      <form method="GET" className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 max-lg:pt-1 lg:border-b lg:border-border">
         {view && <input type="hidden" name="view" value={view} />}
         {status && <input type="hidden" name="status" value={status} />}
         {/* ป้าย "วันที่บันทึกรายการ (วว/ดด/ปปปป …)" ถูกเอาออก 2026-07-23 (owner) —
@@ -527,7 +531,7 @@ export default async function AdminDriversPage({
 
       {/* ── แถวควบคุมเดียว (owner 2026-07-23 "ยก แสดง กับ ค้นหา ขึ้นไปแถวเดียวกัน"):
              ซ้าย = ชิปมุมมอง · ขวา = แสดง N แถว/หน้า + ช่องค้นหา ─────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pt-2.5 pb-3 border-b border-border">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pt-2.5 pb-3 max-lg:pt-1 lg:border-b lg:border-border">
 
       {/* Filter chips. A driver gets the two-way งานที่ต้องส่ง / ประวัติงาน split
           (same as his sidebar) instead of the planner's raw fdstatus chips.
@@ -597,11 +601,11 @@ export default async function AdminDriversPage({
           <input
             id="fd-q" type="search" name="q" defaultValue={searchTerm} maxLength={80}
             placeholder="ชื่อรายการ / เลขที่รอบ"
-            className="rounded-lg border border-border bg-white px-3 py-2 text-sm min-h-[38px] w-52 max-w-full"
+            className="rounded-full border border-border bg-white px-4 py-2 text-sm min-h-[38px] w-52 max-w-full"
           />
           <button
             type="submit"
-            className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface-alt px-3 py-2 text-sm font-medium hover:bg-border/40 min-h-[38px]"
+            className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-alt px-3.5 py-2 text-sm font-medium hover:bg-border/40 min-h-[38px]"
           >
             <Search className="h-4 w-4" />
           </button>
@@ -622,6 +626,7 @@ export default async function AdminDriversPage({
           </Link>
         </p>
       )}
+      </div>{/* ── ปิดการ์ดก้อนหัว (มือถือ · เดสก์ท็อป = contents ไหลรวมแผงเดียว) ── */}
 
       {/* Flat dense table — one row per batch (legacy forwarder-driver.php default
           list mode L269-348: ☑ · วันที่สร้าง · ชื่อรายการ (+meta) · ผู้รับผิดชอบ ·
@@ -787,7 +792,7 @@ export default async function AdminDriversPage({
 
       {/* ── การ์ดมือถือ (ปอน 2026-07-24 · ตามภาพ) — จอ <lg: การ์ดต่อรอบแทนตารางแคบ.
           ข้อมูลชุดเดียวกับตาราง · พื้นเทา #f4f5fa ให้การ์ดขาวลอยเด่น. */}
-      <div className="lg:hidden space-y-3 bg-[#f4f5fa] px-4 py-4">
+      <div className="lg:hidden space-y-3 bg-[#f4f5fa] py-4 max-lg:px-0 lg:px-4">
         {rows.length === 0 ? (
           <div className="rounded-2xl border border-border bg-white p-8 text-center">
             <AlertCircle className="mx-auto mb-3 h-8 w-8 text-muted/50" />
@@ -901,7 +906,7 @@ export default async function AdminDriversPage({
 
       {/* หน้า (pagination) อยู่ในกรอบขาวใบเดียวกับตาราง — ปิดท้ายการ์ด · บนมือถือพื้นเทา
           #f4f5fa ให้ต่อเนื่องกับการ์ดด้านบน ไม่เป็นแถบขาวแปลกๆ (owner 2026-07-25) */}
-      <div className="border-t border-border px-4 py-3 max-lg:bg-[#f4f5fa]">
+      <div className="px-4 py-3 lg:border-t lg:border-border max-lg:px-0 max-lg:bg-[#f4f5fa]">
         <Pagination
           page={page}
           pageSize={pageSize}
