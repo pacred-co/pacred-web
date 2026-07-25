@@ -1,21 +1,16 @@
 "use client";
 
 /**
- * อี้อู ใบส่งของ → box-split arrival rows (ภูม 2026-07-16 · Phase 3).
+ * อี้อู ใบส่งของ → box-split arrival rows (แผนก CS · ภูม 2026-07-16 · rework 2026-07-25).
  *
- * DESIGN (ภูม 2026-07-16, round 2): the form MIRRORS the paper ใบส่งสินค้า —
- *   • the uploaded ใบส่งของ image is shown BIG + sticky on the left (click → full-screen
- *     zoom) so staff can READ it while they TYPE, without switching screens;
- *   • the table columns match the note 1:1 (单号 · PR · สินค้า · กล่อง · น้ำหนัก · ยาว ·
- *     กว้าง · สูง · คิว) with a totals row at the bottom (กล่อง/น้ำหนัก/คิว) like the note;
- *   • the customer PR is a COLUMN — one ใบส่งของ can carry >1 PR; a "เติม PR" fill-down +
- *     row-inherit keeps the single-PR case one-keystroke.
+ * REWORK (owner ภูม 2026-07-25 · mockup ผ่าน):
+ *   • ตัด OCR ทิ้ง — พนักงาน CS คีย์เอง (ไม่ดึงข้อความจากรูป).
+ *   • รูปเล็ก: hover → พรีวิวเด้ง · คลิก → ดูเต็มจอ (เลิกรูปใหญ่ sticky ที่มองยาก · CS เปิดรูปแยกดูเองอยู่แล้ว).
+ *   • ตาราง excel + ลากสลับหัวคอลัมน์ ยาว/กว้าง/สูง ได้ — อี้อูส่งใบบางที กว้าง×ยาว×สูง บางที ยาว×กว้าง×สูง
+ *     → CS ลากคอลัมน์ให้ตรงลำดับในใบ แล้วคีย์ซ้าย→ขวาได้เลย = กันคีย์ผิด (field binding ติดไปกับคอลัมน์).
+ *   • อัพ packing list (step 2 เดิม) ย้ายไปหน้า TTW (แผนก DOC).
  *
- * FLOW (ภูม+เดฟ): CS uploads the ใบส่งของ IMAGE (OCR grabs the PR as a hint) → CS keys the
- * box rows straight off the note → submit → orders land at "ถึงโกดังจีน" (fstatus 2). DOC
- * later uploads the packing list (Step 2 below) → matches trackings → "กำลังส่งมาไทย".
- * Commit groups rows by 单号 into box-split shipments; each 单号 → one PR (validated).
- * Money-safe: the create action re-validates every field + the PR server-side.
+ * commit `addYiwuDeliveryNoteShipments` + validation + result = เดิมทุกบรรทัด (money-path ไม่แตะ).
  */
 
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -25,8 +20,6 @@ import {
   uploadYiwuDeliveryImage,
   type YiwuCreateSummary,
 } from "@/actions/admin/yiwu-delivery-note";
-import { OcrExtract } from "@/components/ocr/ocr-extract";
-import { parseYiwuDeliveryOcr } from "@/lib/admin/yiwu-delivery-parser";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 
 // One flat table row = one box-group (a ใบส่งของ row). `orderNo` (单号) groups rows into
@@ -43,6 +36,11 @@ type FlatRow = {
   heightCm: string;
   cbm: string;
 };
+
+// dim columns are RE-ORDERABLE — the field binding travels with the column so CS types
+// left-to-right in whatever order อี้อู printed the note (กว้าง×ยาว×สูง OR ยาว×กว้าง×สูง).
+type DimKey = "lengthCm" | "widthCm" | "heightCm";
+const DIM_LABEL: Record<DimKey, string> = { lengthCm: "ยาว", widthCm: "กว้าง", heightCm: "สูง" };
 
 const emptyRow = (id: number, pr = "", orderNo = ""): FlatRow => ({
   id, orderNo, pr, productType: "", boxCount: "1",
@@ -61,22 +59,25 @@ export function YiwuDeliveryClient() {
   const idRef = useRef(2);
   const nextId = () => idRef.current++;
 
-  // ── image ─────────────────────────────────────────────────────────────────
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  // ── image (single · small thumb + hover preview + click-to-full) ────────────
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageKey, setImageKey] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
-  const [ocrNote, setOcrNote] = useState<string | null>(null);
   const [zoomOpen, setZoomOpen] = useState(false);
-  const [imageWide, setImageWide] = useState(false); // true = รูปเต็มกว้าง (ตารางลงล่าง)
+  const [hoverPrev, setHoverPrev] = useState(false);
 
   // ── date + Packing ID (whole note) ────────────────────────────────────────
   const [arrivalDate, setArrivalDate] = useState<string>(todayIsoDate);
-  const [packingId, setPackingId] = useState(""); // เลขที่ตู้/Packing ID ต้นทาง (SEA…YW) จากใบส่งของ — อ้างอิง ไม่ใช่ตู้จริง
+  const [packingId, setPackingId] = useState("");
 
   // ── the table ─────────────────────────────────────────────────────────────
   const [rows, setRows] = useState<FlatRow[]>([emptyRow(1)]);
+
+  // ── draggable dim columns (ยาว/กว้าง/สูง) ────────────────────────────────────
+  const [dimOrder, setDimOrder] = useState<DimKey[]>(["lengthCm", "widthCm", "heightCm"]);
+  const [dragKey, setDragKey] = useState<DimKey | null>(null);
+  const [overKey, setOverKey] = useState<DimKey | null>(null);
 
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<YiwuCreateSummary | null>(null);
@@ -86,12 +87,11 @@ export function YiwuDeliveryClient() {
     return () => { if (imagePreview) URL.revokeObjectURL(imagePreview); };
   }, [imagePreview]);
 
-  // ── image select → preview + auto-upload → key ────────────────────────────
+  // ── image select → preview + auto-upload → key (no OCR) ────────────────────
   async function onPickImage(file: File | null) {
     setUploadErr(null); setResult(null);
     if (imagePreview) URL.revokeObjectURL(imagePreview);
-    if (!file) { setImageFile(null); setImagePreview(null); setImageKey(""); return; }
-    setImageFile(file);
+    if (!file) { setImagePreview(null); setImageKey(""); return; }
     setImagePreview(URL.createObjectURL(file));
     setImageKey("");
     setUploading(true);
@@ -105,21 +105,6 @@ export function YiwuDeliveryClient() {
       setUploadErr("อัปโหลดรูปไม่สำเร็จ — ลองใหม่");
     } finally {
       setUploading(false);
-    }
-  }
-
-  // OCR only helps with the PR — CS keys the box rows off the note into the table.
-  function onOcrText(text: string) {
-    const p = parseYiwuDeliveryOcr(text);
-    if (p.packingId && !packingId.trim()) setPackingId(p.packingId);
-    const pid = p.packingId ? ` · Packing ID: ${p.packingId}` : "";
-    if (p.memberCode) {
-      // seed the FIRST row's PR (+ any still-empty PR cell) — staff overrides per row.
-      const pr = p.memberCode.toUpperCase();
-      setRows((prev) => prev.map((r, i) => (i === 0 || !r.pr.trim() ? { ...r, pr } : r)));
-      setOcrNote(`อ่านรหัสลูกค้าได้: ${pr}${pid} — ใส่ให้แล้ว · ตรวจให้ตรงกับรูป (ถ้ามีหลาย PR แก้เป็นรายแถว)`);
-    } else {
-      setOcrNote(`อ่านรูปแล้ว${pid} — กรอกรหัสลูกค้า (PR) ในตารางเอง แล้วคีย์กล่องจากใบส่งของ`);
     }
   }
 
@@ -137,9 +122,6 @@ export function YiwuDeliveryClient() {
       }),
     );
   }
-  // add a row. sameOrder → clone the last row's 单号 (a bill with several box sizes =
-  // one 单号, many rows — the note's normal case); otherwise a fresh 单号 (next bill) but
-  // keep the PR (usually the same customer). Mirrors the note's structure.
   function addRow(sameOrder: boolean) {
     setRows((prev) => {
       const last = prev[prev.length - 1];
@@ -152,7 +134,6 @@ export function YiwuDeliveryClient() {
       return next.length ? next : [emptyRow(nextId())];
     });
   }
-  // fill the first row's PR / 单号 down into every still-empty cell.
   function fillPrDown() {
     setRows((prev) => {
       const pr = prev[0]?.pr.trim();
@@ -168,6 +149,18 @@ export function YiwuDeliveryClient() {
     });
   }
 
+  // ── dim column drag → reorder dimOrder (move dragKey to target's slot) ──────
+  function onDimDrop(target: DimKey) {
+    setDimOrder((prev) => {
+      if (!dragKey || dragKey === target) return prev;
+      const next = prev.filter((k) => k !== dragKey);
+      const idx = next.indexOf(target);
+      next.splice(idx < 0 ? next.length : idx, 0, dragKey);
+      return next;
+    });
+    setDragKey(null); setOverKey(null);
+  }
+
   // ── totals (like the note footer) ─────────────────────────────────────────
   const distinctOrders = new Set(rows.map((r) => r.orderNo.trim().toUpperCase()).filter(Boolean)).size;
   const distinctPrs = new Set(rows.map((r) => r.pr.trim().toUpperCase()).filter(Boolean)).size;
@@ -175,21 +168,19 @@ export function YiwuDeliveryClient() {
   const totalWeight = rows.reduce((n, r) => n + (Number(r.weightKg) || 0), 0);
   const totalCbm = rows.reduce((n, r) => n + (Number(r.cbm) || 0), 0);
   const filledRows = rows.filter((r) => r.orderNo.trim() && r.pr.trim() && Number(r.boxCount) >= 1 && (Number(r.weightKg) > 0 || Number(r.cbm) > 0)).length;
-  // distinct 单号 in appearance order → cluster rows of one bill with a shared tint (like the note).
+  // distinct 单号 in appearance order → cluster rows of one bill with a shared tint.
   const orderIndex = new Map<string, number>();
   for (const r of rows) { const k = r.orderNo.trim().toUpperCase(); if (k && !orderIndex.has(k)) orderIndex.set(k, orderIndex.size); }
   const rowTint = (r: FlatRow): string => {
     const k = r.orderNo.trim().toUpperCase();
     if (!k) return "bg-white";
-    return (orderIndex.get(k)! % 2 === 0) ? "bg-white" : "bg-teal-50/50";
+    return (orderIndex.get(k)! % 2 === 0) ? "bg-white" : "bg-teal-50/40";
   };
 
-  // ── submit ─────────────────────────────────────────────────────────────────
+  // ── submit (verbatim — money-path unchanged) ───────────────────────────────
   async function onSubmit() {
     setSubmitErr(null); setResult(null);
 
-    // group flat rows by 单号 (normalized UPPER so a case slip can't split one bill into
-    // two shipments) → shipments; each 单号 must be one consistent PR.
     const byOrder = new Map<string, { pr: string; rows: FlatRow[] }>();
     for (const r of rows) {
       const k = r.orderNo.trim().toUpperCase();
@@ -243,9 +234,6 @@ export function YiwuDeliveryClient() {
         if (!res.ok) { setSubmitErr(res.error); return; }
         if (res.data) {
           setResult(res.data);
-          // KEEP the rows of any FAILED 单号 so staff can fix + resubmit (no full re-key);
-          // clear the grid only when every shipment went in. (Partial/total failures still
-          // return ok:true with per-shipment errors inside data.results.)
           if (res.data.failed > 0) {
             const failed = new Set(res.data.results.filter((x) => !x.ok && !x.skipped).map((x) => x.orderNo));
             setRows((prev) => {
@@ -262,163 +250,169 @@ export function YiwuDeliveryClient() {
     });
   }
 
+  // excel-cell inputs (border comes from the table gridlines · input is borderless)
   const cellCls =
-    "w-full rounded-md border border-gray-300 px-1.5 py-1 text-[13px] text-right tabular-nums focus:border-teal-500 focus:ring-1 focus:ring-teal-500";
+    "w-full border-0 bg-transparent px-1.5 py-2 text-[13px] text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-inset focus:ring-teal-500 focus:bg-teal-50";
   const textCellCls =
-    "w-full rounded-md border border-gray-300 px-2 py-1 text-[13px] focus:border-teal-500 focus:ring-1 focus:ring-teal-500";
+    "w-full border-0 bg-transparent px-2 py-2 text-[13px] text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-teal-500 focus:bg-teal-50";
 
   return (
     <section className="rounded-2xl border border-gray-200 bg-surface p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex items-center gap-2">
         <span className="grid h-6 w-6 place-items-center rounded-full bg-teal-600 text-[13px] font-bold text-white">1</span>
         <h2 className="text-base font-semibold">อ่านใบส่งของ → คีย์เข้าระบบ</h2>
-        <span className="text-[11px] text-muted">(ดูรูปซ้าย · คีย์ตารางขวา ตามใบส่งของเป๊ะ)</span>
+        <span className="text-[11px] text-muted">(รูปเล็กซ้าย · คีย์ตารางขวา ตามใบส่งของเป๊ะ)</span>
       </div>
 
-      {/* layout: side-by-side (image sticky left · table right) OR image-wide (image
-          full container width on top · table below) — a toggle so staff can blow the note
-          up as big as the screen to read fine print. */}
-      <div className={imageWide ? "space-y-5" : "grid items-start gap-5 lg:grid-cols-[minmax(420px,48%)_1fr]"}>
-        {/* ── image + upload + date ────────────────────────────────────────── */}
-        <div className={imageWide ? "space-y-3" : "lg:sticky lg:top-4 space-y-3"}>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-teal-300 bg-teal-50 px-3.5 py-2 text-sm font-medium text-teal-800 hover:bg-teal-100">
-              <span>📷 เลือกรูปใบส่งของ</span>
-              <input type="file" accept="image/*" className="hidden" onChange={(e) => onPickImage(e.target.files?.[0] ?? null)} />
-            </label>
-            {imagePreview && (
-              <button type="button" onClick={() => setImageWide((v) => !v)}
-                className="inline-flex items-center gap-1 rounded-lg border border-teal-300 bg-white px-3 py-2 text-sm font-medium text-teal-700 hover:bg-teal-50"
-                title={imageWide ? "กลับไปดูรูปควบคู่ตาราง" : "ขยายรูปเต็มความกว้างจอ (อ่านง่ายสุด)"}>
-                {imageWide ? "◧ ดูควบคู่ตาราง" : "⛶ ขยายรูปเต็มกว้าง"}
-              </button>
-            )}
-            {uploading && <span className="text-[11px] text-teal-700">⏳ กำลังอัปโหลด…</span>}
-            {imageKey && !uploading && <span className="text-[11px] text-emerald-700">✓ อัปแล้ว</span>}
-          </div>
-          {uploadErr && <p className="text-[11px] text-red-600">⚠ {uploadErr}</p>}
+      <div className="grid items-start gap-5 lg:grid-cols-[196px_1fr]">
+        {/* ── LEFT · small image (hover=preview · click=full) + date ─────────── */}
+        <div className="space-y-3">
+          <label className="mb-1 block text-xs font-medium text-muted">รูปใบส่งของ</label>
+          <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-teal-300 bg-teal-50 px-3 py-2 text-sm font-medium text-teal-800 hover:bg-teal-100">
+            <span>📷 เลือกรูป</span>
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => onPickImage(e.target.files?.[0] ?? null)} />
+          </label>
 
-          {/* BIG readable image (click → full-screen zoom) */}
           {imagePreview ? (
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setZoomOpen(true)}
-                className="block w-full overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
-                title="คลิกเพื่อดูเต็มจอ"
+                onMouseEnter={() => setHoverPrev(true)}
+                onMouseLeave={() => setHoverPrev(false)}
+                className="relative block h-[132px] w-full overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
+                title="เอาเมาส์จ่อ=พรีวิว · คลิก=ดูเต็มจอ"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imagePreview} alt="ใบส่งของ อี้อู" className={`w-full object-contain ${imageWide ? "max-h-none" : "max-h-[80vh]"}`} />
+                <img src={imagePreview} alt="ใบส่งของ อี้อู" className="h-full w-full object-cover" />
+                <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/55 py-0.5 text-center text-[11px] text-white">🔍 คลิกดูรูปเต็ม</span>
               </button>
-              <span className="pointer-events-none absolute right-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white">🔍 คลิกดูเต็มจอ</span>
+
+              {/* floating hover preview (โผล่เฉพาะตอนจ่อเมาส์ · ลอยเหนือตาราง) */}
+              {hoverPrev && (
+                <div className="pointer-events-none absolute left-full top-0 z-40 ml-3 w-80 rounded-xl border border-gray-200 bg-white p-1.5 shadow-2xl">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={imagePreview} alt="พรีวิวใบส่งของ" className="w-full rounded-lg object-contain" />
+                  <p className="py-1 text-center text-[11px] text-muted">พรีวิว · คลิกที่รูปเพื่อดูเต็มจอ</p>
+                </div>
+              )}
             </div>
           ) : (
-            <div className="grid h-56 place-items-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 text-center text-[12px] text-muted">
-              เลือกรูปใบส่งของ แล้วรูปจะโชว์ตรงนี้ (ตัวใหญ่ · คลิกซูมได้)
+            <div className="grid h-[132px] place-items-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 px-2 text-center text-[11px] text-muted">
+              ยังไม่มีรูป — เลือกรูปใบส่งของ
             </div>
           )}
 
-          {imageFile && (
-            <OcrExtract
-              file={imageFile}
-              label="🔍 อ่านรหัสลูกค้าจากรูป (OCR · ช่วยเติม PR)"
-              hint="ให้ระบบลองอ่าน PR จากรูป — กล่องคีย์เองในตาราง"
-              onText={onOcrText}
-            />
-          )}
-          {ocrNote && <p className="rounded-lg bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800">💡 {ocrNote}</p>}
+          <div className="flex items-center gap-2 text-[11px]">
+            {uploading && <span className="text-teal-700">⏳ กำลังอัปโหลด…</span>}
+            {imageKey && !uploading && <span className="text-emerald-700">✓ อัปแล้ว</span>}
+          </div>
+          {uploadErr && <p className="text-[11px] text-red-600">⚠ {uploadErr}</p>}
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <p className="text-[11px] leading-relaxed text-muted">
+            • จ่อเมาส์ = พรีวิว · คลิก = ดูเต็มจอ<br />
+            • อัปแล้วย้อนดูได้ (เก็บกับรายการ)<br />
+            • ไม่มีดึงข้อความจากรูป — CS คีย์เอง
+          </p>
+
+          <div className="space-y-2 pt-1">
             <div>
               <label className="mb-1 block text-xs font-medium text-muted">วันที่ถึงโกดังจีน (ทั้งใบ)</label>
               <input type="date" value={arrivalDate} onChange={(e) => setArrivalDate(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500" />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted">เลขที่ตู้/Packing ID (จากใบส่งของ)</label>
+              <label className="mb-1 block text-xs font-medium text-muted">เลขที่ตู้/Packing ID</label>
               <input value={packingId} onChange={(e) => setPackingId(e.target.value)} placeholder="เช่น SEA0625-8211YW" autoComplete="off"
                 className="w-full rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm uppercase focus:border-teal-500 focus:ring-1 focus:ring-teal-500" />
-              <p className="mt-0.5 text-[11px] text-muted">อ้างอิงต้นทาง · เลขตู้จริงมาตอนอัป packing (ขั้นตอน 2)</p>
+              <p className="mt-0.5 text-[11px] text-muted">อ้างอิงต้นทาง · เลขตู้จริงมาตอนอัป packing (หน้า TTW)</p>
             </div>
           </div>
         </div>
 
-        {/* ── RIGHT · the delivery-note table ──────────────────────────────── */}
-        <div>
+        {/* ── RIGHT · the excel key-in table ────────────────────────────────── */}
+        <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <p className="text-[12px] text-muted">
-              คีย์ตามใบส่งของทีละแถว — <strong>ขนาดต่างกันแยกคนละแถว</strong>. เลข 单号 เดียว = ลูกค้าเดียว (มีได้หลาย PR ในใบเดียว) · แถวที่ 单号 เดียวกันจะไฮไลต์เป็นกลุ่ม.
+              คีย์ตามใบส่งของทีละแถว — <strong>ขนาดต่างกันแยกคนละแถว</strong> · 单号 เดียว = ลูกค้าเดียว (ไฮไลต์เป็นกลุ่ม) ·{" "}
+              <strong className="text-amber-700">ลากสลับหัวคอลัมน์ ยาว/กว้าง/สูง ได้</strong> ตามที่อี้อูส่งมา
             </p>
             <div className="flex shrink-0 gap-1.5">
-              <button type="button" onClick={fillOrderNoDown} className="rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-medium text-teal-700 hover:bg-teal-100" title="เอาเลข 单号 แถวแรก เติมทุกแถวที่ยังว่าง">
-                ⬇ เติม 单号
-              </button>
-              <button type="button" onClick={fillPrDown} className="rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-medium text-teal-700 hover:bg-teal-100" title="เอา PR แถวแรก เติมทุกแถวที่ยังว่าง">
-                ⬇ เติม PR
-              </button>
+              <button type="button" onClick={fillOrderNoDown} className="rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-medium text-teal-700 hover:bg-teal-100" title="เอาเลข 单号 แถวแรก เติมทุกแถวที่ยังว่าง">⬇ เติม 单号</button>
+              <button type="button" onClick={fillPrDown} className="rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-medium text-teal-700 hover:bg-teal-100" title="เอา PR แถวแรก เติมทุกแถวที่ยังว่าง">⬇ เติม PR</button>
             </div>
           </div>
 
           <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-gray-200">
-            <table className="w-full min-w-[860px] border-collapse text-[13px] [&_td]:border [&_th]:border [&_td]:border-gray-200 [&_th]:border-gray-300">
+            <table className="w-full min-w-[900px] border-collapse text-[13px] [&_td]:border [&_td]:border-gray-200 [&_th]:border [&_th]:border-gray-300">
               <thead>
-                <tr className="bg-teal-600 text-left text-[11px] text-white">
-                  <th className="px-2 py-1.5 font-medium">#</th>
-                  <th className="px-2 py-1.5 font-medium">เลข 单号 (Bill No)</th>
-                  <th className="px-2 py-1.5 font-medium">PR (ลูกค้า)</th>
-                  <th className="px-2 py-1.5 font-medium">สินค้า</th>
-                  <th className="px-2 py-1.5 font-medium">กล่อง</th>
-                  <th className="px-2 py-1.5 font-medium">น้ำหนัก(กก.)</th>
-                  <th className="px-2 py-1.5 font-medium">ยาว</th>
-                  <th className="px-2 py-1.5 font-medium">กว้าง</th>
-                  <th className="px-2 py-1.5 font-medium">สูง(ซม.)</th>
-                  <th className="px-2 py-1.5 font-medium">คิว(CBM)</th>
-                  <th className="px-2 py-1.5 font-medium"></th>
+                <tr className="bg-gray-100 text-center text-[11px] text-gray-600">
+                  <th className="w-8 px-1 py-1.5 font-semibold">#</th>
+                  <th className="w-32 px-2 py-1.5 font-semibold">เลข 单号</th>
+                  <th className="w-36 px-2 py-1.5 font-semibold">PR (ลูกค้า)</th>
+                  <th className="px-2 py-1.5 font-semibold">สินค้า</th>
+                  <th className="w-14 px-2 py-1.5 font-semibold">กล่อง</th>
+                  <th className="w-20 px-2 py-1.5 font-semibold">น้ำหนัก</th>
+                  {dimOrder.map((k) => (
+                    <th
+                      key={k}
+                      draggable
+                      onDragStart={() => setDragKey(k)}
+                      onDragOver={(e) => { e.preventDefault(); setOverKey(k); }}
+                      onDragEnd={() => { setDragKey(null); setOverKey(null); }}
+                      onDrop={(e) => { e.preventDefault(); onDimDrop(k); }}
+                      title="ลากสลับตำแหน่งคอลัมน์ได้ (ยาว/กว้าง/สูง)"
+                      className={`w-16 cursor-grab select-none bg-amber-100 px-1 py-1 font-semibold text-amber-800 active:cursor-grabbing ${dragKey === k ? "opacity-40" : ""} ${overKey === k && dragKey && dragKey !== k ? "ring-2 ring-inset ring-blue-500" : ""}`}
+                    >
+                      <span className="mr-0.5 text-amber-500">⠿</span>{DIM_LABEL[k]}
+                      <span className="block text-[9px] font-medium text-amber-700/80">⇄ ลากได้</span>
+                    </th>
+                  ))}
+                  <th className="w-20 px-2 py-1.5 font-semibold">คิว(CBM)</th>
+                  <th className="w-8 px-1 py-1.5 font-semibold"></th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={r.id} className={rowTint(r)}>
-                    <td className="px-2 py-1 text-center text-[11px] text-muted">{i + 1}</td>
-                    <td className="px-1.5 py-1 w-36"><input value={r.orderNo} onChange={(e) => updateRow(r.id, "orderNo", e.target.value)} placeholder="X9002653" autoComplete="off" className="w-full rounded-md border border-gray-300 px-2 py-1 text-[13px] font-medium uppercase focus:border-teal-500 focus:ring-1 focus:ring-teal-500" /></td>
-                    <td className="px-1.5 py-1 w-24"><input value={r.pr} onChange={(e) => updateRow(r.id, "pr", e.target.value)} placeholder="PR172" autoComplete="off" className="w-full rounded-md border border-gray-300 px-2 py-1 text-[13px] font-medium uppercase focus:border-teal-500 focus:ring-1 focus:ring-teal-500" /></td>
-                    <td className="px-1.5 py-1 min-w-[120px]"><input value={r.productType} onChange={(e) => updateRow(r.id, "productType", e.target.value)} placeholder="ผ้าทำความสะอาด" className={textCellCls} /></td>
-                    <td className="px-1.5 py-1 w-16"><input value={r.boxCount} onChange={(e) => updateRow(r.id, "boxCount", e.target.value)} inputMode="numeric" className={cellCls} /></td>
-                    <td className="px-1.5 py-1 w-24"><input value={r.weightKg} onChange={(e) => updateRow(r.id, "weightKg", e.target.value)} inputMode="decimal" className={cellCls} /></td>
-                    <td className="px-1.5 py-1 w-20"><input value={r.lengthCm} onChange={(e) => updateRow(r.id, "lengthCm", e.target.value)} inputMode="decimal" className={cellCls} /></td>
-                    <td className="px-1.5 py-1 w-20"><input value={r.widthCm} onChange={(e) => updateRow(r.id, "widthCm", e.target.value)} inputMode="decimal" className={cellCls} /></td>
-                    <td className="px-1.5 py-1 w-20"><input value={r.heightCm} onChange={(e) => updateRow(r.id, "heightCm", e.target.value)} inputMode="decimal" className={cellCls} /></td>
-                    <td className="px-1.5 py-1 w-28">
-                      <div className="flex items-center gap-1">
+                    <td className="px-1 py-0 text-center text-[11px] text-muted">{i + 1}</td>
+                    <td className="px-0 py-0"><input value={r.orderNo} onChange={(e) => updateRow(r.id, "orderNo", e.target.value)} placeholder="X9002653" autoComplete="off" className={`${cellCls} font-medium uppercase`} /></td>
+                    <td className="px-0 py-0"><input value={r.pr} onChange={(e) => updateRow(r.id, "pr", e.target.value)} placeholder="PR172" autoComplete="off" className={`${cellCls} font-medium uppercase`} /></td>
+                    <td className="px-0 py-0"><input value={r.productType} onChange={(e) => updateRow(r.id, "productType", e.target.value)} placeholder="ชื่อสินค้า" className={textCellCls} /></td>
+                    <td className="px-0 py-0"><input value={r.boxCount} onChange={(e) => updateRow(r.id, "boxCount", e.target.value)} inputMode="numeric" className={cellCls} /></td>
+                    <td className="px-0 py-0"><input value={r.weightKg} onChange={(e) => updateRow(r.id, "weightKg", e.target.value)} inputMode="decimal" className={cellCls} /></td>
+                    {dimOrder.map((k) => (
+                      <td key={k} className="bg-amber-50/50 px-0 py-0">
+                        <input value={r[k]} onChange={(e) => updateRow(r.id, k, e.target.value)} inputMode="decimal" className={cellCls} />
+                      </td>
+                    ))}
+                    <td className="px-0 py-0">
+                      <div className="flex items-center">
                         <input value={r.cbm} onChange={(e) => updateRow(r.id, "cbm", e.target.value)} inputMode="decimal" className={cellCls} />
-                        <button type="button" onClick={() => computeCbm(r.id)} title="คำนวณคิวจาก ยาว×กว้าง×สูง×กล่อง" className="shrink-0 rounded border border-teal-200 bg-teal-50 px-1 text-[11px] text-teal-700 hover:bg-teal-100">=</button>
+                        <button type="button" onClick={() => computeCbm(r.id)} title="คำนวณคิวจาก ยาว×กว้าง×สูง×กล่อง" className="mr-1 shrink-0 rounded border border-teal-200 bg-teal-50 px-1 text-[11px] text-teal-700 hover:bg-teal-100">=</button>
                       </div>
                     </td>
-                    <td className="px-1.5 py-1 text-center"><button type="button" onClick={() => removeRow(r.id)} className="rounded p-1 text-red-500 hover:bg-red-50" title="ลบแถว">✕</button></td>
+                    <td className="px-0 py-0 text-center"><button type="button" onClick={() => removeRow(r.id)} className="rounded p-1 text-red-500 hover:bg-red-50" title="ลบแถว">✕</button></td>
                   </tr>
                 ))}
               </tbody>
-              {/* totals row (like the note footer) */}
               <tfoot>
-                <tr className="bg-teal-50 text-[12px] font-semibold text-teal-900">
-                  <td className="px-2 py-1.5 text-center" colSpan={4}>รวม</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{totalBoxes}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{n2(totalWeight)}</td>
+                <tr className="bg-gray-100 text-[12px] font-semibold text-gray-700">
+                  <td className="px-2 py-1.5 text-right" colSpan={4}>รวม</td>
+                  <td className="px-2 py-1.5 text-center tabular-nums">{totalBoxes}</td>
+                  <td className="px-2 py-1.5 text-center tabular-nums">{n2(totalWeight)}</td>
                   <td className="px-2 py-1.5" colSpan={3} />
-                  <td className="px-2 py-1.5 text-right tabular-nums" colSpan={1}>{n3(totalCbm)}</td>
+                  <td className="px-2 py-1.5 text-center tabular-nums">{n3(totalCbm)}</td>
                   <td className="px-2 py-1.5" />
                 </tr>
               </tfoot>
             </table>
           </div>
 
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button type="button" onClick={() => addRow(true)} className="rounded-lg border border-dashed border-teal-300 px-3 py-1.5 text-[12px] font-medium text-teal-700 hover:bg-teal-50" title="เพิ่มแถวขนาดอื่นของ 单号 เดิม (คัดลอกเลข 单号 + PR ให้)">
-              ＋ เพิ่มแถว (单号 เดิม)
-            </button>
-            <button type="button" onClick={() => addRow(false)} className="rounded-lg border border-dashed border-gray-300 px-3 py-1.5 text-[12px] font-medium text-gray-600 hover:bg-gray-50" title="เพิ่ม 单号 ใหม่ (เว้นเลข 单号 · คง PR ไว้)">
-              ＋ 单号 ใหม่
-            </button>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => addRow(true)} className="rounded-lg border border-dashed border-teal-300 px-3 py-1.5 text-[12px] font-medium text-teal-700 hover:bg-teal-50" title="เพิ่มแถวขนาดอื่นของ 单号 เดิม (คัดลอกเลข 单号 + PR ให้)">＋ เพิ่มแถว (单号 เดิม)</button>
+            <button type="button" onClick={() => addRow(false)} className="rounded-lg border border-dashed border-gray-300 px-3 py-1.5 text-[12px] font-medium text-gray-600 hover:bg-gray-50" title="เพิ่ม 单号 ใหม่ (เว้นเลข 单号 · คง PR ไว้)">＋ 单号 ใหม่</button>
+            <span className="text-[11px] text-amber-700">💡 อี้อูสลับ กว้าง↔ยาว → ลากหัวคอลัมน์เหลืองให้ตรงใบ กันคีย์ผิด</span>
           </div>
         </div>
       </div>
@@ -458,12 +452,9 @@ export function YiwuDeliveryClient() {
         </div>
       )}
 
-      {/* ── full-screen image zoom ───────────────────────────────────────────── */}
+      {/* ── full-screen image zoom (click thumb) ─────────────────────────────── */}
       {zoomOpen && imagePreview && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-black/80 p-4"
-          onClick={() => setZoomOpen(false)}
-        >
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-black/80 p-4" onClick={() => setZoomOpen(false)}>
           <button type="button" onClick={() => setZoomOpen(false)} className="fixed right-4 top-4 z-10 rounded-full bg-white/90 px-3 py-1.5 text-sm font-medium text-gray-800 shadow hover:bg-white">✕ ปิด</button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={imagePreview} alt="ใบส่งของ อี้อู (ซูม)" className="w-[min(1400px,95vw)] max-w-none rounded-lg bg-white shadow-2xl" onClick={(e) => e.stopPropagation()} />
