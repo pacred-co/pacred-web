@@ -5,8 +5,8 @@ owner brief + แผนที่เคาะแล้ว (mockup ผ่าน "�
 ## 📌 สถานะ (2026-07-25)
 - ✅ **หน้า A yiwu (CS)** เสร็จ — ตาราง excel + ลากคอลัมน์ · รูปเล็ก hover/คลิกเต็ม · ตัด OCR · ประวัติจริง · ตัด step2 · commit ไม่แตะ · eslint 0 · tsc 0
 - ✅ **หน้า B TTW Stage 1** — ย้ายอัพ packing มา (`YiwuPackingClient` mount บน TTW page) + header DOC + staging เดิม · eslint 0 (packing reconcile = money-free เดิม)
-- 🔴 **หน้า B Stage 2 (ทำต่อ · money-path):** ปุ่ม "เอาเข้าระบบ" สำหรับ 单号 unmatched ที่เป็นของเรา → สร้าง tb_forwarder อี้อู (reuse yiwu commit) + กันซ้ำ. reconcile รายงาน `skipped/reason` อยู่แล้ว (yiwu-packing-reconcile.ts) = ต่อยอดได้
-- 🔵 ยังไม่ browser-verify (§0c) — รอ ภูม login localhost:3000 · ยังไม่ push (รอ tsc เขียว)
+- ✅ **หน้า B Stage 2 เสร็จ (money-path):** ปุ่ม "เอาเข้าระบบ" ต่อแถว unmatched (reason "ไม่พบออเดอร์ในระบบ" + มีข้อมูลวัด) → กรอก PR → **reuse `addYiwuDeliveryNoteShipments` 100%** (GUARD กันซ้ำ+validate PR+auto-price · ไม่มี INSERT ใหม่) · confirm ก่อน · หลังสร้าง re-upload packing ผูกตู้+เลื่อน 3 · eslint 0 · tsc 0 · diff review money-safe
+- ✅ browser-verify: yiwu (ตาราง/hover/ประวัติ/สีสถานะ) + TTW (packing+staging render) — ภูม login localhost verify แล้ว · **create flow ต้องอัพไฟล์ packing จริงที่มีเลข unmatched ถึงเห็นปุ่ม (ภูม test)**
 - 🟡 polish รอบหน้า: TTW มี 2 header (page + staging) ซ้อน · รูปหลายใบ (fcover+fimages) ถ้า ภูม อยาก
 
 ## โฟลที่ถูกต้อง (แยกตามแผนก)
