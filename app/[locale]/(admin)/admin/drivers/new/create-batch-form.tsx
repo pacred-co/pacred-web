@@ -304,21 +304,35 @@ export function CreateBatchForm({
       {/* Centered popup host (legacy Swal replacement) — 0-select guard etc. */}
       {dialogs}
 
-      {/* ── Legacy PCS list controls: "แสดง N รายการ" (left) + "ค้นหา" (right) ── */}
+      {/* แถวควบคุมเดียว (owner 2026-07-25 "อยู่แถวเดียวกัน · ขอบมนหมด"): ซ้าย = แสดง N +
+          ปุ่มส่งออก Flash (ถ้ามี · note ย้ายไป tooltip) · ขวา = ค้นหา · ทุกอันขอบมน (rounded-full) */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-        <div className="flex items-center gap-1.5 text-muted">
-          <span>แสดง</span>
-          <select
-            value={pageLength}
-            onChange={(e) => { setPageLength(Number(e.target.value)); setPage(1); }}
-            className="rounded border border-border bg-white px-2 py-1 text-sm"
-            aria-label="จำนวนรายการต่อหน้า"
-          >
-            {[25, 50, 100, 250, 500].map((n) => (
-              <option key={n} value={n}>{n}</option>
-            ))}
-          </select>
-          <span>รายการ</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 text-muted">
+            <span>แสดง</span>
+            <select
+              value={pageLength}
+              onChange={(e) => { setPageLength(Number(e.target.value)); setPage(1); }}
+              className="rounded-full border border-border bg-white px-3 py-1 text-sm"
+              aria-label="จำนวนรายการต่อหน้า"
+            >
+              {[25, 50, 100, 250, 500].map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+            <span>รายการ</span>
+          </div>
+          {showFlashExport && (
+            <button
+              type="button"
+              onClick={handleExportFlash}
+              disabled={exporting || filteredGroups.length === 0}
+              title="ดาวน์โหลด → อัพโหลดเข้าเวป Flash (Import ข้อมูลผู้รับ) → Flash มารับที่โกดัง"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-3.5 py-1.5 text-sm hover:bg-surface-alt disabled:opacity-40 shrink-0"
+            >
+              {exporting ? "⏳ กำลังส่งออก…" : "📄 ส่งออกไฟล์ Flash (นัดรับ)"}
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           <label htmlFor="stop-search" className="text-muted">ค้นหา:</label>
@@ -328,7 +342,7 @@ export function CreateBatchForm({
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
             placeholder="ชื่อ / รหัสลูกค้า / แทรคกิ้ง / ที่อยู่"
-            className="rounded border border-border bg-white px-2.5 py-1 text-sm min-w-[200px]"
+            className="rounded-full border border-border bg-white px-3.5 py-1 text-sm min-w-[200px]"
           />
           <span className="text-muted text-xs">·</span>
           <button type="button" onClick={selectAll} className="text-xs text-primary-600 hover:underline">
@@ -347,7 +361,7 @@ export function CreateBatchForm({
           <button
             type="button"
             onClick={() => { setCarrierFilter(""); setPage(1); }}
-            className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
+            className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
               !carrierFilter ? "bg-primary-600 text-white border-primary-600" : "bg-white text-foreground border-border hover:bg-surface-alt"
             }`}
           >
@@ -358,31 +372,13 @@ export function CreateBatchForm({
               key={c.label}
               type="button"
               onClick={() => { setCarrierFilter(c.label); setPage(1); }}
-              className={`rounded border px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
                 carrierFilter === c.label ? "bg-primary-600 text-white border-primary-600" : "bg-white text-foreground border-border hover:bg-surface-alt"
               }`}
             >
               {c.label} ({c.count})
             </button>
           ))}
-        </div>
-      )}
-
-      {/* ส่งออกไฟล์ Flash (นัดรับ) — Flash tab only. Exports the listed Flash deliveries
-          as the Flash "Import ข้อมูลผู้รับ" CSV (scoped to Flash rows only). */}
-      {showFlashExport && (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleExportFlash}
-            disabled={exporting || filteredGroups.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-sm hover:bg-surface-alt disabled:opacity-40 shrink-0"
-          >
-            {exporting ? "⏳ กำลังส่งออก…" : "📄 ส่งออกไฟล์ Flash (นัดรับ)"}
-          </button>
-          <p className="text-xs text-muted">
-            ดาวน์โหลด → อัพโหลดเข้าเวป Flash (Import ข้อมูลผู้รับ) → Flash มารับที่โกดัง
-          </p>
         </div>
       )}
 
@@ -409,13 +405,19 @@ export function CreateBatchForm({
                 />
               </th>
               <th className="px-3 py-2 w-20 text-center">
+                <button type="button" onClick={() => toggleSort("order")} className="inline-flex items-center gap-1 hover:text-[#cc3333]">
+                  ลำดับส่ง <SortIcon state={sort?.key === "order" ? sort.dir : null} />
+                </button>
+              </th>
+              <th className="px-3 py-2 w-20 text-center">
                 <button type="button" onClick={() => toggleSort("count")} className="inline-flex items-center gap-1 hover:text-[#cc3333]">
                   จำนวน <SortIcon state={sort?.key === "count" ? sort.dir : null} />
                 </button>
               </th>
-              <th className="px-3 py-2 w-40">
+              <th className="px-3 py-2 w-[26rem]">
+                {/* รวม "บริษัทขนส่ง" + "ที่อยู่" เป็นคอลัมน์เดียว (owner 2026-07-25 · แบบโซนกลางหน้า detail) */}
                 <button type="button" onClick={() => toggleSort("carrier")} className="inline-flex items-center gap-1 hover:text-[#cc3333]">
-                  บริษัทขนส่ง <SortIcon state={sort?.key === "carrier" ? sort.dir : null} />
+                  บริษัทขนส่ง · ที่อยู่ <SortIcon state={sort?.key === "carrier" ? sort.dir : null} />
                 </button>
               </th>
               <th className="px-3 py-2">
@@ -423,28 +425,18 @@ export function CreateBatchForm({
                   เลขแทรคกิ้ง <SortIcon state={sort?.key === "tracking" ? sort.dir : null} />
                 </button>
               </th>
-              <th className="px-3 py-2 w-20 text-center">
-                <button type="button" onClick={() => toggleSort("order")} className="inline-flex items-center gap-1 hover:text-[#cc3333]">
-                  ลำดับส่ง <SortIcon state={sort?.key === "order" ? sort.dir : null} />
-                </button>
-              </th>
-              <th className="px-3 py-2 w-[26rem]">
-                <button type="button" onClick={() => toggleSort("address")} className="inline-flex items-center gap-1 hover:text-[#cc3333]">
-                  ที่อยู่ <SortIcon state={sort?.key === "address" ? sort.dir : null} />
-                </button>
-              </th>
             </tr>
           </thead>
           <tbody>
             {groups.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-10 text-center text-muted">
+                <td colSpan={5} className="px-3 py-10 text-center text-muted">
                   ไม่มีรายการรอมอบหมาย — ทุกอย่างถูกมอบหมายไปแล้ว
                 </td>
               </tr>
             ) : visibleGroups.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-10 text-center text-muted">
+                <td colSpan={5} className="px-3 py-10 text-center text-muted">
                   {searchQuery
                     ? <>ไม่พบรายการที่ตรงกับ &quot;{searchQuery}&quot;</>
                     : <>ไม่มีจุดส่งสำหรับขนส่ง &quot;{carrierFilter}&quot; — เลือกขนส่งอื่น หรือ &quot;ทั้งหมด&quot;</>}
@@ -474,16 +466,45 @@ export function CreateBatchForm({
                       />
                     </td>
 
+                    {/* ลำดับส่ง — ขึ้นก่อนจำนวน (owner 2026-07-25) · district route order */}
+                    <td className="px-3 py-2 text-center">
+                      <span
+                        title="ลำดับเส้นทางวิ่งรถ — เขตใกล้โกดัง = เลขน้อย · ไกล = เลขมาก"
+                        className="text-base font-bold text-foreground tabular-nums"
+                      >
+                        {order}
+                      </span>
+                    </td>
+
                     {/* จำนวน — tracking-row count for this stop (legacy "N รายการ") */}
                     <td className="px-3 py-2 text-center whitespace-nowrap">
                       <div className="text-sm font-semibold text-foreground tabular-nums">{g.items.length} รายการ</div>
                     </td>
 
-                    {/* บริษัทขนส่ง — plain carrier label (legacy "PCS เหมาๆ" · no pill,
-                        no customer name/code: those live in the nested รหัสสมาชิก + the
-                        ที่อยู่ recipient name, matching the legacy add-page). */}
-                    <td className="px-3 py-2 text-sm text-foreground">
-                      {g.shipByLabel}
+                    {/* บริษัทขนส่ง · ที่อยู่ — รวมคอลัมน์เดียว แบบโซนกลางหน้า detail (owner 2026-07-25):
+                        badge ขนส่ง ด้านบน · ที่อยู่ผู้รับ (อำเภอไฮไลต์) + โทร ด้านล่าง */}
+                    <td className="px-3 py-2 align-top text-sm">
+                      <div className="mb-1.5">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-2.5 py-0.5 text-xs font-semibold text-white">
+                          <Truck className="h-3 w-3" /> {g.shipByLabel}
+                        </span>
+                      </div>
+                      {g.addressMissing ? (
+                        <div className="inline-block text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-1">
+                          ⚠️ ยังไม่มีที่อยู่จัดส่ง — เซลกรอกเพิ่มที่หน้ารายการนำเข้า
+                        </div>
+                      ) : (
+                        <div className="text-foreground/90 leading-relaxed">
+                          <b className="font-semibold">คุณ{g.recipientName}</b>{" "}
+                          {g.address.no}
+                          {g.address.subDistrict ? <> ตำบล/แขวง {g.address.subDistrict}</> : null}{" "}
+                          {g.address.district ? <>อำเภอ/เขต <span className="bg-[#ff9149] px-1 rounded text-white font-medium">{g.address.district}</span>{" "}</> : null}
+                          {g.address.province ? <>จังหวัด {g.address.province} </> : null}{g.address.zipCode}
+                          {g.address.tel && g.address.tel !== "-" && (
+                            <> โทร. {g.address.tel}</>
+                          )}
+                        </div>
+                      )}
                     </td>
 
                     {/* เลขแทรคกิ้ง — the nested per-tracking sub-table (legacy inner
@@ -552,38 +573,7 @@ export function CreateBatchForm({
                       </details>
                     </td>
 
-                    {/* ลำดับส่ง — district route order (legacy $arrPositF index) ·
-                        plain number like the legacy add-page (was an orange box). */}
-                    <td className="px-3 py-2 text-center">
-                      <span
-                        title="ลำดับเส้นทางวิ่งรถ — เขตใกล้โกดัง = เลขน้อย · ไกล = เลขมาก"
-                        className="text-base font-bold text-foreground tabular-nums"
-                      >
-                        {order}
-                      </span>
-                    </td>
 
-                    {/* ที่อยู่ — legacy add-page format: leads with the recipient name,
-                        full "ตำบล/แขวง … อำเภอ/เขต [highlight] … จังหวัด …" wording, โทร
-                        inline at the end. */}
-                    <td className="px-3 py-2 text-sm">
-                      {g.addressMissing ? (
-                        <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-1">
-                          ⚠️ ยังไม่มีที่อยู่จัดส่ง — เซลกรอกเพิ่มที่หน้ารายการนำเข้า
-                        </span>
-                      ) : (
-                        <span className="text-foreground/90 leading-relaxed">
-                          <b className="font-semibold">คุณ{g.recipientName}</b>{" "}
-                          {g.address.no}
-                          {g.address.subDistrict ? <> ตำบล/แขวง {g.address.subDistrict}</> : null}{" "}
-                          {g.address.district ? <>อำเภอ/เขต <span className="bg-[#ff9149] px-1 rounded text-white font-medium">{g.address.district}</span>{" "}</> : null}
-                          {g.address.province ? <>จังหวัด {g.address.province} </> : null}{g.address.zipCode}
-                          {g.address.tel && g.address.tel !== "-" && (
-                            <> โทร. {g.address.tel}</>
-                          )}
-                        </span>
-                      )}
-                    </td>
                   </tr>
                 );
               })
@@ -607,7 +597,7 @@ export function CreateBatchForm({
                 type="button"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage <= 1}
-                className="rounded border border-border bg-white px-2.5 py-1 disabled:opacity-40 hover:bg-surface-alt"
+                className="rounded-full border border-border bg-white px-3 py-1 disabled:opacity-40 hover:bg-surface-alt"
               >
                 ก่อนหน้า
               </button>
@@ -616,7 +606,7 @@ export function CreateBatchForm({
                 type="button"
                 onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
                 disabled={currentPage >= pageCount}
-                className="rounded border border-border bg-white px-2.5 py-1 disabled:opacity-40 hover:bg-surface-alt"
+                className="rounded-full border border-border bg-white px-3 py-1 disabled:opacity-40 hover:bg-surface-alt"
               >
                 ถัดไป
               </button>

@@ -568,8 +568,10 @@ export default async function CreateDriverBatchPage({
           underline on the active tab (ภูม 2026-07-19 "เอาตาม legacy"). 3 work-tabs +
           กำลังจัดส่ง link + the เตรียมส่งอนุมัติจ่ายแล้ว X/Y health indicator. Express
           tab is Pacred's own (ภูม's 3-way carrier split · kept). */}
-      <div className="overflow-x-auto scrollbar-x-visible border-b border-[#dcdfe4]">
-        <ul className="flex flex-nowrap items-stretch -mb-px min-w-max">
+      <div className="border-b border-[#dcdfe4]">
+        {/* คอม (≥lg) = แถวเดียว ไม่มี scrollbar (owner 2026-07-25) — ย่อ padding แท็บบนคอม
+            (lg:px-2.5) ให้พอดีแถวเดียว · จอเล็ก = wrap ครบทุกแท็บ */}
+        <ul className="flex flex-wrap lg:flex-nowrap items-stretch gap-y-1 -mb-px">
           <li><PcsDriverTab href="/admin/drivers/new" active={activeTab === "driver"} icon={<Truck className="h-4 w-4" />} label="มอบงานให้คนขับรถ" count={driverStops} /></li>
           <li><PcsDriverTab href="/admin/drivers/new?tab=pickup" active={activeTab === "pickup"} icon={<Home className="h-4 w-4" />} label="รายการรับเองหน้าโกดัง" count={pickupStops} /></li>
           <li><PcsDriverTab href="/admin/drivers/new?tab=flash" active={activeTab === "flash"} icon={<Package className="h-4 w-4" />} label="Flash Express" count={flashStops} /></li>
@@ -648,7 +650,7 @@ function PcsDriverTab({
     <Link
       href={href}
       title={title}
-      className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
+      className={`inline-flex items-center justify-center gap-1.5 lg:gap-1 whitespace-nowrap border-b-2 px-4 lg:px-2.5 py-2.5 text-sm font-medium transition-colors ${
         active
           ? "border-[#cc3333] text-[#cc3333]"
           : "border-transparent text-slate-600 hover:text-[#cc3333] hover:border-[#dcdfe4]"
