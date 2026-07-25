@@ -344,15 +344,15 @@ export function YiwuDeliveryClient() {
           </div>
 
           <div className="overflow-x-auto scrollbar-x-visible rounded-lg border border-gray-200">
-            <table className="w-full min-w-[900px] border-collapse text-[13px] [&_td]:border [&_td]:border-gray-200 [&_th]:border [&_th]:border-gray-300">
+            <table className="w-full min-w-[900px] table-fixed border-collapse text-[13px] [&_td]:border [&_td]:border-gray-200 [&_th]:border [&_th]:border-gray-300">
               <thead>
-                <tr className="bg-gray-100 text-center text-[11px] text-gray-600">
-                  <th className="w-8 px-1 py-1.5 font-semibold">#</th>
-                  <th className="w-32 px-2 py-1.5 font-semibold">เลข 单号</th>
-                  <th className="w-36 px-2 py-1.5 font-semibold">PR (ลูกค้า)</th>
-                  <th className="px-2 py-1.5 font-semibold">สินค้า</th>
-                  <th className="w-14 px-2 py-1.5 font-semibold">กล่อง</th>
-                  <th className="w-20 px-2 py-1.5 font-semibold">น้ำหนัก</th>
+                <tr className="bg-slate-600 text-center text-xs text-white">
+                  <th className="w-8 px-1 py-2 font-semibold">#</th>
+                  <th className="w-28 px-2 py-2 font-semibold">เลข 单号</th>
+                  <th className="w-28 px-2 py-2 font-semibold">PR (ลูกค้า)</th>
+                  <th className="w-40 px-2 py-2 font-semibold">สินค้า</th>
+                  <th className="w-14 px-2 py-2 font-semibold">กล่อง</th>
+                  <th className="w-20 px-2 py-2 font-semibold">น้ำหนัก</th>
                   {dimOrder.map((k) => (
                     <th
                       key={k}
@@ -362,14 +362,14 @@ export function YiwuDeliveryClient() {
                       onDragEnd={() => { setDragKey(null); setOverKey(null); }}
                       onDrop={(e) => { e.preventDefault(); onDimDrop(k); }}
                       title="ลากสลับตำแหน่งคอลัมน์ได้ (ยาว/กว้าง/สูง)"
-                      className={`w-16 cursor-grab select-none bg-amber-100 px-1 py-1 font-semibold text-amber-800 active:cursor-grabbing ${dragKey === k ? "opacity-40" : ""} ${overKey === k && dragKey && dragKey !== k ? "ring-2 ring-inset ring-blue-500" : ""}`}
+                      className={`w-16 cursor-grab select-none bg-amber-400 px-1 py-2 font-semibold text-amber-950 active:cursor-grabbing ${dragKey === k ? "opacity-40" : ""} ${overKey === k && dragKey && dragKey !== k ? "ring-2 ring-inset ring-blue-600" : ""}`}
                     >
-                      <span className="mr-0.5 text-amber-500">⠿</span>{DIM_LABEL[k]}
-                      <span className="block text-[9px] font-medium text-amber-700/80">⇄ ลากได้</span>
+                      <span className="mr-0.5 text-amber-700">⠿</span>{DIM_LABEL[k]}
+                      <span className="block text-[10px] font-medium text-amber-900">⇄ ลากได้</span>
                     </th>
                   ))}
-                  <th className="w-20 px-2 py-1.5 font-semibold">คิว(CBM)</th>
-                  <th className="w-8 px-1 py-1.5 font-semibold"></th>
+                  <th className="w-20 px-2 py-2 font-semibold">คิว(CBM)</th>
+                  <th className="w-8 px-1 py-2 font-semibold"></th>
                 </tr>
               </thead>
               <tbody>

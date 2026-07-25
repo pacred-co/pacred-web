@@ -15,6 +15,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { YiwuDeliveryClient } from "./yiwu-client";
+import { fstatusBadge } from "@/lib/admin/forwarder-status";
 
 export const dynamic = "force-dynamic";
 
@@ -23,16 +24,6 @@ const CARRIER_MENUBAR: MenubarItem[] = [
   { label: "อี้อู (ใบส่งของ)", href: "/admin/api-forwarder-yiwu" },
   { label: "CargoCenter", href: "/admin/api-forwarder-cn" },
 ];
-
-// fstatus → readable pill (display-only · อี้อู rows start at "2").
-const FSTATUS_LABEL: Record<string, { label: string; cls: string }> = {
-  "2": { label: "ถึงโกดังจีนแล้ว", cls: "bg-amber-100 text-amber-800" },
-  "3": { label: "กำลังส่งมาไทย", cls: "bg-sky-100 text-sky-800" },
-  "4": { label: "ถึงไทยแล้ว", cls: "bg-orange-100 text-orange-800" },
-  "5": { label: "รอชำระเงิน", cls: "bg-rose-100 text-rose-700" },
-  "6": { label: "เตรียมส่ง", cls: "bg-indigo-100 text-indigo-800" },
-  "7": { label: "ส่งแล้ว", cls: "bg-emerald-100 text-emerald-800" },
-};
 
 type HistRow = {
   id: number;
@@ -162,7 +153,7 @@ export default async function AdminApiForwarderYiwuPage() {
               </thead>
               <tbody className="[&>tr>td]:border [&>tr>td]:border-gray-100 [&>tr>td]:px-3 [&>tr>td]:py-2">
                 {hist.map((r) => {
-                  const st = FSTATUS_LABEL[(r.fstatus ?? "").trim()] ?? { label: r.fstatus ?? "—", cls: "bg-gray-100 text-gray-600" };
+                  const st = fstatusBadge((r.fstatus ?? "").trim());
                   return (
                     <tr key={r.id} className="odd:bg-white even:bg-gray-50/60">
                       <td className="whitespace-nowrap text-muted">{fmtDate(r.fdatestatus2)}</td>
@@ -175,7 +166,7 @@ export default async function AdminApiForwarderYiwuPage() {
                       <td className="text-right tabular-nums">{num(r.fweight, 1)}</td>
                       <td className="text-right tabular-nums">{num(r.fvolume, 4)}</td>
                       <td className="whitespace-nowrap text-muted">{r.fcabinetnumber?.trim() || "—"}</td>
-                      <td><span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${st.cls}`}>{st.label}</span></td>
+                      <td><span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] ${st.chip}`}>{st.label}</span></td>
                       <td className="whitespace-nowrap text-[11px] text-muted">{r.adminidcreator ?? "—"}</td>
                     </tr>
                   );
