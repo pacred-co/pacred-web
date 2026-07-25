@@ -999,8 +999,10 @@ export async function commitMomoRowCore(
       // รูปที่แอดมินเพิ่มบนด่านนำเข้า (admin_patch.extra_images = key ใน bucket
       // forwarder-covers) → แกลเลอรีของแถวจริง (fimages · mig 0176 · JSON array of keys
       // convention เดียวกับ adminAddForwarderImage) · เป็นปกหน้าเมื่อ MOMO ไม่มีรูปเลย.
+      // ⚠️ fimages = NOT NULL DEFAULT '[]' — เขียน null = 23502 พังทุกการนำเข้า
+      // (เจอจริง 2026-07-25 · พนักงานกดเข้าไม่ได้ทั้งหน้า) → ส่ง JSON array เสมอ
       fcover:                momoCover || (stagingExtraImages[0] ?? ""),
-      fimages:               stagingExtraImages.length > 0 ? JSON.stringify(stagingExtraImages) : null,
+      fimages:               JSON.stringify(stagingExtraImages),
       fbox_mark:             momoCg,
       fphotoend:             "",
       fcostrefrate:          0,
