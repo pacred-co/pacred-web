@@ -32,9 +32,10 @@ type Tab = {
   badge?: number;
 };
 
-// TODO(owner 2026-07-25): เบอร์ "keetar" (สายปรึกษา/ดิสแพตช์คนขับ) — รอ owner ยืนยันเบอร์จริง
-// แล้วแก้ค่านี้ (หรือส่งผ่าน prop consultTel จาก layout). ตอนนี้เป็น placeholder.
-const CONSULT_TEL = "0000000000";
+// เบอร์ "ปรึกษา" = กีตาร์ (keetar · AD021) — layout ส่ง prop consultTel ที่ดึงสดจาก
+// profiles.phone มาให้ (owner 2026-07-25 "อิงจากระบบ") · ค่านี้เป็น fallback เบอร์จริง
+// ของ keetar เผื่ออ่าน DB ไม่ได้ ปุ่มจะยังโทรหา keetar ได้เสมอ.
+const CONSULT_TEL = "0955808971";
 
 export function DriverBottomNav({
   noteBadge,
