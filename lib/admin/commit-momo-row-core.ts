@@ -253,12 +253,13 @@ export async function commitMomoRowCore(
       // sync.ts aggregateTrackDetailMetrics) — ภูม 2026-07-13: value the row from THESE,
       // not the first-box `raw` (raw carried only box-1 when MOMO's feed dropped the
       // -2..-N siblings → ~5× under-bill · e.g. 800206224068 raw.kg=46.5 vs true 249).
-      "id, momo_tracking_no, momo_container_no, container_batch_no, momo_sack_no, shipment_status, raw, weight_kg, cbm, quantity, momo_updated_at, committed_at, committed_forwarder_id",
+      "id, momo_tracking_no, tracking_override, momo_container_no, container_batch_no, momo_sack_no, shipment_status, raw, weight_kg, cbm, quantity, momo_updated_at, committed_at, committed_forwarder_id",
     )
     .eq("id", d.rowId)
     .maybeSingle<{
       id:                     string;
       momo_tracking_no:       string | null;
+      tracking_override:      string | null;
       momo_container_no:      string | null;
       container_batch_no:     string | null;
       momo_sack_no:           string | null;
@@ -449,7 +450,10 @@ export async function commitMomoRowCore(
   }
 
   // ── 4. Derive cargo fields from MOMO source row ────────────
-  const trackingNo  = srcRow.momo_tracking_no;
+  // เลขแทรค: ใช้ "เลขที่ถูกต้อง" (tracking_override · mig 0281 · owner เคส 733 —
+  // MOMO คีย์ตกหล่นแต่รูปป้ายมีเลขเต็ม) ก่อนเลขดิบจาก MOMO เสมอ. ทุก dedup/family
+  // guard ข้างล่างวิ่งบนเลขนี้ = เลขที่จะกลายเป็น ftrackingchn จริง.
+  const trackingNo  = (srcRow.tracking_override ?? "").trim() || srcRow.momo_tracking_no;
   // ภูม flag 2026-05-30 (bug 2c): use ONLY the joined REAL cabinet (cid from
   // container_closed · e.g. "GZS260525-2"), what `container_batch_no` holds.
   //
@@ -1036,7 +1040,8 @@ export async function commitMomoRowCore(
       String(row.id),
       {
         momo_row_id:        srcRow.id,
-        momo_tracking_no:   trackingNo,
+        momo_tracking_no:   srcRow.momo_tracking_no,   // เลขตัวตนฝั่ง MOMO (ดิบ)
+        tracking_committed: trackingNo,                // เลขที่ลง ftrackingchn จริง (= override ถ้ามี)
         momo_container_no:  containerNo,                // MOMO routing batch ID (bug 2c)
         container_batch_no: srcRow.container_batch_no,  // real cabinet from container_closed.cid
         momo_sack_no:       srcRow.momo_sack_no,

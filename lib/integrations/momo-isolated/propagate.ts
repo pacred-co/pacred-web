@@ -197,6 +197,33 @@ export async function propagateMomoToForwarders(
   const trackings = Array.from(
     new Set(candidates.map((r) => r.trackingNo!).filter(Boolean)),
   );
+
+  // ── tracking_override alias (mig 0281 · owner เคส 733) ──────────────────
+  // แถวที่แอดมินแก้เลข: MOMO ยังส่งเลขเดิม ("733") แต่ ftrackingchn ในระบบ =
+  // เลขที่ถูกต้อง ("1784597733") → ถ้า match ด้วยเลข MOMO ตรงๆ สายสถานะ/ตู้ขาด.
+  // ดึง alias จาก staging (กุญแจ = momo_tracking_no เดิม) แล้ว lookup ทั้ง 2 เลข.
+  const overrideByMomoNo = new Map<string, string>();
+  {
+    const { data: aliasRows, error: aliasErr } = await admin
+      .from("momo_import_tracks")
+      .select("momo_tracking_no, tracking_override")
+      .in("momo_tracking_no", trackings)
+      .not("tracking_override", "is", null);
+    if (aliasErr) {
+      // fail-soft: alias หายแค่ทำให้แถวที่แก้เลขไม่อัพเดตรอบนี้ — ไม่พังทั้ง batch
+      console.error("[propagateMomoToForwarders] alias lookup failed", {
+        code: aliasErr.code, message: aliasErr.message,
+      });
+    }
+    for (const r of (aliasRows ?? []) as Array<{ momo_tracking_no: string | null; tracking_override: string | null }>) {
+      const from = (r.momo_tracking_no ?? "").trim();
+      const to = (r.tracking_override ?? "").trim();
+      if (from && to && from !== to) {
+        overrideByMomoNo.set(from, to);
+        trackings.push(to);
+      }
+    }
+  }
   // B4 · backlog #259 (migration 0150 · 2026-06-08): include fcabinet_locked
   // in the SELECT so the cabinet-write guard below can skip rows that admin
   // has manually locked against partner-sync overwrites.
@@ -234,6 +261,13 @@ export async function propagateMomoToForwarders(
     const list = forwardersByTracking.get(key) ?? [];
     list.push(row);
     forwardersByTracking.set(key, list);
+  }
+  // alias remap: record ของ MOMO เลขเดิม → เห็นแถวที่ commit ด้วยเลขที่แก้แล้ว
+  // (ที่เหลือของฟังก์ชันคีย์ด้วย record.trackingNo เดิม — remap ตรงนี้จุดเดียวจบ)
+  for (const [momoNo, corrected] of overrideByMomoNo) {
+    if (!forwardersByTracking.has(momoNo) && forwardersByTracking.has(corrected)) {
+      forwardersByTracking.set(momoNo, forwardersByTracking.get(corrected)!);
+    }
   }
   result.matched = (matchedRows ?? []).length;
 

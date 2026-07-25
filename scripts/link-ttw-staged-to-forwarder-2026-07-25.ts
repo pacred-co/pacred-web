@@ -26,7 +26,10 @@ const APPLY = process.argv.includes("--apply");
 const PW = process.env.SUPABASE_DB_PASSWORD;
 if (!PW) { console.error("SUPABASE_DB_PASSWORD required"); process.exit(1); }
 
-const CONTAINERS = ["YWS260720-9T", "YWS260722-10T", "YWS260723-1T", "YWS260724-2T"];
+// รอบ 2 (audit ฝั่งอี้อู · owner "คีย์เข้าระบบกับแพคกิ้งยังแยกกัน"): ครอบ**ทุกตู้**ใน staging
+// ไม่ใช่แค่ 4 ตู้ใหม่ — เจอ 8 แถวเก่าที่มีของจริงในระบบแล้วแต่ pointer ไม่เคยถูกผูก
+// (คีย์ผ่านหน้า yiwu โดยตรง → หน้า TTW เลยโชว์ "ยังไม่เข้าระบบ" ทั้งที่เข้าแล้ว).
+const CONTAINERS: string[] = []; // ว่าง = ทุกตู้ใน ttw_packing_line
 const escLike = (s: string) => s.replace(/[%_\\]/g, "\\$&");
 
 async function main() {
@@ -36,11 +39,12 @@ async function main() {
   });
   await c.connect();
 
-  // staging แถวที่จับคู่ PR แล้ว + ยังไม่เชื่อม
+  // staging แถวที่จับคู่ PR แล้ว + ยังไม่เชื่อม (CONTAINERS ว่าง = ทุกตู้)
   const { rows: staged } = await c.query(
     `SELECT id, container_no, base_tracking, member_code
        FROM ttw_packing_line
-      WHERE container_no = ANY($1) AND member_code IS NOT NULL AND committed_forwarder_id IS NULL
+      WHERE ($1::text[] = '{}' OR container_no = ANY($1))
+        AND member_code IS NOT NULL AND committed_forwarder_id IS NULL
       ORDER BY container_no, base_tracking`,
     [CONTAINERS],
   );

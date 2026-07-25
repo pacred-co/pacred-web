@@ -844,6 +844,14 @@ export function MomoInvoiceCostClient() {
                             = {r.matchedTracking}
                           </span>
                         )}
+                        {r.matchedVia === "staging_alias" && (
+                          <span
+                            className="ml-1 rounded bg-sky-100 px-1 text-[11px] font-sans text-sky-700"
+                            title={`เลขบนบิลคือเลขเดิมที่ MOMO คีย์ตกหล่น — แอดมินแก้เป็นเลขจริง "${r.matchedTracking}" แล้ว (จับคู่ผ่านตัวเชื่อม staging · เคส 733)`}
+                          >
+                            ✎ = {r.matchedTracking}
+                          </span>
+                        )}
                         {r.totalMismatch && (
                           <span
                             className="ml-1 text-orange-600"

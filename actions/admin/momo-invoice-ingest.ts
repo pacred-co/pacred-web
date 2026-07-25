@@ -165,8 +165,9 @@ export type MomoIngestPreviewRow = {
   /** ใบพิมพ์เรท 0.00 → ตรวจยอดด้วยสูตรไม่ได้ (ยอดยังเป็นบิลจริง). */
   rateMissing: boolean;
   matched: boolean;
-  /** จับคู่ด้วยวิธีไหน — "bare_base" = MOMO บิล -1/N แต่ระบบเราเก็บเป็นเลขเปล่า. */
-  matchedVia: "exact" | "bare_base" | null;
+  /** จับคู่ด้วยวิธีไหน — "bare_base" = MOMO บิล -1/N แต่ระบบเราเก็บเป็นเลขเปล่า ·
+   *  "staging_alias" = เลขบนบิลคือเลขเดิม MOMO ที่แอดมินแก้แล้ว (tracking_override เคส 733). */
+  matchedVia: "exact" | "bare_base" | "staging_alias" | null;
   /** เลขแทรคกิ้งของแถวเราที่จับคู่ได้ (ต่างจากบนใบเมื่อ matchedVia = bare_base). */
   matchedTracking: string | null;
   fid: number | null;
@@ -606,7 +607,7 @@ async function buildPreview(text: string): Promise<MomoIngestPreview> {
 
   // Resolve each invoice line → our row: exact first, then the narrow "-1/N" → bare
   // fallback, and only when kg/CBM corroborate. Never fuzzier than this.
-  type Resolved = { row: ForwarderRow; via: "exact" | "bare_base" } | null;
+  type Resolved = { row: ForwarderRow; via: "exact" | "bare_base" | "staging_alias" } | null;
   const resolved: Resolved[] = parsed.lines.map((l) => {
     const exact = fByTracking.get(l.tracking);
     if (exact) return { row: exact, via: "exact" };
@@ -617,6 +618,67 @@ async function buildPreview(text: string): Promise<MomoIngestPreview> {
     // A bare base can be an aggregate bill-header. Only accept it when the numbers agree.
     return corroborates(l, bare) ? { row: bare, via: "bare_base" } : null;
   });
+
+  // ── ชั้นที่ 3: staging alias (tracking_override · mig 0281 · owner เคส 733) ──
+  // MOMO เรียกเก็บด้วยเลขของเขา ("733") แต่แถวเก็บเงินเราถูกแก้เป็นเลขเต็มจากรูปป้าย
+  // ("1784597733") → เลขบนบิลหาตรงๆ ไม่เจอ. ตามหาผ่าน staging เท่านั้น (deterministic ·
+  // ไม่ fuzzy): เลขบนบิล = momo_tracking_no → pointer committed_forwarder_id
+  // (ประทับตอน commit = ตัวจริง) หรือ tracking_override → ftrackingchn.
+  {
+    const missIdx = resolved.map((r, i) => (r ? -1 : i)).filter((i) => i >= 0);
+    if (missIdx.length > 0) {
+      const missNos = Array.from(new Set(missIdx.map((i) => parsed.lines[i]!.tracking)));
+      const { data: aliasRows, error: aliasErr } = await admin
+        .from("momo_import_tracks")
+        .select("momo_tracking_no, tracking_override, committed_forwarder_id")
+        .in("momo_tracking_no", missNos)
+        .not("tracking_override", "is", null);
+      if (aliasErr) console.error("[momo-ingest alias] lookup failed", { code: aliasErr.code, message: aliasErr.message });
+      const aliasByNo = new Map<string, { fid: number | null; corrected: string }>();
+      for (const a of (aliasRows ?? []) as Array<{ momo_tracking_no: string | null; tracking_override: string | null; committed_forwarder_id: number | null }>) {
+        const from = (a.momo_tracking_no ?? "").trim();
+        const to = (a.tracking_override ?? "").trim();
+        if (from && to) aliasByNo.set(from, { fid: a.committed_forwarder_id, corrected: to });
+      }
+      if (aliasByNo.size > 0) {
+        // เติมแถวจริงของเลขที่แก้แล้ว (ทั้งทาง pointer id และทางเลขที่แก้)
+        const wantIds = Array.from(new Set([...aliasByNo.values()].map((v) => v.fid).filter((v): v is number => v != null)));
+        const wantNos = Array.from(new Set([...aliasByNo.values()].map((v) => v.corrected)));
+        const byId = new Map<number, ForwarderRow>();
+        const orParts = [
+          wantIds.length ? `id.in.(${wantIds.join(",")})` : null,
+          wantNos.length ? `ftrackingchn.in.(${wantNos.map((n) => `"${n}"`).join(",")})` : null,
+        ].filter(Boolean).join(",");
+        const { data: aliasFwd, error: fwdErr } = await admin
+          .from("tb_forwarder")
+          .select("id, ftrackingchn, fcabinetnumber, userid, fcosttotalprice, ftotalprice, fweight, fvolume, famount, famountcount")
+          .or(orParts);
+        if (fwdErr) console.error("[momo-ingest alias] forwarder fetch failed", { code: fwdErr.code, message: fwdErr.message });
+        for (const r of (aliasFwd ?? []) as Array<Record<string, unknown>>) {
+          const row: ForwarderRow = {
+            id: r.id as number,
+            ftrackingchn: (r.ftrackingchn as string | null) ?? "",
+            fcabinetnumber: (r.fcabinetnumber as string | null) ?? null,
+            userid: (r.userid as string | null) ?? null,
+            fcosttotalprice: Number(r.fcosttotalprice ?? 0),
+            ftotalprice: Number(r.ftotalprice ?? 0),
+            fweight: Number(r.fweight ?? 0),
+            fvolume: Number(r.fvolume ?? 0),
+            famount: Number(r.famount ?? 0),
+            famountcount: (r.famountcount as string | null) ?? null,
+          };
+          byId.set(row.id, row);
+          if (row.ftrackingchn && !fByTracking.has(row.ftrackingchn)) fByTracking.set(row.ftrackingchn, row);
+        }
+        for (const i of missIdx) {
+          const alias = aliasByNo.get(parsed.lines[i]!.tracking);
+          if (!alias) continue;
+          const row = (alias.fid != null ? byId.get(alias.fid) : undefined) ?? fByTracking.get(alias.corrected);
+          if (row) resolved[i] = { row, via: "staging_alias" };
+        }
+      }
+    }
+  }
 
   // Two invoice lines resolving to ONE row would silently overwrite each other's cost.
   const fidCount = new Map<number, number>();

@@ -94,6 +94,25 @@ prod (2026-07-24): **937 แถว fac='1'** (ในนั้น **224 แถว
       fweight=0 · ให้ DOC อัพไฟล์ packing บนหน้า TTW ให้ reconcile เติม (เส้น audited · แตะราคา)
 - data-health หลัง apply: ไม่มีของใหม่พัง · ttw_staged_uncommitted 447→651 = แถว ingest ใหม่ตามคาด
 
+## ✅ 2026-07-25 รอบบ่าย — แก้เลขแทรคได้ (เคส 733) + audit ฝั่งอี้อู
+
+- [x] **mig 0281 `tracking_override`** (applied prod) — แก้เลขแทรคบนตารางนำเข้า MOMO ได้
+      โดย**ไม่แตะ momo_tracking_no** (กุญแจ sync — แก้ตรงๆ = sync ปั๊ม dup กลับมา)
+- [x] **สายเชื่อมครบ 4 จุด**: commit ใช้เลขแก้ → ftrackingchn · propagate (Live sync) alias
+      remap · **จับคู่บิล MOMO ชั้นที่ 3 "staging_alias"** (บิลมาเลขเดิม "733" → ตามหางาน
+      ผ่าน pointer เจอ) · ป้าย ✎ บนหน้า invoice-cost + ตารางนำเข้า (โชว์ "MOMO: เลขเดิม")
+- [x] **data-fix 733** (PR594): override = 1784597733 (จากรูปป้าย TK) — รอ commit ปกติ
+      · แถว staging เก่า "1784597733" (0kg ไม่เคยชั่ง) จะขึ้น "มีในระบบแล้ว" เองหลัง commit
+- [x] **audit อี้อู (owner "คีย์เข้าระบบกับแพคกิ้งยังแยกกัน")** — ROOT: เส้น CS คีย์ใบส่งของ
+      ไม่เคยประทับ pointer กลับ staging → FIX ที่ `addYiwuDeliveryNoteShipments` (best-effort)
+      + backfill ผูก 7 แทรคค้างเก่า + ซ่อมตู้ YWYY13164→YWS260717-8T (PR289)
+      + แผนรวมหน้าเป็นแพทเทิร์น MOMO อยู่ใน `docs/research/yiwu-ttw-rework-2026-07-25.md`
+      (ภูม lane · mockup-first)
+- 🔴 **ค้าง CS ตรวจ:** X9002745 staged=PR213 แต่แถวจริง #52319=PR647 (ขัดกัน ห้ามเดา)
+- 📌 กติกา owner (มาระหว่าง session · จดเป็น standing): **"ทุกอย่างจาก api — ชิปเม้น แทรคกิ้ง
+      จำนวน กล่อง คิว รูป CG status — ต้องซิงค์จากที่เดียวกัน สถานะเส้นตรง การเปลี่ยนแปลง
+      เชื่อมตามกันทั้งหมด"** — tracking_override + pointer คือ instalment แรกของกติกานี้
+
 ## 📌 งานที่ทำจบไปแล้วใน session นี้ (อย่าทำซ้ำ)
 
 1. ต้นทุนขาด ฿2,111.31 (famountcount ฝั่ง cost) — applied prod

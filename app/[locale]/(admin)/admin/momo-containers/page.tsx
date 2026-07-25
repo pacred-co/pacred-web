@@ -73,7 +73,7 @@ export default async function MomoContainersPage() {
   const { data: rowsRaw, error } = await admin
     .from("momo_import_tracks")
     .select(
-      "id, momo_tracking_no, momo_container_no, container_batch_no, momo_sack_no, shipment_status, phase, admin_status_text, raw, weight_kg, cbm, quantity, committed_at, committed_forwarder_id, commit_userid, last_synced_at",
+      "id, momo_tracking_no, tracking_override, momo_container_no, container_batch_no, momo_sack_no, shipment_status, phase, admin_status_text, raw, weight_kg, cbm, quantity, committed_at, committed_forwarder_id, commit_userid, last_synced_at",
     )
     .order("last_synced_at", { ascending: false })
     .limit(2000);
@@ -110,6 +110,7 @@ export default async function MomoContainersPage() {
     return {
       id: row.id as string,
       tracking: row.momo_tracking_no ?? null,
+      trackingOverride: (row.tracking_override as string | null) ?? null,
       container: (row.container_batch_no as string | null) ?? null, // real cabinet (GZS/GZE)
       transport: resolveTransportMode((row.container_batch_no as string | null) ?? "", null),
       routingBatch: row.momo_container_no ?? null,                   // MOMO routing batch (audit)

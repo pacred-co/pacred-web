@@ -31,6 +31,9 @@ import type { CommitMomoRowInput } from "@/lib/admin/commit-momo-row-core";
 export type IngestTrack = {
   id: string; // momo_import_tracks.id (uuid) — the rowId for commit
   tracking: string | null;
+  /** เลขที่ถูกต้อง (แอดมินแก้จากรูปป้าย · mig 0281 · เคส 733) — commit ใช้เลขนี้ ·
+   *  tracking ด้านบนคงเป็นเลขดิบ MOMO (กุญแจ sync) เสมอ */
+  trackingOverride: string | null;
   container: string | null; // real cabinet (GZS/GZE) — link target
   transport: "1" | "2" | "3" | null;
   routingBatch: string | null;
@@ -319,7 +322,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
   const [dragKey, setDragKey] = useState<string | null>(null);
   const { order: colOrder, move: moveCol, reset: resetCols } = useColumnOrder(DATA_KEYS);
   // ✎ inline-edit น้ำหนัก/คิว/จำนวน (pending only · updateMomoImportTrackFields · แก้ก่อนนำเข้า)
-  const [editing, setEditing] = useState<{ id: string; field: "weightKg" | "cbm" | "qty" | "width" | "length" | "height" | "pr"; value: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; field: "weightKg" | "cbm" | "qty" | "width" | "length" | "height" | "pr" | "tracking"; value: string } | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editErr, setEditErr] = useState<string | null>(null);
   // per-row result after commit (so a just-imported row flips without waiting for refresh)
@@ -362,6 +365,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     if (term)
       list = list.filter((t) =>
         (t.tracking ?? "").toLowerCase().includes(term) ||
+        (t.trackingOverride ?? "").toLowerCase().includes(term) ||
         (t.guessedUserId ?? "").toLowerCase().includes(term) ||
         (t.container ?? "").toLowerCase().includes(term));
     return list;
@@ -819,6 +823,8 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     const payload: Record<string, unknown> = { rowId: editing.id };
     if (editing.field === "pr") {
       payload.memberCode = editing.value.trim().toUpperCase(); // "" = เคลียร์ PR
+    } else if (editing.field === "tracking") {
+      payload.tracking = editing.value.trim().toUpperCase(); // "" = เคลียร์ กลับเลขเดิม MOMO
     } else {
       const numVal = Number(editing.value);
       if (!Number.isFinite(numVal) || numVal < 0) { setEditErr("ค่าไม่ถูกต้อง"); return; }
@@ -846,6 +852,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
   function fieldInitValue(t: IngestTrack, field: NonNullable<typeof editing>["field"]): string {
     switch (field) {
       case "pr": return t.guessedUserId ?? "";
+      case "tracking": return t.trackingOverride ?? t.tracking ?? "";
       case "weightKg": return t.weightKg > 0 ? String(t.weightKg) : "";
       case "cbm": return t.cbm > 0 ? String(t.cbm) : "";
       case "qty": return t.qty != null ? String(t.qty) : "";
@@ -861,15 +868,17 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     const canEdit = !t.committed && !rowResult[t.id]?.ok;
     const isEditing = editing?.id === t.id && editing.field === field;
     const isPr = field === "pr";
+    const isTracking = field === "tracking";
+    const isText = isPr || isTracking;
     if (isEditing) {
       return (
         <span className="inline-flex flex-col items-end gap-0.5">
           <span className="inline-flex items-center gap-0.5">
-            <input autoFocus type={isPr ? "text" : "number"} step={isPr ? undefined : "any"} value={editing.value} disabled={savingEdit}
-              placeholder={isPr ? "PR545" : undefined}
-              onChange={(e) => setEditing((ed) => (ed ? { ...ed, value: isPr ? e.target.value.toUpperCase() : e.target.value } : ed))}
+            <input autoFocus type={isText ? "text" : "number"} step={isText ? undefined : "any"} value={editing.value} disabled={savingEdit}
+              placeholder={isPr ? "PR545" : isTracking ? "เลขเต็มจากรูปป้าย" : undefined}
+              onChange={(e) => setEditing((ed) => (ed ? { ...ed, value: isText ? e.target.value.toUpperCase() : e.target.value } : ed))}
               onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); else if (e.key === "Escape") { setEditing(null); setEditErr(null); } }}
-              className={`${isPr ? "w-20 text-left uppercase" : "w-16 text-right"} rounded border border-primary-400 px-1 py-0.5 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary-300`} />
+              className={`${isTracking ? "w-44 text-left" : isPr ? "w-20 text-left uppercase" : "w-16 text-right"} rounded border border-primary-400 px-1 py-0.5 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-primary-300`} />
             <button type="button" onClick={saveEdit} disabled={savingEdit} className="text-emerald-600 hover:text-emerald-700" title="บันทึก"><Check className="h-3.5 w-3.5" /></button>
             <button type="button" onClick={() => { setEditing(null); setEditErr(null); }} className="text-gray-400 hover:text-gray-600" title="ยกเลิก"><X className="h-3 w-3" /></button>
           </span>
@@ -976,16 +985,24 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     tracking: {
       label: "Tracking", sortKey: "tracking", tdClass: "px-2 py-1.5 font-mono font-semibold text-foreground whitespace-nowrap",
       td: (t) => {
-        // owner 2026-07-23 "เลขแทรคกิ้ง 733 นี่มีจริงหรอครับ" — เลขที่รูปทรงผิดปกติ (สั้นเกิน /
-        // มีขีดเกิน) ต้องสะดุดตาก่อนกดนำเข้า. DISPLAY-ONLY: ไม่แก้เลขให้เอง ไม่บล็อกการนำเข้า
-        // (เดาแก้เลขพัสดุ = ของไปผิดเจ้าของ) · เตือนเฉพาะแถวที่ยังไม่นำเข้า = ที่ยังแก้ทันเท่านั้น.
-        const anomaly = t.committed ? null : momoTrackingAnomaly(t.tracking);
+        // owner 2026-07-23 "เลขแทรคกิ้ง 733 นี่มีจริงหรอครับ" + 2026-07-25 "ทำให้แก้ไขได้
+        // ด้วยครับ ดูรูปสิ 733 รูปเขาก็มี tracking เต็มๆ ให้" — เลขที่รูปทรงผิดปกติแก้ได้
+        // ที่ตารางเลย (✎ → tracking_override · mig 0281). เลขดิบ MOMO ไม่ถูกแตะ (กุญแจ sync
+        // — โชว์กำกับใต้เลขที่แก้ ให้ตามรอยกับฝั่ง MOMO ได้เสมอ) · ป้ายเตือนประเมินจาก
+        // "เลขที่จะใช้จริง" → แก้แล้วป้ายหาย · เตือนเฉพาะแถวที่ยังไม่นำเข้า = ที่ยังแก้ทัน.
+        const effective = t.trackingOverride ?? t.tracking;
+        const anomaly = t.committed ? null : momoTrackingAnomaly(effective);
         return (
           <>
-            {t.tracking ?? "—"}
+            {editableCell(t, "tracking", <>{effective ?? "—"}</>)}
+            {t.trackingOverride && (
+              <div className="text-[11px] font-normal text-muted" title="เลขดิบที่ MOMO ส่งมา (ใช้ตามรอย/จับคู่บิล MOMO — ระบบเชื่อมให้อัตโนมัติ)">
+                MOMO: {t.tracking ?? "—"} <span className="text-sky-600">✎ แก้แล้ว</span>
+              </div>
+            )}
             {anomaly && (
               <span className="ml-1 inline-flex items-center gap-0.5 rounded bg-rose-100 px-1 py-0.5 font-sans text-[10px] font-bold text-rose-700"
-                title={`${anomaly.detail} · (ระบบไม่แก้เลขให้เอง — แก้ที่ MOMO แล้วกด "🔄 ดึง Live")`}>
+                title={`${anomaly.detail} · กด ✎ ที่เลขเพื่อแก้เป็นเลขจริงจากรูปป้าย (เลขเดิมของ MOMO ระบบเก็บไว้จับคู่บิลให้เอง)`}>
                 ⚠️ {anomaly.label}
               </span>
             )}
@@ -1653,7 +1670,10 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
             </div>
 
             <div className="rounded-lg bg-surface-alt/50 p-3 text-xs space-y-1.5">
-              <div className="flex justify-between gap-2"><span className="text-muted">แทรคกิ้ง</span><span className="font-mono font-semibold">{modal.track.tracking ?? "—"}</span></div>
+              <div className="flex justify-between gap-2"><span className="text-muted">แทรคกิ้ง</span><span className="font-mono font-semibold">{modal.track.trackingOverride ?? modal.track.tracking ?? "—"}</span></div>
+              {modal.track.trackingOverride && (
+                <div className="flex justify-between gap-2 text-[11px]"><span className="text-muted">เลขเดิม MOMO</span><span className="font-mono text-muted">{modal.track.tracking ?? "—"} <span className="text-sky-600">✎ แก้แล้ว</span></span></div>
+              )}
               <div className="flex justify-between gap-2"><span className="text-muted">ตู้</span><span className="font-mono">{modal.track.container ?? <span className="text-amber-600">ยังไม่เข้าตู้ปิด</span>}</span></div>
               <div className="flex justify-between gap-2"><span className="text-muted">น้ำหนัก / คิว / จำนวน</span><span className="font-mono">{n2(modal.track.weightKg)} กก. · {n6(modal.track.cbm)} คิว · {modal.track.qty ?? "—"} ชิ้น</span></div>
               {(modal.track.width > 0 || modal.track.length > 0 || modal.track.height > 0) && (

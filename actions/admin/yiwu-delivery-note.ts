@@ -299,6 +299,24 @@ async function createYiwuShipmentImpl(
     }
   }
 
+  // ── ผูก staging TTW กลับทันที (owner 2026-07-25 "คีย์เข้าระบบกับแพคกิ้งยังแยกกัน") ──
+  // เดิมเส้นนี้ (CS คีย์ใบส่งของ) สร้างแถวจริงแต่ไม่เคยประทับ committed_forwarder_id
+  // บน ttw_packing_line → หน้า TTW โชว์ "ยังไม่เข้าระบบ" ทั้งที่เข้าแล้ว (audit เจอค้าง
+  // 8 แถวจริงบน prod). best-effort: พลาดแค่ label บนหน้า TTW — งานสร้างสำเร็จเสมอ.
+  try {
+    const anchorFid = createdFids[0];
+    if (anchorFid != null) {
+      const { error: linkErr } = await admin
+        .from("ttw_packing_line")
+        .update({ committed_forwarder_id: anchorFid, updated_at: new Date().toISOString() })
+        .eq("base_tracking", orderNo)
+        .is("committed_forwarder_id", null);
+      if (linkErr) console.error("[yiwu staging link] failed", { orderNo, code: linkErr.code, message: linkErr.message });
+    }
+  } catch (e) {
+    console.error("[yiwu staging link] threw", { orderNo, error: e instanceof Error ? e.message : String(e) });
+  }
+
   await logAdminAction(adminId, "forwarder.yiwu_delivery_note.create", "tb_forwarder", String(createdFids[0] ?? ""), {
     order_no: orderNo, userid: customer.userID, box_rows: N, fids: createdFids,
     arrival: arrivalIso, warehouse: "yiwu",
