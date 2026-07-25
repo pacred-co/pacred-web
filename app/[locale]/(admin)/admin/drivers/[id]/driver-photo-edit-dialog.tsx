@@ -109,7 +109,7 @@ export function DriverPhotoEditDialog({
         disabled={disabled || pending}
         className={`inline-flex items-center justify-center gap-1 border font-semibold transition disabled:opacity-50 ${
           gradient
-            ? "w-full rounded-full px-2 py-1.5 text-xs " +
+            ? "w-full rounded-full px-2 py-1 text-xs whitespace-nowrap " +
               (hasPhoto
                 ? "border-amber-600 bg-amber-600 text-white shadow-sm hover:bg-amber-700"
                 : "border-[#C82333] bg-[#C82333] text-white shadow-sm hover:bg-[#B21F2D]")
@@ -120,8 +120,8 @@ export function DriverPhotoEditDialog({
         }`}
       >
         {hasPhoto
-          ? <Pencil className={gradient ? "h-4 w-4" : "h-3 w-3"} />
-          : <Camera className={gradient ? "h-4 w-4" : "h-3 w-3"} />}
+          ? <Pencil className={gradient ? "h-3.5 w-3.5" : "h-3 w-3"} />
+          : <Camera className={gradient ? "h-3.5 w-3.5" : "h-3 w-3"} />}
         {hasPhoto ? "แก้ภาพ" : gradient ? "ถ่ายส่ง" : "ถ่ายส่งสินค้า"}
       </button>
 

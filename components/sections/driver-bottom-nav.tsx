@@ -47,7 +47,12 @@ export function DriverBottomNav({ noteBadge, todoBadge }: { noteBadge?: number; 
     <>
       {/* spacer กันเนื้อหาถูกบังหลังแถบ fixed (มือถือเท่านั้น) — เผื่อ safe-area
           (home-indicator iPhone) ให้เท่ากับความสูง nav จริง ห้ามบังเนื้อหาเด็ดขาด (ปอน 2026-07-24) */}
-      <div className="h-[calc(4rem+env(safe-area-inset-bottom))] lg:hidden print:hidden" aria-hidden />
+      <div className="h-[calc(4rem+env(safe-area-inset-bottom))] bg-[#f4f5fa] lg:hidden print:hidden" aria-hidden />
+
+      {/* globals.css ตั้ง body{padding-bottom:90px} บนมือถือ เผื่อแถบเมนู "ลูกค้า" —
+          หน้า admin (คนขับ) ไม่ต้องการ (spacer ด้านบนจองที่ให้แถบนี้เองแล้ว) ไม่งั้น
+          จะเหลือพื้นขาวของ body ~26px โผล่ใต้สุด → เคลียร์ทิ้งเฉพาะตอนแสดงแถบนี้ (ปอน 2026-07-25) */}
+      <style>{`@media (max-width:767px){body{padding-bottom:0 !important}}`}</style>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.06)] pb-[env(safe-area-inset-bottom)] lg:hidden print:hidden">
         <ul className="grid grid-cols-5">

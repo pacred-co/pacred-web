@@ -84,8 +84,10 @@ export function DriverStopCard({
         done ? "border-emerald-600 bg-emerald-600" : "border-border bg-white"
       }`}
     >
-      {/* หัวการ์ด — ติ๊กวงกลม + จำนวนรายการ + แท็ก · บรรทัดเดียวทั้งหมด (owner 2026-07-24 · ไม่ wrap) */}
-      <div className="flex items-center gap-1.5">
+      {/* หัวการ์ด — ติ๊กวงกลม + จำนวนรายการ + 2 แท็ก · อยู่แถวเดียวกันทั้งหมดเสมอ
+          (owner 2026-07-25 "ให้เป็นแถวเดียวกันให้หมด") — แท็กขนส่งย่อ/ตัดได้ถ้ายาว
+          จึงไม่ตกบรรทัด และไม่ทะลุกรอบ */}
+      <div className="flex items-center gap-1">
         <button
           type="button"
           onClick={() => setDone((v) => !v)}
@@ -100,11 +102,11 @@ export function DriverStopCard({
           <Check className="h-3.5 w-3.5" strokeWidth={3} />
         </button>
         {/* จำนวนรายการในจุดนี้ (แทนรหัสลูกค้า · owner 2026-07-24) */}
-        <span className={`shrink-0 text-sm font-bold ${done ? "text-white" : "text-foreground"}`}>
+        <span className={`shrink-0 text-xs font-bold ${done ? "text-white" : "text-foreground"}`}>
           {items.length} รายการ
         </span>
-        {/* แท็กขนส่ง+สถานะ บังคับอยู่แถวเดียวกัน ไม่แตกบรรทัด (owner 2026-07-24) */}
-        <div className="flex shrink-0 items-center gap-1.5">{badges}</div>
+        {/* แท็กขนส่ง+สถานะ (2 แท็ก) — กินพื้นที่ที่เหลือ · แท็กแรก (ขนส่ง) ย่อได้ ไม่ตกบรรทัด */}
+        <div className="flex min-w-0 flex-1 items-center gap-1">{badges}</div>
       </div>
 
       {/* ตัวการ์ด — รูป | ข้อมูล + ปุ่ม › */}
@@ -191,18 +193,18 @@ export function DriverStopCard({
           <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={hasPhoto} gradient />
         ) : (
           <span
-            className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1.5 text-xs font-semibold ${
+            className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap ${
               done ? "border-white/40 bg-white/15 text-white" : "border-emerald-200 bg-emerald-50 text-emerald-700"
             }`}
           >
-            <Check className="h-3.5 w-3.5" /> ส่งครบแล้ว
+            <Check className="h-3.5 w-3.5" /> ส่งครบ
           </span>
         )}
         <a
           href={mapHref}
           target="_blank"
           rel="noopener noreferrer"
-          className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1.5 text-xs font-semibold ${
+          className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap ${
             done
               ? "border-white/40 bg-white/15 text-white"
               : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
@@ -213,7 +215,7 @@ export function DriverStopCard({
         {phone ? (
           <a
             href={`tel:${phone}`}
-            className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1.5 text-xs font-semibold ${
+            className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap ${
               done ? "border-white/40 bg-white/15 text-white" : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
             }`}
           >
@@ -221,7 +223,7 @@ export function DriverStopCard({
           </a>
         ) : (
           <span
-            className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1.5 text-xs font-semibold opacity-50 ${
+            className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap opacity-50 ${
               done ? "border-white/40 text-white" : "border-border text-muted"
             }`}
           >
@@ -243,37 +245,38 @@ export function DriverStopCard({
               {fullAddress || "—"}
             </p>
           )}
-          <div className="overflow-x-auto">
-            <table className="w-full text-[11px]">
-              <thead className={done ? "text-white/80" : "text-muted"}>
-                <tr className="text-left">
-                  <th className="px-1.5 py-1 font-semibold">ออเดอร์</th>
-                  <th className="px-1.5 py-1 font-semibold">แทรคกิ้ง</th>
-                  <th className="px-1.5 py-1 text-right font-semibold">กล่อง</th>
-                  <th className="px-1.5 py-1 text-right font-semibold">CBM</th>
-                  <th className="px-1.5 py-1 text-right font-semibold">KG</th>
+          {/* ตารางกางเต็ม — พอดีกรอบมือถือ ไม่ต้องเลื่อนแนวนอน (ปอน 2026-07-25):
+              table-fixed + กำหนดความกว้างคอลัมน์ + แทรคกิ้ง/ออเดอร์ตัดขึ้นบรรทัดใหม่ได้
+              + CBM เหลือ 3 ตำแหน่ง (5 ตำแหน่งกว้างเกิน) */}
+          <table className="w-full table-fixed text-[11px]">
+            <thead className={done ? "text-white/80" : "text-muted"}>
+              <tr className="text-left">
+                <th className="w-[22%] px-1 py-1 font-semibold">ออเดอร์</th>
+                <th className="w-[32%] px-1 py-1 font-semibold">แทรคกิ้ง</th>
+                <th className="w-[13%] px-1 py-1 text-right font-semibold">กล่อง</th>
+                <th className="w-[18%] px-1 py-1 text-right font-semibold">CBM</th>
+                <th className="w-[15%] px-1 py-1 text-right font-semibold">KG</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it) => (
+                <tr key={it.id} className={`border-t align-top ${done ? "border-white/25" : "border-border"}`}>
+                  <td className="px-1 py-1">
+                    <Link
+                      href={`/admin/forwarders/${it.id}`}
+                      className={`break-all font-mono ${done ? "text-white underline" : "text-primary-600"}`}
+                    >
+                      {it.refCode}
+                    </Link>
+                  </td>
+                  <td className={`px-1 py-1 font-mono break-all ${done ? "text-white" : ""}`}>{it.tracking}</td>
+                  <td className={`px-1 py-1 text-right ${done ? "text-white" : ""}`}>{it.boxes}</td>
+                  <td className={`px-1 py-1 text-right tabular-nums ${done ? "text-white" : ""}`}>{it.cbm.toFixed(3)}</td>
+                  <td className={`px-1 py-1 text-right tabular-nums ${done ? "text-white" : ""}`}>{it.weight.toFixed(2)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {items.map((it) => (
-                  <tr key={it.id} className={`border-t ${done ? "border-white/25" : "border-border"}`}>
-                    <td className="px-1.5 py-1">
-                      <Link
-                        href={`/admin/forwarders/${it.id}`}
-                        className={`font-mono ${done ? "text-white underline" : "text-primary-600"}`}
-                      >
-                        {it.refCode}
-                      </Link>
-                    </td>
-                    <td className={`px-1.5 py-1 font-mono break-all ${done ? "text-white" : ""}`}>{it.tracking}</td>
-                    <td className={`px-1.5 py-1 text-right ${done ? "text-white" : ""}`}>{it.boxes}</td>
-                    <td className={`px-1.5 py-1 text-right ${done ? "text-white" : ""}`}>{it.cbm.toFixed(5)}</td>
-                    <td className={`px-1.5 py-1 text-right ${done ? "text-white" : ""}`}>{it.weight.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
           <div className="grid grid-cols-2 gap-2">
             <a
               href={slipHref}

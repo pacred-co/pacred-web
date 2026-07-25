@@ -574,7 +574,9 @@ export default async function AdminDriverBatchDetailPage({
   });
 
   return (
-    <main className="p-4 sm:p-6 lg:p-8 space-y-5">
+    // พื้นเทา #f4f5fa เหมือนหน้า list — กันพื้นขาวโผล่ท้ายหน้า/ใต้แถบเมนูล่างบนมือถือ
+    // (ปอน 2026-07-25) · min-h กันพื้นขาวเวลาเนื้อหาสั้น
+    <main className="p-4 sm:p-6 lg:p-8 space-y-5 bg-[#f4f5fa] min-h-[calc(100vh-3.5rem)]">
       {/* Breadcrumb */}
       <Link href="/admin/drivers" className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline">
         <ArrowLeft className="h-3 w-3" />
@@ -596,11 +598,14 @@ export default async function AdminDriverBatchDetailPage({
                 {BATCH_STATUS_LABEL[fdstatus]}
               </span>
             </div>
-            {/* บรรทัด 2: วันที่สร้าง (ซ้าย) + นับถอยหลัง (ขวา · owner 2026-07-24 "เอาเวลามาบรรทัด 2") */}
+            {/* บรรทัด 2: วันที่สร้าง (ซ้าย) + นับถอยหลัง (ขวา · owner 2026-07-24 "เอาเวลามาบรรทัด 2")
+                — ชิดขอบสองข้าง (justify-between) ให้ล้อกันพอดี ไม่ล้นกรอบ (ปอน 2026-07-25) */}
             {(batch.fddate || batch.endtime) && (
-              <div className="flex items-center justify-center gap-6">
-                {batch.fddate && (
-                  <p className="whitespace-nowrap text-xs text-muted">สร้าง {formatThaiDateTime(batch.fddate)}</p>
+              <div className="flex items-center justify-between gap-2">
+                {batch.fddate ? (
+                  <p className="min-w-0 truncate text-xs text-muted">สร้าง {formatThaiDateTime(batch.fddate)}</p>
+                ) : (
+                  <span />
                 )}
                 {batch.endtime && <BatchCountdown endTimeIso={batch.endtime} status={fdstatus} size="lg" />}
               </div>
@@ -1221,19 +1226,22 @@ export default async function AdminDriverBatchDetailPage({
                 }))}
                 badges={
                   <>
-                    {/* แท็กประเภทขนส่ง — PRF/เหมาๆ ฯลฯ (badge มนๆ pill เหมือนเดิม) */}
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${isSelfDelivery(f.fshipby) ? "bg-rose-600 text-white" : "border border-slate-300 bg-slate-200 text-slate-700"}`}>
-                      <Truck className="h-3 w-3" /> {shipByLabel(f.fshipby)}
+                    {/* แท็กประเภทขนส่ง — PRF/เหมาๆ ฯลฯ · ย่อ+ตัดได้ถ้ายาว (min-w-0 truncate)
+                        เพื่ออยู่แถวเดียวกับ "N รายการ"+สถานะ เสมอ (owner 2026-07-25) */}
+                    <span className={`inline-flex min-w-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${isSelfDelivery(f.fshipby) ? "bg-rose-600 text-white" : "border border-slate-300 bg-slate-200 text-slate-700"}`}>
+                      <Truck className="h-3 w-3 shrink-0" /> <span className="truncate">{shipByLabel(f.fshipby)}</span>
                     </span>
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${allDone ? ITEM_STATUS_CLS["2"] : delivered > 0 ? ITEM_STATUS_CLS["1"] : "bg-amber-500 text-white border-transparent"}`}>
-                      {allDone ? <CheckCircle2 className="h-3 w-3" /> : <Truck className="h-3 w-3" />}
-                      {allDone ? "สำเร็จ" : delivered > 0 ? `ส่งแล้ว ${delivered}/${total}` : "กำลังจัดส่ง"}
+                    {/* สถานะ (แท็กที่ 2) — เอาแค่ 2 แท็กพอ (owner 2026-07-25): พับ "ส่งไม่ได้"
+                        เข้าแท็กสถานะกรณีตกทั้งจุด (ไม่งั้นจะโชว์ "กำลังจัดส่ง" หลอก) · shrink-0 อยู่ครบเสมอ */}
+                    <span className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      allDone ? ITEM_STATUS_CLS["2"]
+                        : delivered > 0 ? ITEM_STATUS_CLS["1"]
+                        : failed > 0 ? ITEM_STATUS_CLS["3"]
+                        : "bg-amber-500 text-white border-transparent"
+                    }`}>
+                      {allDone ? <CheckCircle2 className="h-3 w-3" /> : (failed > 0 && delivered === 0) ? <AlertTriangle className="h-3 w-3" /> : <Truck className="h-3 w-3" />}
+                      {allDone ? "สำเร็จ" : delivered > 0 ? `ส่งแล้ว ${delivered}/${total}` : failed > 0 ? `ส่งไม่ได้ ${failed}` : "กำลังจัดส่ง"}
                     </span>
-                    {failed > 0 && (
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${ITEM_STATUS_CLS["3"]}`}>
-                        <AlertTriangle className="h-3 w-3" /> ส่งไม่ได้ {failed}
-                      </span>
-                    )}
                   </>
                 }
               />

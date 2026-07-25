@@ -483,7 +483,9 @@ export default async function AdminDriversPage({
         {/* ป้าย "วันที่บันทึกรายการ (วว/ดด/ปปปป …)" ถูกเอาออก 2026-07-23 (owner) —
             ตัวช่องมี placeholder "วว/ดด/ปปปป" + ปฏิทินให้กดอยู่แล้ว. การอ่านออกเสียง
             สำหรับ screen-reader ยังครบผ่าน aria-label ของ <ThaiDateField>. */}
-        <div>
+        {/* บนมือถือ (จอเล็ก) บังคับ 2 แถว: วันที่แถวบน · ปุ่มค้นหาแถวล่าง — full-width
+            ให้แต่ละกลุ่มอยู่คนละแถว (owner 2026-07-25) · ≥sm ไหลอยู่แถวเดียวตามเดิม */}
+        <div className="max-sm:w-full">
           {/* ⚠️ ห้ามเปลี่ยนกลับเป็น <input type="date"> ตรงๆ — รูปแบบที่ "แสดง" ของมัน
               ยึดภาษาของ browser/OS ไม่ใช่ของหน้าเว็บ บนเครื่องภาษาอังกฤษจะขึ้นเป็น
               04/24/2026 (ดด/วว) ซึ่งคนไทยอ่านเป็น 4 เม.ย. — บังคับด้วย HTML/CSS
@@ -495,22 +497,25 @@ export default async function AdminDriversPage({
             <ThaiDateField id="fd-to" name="to" defaultValueIso={toIso} ariaLabel="วันที่สิ้นสุด" />
           </div>
         </div>
-        <button
-          type="submit"
-          className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400 bg-emerald-50 px-3.5 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 min-h-[38px]"
-        >
-          <Search className="h-4 w-4" /> ค้นหาข้อมูล
-        </button>
-        <Link
-          href={buildHref({ status, view, range: "all", from: null, to: null })}
-          className="inline-flex items-center gap-1.5 rounded-full border border-sky-400 bg-sky-50 px-3.5 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100 min-h-[38px]"
-        >
-          <Search className="h-4 w-4" /> ค้นหาข้อมูลทั้งหมด
-        </Link>
+        {/* ปุ่มค้นหา 2 ปุ่มอยู่ด้วยกันเสมอ (ไม่แยกบรรทัด) — บนมือถือลงมาเป็นแถวที่ 2 */}
+        <div className="flex items-center gap-2 max-sm:w-full">
+          <button
+            type="submit"
+            className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400 bg-emerald-50 px-3.5 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 min-h-[38px]"
+          >
+            <Search className="h-4 w-4" /> ค้นหาข้อมูล
+          </button>
+          <Link
+            href={buildHref({ status, view, range: "all", from: null, to: null })}
+            className="inline-flex items-center gap-1.5 rounded-full border border-sky-400 bg-sky-50 px-3.5 py-2 text-sm font-medium text-sky-700 hover:bg-sky-100 min-h-[38px]"
+          >
+            <Search className="h-4 w-4" /> ค้นหาข้อมูลทั้งหมด
+          </Link>
+        </div>
       </form>
 
-      {/* ผลลัพธ์การค้นหา … (legacy red result line) */}
-      <p className="px-4 pt-2.5 text-[13px] font-medium text-primary-600">
+      {/* ผลลัพธ์การค้นหา … (legacy red result line) · ซ่อนบนมือถือ ไม่จำเป็น (ปอน 2026-07-25) */}
+      <p className="px-4 pt-2.5 text-[13px] font-medium text-primary-600 max-lg:hidden">
         ผลลัพธ์การค้นหา{" "}
         {hasCustomRange
           ? `${fromIso ? formatThaiDate(fromIso) : "เริ่มแรก"} – ${toIso ? formatThaiDate(toIso) : "ปัจจุบัน"}`
@@ -525,8 +530,10 @@ export default async function AdminDriversPage({
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pt-2.5 pb-3 border-b border-border">
 
       {/* Filter chips. A driver gets the two-way งานที่ต้องส่ง / ประวัติงาน split
-          (same as his sidebar) instead of the planner's raw fdstatus chips. */}
-      <div className="flex flex-wrap gap-2">
+          (same as his sidebar) instead of the planner's raw fdstatus chips.
+          บนมือถือของคนขับ (selfOnly) ซ่อนชิปนี้ — แถบเมนูลัดล่างมีให้กดอยู่แล้ว
+          (ปอน 2026-07-25) · ผู้วางแผน (ops/super/warehouse) ยังเห็นชิปสถานะบนมือถือ */}
+      <div className={`flex flex-wrap gap-2 ${selfOnly ? "max-lg:hidden" : ""}`}>
         {selfOnly ? (
           <>
             <Chip href={buildHref({ status: null, view: "todo", range, from: fromParam, to: toParam })} active={view !== "history"}>
@@ -799,14 +806,31 @@ export default async function AdminDriversPage({
             const driver   = r.fdadminid ? driverDirectory.get(r.fdadminid) : null;
             return (
               <div key={r.id} className="rounded-2xl border border-border bg-white shadow-sm p-2.5 space-y-2">
-                {/* หัว: ชื่อรอบ + สถานะ (owner 2026-07-24 · เล็ก/คอมแพ็ค แบบภาพ) */}
-                <div className="flex items-start justify-between gap-2">
-                  <Link href={`/admin/drivers/${r.id}`} className="whitespace-nowrap font-bold text-primary-600 hover:underline">
-                    {r.fdname ?? `รอบ #${r.id}`}
-                  </Link>
-                  <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CLS[fdstatus]}`}>
-                    {STATUS_ICON[fdstatus]} {STATUS_LABEL[fdstatus]}
-                  </span>
+                {/* หัวการ์ด — จัดแบบหัวมือถือหน้า detail (owner 2026-07-25 "จัดให้เหมือนในภาพ ล้อกันพอดี"):
+                    ไอคอน | (ชื่อรอบ+สถานะ) บรรทัด 1 · (วันที่สร้าง+นับถอยหลัง) บรรทัด 2 */}
+                <div className="flex items-start gap-2">
+                  <Truck className="mt-0.5 h-6 w-6 shrink-0 text-primary-600" />
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="flex items-center justify-between gap-2">
+                      {/* ชื่อรอบ = แถวเดียว (truncate กันล้น) ตัว text-sm ให้ใหญ่บาลานซ์กับนับถอยหลัง (ปอน 2026-07-25) */}
+                      <Link href={`/admin/drivers/${r.id}`} className="min-w-0 truncate text-sm font-bold text-primary-600 hover:underline">
+                        {r.fdname ?? `รอบ #${r.id}`}
+                      </Link>
+                      <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_CLS[fdstatus]}`}>
+                        {STATUS_ICON[fdstatus]} {STATUS_LABEL[fdstatus]}
+                      </span>
+                    </div>
+                    {(r.fddate || r.endtime) && (
+                      <div className="flex items-center justify-between gap-2">
+                        {r.fddate ? (
+                          <p className="min-w-0 truncate text-xs text-muted">สร้าง {formatThaiDateTime(r.fddate)}</p>
+                        ) : (
+                          <span />
+                        )}
+                        {r.endtime && <BatchCountdown endTimeIso={r.endtime} status={fdstatus} size="lg" />}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* สถิติ 3 กล่อง แบบหน้า detail (owner 2026-07-24) — แทรคกิ้ง · จุดส่ง · กล่อง */}
@@ -824,13 +848,6 @@ export default async function AdminDriversPage({
                     <div className="mt-0.5 text-lg font-bold">{agg.boxSum}</div>
                   </div>
                 </div>
-
-                {/* นับถอยหลัง เด่นๆ (owner 2026-07-24 · แบบหน้า detail) */}
-                {r.endtime && (
-                  <div className="flex justify-center">
-                    <BatchCountdown endTimeIso={r.endtime} status={fdstatus} size="lg" />
-                  </div>
-                )}
 
                 {/* 3 คน: ผู้สร้าง · เตรียมของ · จัดส่ง (โชว์ชื่อ user · owner 2026-07-24) */}
                 <div className="grid grid-cols-3 gap-2 rounded-xl bg-surface-alt/30 p-1.5">
@@ -882,8 +899,9 @@ export default async function AdminDriversPage({
         )}
       </div>
 
-      {/* หน้า (pagination) อยู่ในกรอบขาวใบเดียวกับตาราง — ปิดท้ายการ์ด */}
-      <div className="border-t border-border px-4 py-3">
+      {/* หน้า (pagination) อยู่ในกรอบขาวใบเดียวกับตาราง — ปิดท้ายการ์ด · บนมือถือพื้นเทา
+          #f4f5fa ให้ต่อเนื่องกับการ์ดด้านบน ไม่เป็นแถบขาวแปลกๆ (owner 2026-07-25) */}
+      <div className="border-t border-border px-4 py-3 max-lg:bg-[#f4f5fa]">
         <Pagination
           page={page}
           pageSize={pageSize}
