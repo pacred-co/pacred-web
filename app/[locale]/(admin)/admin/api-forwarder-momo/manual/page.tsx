@@ -11,32 +11,20 @@
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { WarehouseWorkspaceNav } from "@/components/admin/warehouse-workspace-nav";
 import { Link } from "@/i18n/navigation";
-import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { ApiForwarderManualForm } from "@/components/admin/api-forwarder-manual-form";
 
 export const dynamic = "force-dynamic";
-
-const CARRIER_MENUBAR: MenubarItem[] = [
-  { label: "MOMO", href: "/admin/api-forwarder-momo" },
-  { label: "CargoCenter", href: "/admin/api-forwarder-cn" },
-];
 
 export default async function AdminApiForwarderMomoManualPage() {
   await requireAdmin(["super", "ops", "warehouse"]);
 
   return (
     <main className="p-4 lg:p-8 space-y-5">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-xs text-muted">
-        <Link href="/admin" className="hover:text-primary-600">Admin</Link>
-        <span>›</span>
-        <Link href="/admin/forwarders" className="hover:text-primary-600">ฝากนำเข้า</Link>
-        <span>›</span>
-        <Link href="/admin/api-forwarder-momo" className="hover:text-primary-600">MOMO</Link>
-        <span>›</span>
-        <span className="text-foreground font-medium">อัปเดตด้วยมือ</span>
-      </nav>
+      {/* owner 2026-07-26 — แถบนำทางร่วม (แท็บโกดัง + เครื่องมือ + ทางกลับ) ตัวเดียวทุกหน้า */}
+      <WarehouseWorkspaceNav warehouse="guangzhou" current="/admin/api-forwarder-momo/manual"
+        pageLabel="เพิ่มงานเอง (manual)" />
 
       {/* Header */}
       <header>
@@ -50,9 +38,6 @@ export default async function AdminApiForwarderMomoManualPage() {
           (fIDorCO) · fWarehouseName = <code className="rounded bg-surface-alt px-1">7</code> (Cargo Center)
         </p>
       </header>
-
-      {/* Top menubar */}
-      <PageTopMenubar items={CARRIER_MENUBAR} activeHref="/admin/api-forwarder-momo" />
 
       {/* Legacy-fidelity banner */}
       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900 leading-relaxed">

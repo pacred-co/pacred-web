@@ -61,7 +61,6 @@ import {
 import { getContainerCompleteness } from "@/lib/warehouse/container-completeness";
 import { resolveMomoContainerInfo } from "@/lib/admin/momo-container-resolve";
 import { buildContainerJourney, type JourneyForwarderRow } from "@/lib/admin/container-journey";
-import { loadWechatContainerContext } from "@/lib/admin/wechat-forwarder-context";
 import { ContainerJourneyPanel } from "./container-journey-panel";
 import "./legacy-report-cnt.css";
 
@@ -690,10 +689,6 @@ export default async function AdminReportCntDetailPage({
     volumeCbm: journeyVolumeCbm,
     weightKg: journeyWeightKg,
   };
-  const wechatContext = await loadWechatContainerContext({
-    container: fCabinetNumber,
-    carrierContainerNo,
-  });
 
   // ── LANE A — fetch แสง's Google Sheet parcels for the cost-update diff ──
   // Only when on the cost-update tab + money-tier. Cache-first (kept fresh
@@ -964,7 +959,6 @@ export default async function AdminReportCntDetailPage({
               totals={journeyTotals}
               etd={journeyEtd}
               eta={journeyEta}
-              wechat={wechatContext}
             />
           </div>
         </details>

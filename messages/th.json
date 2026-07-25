@@ -3374,8 +3374,7 @@
       "cn": "CargoCenter",
       "jmf": "JMF",
       "ttp": "TTP",
-      "gogo": "GOGO (ยกเลิก)",
-      "wechatOps": "คลังแชท WeChat (จีน)"
+      "gogo": "GOGO (ยกเลิก)"
     },
     "apiSheets": {
       "adjustGroup": "ปรับรายการ Sheet",

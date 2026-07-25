@@ -13,17 +13,11 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
-import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
+import { WarehouseWorkspaceNav } from "@/components/admin/warehouse-workspace-nav";
 import { YiwuDeliveryClient } from "./yiwu-client";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
 
 export const dynamic = "force-dynamic";
-
-const CARRIER_MENUBAR: MenubarItem[] = [
-  { label: "MOMO", href: "/admin/api-forwarder-momo" },
-  { label: "อี้อู (ใบส่งของ)", href: "/admin/api-forwarder-yiwu" },
-  { label: "CargoCenter", href: "/admin/api-forwarder-cn" },
-];
 
 type HistRow = {
   id: number;
@@ -72,14 +66,10 @@ export default async function AdminApiForwarderYiwuPage() {
 
   return (
     <main className="p-4 lg:p-8 space-y-5">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-xs text-muted">
-        <Link href="/admin" className="hover:text-primary-600">Admin</Link>
-        <span>›</span>
-        <Link href="/admin/forwarders" className="hover:text-primary-600">ฝากนำเข้า</Link>
-        <span>›</span>
-        <span className="text-foreground font-medium">อี้อู · ใบส่งของ</span>
-      </nav>
+      {/* owner 2026-07-26 "ใช้แพทเทินและธีมเดียวกับ MOMO แค่คนละโกดัง" — แถบนำทางร่วม
+          ตัวเดียวกับหน้า MOMO: แท็บโกดัง (กวางโจว/อี้อู) + เครื่องมือของโกดังนี้ + ทางกลับ */}
+      <WarehouseWorkspaceNav warehouse="yiwu" current="/admin/api-forwarder-yiwu"
+        pageLabel="คีย์ใบส่งของ (CS)" />
 
       {/* Header */}
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -98,8 +88,6 @@ export default async function AdminApiForwarderYiwuPage() {
           </p>
         </div>
       </header>
-
-      <PageTopMenubar items={CARRIER_MENUBAR} activeHref="/admin/api-forwarder-yiwu" />
 
       {/* How-it-works banner */}
       <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4 text-xs leading-relaxed text-teal-900">

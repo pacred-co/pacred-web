@@ -13,8 +13,8 @@
  *    (CS ลืมคีย์ · packing reconcile รายงานเป็น unmatched) → สร้าง tb_forwarder อี้อู + กันซ้ำ.
  */
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { WarehouseWorkspaceNav } from "@/components/admin/warehouse-workspace-nav";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Link } from "@/i18n/navigation";
 import { TtwStagingClient, type TtwLine } from "./ttw-staging-client";
 import { YiwuPackingClient } from "../api-forwarder-yiwu/yiwu-packing-client";
 
@@ -53,14 +53,9 @@ export default async function AdminApiForwarderTtwPage() {
 
   return (
     <main className="p-4 lg:p-8 space-y-5">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-xs text-muted">
-        <Link href="/admin" className="hover:text-primary-600">Admin</Link>
-        <span>›</span>
-        <Link href="/admin/forwarders" className="hover:text-primary-600">ฝากนำเข้า</Link>
-        <span>›</span>
-        <span className="text-foreground font-medium">TTW / อี้อู · packing</span>
-      </nav>
+      {/* owner 2026-07-26 — แถบนำทางร่วม (แท็บโกดัง + เครื่องมือ + ทางกลับ) ตัวเดียวทุกหน้า */}
+      <WarehouseWorkspaceNav warehouse="yiwu" current="/admin/api-forwarder-ttw"
+        pageLabel="แพคกิ้ง · ใส่ PR (DOC)" />
 
       {/* Header */}
       <header>

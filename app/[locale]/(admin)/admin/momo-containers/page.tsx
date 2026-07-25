@@ -13,7 +13,6 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Link } from "@/i18n/navigation";
 import { momoTypeToProductType } from "@/lib/admin/momo-live-discovery-plan";
 import { deriveMomoMemberCode, baseTrackingOf, aggregateTrackDetailMetrics } from "@/lib/admin/momo-raw-helpers";
 import { deriveMomoBoxConsistency, type BoxConsistencyInput } from "@/lib/admin/momo-box-consistency";
@@ -23,34 +22,12 @@ import { getSignedBucketUrl } from "@/lib/storage/upload";
 import type { PackingUploadSnapshot } from "@/actions/admin/momo-packing-history";
 import { MomoIngestClient, type IngestTrack, type IngestBoxRow, type MissingParcel } from "./momo-containers-client";
 import { MomoGuideButton } from "./momo-guide-button";
+import { WarehouseWorkspaceNav } from "@/components/admin/warehouse-workspace-nav";
 
 export const dynamic = "force-dynamic";
 
 // owner 2026-07-20 "ยุบให้เหลือ hub + แพคกิ้งลิส" — drift (iTAM ตาย) + review (ซ้ำ
 // กับ hub นี้) ถูก retire เป็น redirect แล้ว; เหลือเครื่องมือที่ใช้จริง 3 ปุ่ม.
-// owner 2026-07-21 "ทำปุ่มทางเข้าไปหน้า MOMO Live ให้ที · อยู่ในหน้าเดียวของเรานั่นแหละ
-// แค่เพิ่มปุ่มทางเข้า" — MOMO Live = เว็บของ MOMO เอง (momocargo.com) ที่พนักงานเปิดไป
-// ดู/ชั่งของจริงฝั่งจีน. หน้า /admin/api-forwarder-momo/live ภายในถูกยุบเข้า hub นี้แล้ว
-// (2026-07-20) จึงลิงก์ออกเว็บนอกตรงๆ · เปิดแท็บใหม่ (พนักงานไม่เสียหน้าตรวจตู้ที่ค้างอยู่).
-const MOMO_LIVE_URL = "https://www.momocargo.com/";
-// owner 2026-07-22 "เอามาเพิ่มอยู่ในหน้านี้ให้ทีครับ เป็นเมนูเข้าไป … เราจะใช้หน้านี้หน้าเดียว
-// เท่านั้นครับ ของ MOMO ทั้งหมด" — บิลต้นทุน + ตัดจ่าย เดิมอยู่คนละที่ (ผิดกลุ่ม) → เข้าจาก hub นี้.
-// `cost` = เห็นเฉพาะสิทธิ์ต้นทุน (ultra/accounting/pricing) กันคลิกตาย (§0d).
-// owner 2026-07-26: "ยุบทุกเมนูย่อยเข้ามาอยู่ในเมนูอัพเดทฝากนำเข้าหน้าเดียว · อันไหนใช้
-// เอามาจัดเรียงอยู่หน้าเดียวกัน · แพทเทินหน้านี้ = แพทเทินหลัก" → sidebar เหลือ entry เดียว
-// (hub นี้) · ทางเข้าเครื่องมือทุกตัวรวมเป็นปุ่มแถวนี้ เรียงตามโฟลว์งานจริง:
-// MOMO (sync→packing→manual→บิลต้นทุน) → อี้อู/TTW (CS คีย์ใบส่งของ → DOC ใส่ PR/เอาเข้าระบบ)
-// → อ้างอิง (WeChat จีน · เว็บ MOMO). ❌ ตัด momo-lcl (อ่านตารางที่ไม่มีในฐานแล้ว = หน้าตาย).
-const HUB_LINKS: { href: string; label: string; external?: boolean; cost?: boolean }[] = [
-  { href: "/admin/api-forwarder-momo/sync", label: "📥 Sync จาก MOMO API" },
-  { href: "/admin/api-forwarder-momo/packing-upload", label: "📦 อัพ packing list (จาก MOMO)" },
-  { href: "/admin/api-forwarder-momo/manual", label: "✍️ เพิ่มงานเอง (manual)" },
-  { href: "/admin/api-forwarder-momo/invoice-cost", label: "💰 บิลต้นทุน MOMO (ตรวจ · บันทึก · ตัดจ่าย)", cost: true },
-  { href: "/admin/api-forwarder-yiwu", label: "🧾 อี้อู — คีย์ใบส่งของ (CS)" },
-  { href: "/admin/api-forwarder-ttw", label: "📋 อี้อู/TTW — ใส่ PR · เอาเข้าระบบ (DOC)" },
-  { href: "/admin/wechat-ops", label: "💬 คลังแชท WeChat (จีน)" },
-  { href: MOMO_LIVE_URL, label: "🌐 เปิด MOMO Live (เว็บ MOMO)", external: true },
-];
 
 /** momo_box_detail rows → the display box sub-rows (sorted by box number · per-box TOTAL
  *  metrics). Only a genuinely multi-box tracking (>1) expands; single-box stays 1 row. */
@@ -73,7 +50,6 @@ function displayBoxesOf(boxes: BoxConsistencyInput[] | undefined): IngestBoxRow[
 export default async function MomoContainersPage() {
   const { roles } = await requireAdmin(["super", "ops", "warehouse"]);
   const showCostLinks = canViewCostProfit(roles);
-  const hubLinks = HUB_LINKS.filter((l) => !l.cost || showCostLinks);
   const admin = createAdminClient();
 
   // Every MOMO-synced tracking (committed + pending), newest-sync first.
@@ -512,8 +488,12 @@ export default async function MomoContainersPage() {
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-6 space-y-5">
+      {/* owner 2026-07-26 — แถบนำทางร่วม (แท็บโกดัง + เครื่องมือของโกดัง + ทางกลับ) ·
+          ทุกหน้าในสายนำเข้าใช้ตัวเดียวกัน → เปิดหน้าไหนก็รู้ว่าอยู่ตรงไหน กลับทางไหน */}
+      <WarehouseWorkspaceNav warehouse="guangzhou" current="/admin/momo-containers"
+        pageLabel="ตรวจข้อมูล + นำเข้าระบบ" showCostTools={showCostLinks} />
+
       <header className="space-y-1">
-        <div className="text-[11px] font-medium uppercase tracking-wide text-muted">ADMIN · MOMO · sync / นำเข้าระบบ</div>
         <h1 className="text-2xl font-bold">MOMO — ตรวจข้อมูล + นำเข้าระบบ (รายแทรคกิ้ง)</h1>
         <p className="text-sm text-muted leading-relaxed">
           ข้อมูลจาก <strong>MOMO API</strong> (และ packing list) มาเป็น <strong>รายแทรคกิ้งลูกค้า</strong> —
@@ -522,23 +502,6 @@ export default async function MomoContainersPage() {
           {" "}กดเลขตู้เพื่อดูรายละเอียดทั้งตู้.
         </p>
         <div className="flex flex-wrap gap-2 pt-1">
-          {hubLinks.map((l) =>
-            // external (MOMO's own site) → plain <a target=_blank>; the i18n <Link>
-            // would prefix the locale onto an absolute URL. rel=noreferrer keeps our
-            // admin URL out of their referer log.
-            l.external ? (
-              <a key={l.href} href={l.href} target="_blank" rel="noopener noreferrer"
-                title="เปิดเว็บ MOMO (ดู/ชั่งของจริงฝั่งจีน) ในแท็บใหม่ — หน้าตรวจตู้ที่ค้างอยู่ไม่หาย"
-                className="rounded-full border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-700 shadow-sm hover:bg-sky-100">
-                {l.label} ↗
-              </a>
-            ) : (
-              <Link key={l.href} href={l.href}
-                className="rounded-full border border-border bg-white dark:bg-surface px-3 py-1.5 text-xs font-medium shadow-sm hover:bg-surface-alt">
-                {l.label}
-              </Link>
-            ),
-          )}
           <MomoGuideButton />
         </div>
       </header>

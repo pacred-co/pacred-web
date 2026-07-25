@@ -83,7 +83,6 @@ import { fetchCountableForwarderSiblings } from "@/lib/admin/forwarder-siblings"
 // that mention THIS order's container / China tracking / customer PR, so staff
 // see "what did China say about this container?" without leaving the page. Gated
 // by this page's requireAdmin; the panel never widens access or writes anything.
-import { WechatContextPanel } from "./wechat-context-panel";
 // 2026-06-30 (gap G7 · owner "อุดจุดบอด") — parcel-exception handling (mig 0230).
 // Staff flag a ฝากนำเข้า row as an exception (ของแตก/ไม่ใช่ของลูกค้า/ตู้ตีกลับ/
 // ติดด่าน/PR สลับ), record a note + photo, and resolve it. RECORD-ONLY — the
@@ -1264,18 +1263,6 @@ async function tryRenderTbForwarder(
             <ForwarderDocTierConfirm fId={r.id} />
           </div>
 
-          {/* ── จีนว่าไงเรื่องตู้/แทรคนี้ — READ-ONLY WeChat ops context (owner
-             carryover 2026-06-30 · mig 0228). Grouped here WITH the PIN-gated ต้นทุน
-             section + collapsed by default (owner 2026-06-30 "ข้อความยาวเกินไป →
-             ย่อซ่อน รวมกับต้นทุนที่ต้องใส่รหัสอ่าน"). Matches THIS order's container/
-             tracking/PR against the decrypted China-ops chats · pure read. ── */}
-          <div className="mt-4">
-            <WechatContextPanel
-              fcabinetnumber={r.fcabinetnumber}
-              ftrackingchn={r.ftrackingchn}
-              userid={r.userid}
-            />
-          </div>
             </div>
           </details>
         </ForwarderStatusWorkflow>

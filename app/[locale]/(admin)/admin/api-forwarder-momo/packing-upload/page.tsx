@@ -9,6 +9,7 @@
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { WarehouseWorkspaceNav } from "@/components/admin/warehouse-workspace-nav";
 import { Link } from "@/i18n/navigation";
 import { MomoPackingUploadClient } from "./packing-upload-client";
 
@@ -19,13 +20,9 @@ export default async function MomoPackingUploadPage() {
 
   return (
     <main className="p-4 lg:p-8 space-y-5">
-      <nav className="flex items-center gap-1.5 text-xs text-muted">
-        <Link href="/admin" className="hover:text-primary-600">Admin</Link>
-        <span>›</span>
-        <Link href="/admin/api-forwarder-momo" className="hover:text-primary-600">กวางโจว</Link>
-        <span>›</span>
-        <span className="text-foreground font-medium">อัปโหลด packing list (ปิดตู้)</span>
-      </nav>
+      {/* owner 2026-07-26 — แถบนำทางร่วม (แท็บโกดัง + เครื่องมือ + ทางกลับ) ตัวเดียวทุกหน้า */}
+      <WarehouseWorkspaceNav warehouse="guangzhou" current="/admin/api-forwarder-momo/packing-upload"
+        pageLabel="อัพ packing list" />
 
       <header>
         <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · กวางโจว (MOMO) · PACKING LIST</p>

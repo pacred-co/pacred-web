@@ -10,6 +10,7 @@
 
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { WarehouseWorkspaceNav } from "@/components/admin/warehouse-workspace-nav";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { Link } from "@/i18n/navigation";
 import { MomoInvoiceCostClient } from "./invoice-cost-client";
@@ -22,13 +23,9 @@ export default async function MomoInvoiceCostPage() {
 
   return (
     <main className="p-4 lg:p-8 space-y-5">
-      <nav className="flex items-center gap-1.5 text-xs text-muted">
-        <Link href="/admin" className="hover:text-primary-600">Admin</Link>
-        <span>›</span>
-        <Link href="/admin/momo-containers" className="hover:text-primary-600">MOMO</Link>
-        <span>›</span>
-        <span className="text-foreground font-medium">บิลต้นทุน MOMO</span>
-      </nav>
+      {/* owner 2026-07-26 — แถบนำทางร่วม (แท็บโกดัง + เครื่องมือ + ทางกลับ) ตัวเดียวทุกหน้า */}
+      <WarehouseWorkspaceNav warehouse="guangzhou" current="/admin/api-forwarder-momo/invoice-cost"
+        pageLabel="บิลต้นทุน MOMO" showCostTools />
 
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>

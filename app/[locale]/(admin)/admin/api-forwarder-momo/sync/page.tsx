@@ -12,6 +12,7 @@
  */
 
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { WarehouseWorkspaceNav } from "@/components/admin/warehouse-workspace-nav";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
@@ -62,14 +63,9 @@ export default async function AdminMomoSyncPage() {
 
   return (
     <main className="p-4 lg:p-8 space-y-5">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1.5 text-xs text-muted">
-        <Link href="/admin" className="hover:text-primary-600">Admin</Link>
-        <span>›</span>
-        <Link href="/admin/api-forwarder-momo" className="hover:text-primary-600">MOMO</Link>
-        <span>›</span>
-        <span className="text-foreground font-medium">ดึงสถานะ (Status Sync)</span>
-      </nav>
+      {/* owner 2026-07-26 — แถบนำทางร่วม (แท็บโกดัง + เครื่องมือ + ทางกลับ) ตัวเดียวทุกหน้า */}
+      <WarehouseWorkspaceNav warehouse="guangzhou" current="/admin/api-forwarder-momo/sync"
+        pageLabel="Sync จาก MOMO API" />
 
       {/* Header */}
       <header>

@@ -19,7 +19,6 @@
 
 import { Link } from "@/i18n/navigation";
 import type { ContainerJourney, JourneyStage } from "@/lib/admin/container-journey";
-import type { WechatForwarderContext } from "@/lib/admin/wechat-forwarder-context";
 
 const TRANSPORT_LABEL: Record<string, string> = {
   "1": "🚛 ทางรถ", "2": "🚢 ทางเรือ", "3": "✈️ ทางอากาศ",
@@ -60,13 +59,11 @@ export function ContainerJourneyPanel({
   totals,
   etd,
   eta,
-  wechat,
 }: {
   journey: ContainerJourney;
   totals: { trackCount: number; boxes: number; volumeCbm: number; weightKg: number };
   etd: string | null;
   eta: string | null;
-  wechat: WechatForwarderContext;
 }) {
   return (
     <section className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
@@ -149,48 +146,6 @@ export function ContainerJourneyPanel({
           </div>
         </div>
 
-        {/* ── China-ops chat mini-feed (1/3) ── */}
-        <div className="lg:col-span-1">
-          <div className="rounded-xl border border-border bg-surface-alt/30 h-full flex flex-col">
-            <div className="px-3 py-2 border-b border-border">
-              <p className="text-sm font-semibold flex items-center gap-1.5">💬 จีนว่าไงเรื่องตู้นี้</p>
-              {wechat.searchedTokens.length > 0 && (
-                <p className="mt-0.5 text-[11px] text-muted truncate" title={wechat.searchedTokens.join(" · ")}>
-                  ค้นจาก: {wechat.searchedTokens.join(" · ")}
-                </p>
-              )}
-            </div>
-            <div className="p-2 space-y-2 overflow-y-auto max-h-[360px]">
-              {wechat.messages.length === 0 ? (
-                <p className="px-1 py-4 text-center text-[11px] text-muted">
-                  ยังไม่พบข้อความแชทจีนที่อ้างถึงตู้นี้
-                </p>
-              ) : (
-                wechat.messages.slice(0, 5).map((m, idx) => (
-                  <div key={idx} className="rounded-lg border border-border bg-white dark:bg-surface px-2.5 py-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-medium text-foreground truncate" title={m.chat_name}>
-                        {m.chat_name}
-                      </span>
-                      <span className="text-[11px] text-muted whitespace-nowrap">{fmtChatTime(m.sent_at)}</span>
-                    </div>
-                    {m.sender && <p className="text-[11px] text-muted">{m.sender}</p>}
-                    <p className="mt-0.5 text-xs text-foreground whitespace-pre-wrap break-words line-clamp-4">
-                      {m.content}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-            {wechat.messages.length > 5 && (
-              <div className="px-3 py-1.5 border-t border-border text-[11px] text-muted">
-                แสดง 5 จาก {wechat.messages.length}
-                {wechat.truncated ? "+" : ""} ข้อความ · ดูทั้งหมดที่{" "}
-                <Link href="/admin/wechat-ops" className="text-primary-600 hover:underline">/admin/wechat-ops</Link>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
     </section>
   );
