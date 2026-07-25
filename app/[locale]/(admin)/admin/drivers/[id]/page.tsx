@@ -31,9 +31,7 @@ import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
 import { routeOrderOf } from "@/lib/admin/driver-route-order";
 import { BILL_BADGE_CLASS, DriverBillViewModal } from "./driver-bill-view-modal";
 import { BatchManage, RemoveItemButton } from "./batch-manage";
-import { PinLocationButton } from "./pin-location-button";
-import { ExpandableText } from "@/components/admin/expandable-text";
-import { DriverStopActions } from "./driver-stop-actions";
+import { DriverStopCard } from "./driver-stop-card";
 import { CourierUrlInput } from "./courier-url-input";
 import { TruckBookingCopyBox } from "./truck-booking-copy-box";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
@@ -301,24 +299,29 @@ export default async function AdminDriverBatchDetailPage({
     new Set([batch.fdadminid, batch.fdadmincreator].map((c) => (c ?? "").trim()).filter(Boolean)),
   );
   const adminNameByCode = new Map<string, string>();
+  // ชื่อผู้ใช้ (login) พนักงาน แบบ admin_xxx (owner 2026-07-24 · โชว์แทนชื่อจริงในหัวการ์ด)
+  const adminUsernameByCode = new Map<string, string>();
   // รูปโปรไฟล์พนักงาน (ปอน 2026-07-24) — โชว์ avatar จริงในกล่อง ดำเนินงาน/มอบหมาย
   // (หัวมือถือ) แทนตัวอักษรย่อ. avatar_url อยู่ใน profiles เดียวกับชื่อ.
   const adminAvatarRawByCode = new Map<string, string>();
   if (adminCodes.length > 0) {
     const { data: adminRows, error: adminNameErr } = await admin
       .from("profiles")
-      .select("member_code, first_name, last_name, avatar_url")
+      .select("member_code, first_name, last_name, avatar_url, admin_login_id")
       .in("member_code", adminCodes);
     if (adminNameErr) {
       console.error(`/admin/drivers/${id}: staff name lookup failed`, {
         code: adminNameErr.code, message: adminNameErr.message,
       });
     }
-    for (const p of (adminRows ?? []) as { member_code: string | null; first_name: string | null; last_name: string | null; avatar_url: string | null }[]) {
+    for (const p of (adminRows ?? []) as { member_code: string | null; first_name: string | null; last_name: string | null; avatar_url: string | null; admin_login_id: string | null }[]) {
       const code = (p.member_code ?? "").trim();
       const name = `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim();
       if (code && name) adminNameByCode.set(code, name);
       if (code && (p.avatar_url ?? "").trim()) adminAvatarRawByCode.set(code, (p.avatar_url ?? "").trim());
+      // owner 2026-07-24: โชว์เฉพาะส่วนหลัง "admin_" (เช่น admin_ben → ben · admin_keetar → keetar)
+      const login = (p.admin_login_id ?? "").trim().replace(/^admin_/i, "");
+      if (code && login) adminUsernameByCode.set(code, login);
     }
   }
   const adminNameOf = (code: string | null | undefined): string =>
@@ -327,6 +330,9 @@ export default async function AdminDriverBatchDetailPage({
   // customer-driver) then to the raw code so the field is never blank.
   const driverDisplayName = adminNameOf(batch.fdadminid) || (driverName !== "—" ? driverName : "") || (batch.fdadminid ?? "");
   const creatorDisplayName = adminNameOf(batch.fdadmincreator) || (batch.fdadmincreator ?? "");
+  // ชื่อผู้ใช้ (login admin_xxx) — โชว์แทนชื่อจริงในหัวการ์ด (owner 2026-07-24) · ไม่มี login → fallback ชื่อจริง
+  const driverUsername = adminUsernameByCode.get((batch.fdadminid ?? "").trim()) || driverDisplayName;
+  const creatorUsername = adminUsernameByCode.get((batch.fdadmincreator ?? "").trim()) || creatorDisplayName;
   // resolve รูปโปรไฟล์ (คนขับ + ผู้มอบหมาย) — resolveLegacyUrl ผ่าน full URL / เซ็น path ให้
   const driverAvatarRaw = adminAvatarRawByCode.get((batch.fdadminid ?? "").trim());
   const creatorAvatarRaw = adminAvatarRawByCode.get((batch.fdadmincreator ?? "").trim());
@@ -582,7 +588,7 @@ export default async function AdminDriverBatchDetailPage({
           <Truck className="mt-0.5 h-6 w-6 flex-shrink-0" />
           <div className="min-w-0 flex-1 space-y-0.5">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg font-bold leading-tight">รายการที่ต้องส่งของ #{batch.id}</h1>
+              <h1 className="text-lg font-bold leading-tight">รายการจัดส่ง #{batch.id}</h1>
               <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${BATCH_STATUS_CLS[fdstatus]}`}>
                 {fdstatus === "1" && <Clock className="h-3 w-3" />}
                 {fdstatus === "2" && <CheckCircle2 className="h-3 w-3" />}
@@ -590,7 +596,15 @@ export default async function AdminDriverBatchDetailPage({
                 {BATCH_STATUS_LABEL[fdstatus]}
               </span>
             </div>
-            {batch.fddate && <p className="text-xs text-muted">สร้าง {formatThaiDateTime(batch.fddate)}</p>}
+            {/* บรรทัด 2: วันที่สร้าง (ซ้าย) + นับถอยหลัง (ขวา · owner 2026-07-24 "เอาเวลามาบรรทัด 2") */}
+            {(batch.fddate || batch.endtime) && (
+              <div className="flex items-center justify-center gap-6">
+                {batch.fddate && (
+                  <p className="whitespace-nowrap text-xs text-muted">สร้าง {formatThaiDateTime(batch.fddate)}</p>
+                )}
+                {batch.endtime && <BatchCountdown endTimeIso={batch.endtime} status={fdstatus} size="lg" />}
+              </div>
+            )}
           </div>
         </div>
 
@@ -610,14 +624,15 @@ export default async function AdminDriverBatchDetailPage({
           </div>
         </div>
 
-        {/* 3 บทบาท (owner 2026-07-24): แถวบน = คนสร้าง (ซ้าย) + นับถอยหลัง "ส่งของก่อนเวลา"
-            (ขวา · แถวเดียวกัน แบบภาพ · ไม่ขึ้นบรรทัดใหม่) → แถวล่าง = คนเตรียมของ | คนขับรถ.
+        {/* 3 บทบาท (owner 2026-07-24) — นับถอยหลัง "ส่งของก่อนเวลา" แถวบนสุด (ชิดขวา) →
+            3 คนแถวเดียว เรียง 1.ผู้สร้าง 2.คนเตรียมของ 3.คนขับรถ.
             คนสร้าง = fdadmincreator (กีตาร์) · คนขับรถ = fdadminid (ben) · คนเตรียมของ (คนหา)
             ยังไม่มีข้อมูล → ช่องกรอบประ "ยังไม่ระบุ". */}
         <div className="space-y-2">
-          {/* แถวบน: คนสร้าง (flex-1) + นับถอยหลัง (ชิดขวา) */}
-          <div className="flex items-center gap-2">
-            <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-border p-2">
+          {/* 3 คนแถวเดียว ไม่มีกรอบ · ไม่มีเส้นคั่น (owner 2026-07-24) · โชว์ชื่อ user admin_ */}
+          <div className="grid grid-cols-3 gap-2">
+            {/* 1. ผู้สร้างรายการ = fdadmincreator */}
+            <div className="flex min-w-0 items-center gap-1.5 px-1.5">
               {creatorAvatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={creatorAvatar} alt="" className="h-8 w-8 flex-shrink-0 rounded-full object-cover ring-1 ring-primary-200" />
@@ -625,28 +640,20 @@ export default async function AdminDriverBatchDetailPage({
                 <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary-500 text-xs font-bold text-white">{(creatorDisplayName || "?").trim().charAt(0)}</span>
               )}
               <div className="min-w-0">
-                <p className="text-[11px] text-muted">คนสร้าง</p>
-                <p className="truncate text-xs font-semibold">{creatorDisplayName || "—"}</p>
+                <p className="whitespace-nowrap text-[11px] text-muted">ผู้สร้าง</p>
+                <p className="truncate text-xs font-semibold">{creatorUsername || "—"}</p>
               </div>
             </div>
-            {batch.endtime && (
-              <div className="flex shrink-0 flex-col items-end">
-                <span className="mb-0.5 whitespace-nowrap text-[11px] leading-none text-muted">ส่งของก่อนเวลา</span>
-                <BatchCountdown endTimeIso={batch.endtime} status={fdstatus} size="lg" />
-              </div>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {/* คนเตรียมของ (คนหา) — ยังไม่มีข้อมูล · ช่องกรอบประ */}
-            <div className="flex items-center gap-2 rounded-lg border border-dashed border-border p-2">
+            {/* 2. คนเตรียมของ (คนหา) — ยังไม่มีข้อมูล */}
+            <div className="flex min-w-0 items-center gap-1.5 px-1.5">
               <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-400">?</span>
               <div className="min-w-0">
-                <p className="text-[11px] text-muted">คนเตรียมของ</p>
-                <p className="truncate text-xs font-semibold text-muted">— ยังไม่ระบุ</p>
+                <p className="whitespace-nowrap text-[11px] text-muted">เตรียมของ</p>
+                <p className="truncate text-xs font-semibold text-muted">ยังไม่ระบุ</p>
               </div>
             </div>
-            {/* คนขับรถ */}
-            <div className="flex items-center gap-2 rounded-lg border border-border p-2">
+            {/* 3. คนขับรถ = fdadminid */}
+            <div className="flex min-w-0 items-center gap-1.5 px-1.5">
               {driverAvatar ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={driverAvatar} alt="" className="h-8 w-8 flex-shrink-0 rounded-full object-cover ring-1 ring-primary-200" />
@@ -654,28 +661,28 @@ export default async function AdminDriverBatchDetailPage({
                 <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary-500 text-xs font-bold text-white">{(driverDisplayName || "?").trim().charAt(0)}</span>
               )}
               <div className="min-w-0">
-                <p className="text-[11px] text-muted">คนขับรถ</p>
-                <p className="truncate text-xs font-semibold">{driverDisplayName || "—"}</p>
+                <p className="whitespace-nowrap text-[11px] text-muted">จัดส่ง</p>
+                <p className="truncate text-xs font-semibold">{driverUsername || "—"}</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* ปุ่ม นำทาง + พิมพ์ (2×2) */}
-        <div className="grid grid-cols-2 gap-2">
+        {/* ปุ่ม นำทาง + พิมพ์ — ไอคอน + ตัวอักษรสี (ไม่มีพื้นปุ่ม) · แถวเดียว ไม่ตกบรรทัด (owner 2026-07-24) */}
+        <div className="flex items-center justify-between gap-1">
           {googleMapsHref && (
-            <a href={googleMapsHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-emerald-600 to-emerald-500 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-emerald-700 hover:to-emerald-600">
-              <MapPin className="h-4 w-4" /> Google นำทาง
+            <a href={googleMapsHref} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1 whitespace-nowrap px-0.5 py-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700">
+              <MapPin className="h-4 w-4 shrink-0" /> GPS แผนที่
             </a>
           )}
-          <Link href={`/admin/drivers/${batch.id}/print`} target="_blank" className="inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-[#A01824] to-[#C82333] px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-[#87141E] hover:to-[#B21F2D]">
-            <Printer className="h-4 w-4" /> พิมพ์บิลจัดส่ง
+          <Link href={`/admin/drivers/${batch.id}/print`} target="_blank" className="flex items-center justify-center gap-1 whitespace-nowrap px-0.5 py-1 text-[11px] font-semibold text-[#C82333] hover:text-[#A01824]">
+            <Printer className="h-4 w-4 shrink-0" /> พิมพ์ส่ง
           </Link>
-          <Link href={`/admin/drivers/${batch.id}/picking-list`} target="_blank" className="inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-amber-600 to-amber-500 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-amber-700 hover:to-amber-600">
-            <ClipboardList className="h-4 w-4" /> พิมพ์บิลหาสินค้า
+          <Link href={`/admin/drivers/${batch.id}/picking-list`} target="_blank" className="flex items-center justify-center gap-1 whitespace-nowrap px-0.5 py-1 text-[11px] font-semibold text-amber-600 hover:text-amber-700">
+            <ClipboardList className="h-4 w-4 shrink-0" /> พิมพ์หา
           </Link>
-          <Link href={`/admin/drivers/${batch.id}/stickers`} target="_blank" className="inline-flex items-center justify-center gap-1.5 rounded-full bg-gradient-to-r from-sky-600 to-sky-500 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:from-sky-700 hover:to-sky-600">
-            <Tag className="h-4 w-4" /> พิมพ์สติกเกอร์
+          <Link href={`/admin/drivers/${batch.id}/stickers`} target="_blank" className="flex items-center justify-center gap-1 whitespace-nowrap px-0.5 py-1 text-[11px] font-semibold text-sky-600 hover:text-sky-700">
+            <Tag className="h-4 w-4 shrink-0" /> พิมพ์สติ๊กเกอร์
           </Link>
         </div>
       </section>
@@ -892,9 +899,6 @@ export default async function AdminDriverBatchDetailPage({
             const mapHref = hasPin
               ? `https://www.google.com/maps/search/${f.faddresslatitude},${f.faddresslongitude}`
               : `https://www.google.com/maps/search/${encodeURIComponent(addrText)}`;
-            // ทุก tb_forwarder ที่อยู่ในจุดส่งนี้ (จุด = ลูกค้า+ที่อยู่เดียวกัน · ดู
-            // stopsByKey ด้านบน) — ใช้เป็นเป้าของการปักหมุดให้ติดทั้งจุดในครั้งเดียว.
-            const stopFids = Array.from(new Set(stop.items.map((e) => e.forwarder.id)));
             // delivery photos for this stop (the driver's drop-off shots)
             const deliveryPhotos = Array.from(
               new Set(stop.items.map((e) => e.photoOffUrl).filter((u): u is string => Boolean(u))),
@@ -988,15 +992,6 @@ export default async function AdminDriverBatchDetailPage({
                       >
                         <MapPin className="h-3 w-3" /> {hasPin ? "แผนที่" : "ค้นที่อยู่"}
                       </a>
-                      {/* ปักหมุด — บันทึกพิกัดที่ยืนอยู่จริงเป็นที่อยู่จัดส่งของจุดนี้
-                          (ปอน 2026-07-24). ส่ง fid ของ "ทุกแถวในจุดนี้" ไม่ใช่แค่แถวแรก
-                          เพราะ 1 จุดส่ง = ลูกค้า+ที่อยู่เดียว แต่มีได้หลายแทรคกิ้ง —
-                          ปักติดไม่ครบ = แถวพี่น้องยังนำทางด้วยข้อความ ไปคนละที่กัน. */}
-                      <PinLocationButton
-                        fids={stopFids}
-                        addressText={addrText}
-                        hasPin={hasPin}
-                      />
                     </div>
                     {isWarehousePlaceholder(f.faddressname) ? (
                       <>
@@ -1192,152 +1187,56 @@ export default async function AdminDriverBatchDetailPage({
               : `https://www.google.com/maps/search/${encodeURIComponent(addrText)}`;
             const deliveryPhotos = Array.from(new Set(stop.items.map((e) => e.photoOffUrl).filter((u): u is string => Boolean(u))));
             const editableIds = stop.items.filter((e) => e.item.fdistatus !== "3").map((e) => e.item.id);
-            // เป้าของการปักหมุด = ทุกแถวในจุดนี้ (เหมือนฝั่งเดสก์ท็อป · ค่าเดียวกัน)
-            const stopFids = Array.from(new Set(stop.items.map((e) => e.forwarder.id)));
             const phones = [f.faddresstel, f.faddresstel2].map((p) => (p ?? "").trim()).filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
             const placeholder = isWarehousePlaceholder(f.faddressname);
             const heroPhoto = deliveryPhotos[0] ?? stop.items.find((e) => e.coverUrl)?.coverUrl ?? null;
             return (
-              <div key={stop.addressKey} className="rounded-2xl border border-border bg-white shadow-sm p-4 space-y-3">
-                {/* แถวเดียว (owner 2026-07-24 "ทำให้เป็นแถวเดียว") — badge ขนส่ง+สถานะ ชิดซ้าย
-                    · ปักหมุด ชิดขวา. ป้าย "ลำดับส่ง / N รายการ" + วงกลมเลข/สถานะ ถอดออกแล้ว. */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {/* แท็กประเภทขนส่ง — PRF/เหมาๆ ฯลฯ */}
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${isSelfDelivery(f.fshipby) ? "bg-rose-600 text-white" : "border border-slate-300 bg-slate-200 text-slate-700"}`}>
-                    <Truck className="h-3 w-3" /> {shipByLabel(f.fshipby)}
-                  </span>
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${allDone ? ITEM_STATUS_CLS["2"] : delivered > 0 ? ITEM_STATUS_CLS["1"] : "bg-amber-500 text-white border-transparent"}`}>
-                    {allDone ? <CheckCircle2 className="h-3 w-3" /> : <Truck className="h-3 w-3" />}
-                    {/* ยังไม่ส่งเลย = กำลังจัดส่ง (ออกรถแล้ว/ระหว่างทาง) · ส่งบางส่วน = ส่งแล้ว X/M
-                        · ครบ = สำเร็จ (owner 2026-07-24). */}
-                    {allDone ? "สำเร็จ" : delivered > 0 ? `ส่งแล้ว ${delivered}/${total}` : "กำลังจัดส่ง"}
-                  </span>
-                  {failed > 0 && (
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${ITEM_STATUS_CLS["3"]}`}>
-                      <AlertTriangle className="h-3 w-3" /> ส่งไม่ได้ {failed}
+              <DriverStopCard
+                key={stop.addressKey}
+                userId={f.userid}
+                customerName={customerNameOf(f.userid)}
+                placeholder={placeholder}
+                district={f.faddressdistrict ?? ""}
+                province={f.faddressprovince ?? ""}
+                zip={f.faddresszipcode ?? ""}
+                fullAddress={addrText}
+                boxes={stop.totalBoxes}
+                weight={stop.totalWeight}
+                cbm={stop.totalVolume}
+                phones={phones}
+                mapHref={mapHref}
+                hasPin={hasPin}
+                heroPhoto={heroPhoto}
+                editableIds={editableIds}
+                hasPhoto={deliveryPhotos.length > 0}
+                slipHref={`/admin/drivers/${batch.id}/delivery-slip?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
+                stickersHref={`/admin/drivers/${batch.id}/stickers?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
+                items={stop.items.map((e) => ({
+                  id: e.forwarder.id,
+                  refCode: e.forwarder.fidorco ?? `#${e.forwarder.id}`,
+                  tracking: e.forwarder.ftrackingchn ?? "—",
+                  boxes: e.forwarder.famount ?? 0,
+                  cbm: Number(e.forwarder.fvolume ?? 0),
+                  weight: Number(e.forwarder.fweight ?? 0),
+                }))}
+                badges={
+                  <>
+                    {/* แท็กประเภทขนส่ง — PRF/เหมาๆ ฯลฯ (badge มนๆ pill เหมือนเดิม) */}
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${isSelfDelivery(f.fshipby) ? "bg-rose-600 text-white" : "border border-slate-300 bg-slate-200 text-slate-700"}`}>
+                      <Truck className="h-3 w-3" /> {shipByLabel(f.fshipby)}
                     </span>
-                  )}
-                  {/* ปักหมุด ชิดขวาสุดของแถวเดียวกัน */}
-                  <div className="ml-auto shrink-0">
-                    <PinLocationButton fids={stopFids} addressText={addrText} hasPin={hasPin} />
-                  </div>
-                </div>
-
-                {/* รูป+แก้ภาพ | ลูกค้า+ที่อยู่+ติดต่อ */}
-                <div className="flex gap-3">
-                  {/* คอลัมน์ซ้าย = รูป (ใหญ่ขึ้น · สูงเต็มคอลัมน์) + ปุ่มถ่ายส่งชิดล่าง
-                      (owner 2026-07-24 "ทำภาพใหญ่ขึ้น จนปุ่มถ่ายดันลงมาพอดีกับกรอบ").
-                      flex-col + รูป flex-1 → รูปยืดเต็มความสูงของคอลัมน์ข้อมูล (flex stretch)
-                      · ปุ่มถ่ายส่ง mt-auto ดันไปล่างสุด. min-h กันรูปเตี้ยเกินตอนข้อมูลสั้น. */}
-                  <div className="flex w-24 flex-shrink-0 flex-col gap-1.5">
-                    {heroPhoto ? (
-                      <a href={heroPhoto} target="_blank" rel="noopener noreferrer" className="relative block min-h-[5rem] flex-1">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={heroPhoto} alt="รูปส่งสินค้า" className="absolute inset-0 h-full w-full rounded-lg border border-border object-cover" />
-                      </a>
-                    ) : (
-                      <div className="flex min-h-[5rem] w-full flex-1 items-center justify-center rounded-lg border border-dashed border-border text-muted">
-                        <Camera className="h-6 w-6" />
-                      </div>
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${allDone ? ITEM_STATUS_CLS["2"] : delivered > 0 ? ITEM_STATUS_CLS["1"] : "bg-amber-500 text-white border-transparent"}`}>
+                      {allDone ? <CheckCircle2 className="h-3 w-3" /> : <Truck className="h-3 w-3" />}
+                      {allDone ? "สำเร็จ" : delivered > 0 ? `ส่งแล้ว ${delivered}/${total}` : "กำลังจัดส่ง"}
+                    </span>
+                    {failed > 0 && (
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${ITEM_STATUS_CLS["3"]}`}>
+                        <AlertTriangle className="h-3 w-3" /> ส่งไม่ได้ {failed}
+                      </span>
                     )}
-                    {editableIds.length > 0 && (
-                      <div className="mt-auto">
-                        <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={deliveryPhotos.length > 0} gradient />
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    {/* รหัส + ชื่อ บรรทัดเดียว (owner 2026-07-24) — ชื่อบริษัทยาวตัด …
-                        ท้าย (truncate) แทนการตกไปบรรทัด 2. */}
-                    <div className="flex items-baseline gap-1 leading-tight">
-                      {f.userid && <span className="shrink-0 font-mono text-sm font-bold text-primary-600">{f.userid}</span>}
-                      <span className="truncate text-sm font-bold text-foreground">{customerNameOf(f.userid)}</span>
-                    </div>
-                    {placeholder ? (
-                      <p className="inline-block rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-800">⚠️ ยังไม่ระบุที่อยู่จัดส่ง</p>
-                    ) : (
-                      // ที่อยู่จำกัด 2 บรรทัด · ยาวเกินมี … + ปุ่มเพิ่มเติม กางเต็ม (owner 2026-07-24)
-                      <ExpandableText className="text-xs leading-relaxed text-foreground/80">
-                        {f.faddressno ?? ""} ตำบล/แขวง {f.faddresssubdistrict ?? ""} อำเภอ/เขต{" "}
-                        <span className="rounded bg-amber-100 px-1 text-amber-800">{f.faddressdistrict ?? ""}</span>{" "}
-                        จังหวัด {f.faddressprovince ?? ""} {f.faddresszipcode ?? ""}
-                      </ExpandableText>
-                    )}
-                    <div className="flex items-center gap-1.5">
-                      {phones.map((p) => (
-                        <a key={p} href={`tel:${p}`} className="inline-flex shrink-0 items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
-                          <Phone className="h-3 w-3" /> {p}
-                        </a>
-                      ))}
-                      <a href={mapHref} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-                        <MapPin className="h-3 w-3" /> GoogleMaps
-                      </a>
-                      {/* (ปุ่มปักหมุดย้ายขึ้นไปแถวหัวการ์ดแล้ว — ปอน 2026-07-24) */}
-                    </div>
-
-                    {/* ตารางย่อ — อยู่ในคอลัมน์ข้อมูล (ขวา) เยื้องเริ่มตรงกับช่องเบอร์โทร
-                        แทนการกินเต็มความกว้างใต้รูป (owner 2026-07-24). */}
-                    {/* ตารางบางลง (owner 2026-07-24) — cell เตี้ยลง py-1→0.5 · หัว text-[10px] */}
-                    <div className="overflow-hidden rounded-lg border border-border">
-                      <table className="w-full text-center text-[11px]">
-                        <thead className="bg-surface-alt/60 text-[10px] text-muted">
-                          <tr>
-                            <th className="px-2 py-0.5 font-semibold">แทรคกิ้ง</th>
-                            <th className="px-2 py-0.5 font-semibold">กล่อง</th>
-                            <th className="px-2 py-0.5 font-semibold">CBM</th>
-                            <th className="px-2 py-0.5 font-semibold">KG</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr className="font-semibold">
-                            <td className="border-t border-border px-2 py-0.5">{total}</td>
-                            <td className="border-t border-border px-2 py-0.5">{stop.totalBoxes}</td>
-                            <td className="border-t border-border px-2 py-0.5">{stop.totalVolume.toFixed(5)}</td>
-                            <td className="border-t border-border px-2 py-0.5">{stop.totalWeight.toFixed(2)}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3 ปุ่มแถวเดียว (owner 2026-07-24): ใบส่งสินค้า · สติกเกอร์ · เพิ่มเติม.
-                    "เพิ่มเติม" กางตารางออเดอร์ (per-stop fids). */}
-                <DriverStopActions
-                  slipHref={`/admin/drivers/${batch.id}/delivery-slip?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
-                  stickersHref={`/admin/drivers/${batch.id}/stickers?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
-                >
-                  <div className="overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full text-[11px]">
-                      <thead className="bg-surface-alt/50 text-left text-muted">
-                        <tr>
-                          <th className="px-2 py-1">ออเดอร์</th>
-                          <th className="px-2 py-1">แทรคกิ้ง</th>
-                          <th className="px-2 py-1 text-right">กล่อง</th>
-                          <th className="px-2 py-1 text-right">CBM</th>
-                          <th className="px-2 py-1 text-right">KG</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {stop.items.map(({ item, forwarder }) => (
-                          <tr key={item.id} className="border-t border-border align-top">
-                            <td className="px-2 py-1">
-                              <Link href={`/admin/forwarders/${forwarder.id}`} className="font-mono text-primary-600">
-                                {forwarder.fidorco ?? `#${forwarder.id}`}
-                              </Link>
-                            </td>
-                            <td className="px-2 py-1 font-mono break-all">{forwarder.ftrackingchn ?? "—"}</td>
-                            <td className="px-2 py-1 text-right">{forwarder.famount ?? 0}</td>
-                            <td className="px-2 py-1 text-right">{Number(forwarder.fvolume ?? 0).toFixed(5)}</td>
-                            <td className="px-2 py-1 text-right">{Number(forwarder.fweight ?? 0).toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </DriverStopActions>
-              </div>
+                  </>
+                }
+              />
             );
           })}
         </div>

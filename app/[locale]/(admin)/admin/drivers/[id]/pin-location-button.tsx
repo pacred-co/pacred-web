@@ -27,6 +27,7 @@ export function PinLocationButton({
   addressText,
   hasPin,
   className,
+  iconOnly = false,
 }: {
   /** ทุกแถว tb_forwarder ของจุดส่งนี้ — ปักครั้งเดียวติดทั้งจุด */
   fids: number[];
@@ -35,6 +36,8 @@ export function PinLocationButton({
   /** จุดนี้เคยปักหมุดไว้แล้ว → ป้ายเปลี่ยนเป็น "ปักหมุดใหม่" */
   hasPin: boolean;
   className?: string;
+  /** โหมดไอคอนอย่างเดียว (บนบรรทัดที่อยู่การ์ดจุดส่ง · owner 2026-07-24) — MapPin ใหญ่+แดง ไม่มีตัวหนังสือ · กดแล้วเปิด popup ปักหมุด */
+  iconOnly?: boolean;
 }) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement | null>(null);
@@ -129,18 +132,24 @@ export function PinLocationButton({
       <button
         type="button"
         onClick={requestFix}
+        title={iconOnly ? (hasPin ? "ปักหมุดใหม่ที่อยู่" : "ปักหมุดที่อยู่") : undefined}
+        aria-label={iconOnly ? (hasPin ? "ปักหมุดใหม่ที่อยู่" : "ปักหมุดที่อยู่") : undefined}
         className={
           className ??
-          "group inline-flex shrink-0 items-center gap-1.5 text-rose-600 hover:underline"
+          (iconOnly
+            ? "shrink-0 text-red-600 hover:text-red-700"
+            : "group inline-flex shrink-0 items-center gap-1.5 text-rose-600 hover:underline")
         }
       >
         <MapPin className="h-5 w-5 shrink-0" />
         {/* 2 บรรทัดคู่ไอคอน (owner 2026-07-24) — "ปักหมุด" หนาแดง · "ที่อยู่ลูกค้า"
-            เล็กบางลง ให้บาลานซ์ความสูงกับไอคอน h-5. */}
-        <span className="flex flex-col items-start gap-0.5 leading-none">
-          <span className="text-[15px] font-bold">{hasPin ? "ปักหมุดใหม่" : "ปักหมุด"}</span>
-          <span className="text-[10px] font-semibold text-rose-600">ที่อยู่ลูกค้า</span>
-        </span>
+            เล็กบางลง ให้บาลานซ์ความสูงกับไอคอน h-5. (iconOnly = ซ่อนตัวหนังสือ · โชว์แค่ MapPin) */}
+        {!iconOnly && (
+          <span className="flex flex-col items-start gap-0.5 leading-none">
+            <span className="text-[15px] font-bold">{hasPin ? "ปักหมุดใหม่" : "ปักหมุด"}</span>
+            <span className="text-[10px] font-semibold text-rose-600">ที่อยู่ลูกค้า</span>
+          </span>
+        )}
       </button>
 
       <PacredDialog dialogRef={dialogRef} title="ปักหมุดตำแหน่งจัดส่ง" onClose={close}>

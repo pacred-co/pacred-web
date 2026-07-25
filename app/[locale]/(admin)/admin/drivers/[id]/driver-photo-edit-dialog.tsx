@@ -100,17 +100,16 @@ export function DriverPhotoEditDialog({
         aria-hidden="true"
       />
 
-      {/* gradient = การ์ดมือถือ (ใต้รูป · คอลัมน์กว้าง 80px). ปอน 2026-07-24:
-          "ไม่เป็นก้อนกลมๆ · เห็นชัดว่าเป็น ถ่ายส่ง" → ปุ่มสี่เหลี่ยม (rounded-lg)
-          เต็มความกว้าง จัดกึ่งกลาง ไอคอนกล้องใหญ่ขึ้น = ดูออกทันทีว่ากดถ่ายได้.
-          non-gradient = เดสก์ท็อป (แถวปุ่มในตาราง) ยังเป็น pill เล็กเหมือนเดิม. */}
+      {/* gradient = ปุ่ม "ถ่ายส่ง" ในแถวปุ่มท้ายการ์ดมือถือ (owner 2026-07-24
+          "ปุ่มกลมมน") → pill rounded-full เต็มความกว้างช่อง · ไอคอนกล้องใหญ่ =
+          ดูออกทันทีว่ากดถ่ายได้. non-gradient = เดสก์ท็อป (แถวปุ่มในตาราง) pill เล็กเหมือนเดิม. */}
       <button
         type="button"
         onClick={openPicker}
         disabled={disabled || pending}
         className={`inline-flex items-center justify-center gap-1 border font-semibold transition disabled:opacity-50 ${
           gradient
-            ? "w-full rounded-lg px-2 py-1.5 text-xs " +
+            ? "w-full rounded-full px-2 py-1.5 text-xs " +
               (hasPhoto
                 ? "border-amber-600 bg-amber-600 text-white shadow-sm hover:bg-amber-700"
                 : "border-[#C82333] bg-[#C82333] text-white shadow-sm hover:bg-[#B21F2D]")
