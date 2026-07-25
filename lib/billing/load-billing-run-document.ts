@@ -1,8 +1,6 @@
 import "server-only";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
-import {
-  baseTrackingOf, formatCoveredTrackings, resolveLineCoverage, type CoverageRow,
-} from "./shipment-line-coverage";
+import { baseTrackingOf, expandDocLines, type CoverageRow } from "./shipment-line-coverage";
 
 /**
  * Billing-run (ใบวางบิล) document loader (FAITHFUL PORT) — the SINGLE source of
@@ -123,12 +121,9 @@ export type BillingRunInvoiceDetail = {
       /** "KG" | "CBM" | "" */
       rate_basis: string;
       rate: number;
-      /** บรรทัดนี้เก็บเงินแทนทั้งชิปเม้น → กล่อง/น้ำหนัก/คิว ข้างบนเป็นยอด "ทั้งชิปเม้น"
-       *  (owner 2026-07-24 · lib/billing/shipment-line-coverage.ts) */
-      covers_shipment: boolean;
-      /** ข้อความย่อของกล่องย่อยที่บรรทัดนี้ครอบคลุม เช่น "รวม 8 กล่องย่อย: -2 ถึง -8"
-       *  (ว่าง = แจงแยกบรรทัดอยู่แล้ว) — ย่อมาแล้วเพราะเอกสารคอลัมน์แคบ */
-      covered_note: string;
+      /** บรรทัดนี้ถูกแตกออกมาจากบรรทัดที่เก็บเงินรวมทั้งชิปเม้น (owner 2026-07-24 ·
+       *  เอกสารต้อง 1 บรรทัด = 1 แทรคกิ้ง เหมือนชิปเม้นอื่นบนใบเดียวกัน) */
+      expanded_from_shipment: boolean;
       /** ค่าขนส่งสินค้า (freight · ftotalprice) — the FREIGHT-only amount so the
        *  row's Amount reconciles with Rate × Kg (owner 2026-07-07). The stored
        *  amount_thb (GROSS incl ค่าขนส่งในไทย etc.) is unchanged; this is display. */
@@ -334,7 +329,12 @@ export async function loadBillingRunDocument(
   if (lineBases.length > 0) {
     const { data: famRaw, error: famErr } = await admin
       .from("tb_forwarder")
-      .select("id, ftrackingchn, famount, famountcount, fweight, fvolume, ftotalprice")
+      .select(
+        "id, ftrackingchn, famount, famountcount, fweight, fvolume, fdate, fstatus, fcabinetnumber, " +
+          "ftransporttype, frefprice, frefrate, fcredit, fproductstype, fwidth, flength, fheight, " +
+          "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+          "pricecrate, ftransportpricechnthb, priceother, fdiscount",
+      )
       .eq("userid", hdrRaw.userid)
       .or(lineBases.map((b) => `ftrackingchn.like.${b}*`).join(","))
       .limit(5_000);
@@ -356,11 +356,14 @@ export async function loadBillingRunDocument(
           freight: Number(r.ftotalprice ?? 0),
         };
         familyByBase.set(base, [...(familyByBase.get(base) ?? []), row]);
+        if (!fwdByID.has(r.id)) fwdByID.set(r.id, r);   // แถวที่จะถูกแตกออกมาต้องมีข้อมูลจอครบ
       }
     }
   }
-  const coverage = resolveLineCoverage({
-    lines: items.map((i) => ({ forwarderId: i.forwarder_id, amountThb: Number(i.amount_thb) })),
+  const docLines = expandDocLines({
+    lines: items.map((i) => ({
+      id: i.id, forwarderId: i.forwarder_id, amountThb: Number(i.amount_thb),
+    })),
     lineRows: new Map(
       [...fwdByID.values()].map((f) => [
         f.id,
@@ -376,7 +379,7 @@ export async function loadBillingRunDocument(
     ),
     familyByBase,
   });
-
+  // แถวที่ถูกแตกออกมาอาจไม่ได้อยู่ใน fwdByID (ไม่ใช่บรรทัดต้นทาง) → เติมข้อมูลจอ
   // ขนาดกล่อง (ก×ย×ส) fallback via momo_box_detail (owner 2026-07-23) — a MULTI-BOX
   // MOMO row leaves ก×ย×ส BLANK on its aggregate row on purpose (its boxes differ in
   // size · propagate-live-data.ts), and a single-box row can be blank before Live
@@ -502,21 +505,20 @@ export async function loadBillingRunDocument(
       // gate (paidAt) so its printed/detail net still equals what was collected.
       ...computeBillWht(hdrRaw.is_juristic, Number(hdrRaw.total_thb), { paidAt: hdrRaw.paid_at }),
     },
-    items: items.map((i) => {
-      const f = fwdByID.get(i.forwarder_id) ?? null;
-      const cov = coverage.get(i.forwarder_id) ?? null;
+    // 1 บรรทัดบนเอกสาร = 1 แทรคกิ้ง (owner 2026-07-24) — บรรทัดที่เก็บเงินแทนทั้งชิปเม้น
+    // ถูกแตกโดย expandDocLines แล้ว · ยอดถูกแบ่งตามค่าขนส่ง Σ = ยอดที่แช่ไว้เป๊ะ
+    items: docLines.map((dl) => {
+      const f = fwdByID.get(dl.row.id) ?? null;
       return {
-        id:           i.id,
-        forwarder_id: i.forwarder_id,
-        amount_thb:   Number(i.amount_thb),
+        id:           dl.expanded ? dl.row.id : dl.sourceLineId,
+        forwarder_id: dl.row.id,
+        amount_thb:   dl.amountThb,
         forwarder:    f
           ? {
               ftrackingchn: f.ftrackingchn ?? "",
-              // กล่อง/น้ำหนัก/คิว = ของแถวเอง · เว้นแต่บรรทัดนี้เก็บเงินแทนทั้งชิปเม้น
-              // → ใช้ยอดทั้งชิปเม้น (shipment-line-coverage · เงินไม่ถูกแตะ)
-              famount:      cov ? cov.famount  : f.famount != null ? Number(f.famount) : null,
-              fweight:      cov ? cov.fweight  : f.fweight != null ? Number(f.fweight) : null,
-              fvolume:      cov ? cov.totalCbm : f.fvolume != null ? totalCbmOf(f) : null, // row-TOTAL CBM (famountcount rule)
+              famount:      f.famount != null ? Number(f.famount) : null,
+              fweight:      f.fweight != null ? Number(f.fweight) : null,
+              fvolume:      f.fvolume != null ? totalCbmOf(f) : null, // row-TOTAL CBM (famountcount rule)
               fdate:        f.fdate,
               fstatus:      f.fstatus,
               cabinet:      f.fcabinetnumber ?? "",
@@ -526,16 +528,9 @@ export async function loadBillingRunDocument(
               rate_basis:   f.frefprice === "2" ? "CBM" : f.frefprice === "1" ? "KG" : "",
               rate:         f.frefrate != null ? Number(f.frefrate) : 0,
               // ค่าขนส่งสินค้า (freight-only) — the row Amount so Rate × Kg reconciles.
-              freight:      cov ? cov.freight : f.ftotalprice != null ? Number(f.ftotalprice) : 0,
-              covers_shipment: cov?.folded ?? false,
-              covered_note: cov
-                ? formatCoveredTrackings(
-                    baseTrackingOf(f.ftrackingchn ?? ""), cov.coveredTrackings,
-                    cov.coveredTrackings.length + 1)
-                : "",
+              freight:      f.ftotalprice != null ? Number(f.ftotalprice) : 0,
+              expanded_from_shipment: dl.expanded,
               // ประเภท (รหัส g/m/a/s) — owner 2026-07-18. ขนาดกล่อง ก×ย×ส — owner 2026-07-23
-              // via resolveDimsDisplay: the row's own dim, else the real per-box sizes from
-              // momo_box_detail (blank on multi-box aggregate rows), else "—".
               product_type: productTypeCode(f.fproductstype),
               dimsDisplay:  resolveDimsDisplay({
                 fwidth:  Number(f.fwidth  ?? 0),

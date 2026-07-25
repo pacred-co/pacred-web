@@ -46,10 +46,6 @@ export type BillingRunPaperRow = {
   no:          number;
   fid:         string;
   tracking:    string;
-  /** ข้อความย่อของกล่องย่อย เช่น "รวม 8 กล่องย่อย: -2 ถึง -8" (ว่าง = แจงแยกบรรทัดแล้ว).
-   *  owner 2026-07-24: บรรทัดที่คิดเงิน "ทั้งชิปเม้น" ต้องบอกให้ครบว่าคลุมกี่กล่อง
-   *  แต่ต้อง "อ่านออก" — พิมพ์เลขเต็ม 7 ตัวในคอลัมน์แคบ = เลขฐานซ้ำ + ตัดกลางตัวเลข. */
-  coveredNote?: string;
   /** ประเภทสินค้า — ทั่วไป/มอก./อย./พิเศษ (owner 2026-07-18). */
   productType: string;
   cabinet:     string;
@@ -288,17 +284,7 @@ function BillingRunPage({
                   <tr key={row.no} style={{ background: "#fff", breakInside: "avoid", pageBreakInside: "avoid" }}>
                     <td style={tdC}>{row.no}</td>
                     <td style={tdMonoC}>#{row.fid}</td>
-                    <td style={tdMono}>
-                      {row.tracking}
-                      {row.coveredNote ? (
-                        <span style={{
-                          display: "block", fontSize: "8.5px", lineHeight: 1.35, opacity: 0.75,
-                          whiteSpace: "nowrap", fontFamily: "inherit",
-                        }}>
-                          {row.coveredNote}
-                        </span>
-                      ) : null}
-                    </td>
+                    <td style={tdMono}>{row.tracking}</td>
                     <td style={{ ...tdC, fontSize: "8px", color: "#374151" }}>{row.productType || "—"}</td>
                     <td style={{ ...tdMono, color: "#374151" }}>{row.cabinet || "—"}</td>
                     <td style={{ ...tdMonoC, fontWeight: "bold", color: row.transport === "SEA" ? "#1d4ed8" : "#b45309" }}>{row.transport || "—"}</td>
