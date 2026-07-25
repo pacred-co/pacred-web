@@ -18,6 +18,7 @@ import { momoTypeToProductType } from "@/lib/admin/momo-live-discovery-plan";
 import { deriveMomoMemberCode, baseTrackingOf, aggregateTrackDetailMetrics } from "@/lib/admin/momo-raw-helpers";
 import { deriveMomoBoxConsistency, type BoxConsistencyInput } from "@/lib/admin/momo-box-consistency";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
+import { classifyCabinetId } from "@/lib/forwarder/cabinet-class";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import type { PackingUploadSnapshot } from "@/actions/admin/momo-packing-history";
 import { MomoIngestClient, type IngestTrack, type IngestBoxRow, type MissingParcel } from "./momo-containers-client";
@@ -163,6 +164,21 @@ export default async function MomoContainersPage() {
       noteText: apStr("note"),
       dum: apStr("dum"),
       smNumber: apStr("sm_number"),
+      // ตีลังไม้ (owner 2026-07-25) — MOMO ส่ง wooden_info เป็น JSON string:
+      // {woodenTrack:"PKF000867", kg, cbm, image:[url]} · ลังเดียวมีได้หลายแทรค
+      wooden: (() => {
+        const w = raw && typeof raw === "object" ? raw.wooden_info : null;
+        if (!w) return null;
+        try {
+          const o = typeof w === "string" ? (JSON.parse(w) as Record<string, unknown>) : (w as Record<string, unknown>);
+          if (!o || typeof o !== "object") return null;
+          const img = Array.isArray(o.image) ? o.image.find((u): u is string => typeof u === "string") ?? null : null;
+          const track = typeof o.woodenTrack === "string" && o.woodenTrack.trim() ? o.woodenTrack : null;
+          const kg = Number(o.kg); const cbm = Number(o.cbm);
+          if (!track && !img && !Number.isFinite(kg)) return null;
+          return { track, kg: Number.isFinite(kg) ? kg : null, cbm: Number.isFinite(cbm) ? cbm : null, image: img };
+        } catch { return null; }
+      })(),
       returnNote: apStr("return_note"),
       etdOverride: apStr("etd"),
       etaOverride: apStr("eta"),
@@ -468,6 +484,12 @@ export default async function MomoContainersPage() {
   const missing: MissingParcel[] = [];
   for (const [base, pk] of packingByBase) {
     if (apiBases.has(base) || !pk.container) continue;
+    // owner 2026-07-25 "ตรงนี้ใช้ได้จริงไหม" — ลิสต์เคยโชว์ขยะ 2 ชนิดปนเป็น "พัสดุขาด":
+    // (1) เลขกระสอบ CBX… = แถว subtotal ของกระสอบในไฟล์ packing ไม่ใช่พัสดุ
+    // (2) แถวหัวตารางของไฟล์ ("Tracking"/"Code" = ชื่อคอลัมน์ ไม่มีตัวเลขสักตัว)
+    // ทั้งคู่สร้างเป็นแถวเก็บเงินไม่ได้ → ต้องไม่โผล่ในคิวนี้เลย
+    if (classifyCabinetId(base) === "sack") continue;
+    if (!/\d/.test(base)) continue;
     missing.push({
       tracking: base,
       cabinet: pk.container,

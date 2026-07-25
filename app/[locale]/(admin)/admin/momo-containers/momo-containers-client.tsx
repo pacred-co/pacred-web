@@ -69,6 +69,8 @@ export type IngestTrack = {
   extraImageKeys: string[];
   /** URL ที่ sign แล้วของ extraImageKeys (page.tsx เตรียมให้) */
   extraImageUrls: string[];
+  /** ตีลังไม้ (MOMO wooden_info) — เลข PKF + ขนาด/นน. + รูป (null = ไม่ได้ตีลัง) */
+  wooden: { track: string | null; kg: number | null; cbm: number | null; image: string | null } | null;
   momoType: string | null;    // raw MOMO type (general/tis/fda/special/control) — อย. ≠ น้ำยา
   serviceFee: number | null;  // V "Service fee." (= extra_cost ของ MOMO)
   etd: string | null;         // Y — จาก packing list ระดับตู้ (taem_container_etd_eta)
@@ -320,8 +322,11 @@ const SORT_VAL: Record<string, (t: IngestTrack) => string | number> = {
   cbm: (t) => t.cbm,
 };
 // ⋮⋮ default column order (checkbox # = คอลัมน์แรกตายตัว · 27 ตัวนี้ลากย้ายได้ · = ลำดับตารางปอนเป๊ะ)
+// owner 2026-07-25: "เพิ่มคอลัมน์กระสอบแยกมาเลย — ตู้ และก็เลขกระสอบ หรือเลขตีลังไม้
+// เพราะในกระสอบ/ตีลังไม้ บางทีมีหลายชิปเม้น หลายออเดอร์ หลาย PR" (prod ยืนยัน:
+// CBX260717-EK13 = 14 แทรค/9 PR) → sack + wooden แยกเป็นคอลัมน์ของตัวเอง
 const DATA_KEYS = [
-  "image", "container", "trans", "smDate", "smNumber", "branch", "product", "dum", "type", "code",
+  "image", "container", "sack", "wooden", "trans", "smDate", "smNumber", "branch", "product", "dum", "type", "code",
   "tracking", "w", "l", "h", "totalParcel", "wt", "vol", "totalWt", "totalVol", "rem", "cg", "note",
   "serviceFee", "status", "return", "etd", "eta",
 ];
@@ -1091,14 +1096,18 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           {t.container ? (
             <Link href={`/admin/momo-containers/${encodeURIComponent(t.container)}`} className="font-mono font-semibold text-sky-700 hover:underline">{t.container}</Link>
           ) : roundClosedNoContainer(t) ? (
-            /* owner 2026-07-23 — สถานะบอกปิดรอบแล้ว แต่ไม่มีเลขตู้ = ขัดกันเอง ต้องเห็นชัด
-               ไม่ใช่ปล่อยช่องว่างให้ดูเหมือนปกติ (prod 12 แถว) */
-            <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[11px] font-bold text-amber-800"
-              title={`ย้อนแย้ง: MOMO แจ้งสถานะ "${t.adminStatusText}" แต่ยังไม่ส่งเลขตู้มา` +
-                `${t.routingBatch ? ` (มีแต่รอบขนส่ง ${t.routingBatch} ซึ่งไม่ใช่เลขตู้)` : ""}` +
-                ` — นำเข้าระบบได้ปกติ (จะลงเป็น "กำลังส่งมาไทย" รอเลขตู้จริงจาก MOMO) · ถ้าค้างนาน ให้ทวงเลขตู้กับ MOMO`}>
-              ⚠️ ปิดรอบแล้วแต่ยังไม่มีเลขตู้
-            </span>
+            /* owner 2026-07-23 — สถานะบอกปิดรอบแล้ว แต่ไม่มีเลขตู้ = ขัดกันเอง ต้องเห็นชัด.
+               owner 2026-07-25 — "ต้องใส่เลขตู้ก่อนได้ด้วยสิ — CS/DOC อยู่ในกลุ่ม WeChat
+               บางทีรู้เลขตู้ก่อน MOMO ส่งมา · MOMO ส่งมาใหม่ค่อยว่ากัน" → กด ✎ กรอกได้
+               (ผ่าน cabinetWriteGuard · MOMO cid จริงมาแล้วชนะเสมอ · sync ยึด key เดิม
+               = ไม่มีทางเบิ้ลแถว) */
+            editableCell(t, "containerName",
+              <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[11px] font-bold text-amber-800"
+                title={`ย้อนแย้ง: MOMO แจ้งสถานะ "${t.adminStatusText}" แต่ยังไม่ส่งเลขตู้มา` +
+                  `${t.routingBatch ? ` (มีแต่รอบขนส่ง ${t.routingBatch} ซึ่งไม่ใช่เลขตู้)` : ""}` +
+                  ` — รู้เลขตู้จาก WeChat แล้ว กด ✎ ใส่ได้เลย · MOMO ส่งเลขจริงมาทีหลัง ระบบใช้ของจริงให้เอง`}>
+                ⚠️ ปิดรอบแล้วแต่ยังไม่มีเลขตู้
+              </span>)
           ) : (
             /* owner 2026-07-25 "Container Name แก้ได้" — MOMO ยังไม่ผูกตู้ → กรอกจาก docs ได้
                (ผ่าน cabinetWriteGuard กันเลขกระสอบ/placeholder) · พอ MOMO ส่ง cid จริงมา
@@ -1106,7 +1115,6 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
             editableCell(t, "containerName",
               <span className="text-[11px] text-amber-600" title={t.routingBatch ?? ""}>⏳ ยังไม่เข้าตู้ปิด</span>)
           )}
-          {t.sack && <div className="text-[11px] text-muted">กระสอบ: {t.sack}</div>}
           {t.momoGarbage && (
             <div className="mt-0.5 inline-flex items-center gap-0.5 rounded bg-red-600 px-1 py-0.5 text-[11px] font-bold text-white"
               title={`ตัวเลข MOMO ขัดกันเอง — กล่องย่อย (box_detail) ${t.momoGarbage.boxCount} กล่อง รวม${
@@ -1124,6 +1132,43 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           )}
         </>
       ),
+    },
+    sack: {
+      label: "กระสอบ", thTitle: "เลขกระสอบ (CBX…) จาก MOMO — กระสอบเดียวมีได้หลายชิปเม้น/หลาย PR · เลขนี้ห้ามลงช่องตู้ (ระบบกันไว้แล้ว)",
+      tdClass: "px-2 py-1.5 text-center font-mono text-[11px] whitespace-nowrap",
+      tdTitle: (t) => {
+        if (!t.sack) return "";
+        const mates = tracks.filter((x) => x.sack === t.sack);
+        const prs = new Set(mates.map((x) => x.guessedUserId ?? "?"));
+        return `กระสอบ ${t.sack} — ${mates.length} แทรค · ${prs.size} PR (${[...prs].join(", ")})`;
+      },
+      td: (t) => {
+        if (!t.sack) return DASH;
+        const mates = tracks.filter((x) => x.sack === t.sack);
+        const prs = new Set(mates.map((x) => x.guessedUserId ?? "?"));
+        return (
+          <>
+            <span className="rounded bg-violet-50 px-1 py-0.5 font-semibold text-violet-700">{t.sack}</span>
+            {mates.length > 1 && (
+              <div className="text-[11px] font-sans text-muted">{mates.length} แทรค · {prs.size} PR</div>
+            )}
+          </>
+        );
+      },
+    },
+    wooden: {
+      label: "ตีลังไม้", thTitle: "เลขตีลังไม้ (PKF…) จาก MOMO — ลังเดียวมีได้หลายแทรค · ค่าตีลังอยู่คอลัมน์ Service Fee",
+      tdClass: "px-2 py-1.5 text-center font-mono text-[11px] whitespace-nowrap",
+      tdTitle: (t) => t.wooden ? `ตีลังไม้ ${t.wooden.track ?? ""} · ${t.wooden.kg ?? "?"} กก. · ${t.wooden.cbm ?? "?"} คิว` : "",
+      td: (t) => t.wooden ? (
+        t.wooden.image ? (
+          <button type="button" className="rounded bg-amber-50 px-1 py-0.5 font-semibold text-amber-800 hover:ring-1 hover:ring-amber-400"
+            onClick={() => setZoom({ urls: [t.wooden!.image!], tracking: `ตีลังไม้ ${t.wooden!.track ?? ""}` })}
+            title="คลิกดูรูปลังไม้">
+            🪵 {t.wooden.track ?? "มีลัง"}
+          </button>
+        ) : <span className="rounded bg-amber-50 px-1 py-0.5 font-semibold text-amber-800">🪵 {t.wooden.track ?? "มีลัง"}</span>
+      ) : DASH,
     },
     trans: { label: "Trans", thTitle: "รถ/เรือ/อากาศ — ตู้จริงตัดสินก่อน (GZS=เรือ GZE=รถ) · ยังไม่มีตู้ เลือกเองได้", tdClass: "px-2 py-1.5 text-center whitespace-nowrap", td: (t) => editableCell(t, "trans", <>{(t.transport && TRANSPORT_TH[t.transport]) || DASH}</>) },
     smDate: { label: "SM Date", sortKey: "smDate", tdClass: "px-2 py-1.5 text-center tabular-nums whitespace-nowrap", tdTitle: (t) => t.smDate ?? "", td: (t) => editableCell(t, "smDate", dateOnly(t.smDate) ?? DASH) },
