@@ -325,10 +325,18 @@ const SORT_VAL: Record<string, (t: IngestTrack) => string | number> = {
 // owner 2026-07-25: "เพิ่มคอลัมน์กระสอบแยกมาเลย — ตู้ และก็เลขกระสอบ หรือเลขตีลังไม้
 // เพราะในกระสอบ/ตีลังไม้ บางทีมีหลายชิปเม้น หลายออเดอร์ หลาย PR" (prod ยืนยัน:
 // CBX260717-EK13 = 14 แทรค/9 PR) → sack + wooden แยกเป็นคอลัมน์ของตัวเอง
+// ลำดับคอลัมน์เริ่มต้น — owner จัดเอง 2026-07-26: *"ยึด default หัวคอลัมน์หน้านี้ให้เป็น
+// แบบนี้ · เราย้ายบางส่วนมาไว้ข้างหลัง จะได้เห็นข้อมูลที่จะใช้หลักๆ ได้ไวๆ ก่อน"*
+//   หน้า = ของที่ต้องตัดสินใจตอนตรวจก่อนนำเข้า (รูป · ตู้ · ขนส่ง · วันที่ · ชิปเม้น ·
+//          สินค้า · ประเภท · PR · แทรค · ขนาด/จำนวน/น้ำหนัก/คิว)
+//   ท้าย = ของอ้างอิง/เติมทีหลัง (Rem · CG · Note · ค่าตีลัง · สถานะ · ตีกลับ · ETD/ETA ·
+//          กระสอบ · ตีลังไม้ · Dum · Branch)
+// ⚠️ ลากสลับได้เหมือนเดิม (⋮⋮) แต่ไม่ถูกจำข้ามรีเฟรช → ลิสต์นี้คือสิ่งที่ทุกคนเห็นตอนเปิดหน้า
 const DATA_KEYS = [
-  "image", "container", "sack", "wooden", "trans", "smDate", "smNumber", "branch", "product", "dum", "type", "code",
-  "tracking", "w", "l", "h", "totalParcel", "wt", "vol", "totalWt", "totalVol", "rem", "cg", "note",
-  "serviceFee", "status", "return", "etd", "eta",
+  "image", "container", "trans", "smDate", "smNumber", "product", "type", "code",
+  "tracking", "w", "l", "h", "totalParcel", "wt", "vol", "totalWt", "totalVol",
+  "rem", "cg", "note", "serviceFee", "status", "return", "etd", "eta",
+  "sack", "wooden", "dum", "branch",
 ];
 
 // owner 2026-07-21 — "MOMO ไม่ส่ง PR คือ ตีเป็น NO CODE เลยครับ แบ่งอีก tab เป็น NO CODE
