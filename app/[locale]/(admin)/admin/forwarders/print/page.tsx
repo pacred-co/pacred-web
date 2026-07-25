@@ -45,6 +45,7 @@ import QRCode from "qrcode";
 import bwipjs from "bwip-js/node";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
 import { SITE_URL, SITE_NAME, LOGO_PATH, SITE_LEGAL_NAME_TH, CONTACT, ADDRESSES } from "@/components/seo/site";
@@ -263,6 +264,7 @@ type ForwarderRow = {
   fweight: number | string | null;
   fvolume: number | string | null;
   famount: number | string | null;
+  famountcount: string | null;
   fpallet: string | null;
   fshipby: string | null;
   faddressname: string | null;
@@ -370,7 +372,7 @@ export default async function ForwarderLabelPrintPage({
   const { data: forwardersData, error: fErr } = await admin
     .from("tb_forwarder")
     .select(
-      "id, userid, ftrackingchn, ftrackingchn2, fweight, fvolume, famount, fpallet, fshipby, " +
+      "id, userid, ftrackingchn, ftrackingchn2, fweight, fvolume, famount, famountcount, fpallet, fshipby, " +
         "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
         "faddressdistrict, faddressprovince, faddresszipcode, " +
         "faddresstel, faddresstel2, faddressnote",
@@ -519,7 +521,10 @@ export default async function ForwarderLabelPrintPage({
               const barcode = barcodeMap.get(f.id) ?? null;
               const displayUser = displayBoxUserId(f.userid, f.ftrackingchn2);
               const showLogo = !isFamilyAccount(f.userid);
-              const totalVolume = Number(f.fvolume ?? 0) * Number(f.famount ?? 1);
+              // คิว = กฎ famountcount (SOT) — ห้ามคูณกล่องเมื่อ fvolume เป็นยอดรวมแล้ว
+              const totalVolume = totalCbmOf({
+                fvolume: f.fvolume, famount: f.famount, famountcount: f.famountcount,
+              });
               return Array.from({ length: copies }).map((_, copy) => (
                 <div key={`box-${f.id}-${copy}`} className="label-page">
                   <div className="label-rot">
