@@ -86,7 +86,7 @@ export default async function AdminApiForwarderTtwPage() {
         <span className="text-[11px] font-medium tracking-widest text-muted">รายการค้างในตู้ · ใส่ PR ให้ลูกค้า</span>
         <div className="h-px flex-1 bg-gray-200" />
       </div>
-      <TtwStagingClient rows={rows} nameByPr={nameByPr} loadError={!!error} />
+      <TtwStagingClient rows={rows} nameByPr={nameByPr} loadError={!!error} hideTitle />
     </main>
   );
 }

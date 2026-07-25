@@ -3,7 +3,8 @@
 import { Fragment, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { adminAssignTtwPackingPr } from "@/actions/admin/ttw-packing";
+import { adminAssignTtwPackingPr, adminCreateForwarderFromTtwStaging } from "@/actions/admin/ttw-packing";
+import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 
 export type TtwLine = {
   id: string;
@@ -23,7 +24,6 @@ export type TtwLine = {
   committed_forwarder_id: number | null;
 };
 
-const TRANSPORT: Record<string, string> = { "1": "🚛 ทางรถ", "2": "🚢 ทางเรือ", "3": "✈️ ทางอากาศ" };
 // Colored transport pill — matches report-cnt (nameTransportType2 · ทางรถ=blue · ทางเรือ=green).
 const TRANSPORT_PILL: Record<string, { label: string; cls: string }> = {
   "1": { label: "ทางรถ", cls: "bg-[#1e9ff2]" },
@@ -39,10 +39,12 @@ export function TtwStagingClient({
   rows,
   nameByPr,
   loadError,
+  hideTitle = false,
 }: {
   rows: TtwLine[];
   nameByPr: Record<string, string>;
   loadError: boolean;
+  hideTitle?: boolean;
 }) {
   // Two separate mirrors, keyed by row id:
   //  - `edits` = the live INPUT buffer (updates on every keystroke · display only).
@@ -60,6 +62,10 @@ export function TtwStagingClient({
   // Last-save notice — surfaces the mark-family propagation ("ติดให้ทั้งมาร์คอีก N แถว").
   const [notice, setNotice] = useState<string | null>(null);
   const router = useRouter();
+  const { confirm, dialogs } = useConfirmDialogs();
+  // "เอาเข้าระบบ" (สร้าง tb_forwarder จาก staging) — local committed marker + per-row busy.
+  const [committedLocal, setCommittedLocal] = useState<Record<string, number>>({});
+  const [commitBusy, setCommitBusy] = useState<Record<string, boolean>>({});
 
   // The effective SAVED PR of a row (post-save local mirror, else the server value).
   const assignedPr = (r: TtwLine) => (r.id in saved ? saved[r.id].pr : r.member_code) ?? "";
@@ -141,10 +147,37 @@ export function TtwStagingClient({
     });
   }
 
+  // "เอาเข้าระบบ" — commit a staged row → real tb_forwarder อี้อู (reuse guarded action · dedup-safe).
+  async function commit(r: TtwLine) {
+    const pr = assignedPr(r).trim().toUpperCase();
+    if (!/^PR\d+$/.test(pr)) { alert("ใส่รหัสลูกค้า (PR) แล้วกดบันทึกก่อน จึงจะเอาเข้าระบบได้"); return; }
+    const ok = await confirm(
+      `ยืนยันเอา ${r.base_tracking} เข้าระบบ?\n\n` +
+      `• ลูกค้า: ${pr}\n` +
+      `• ${r.boxes ?? "?"} กล่อง · ${num(r.weight_kg, 1)} กก. · ${num(r.cbm, 4)} คิว` +
+      (r.container_no ? `\n• ตู้: ${r.container_no}` : "") +
+      `\n• สถานะเริ่มต้น: ถึงโกดังจีนแล้ว (อี้อู) — ระบบตั้งราคาให้อัตโนมัติ\n\n` +
+      `ถ้าเลขนี้มีในระบบแล้ว ระบบจะเชื่อมให้ (กันสร้างซ้ำ).`,
+    );
+    if (!ok) return;
+    setCommitBusy((p) => ({ ...p, [r.id]: true }));
+    startT(async () => {
+      const res = await adminCreateForwarderFromTtwStaging({ id: r.id });
+      setCommitBusy((p) => ({ ...p, [r.id]: false }));
+      if (res.ok) {
+        if (res.data?.forwarderId != null) setCommittedLocal((m) => ({ ...m, [r.id]: res.data!.forwarderId! }));
+        setNotice(`✅ ${r.base_tracking} → ${res.data?.message ?? "เข้าระบบแล้ว"}`);
+        router.refresh();
+      } else {
+        alert(res.error);
+      }
+    });
+  }
+
   if (rows.length === 0) {
     return (
       <div className="p-6">
-        <Header totalContainers={0} totalTracks={0} totalNoPr={0} totalNoPrMarks={0} totalCommitted={0} />
+        <Header totalContainers={0} totalTracks={0} totalNoPr={0} totalNoPrMarks={0} totalCommitted={0} hideTitle={hideTitle} />
         <div className="mt-6 rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
           {loadError ? "โหลดข้อมูลไม่สำเร็จ" : "ยังไม่มีแพคกิ้งลิสต์อี้อู/TTW ในระบบ — รัน scripts/ingest-ttw-packing-2026-07-18.ts ก่อน"}
         </div>
@@ -154,7 +187,7 @@ export function TtwStagingClient({
 
   return (
     <div className="p-4 sm:p-6">
-      <Header totalContainers={totalContainers} totalTracks={totalTracks} totalNoPr={totalNoPr} totalNoPrMarks={totalNoPrMarks} totalCommitted={totalCommitted} />
+      <Header totalContainers={totalContainers} totalTracks={totalTracks} totalNoPr={totalNoPr} totalNoPrMarks={totalNoPrMarks} totalCommitted={totalCommitted} hideTitle={hideTitle} />
 
       {notice && (
         <div className="mt-3 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-[13px] text-emerald-800">
@@ -270,7 +303,7 @@ export function TtwStagingClient({
                     </thead>
                     <tbody>
                       {g.lines.map((r, i) => {
-                        const committed = r.committed_forwarder_id != null;
+                        const committed = r.committed_forwarder_id != null || r.id in committedLocal;
                         const inputPr = inputVal(r);          // live input buffer (display + live badge)
                         const committedPr = assignedPr(r);    // the saved PR (committed badge)
                         const savedInfo = saved[r.id];
@@ -292,29 +325,42 @@ export function TtwStagingClient({
                                   ✓ {committedPr || "—"} (commit แล้ว)
                                 </span>
                               ) : (
-                                <div className="flex items-center gap-1.5">
-                                  <input
-                                    value={inputPr}
-                                    onChange={(e) => setEdits((ed) => ({ ...ed, [r.id]: e.target.value }))}
-                                    onKeyDown={(e) => { if (e.key === "Enter") save(r); }}
-                                    placeholder="PR…"
-                                    className="w-24 rounded border px-2 py-1 text-[12px] uppercase"
-                                    disabled={busy}
-                                  />
-                                  <button
-                                    onClick={() => save(r)}
-                                    disabled={busy}
-                                    className="rounded bg-primary-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-primary-700 disabled:opacity-50"
-                                  >
-                                    {busy ? "…" : "บันทึก"}
-                                  </button>
-                                  {inputPr && (found ? (
-                                    <span className="text-[11px] text-emerald-600" title={name ?? ""}>✓ {name ? name.slice(0, 18) : "พบ"}</span>
-                                  ) : (
-                                    <span className="text-[11px] text-amber-600">⚠ ยังไม่พบ PR นี้</span>
-                                  ))}
-                                  {r.pr_source === "mark" && !savedInfo && (
-                                    <span className="text-[10px] text-sky-600" title="เดาจากมาร์ค PR ในแพคกิ้งลิสต์">(จากมาร์ค)</span>
+                                <div className="flex flex-col gap-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      value={inputPr}
+                                      onChange={(e) => setEdits((ed) => ({ ...ed, [r.id]: e.target.value }))}
+                                      onKeyDown={(e) => { if (e.key === "Enter") save(r); }}
+                                      placeholder="PR…"
+                                      className="w-24 rounded border px-2 py-1 text-[12px] uppercase"
+                                      disabled={busy}
+                                    />
+                                    <button
+                                      onClick={() => save(r)}
+                                      disabled={busy}
+                                      className="rounded bg-primary-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                                    >
+                                      {busy ? "…" : "บันทึก"}
+                                    </button>
+                                    {inputPr && (found ? (
+                                      <span className="text-[11px] text-emerald-600" title={name ?? ""}>✓ {name ? name.slice(0, 18) : "พบ"}</span>
+                                    ) : (
+                                      <span className="text-[11px] text-amber-600">⚠ ยังไม่พบ PR นี้</span>
+                                    ))}
+                                    {r.pr_source === "mark" && !savedInfo && (
+                                      <span className="text-[10px] text-sky-600" title="เดาจากมาร์ค PR ในแพคกิ้งลิสต์">(จากมาร์ค)</span>
+                                    )}
+                                  </div>
+                                  {committedPr && (
+                                    <button
+                                      type="button"
+                                      onClick={() => commit(r)}
+                                      disabled={commitBusy[r.id]}
+                                      className="w-fit rounded bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                      title="สร้างรายการนำเข้าอี้อูจากข้อมูลนี้ (มีตัวกันสร้างซ้ำ)"
+                                    >
+                                      {commitBusy[r.id] ? "⏳ กำลังเอาเข้าระบบ…" : "＋ เอาเข้าระบบ"}
+                                    </button>
                                   )}
                                 </div>
                               )}
@@ -337,22 +383,23 @@ export function TtwStagingClient({
           </tbody>
         </table>
       </div>
+      {dialogs}
     </div>
   );
 }
 
 function Header({
-  totalContainers, totalTracks, totalNoPr, totalNoPrMarks, totalCommitted,
-}: { totalContainers: number; totalTracks: number; totalNoPr: number; totalNoPrMarks: number; totalCommitted: number }) {
+  totalContainers, totalTracks, totalNoPr, totalNoPrMarks, totalCommitted, hideTitle = false,
+}: { totalContainers: number; totalTracks: number; totalNoPr: number; totalNoPrMarks: number; totalCommitted: number; hideTitle?: boolean }) {
   return (
     <div>
-      <h1 className="text-2xl font-bold">📦 แพคกิ้งลิสต์ อี้อู / TTW — ใส่ PR ให้ลูกค้า</h1>
+      {!hideTitle && <h1 className="text-2xl font-bold">📦 แพคกิ้งลิสต์ อี้อู / TTW — ใส่ PR ให้ลูกค้า</h1>}
       <p className="mt-1 text-sm text-muted-foreground">
         ตู้จากโกดัง <b>อี้อู</b> (เฟรท <b>TTW</b>) เข้าระบบแล้ว — แต่ยังไม่รู้ว่าของใคร (会员=YY).
-        CS จับคู่ <b>มาร์ค (唛头)</b> กับ <b>ใบส่งของ</b> → ใส่รหัสลูกค้า (PR) ในช่องด้านล่าง.{" "}
+        CS/DOC จับคู่ <b>มาร์ค (唛头)</b> กับ <b>ใบส่งของ</b> → ใส่รหัสลูกค้า (PR).{" "}
         <b className="text-emerald-700">ใส่ PR แถวเดียว = ระบบติดให้ทุกแถวของมาร์คเดียวกันอัตโนมัติ</b>{" "}
-        (มาร์ค = รหัสลูกค้าของ TTW · เช่น SPK/KTM888/SEA ทั้ง 101 แถว = ลูกค้าคนเดียว → ทำจริงแค่ครั้งเดียวต่อมาร์ค).
-        การใส่ PR ที่นี่ยัง <b>ไม่</b> สร้างรายการนำเข้า/บิล — เป็นการจับคู่ไว้ก่อน (ขั้นถัดไป = จับกลุ่ม + สร้างรายการนำเข้า).
+        (มาร์ค = รหัสลูกค้าของ TTW · เช่น SPK/KTM888/SEA ทั้ง 101 แถว = ลูกค้าคนเดียว).{" "}
+        <b>ใส่ PR แล้วกด “＋ เอาเข้าระบบ”</b> เพื่อสร้างรายการนำเข้าอี้อู (มีตัวกันสร้างซ้ำ) — ของบริษัทอื่น = ปล่อยไว้.
       </p>
       <div className="mt-3 flex flex-wrap gap-2 text-[13px]">
         <Stat label="ตู้" value={totalContainers} />

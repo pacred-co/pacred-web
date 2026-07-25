@@ -19,7 +19,13 @@
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { addYiwuDeliveryNoteShipments } from "./yiwu-delivery-note";
 import { revalidatePath } from "next/cache";
+
+/** Escape PostgREST `like` wildcards so a base tracking can't widen the match. */
+function escapeLike(base: string): string {
+  return base.replace(/[%_,\\]/g, "\\$&");
+}
 
 const AssignSchema = z.object({
   id: z.string().uuid(),
@@ -136,5 +142,135 @@ export async function adminAssignTtwPackingPr(
     revalidatePath("/admin/api-forwarder-ttw");
 
     return { ok: true, data: { id, memberCode, found, customerName, propagated } };
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// "เอาเข้าระบบ" — commit a STAGING row → a billable tb_forwarder อี้อู row.
+//
+// owner ภูม 2026-07-25: the staging (447 rows · ttw_packing_line) had assign-PR but
+// NO way to turn a row into a real รายการนำเข้า ("commit แล้ว 0/447" forever). DOC
+// (or CS) assigns the PR, then presses "เอาเข้าระบบ" here to create the forwarder from
+// the packing measurements — the "SEPARATE, later, gated step" the assign docstring
+// promised.
+//
+// MONEY-SAFETY: this REUSES the guarded create `addYiwuDeliveryNoteShipments`
+// (GUARD 1 dedup by base 单号 · GUARD 2 member-validate · box-split · auto-price) —
+// it writes NO INSERT/price/money itself. The only extra write is marking the staging
+// row committed (committed_forwarder_id · non-money · mirrors the assign guard). If the
+// base already exists in tb_forwarder (dedup skip), we LINK the staging to that row
+// instead of creating a duplicate.
+// ────────────────────────────────────────────────────────────────────────
+
+const CreateSchema = z.object({ id: z.string().uuid() });
+
+const TTW_CREATE_ROLES = ["super", "ops", "sales", "sales_admin", "accounting", "warehouse"] as const;
+
+export type TtwCreateResult = {
+  id: string;
+  base: string;
+  forwarderId: number | null;
+  created: boolean; // true = สร้างใหม่ · false = มีอยู่แล้ว → เชื่อมให้
+  message: string;
+};
+
+export async function adminCreateForwarderFromTtwStaging(
+  input: unknown,
+): Promise<AdminActionResult<TtwCreateResult>> {
+  const parsed = CreateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "ข้อมูลไม่ถูกต้อง" };
+  }
+  const { id } = parsed.data;
+
+  return withAdmin<TtwCreateResult>([...TTW_CREATE_ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+
+    const { data: row, error: rowErr } = await admin
+      .from("ttw_packing_line")
+      .select("id, base_tracking, member_code, boxes, weight_kg, cbm, container_no, committed_forwarder_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (rowErr) {
+      console.error("[ttw create] load failed", { code: rowErr.code, message: rowErr.message });
+      return { ok: false, error: "อ่านข้อมูลไม่สำเร็จ" };
+    }
+    if (!row) return { ok: false, error: "ไม่พบรายการนี้" };
+    const r = row as {
+      id: string; base_tracking: string | null; member_code: string | null;
+      boxes: number | null; weight_kg: number | string | null; cbm: number | string | null;
+      container_no: string | null; committed_forwarder_id: number | null;
+    };
+    if (r.committed_forwarder_id != null) return { ok: false, error: "รายการนี้ commit เข้าระบบแล้ว" };
+
+    const pr = (r.member_code ?? "").trim().toUpperCase();
+    if (!/^PR\d+$/.test(pr)) {
+      return { ok: false, error: "ยังไม่ได้ใส่รหัสลูกค้า (PR) ที่ถูกต้อง — ใส่ PR ก่อนแล้วค่อยเอาเข้าระบบ" };
+    }
+    const base = (r.base_tracking ?? "").trim();
+    if (!base) return { ok: false, error: "แถวนี้ไม่มีเลขแทรคกิ้ง (单号)" };
+
+    const boxes = Number(r.boxes) || 1;
+    const weightKg = Number(r.weight_kg) || 0;
+    const cbm = Number(r.cbm) || 0;
+    if (!(weightKg > 0) && !(cbm > 0)) {
+      return { ok: false, error: "แถวนี้ไม่มีน้ำหนักและคิว — เอาเข้าระบบไม่ได้ (ต้องมีอย่างน้อยหนึ่งอย่าง)" };
+    }
+
+    // REUSE the guarded create — no new INSERT/money-path here.
+    const res = await addYiwuDeliveryNoteShipments([
+      {
+        orderNo: base,
+        memberCode: pr,
+        arrivalDate: new Date().toISOString().slice(0, 10),
+        packingId: (r.container_no ?? "").trim() || undefined,
+        rows: [{ boxCount: boxes, weightKg, lengthCm: 0, widthCm: 0, heightCm: 0, cbm, productType: "" }],
+      },
+    ]);
+    if (!res.ok) return { ok: false, error: res.error };
+    const one = res.data?.results?.[0];
+
+    let forwarderId: number | null = null;
+    let created = false;
+    let message = "";
+
+    if (one?.ok) {
+      forwarderId = one.fids?.[0] ?? null;
+      created = true;
+      message = `สร้างเข้าระบบแล้ว${forwarderId != null ? ` (#${forwarderId})` : ""}`;
+    } else if (one?.skipped) {
+      // Already in tb_forwarder → link the staging to that existing row (no dup).
+      const escBase = escapeLike(base);
+      const { data: existing, error: exErr } = await admin
+        .from("tb_forwarder")
+        .select("id")
+        .or(`ftrackingchn.eq.${base},ftrackingchn.like.${escBase}-%`)
+        .order("id", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (exErr) console.error("[ttw create] existing lookup failed", { code: exErr.code, message: exErr.message });
+      forwarderId = (existing as { id: number } | null)?.id ?? null;
+      created = false;
+      message = forwarderId != null ? `มีในระบบอยู่แล้ว — เชื่อมให้ (#${forwarderId})` : "มีในระบบอยู่แล้ว";
+    } else {
+      return { ok: false, error: one?.error ?? "เอาเข้าระบบไม่สำเร็จ — ลองใหม่" };
+    }
+
+    // Mark the staging row committed (non-money · guarded re-check).
+    if (forwarderId != null) {
+      const { error: upErr } = await admin
+        .from("ttw_packing_line")
+        .update({ committed_forwarder_id: forwarderId, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .is("committed_forwarder_id", null);
+      if (upErr) console.error("[ttw create] mark committed failed", { code: upErr.code, message: upErr.message });
+    }
+
+    await logAdminAction(adminId, "ttw_packing.create_forwarder", "ttw_packing_line", id, {
+      base, pr, forwarderId, created,
+    });
+    revalidatePath("/admin/api-forwarder-ttw");
+
+    return { ok: true, data: { id, base, forwarderId, created, message } };
   });
 }
