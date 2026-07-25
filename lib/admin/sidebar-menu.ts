@@ -521,37 +521,26 @@ const itemCustomsDocKit: MenuItem = {
  *     one client component (CarrierManualForm) parameterised via
  *     lib/carrier/registry.ts.
  */
+// owner 2026-07-26: "ยุบทุกเมนูย่อยออกไปหมด เอาเข้ามาอยู่ในเมนูอัพเดทฝากนำเข้าหน้าเดียวเลย
+// · อันไหนไม่ได้ใช้เอาออก · อันไหนใช้เอามาจัดเรียงอยู่ในหน้าเดียวกัน · ใช้แพทเทินหน้าอัพเดท
+// MOMO เป็นแพทเทินหลัก" → sidebar เหลือ ENTRY เดียว = hub /admin/momo-containers ·
+// ทางเข้า yiwu/TTW/packing/WeChat ย้ายไปเป็นปุ่มบนหัว hub (HUB_LINKS) ·
+// momo-lcl ถูกตัด (อ่านตาราง tb_tmp_forwarder_item_momo ที่ไม่มีในฐานแล้ว = หน้าตาย).
 const blockApiForwarderUpdate: MenuItem = {
   labelKey: "apiForwarderUpdate.title",
   icon: "Wand2",
-  children: [
-    // owner 2026-07-20 "ยุบทุกหน้า MOMO เหลือ hub + แพคกิ้งลิส · ไอแต้มไม่มีแล้ว · กระจาย
-    // จนหาไม่เจอ" — the old card-hub / live / discovery / review / drift entries are
-    // RETIRED (routes redirect into the hub). Sidebar = exactly the 2 workspaces:
-    //   1. ตรวจตู้ (hub — sync + pending/committed + Live merge + commit · momoPending
-    //      badge = แทรคที่ sync มาแล้วยังไม่เข้าระบบ)
-    //   2. อัพ packing list จาก MOMO (sole writer of container_packing_reconcile)
-    { labelKey: "apiForwarderUpdate.momoContainers", href: "/admin/momo-containers", icon: "PackageCheck", badge: "momoPending" },
-    { labelKey: "apiForwarderUpdate.momoPacking", href: "/admin/api-forwarder-momo/packing-upload", icon: "FileUp" },
-    // ภูม 2026-07-16 — อี้อู (Yiwu) has NO API. Staff upload the ใบส่งของ (delivery-note)
-    // IMAGE when goods land at the China warehouse → OCR-assisted review grid → commit
-    // box-split arrival rows (fstatus 2 · fwarehousechina 2 = อี้อู rate card). The
-    // packing-list upload later assigns the container + advances to "กำลังมาไทย".
-    { labelKey: "apiForwarderUpdate.yiwu", href: "/admin/api-forwarder-yiwu", icon: "FileImage" },
-    // TTW/อี้อู packing-list staging → CS ใส่ PR (mig 0262 · ttw_packing_line · owner 2026-07-18).
-    { labelKey: "apiForwarderUpdate.ttw",  href: "/admin/api-forwarder-ttw",  icon: "PackagePlus" },
-    // owner 2026-07-18 "พาร์ทเนอร์ใช้แค่ MOMO กับ TTW · เจ้าอื่นเอาออกให้หมด เกะกะรก" —
-    // retired-partner API pages removed from the sidebar (CargoCenter/JMF/TTP/GOGO/CargoThai).
-    // The route files stay (reachable by URL for old-shipment history if ever needed).
-    // MOMO LCL sack tracking = a MOMO sub-page → kept.
-    { labelKey: "forwarder.momoLclSack",   href: "/admin/momo-lcl",  icon: "Barcode" },
-    // 2026-06-29 (owner "เอาข้อมูล wechat เข้า database") — searchable archive of
-    // the decrypted China-ops coordination chats (MOMO/PCS/AXELRA/HUAHAI/柏盛泰/
-    // Yiwu/แลกหยวน/退税/per-container). Read-only · mig 0228 wechat_ops_message.
-    { labelKey: "apiForwarderUpdate.wechatOps", href: "/admin/wechat-ops", icon: "MessageCircle" },
-    // owner 2026-07-18 — the "ปรับชีต" group (CTT/แสง/MK/MX sheet-adjusters) = retired
-    // partners → removed from the sidebar (routes stay for history if ever needed).
-  ],
+  href: "/admin/momo-containers",
+  badge: "momoPending",
+};
+
+/** ตัวเดียวกันสำหรับ CS/เซล — หน้า hub MOMO gate = super/ops/warehouse เท่านั้น
+ *  (ปุ่มนำเข้า/แก้ค่า = เขียนแถวเก็บเงิน) → ถ้าให้ sales ชี้ hub = คลิกแล้วเจอ "ไม่มีสิทธิ์"
+ *  (คลิกตาย §0d) และเสียทางเข้า TTW ที่ CS ใช้จริงอยู่ (ใส่ PR · เอาเข้าระบบ).
+ *  งานของ CS ในสายนี้อยู่ที่ TTW → ชี้ตรงนั้น · label เดียวกัน (เมนูเดียวเหมือนกัน). */
+const blockApiForwarderUpdateCs: MenuItem = {
+  labelKey: "apiForwarderUpdate.title",
+  icon: "Wand2",
+  href: "/admin/api-forwarder-ttw",
 };
 
 /** legacy OOP/Cargo/menu-payment.php — บริการฝากโอน/ชำระ */
@@ -2444,10 +2433,32 @@ const ROLE_PRECEDENCE: AdminRole[] = [
   "freight_import_messenger",
 ];
 
+/**
+ * ปรับปลายทางของเมนู "อัปเดตฝากนำเข้า" ให้ตรงสิทธิ์จริง (owner 2026-07-26 · ยุบเหลือเมนูเดียว).
+ *
+ * หน้า hub `/admin/momo-containers` gate = super/ops/warehouse (+god) เพราะบนหน้ามีปุ่ม
+ * "นำเข้าระบบ" = เขียนแถวเก็บเงิน. role อื่นที่เห็นเมนูนี้ (sales = CS · manager) เปิดไม่ได้
+ * → ถ้าปล่อยชี้ hub = คลิกแล้วเจอ "ไม่มีสิทธิ์" (คลิกตาย §0d).
+ *   • CS/เซล → ชี้ TTW (หน้าที่เขาใช้จริง: ใส่ PR · เอาเข้าระบบ · gate มี sales)
+ *   • role ที่เปิดไม่ได้สักหน้า (manager) → ตัดเมนูออก (เดิมเป็นลิงก์ตาย 6 อัน)
+ * ไม่แตะสิทธิ์ของหน้าใดๆ — จัดแค่ปลายทางให้ตรงกับสิทธิ์ที่มีอยู่แล้ว.
+ */
+function retargetImportUpdateEntry(sections: MenuSection[], roles: AdminRole[]): MenuSection[] {
+  const canHub = roles.some((r) => r === "super" || r === "ultra" || r === "normies" || r === "ops" || r === "warehouse");
+  if (canHub) return sections;
+  const canTtw = roles.some((r) => r === "sales" || r === "sales_admin" || r === "accounting");
+  const fix = (items: MenuItem[]): MenuItem[] =>
+    items.flatMap((i) => {
+      if (i.labelKey === "apiForwarderUpdate.title") return canTtw ? [blockApiForwarderUpdateCs] : [];
+      return [i.children ? { ...i, children: fix(i.children) } : i];
+    });
+  return sections.map((sec) => ({ ...sec, items: fix(sec.items) })).filter((sec) => sec.items.length > 0);
+}
+
 export function menuForRoles(roles: AdminRole[]): MenuSection[] {
   if (roles.includes("ultra") || roles.includes("super") || roles.includes("normies")) return ROLE_MENUS.super;
   for (const r of ROLE_PRECEDENCE) {
-    if (roles.includes(r)) return ROLE_MENUS[r];
+    if (roles.includes(r)) return retargetImportUpdateEntry(ROLE_MENUS[r], roles);
   }
   // No recognised role — empty menu (the layout guard already 404s
   // non-admins, so this is just a defensive fallback).

@@ -36,11 +36,19 @@ const MOMO_LIVE_URL = "https://www.momocargo.com/";
 // owner 2026-07-22 "เอามาเพิ่มอยู่ในหน้านี้ให้ทีครับ เป็นเมนูเข้าไป … เราจะใช้หน้านี้หน้าเดียว
 // เท่านั้นครับ ของ MOMO ทั้งหมด" — บิลต้นทุน + ตัดจ่าย เดิมอยู่คนละที่ (ผิดกลุ่ม) → เข้าจาก hub นี้.
 // `cost` = เห็นเฉพาะสิทธิ์ต้นทุน (ultra/accounting/pricing) กันคลิกตาย (§0d).
+// owner 2026-07-26: "ยุบทุกเมนูย่อยเข้ามาอยู่ในเมนูอัพเดทฝากนำเข้าหน้าเดียว · อันไหนใช้
+// เอามาจัดเรียงอยู่หน้าเดียวกัน · แพทเทินหน้านี้ = แพทเทินหลัก" → sidebar เหลือ entry เดียว
+// (hub นี้) · ทางเข้าเครื่องมือทุกตัวรวมเป็นปุ่มแถวนี้ เรียงตามโฟลว์งานจริง:
+// MOMO (sync→packing→manual→บิลต้นทุน) → อี้อู/TTW (CS คีย์ใบส่งของ → DOC ใส่ PR/เอาเข้าระบบ)
+// → อ้างอิง (WeChat จีน · เว็บ MOMO). ❌ ตัด momo-lcl (อ่านตารางที่ไม่มีในฐานแล้ว = หน้าตาย).
 const HUB_LINKS: { href: string; label: string; external?: boolean; cost?: boolean }[] = [
   { href: "/admin/api-forwarder-momo/sync", label: "📥 Sync จาก MOMO API" },
   { href: "/admin/api-forwarder-momo/packing-upload", label: "📦 อัพ packing list (จาก MOMO)" },
   { href: "/admin/api-forwarder-momo/manual", label: "✍️ เพิ่มงานเอง (manual)" },
   { href: "/admin/api-forwarder-momo/invoice-cost", label: "💰 บิลต้นทุน MOMO (ตรวจ · บันทึก · ตัดจ่าย)", cost: true },
+  { href: "/admin/api-forwarder-yiwu", label: "🧾 อี้อู — คีย์ใบส่งของ (CS)" },
+  { href: "/admin/api-forwarder-ttw", label: "📋 อี้อู/TTW — ใส่ PR · เอาเข้าระบบ (DOC)" },
+  { href: "/admin/wechat-ops", label: "💬 คลังแชท WeChat (จีน)" },
   { href: MOMO_LIVE_URL, label: "🌐 เปิด MOMO Live (เว็บ MOMO)", external: true },
 ];
 

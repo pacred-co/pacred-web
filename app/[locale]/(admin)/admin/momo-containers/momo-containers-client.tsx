@@ -799,6 +799,14 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
 
   // full-data preview table — for the Live modal (show incomplete pending rows to verify · ภูม "โชว์ครบเหมือนตาราง").
   function previewTable(rows: IngestTrack[]) {
+    // owner 2026-07-26 "หน้าตอนนำเข้า อยากให้เพิ่มเปิดกรุ๊ปเอาแทรคกิ้งเป็นเข้าชิปเม้น" —
+    // จัดแถวที่เลือกเป็นกลุ่มตามชิปเม้น (base tracking = ออเดอร์ = หัวบิล) ให้เห็นว่า
+    // แทรคไหนคืองานเดียวกัน + Σ ต่อชิปเม้น · ชิปเม้นเดี่ยวไม่ต้องมีหัว (ไม่รก)
+    const byShip = new Map<string, IngestTrack[]>();
+    for (const t of rows) {
+      const b = baseTracking(t.trackingOverride ?? t.tracking ?? "") || `__solo_${t.id}`;
+      byShip.set(b, [...(byShip.get(b) ?? []), t]);
+    }
     return (
       <div className="max-h-72 overflow-auto rounded-lg border border-border">
         <table className="w-full whitespace-nowrap border-collapse text-[11px] [&_td]:border [&_td]:border-border [&_th]:border [&_th]:border-border">
@@ -808,9 +816,22 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
             <th className="px-2 py-1 text-left">ขนาด</th><th className="px-2 py-1 text-left">ประเภท</th><th className="px-2 py-1 text-left">สถานะ MOMO</th>
           </tr></thead>
           <tbody>
-            {rows.map((t) => (
+            {[...byShip.entries()].flatMap(([shipBase, members]) => [
+              ...(members.length > 1 ? [(
+                <tr key={`ship-${shipBase}`} className="bg-slate-100/80">
+                  <td colSpan={9} className="px-2 py-1">
+                    <span className="font-mono font-bold text-slate-700">📦 ชิปเม้น {shipBase}</span>
+                    <span className="ml-2 text-slate-600">{members.length} แทรค · Σ {members.reduce((s, x) => s + (x.qty ?? 0), 0)} กล่อง · {n2(members.reduce((s, x) => s + x.weightKg, 0))} กก. · {n6(members.reduce((s, x) => s + x.cbm, 0))} คิว</span>
+                  </td>
+                </tr>
+              )] : []),
+              ...members.map((t) => (
               <tr key={t.id}>
-                <td className="px-2 py-1 font-mono font-semibold">{t.tracking}</td>
+                <td className="px-2 py-1 font-mono font-semibold">
+                  {members.length > 1 && <span className="text-sky-600">↳ </span>}
+                  {t.trackingOverride ?? t.tracking}
+                  {t.trackingOverride && <span className="ml-1 font-sans text-[10px] text-muted">(MOMO: {t.tracking} ✎)</span>}
+                </td>
                 <td className="px-2 py-1 font-mono">{t.container ?? <span className="text-amber-600">ยังไม่เข้าตู้</span>}</td>
                 <td className="px-2 py-1 font-mono">
                   {t.guessedUserId ?? <span className="font-sans font-bold text-amber-700" title="MOMO ไม่ได้ส่งรหัสลูกค้า (PR) มา">NO CODE</span>}
@@ -822,7 +843,8 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                 <td className="px-2 py-1">{typeTh(t)}</td>
                 <td className="max-w-[9rem] truncate px-2 py-1" title={t.adminStatusText ?? ""}>{t.adminStatusText ?? t.phase ?? "—"}</td>
               </tr>
-            ))}
+              )),
+            ])}
           </tbody>
         </table>
       </div>
@@ -1321,6 +1343,19 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
         )}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ค้นหา แทรคกิ้ง / PR / เลขตู้…"
           className="ml-auto rounded-full border border-border bg-white dark:bg-surface px-3 py-1 text-xs w-56" />
+        {/* owner 2026-07-26 "เพิ่มเปิดกรุ๊ปเอาแทรคกิ้งเป็นเข้าชิปเม้น" — กาง/ย่อหัวชิปเม้นทุกกลุ่มทีเดียว
+            (รายกลุ่มกดที่หัวชิปเม้นได้เหมือนเดิม) */}
+        <button type="button"
+          onClick={() => setOpenFams((cur) => {
+            if (cur.size > 0) return new Set();
+            const all = new Set<string>();
+            for (const t of tracks) { const b = baseTracking(t.trackingOverride ?? t.tracking ?? ""); if (b) all.add(b); }
+            return all;
+          })}
+          className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt"
+          title="กาง/ย่อ ทุกชิปเม้น (แทรคกิ้งย่อยในชิปเม้นเดียวกันซ้อนใต้หัวชิปเม้น)">
+          {openFams.size > 0 ? "▾ ย่อทุกชิปเม้น" : "▸ กางทุกชิปเม้น"}
+        </button>
         <button type="button" onClick={() => router.refresh()} disabled={pending}
           className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt disabled:opacity-50">
           <RefreshCw className={`h-3 w-3 ${pending ? "animate-spin" : ""}`} /> รีเฟรช
