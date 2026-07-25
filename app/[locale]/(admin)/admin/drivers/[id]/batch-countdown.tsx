@@ -43,10 +43,10 @@ export function BatchCountdown({
   }, [endTimeIso, isOpen]);
 
   const isLg = size === "lg";
-  const ic = isLg ? "h-6 w-6" : "h-3.5 w-3.5";
-  // lg (หัวมือถือ · ปอน 2026-07-24) = ข้อความล้วน ไม่มีกรอบ/พื้นหลัง ตัวใหญ่
-  // (text-2xl · พอดีกับปุ่ม "ดูใบส่งสินค้า" ข้างๆ) · sm = pill กลมเหมือนเดิม.
-  const box = isLg ? "whitespace-nowrap text-2xl" : "whitespace-nowrap rounded-full border px-3 py-1 text-xs";
+  const ic = isLg ? "h-5 w-5" : "h-3.5 w-3.5";
+  // lg (หัวมือถือ · ปอน 2026-07-25) = ข้อความล้วน ไม่มีกรอบ/พื้นหลัง · text-lg
+  // (ลดจาก text-2xl ที่ล้นกรอบการ์ดมือถือ → พอดีในกรอบ + ล้อกับวันที่สร้างข้างๆ) · sm = pill กลม.
+  const box = isLg ? "whitespace-nowrap text-lg" : "whitespace-nowrap rounded-full border px-3 py-1 text-xs";
 
   // ── Closed run → a STATIC terminal label (frozen), never a live clock. ──
   if (status === "2") {

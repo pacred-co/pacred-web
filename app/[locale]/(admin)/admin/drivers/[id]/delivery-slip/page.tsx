@@ -36,6 +36,7 @@ import type { Metadata } from "next";
 import { Mail, Phone } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
@@ -96,6 +97,7 @@ type Forwarder = {
   ftrackingchn: string | null;
   fshipby: string | null;
   famount: number | string | null;
+  famountcount: string | null;
   fweight: number | string | null;
   fvolume: number | string | null;
   fpallet: string | null;
@@ -111,7 +113,7 @@ type Forwarder = {
 };
 
 const FORWARDER_COLS =
-  "id, userid, ftrackingchn, fshipby, famount, fweight, fvolume, fpallet, " +
+  "id, userid, ftrackingchn, fshipby, famount, famountcount, fweight, fvolume, fpallet, " +
   "faddressname, faddresslastname, faddressno, faddresssubdistrict, " +
   "faddressdistrict, faddressprovince, faddresszipcode, faddresstel, faddresstel2";
 
@@ -367,7 +369,7 @@ export default async function DeliverySlipPage({
     : "—";
 
   const totalWeight = forwarders.reduce((s, f) => s + Number(f.fweight ?? 0), 0);
-  const totalCbm = forwarders.reduce((s, f) => s + Number(f.fvolume ?? 0), 0);
+  const totalCbm = forwarders.reduce((s, f) => s + totalCbmOf(f), 0);
   const totalBoxes = forwarders.reduce((s, f) => s + Number(f.famount ?? 0), 0);
 
   // QR = a real link to this run's detail page, mirroring legacy PCS whose slip

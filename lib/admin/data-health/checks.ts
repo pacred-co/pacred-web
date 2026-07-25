@@ -462,6 +462,92 @@ const CHECKS: CheckDef[] = [
     },
   },
   {
+    id: "doc_itemisation_gap",
+    title: "เอกสารแจงไม่ครบ: บรรทัดเก็บเงินแทนพี่น้อง แต่พี่น้องไม่อยู่บนใบ",
+    severity: "warn",
+    why: "PR079 FRI2607-00071 / ใบเสร็จ FRC2607-00024 (owner 2026-07-24 'ยอดเก็บเงินถูก แต่แจงรายละเอียดไม่ตรงกับที่ลูกค้าได้รับ') — ชิปเม้น 800206224068 แตก 8 แถว/13 กล่อง แต่บิลเขียนบรรทัดเดียวชี้แถว anchor (3 กล่อง) พร้อมยอดทั้งชิปเม้น ฿4,980",
+    action: "ตัวเรนเดอร์ยุบให้อัตโนมัติแล้ว (lib/billing/shipment-line-coverage.ts · เอกสารเก่าก็แจงถูก) — เช็คนี้เฝ้าไว้ว่ามีเคสใหม่ไหม · ถ้าโผล่เยอะ = เครื่องคิดเงินควรเขียนบรรทัดต่อแถวแทน",
+    run: async (admin) => {
+      const { data: items, error: itErr } = await admin
+        .from("tb_forwarder_invoice_item")
+        .select("invoice_id, forwarder_id, amount_thb")
+        .limit(20_000);
+      if (itErr) throw new Error(`invoice_item: ${itErr.message}`);
+      const allRows = (items ?? []) as Array<{ invoice_id: number; forwarder_id: number; amount_thb: number | string }>;
+      if (allRows.length === 0) return { count: 0, sample: [] };
+
+      // ใบที่ยกเลิกแล้วไม่ใช่เอกสารที่ลูกค้าถือ — ไม่นับ (FRI2607-00061 ถูก void ไปแล้ว)
+      const { data: invs, error: invErr } = await admin
+        .from("tb_forwarder_invoice")
+        .select("id, cancelled_at")
+        .in("id", [...new Set(allRows.map((r) => r.invoice_id))]);
+      if (invErr) throw new Error(`invoice: ${invErr.message}`);
+      const activeInv = new Set(
+        ((invs ?? []) as Array<{ id: number; cancelled_at: string | null }>)
+          .filter((i) => !i.cancelled_at)
+          .map((i) => i.id),
+      );
+      const rows = allRows.filter((r) => activeInv.has(r.invoice_id));
+      if (rows.length === 0) return { count: 0, sample: [] };
+
+      const fids = [...new Set(rows.map((r) => r.forwarder_id))];
+      const { data: fwd, error: fErr } = await admin
+        .from("tb_forwarder")
+        .select("id, userid, ftrackingchn, famount, ftotalprice")
+        .in("id", fids)
+        .limit(20_000);
+      if (fErr) throw new Error(`forwarder: ${fErr.message}`);
+      const byId = new Map(
+        ((fwd ?? []) as Array<{ id: number; userid: string; ftrackingchn: string; famount: number | string; ftotalprice: number | string }>)
+          .map((f) => [f.id, f]),
+      );
+
+      // แถวทั้งหมดของครอบครัวที่เกี่ยวข้อง (นับว่ามีกี่แถวจริง)
+      const baseOf = (t: string) => (t ?? "").trim().replace(/-\d+(\/\d+)?$/, "");
+      const bases = [...new Set([...byId.values()].map((f) => baseOf(f.ftrackingchn)).filter(Boolean))];
+      const famCount = new Map<string, number>();
+      for (let i = 0; i < bases.length; i += 100) {
+        const chunk = bases.slice(i, i + 100);
+        const { data: fam, error: famErr } = await admin
+          .from("tb_forwarder")
+          .select("userid, ftrackingchn")
+          .or(chunk.map((b) => `ftrackingchn.like.${b}*`).join(","))
+          .limit(20_000);
+        if (famErr) throw new Error(`family: ${famErr.message}`);
+        for (const r of ((fam ?? []) as Array<{ userid: string; ftrackingchn: string }>)) {
+          const k = `${r.userid}|${baseOf(r.ftrackingchn)}`;
+          famCount.set(k, (famCount.get(k) ?? 0) + 1);
+        }
+      }
+
+      // มีแถวของครอบครัวนี้อยู่บนใบเดียวกันกี่แถว
+      const onDoc = new Map<string, number>();
+      for (const r of rows) {
+        const f = byId.get(r.forwarder_id);
+        if (!f) continue;
+        const k = `${r.invoice_id}|${f.userid}|${baseOf(f.ftrackingchn)}`;
+        onDoc.set(k, (onDoc.get(k) ?? 0) + 1);
+      }
+
+      const out: Array<Record<string, unknown>> = [];
+      for (const r of rows) {
+        const f = byId.get(r.forwarder_id);
+        if (!f) continue;
+        const base = baseOf(f.ftrackingchn);
+        const famRows = famCount.get(`${f.userid}|${base}`) ?? 1;
+        const here = onDoc.get(`${r.invoice_id}|${f.userid}|${base}`) ?? 1;
+        const billsBeyondSelf = Number(r.amount_thb) > Number(f.ftotalprice ?? 0) * 1.02;
+        if (famRows > 1 && here === 1 && billsBeyondSelf) {
+          out.push({
+            invoice_id: r.invoice_id, forwarder_id: r.forwarder_id, tracking: f.ftrackingchn,
+            userid: f.userid, amount: Number(r.amount_thb), anchorBoxes: Number(f.famount ?? 0), famRows,
+          });
+        }
+      }
+      return { count: out.length, sample: cap(out) };
+    },
+  },
+  {
     id: "double_billed",
     title: "เก็บเงินซ้ำ: แถว/ชิปเม้นเดียว อยู่บน >1 ใบแจ้งหนี้ active",
     severity: "red",

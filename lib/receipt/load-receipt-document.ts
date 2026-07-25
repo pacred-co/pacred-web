@@ -1,5 +1,6 @@
 import "server-only";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
+import { baseTrackingOf, expandDocLines, type CoverageRow } from "@/lib/billing/shipment-line-coverage";
 
 /**
  * Receipt document loader (FAITHFUL PORT) — the SINGLE source of the receipt's
@@ -321,10 +322,68 @@ export async function loadReceiptDocument(
       || (receipt.recompaddress && receipt.recompaddress.trim() ? receipt.recompaddress.trim() : "")
       || composeMainAddress(mainAddressRow);
 
+  // ── บรรทัดที่เก็บเงินแทน "ทั้งชิปเม้น" (owner 2026-07-24) ──────────────────
+  // ใบเสร็จเดียวกับใบวางบิล: ถ้าชิปเม้นแตกหลายแถวแต่ใบแจงแถวเดียว ลูกค้าจะเห็น
+  // กล่อง/น้ำหนักของแถวเดียว ทั้งที่จ่ายค่าทั้งชิปเม้น (FRC2607-00024: ยอด ฿6,444.81
+  // แต่แจงแค่ ฿2,459.91). ใช้ SOT เดียวกับใบวางบิล · เงินไม่ถูกแตะ (ramount frozen)
+  // best-effort: โหลดพลาด → familyByBase ว่าง → ไม่ยุบ = พฤติกรรมเดิมเป๊ะ
+  const covRowOf = (f: (typeof forwarders)[number]): CoverageRow => ({
+    id: f.id,
+    ftrackingchn: f.ftrackingchn ?? "",
+    famount: toNumber(f.famount),
+    fweight: toNumber(f.fweight),
+    totalCbm: totalCbmOf(f),
+    freight: toNumber(f.ftotalprice),
+  });
+  const covFamilyByBase = new Map<string, CoverageRow[]>();
+  const covBases = Array.from(
+    new Set(forwarders.map((f) => baseTrackingOf(f.ftrackingchn ?? "")).filter(Boolean)),
+  );
+  if (covBases.length > 0) {
+    const { data: famRaw, error: famErr } = await admin
+      .from("tb_forwarder")
+      .select(
+        "id, userid, ftrackingchn, fcabinetnumber, famount, famountcount, fweight, fvolume, fdate, " +
+          "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+          "ftransportpricechnthb, pricecrate, priceother, fdiscount, ftransporttype, frefprice, frefrate",
+      )
+      .eq("userid", receipt.userid)
+      .or(covBases.map((b) => `ftrackingchn.like.${b}*`).join(","))
+      .limit(5_000);
+    if (famErr) {
+      console.error("[loadReceiptDocument family coverage] failed (degrading to per-row)", {
+        code: famErr.code, message: famErr.message,
+      });
+    } else {
+      for (const r of ((famRaw ?? []) as unknown as Array<Parameters<typeof covRowOf>[0]>)) {
+        const base = baseTrackingOf(r.ftrackingchn ?? "");
+        if (!covBases.includes(base)) continue;   // `like base*` อาจลากคนละชิปเม้นมา
+        covFamilyByBase.set(base, [...(covFamilyByBase.get(base) ?? []), covRowOf(r)]);
+        if (!forwardersById.has(r.id)) forwardersById.set(r.id, r);  // แถวที่จะถูกแตกต้องมีข้อมูลจอครบ
+      }
+    }
+  }
+  // ใบเสร็จไม่มียอดต่อบรรทัดแช่ไว้ → ส่ง "ยอดของทั้งครอบครัว" เป็น amountThb
+  // เพื่อให้ expandDocLines รู้ว่าบรรทัดนี้กินพี่น้องด้วย แล้วมันจะแบ่งกลับตามค่าขนส่ง
+  // (ผลลัพธ์ = แต่ละแถวได้ค่าขนส่งของตัวเองเป๊ะ)
+  const covLineRows = new Map(forwarders.map((f) => [f.id, covRowOf(f)]));
+  const docLines = expandDocLines({
+    lines: receiptItems
+      .filter((it) => forwardersById.has(it.fid))
+      .map((it) => {
+        const f = forwardersById.get(it.fid)!;
+        const fam = covFamilyByBase.get(baseTrackingOf(f.ftrackingchn ?? "")) ?? [];
+        const famFreight = fam.reduce((sum, x) => sum + x.freight, 0);
+        return { id: f.id, forwarderId: f.id, amountThb: famFreight || toNumber(f.ftotalprice) };
+      }),
+    lineRows: covLineRows,
+    familyByBase: covFamilyByBase,
+  });
+
   // ── 7. Compute totals + WHT 1% (legacy printReceipt.php:357-399) ──
-  const computedItems = receiptItems
-    .map((it, idx) => {
-      const f = forwardersById.get(it.fid);
+  const computedItems = docLines
+    .map((dl, idx) => {
+      const f = forwardersById.get(dl.row.id);
       if (!f) {
         return null;
       }
@@ -352,9 +411,10 @@ export async function loadReceiptDocument(
         // คิดราคาตาม: '1'=KG · '2'=CBM
         rateBasis:    f.frefprice === "2" ? "CBM" : f.frefprice === "1" ? "KG" : "",
         rate:         toNumber(f.frefrate),
+        // 1 บรรทัด = 1 แทรคกิ้ง (owner 2026-07-24) — ค่าของแถวนั้นตรงๆ
         famount:      toNumber(f.famount),
         fweight:      toNumber(f.fweight),
-        fvolume:      totalCbmOf(f), // row-TOTAL CBM on the doc (famountcount rule)
+        fvolume:      totalCbmOf(f), // row-TOTAL CBM (famountcount rule)
         ftotalprice:  fTotalPrice,
       };
 

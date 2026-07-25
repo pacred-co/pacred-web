@@ -60,6 +60,7 @@
  */
 
 import "server-only";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
@@ -262,7 +263,7 @@ export async function getSalesMonthlyReport(range: DateRange): Promise<Result<Sa
     ));
     const { data: fData, error: fErr } = await fetchForwardersByIds(
       admin, fids,
-      "id, fstatus, ftotalprice, ftransportprice, fpriceupdate, fweight, fvolume",
+      "id, fstatus, ftotalprice, ftransportprice, fpriceupdate, fweight, fvolume, famount, famountcount",
     );
     if (fErr) {
       logger.error("reports", "sales-monthly tb_forwarder join failed", new Error(fErr));
@@ -272,6 +273,7 @@ export async function getSalesMonthlyReport(range: DateRange): Promise<Result<Sa
       id: number; fstatus: string;
       ftotalprice: number | null; ftransportprice: number | null; fpriceupdate: number | null;
       fweight: number | null; fvolume: number | null;
+      famount: number | null; famountcount: string | null;
     };
     const fwById = new Map<number, FRow>(
       (fData as unknown as FRow[]).map((f) => [Number(f.id), f]),
@@ -319,7 +321,7 @@ export async function getSalesMonthlyReport(range: DateRange): Promise<Result<Sa
       };
       a.order_count += 1;
       a.weight_kg   += Number(fw.fweight ?? 0);
-      a.volume_cbm  += Number(fw.fvolume ?? 0);
+      a.volume_cbm  += totalCbmOf(fw);   // กฎ famountcount (SOT)
       // Revenue = fTotalPrice + fTransportPrice + fPriceUpdate (legacy 3-col sum).
       a.revenue_thb += Number(fw.ftotalprice ?? 0)
                      + Number(fw.ftransportprice ?? 0)
@@ -400,7 +402,7 @@ export async function getForwarderProfitReport(
     let q = admin
       .from("tb_forwarder")
       .select(`id, userid, fstatus, fwarehousechina, ftransporttype,
-        fweight, fvolume, ftotalprice, fdiscount, fcosttotalprice,
+        fweight, fvolume, famount, famountcount, ftotalprice, fdiscount, fcosttotalprice,
         fprofittotal, fdate`)
       .gte("fdate", dayStartIso(range.from))
       .lte("fdate", dayEndIso(range.to))
@@ -434,6 +436,8 @@ export async function getForwarderProfitReport(
       ftransporttype: string | null;
       fweight: number | null;
       fvolume: number | null;
+      famount: number | null;
+      famountcount: string | null;
       ftotalprice: number | null;
       fdiscount: number | null;
       fcosttotalprice: number | null;
@@ -484,7 +488,7 @@ export async function getForwarderProfitReport(
         source_warehouse: WAREHOUSE_CHN_MAP[r.fwarehousechina ?? ""] ?? (r.fwarehousechina ?? ""),
         transport_type:   TRANSPORT_MAP[r.ftransporttype ?? ""]      ?? (r.ftransporttype ?? ""),
         weight_kg:        Number(r.fweight ?? 0),
-        volume_cbm:       Number(r.fvolume ?? 0),
+        volume_cbm:       totalCbmOf(r),
         cost_total: cost,
         sale_total: sale,
         profit,

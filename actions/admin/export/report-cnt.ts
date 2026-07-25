@@ -34,6 +34,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { logAdminExport } from "@/actions/admin/export-log";
@@ -66,6 +67,8 @@ type Row = {
   fdatecontainerclose: string | null;
   ftransporttype: string;
   fvolume: number;
+  famount: number | null;
+  famountcount: string | null;
   fweight: number;
   fcosttotalprice: number;
   ftotalprice: number;
@@ -111,7 +114,7 @@ function groupByContainer(rows: Row[], paidContainers: Set<string>): Grouped[] {
     const existing = byContainer.get(k);
     if (existing) {
       existing.trackCount += 1;
-      existing.volumeSum += Number(r.fvolume ?? 0);
+      existing.volumeSum += totalCbmOf(r);   // กฎ famountcount (SOT)
       existing.weightSum += Number(r.fweight ?? 0);
       existing.costSum   += Number(r.fcosttotalprice ?? 0);
       existing.priceSum  += Number(r.ftotalprice ?? 0);
@@ -130,7 +133,7 @@ function groupByContainer(rows: Row[], paidContainers: Set<string>): Grouped[] {
         ftransporttype: r.ftransporttype,
         fstatus: r.fstatus,
         trackCount: 1,
-        volumeSum: Number(r.fvolume ?? 0),
+        volumeSum: totalCbmOf(r),
         weightSum: Number(r.fweight ?? 0),
         costSum:   Number(r.fcosttotalprice ?? 0),
         priceSum:  Number(r.ftotalprice ?? 0),
@@ -194,7 +197,7 @@ export async function exportReportCntAll(
     let q = admin
       .from("tb_forwarder")
       .select(
-        "fwarehousename,fdatestatus4,fstatus,fcabinetnumber,fdatecontainerclose,ftransporttype,fvolume,fweight,fcosttotalprice,ftotalprice",
+        "fwarehousename,fdatestatus4,fstatus,fcabinetnumber,fdatecontainerclose,ftransporttype,fvolume,famount,famountcount,fweight,fcosttotalprice,ftotalprice",
       )
       .not("fcabinetnumber", "is", null)
       .neq("fcabinetnumber", "")

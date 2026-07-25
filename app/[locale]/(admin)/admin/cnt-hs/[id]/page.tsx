@@ -32,6 +32,7 @@
  */
 
 import { notFound } from "next/navigation";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
@@ -95,6 +96,8 @@ type FwRow = {
   fcosttotalprice: number | null;
   fweight: number | null;
   fvolume: number | null;
+  famount: number | null;
+  famountcount: string | null;
   userid: string | null;
 };
 type URow = {
@@ -191,7 +194,7 @@ export default async function CntHsDetailPage({
   if (cabinetNumbers.length > 0) {
     const { data: fwRaw, error: fwRawErr } = await admin
       .from("tb_forwarder")
-      .select("id,fdate,fcabinetnumber,fidorco,fstatus,ftotalprice,fcosttotalprice,fweight,fvolume,userid")
+      .select("id,fdate,fcabinetnumber,fidorco,fstatus,ftotalprice,fcosttotalprice,fweight,fvolume,famount,famountcount,userid")
       .in("fcabinetnumber", cabinetNumbers)
       .order("fdate", { ascending: false })
       .limit(5000);
@@ -473,7 +476,7 @@ export default async function CntHsDetailPage({
                 {cabinetNumbers.map((cabinet) => {
                   const fws = fwByCabinet.get(cabinet) ?? [];
                   const w = fws.reduce((s, f) => s + Number(f.fweight ?? 0), 0);
-                  const v = fws.reduce((s, f) => s + Number(f.fvolume ?? 0), 0);
+                  const v = fws.reduce((s, f) => s + totalCbmOf(f), 0);   // กฎ famountcount (SOT)
                   const t = fws.reduce((s, f) => s + Number(f.ftotalprice ?? 0), 0);
                   return (
                     <tr key={cabinet} className="border-t border-border">

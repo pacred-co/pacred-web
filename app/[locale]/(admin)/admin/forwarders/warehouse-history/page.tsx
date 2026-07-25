@@ -1,5 +1,6 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { isGeneralCoid } from "@/lib/forwarder/coid";
@@ -164,6 +165,7 @@ type ImportRow = {
   f_id: number | null;
   f_fstatus: string | null;
   f_famount: number | null;
+  f_famountcount: string | null;
   f_userid: string | null;
   f_ftrackingchn: string | null;
   f_fcabinetnumber: string | null;
@@ -330,6 +332,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
     id: number;
     fstatus: string | null;
     famount: number | null;
+    famountcount: string | null;
     userid: string | null;
     ftrackingchn: string | null;
     fcabinetnumber: string | null;
@@ -360,7 +363,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
     const { data: forwarderRows, error: fwdErr } = await admin
       .from("tb_forwarder")
       .select(
-        "id, fstatus, famount, userid, ftrackingchn, fcabinetnumber, " +
+        "id, fstatus, famount, famountcount, userid, ftrackingchn, fcabinetnumber, " +
           "fdatecontainerclose, fdatestatus2, fproductstype, ftransporttype, " +
           "fwarehousechina, fcover, fdetail, fidorco, reforder, " +
           "adminidcreator, adminidkey, ftotalprice, ftransportprice, " +
@@ -411,6 +414,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
       f_id: f?.id ?? null,
       f_fstatus: f?.fstatus ?? null,
       f_famount: f?.famount ?? null,
+      f_famountcount: f?.famountcount ?? null,
       f_userid: f?.userid ?? null,
       f_ftrackingchn: f?.ftrackingchn ?? null,
       f_fcabinetnumber: f?.fcabinetnumber ?? null,
@@ -581,9 +585,12 @@ export default async function AdminForwardersWarehouseHistoryPage({
         Number(row.f_fpriceupdate ?? 0) +
         Number(row.f_fshippingservice ?? 0)) -
       Number(row.f_fdiscount ?? 0);
+    // คิว = กฎ famountcount (SOT lib/forwarder/quantities) — owner 2026-07-24:
+    // เดิมคูณกล่องเสมอ ทั้งที่ MOMO เขียน famountcount='1' = fvolume เป็นยอดรวมอยู่แล้ว
+    // → 8.6 คิว โชว์เป็น 344 คิว (1783234654) · ลามไปโกดัง/จัดส่ง/คอม
     const volumeTotal =
-      row.f_fvolume && row.f_famount
-        ? Number(row.f_fvolume) * Number(row.f_famount)
+      row.f_fvolume != null
+        ? totalCbmOf({ fvolume: row.f_fvolume, famount: row.f_famount, famountcount: row.f_famountcount })
         : null;
     return {
       section: "เชื่อมแล้ว (matched)",
@@ -853,7 +860,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
                         Number(row.f_fdiscount ?? 0);
                       const volumeTotal =
                         row.f_fvolume && row.f_famount
-                          ? Number(row.f_fvolume) * Number(row.f_famount)
+                          ? totalCbmOf({ fvolume: row.f_fvolume, famount: row.f_famount, famountcount: row.f_famountcount })
                           : null;
                       const containerCloseDDMMYYYY = formatDDMMYYYY(row.f_fdatecontainerclose);
                       // Row-tint state machine (forwarder-status.ts philosophy —

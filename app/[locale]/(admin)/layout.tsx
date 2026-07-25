@@ -17,6 +17,7 @@ import { departmentLabel } from "@/lib/admin/departments";
 import { AdminSidebar } from "@/components/sections/admin-sidebar";
 import { DriverBottomNav } from "@/components/sections/driver-bottom-nav";
 import { countDriverOpenBatches } from "@/lib/admin/driver-todo-count";
+import { getDriverConsultTel } from "@/lib/admin/consult-contact";
 import { CollapseAdminSidebar } from "@/components/sections/collapse-admin-sidebar";
 import { LocaleSwitcher } from "@/components/locale-switcher";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -83,6 +84,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const driverTodoCount = isDriverView
     ? await countDriverOpenBatches(profile?.member_code ?? null)
     : 0;
+  // เบอร์ "ปรึกษา" (keetar) ดึงสดจากระบบ เฉพาะตอนโชว์แถบล่างคนขับ (owner 2026-07-25)
+  const driverConsultTel = isDriverView ? await getDriverConsultTel() : null;
   const adminLabel =
     [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim() ||
     profile?.member_code ||
@@ -158,7 +161,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <CostRevealProvider bypass={hasRole(displayRoles, ["accounting", "pricing"])}>
           <RouteFade>{children}</RouteFade>
         </CostRevealProvider>
-        {isDriverView && <DriverBottomNav todoBadge={driverTodoCount} />}
+        {isDriverView && <DriverBottomNav todoBadge={driverTodoCount} consultTel={driverConsultTel ?? undefined} />}
       </div>
     </div>
     </AdminHeaderNavProvider>

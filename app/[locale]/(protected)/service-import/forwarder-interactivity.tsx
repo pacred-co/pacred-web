@@ -7,6 +7,7 @@ import {
   useTransition,
   type ReactNode,
 } from "react";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { Package, ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { calculateForwarderTotal } from "@/actions/forwarder";
@@ -62,7 +63,7 @@ function summarizeContainer(rows: ForwarderRow[]): ContainerSummary {
   for (const r of countable) {
     boxes += Number(r.famount) || 0;
     weight += Number(r.fweight) || 0;
-    volume += Number(r.fvolume) || 0;
+    volume += totalCbmOf(r);   // กฎ famountcount (SOT)
     total += calPriceForwarderSumCompany(
       r.fusercompany,
       r.fpriceupdate,

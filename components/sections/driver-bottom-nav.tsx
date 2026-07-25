@@ -15,7 +15,7 @@
  */
 
 import { Link, usePathname } from "@/i18n/navigation";
-import { Home, Truck, History, StickyNote, Menu } from "lucide-react";
+import { Home, Truck, History, StickyNote, Menu, Phone, ScanLine } from "lucide-react";
 
 type Tab = {
   /** แท็บลิงก์: href + match (pathname ที่ถือว่า active) */
@@ -23,23 +23,42 @@ type Tab = {
   match?: string;
   /** แท็บปุ่ม: กดแล้วสั่งงาน (เช่น "เมนู" เปิด sidebar) แทนการนำทาง */
   action?: "openSidebar";
+  /** ปุ่มโทร (ปรึกษา) — href = tel:<tel> */
+  tel?: string;
+  /** ปุ่มกลางเด่น = วงกลมแดงลอยขึ้นเหนือแถบ */
+  center?: boolean;
   label: string;
   icon: typeof Home;
   badge?: number;
 };
 
-export function DriverBottomNav({ noteBadge, todoBadge }: { noteBadge?: number; todoBadge?: number }) {
+// เบอร์ "ปรึกษา" = กีตาร์ (keetar · AD021) — layout ส่ง prop consultTel ที่ดึงสดจาก
+// profiles.phone มาให้ (owner 2026-07-25 "อิงจากระบบ") · ค่านี้เป็น fallback เบอร์จริง
+// ของ keetar เผื่ออ่าน DB ไม่ได้ ปุ่มจะยังโทรหา keetar ได้เสมอ.
+const CONSULT_TEL = "0955808971";
+
+export function DriverBottomNav({
+  noteBadge,
+  todoBadge,
+  consultTel,
+}: {
+  noteBadge?: number;
+  todoBadge?: number;
+  consultTel?: string;
+}) {
   const pathname = usePathname();
 
   const tabs: Tab[] = [
     { href: "/admin/drivers?view=todo", match: "/admin/drivers", label: "หน้าแรก", icon: Home },
-    // badge = จำนวนงานที่ต้องส่ง (รอบเปิดของคนขับคนนี้) เหมือน legacy footer โชว์ "1"
-    // (owner 2026-07-24) — ตัวเลขมาจาก countDriverOpenBatches (ตรงหน้า view=todo).
-    { href: "/admin/drivers?view=todo", match: "/admin/drivers", label: "จัดส่ง", icon: Truck, badge: todoBadge },
+    // badge = จำนวนงานที่ต้องส่ง (รอบเปิดของคนขับคนนี้) · จาก countDriverOpenBatches.
+    { href: "/admin/drivers?view=todo", match: "/admin/drivers", label: "ต้องส่ง", icon: Truck, badge: todoBadge },
     { href: "/admin/drivers?view=history", match: "/admin/drivers", label: "ประวัติงาน", icon: History },
+    // ปุ่มกลาง "ปรึกษา" = โทรหา keetar (owner 2026-07-25 · เบอร์รอ owner · "เดี๋ยวว่ากันที่เหลือ")
+    { tel: consultTel ?? CONSULT_TEL, center: true, label: "ปรึกษา", icon: Phone },
+    // "ยิงหาของ" = สแกนบาร์โค้ดหาพัสดุ (owner เลือกมา · /admin/barcode/driver/all)
+    { href: "/admin/barcode/driver/all", match: "/admin/barcode/driver", label: "ยิงหาของ", icon: ScanLine },
     { href: "/admin/incidents", match: "/admin/incidents", label: "หมายเหตุ", icon: StickyNote, badge: noteBadge },
-    // "เมนู" (owner 2026-07-24: "มันคือเมนู · ใช้ไอคอนเดียวกันได้เลย") — ปุ่มเปิด
-    // left sidebar ตัวเดียวกับปุ่มแฮมเบอร์เกอร์บนซ้าย (ยิง event ให้ AdminSidebar เปิด).
+    // "เมนู" — เปิด left sidebar ตัวเดียวกับปุ่มแฮมเบอร์เกอร์ (ยิง event ให้ AdminSidebar).
     { action: "openSidebar", label: "เมนู", icon: Menu },
   ];
 
@@ -47,13 +66,37 @@ export function DriverBottomNav({ noteBadge, todoBadge }: { noteBadge?: number; 
     <>
       {/* spacer กันเนื้อหาถูกบังหลังแถบ fixed (มือถือเท่านั้น) — เผื่อ safe-area
           (home-indicator iPhone) ให้เท่ากับความสูง nav จริง ห้ามบังเนื้อหาเด็ดขาด (ปอน 2026-07-24) */}
-      <div className="h-[calc(4rem+env(safe-area-inset-bottom))] lg:hidden print:hidden" aria-hidden />
+      <div className="h-[calc(4rem+env(safe-area-inset-bottom))] bg-[#f4f5fa] lg:hidden print:hidden" aria-hidden />
+
+      {/* globals.css ตั้ง body{padding-bottom:90px} บนมือถือ เผื่อแถบเมนู "ลูกค้า" —
+          หน้า admin (คนขับ) ไม่ต้องการ (spacer ด้านบนจองที่ให้แถบนี้เองแล้ว) ไม่งั้น
+          จะเหลือพื้นขาวของ body ~26px โผล่ใต้สุด → เคลียร์ทิ้งเฉพาะตอนแสดงแถบนี้ (ปอน 2026-07-25) */}
+      <style>{`@media (max-width:767px){body{padding-bottom:0 !important}}`}</style>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.06)] pb-[env(safe-area-inset-bottom)] lg:hidden print:hidden">
-        <ul className="grid grid-cols-5">
+        <ul className="flex items-stretch">
           {tabs.map((t, i) => {
             const active = !!t.match && (pathname === t.match || pathname.startsWith(`${t.match}/`));
             const Icon = t.icon;
+
+            // ── ปุ่มกลาง "ปรึกษา" = วงกลมแดงลอยขึ้นเหนือแถบ (โทรหา keetar) ──
+            if (t.center) {
+              return (
+                <li key={`center-${i}`} className="flex flex-1 justify-center">
+                  <a
+                    href={`tel:${t.tel}`}
+                    aria-label={`${t.label} (โทร)`}
+                    className="flex flex-col items-center justify-end gap-0.5 pb-1.5"
+                  >
+                    <span className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-[#e30613] text-white shadow-lg ring-4 ring-white">
+                      <Icon className="h-7 w-7" strokeWidth={2.2} />
+                    </span>
+                    <span className="text-[10px] font-semibold leading-tight text-[#cc3333]">{t.label}</span>
+                  </a>
+                </li>
+              );
+            }
+
             // เนื้อในเหมือนกันทั้งแท็บลิงก์และปุ่ม (ไอคอน + badge + label)
             const inner = (
               <>
@@ -72,7 +115,7 @@ export function DriverBottomNav({ noteBadge, todoBadge }: { noteBadge?: number; 
               active ? "text-[#cc3333]" : "text-[#cc3333]/85"
             }`;
             return (
-              <li key={`${t.href ?? t.action}-${i}`}>
+              <li key={`${t.href ?? t.action}-${i}`} className="flex-1">
                 {t.action === "openSidebar" ? (
                   // ปุ่ม "เมนู" — เปิด left sidebar ตัวเดียวกับปุ่มแฮมเบอร์เกอร์
                   // (ยิง event · AdminSidebar ฟังแล้ว setOpenMobile(true)).

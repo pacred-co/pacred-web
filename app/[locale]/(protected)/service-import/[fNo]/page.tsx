@@ -876,6 +876,7 @@ export default async function ServiceImportDetailPage({
     fdetail:                row.fdetail,
     fcover:                 row.fcover,
     famount:                row.famount,
+    famountcount:           (row as { famountcount?: string | null }).famountcount ?? null,
     fweight:                fWeight,
     fvolume:                fVolume,
     ftotalprice:            fTotalPrice,
@@ -997,7 +998,7 @@ export default async function ServiceImportDetailPage({
       const { data: sibRaw, error: sibErr } = await admin
         .from("tb_forwarder")
         .select(
-          "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftrackingth, ftransporttype, fshipby, fdetail, fcover, famount, fweight, fvolume, ftotalprice, ftransportprice, paymethod, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, fcredit, fcreditdate, fdatestatus5, fdatetothai, fcabinetnumber, fdatecontainerclose, fnote, fnoteuser, reforder, promoid, fproductstype, tax_doc_pref",
+          "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftrackingth, ftransporttype, fshipby, fdetail, fcover, famount, famountcount, fweight, fvolume, ftotalprice, ftransportprice, paymethod, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, fcredit, fcreditdate, fdatestatus5, fdatetothai, fcabinetnumber, fdatecontainerclose, fnote, fnoteuser, reforder, promoid, fproductstype, tax_doc_pref",
         )
         .eq("userid", row.userid ?? "")
         .in("id", siblingIds)
@@ -1030,6 +1031,7 @@ export default async function ServiceImportDetailPage({
             fdetail: (s.fdetail as string | null) ?? null,
             fcover: (s.fcover as string | null) ?? null,
             famount: num2(s.famount),
+            famountcount: (s as { famountcount?: string | null }).famountcount ?? null,
             fweight: num2(s.fweight),
             fvolume: num2(s.fvolume),
             ftotalprice: num2(s.ftotalprice),

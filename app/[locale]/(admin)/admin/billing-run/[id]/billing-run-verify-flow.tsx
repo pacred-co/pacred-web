@@ -51,6 +51,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, XCircle, Loader2, Undo2 } from "lucide-react";
 import { RejectReasonPicker } from "@/components/admin/reject-reason-picker";
+import { SlipVerifyStep } from "@/components/admin/slip-verify-step";
 import { ReceiptDocNoEditor } from "@/components/admin/receipt-doc-no-editor";
 import {
   markBillingRunPaid,
@@ -368,14 +369,11 @@ export function BillingRunVerifyFlow(props: Props) {
         <>
           {/* ── PAGE-1 · ขั้นที่ 1 (สลิป pending · ยังไม่ผ่านรอบ 1) ── */}
           {round1Pending && (
-            <div className="space-y-2 rounded-xl border border-sky-300 bg-sky-50/60 p-3 dark:bg-sky-50/5">
-              <p className="text-sm font-semibold text-sky-900 dark:text-foreground">
-                ขั้นที่ 1 · ตรวจสลิป · วันโอน · รายการซ้ำ
-              </p>
-              <p className="text-[11px] text-sky-800 dark:text-muted">
-                เทียบสลิปลูกค้า (ด้านบน) กับยอดที่ต้องชำระ + วันเวลาโอน แล้วกดผ่านรอบ 1
-                จึงจะไปขั้นตรวจเอกสาร + อนุมัติ ตัดจ่าย (รอบ 2)
-              </p>
+            <SlipVerifyStep
+              step={1}
+              titleSuffix=" · วันโอน · รายการซ้ำ"
+              subtitle={<>เทียบสลิปลูกค้า (ด้านบน) กับยอดที่ต้องชำระ + วันเวลาโอน แล้วกดผ่านรอบ 1 จึงจะไปขั้นตรวจเอกสาร + อนุมัติ ตัดจ่าย (รอบ 2)</>}
+            >
 
               <div className="space-y-1 rounded-lg border border-border bg-white p-3 dark:bg-surface">
                 <div className="flex justify-between gap-3 text-sm">
@@ -432,22 +430,20 @@ export function BillingRunVerifyFlow(props: Props) {
               </div>
 
               {rejectPanel}
-            </div>
+            </SlipVerifyStep>
           )}
 
           {/* ── PAGE-2 · ขั้นที่ 2 (ผ่านรอบ 1 แล้ว · หรือ ไม่มีสลิป pending) ── */}
           {!round1Pending && (
-            <div className="space-y-2 rounded-xl border border-emerald-300 bg-emerald-50/50 p-3 dark:bg-emerald-50/5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-emerald-900 dark:text-foreground">
-                  ขั้นที่ 2 · ตรวจเอกสาร → อนุมัติ ตัดจ่าย · ออกใบเสร็จ
-                </p>
-                {hasPendingSlip && (
-                  <span className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800">
-                    ✓ ตรวจสลิป รอบ 1 แล้ว
-                  </span>
-                )}
-              </div>
+            <SlipVerifyStep
+              step={2}
+              titleSuffix=" · ตรวจเอกสาร → ออกใบเสร็จ"
+              titleRight={hasPendingSlip ? (
+                <span className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800">
+                  ✓ ตรวจสลิป รอบ 1 แล้ว
+                </span>
+              ) : null}
+            >
 
               {/* step-② semantic (bill-no + WHT · NOT receipt-no) — kept from the old tracker */}
               <div className="rounded-lg border border-emerald-200 bg-white/70 px-3 py-2 text-[12px] dark:bg-surface">
@@ -595,7 +591,7 @@ export function BillingRunVerifyFlow(props: Props) {
               </form>
 
               {rejectPanel}
-            </div>
+            </SlipVerifyStep>
           )}
         </>
       )}

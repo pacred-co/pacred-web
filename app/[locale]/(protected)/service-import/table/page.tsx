@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { getTranslations } from "next-intl/server";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total";
@@ -225,6 +226,7 @@ type ForwarderRow = {
   famount: number | null;
   fweight: number | null;
   fvolume: number | null;
+  famountcount: string | null;
   fwidth: number | null;
   fheight: number | null;
   flength: number | null;
@@ -343,7 +345,7 @@ export default async function ForwarderTablePage({
   let tableQuery = admin
     .from("tb_forwarder")
     .select(
-      "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftransporttype, fshipby, paymethod, fcredit, fdetail, fcover, famount, fweight, fvolume, fwidth, fheight, flength, fproductstype, frefprice, frefrate, fcabinetnumber, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, reforder, fdatestatus2, fdatestatus3, fdatestatus4",
+      "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftransporttype, fshipby, paymethod, fcredit, fdetail, fcover, famount, famountcount, fweight, fvolume, fwidth, fheight, flength, fproductstype, frefprice, frefrate, fcabinetnumber, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, reforder, fdatestatus2, fdatestatus3, fdatestatus4",
     )
     .eq("userid", memberCode);
 
@@ -390,6 +392,7 @@ export default async function ForwarderTablePage({
       famount: row.famount == null ? null : Number(row.famount),
       fweight: row.fweight == null ? null : Number(row.fweight),
       fvolume: row.fvolume == null ? null : Number(row.fvolume),
+      famountcount: (row.famountcount as string | null) ?? null,
       fwidth: row.fwidth == null ? null : Number(row.fwidth),
       fheight: row.fheight == null ? null : Number(row.fheight),
       flength: row.flength == null ? null : Number(row.flength),
@@ -457,7 +460,7 @@ export default async function ForwarderTablePage({
   for (const row of rows) {
     sumBoxes += Number(row.famount ?? 0);
     sumWeight += Number(row.fweight ?? 0);
-    sumVolume += Number(row.fvolume ?? 0);
+    sumVolume += totalCbmOf(row);   // กฎ famountcount (SOT)
     sumNetPrice += rowNet.get(row.id) ?? 0;
   }
 
@@ -507,7 +510,7 @@ export default async function ForwarderTablePage({
       width:          (row.fwidth ?? 0) > 0 ? numberFormat(row.fwidth!, 2) : "",
       height:         (row.fheight ?? 0) > 0 ? numberFormat(row.fheight!, 2) : "",
       length:         (row.flength ?? 0) > 0 ? numberFormat(row.flength!, 2) : "",
-      volume:         (row.fvolume ?? 0) > 0 ? numberFormat(row.fvolume!, 3) : "",
+      volume:         (row.fvolume ?? 0) > 0 ? numberFormat(totalCbmOf(row), 3) : "",
       pricedBy:       nameRefPrice2(row.frefprice, t),
       importRate:     (row.frefrate ?? 0) > 0 ? numberFormat(row.frefrate!, 2) : "",
       type:           nameProductsType2(row.fproductstype, t),
@@ -576,6 +579,7 @@ export default async function ForwarderTablePage({
     fdetail: r.fdetail,
     fcover: r.fcover,
     famount: r.famount ?? 0,
+    famountcount: r.famountcount ?? null,
     fweight: r.fweight ?? 0,
     fvolume: r.fvolume ?? 0,
     ftotalprice: r.ftotalprice ?? 0,

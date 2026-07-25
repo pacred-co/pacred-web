@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { AdminDateFilter } from "@/components/admin/date-filter";
@@ -35,6 +36,8 @@ type ForwarderRow = {
   fwarehousename:      string;
   fstatus:             string;
   fvolume:             number;
+  famount:             number | null;
+  famountcount:        string | null;
   fweight:             number;
 };
 
@@ -73,7 +76,7 @@ function groupByContainer(rows: ForwarderRow[]): Grouped[] {
     const existing = by.get(k);
     if (existing) {
       existing.shipmentCount += 1;
-      existing.totalVolume += Number(r.fvolume ?? 0);
+      existing.totalVolume += totalCbmOf(r);   // กฎ famountcount (SOT)
       existing.totalWeight += Number(r.fweight ?? 0);
     } else {
       by.set(k, {
@@ -84,7 +87,7 @@ function groupByContainer(rows: ForwarderRow[]): Grouped[] {
         fwarehousename:      r.fwarehousename,
         fstatus:             r.fstatus,
         shipmentCount:       1,
-        totalVolume:         Number(r.fvolume ?? 0),
+        totalVolume:         totalCbmOf(r),
         totalWeight:         Number(r.fweight ?? 0),
       });
     }
@@ -112,7 +115,7 @@ export default async function ContainersAwaitingThReport({
   let q = admin
     .from("tb_forwarder")
     .select(`fcabinetnumber, fdatecontainerclose, fdatestatus4, ftransporttype,
-      fwarehousename, fstatus, fvolume, fweight`)
+      fwarehousename, fstatus, fvolume, famount, famountcount, fweight`)
     .not("fcabinetnumber", "is", null).neq("fcabinetnumber", "").neq("fcabinetnumber", "0")
     .lt("fstatus", "4")
     .limit(50_000);

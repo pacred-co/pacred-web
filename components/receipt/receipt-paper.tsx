@@ -515,7 +515,9 @@ export function ReceiptPage({
                       >
                         <td style={{ padding: "3px 3px", fontSize: "9px", textAlign: "center", borderTop: "0.5px solid #e5e7eb" }}>{row.no}</td>
                         <td style={{ padding: "3px 3px", fontSize: "8px", textAlign: "center", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>#{row.fid}</td>
-                        <td style={{ padding: "3px 3px", fontSize: "8px", wordBreak: "break-all", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{row.tracking}</td>
+                        <td style={{ padding: "3px 3px", fontSize: "8px", wordBreak: "break-all", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>
+                          {row.tracking}
+                        </td>
                         <td style={{ padding: "3px 3px", fontSize: "8px", wordBreak: "break-all", fontFamily: "monospace", color: "#374151", borderTop: "0.5px solid #e5e7eb" }}>{row.cabinet || "—"}</td>
                         <td style={{ padding: "3px 3px", fontSize: "8px", textAlign: "center", fontWeight: "bold", color: row.transport === "SEA" ? "#1d4ed8" : "#b45309", borderTop: "0.5px solid #e5e7eb" }}>{row.transport || "—"}</td>
                         <td style={{ padding: "3px 3px", fontSize: "9px", textAlign: "right", fontFamily: "monospace", borderTop: "0.5px solid #e5e7eb" }}>{fmt0(row.famount)}</td>

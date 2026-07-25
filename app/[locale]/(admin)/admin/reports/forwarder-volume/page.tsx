@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton } from "@/components/admin/csv-button";
@@ -13,7 +14,7 @@ import { filterCountableForwarderRows } from "@/lib/admin/momo-bill-header";
  * (empty on prod) → `tb_forwarder` with these column mappings:
  *   source_warehouse → fwarehousechina ("1"=Yiwu, "2"=Guangzhou)
  *   transport_type   → ftransporttype  ("1"=truck, "2"=ship, "3"=air)
- *   box_count        → famountcount
+ *   box_count        → famount (จำนวนกล่องจริง — famountcount คือ FLAG convention ไม่ใช่จำนวน!)
  *   weight_kg        → fweight
  *   volume_cbm       → fvolume
  *   total_price      → ftotalprice
@@ -39,7 +40,8 @@ const TRANSPORT_LABEL: Record<string, string> = {
 type FwRow = {
   fwarehousechina: string | null;
   ftransporttype:  string | null;
-  famountcount:    number | null;
+  famount:         number | null;
+  famountcount:    string | null;
   fweight:         number | null;
   fvolume:         number | null;
   ftotalprice:     number | null;
@@ -76,7 +78,7 @@ export default async function ForwarderVolumeReport({
   const { data, error } = await admin
     .from("tb_forwarder")
     .select(
-      "fwarehousechina,ftransporttype,famountcount,fweight,fvolume,ftotalprice,fstatus,ftrackingchn,userid",
+      "fwarehousechina,ftransporttype,famount,famountcount,fweight,fvolume,ftotalprice,fstatus,ftrackingchn,userid",
     )
     .gte("fdate", from)
     .neq("fstatus", "99")
@@ -124,9 +126,11 @@ export default async function ForwarderVolumeReport({
       revenue_thb: 0,
     };
     a.count += 1;
-    a.box_count += Number(r.famountcount ?? 0);
+    // 🔴 owner 2026-07-24 'กล่องผิดมั่ง' — เดิมบวก famountcount (FLAG '1'=ยอดรวม)
+    // เป็นจำนวนกล่อง ได้ 0/1 มั่วๆ · จำนวนกล่องจริงคือ famount
+    a.box_count += Number(r.famount ?? 0);
     a.weight_kg += Number(r.fweight ?? 0);
-    a.volume_cbm += Number(r.fvolume ?? 0);
+    a.volume_cbm += totalCbmOf(r);   // กฎ famountcount (SOT)
     a.revenue_thb += Number(r.ftotalprice ?? 0);
     aggMap.set(key, a);
   }

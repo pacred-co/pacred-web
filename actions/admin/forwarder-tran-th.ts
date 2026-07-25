@@ -26,6 +26,7 @@
  */
 
 import { z } from "zod";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -82,6 +83,7 @@ export type TranThItemRow = {
     famount:              number;
     fweight:              number;
     fvolume:              number;
+    famountcount:         string | null;
   } | null;
 };
 
@@ -217,6 +219,7 @@ export async function getTranThDetail(id: number): Promise<TranThDetail | null> 
     famount: number | string | null;
     fweight: number | string | null;
     fvolume: number | string | null;
+    famountcount: string | null;
   };
   let fwdById = new Map<number, FwdRow>();
   if (fIds.length > 0) {
@@ -224,7 +227,7 @@ export async function getTranThDetail(id: number): Promise<TranThDetail | null> 
       .from("tb_forwarder")
       .select(
         "id, fid, fdetail, ftrackingchn, ftrackingth, faddressname, faddresslastname, " +
-        "faddressprovince, faddresstel, fstatus, fdate, famount, fweight, fvolume",
+        "faddressprovince, faddresstel, fstatus, fdate, famount, famountcount, fweight, fvolume",
       )
       .in("id", fIds);
     if (fwdErr) {
@@ -253,6 +256,7 @@ export async function getTranThDetail(id: number): Promise<TranThDetail | null> 
             famount:           Number(f.famount ?? 0),
             fweight:           Number(f.fweight ?? 0),
             fvolume:           Number(f.fvolume ?? 0),
+            famountcount:      f.famountcount ?? null,
           }
         : null,
     };
@@ -265,7 +269,7 @@ export async function getTranThDetail(id: number): Promise<TranThDetail | null> 
   for (const it of items) {
     if (!it.forwarder) continue;
     totalWeight += it.forwarder.fweight;
-    totalVolume += it.forwarder.fvolume;
+    totalVolume += totalCbmOf({ fvolume: it.forwarder.fvolume, famount: it.forwarder.famount, famountcount: it.forwarder.famountcount });
     totalBoxes  += it.forwarder.famount;
   }
 

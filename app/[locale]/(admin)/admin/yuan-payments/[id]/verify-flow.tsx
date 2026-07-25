@@ -38,6 +38,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, XCircle, Loader2, Undo2 } from "lucide-react";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
+import { SlipVerifyStep } from "@/components/admin/slip-verify-step";
 import { adminUpdateYuanPayment, adminReviewYuanRound1 } from "@/actions/admin/yuan-payments";
 import { YuanRefundModal } from "../refund-modal";
 
@@ -221,14 +222,11 @@ export function YuanVerifyFlow(props: Props) {
 
       {/* ── PAGE-1 · ขั้นที่ 1 (pending · ยังไม่ผ่านรอบ 1) ── */}
       {isPending && !round1Done && (
-        <div className="space-y-2 rounded-xl border border-sky-300 bg-sky-50/60 p-3 dark:bg-sky-50/5">
-          <p className="text-sm font-semibold text-sky-900 dark:text-foreground">
-            ขั้นที่ 1 · ตรวจสลิปกับยอดและวันโอน
-          </p>
-          <p className="text-[11px] text-sky-800 dark:text-muted">
-            เทียบสลิปลูกค้า (ด้านบน) กับยอดโอน + วันเวลาโอน แล้วกดผ่านรอบ 1
-            จึงจะไปขั้นอนุมัติ + ตัดจ่าย (รอบ 2)
-          </p>
+        <SlipVerifyStep
+          step={1}
+          titleSuffix=" · กับยอดและวันโอน"
+          subtitle={<>เทียบสลิปลูกค้า (ด้านบน) กับยอดโอน + วันเวลาโอน แล้วกดผ่านรอบ 1 จึงจะไปขั้นอนุมัติ + ตัดจ่าย (รอบ 2)</>}
+        >
 
           {/* ยอดที่ต้องตรงสลิป — the same figures the page shows, folded into one check */}
           <div className="space-y-1 rounded-lg border border-border bg-white p-3 dark:bg-surface">
@@ -285,20 +283,19 @@ export function YuanVerifyFlow(props: Props) {
               <XCircle className="h-4 w-4" /> ปฏิเสธรายการ (สลิปปลอม · ซ้ำ · ไม่ตรงยอด)
             </button>
           </div>
-        </div>
+        </SlipVerifyStep>
       )}
 
       {/* ── PAGE-2 · ขั้นที่ 2 (pending · ผ่านรอบ 1 แล้ว) ── */}
       {isPending && round1Done && (
-        <div className="space-y-2 rounded-xl border border-emerald-300 bg-emerald-50/50 p-3 dark:bg-emerald-50/5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-emerald-900 dark:text-foreground">
-              ขั้นที่ 2 · อนุมัติ + ตัดจ่าย (รอบ 2)
-            </p>
+        <SlipVerifyStep
+          step={2}
+          titleRight={
             <span className="inline-flex items-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800">
               ✓ ตรวจสลิปรอบ 1 แล้ว{reviewedAt ? ` · ${fmtStamp(reviewedAt)}` : ""}
             </span>
-          </div>
+          }
+        >
           <p className="text-[11px] text-emerald-900/80 dark:text-muted">
             อนุมัติ = ตัดจ่าย {moneyLine} + แจ้งผลลูกค้า · เรทต้นทุนถูกบันทึกอัตโนมัติตามเรทระบบ
             (แก้ได้ที่กรอบ &lsquo;สรุปรายการเงิน&rsquo;) — ฝากโอนไม่ออกใบเสร็จอัตโนมัติ
@@ -325,7 +322,7 @@ export function YuanVerifyFlow(props: Props) {
               <XCircle className="h-4 w-4" /> ปฏิเสธรายการ
             </button>
           </div>
-        </div>
+        </SlipVerifyStep>
       )}
 
       {/* ── คืนเงิน + แนบสลิป — same reachability as before (pending/processing/completed) ── */}

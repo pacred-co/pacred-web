@@ -257,7 +257,7 @@ export default async function ServiceImportPage({
   let listQuery = admin
     .from("tb_forwarder")
     .select(
-      "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftrackingth, ftransporttype, fshipby, paymethod, fdetail, fcover, famount, fweight, fvolume, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, fcredit, fcreditdate, fdatestatus5, fdatetothai, fcabinetnumber, fdatecontainerclose, fnote, fnoteuser, reforder, adminidcreator, fproductstype, tax_doc_pref",
+      "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftrackingth, ftransporttype, fshipby, paymethod, fdetail, fcover, famount, famountcount, fweight, fvolume, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, fcredit, fcreditdate, fdatestatus5, fdatetothai, fcabinetnumber, fdatecontainerclose, fnote, fnoteuser, reforder, adminidcreator, fproductstype, tax_doc_pref",
     )
     .eq("userid", memberCode);
   switch (q) {
@@ -334,6 +334,7 @@ export default async function ServiceImportPage({
       fdetail: (r.fdetail as string) ?? null,
       fcover: (r.fcover as string) ?? null,
       famount: Number(r.famount ?? 0),
+      famountcount: (r as { famountcount?: string | null }).famountcount ?? null,
       fweight: Number(r.fweight ?? 0),
       fvolume: Number(r.fvolume ?? 0),
       ftotalprice: Number(r.ftotalprice ?? 0),
