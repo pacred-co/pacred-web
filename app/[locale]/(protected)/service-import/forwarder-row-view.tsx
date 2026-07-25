@@ -240,6 +240,9 @@ export type ForwarderRow = {
   fdetail: string | null;
   fcover: string | null;
   famount: number;
+  /** FLAG convention (กฎ famountcount): '1' = fvolume เป็นยอดรวมแถวแล้ว · อื่น = ต่อกล่อง.
+   *  REQUIRED — บังคับทุก builder ส่งมา ไม่งั้น totalCbmOf จะเดาผิดเงียบๆ (คิว 344 ผี). */
+  famountcount: string | null;
   fweight: number;
   fvolume: number;
   ftotalprice: number;

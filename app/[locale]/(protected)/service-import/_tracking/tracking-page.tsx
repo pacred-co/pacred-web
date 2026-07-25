@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { calPriceForwarderSumCompany } from "@/lib/forwarder/calc-company-total";
@@ -141,7 +142,7 @@ export default async function TrackingPage({
   const { data: listRows, error: listRowsErr } = await admin
     .from("tb_forwarder")
     .select(
-      "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftrackingth, ftransporttype, fshipby, paymethod, fdetail, fcover, famount, fweight, fvolume, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, fcredit, fcreditdate, fdatestatus5, fdatetothai, fcabinetnumber, fdatecontainerclose, fnote, fnoteuser, reforder, adminidcreator",
+      "id, fdate, fstatus, ftrackingchn, ftrackingchn2, ftrackingth, ftransporttype, fshipby, paymethod, fdetail, fcover, famount, famountcount, fweight, fvolume, ftotalprice, ftransportprice, fpriceupdate, fdiscount, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fusercompany, fcredit, fcreditdate, fdatestatus5, fdatetothai, fcabinetnumber, fdatecontainerclose, fnote, fnoteuser, reforder, adminidcreator",
     )
     .eq("userid", memberCode)
     .eq("ftransporttype", meta.ttype);
@@ -160,6 +161,7 @@ export default async function TrackingPage({
     famount: Number(r.famount ?? 0),
     fweight: Number(r.fweight ?? 0),
     fvolume: Number(r.fvolume ?? 0),
+    famountcount: (r.famountcount as string | null) ?? null,
     ftotalprice: Number(r.ftotalprice ?? 0),
     paymethod: (r.paymethod as string | null) ?? null,
     ftransportprice: Number(r.ftransportprice ?? 0),
@@ -303,7 +305,7 @@ export default async function TrackingPage({
     c.rows.push(r);
     c.qty += r.famount || 0;
     c.weight += r.fweight || 0;
-    c.cbm += r.fvolume || 0;
+    c.cbm += totalCbmOf(r);   // กฎ famountcount (SOT)
     c.total += calPriceForwarderSumCompany(
       r.fusercompany,
       r.fpriceupdate,
@@ -1041,7 +1043,7 @@ async function ContainerItemRow({
       <ItemCell label={t("itemDateInWarehouse")} value={row.fdatecontainerclose ? dmy(row.fdatecontainerclose) : (row.fdate ? dmy(row.fdate) : "—")} />
       <ItemCell label={t("itemQty")} value={t("unitBoxes", { n: row.famount || 0 })} />
       <ItemCell label={t("itemWeight")} value={`${numberFormat2(row.fweight || 0)} kg`} />
-      <ItemCell label="CBM" value={numberFormat2(row.fvolume || 0)} />
+      <ItemCell label="CBM" value={numberFormat2(totalCbmOf(row))} />
       <div>
         <div className="text-xs text-muted">{t("itemAmount")}</div>
         <div className="text-base md:text-lg font-extrabold text-red-600 notranslate">{t("unitBaht", { v: numberFormat2(net) })}</div>

@@ -37,24 +37,19 @@ prod (2026-07-24): **937 แถว fac='1'** (ในนั้น **224 แถว
 - [x] `actions/admin/pay-user-view.ts` — กฎถูกแต่ก๊อปสูตร → ต่อ SOT
 - [x] ทุกไฟล์เติม `famountcount` เข้า select + type แล้ว
 
-## 🔴 ยังเหลือ — 9 จุด (ยาม `cbm-sot-guard.test.ts` ชี้ให้ครบแล้ว)
+## ✅ เสร็จรอบ 3 — 10 จุดสุดท้าย + ยามเขียวทั้งระบบ + ลงทะเบียน test:unit แล้ว
 
-**รอบแรกลองแก้ 4 ตัวแรกแล้วใส่ type ผิดตำแหน่ง → ถอยกลับหมด** (ไม่ดันต่อตอน context เหลือน้อย
-= กติกาห้ามทำงานบัค) · แก้ทีละไฟล์ ตรวจ type ให้ตรง struct จริงก่อนเสมอ
-
-- [ ] `actions/admin/export/report-cnt.ts:114` — `existing.volumeSum += Number(r.fvolume ?? 0)`
-- [ ] `actions/admin/reports.ts:322` — `a.volume_cbm += Number(fw.fvolume ?? 0)`
-- [ ] `actions/admin/forwarder-tran-th.ts:268` — `totalVolume += it.forwarder.fvolume`
-- [ ] `(protected)/service-import/table/page.tsx:460` — `sumVolume += Number(row.fvolume ?? 0)`
-- [ ] `admin/cnt-hs/[id]/page.tsx`
-- [ ] `admin/reports/containers-awaiting-th/page.tsx`
-- [ ] `admin/reports/forwarder-volume/page.tsx`
-- [ ] `(protected)/service-import/_tracking/tracking-page.tsx`
-- [ ] `(protected)/service-import/forwarder-interactivity.tsx`
-
-**⚠️ ยามยังไม่ได้ลงทะเบียนใน `test:unit`** — จะแดงจนกว่า 9 จุดนี้จบ
-รันเองด้วย `npx tsx lib/forwarder/cbm-sot-guard.test.ts` (มันจะพิมพ์รายชื่อที่เหลือให้)
-**พอครบแล้วต้องเติมเข้า `package.json` test + test:unit ทันที** ไม่งั้นยามไม่ทำงานจริง
+- [x] `actions/admin/export/report-cnt.ts` (2 จุด) · `actions/admin/reports.ts` (2 query)
+- [x] `actions/admin/forwarder-tran-th.ts` · `admin/cnt-hs/[id]` · `admin/billing-run` (list Σ)
+- [x] `admin/reports/containers-awaiting-th` (2 จุด)
+- [x] 🔴 `admin/reports/forwarder-volume` — **บั๊ก "กล่องผิด" ตัวจริง**: บวก famountcount
+      (FLAG '1') เป็นจำนวนกล่อง ได้ 0/1 มั่วๆ → ใช้ famount จริง + คิวผ่าน SOT
+- [x] `(protected)/service-import/table` (Σ + ต่อแถว) · `_tracking/tracking-page` (Σ กลุ่ม +
+      ItemCell) · `forwarder-interactivity` (Σ ลูกค้า)
+- [x] **type กลาง `ForwarderRow` (forwarder-row-view) += famountcount REQUIRED** —
+      tsc บังคับทุก builder ส่งมา (optional = เงียบแล้วคูณผิดซ้ำ) → เติม select+map ครบ:
+      payment-due · service-import list · [fNo] (รวม sibling query) · table
+- [x] ยามลงทะเบียนใน package.json test + test:unit แล้ว (เขียวทั้งระบบ)
 
 ## ✅ ยาม กันกลับมาอีก — ทำแล้ว
 

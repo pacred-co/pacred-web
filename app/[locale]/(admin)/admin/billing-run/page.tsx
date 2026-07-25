@@ -25,6 +25,7 @@
  */
 
 import { Link } from "@/i18n/navigation";
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { getInvoiceList } from "@/actions/admin/billing-run";
@@ -93,7 +94,7 @@ async function loadEligibleCabinets(): Promise<CntListRow[]> {
   const { data: rows, error } = await admin
     .from("tb_forwarder")
     .select(
-      "fwarehousename,fwarehousechina,fdatestatus4,fstatus,fcabinetnumber,fdatecontainerclose,ftransporttype,fvolume,fweight,fcosttotalprice,ftotalprice",
+      "fwarehousename,fwarehousechina,fdatestatus4,fstatus,fcabinetnumber,fdatecontainerclose,ftransporttype,fvolume,famount,famountcount,fweight,fcosttotalprice,ftotalprice",
     )
     .not("fcabinetnumber", "is", null)
     .neq("fcabinetnumber", "")
@@ -119,6 +120,8 @@ async function loadEligibleCabinets(): Promise<CntListRow[]> {
     fdatecontainerclose: string | null;
     ftransporttype: string;
     fvolume: number;
+    famount: number | null;
+    famountcount: string | null;
     fweight: number;
     fcosttotalprice: number;
     ftotalprice: number;
@@ -129,7 +132,7 @@ async function loadEligibleCabinets(): Promise<CntListRow[]> {
     const existing = byContainer.get(k);
     if (existing) {
       existing.trackCount += 1;
-      existing.volumeSum += Number(r.fvolume ?? 0);
+      existing.volumeSum += totalCbmOf(r);   // กฎ famountcount (SOT)
       existing.weightSum += Number(r.fweight ?? 0);
       existing.costSum   += Number(r.fcosttotalprice ?? 0);
       existing.priceSum  += Number(r.ftotalprice ?? 0);
@@ -146,7 +149,7 @@ async function loadEligibleCabinets(): Promise<CntListRow[]> {
         ftransporttype: r.ftransporttype,
         fstatus: r.fstatus,
         trackCount: 1,
-        volumeSum: Number(r.fvolume ?? 0),
+        volumeSum: totalCbmOf(r),
         weightSum: Number(r.fweight ?? 0),
         costSum:   Number(r.fcosttotalprice ?? 0),
         priceSum:  Number(r.ftotalprice ?? 0),
