@@ -237,24 +237,45 @@ export async function adminCreateForwarderFromTtwStaging(
     if (one?.ok) {
       forwarderId = one.fids?.[0] ?? null;
       created = true;
-      message = `สร้างเข้าระบบแล้ว${forwarderId != null ? ` (#${forwarderId})` : ""}`;
     } else if (one?.skipped) {
       // Already in tb_forwarder → link the staging to that existing row (no dup).
-      const escBase = escapeLike(base);
+      const escB = escapeLike(base);
       const { data: existing, error: exErr } = await admin
         .from("tb_forwarder")
         .select("id")
-        .or(`ftrackingchn.eq.${base},ftrackingchn.like.${escBase}-%`)
+        .or(`ftrackingchn.eq.${base},ftrackingchn.like.${escB}-%`)
         .order("id", { ascending: true })
         .limit(1)
         .maybeSingle();
       if (exErr) console.error("[ttw create] existing lookup failed", { code: exErr.code, message: exErr.message });
       forwarderId = (existing as { id: number } | null)?.id ?? null;
       created = false;
-      message = forwarderId != null ? `มีในระบบอยู่แล้ว — เชื่อมให้ (#${forwarderId})` : "มีในระบบอยู่แล้ว";
     } else {
       return { ok: false, error: one?.error ?? "เอาเข้าระบบไม่สำเร็จ — ลองใหม่" };
     }
+
+    // ── ผูกเลขตู้จริง + เลื่อนสถานะ → "กำลังส่งมาไทย" (staging มีตู้อยู่แล้ว · owner ภูม 2026-07-25).
+    //    MONEY-FREE · mirror the packing reconcile guards: ใส่ตู้เฉพาะแถวที่ cabinet ว่าง (ไม่ทับ) ·
+    //    เลื่อนเฉพาะ 1/2 → 3 (ไม่แตะแถวที่บิลแล้ว ≥4 · ไม่ถอยสถานะ). ครอบทั้ง base + box-split.
+    const container = (r.container_no ?? "").trim();
+    let advanced = false;
+    if (forwarderId != null && container) {
+      const escB = escapeLike(base);
+      const orFilter = `ftrackingchn.eq.${base},ftrackingchn.like.${escB}-%`;
+      const { error: cabErr } = await admin
+        .from("tb_forwarder").update({ fcabinetnumber: container }).or(orFilter).eq("fcabinetnumber", "");
+      if (cabErr) console.error("[ttw create] cabinet link failed", { code: cabErr.code, message: cabErr.message });
+      const { data: adv, error: stErr } = await admin
+        .from("tb_forwarder")
+        .update({ fstatus: "3", fdatestatus3: new Date().toISOString().slice(0, 10) })
+        .or(orFilter).in("fstatus", ["1", "2"]).select("id");
+      if (stErr) console.error("[ttw create] advance status failed", { code: stErr.code, message: stErr.message });
+      else advanced = (adv ?? []).length > 0;
+    }
+
+    message = created
+      ? `เข้าระบบแล้ว${container ? " · ผูกตู้ · กำลังส่งมาไทย" : ""}${forwarderId != null ? ` (#${forwarderId})` : ""}`
+      : `มีในระบบอยู่แล้ว — เชื่อมให้${advanced ? " · เลื่อนเป็นกำลังส่งมาไทย" : ""}${forwarderId != null ? ` (#${forwarderId})` : ""}`;
 
     // Mark the staging row committed (non-money · guarded re-check).
     if (forwarderId != null) {

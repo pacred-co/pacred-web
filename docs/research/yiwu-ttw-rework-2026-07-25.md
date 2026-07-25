@@ -9,6 +9,8 @@ owner brief + แผนที่เคาะแล้ว (mockup ผ่าน "�
 - ✅ browser-verify: yiwu (ตาราง/hover/ประวัติ/สีสถานะ) + TTW (packing+staging render) — ภูม login localhost verify แล้ว
 - ✅ **staging create + ลบ header ซ้ำ (ภูม feedback 2026-07-25):** ปุ่ม "＋ เอาเข้าระบบ" บน**ตาราง staging** (แถวมี PR + ยังไม่ commit) → reuse `addYiwuDeliveryNoteShipments` + set `committed_forwarder_id` + link-existing ถ้าซ้ำ (action ใหม่ `adminCreateForwarderFromTtwStaging` · money-safe) · `hideTitle` ลบ h1 ซ้ำ · eslint/tsc 0 · render verified (header หาย · ปุ่มใน DOM) · **create จริง = ภูม/DOC กด (prod write · ยืนยัน CS ก่อน)**
 - 🔵 fix yiwu รอบ 2: คอลัมน์สินค้าแคบ+หัวตารางเข้ม/ใหญ่ + สีสถานะ SOT (ภูม feedback)
+- ✅ **สร้าง+ผูกตู้+เลื่อนสถานะ + ตู้แดง/ขาว (ภูม feedback รอบ 3):** ปุ่มเอาเข้าระบบ = create + ผูกเลขตู้ (staging มีอยู่แล้ว) + เลื่อน "กำลังส่งมาไทย" ในคลิกเดียว (money-free · mirror reconcile guards: ใส่ตู้เฉพาะช่องว่าง · เลื่อน 1/2→3 · ไม่แตะบิลแล้ว) · tabs แยก "มี PR·ยังไม่เข้าระบบ / เข้าระบบแล้ว / ยังไม่มี PR / ทั้งหมด" · **ตู้แถวแดง (rose-100) ถ้ายังมีรายการไม่เข้าระบบ · ขาวเมื่อครบ** (แบบยิงรับเข้าโกดัง · ตรวจง่าย) · verified DOM: 8 ตู้แดง (commit 0) · tabs ถูก · header หน้าเดียว · eslint/tsc 0
+- 🟡 caveat: "ตู้แดง = มีรายการยังไม่เข้าระบบ" นับ**ทุกแถวที่ไม่ commit** (รวม no-PR/ของบริษัทอื่น) → ถ้าตู้มีของเจ้าอื่นที่เราไม่สร้าง จะแดงค้าง · ถ้าเจอ = เพิ่มปุ่ม "ไม่ใช่ของเรา" ได้
 - 🟡 polish รอบหน้า: TTW มี 2 header (page + staging) ซ้อน · รูปหลายใบ (fcover+fimages) ถ้า ภูม อยาก
 
 ## โฟลที่ถูกต้อง (แยกตามแผนก)
