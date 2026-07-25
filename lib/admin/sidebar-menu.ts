@@ -1326,11 +1326,13 @@ const wrapServiceImport: MenuItem = {
         { labelKey: "forwarder.listAdd",     href: "/admin/forwarders/new",        icon: "Plus" },
       ],
     },
+    // owner 2026-07-26: *"ย้ายหัวข้ออัปเดตฝาก ไปไว้ข้างล่างหัวข้อ รายการนำเข้าที"* —
+    // งานนำเข้าเริ่มที่นี่ (ของเข้าระบบ) ก่อนไปดูรายการ/หมายเหตุ/ตู้ → วางไว้ติดกัน
+    blockApiForwarderUpdate,
     { labelKey: "forwarder.note",         href: "/admin/forwarders?filter=note",         icon: "FileText" },
     { labelKey: "forwarder.checkCntCost", href: "/admin/forwarders/container-cost-check", icon: "Calculator" },
     { labelKey: "warehouse.containers",   href: "/admin/report-cnt",                     icon: "Package" },
     { labelKey: "forwarder.whHistory",    href: "/admin/forwarders/warehouse-history",   icon: "PackageCheck", badge: "forwarderWhError" },
-    blockApiForwarderUpdate,
     // 2026-07-06 (ภูม) — กระสอบรวม = สินค้าที่นำเข้ามา → ย้ายมาอยู่ใต้ "บริการนำเข้า"
     // ต่อจาก "อัปเดตฝากนำเข้า" (ย้ายออกจากกลุ่ม Warehouse). read-only MOMO mirror.
     itemSacks,
