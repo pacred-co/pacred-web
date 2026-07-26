@@ -3,6 +3,26 @@
 
 ---
 
+# 📦 2026-07-26 ปิด session (เดฟ · Mac · marathon 25-26/07) — ด่านนำเข้า MOMO แก้ได้ทุกช่อง (admin_patch กัน sync ทับ) + เคส 733 + อี้อู 4 ตู้ + แท็บโกดัง + ตัดของตาย → ALL BRANCHES · read FIRST
+
+> **🏁 main = dave-pacred2 = dave-pacred = Poom-pacred = InwPond007 = codex = `<HEAD>`** (owner สั่ง push all ตอนปิด). gate ทุก commit: **tsc 0 · lint 0 · i18n 0 · md 0 · test:unit เต็ม 0 · build 0**. **mig 0281 tracking_override + 0282 admin_patch APPLIED PROD (dev ตายถาวร ห้าม reconcile) · NEXT FREE = 0283.** 🆕 **§0k local-first**: dev รันค้าง (`preview_start pacred-1to1`) · owner login ให้แล้ว → **verify บนจอจริงได้ทุกงาน** (ยุค build-green-only จบแล้ว) · push main เฉพาะตอน owner สั่ง.
+>
+> **📦 อี้อู 4 ตู้ใหม่ (owner ส่งไฟล์ YWS260720-9T/22-10T/23-1T/24-2T):** ingest 209 แทรค → ttw_packing_line · จับคู่ PR 7 (verify tb_users ทุกตัว · **PCS10830→PR10830** โค้ดเก่า) · อัพเดทแถวในระบบ 4 แทรค/5 แถว (ผูกตู้+เลื่อน 2→3 = logic ปุ่มภูม) · **audit เจอราก "2 หน้าไม่เชื่อม": เส้น CS คีย์ใบส่งของไม่เคยประทับ pointer กลับ staging → FIX ที่ `addYiwuDeliveryNoteShipments` + backfill 7 แทรคค้าง** · เหลือ DOC กดสร้าง 4 ราย (PR269/PR572/PR596/PR10830) + CS ตรวจ X9002745 (staged PR213 vs แถวจริง PR647 ขัดกัน) · ⚠️ X9002904 (PR609) ระบบ 32.59kg vs packing 2,015kg/62 กล่อง — DOC อัพ packing ให้ reconcile ก่อนบิล.
+>
+> **🔢 เคส 733 (MOMO เปิด 2 เรคคอร์ดต่อพัสดุเดียว):** ร้านประกาศเลขเต็ม (0kg ค้าง) + โกดังชั่งคีย์ 3 ตัวท้าย (31.5kg มีรูปป้ายเขียน TK เต็มเอง) → **mig 0281 `tracking_override`**: แก้เลขบนตารางนำเข้าได้ (✎) โดย**ห้ามแตะ momo_tracking_no** (คีย์ sync — แก้ = ปั๊ม dup) + สาย alias ครบ: commit ใช้เลขแก้ · propagate remap · **จับคู่บิล MOMO ชั้น 3 `staging_alias`** (บิลมาเลขเดิมก็หางานเจอ = ตอบ "ตอน MOMO เก็บเงินเจอไหม") · **กันเบิ้ล 3 ชั้น**: ป้าย 🔁 ซ้ำ + hold · **commit refuse แถวถูกเคลม (fail-CLOSED ครอบ cron)** · heal ประทับแถวผีหลัง commit (**replay planner จริงกับ prod = exact ✓**) · ขาเงิน: 2 เลขชนแถวเดียว → duplicateFid + MCS double-pay guard เดิม.
+>
+> **✍️ ด่านนำเข้าแก้ได้ทุกคอลัมน์ (owner "docs มีข้อมูลเพิ่ม เดี๋ยวกรอกเอง · คำตอบตายตัวเป็นตัวเลือก"):** 17 ช่อง — PR/Tracking/W/L/H/Parcel/Wt/Vol เดิม + SM Date·Branch·Product·**Type (dropdown 4 ค่า)**·Rem·Note·Dum·CG·**Service Fee (ค่าตีลัง→pricecrate)**·ETD/ETA·Return·**Status (dropdown)**·**Trans (dropdown)**·SM Number·**Container (ผ่าน cabinetWriteGuard · กรอกได้บนแขนง "ปิดรอบแล้วแต่ยังไม่มีเลขตู้" — CS รู้จาก WeChat ก่อน MOMO)**·**รูปกด + เพิ่มได้** (bucket forwarder-covers → fimages/fcover ตอนนำเข้า). **ของที่กรอกไหลเข้าแถวจริง**: Product→fdetail · Rem→fnote (เดิม hardcode ""/null) · commit overlay จุดเดียวต้นทาง = **จอโชว์ = ที่บิล**.
+>
+> **🔴 2 ราก systemic ที่เจอ (learning [`staging-gate-editable-and-db-constraint.md`](docs/learnings/staging-gate-editable-and-db-constraint.md)):** (1) **sync ทับ raw ทั้งก้อนทุก 5 นาที** → ของที่กรอกลง raw หายเงียบ (dims ภูมโดนมา 11 วัน) → **mig 0282 `admin_patch`** = บ้าน sync-proof + overlay จอ/commit (2) **fimages NOT NULL DEFAULT '[]' — เขียน null = พังทุกการนำเข้า** ทั้งที่ gate เขียวหมด (owner จับได้คาหน้า) → FIX + **rollback-INSERT test 8 เคส** (`verify-momo-commit-insert-2026-07-25.ts` · เคส regression ต้องพัง = เทสไม่หลอก) + **ยาม NOT-NULL ลง test:unit** (`momo-commit-insert-guard.test.ts` · พิสูจน์จับได้จริง).
+>
+> **🗂 จัดบ้าน (owner "แต่ละหน้าเหมือนคนละเว็บไซต์"):** sidebar "อัปเดตฝากนำเข้า" ยุบเหลือ **entry เดียว → hub** (ย้ายไปใต้ "รายการนำเข้า") · NEW **`warehouse-workspace-nav.tsx`** ใช้ 7 หน้า (breadcrumb + **แท็บโกดัง 🚢 กวางโจว/🧾 อี้อู** + เครื่องมือของโกดัง + ↩ ทางกลับ) · **CargoCenter/JMF/GOGO/TTP/momo-lcl = 0 งานบน prod ทุกตัว → redirect เข้า hub** · **คลังแชท WeChat ถอดทั้งระบบ** (owner "หนักรกเกะกะ" · หน้า+panel+ลิงก์ · **ไม่แตะ WeChat Pay** · ตาราง 24,428 แถวยังอยู่ รอ owner สั่ง drop) · default หัวคอลัมน์ตาม owner จัด · กรุ๊ปชิปเม้นใน modal ยืนยัน + ปุ่มกาง/ย่อทุกชิปเม้น · กรองขยะ "พัสดุ MOMO ไม่ส่ง" (CBX กระสอบ + หัวตารางไฟล์ = ไม่ใช่พัสดุ → เหลือจริง 0) · คอลัมน์ **กระสอบ (CBX + N แทรค·N PR)** + **ตีลังไม้ (PKF + รูป)** — audit เงินกระสอบ: บิล MOMO รายแทรคเสมอ หลาย PR ในกระสอบเดียวเงินไม่ปน ✓.
+>
+> **🧾 งานบัญชี (เปิดไว้ · รอ owner เคาะลำดับ):** สำรวจ prod แล้ว — AR เดิน (บิล 137/จ่าย 82 · ใบเสร็จ 150 · 50ทวิ 150) · **AP = 0 ทั้งหมด** (ทะเบียนพร้อมแต่ไม่มีใครลง) · ใบกำกับ 4/0 · **stock = ไม่มีตารางเลย** · ไกด์ PEAK ภูมครบ 4 ไฟล์ (`docs/research/peak-accounting/`) = พิมพ์เขียวพร้อม. ตัวเลือกเสนอ: (1) ปิดช่อง AP (2) **รายงานยื่นเดือน ภงด.53/ภพ.30 (แนะนำเริ่ม — read-only)** (3) stock+ใบกำกับ (ออกแบบก่อน).
+>
+> **🔴 CARRYOVER:** (1) DOC กดสร้าง 4 ราย TTW + CS ตรวจ X9002745 + PR609 reconcile น้ำหนัก. (2) accounting: void FRI2606-00013 (residue เดิม). (3) owner เคาะเลน บัญชี. (4) wallet edit-form ย้ายเข้า SlipVerifyStep. (5) ตาราง wechat_ops_message รอเคาะ drop. (6) mockup รวมหน้า yiwu เข้า hub เต็มรูป (ภูม lane · mockup-first).
+
+---
+
 # 📚 2026-07-24 ปิด session (ภูม · กู้งานชนลิมิต ×2) — PEAK core ครบวง 4 ไฟล์ (GL engine = ชิ้นสุดท้าย) + MOMO Σ หัวชิปเม้น 888073444322 → Poom-pacred · read FIRST
 
 > **🏁 origin/Poom-pacred = `<HEAD>`** (push ครบ · merge ไม่ force = งานใครไม่หาย). gate ทุก commit: **tsc 0 · BUILD_EXIT=0 · eslint 0 · md-links 6414/6414 · เทส momo/เงิน ผ่าน**. **ไม่มี migration ใหม่** (งาน session นี้ = docs + display เท่านั้น · เช็ค `ls supabase/migrations | tail` ก่อนตั้งเลขเสมอ).
