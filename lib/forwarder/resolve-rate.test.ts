@@ -193,6 +193,29 @@ function inp(over: Partial<ResolveRateInput> = {}): ResolveRateInput {
   eq("customComparison 100→clamp250: 260>250 → KG", r.basis, "kg");
 }
 
+// ── 6d. 🔴 ค่าเทียบที่พนักงานตั้งเอง ชนะ "เก็บฐานที่แพงกว่า" (owner 2026-07-26 · งาน 52560/PR075)
+//    เดิม: ติ๊กแบบกำหนดเอง + พิมพ์ค่าเทียบ → จอโชว์ผลของค่าเทียบ (คิดตามกิโล 11,976.50)
+//    แต่ตอนบันทึก CHARGE_HIGHER_BASIS ทับเป็นคิว (12,333.50) → "แก้ยังไงก็ไม่เปลี่ยน".
+//    เลขทั้งหมดคือของจริงจากชิปเม้น 1783583857 (704.50 กก. · 2.51704 คิว · 17 ฿/กก. · 4,900 ฿/คิว).
+{
+  const c = cand({ isSvip: true, svipKg: 17, svipCbm: 4900 });
+  const real = { weightKg: 704.5, volumeCbm: 2.51704, chargeHigherBasis: true };
+
+  // ไม่ติ๊ก = นโยบายเดิม → เก็บฐานที่แพงกว่า (คิว 12,333.50) — ต้องไม่เปลี่ยนพฤติกรรม
+  let r = resolveForwarderRate(c, inp(real));
+  eq("ไม่ติ๊กค่าเทียบ: เก็บฐานแพงกว่า → CBM", r.basis, "cbm");
+  near("ไม่ติ๊กค่าเทียบ: ยอด = 12,333.50", r.transportSubtotal, 12333.5);
+
+  // ติ๊กเอง + พิมพ์ 100 (clamp เป็น 250) · 704.5/2.51704 = 279.89 > 250 → ต้องคิดตามกิโล
+  r = resolveForwarderRate(c, inp({ ...real, customComparison: true, comparisonValue: 100 }));
+  eq("ติ๊กค่าเทียบเอง: ชนะนโยบายแพงกว่า → KG", r.basis, "kg");
+  near("ติ๊กค่าเทียบเอง: ยอด = 11,976.50 (ตรงกับที่จอโชว์)", r.transportSubtotal, 11976.5);
+
+  // ติ๊กเองแล้วอัตราส่วนต่ำกว่าเกณฑ์ → คิว ตามค่าเทียบ (ไม่ใช่เพราะแพงกว่า)
+  r = resolveForwarderRate(c, inp({ weightKg: 100, volumeCbm: 2.51704, chargeHigherBasis: true, customComparison: true, comparisonValue: 300 }));
+  eq("ติ๊กค่าเทียบเอง + ต่ำกว่าเกณฑ์ → CBM", r.basis, "cbm");
+}
+
 // ── 7. SVIP-but-warehouse-missing EDGE → rate 0 → rateMissing flag ──
 //      (legacy: getPrice() returns rate 0 when the per-user row for the tuple
 //       is absent · $error[] 'ไม่มีเรทราคา … SVIP'; the save writes fTotalPrice 0.)

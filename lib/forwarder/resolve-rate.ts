@@ -427,7 +427,17 @@ export function resolveForwarderRate(
   // ── 🔴 CHARGE THE HIGHER BASIS (owner 2026-07-21 · see CHARGE_HIGHER_BASIS) ──
   // Runs BEFORE both selectors, because both of them can land on the cheaper side.
   // Skipped when the caller pinned a basis (estimator "ถ้าคิดตามกิโล ได้เท่าไร").
-  if ((input.chargeHigherBasis ?? CHARGE_HIGHER_BASIS) && !input.basisPinned) {
+  // 🔴 owner 2026-07-26 (งาน 52560 · PR075): *"เผลอเก็บเสนอราคาขายเป็นกิโลไป พอปรับค่าเทียบ
+  // ให้คิดกิโล พอบันทึกแล้วมันไม่เปลี่ยนให้"* — พนักงาน**ติ๊ก "คิดราคา + ค่าเทียบ แบบกำหนดเอง"
+  // แล้วพิมพ์ค่าเทียบเอง** = การตัดสินใจของคนที่ตั้งใจเลือกฐานให้งานนั้นโดยเฉพาะ
+  // (เคสนี้ตั้ง 100 → 279.89 > 100 → ต้องคิดตามกิโล 11,976.50) แต่ CHARGE_HIGHER_BASIS
+  // (นโยบายเหมารวมของ 2026-07-21) มาทับเป็นฐานคิว 12,333.48 → **จอโชว์ "ระบบเลือก คิดตาม
+  // ค่าเทียบ → 11,976.50" แต่ค่าที่บันทึกเป็นอีกตัว** = แก้ยังไงก็ไม่เปลี่ยน.
+  // กติกา: **ค่าที่คนตั้งเองรายงาน ชนะ นโยบายเหมารวมเสมอ** (เหมือน basisPinned ของเครื่องมือ
+  // ประเมิน) · งานที่ไม่ได้ติ๊ก = ใช้ "เก็บฐานที่แพงกว่า" เหมือนเดิมทุกประการ (prod: ติ๊กเอง
+  // 222 แถว · ยังไม่บิลแค่ 13 → รัศมีแคบ · ที่บิลไปแล้วไม่ถูกคิดใหม่).
+  const staffPinnedComparison = input.customComparison === true;
+  if ((input.chargeHigherBasis ?? CHARGE_HIGHER_BASIS) && !input.basisPinned && !staffPinnedComparison) {
     const kgProbeH = rateForBasis("kg", candidates, weight);
     const cbmProbeH = rateForBasis("cbm", candidates, cbm);
     const cbmDiscH = applyDocTierCbmDiscount(cbmProbeH.rate, docEligible, docDiscountCbm);

@@ -11,6 +11,7 @@ import {
   uploadForwarderSlip,
 } from "@/actions/forwarder";
 import { confirm } from "@/components/ui/confirm";
+import { compressImageFile } from "@/lib/image-compress";
 import type { ForwarderRow } from "./forwarder-row-view";
 import { serviceAccountFor } from "@/lib/services/service-catalog";
 import { modeFromPref } from "@/lib/tax/tax-doc-mode";
@@ -298,9 +299,30 @@ export function ForwarderPayModal({
     const seq = ++uploadSeq.current;
     setError(null);
     setSlipUploading(true);
+    // 🔴 owner 2026-07-26 (3 เคสในวันเดียว · PR075 "แนบไประบบ มันค้าง") — หน้านี้เป็นที่เดียว
+    // ที่ยัง**ไม่ย่อรูปก่อนอัพ** (หน้าแอดมินทุกหน้าแก้ไปตั้งแต่ 2026-07-16). รูปสลิปจากมือถือ
+    // 5-12MB ยิงตรงเข้า server action → ค้างยาว/ชน bodySizeLimit → สปินเนอร์หมุนไม่จบ =
+    // "แนบไม่ได้". ย่อในเครื่องก่อน (เหมือนทุกหน้า: 1600px q0.82 · fail-soft คืนไฟล์เดิม
+    // ถ้าถอดรหัสไม่ได้ เช่น PDF สลิปธนาคาร) แล้วค่อยกันขนาดพร้อมข้อความที่บอกทางออก.
+    const compact = await compressImageFile(file, { maxDim: 1600, quality: 0.82 }).catch(() => file);
+    if (compact.size > 5 * 1024 * 1024) {
+      setSlipUploading(false);
+      setError("ไฟล์สลิปใหญ่เกิน 5MB — ลองถ่ายใหม่/ส่งเป็นรูป (JPG/PNG) แทนไฟล์ PDF ความละเอียดสูง");
+      e.target.value = "";
+      return;
+    }
     const fd = new FormData();
-    fd.append("slip", file);
-    const res = await uploadForwarderSlip(fd);
+    fd.append("slip", compact);
+    // กันค้างถาวร: ถ้าเน็ตช้า/คำขอหาย ต้องมีทางออก ไม่ใช่หมุนตลอดกาล
+    const res = await Promise.race([
+      uploadForwarderSlip(fd),
+      new Promise<{ ok: false; error: string }>((resolve) =>
+        setTimeout(
+          () => resolve({ ok: false, error: "อัปโหลดสลิปนานผิดปกติ (เน็ตช้า/สัญญาณหลุด) — กดแนบใหม่อีกครั้งได้เลย เงินยังไม่ถูกตัด" }),
+          45_000,
+        ),
+      ),
+    ]);
     if (seq !== uploadSeq.current) return;
     setSlipUploading(false);
     if (res.ok && res.data) {
