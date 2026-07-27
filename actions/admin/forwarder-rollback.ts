@@ -208,12 +208,13 @@ async function gatherRollbackContext(
     return { ok: false, error: `ตรวจสอบการชำระเงินไม่สำเร็จ: ${pErr.message}` };
   }
   const pay = (payRows ?? [])[0] as
-    | { id: number; amount: number | string | null; depositnamebank: string | null; reforder2: string | null }
+    | { id: number; amount: number | string | null; depositnamebank: string | null; /** 🔴 คอลัมน์นี้เป็น NUMBER บน prod (ต่างจาก reforder ที่เป็น text) — ห้าม .trim() ตรงๆ */
+      reforder2: number | string | null }
     | undefined;
 
   let hasCombinedSlip = false;
   if (pay) {
-    hasCombinedSlip = (pay.reforder2 ?? "").trim() !== "";
+    hasCombinedSlip = String(pay.reforder2 ?? "").trim() !== "";
     if (!hasCombinedSlip) {
       const { data: link, error: linkErr } = await admin
         .from("tb_wallet_paydeposit")

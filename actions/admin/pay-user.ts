@@ -1621,7 +1621,8 @@ async function reconcileStaleForwarderPayOrphan(
     return { ok: false, unwound: false, blocked: false, refunded: 0, dbError: pErr.code ?? "unknown" };
   }
   const funding = (fundingRows ?? [])[0] as
-    | { id: number; amount: number | string | null; depositnamebank: string | null; reforder2: string | null; wusercredit: string | null }
+    | { id: number; amount: number | string | null; depositnamebank: string | null; /** 🔴 คอลัมน์นี้เป็น NUMBER บน prod (ต่างจาก reforder ที่เป็น text) — ห้าม .trim() ตรงๆ */
+      reforder2: number | string | null; wusercredit: string | null }
     | undefined;
   if (!funding) {
     // nothing settled to heal (or the gate matched a typeservice≠'2' row) →
@@ -1643,7 +1644,7 @@ async function reconcileStaleForwarderPayOrphan(
   //    tb_wallet_paydeposit link on hno=fid) shares a refund + siblings; never
   //    partial-reverse → block. This blocks EVERY WithTopUp-origin settle (it
   //    writes both), so only a direct-slip anchor (PR178) heals here.
-  const hasReforder2 = (funding.reforder2 ?? "").trim() !== "";
+  const hasReforder2 = String(funding.reforder2 ?? "").trim() !== "";
   const { data: link, error: linkErr } = await admin
     .from("tb_wallet_paydeposit")
     .select("id")
@@ -1845,7 +1846,8 @@ export async function adminReverseForwarderPayment(
         return { ok: false, error: `db_error:${pErr.code ?? "unknown"}` };
       }
       const funding = (fundingRows ?? [])[0] as
-        | { id: number; amount: number | string | null; depositnamebank: string | null; reforder2: string | null; wusercredit: string | null }
+        | { id: number; amount: number | string | null; depositnamebank: string | null; /** 🔴 คอลัมน์นี้เป็น NUMBER บน prod (ต่างจาก reforder ที่เป็น text) — ห้าม .trim() ตรงๆ */
+      reforder2: number | string | null; wusercredit: string | null }
         | undefined;
       if (!funding) {
         return { ok: false, error: `ไม่พบรายการชำระที่ตัดจ่ายแล้วสำหรับออเดอร์ #${fid} (อาจย้อนไปแล้ว)` };
@@ -1854,7 +1856,7 @@ export async function adminReverseForwarderPayment(
       // 3. Cascade guard — a combined "เติม-แล้วจ่าย" settle shares a type='7'
       //    consumed-balance refund + siblings; a single-order partial reverse
       //    would mis-refund → REFUSE (accounting reverses the whole group).
-      const hasReforder2 = (funding.reforder2 ?? "").trim() !== "";
+      const hasReforder2 = String(funding.reforder2 ?? "").trim() !== "";
       let hasPaydepositLink = false;
       {
         const { data: link, error: linkErr } = await admin

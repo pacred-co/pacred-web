@@ -15,6 +15,9 @@ import { useRouter } from "@/i18n/navigation";
 import { Undo2 } from "lucide-react";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { adminReverseForwarderPayment } from "@/actions/admin/pay-user";
+import { describeActionDispatchError } from "@/lib/observability/action-dispatch-error";
+import { isNextControlFlowError } from "@/lib/observability/next-control-flow";
+import { reportClientIncident } from "@/lib/observability/client-report";
 
 export function PayUserReverseButton({ fid }: { fid: string }) {
   const router = useRouter();
@@ -33,7 +36,20 @@ export function PayUserReverseButton({ fid }: { fid: string }) {
     );
     if (!ok) return;
     startTransition(async () => {
-      const res = await adminReverseForwarderPayment({ fid, reason: `ย้อนการชำระ #${fid} (จากหน้าจ่ายเงินแทนลูกค้า)` });
+      // 🔴 owner 2026-07-28: กดปุ่มนี้แล้ว **ทั้งหน้าแตก** ("ขออภัย เกิดข้อผิดพลาด")
+      // เพราะ action โยน TypeError (reforder2 เป็น number แต่โค้ดเรียก .trim()) แล้วที่นี่
+      // ไม่มี try/catch → React ส่งขึ้น error boundary = จอขาวทั้งหน้า + ไม่มีใบให้ตาม.
+      // แก้ต้นตอที่ action แล้ว · ตรงนี้คือตาข่าย: ต่อให้ action พังด้วยเหตุอื่น
+      // ต้องได้ข้อความบอกเหตุ ไม่ใช่จอแตก. เงิน → ห้ามชวนกดซ้ำ (mutating:true).
+      let res: Awaited<ReturnType<typeof adminReverseForwarderPayment>>;
+      try {
+        res = await adminReverseForwarderPayment({ fid, reason: `ย้อนการชำระ #${fid} (จากหน้าจ่ายเงินแทนลูกค้า)` });
+      } catch (e) {
+        if (isNextControlFlowError(e)) throw e;
+        await alert(describeActionDispatchError(e, { mutating: true }));
+        void reportClientIncident(e as Error);
+        return;
+      }
       if (!res.ok) {
         await alert(`ย้อนการชำระไม่สำเร็จ: ${res.error}`);
         return;
