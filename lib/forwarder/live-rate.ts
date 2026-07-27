@@ -270,6 +270,15 @@ export async function resolveLiveForwarderRate(
     // form lets the admin type an arbitrary ค่าเทียบ (e.g. 250). Threading the
     // typed value through comparisonEnabled/comparisonValue (above) honours it
     // without touching the math.
+    // 🔴 owner 2026-07-26 (งาน 52560/PR075 "ปรับค่าเทียบให้คิดกิโล พอบันทึกแล้วมันไม่เปลี่ยน") —
+    // เมื่อพนักงาน**ติ๊กค่าเทียบเอง** = ตั้งใจเลือกฐานให้งานนั้นโดยเฉพาะ → นโยบายเหมารวม
+    // "เก็บฐานที่แพงกว่า" (CHARGE_HIGHER_BASIS · 2026-07-21) ต้องไม่มาทับ ไม่งั้น **จอโชว์ผล
+    // ของค่าเทียบ (คิดตามกิโล 11,976.50) แต่ค่าที่บันทึกเป็นอีกฐาน (คิว 12,333.48)** = แก้ยังไง
+    // ก็ไม่เปลี่ยน. ปิดนโยบายเฉพาะ call นี้ (input ที่มีอยู่แล้ว) — งานที่ไม่ได้ติ๊กยังเก็บฐาน
+    // แพงกว่าเหมือนเดิมทุกประการ.
+    // ⚠️ ต้องแก้ที่นี่ ไม่ใช่ที่ resolve-rate: ไฟล์นี้จงใจ**ไม่ส่งธง customComparison**
+    // (ดูหมายเหตุด้านบน) → ด่านใน resolver ที่อิงธงนั้นไม่มีวันทำงานบนเส้นบันทึกจริง.
+    ...(ctx.customComparisonSwitch === true ? { chargeHigherBasis: false } : {}),
     // Owner-locked doc-tier discount (no-op when the caller leaves these unset).
     docTierEligible: ctx.docTierEligible === true,
     docTierDiscountCbm: ctx.docTierDiscountCbm ?? 0,
