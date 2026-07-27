@@ -46,6 +46,7 @@ import { createClient } from "@/lib/supabase/server";
 import { rejectPendingSlipsForCancelledOrder } from "@/lib/admin/reject-cancelled-order-slips";
 import { roundUp } from "@/lib/admin/shop-disbursement-calc";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { shopSellTotalThb } from "@/lib/shop-order/sell-total";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 
 // ────────────────────────────────────────────────────────────
@@ -371,7 +372,7 @@ export async function adminDeleteOrderItem(
       //    htotalpricechn + hcount (read-then-write decrement).
       const { data: header, error: headerErr } = await admin
         .from("tb_header_order")
-        .select("id, hno, hcover, htotalpricechn, htotalpriceuser, hrate, hshippingchn, hshippingservice, hcount, hstatus, userid")
+        .select("id, hno, hcover, htotalpricechn, htotalpriceuser, hrate, hshippingchn, hshippingservice, hcount, hstatus, userid, crate, pricecrate")
         .eq("hno", d.h_no)
         .maybeSingle<{
           id:               number;
@@ -385,6 +386,8 @@ export async function adminDeleteOrderItem(
           hcount:           number | null;
           hstatus:          string | null;
           userid:           string;
+          crate:            string | null;
+          pricecrate:       number | string | null;
         }>();
       if (headerErr) {
         console.error(`[tb_header_order line-delete lookup] failed`, {
@@ -437,7 +440,11 @@ export async function adminDeleteOrderItem(
         .filter((r) => String((r as { crewallet?: string | null }).crewallet ?? "") !== "1")
         .reduce((a, r) => a + roundUp(Number((r as { cprice?: number | string | null }).cprice ?? 0) * Number((r as { camount?: number | null }).camount ?? 0), 2), 0);
       const hrate = Number(header.hrate ?? 0);
-      const newTotalUser = roundUp((sumChn + Number(header.hshippingchn ?? 0)) * hrate + Number(header.hshippingservice ?? 0), 2);
+      // owner 2026-07-27 (P22456): ผ่าน SOT — รวมค่าลังไม้ (crate='1') เหมือนจอ/ใบเสนอราคา
+      const newTotalUser = shopSellTotalThb({
+        htotalpricechn: sumChn, hshippingchn: header.hshippingchn, hrate,
+        hshippingservice: header.hshippingservice, crate: header.crate, pricecrate: header.pricecrate,
+      });
 
       // 6. UPDATE header — recomputed totals + stamp adminidupdate.
       const { error: hdrUpdErr } = await admin

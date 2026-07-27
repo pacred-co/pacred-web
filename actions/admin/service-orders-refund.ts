@@ -50,6 +50,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { shopSellTotalThb } from "@/lib/shop-order/sell-total";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { roundUp } from "@/lib/admin/shop-disbursement-calc";
@@ -152,7 +153,7 @@ export async function adminRefundShopOrderItem(
     // totals from the remaining lines (canonical formula, not a delta-subtract).
     const { data: header, error: headerErr } = await admin
       .from("tb_header_order")
-      .select("id, hno, hstatus, htotalpriceuser, hrate, htotalpricechn, hshippingchn, hshippingservice")
+      .select("id, hno, hstatus, htotalpriceuser, hrate, htotalpricechn, hshippingchn, hshippingservice, crate, pricecrate")
       .eq("hno", item.hno)
       .maybeSingle<{
         id: number; hno: string;
@@ -338,7 +339,12 @@ export async function adminRefundShopOrderItem(
     }
     const shipChn        = Number(header.hshippingchn ?? 0);
     const svc            = Number(header.hshippingservice ?? 0);
-    const newHeaderTotal = roundUp((sumChn + shipChn) * orderHrate + svc, 2);
+    // owner 2026-07-27 (P22456): ผ่าน SOT — รวมค่าลังไม้ (crate='1') เหมือนจอ/ใบเสนอราคา
+    const newHeaderTotal = shopSellTotalThb({
+      htotalpricechn: sumChn, hshippingchn: shipChn, hrate: orderHrate,
+      hshippingservice: svc, crate: (header as { crate?: string | null }).crate,
+      pricecrate: (header as { pricecrate?: number | string | null }).pricecrate,
+    });
 
     // ── Step 5: UPDATE tb_header_order (htotalpricechn + htotalpriceuser) ──
     // Recompute parent totals so the per-order summary + reports match reality
@@ -461,7 +467,7 @@ export async function adminRefundShopOrderShipping(
     // 1. Load header — rate + cost-side columns for the recompute.
     const { data: header, error: headerErr } = await admin
       .from("tb_header_order")
-      .select("id, hno, userid, hstatus, hrate, htotalpricechn, hshippingchn, hshippingservice, htotalpriceuser")
+      .select("id, hno, userid, hstatus, hrate, htotalpricechn, hshippingchn, hshippingservice, htotalpriceuser, crate, pricecrate")
       .eq("hno", d.h_no)
       .maybeSingle<{
         id: number; hno: string; userid: string | null;

@@ -95,6 +95,7 @@ import { revalidatePath } from "next/cache";
 import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { shopSellTotalThb } from "@/lib/shop-order/sell-total";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { sendNotification } from "@/lib/notifications";
@@ -388,11 +389,12 @@ export async function adminSaveShopOrderItemsAndQuote(
     // 1. Load + guard the header.
     const { data: header, error: headerErr } = await admin
       .from("tb_header_order")
-      .select("id, hno, userid, hstatus, hrate, hshippingservice")
+      .select("id, hno, userid, hstatus, hrate, hshippingservice, crate, pricecrate")
       .eq("hno", d.hNo)
       .maybeSingle<{
         id: number; hno: string; userid: string; hstatus: string | null;
         hrate: number | string | null; hshippingservice: number | string | null;
+        crate: string | null; pricecrate: number | string | null;
       }>();
     if (headerErr) {
       console.error(`[tb_header_order save-items lookup] failed`, {
@@ -521,10 +523,12 @@ export async function adminSaveShopOrderItemsAndQuote(
     const hShippingService = Number(header.hshippingservice ?? 0);
     const hCostAllTh       = roundUp(d.hCostAll * d.hRateCost, 2);
     // Legacy L978-979: hTotalPriceUser = round_up(((CHN+shipCHN)×rate)+svc, 2).
-    const htotalpriceuser  = roundUp(
-      (sumTotalChnAll + sumShippingChnAll) * hRate + hShippingService,
-      2,
-    );
+    // owner 2026-07-27 (P22456 เก็บขาด ฿618): + ค่าลังไม้ (crate='1') ผ่าน SOT
+    // `shopSellTotalThb` — ตรงกับ "ราคารวมสุทธิ" ที่จอ/ใบเสนอราคาโชว์ลูกค้าเสมอ.
+    const htotalpriceuser  = shopSellTotalThb({
+      htotalpricechn: sumTotalChnAll, hshippingchn: sumShippingChnAll, hrate: hRate,
+      hshippingservice: hShippingService, crate: header.crate, pricecrate: header.pricecrate,
+    });
 
     const nowIso      = new Date().toISOString();
     const deadline    = defaultQuoteDeadline();

@@ -78,6 +78,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { shopSellTotalThb, crateCnyOf } from "@/lib/shop-order/sell-total";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
 import { roundUp } from "@/lib/admin/shop-disbursement-calc";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
@@ -331,7 +332,7 @@ export async function adminUpdateOrderRate(
       const { data: header, error: readErr } = await admin
         .from("tb_header_order")
         .select(
-          "id, hno, userid, hstatus, hrate, htotalpricechn, hshippingchn, hshippingservice, htotalpriceuser",
+          "id, hno, userid, hstatus, hrate, htotalpricechn, hshippingchn, hshippingservice, htotalpriceuser, crate, pricecrate",
         )
         .eq("hno", d.h_no)
         .maybeSingle<{
@@ -344,6 +345,8 @@ export async function adminUpdateOrderRate(
           hshippingchn:      number | string | null;
           hshippingservice:  number | string | null;
           htotalpriceuser:   number | string | null;
+          crate:             string | null;
+          pricecrate:        number | string | null;
         }>();
       if (readErr) {
         console.error(`[adminUpdateOrderRate read] failed`, {
@@ -380,12 +383,13 @@ export async function adminUpdateOrderRate(
         };
       }
 
-      // Legacy round_up(x, 2) → roundUp(x, 2) (Math.ceil-based, satang-safe).
-      const afterTotalRaw = (chn + ship) * d.h_rate + svc;
+      // owner 2026-07-27 (P22456 เก็บขาด ฿618): สูตรผ่าน SOT `shopSellTotalThb`
+      // — รวมค่าลังไม้ (crate='1') เหมือน "ราคารวมสุทธิ" ที่จอ/ใบเสนอราคาโชว์ลูกค้า.
+      const afterTotalRaw = (chn + ship + crateCnyOf(header)) * d.h_rate + svc;
       if (!Number.isFinite(afterTotalRaw) || afterTotalRaw <= 0) {
         return { ok: false, error: "คำนวณยอดสุทธิใหม่ไม่ได้ (ผลลัพธ์ไม่ใช่ตัวเลขบวก)" };
       }
-      const afterTotal = roundUp(afterTotalRaw, 2);
+      const afterTotal = shopSellTotalThb({ ...header, hrate: d.h_rate });
 
       // 2. UPDATE — both hrate + htotalpriceuser in one round-trip
       //    (legacy splits this into 2 statements; same end-state).
@@ -690,12 +694,13 @@ export async function adminUpdateOrderPayMethod(
 // ════════════════════════════════════════════════════════════════════════
 
 // 2026-06-29 (fix #3) — schema now also accepts an optional crate PRICE
-// (ราคาค่าตีลังไม้ → tb_header_order.pricecrate · mig 0223). pricecrate is a
-// COST/charge field carried to tb_forwarder.pricecrate on spawn — it is NOT
-// part of the ฝากสั่งซื้อ SELL total (htotalpriceuser), so writing it never
-// moves the customer's charge. Optional → existing crate-only callers are
-// unaffected. No status gate (legacy update_crate had none) — crate +
-// crate-price are editable at any status.
+// (ราคาค่าตีลังไม้ → tb_header_order.pricecrate · mig 0223).
+// 🔴 owner 2026-07-27 (P22456 เก็บขาด ฿618): ความเชื่อเดิมของไฟล์นี้ ("pricecrate ไม่เข้า
+// ยอดขาย htotalpriceuser") **ผิด** — จอแอดมิน/ใบเสนอราคาที่ Pricing ส่งลูกค้า รวมค่าลัง
+// ตั้งแต่ 2026-07-01 → ลูกค้าเห็น 151,219.45 แต่ modal เก็บ 150,601.45. ตอนนี้ค่าลัง
+// เข้ายอดขายผ่าน SOT `shopSellTotalThb` และการเซฟค่าลังบนออเดอร์ที่ตั้งราคาแล้ว
+// (hstatus='2' ยังไม่จ่าย) ต้อง RECOMPUTE ยอดทันที · ออเดอร์จ่ายแล้ว (>=3) เงิน frozen
+// — เขียนได้แค่ pricecrate + เตือนว่ายอดไม่ขยับ (เก็บเพิ่มใช้ flow เก็บเพิ่ม).
 const updateCrateSchema = z.object({
   h_no:  hnoSchema,
   crate: z.enum(["1", "2"] as const, {
@@ -722,7 +727,7 @@ export async function adminUpdateOrderCrate(
 
       const { data: before, error: readErr } = await admin
         .from("tb_header_order")
-        .select("id, hno, crate, pricecrate, hstatus")
+        .select("id, hno, crate, pricecrate, hstatus, htotalpricechn, hshippingchn, hrate, hshippingservice, htotalpriceuser")
         .eq("hno", d.h_no)
         .maybeSingle<{
           id:         number;
@@ -730,6 +735,11 @@ export async function adminUpdateOrderCrate(
           crate:      string | null;
           pricecrate: number | string | null;
           hstatus:    string | null;
+          htotalpricechn:   number | string | null;
+          hshippingchn:     number | string | null;
+          hrate:            number | string | null;
+          hshippingservice: number | string | null;
+          htotalpriceuser:  number | string | null;
         }>();
       if (readErr) {
         console.error(`[adminUpdateOrderCrate read] failed`, {
@@ -756,6 +766,21 @@ export async function adminUpdateOrderCrate(
       // callers from zeroing an existing price).
       if (d.pricecrate !== undefined) update.pricecrate = d.pricecrate;
 
+      // ── recompute ยอดขาย (owner 2026-07-27 · P22456) ──
+      // ออเดอร์ตั้งราคาแล้วแต่ยังไม่จ่าย ('2') → ค่าลังเปลี่ยน = ยอดที่ลูกค้าต้องจ่าย
+      // เปลี่ยนทันที (SOT รวมลังเมื่อ crate='1') · จ่ายแล้ว (>=3) = เงิน frozen ไม่แตะยอด.
+      const statusNow = String(before.hstatus ?? "").trim();
+      let totalRecomputed: number | null = null;
+      if (statusNow === "2" && Number(before.hrate ?? 0) > 0) {
+        totalRecomputed = shopSellTotalThb({
+          htotalpricechn: before.htotalpricechn, hshippingchn: before.hshippingchn,
+          hrate: before.hrate, hshippingservice: before.hshippingservice,
+          crate: d.crate,
+          pricecrate: d.pricecrate !== undefined ? d.pricecrate : before.pricecrate,
+        });
+        update.htotalpriceuser = totalRecomputed;
+      }
+
       const { error: updErr } = await admin
         .from("tb_header_order")
         .update(update)
@@ -779,6 +804,8 @@ export async function adminUpdateOrderCrate(
           after:            d.crate,
           before_pricecrate: beforePrice,
           after_pricecrate:  d.pricecrate ?? beforePrice,
+          before_total: Number(before.htotalpriceuser ?? 0),
+          after_total: totalRecomputed ?? Number(before.htotalpriceuser ?? 0),
         },
       );
 

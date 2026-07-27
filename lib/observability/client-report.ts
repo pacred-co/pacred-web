@@ -39,6 +39,12 @@ const INGEST_URL = "/api/observability/incident";
  * for the tightly-scoped allow-lists — a real error is never suppressed.
  */
 export async function reportClientIncident(error: Error & { digest?: string }): Promise<void> {
+  // 🔴 owner 2026-07-27 ("ล้าง /admin/incidents"): dev บนเครื่อง (localhost) ชี้ DB prod
+  // ตาม local-first (§0k) → error ระหว่างแก้โค้ด (hot-reload "X is not defined" ฯลฯ)
+  // ไหลเข้าคิว incidents ของ prod — เจอ 19 ใบจาก session dev หน้า drivers.
+  // NODE_ENV ถูก inline ใน client bundle: `next dev` = development → ไม่รายงาน ·
+  // โปรดักชันจริงรายงานเหมือนเดิมทุกประการ.
+  if (process.env.NODE_ENV !== "production") return;
   // Skip pure transient aborts + deploy-churn chunk-load errors — not incidents.
   if (isTransientAbortError(error) || isChunkLoadError(error)) return;
 

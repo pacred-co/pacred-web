@@ -60,7 +60,20 @@ export async function GET(request: Request) {
         });
       }
 
+      // ── งานคน ≠ บั๊กระบบ — ห้ามเปิดใบ incident (owner 2026-07-27 "ล้างรายการให้ครบ") ──
+      // check กลุ่มนี้แดงเพราะ "มีงานคิวคน" ค้าง (บัญชี void บิลซ้ำ · CS เติมที่อยู่) ไม่ใช่
+      // ระบบพัง — บ้านจริงของมันคือ /admin/data-health ซึ่งลิสต์แถวจริงให้ทำงานอยู่แล้ว.
+      // ถ้าเปิดใบด้วย คิว incidents จะมีใบค้างถาวรจนแยกบั๊กจริงไม่ออก (ที่ผ่านมาเป็นแบบนั้น).
+      // check อื่นทั้งหมด (dup/dangling/fanout/ฯลฯ = ระบบพังจริง) ยังเปิดใบเหมือนเดิม.
+      const HUMAN_QUEUE_CHECK_IDS = new Set([
+        "double_billed",                    // บัญชีเคาะ void (เคสรู้แล้ว FRI2606-00013)
+        "residue_half_split",               // แถว billed ค้างรอบัญชีเคาะ (1780555730 ฯลฯ)
+        "live_forwarder_missing_delivery",  // CS เติมที่อยู่/ขนส่งให้งานถึงไทย
+        "customer_main_address_invalid",    // CS แก้ที่อยู่หลักลูกค้า
+      ]);
+
       for (const r of failingRed) {
+        if (HUMAN_QUEUE_CHECK_IDS.has(r.id)) continue;
         // STABLE message per check-id (no counts inline) → hourly re-runs dedupe
         // into ONE live incident; the moving numbers go to surface_meta.
         await captureIncident({

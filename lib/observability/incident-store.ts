@@ -103,6 +103,12 @@ export type CaptureIncidentResult = {
 export async function captureIncident(
   input: CaptureIncidentInput,
 ): Promise<CaptureIncidentResult> {
+  // 🔴 owner 2026-07-27: dev เครื่อง (localhost) ชี้ DB prod (§0k) — server action/cron
+  // ที่พังระหว่าง dev ห้ามเขียนใบลงคิว prod. Vercel prod = NODE_ENV 'production' → ปกติ.
+  if (process.env.NODE_ENV !== "production") {
+    console.error("[captureIncident skipped · non-production]", { source: input.source, kind: input.kind, route: input.route, message: String(input.message).slice(0, 200) });
+    return { ok: false, error: "skipped_non_production" };
+  }
   try {
     const admin = createAdminClient();
 
