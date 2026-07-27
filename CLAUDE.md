@@ -3,6 +3,22 @@
 
 ---
 
+# 💰 2026-07-27 (เดฟ · Mac · owner "ทำไมบัคเยอะจัง เรื่องเงินทั้งนั้น") — ค่าลังไม้หายจากยอดที่เก็บลูกค้า (P22456 ขาด ฿618) + ล้างคิว /admin/incidents ให้ว่างจริง → ALL BRANCHES + MAIN · read FIRST
+
+> **🏁 main = dave-pacred2 = dave-pacred = Poom-pacred = InwPond007 = codex = `<HEAD>`** (Vercel prod). gate: **tsc 0 · eslint 0 · test:unit เต็ม 0 · BUILD_EXIT=0 · md-links 6424/6424**. ไม่มี migration ใหม่ (เช็ค `ls supabase/migrations | tail` ก่อนตั้งเลขเสมอ).
+>
+> **🔴 ค่าลังไม้ไม่เข้ายอดที่เก็บ (owner: "เจ้าหน้าที่ทำราคามา 151k ทำไมลูกค้าเห็นแค่ 150k ลูกค้าจะจ่ายตังแล้ว") — ราก: จอกับตัวเก็บเงินคนละสูตร:** จอแอดมิน/ใบเสนอราคาคิด "ราคารวมสุทธิ" **รวมค่าลังไม้** (ภูม 07-01) แต่ writer ของ `htotalpriceuser` ทุกตัวใช้สูตรเก่า **ไม่มีลัง** → ทุกออเดอร์ที่ตีลัง เก็บขาด = ลัง ¥ × เรท (P22456 = ¥120 × 5.15 = **฿618 เป๊ะ**) · ที่ซ่อนตัวได้: action เซฟค่าลัง **เขียนคอมเมนต์ยืนยันไว้เลย**ว่า "ไม่ใช่ส่วนหนึ่งของยอดขาย" = คอมเมนต์เก่าที่ขัดกับจอ. **FIX = SOT `lib/shop-order/sell-total.ts`** (crate='1' เท่านั้นเข้ายอด · `roundUp` ตัวกลาง float-safe — เขียนสูตรปัดเองให้ 151,219.**46** ผิด) wire ครบ **5 writer** (ตั้งราคา update2 · แก้เรท · **แก้ค่าลัง [recompute เมื่อ hstatus=2]** · ลบรายการ · refund) + เทสล็อกเลขจริง. **DATA prod** (dry-run+backup+TOCTOU · `fix-shop-crate-total-2026-07-27.mjs`): กวาดออเดอร์ตีลังทั้งระบบ → โดน **2** · P22456 150,601.45 → **151,219.45** applied (re-run 0) · 🔴 **P22359 (PR075) จ่ายไปแล้ว ขาด ฿612 — รายงานอย่างเดียว รอ owner/บัญชีเคาะเก็บเพิ่ม** (ห้ามสคริปต์ขยับเงินที่ freeze).
+>
+> **🧹 /admin/incidents 30 → 0 (owner "แก้ให้หมดแล้วล้างรายการให้ครบ") — อุด 2 รากก่อนล้าง ไม่งั้นเต็มใหม่:** (1) **dev บนเครื่องชี้ DB prod (§0k)** → error ตอนแก้โค้ดโพสต์เข้าคิว prod = **19/30 ใบ** เป็น js_error หน้า drivers จาก session เพื่อนร่วมทีม 07-23/24 **ทั้งที่โค้ดบน main ไม่เคยมี symbol ผิดพวกนั้น** → gate `NODE_ENV !== "production"` ทั้ง `client-report.ts` และ `captureIncident` · (2) **data-health check ที่เป็น "คิวงานคน"** (บัญชี void บิลซ้ำ · CS เติมที่อยู่ 87 งาน) มีบ้านอยู่แล้วที่ `/admin/data-health` → `HUMAN_QUEUE_CHECK_IDS` ใน cron ไม่เปิดใบ (check ที่ระบบพังจริงยังเปิดเหมือนเดิม) · แล้วปิด 30 ใบพร้อม note ต่อ class (`clear-incidents-2026-07-27.mjs` · backup · re-run 0). **พิสูจน์ด้วย cron จริงบน prod:** ยิง `/api/cron/data-health` → HTTP 200 รายงานแดง 4 check **แต่ไม่เปิดใบเลย** → คิว = 0 (ไม่ใช่แค่แก้บนเครื่อง). ⚠️ **wallet-reconcile PR588 ใช้เกินยอด ฿198 = ของจริง** — cron รายวันจะเปิดใบใหม่จนบัญชีเคลียร์ (ตั้งใจ ไม่ silence).
+>
+> **⚠️ กลไก incidents ที่ต้องรู้ (เสียเวลาไปแล้ว):** `resolved`/`ignored` **ไม่กัน re-fire** (รอบหน้า INSERT ใบใหม่ ไม่ bump ใบเก่า) · default filter หน้าเว็บรวม **`acknowledged`** ด้วย ⇒ "รับเรื่องแล้ว" ยังโชว์ · mig 0077 มี CHECK **2 ตัว** — `resolved_consistent` (resolved_at + note) **และ `triaged_consistent` (acknowledged_at + assigned_to)** ลืมตัวหลัง = UPDATE ตกทั้ง 30 แถว.
+>
+> **📚 learning ใหม่ 2 ไฟล์:** [`display-vs-stored-money-formula.md`](docs/learnings/display-vs-stored-money-formula.md) (ยอดที่จอคิดสด vs ค่าที่เก็บ ต้องเป็นสูตรเดียว SOT · ตาม writer ให้ครบ · คอมเมนต์กติกาเงินเก่าได้เงียบ · ปัดเศษใช้ helper กลาง) + [`incident-queue-hygiene.md`](docs/learnings/incident-queue-hygiene.md). memory `shop-crate-and-incident-hygiene-2026-07-27`.
+>
+> **🔴 CARRYOVER:** (1) **P22359 ขาด ฿612 (จ่ายแล้ว)** = owner/บัญชีเคาะ. (2) **PR588 ใช้เกินยอดกระเป๋า ฿198** = บัญชีตรวจ pending. (3) คิวงานคนบน `/admin/data-health`: void FRI2606-00013 (เคลียร์ double_billed + residue) · CS เติมที่อยู่ 87 งาน + ที่อยู่หลักลูกค้า 26 ราย. (4) เลนบัญชีที่ owner ยังไม่เคาะ (ทะเบียน AP / ยื่นภาษีรายเดือน ภงด.53+ภพ.30 [แนะนำเริ่มตรงนี้] / สต๊อก+ใบกำกับ). (5) carryover เดิม 07-26 ยังอยู่ (DOC สร้าง 4 แถว TTW · CS เช็ค X9002745 · PR609 น้ำหนักไม่ตรง).
+
+---
+
 # 📦 2026-07-26 ปิด session (เดฟ · Mac · marathon 25-26/07) — ด่านนำเข้า MOMO แก้ได้ทุกช่อง (admin_patch กัน sync ทับ) + เคส 733 + อี้อู 4 ตู้ + แท็บโกดัง + ตัดของตาย → ALL BRANCHES · read FIRST
 
 > **🏁 main = dave-pacred2 = dave-pacred = Poom-pacred = InwPond007 = codex = `<HEAD>`** (owner สั่ง push all ตอนปิด). gate ทุก commit: **tsc 0 · lint 0 · i18n 0 · md 0 · test:unit เต็ม 0 · build 0**. **mig 0281 tracking_override + 0282 admin_patch APPLIED PROD (dev ตายถาวร ห้าม reconcile) · NEXT FREE = 0283.** 🆕 **§0k local-first**: dev รันค้าง (`preview_start pacred-1to1`) · owner login ให้แล้ว → **verify บนจอจริงได้ทุกงาน** (ยุค build-green-only จบแล้ว) · push main เฉพาะตอน owner สั่ง.

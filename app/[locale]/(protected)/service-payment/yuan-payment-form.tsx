@@ -14,6 +14,9 @@ import { CartTaxDocPref, type TaxDocDefaults } from "../cart/cart-tax-doc-pref";
 import { resolvePaymentAccount, OUTPUT_VAT_RATE } from "@/lib/payment/bank-accounts";
 import { type TaxDocMode } from "@/lib/tax/tax-doc-mode";
 import { PayDestination } from "@/components/payment/pay-destination";
+import { describeActionDispatchError } from "@/lib/observability/action-dispatch-error";
+import { isNextControlFlowError } from "@/lib/observability/next-control-flow";
+import { reportClientIncident } from "@/lib/observability/client-report";
 
 const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
@@ -171,13 +174,21 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
         taxDocBillingName,
         taxDocAddress,
       };
-      const res = await createYuanPayment(payload);
-      if (res.ok && res.data) {
-        trackPlaceOrder("service_payment", res.data.thb_amount);
-        setDone({ id: res.data.id, thb: res.data.thb_amount });
-        router.refresh();
-      } else if (!res.ok) {
-        setError(res.error);
+      // 🔴 คลาสเดียวกับ PR106 2026-07-27: ไม่มี try/catch → dispatch พัง (ดีพลอย/เน็ต)
+      // = กดส่งแล้วเงียบ ไม่มีข้อความ ไม่มีใบใน incidents. เงิน → ห้ามชวนกดซ้ำ.
+      try {
+        const res = await createYuanPayment(payload);
+        if (res.ok && res.data) {
+          trackPlaceOrder("service_payment", res.data.thb_amount);
+          setDone({ id: res.data.id, thb: res.data.thb_amount });
+          router.refresh();
+        } else if (!res.ok) {
+          setError(res.error);
+        }
+      } catch (e) {
+        if (isNextControlFlowError(e)) throw e;
+        setError(describeActionDispatchError(e, { mutating: true }));
+        void reportClientIncident(e as Error);
       }
     });
   }

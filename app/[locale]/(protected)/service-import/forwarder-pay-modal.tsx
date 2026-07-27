@@ -11,6 +11,9 @@ import {
   uploadForwarderSlip,
 } from "@/actions/forwarder";
 import { confirm } from "@/components/ui/confirm";
+import { describeActionDispatchError } from "@/lib/observability/action-dispatch-error";
+import { isNextControlFlowError } from "@/lib/observability/next-control-flow";
+import { reportClientIncident } from "@/lib/observability/client-report";
 import { compressImageFile } from "@/lib/image-compress";
 import type { ForwarderRow } from "./forwarder-row-view";
 import { serviceAccountFor } from "@/lib/services/service-catalog";
@@ -369,25 +372,37 @@ export function ForwarderPayModal({
     );
     if (!ok) return;
     startTransition(async () => {
-      const res = await submitForwarderPayment({
-        ids: rows.map((r) => r.id),
-        slipPath,
-        ...(extraSlipPaths.length > 0 ? { extraSlipPaths } : {}),
-        quoteKey: serverQuote.quoteKey,
-      });
-      if (res.ok) {
-        setDone(true);
-        router.refresh();
-      } else if (res.error.startsWith("quote_changed")) {
+      // 🔴 PR106 2026-07-27 ("แนบแล้วครับแต่กดยืนยันไม่ได้"): เดิมไม่มี try/catch —
+      // ถ้า dispatch ของ server action พัง (ดีพลอยทับ action id · เน็ตหลุด · 500)
+      // promise reject กลายเป็น unhandled rejection ที่ error boundary จับไม่ได้ →
+      // กดปุ่มแล้ว **ไม่มีอะไรเกิดขึ้นเลย** และไม่มีใบใน /admin/incidents ให้เราตาม.
+      // ⚠️ เงิน: dispatch พัง = ไม่รู้ว่าคำสั่งถึงเซิร์ฟเวอร์และ commit ไปหรือยัง →
+      // ข้อความต้องห้ามชวนกดซ้ำ (describeActionDispatchError mutating:true).
+      try {
+        const res = await submitForwarderPayment({
+          ids: rows.map((r) => r.id),
+          slipPath,
+          ...(extraSlipPaths.length > 0 ? { extraSlipPaths } : {}),
+          quoteKey: serverQuote.quoteKey,
+        });
+        if (res.ok) {
+          setDone(true);
+          router.refresh();
+        } else if (res.error.startsWith("quote_changed")) {
         // ยอดขยับระหว่างลูกค้าแนบสลิป (พนักงานแก้ราคา/ที่อยู่ · cron คิดเรทใหม่) —
         // เดิมบอกให้ "ปิดแล้วเปิดหน้าชำระใหม่" = สลิปที่แนบหาย + ลูกค้าที่โอนเงินไปแล้ว
         // เจอทางตัน. ตอนนี้ดึงยอดใหม่ให้ในที่เดิม สลิปยังอยู่ → ลูกค้าตรวจยอดแล้วกดยืนยันซ้ำ
         // (ไม่ auto-submit — เงินต้องผ่านการกดยืนยันเสมอ).
-        setQuoteRefreshed(true);
-        setQuoteReloadSeq((n) => n + 1);
-        setError("ยอดชำระมีการอัปเดตระหว่างที่แนบสลิป — ระบบดึงยอดใหม่ให้แล้ว (สลิปที่แนบไว้ยังอยู่) กรุณาตรวจยอดด้านบนแล้วกดยืนยันอีกครั้ง");
-      } else {
-        setError(res.error);
+          setQuoteRefreshed(true);
+          setQuoteReloadSeq((n) => n + 1);
+          setError("ยอดชำระมีการอัปเดตระหว่างที่แนบสลิป — ระบบดึงยอดใหม่ให้แล้ว (สลิปที่แนบไว้ยังอยู่) กรุณาตรวจยอดด้านบนแล้วกดยืนยันอีกครั้ง");
+        } else {
+          setError(res.error);
+        }
+      } catch (e) {
+        if (isNextControlFlowError(e)) throw e;
+        setError(describeActionDispatchError(e, { mutating: true }));
+        void reportClientIncident(e as Error); // ให้เราเห็นในคิว ไม่ใช่รู้ตอนลูกค้าโทรมา
       }
     });
   }

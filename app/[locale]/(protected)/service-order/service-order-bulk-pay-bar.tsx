@@ -24,6 +24,9 @@ import { Trash2, CheckSquare } from "lucide-react";
 import { cancelServiceOrder } from "@/actions/service-order";
 import { confirm } from "@/components/ui/confirm";
 import { summariseLoopResults, type LoopOutcome } from "@/lib/service-order/bulk-eligibility";
+import { describeActionDispatchError } from "@/lib/observability/action-dispatch-error";
+import { isNextControlFlowError } from "@/lib/observability/next-control-flow";
+import { reportClientIncident } from "@/lib/observability/client-report";
 // Re-use the selection context + RowCheckbox + provider from the existing module.
 import { useBulkSelection } from "./add/service-order-bulk-actions";
 
@@ -62,9 +65,17 @@ export function ServiceOrderBulkActionsBar(
       const targets = selectedCancelable;
       const out: LoopOutcome[] = [];
       for (const hno of targets) {
-        const res = await cancelServiceOrder(hno);
-        if (res.ok) out.push({ ok: true, hno });
-        else out.push({ ok: false, hno, error: res.error });
+        // คลาสเดียวกับ PR106 2026-07-27: ถ้า action ตัวใดตัวหนึ่ง reject (ดีพลอย/เน็ต)
+        // ลูปเดิมจะตายกลางคันแบบเงียบ — ที่เหลือไม่ถูกทำและผู้ใช้ไม่รู้ว่าค้างที่ไหน.
+        try {
+          const res = await cancelServiceOrder(hno);
+          if (res.ok) out.push({ ok: true, hno });
+          else out.push({ ok: false, hno, error: res.error });
+        } catch (e) {
+          if (isNextControlFlowError(e)) throw e;
+          out.push({ ok: false, hno, error: describeActionDispatchError(e, { mutating: true }) });
+          void reportClientIncident(e as Error);
+        }
       }
       const summary = summariseLoopResults(out);
       if (summary.failed === 0) {

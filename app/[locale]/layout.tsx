@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { routing } from "@/i18n/routing";
 import { LocaleHtmlLang } from "@/components/locale-html-lang";
 import { ConfirmDialogHost } from "@/components/ui/confirm";
+import { UnhandledRejectionReporter } from "@/components/observability/unhandled-rejection-reporter";
 import { JsonLd } from "@/components/seo/json-ld";
 import {
   localBusinessSchema,
@@ -138,6 +139,10 @@ export default async function LocaleLayout({
       {/* Global centered confirm/alert/prompt host — replaces native browser
           popups everywhere (see components/ui/confirm.tsx). Mounted once. */}
       <ConfirmDialogHost />
+      {/* ตาข่ายชั้นสุดท้าย: promise ที่ reject แล้วไม่มีใครรับ (server action ที่ dispatch
+          พังใน startTransition) — error boundary จับไม่ได้ ⇒ เคยเงียบสนิททั้งจอและคิว
+          incidents (เคส PR106 "กดยืนยันไม่ได้" 2026-07-27). */}
+      <UnhandledRejectionReporter />
     </NextIntlClientProvider>
   );
 }

@@ -25,6 +25,9 @@ import { resolvePaymentAccount, OUTPUT_VAT_RATE } from "@/lib/payment/bank-accou
 import { modeFromPref } from "@/lib/tax/tax-doc-mode";
 import { computeShopOrderTransferAmount } from "@/lib/service-order/payment-amount";
 import { PayDestination } from "@/components/payment/pay-destination";
+import { describeActionDispatchError } from "@/lib/observability/action-dispatch-error";
+import { isNextControlFlowError } from "@/lib/observability/next-control-flow";
+import { reportClientIncident } from "@/lib/observability/client-report";
 
 const fmt = (n: number) =>
   n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -113,16 +116,26 @@ export function ShopOrderPayButton({
     if (!(await confirm(t("submitPaymentConfirm", { hNo })))) return;
     setErr(null);
     setSubmitting(true);
-    const r = await submitShopOrderSlipPayment(hNo, {
-      slipPath,
-      slipDate: slipDate || undefined,
-    });
-    setSubmitting(false);
-    if (r.ok) {
-      setDone(true);
-      router.refresh();
-    } else {
-      setErr(r.error);
+    // 🔴 คลาสเดียวกับ PR106 2026-07-27 ("กดยืนยันไม่ได้"): ไม่มี try/catch แล้ว
+    // dispatch พัง = ปุ่มค้าง "กำลังส่ง" ตลอดกาล ไม่มีข้อความ ไม่มีใบใน incidents.
+    // เงิน → ห้ามชวนกดซ้ำ (mutating:true).
+    try {
+      const r = await submitShopOrderSlipPayment(hNo, {
+        slipPath,
+        slipDate: slipDate || undefined,
+      });
+      if (r.ok) {
+        setDone(true);
+        router.refresh();
+      } else {
+        setErr(r.error);
+      }
+    } catch (e) {
+      if (isNextControlFlowError(e)) throw e;
+      setErr(describeActionDispatchError(e, { mutating: true }));
+      void reportClientIncident(e as Error);
+    } finally {
+      setSubmitting(false);
     }
   }
 
