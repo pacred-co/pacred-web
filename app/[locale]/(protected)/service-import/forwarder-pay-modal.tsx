@@ -115,6 +115,14 @@ export function ForwarderPayModal({
   const router = useRouter();
   const t = useTranslations("forwarderPayModal");
 
+  /** 🔴 owner 2026-07-26 (เคส PR9217 "แนบแล้วกด save ไม่ไป") — กล่อง error อยู่ "หัวโมดัล"
+   *  แต่ปุ่มยืนยันอยู่ "ท้ายสุด": บนมือถือ ลูกค้ากดปุ่มแล้ว error โผล่นอกจอ = เห็นว่า
+   *  "ไม่มีอะไรเกิดขึ้น" → เลื่อนไปหา error ทุกครั้งที่ตั้งค่า + ปุ่มเด้งข้อความสั้นด้วย. */
+  const errorRef = useRef<HTMLDivElement>(null);
+  /** บังคับดึงยอดใหม่ (ใช้ตอนยอดเปลี่ยนระหว่างลูกค้าแนบสลิป — กู้ในที่เดิม ไม่ต้องปิดหน้า). */
+  const [quoteReloadSeq, setQuoteReloadSeq] = useState(0);
+  const [quoteRefreshed, setQuoteRefreshed] = useState(false);
+
   const quoteRequestKey = useMemo(
     () => JSON.stringify(
       [...rows]
@@ -165,7 +173,7 @@ export function ForwarderPayModal({
       }
     });
     return () => { cancelled = true; };
-  }, [open, quoteRequestKey, rows, taxDirectPayBlocked]);
+  }, [open, quoteRequestKey, rows, taxDirectPayBlocked, quoteReloadSeq]);
 
   const serverQuote = quoteState?.key === quoteRequestKey ? quoteState.quote : null;
   const serverQuoteError = quoteErrorState?.key === quoteRequestKey ? quoteErrorState.error : null;
@@ -348,11 +356,25 @@ export function ForwarderPayModal({
       if (res.ok) {
         setDone(true);
         router.refresh();
+      } else if (res.error.startsWith("quote_changed")) {
+        // ยอดขยับระหว่างลูกค้าแนบสลิป (พนักงานแก้ราคา/ที่อยู่ · cron คิดเรทใหม่) —
+        // เดิมบอกให้ "ปิดแล้วเปิดหน้าชำระใหม่" = สลิปที่แนบหาย + ลูกค้าที่โอนเงินไปแล้ว
+        // เจอทางตัน. ตอนนี้ดึงยอดใหม่ให้ในที่เดิม สลิปยังอยู่ → ลูกค้าตรวจยอดแล้วกดยืนยันซ้ำ
+        // (ไม่ auto-submit — เงินต้องผ่านการกดยืนยันเสมอ).
+        setQuoteRefreshed(true);
+        setQuoteReloadSeq((n) => n + 1);
+        setError("ยอดชำระมีการอัปเดตระหว่างที่แนบสลิป — ระบบดึงยอดใหม่ให้แล้ว (สลิปที่แนบไว้ยังอยู่) กรุณาตรวจยอดด้านบนแล้วกดยืนยันอีกครั้ง");
       } else {
         setError(res.error);
       }
     });
   }
+
+  // 🔴 เลื่อนกล่อง error เข้ามาในจอเสมอ (มือถือ: ปุ่มอยู่ท้าย · error อยู่หัว = มองไม่เห็น)
+  useEffect(() => {
+    if (!error) return;
+    errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [error]);
 
   // ESC key close
   useEffect(() => {
@@ -466,8 +488,13 @@ export function ForwarderPayModal({
 
                 {/* Error message */}
                 {error && (
-                  <div className="rounded-lg bg-red-600 text-white px-3 py-2 text-sm">
+                  <div ref={errorRef} className="rounded-lg bg-red-600 text-white px-3 py-2 text-sm">
                     {error}
+                  </div>
+                )}
+                {quoteRefreshed && !error && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    ยอดถูกอัปเดตใหม่แล้ว — ตรวจยอดอีกครั้งแล้วกดยืนยันได้เลย (สลิปที่แนบไว้ยังอยู่)
                   </div>
                 )}
 
