@@ -277,8 +277,8 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
                   <Th w="7%"  th="น้ำหนัก"       en="Wt·kg" right />
                   <Th w="6%"  th="ประเภท"       en="Type" center />
                   <Th w="7%"  th="เรทราคา"      en="Rate" right />
-                  <Th w="7%"  th="ค่าขนส่ง"      en="Amount" right />
                   <Th w="8%"  th="อื่นๆ"         en="Other" right />
+                  <Th w="7%"  th="ค่าขนส่ง"      en="Amount" right />
                 </tr>
               </thead>
               <tbody>
@@ -304,8 +304,8 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
                       <td style={tdNum}>{fmt2(r.weight)}</td>
                       <td style={{ ...tdC, fontSize: "8px", color: "#374151" }}>{r.productType || "—"}</td>
                       <td style={tdNum}>{r.rate > 0 ? fmt2(r.rate) : "—"}</td>
-                      <td style={tdNum}>{fmt2(r.amount)}</td>
                       <td style={tdNum}>{r.otherCharges > 0 ? fmt2(r.otherCharges) : "—"}</td>
+                      <td style={tdNum}>{fmt2(r.amount)}</td>
                     </tr>
                   ))
                 )}
@@ -334,7 +334,7 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
                     <SumLine k="ค่าขนส่งสินค้า" v={`${fmt2(feeFreight)} บาท`} />
                     {feeThaiShip > 0 && <SumLine k="+ ค่าขนส่งไทย" v={`${fmt2(feeThaiShip)} บาท`} />}
                     {feeMao > 0 && <SumLine k="+ ค่าส่งเหมาๆ" v={`${fmt2(feeMao)} บาท`} />}
-                    {feeChn > 0 && <SumLine k="+ ค่าขนส่งจีน+" v={`${fmt2(feeChn)} บาท`} />}
+                    {feeChn > 0 && <SumLine k="+ ค่าขนส่ง" v={`${fmt2(feeChn)} บาท`} />}
                     {feeOther > 0 && <SumLine k="+ ค่าอื่นๆ" v={`${fmt2(feeOther)} บาท`} />}
                     {feeDiscount > 0 && <SumLine k="− ส่วนลด" v={`${fmt2(feeDiscount)} บาท`} red />}
                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderTop: "0.5px solid #e5e7eb", paddingTop: "2px", marginTop: "2px" }}>
