@@ -484,9 +484,12 @@ export function CreateBatchForm({
                     {/* บริษัทขนส่ง · ที่อยู่ — รวมคอลัมน์เดียว แบบโซนกลางหน้า detail (owner 2026-07-25):
                         badge ขนส่ง ด้านบน · ที่อยู่ผู้รับ (อำเภอไฮไลต์) + โทร ด้านล่าง */}
                     <td className="px-3 py-2 align-top text-sm">
-                      <div className="mb-1.5">
+                      <div className="mb-1.5 flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-2.5 py-0.5 text-xs font-semibold text-white">
                           <Truck className="h-3 w-3" /> {g.shipByLabel}
+                        </span>
+                        <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-mono font-semibold text-gray-700">
+                          {g.userid}
                         </span>
                       </div>
                       {g.addressMissing ? (

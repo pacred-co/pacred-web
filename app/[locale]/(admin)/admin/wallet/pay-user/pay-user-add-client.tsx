@@ -1477,8 +1477,8 @@ function PayModal({
                     <th className="px-2 py-2">น้ำหนัก (กก.)</th>
                     <th className="px-2 py-2">ประเภท</th>
                     <th className="px-2 py-2 text-right">เรทราคา</th>
-                    <th className="px-2 py-2 text-right">ค่าขนส่ง</th>
                     <th className="px-2 py-2 text-right">อื่นๆ</th>
+                    <th className="px-2 py-2 text-right">ค่าขนส่ง</th>
                   </>
                 ) : (
                   <th className="px-2 py-2">รายละเอียดสินค้า</th>
@@ -1501,8 +1501,8 @@ function PayModal({
                       <td className="px-2 py-1.5 text-center font-mono text-[11px] text-gray-600 tabular-nums">{r.weight > 0 ? r.weight : "—"}</td>
                       <td className="px-2 py-1.5 text-center text-[11px] text-gray-600">{r.products_type_label || "—"}</td>
                       <td className="px-2 py-1.5 text-right font-mono tabular-nums">{r.rate > 0 ? fmt2(r.rate) : "—"}</td>
-                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">{fmt2(r.breakdown.freight)}</td>
                       <td className="px-2 py-1.5 text-right font-mono tabular-nums">{fmt2(r.breakdown.otherCharges)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">{fmt2(r.breakdown.freight)}</td>
                     </tr>
                   ))
                 : shopRows.map((r, i) => (
