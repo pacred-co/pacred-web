@@ -77,6 +77,7 @@ import { resolveProfileIdsForLegacyUserids } from "@/lib/auth/tb-users-resolver"
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
 import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shipping";
+import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
 
 // ────────────────────────────────────────────────────────────
 // Schemas
@@ -165,6 +166,7 @@ export type BillFailure = {
     | "no_delivery_address" // ยังไม่มีที่อยู่จัดส่ง (owner 2026-07-23 · กระทบค่าส่งไทย + เอกสาร)
     | "th_shipping_missing" // C2 ยังไม่มีค่าส่งไทย (+ ระบบเติมอัตโนมัติไม่ได้)
     | "not_status_4"        // แถวไม่ได้อยู่สถานะ 4 → action อ่านไม่เจอ (เดิม = หายเงียบ)
+    | "already_paid"        // 🔴 มีบันทึกการชำระเงินแล้ว = ห้ามแจ้งชำระซ้ำ (PR189 2026-07-28)
     | "update_failed";      // UPDATE ไม่ผ่าน (race / DB error)
   /** เหตุผลไทย อ่านรู้เรื่องในตาแรก. */
   reason: string;
@@ -571,6 +573,35 @@ export async function adminCallPriceUser(
             code: "th_shipping_missing",
             reason: `ค่าส่งในไทยยังเป็น ฿0 · ระบบคิดให้อัตโนมัติไม่ได้ เพราะ ${diag.reason}`,
             nextAction: diag.nextAction,
+          };
+          result.failed++;
+          result.failures.push(f);
+          result.errors.push(failureLine(f));
+          continue;
+        }
+
+        // 🔴 กันเรียกเก็บซ้ำ (owner 2026-07-28 · PR189/52315) — ด่านสุดท้ายก่อนดัน
+        // เป็น "รอชำระเงิน" + ยิง SMS ทวงลูกค้า.
+        //
+        // เคสจริง: งาน 52315 ถูกเก็บเงินและตรวจสลิปผ่านแล้ว (tb_wallet_hs 106474/106475
+        // settled ฿1,734.43 · 22:07) → 22:45 พนักงาน void ใบเสร็จ+ใบวางบิล ("ออกผิด")
+        // → 22:48 ดันสถานะกลับเป็น '4' → 22:50 กดแจ้งชำระรวมที่หน้านี้ → **ผ่านฉลุย
+        // 2/2 + ส่ง SMS ทวงลูกค้าอีกรอบ** ทั้งที่เงินเข้าแล้ว.
+        //
+        // `assertNotRefunded` (legacy forwarder.php:1290 ePayRe) ถูก wire ไว้ใน
+        // path ดันสถานะ (forwarders.ts / forwarder-step.ts / field-edits) แล้ว —
+        // แต่ **หน้าตรวจตู้ → แจ้งชำระรวม ไม่เคยมี** → เป็นรูที่เหลืออยู่ทางเดียว.
+        // REFUSAL-only: ไม่แตะเงิน ไม่แตะราคา แค่ข้ามแถวพร้อมบอกทางออก
+        // (ถ้าจะเก็บใหม่จริง ต้องกด "ย้อนการชำระ" ให้ pay row เป็น status='3' ก่อน
+        //  ซึ่ง guard ยอมให้ผ่านโดยดีไซน์). fail-CLOSED ตามตัว guard เอง.
+        const noRebill = await assertNotRefunded(admin, Number(row.id));
+        if (!noRebill.ok) {
+          const f: BillFailure = {
+            fid: row.id,
+            code: "already_paid",
+            reason: `${noRebill.error} — งานนี้มีบันทึกการชำระเงินอยู่แล้ว`,
+            nextAction:
+              "ถ้าเก็บเงินไปแล้วจริง = ไม่ต้องแจ้งชำระซ้ำ · ถ้าต้องออกเอกสาร/เก็บใหม่ ให้กด “ย้อนการชำระ” ที่หน้าจ่ายเงินแทนลูกค้าก่อน แล้วค่อยแจ้งชำระอีกครั้ง",
           };
           result.failed++;
           result.failures.push(f);

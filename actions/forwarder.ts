@@ -24,6 +24,7 @@ import { loadCustomerBillingParty } from "@/lib/admin/customer-billing-party";
 // transparent (same return value on success · re-throws the ORIGINAL error),
 // files only UNEXPECTED throws (handled `{ ok:false }` returns untouched).
 import { withObservability } from "@/lib/observability/with-observability";
+import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
 
 type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -555,6 +556,26 @@ async function submitForwarderPaymentImpl(
   const eligibleIds = new Set(eligible.map((r) => r.id));
   if (ids.some((id) => !eligibleIds.has(id))) {
     return { ok: false, error: "ineligible_row — มีรายการที่ชำระเงินไม่ได้ปะปนมา" };
+  }
+  // 🔴 กันลูกค้าจ่ายซ้ำงานที่เก็บเงินไปแล้ว (owner 2026-07-28 · PR189/52315).
+  //
+  // ปกติงานที่จ่ายแล้วจะอยู่ fstatus 6 จึงไม่โผล่มาให้จ่าย — แต่คืนนี้เจอของจริง:
+  // 52315 เก็บเงิน+ตรวจสลิปผ่านแล้ว (฿1,734.43) → พนักงาน void เอกสาร "ออกผิด"
+  // → ดันสถานะกลับ '4' → แจ้งชำระใหม่ → กลับมาเป็น 5 **พร้อม SMS ทวงลูกค้า** ⇒
+  // ถ้าลูกค้ากดจ่ายตามนั้น = จ่ายซ้ำ เงินเข้า 2 รอบ.
+  // ด่านนี้ปฏิเสธอย่างเดียว (ไม่แตะเงิน/สถานะ) และไม่กระทบทางปกติ เพราะ pay row
+  // ที่ถูก "ย้อนการชำระ" แล้วจะเป็น status='3' ซึ่ง guard ยอมให้จ่ายใหม่โดยดีไซน์.
+  const paidCheck = await Promise.all(
+    eligible.map(async (row) => ({ id: row.id, res: await assertNotRefunded(admin, Number(row.id)) })),
+  );
+  const alreadyPaid = paidCheck.filter((r) => !r.res.ok);
+  if (alreadyPaid.length > 0) {
+    return {
+      ok: false,
+      error:
+        `already_paid — รายการ ${alreadyPaid.map((r) => `#${r.id}`).join(", ")} มีบันทึกการชำระเงินอยู่แล้ว ` +
+        "ระบบจึงไม่รับชำระซ้ำ (เงินของคุณไม่ถูกตัด) กรุณาติดต่อเจ้าหน้าที่เพื่อตรวจสอบสถานะรายการนี้",
+    };
   }
   // Credit jobs do not have a transactional reservation/settlement leg in the
   // grouped-payment RPC. Letting them through would mark work paid without a

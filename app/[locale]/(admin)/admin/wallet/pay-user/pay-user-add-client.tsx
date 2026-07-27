@@ -58,6 +58,7 @@ import {
 import { adminSearchCustomers, type CustomerPickerRow } from "@/actions/admin/search-customers";
 import { describeActionDispatchError } from "@/lib/observability/action-dispatch-error";
 import { isNextControlFlowError } from "@/lib/observability/next-control-flow";
+import { reportClientIncident } from "@/lib/observability/client-report";
 import { WalletBalanceCard } from "@/components/admin/wallet-balance-card";
 
 // ── formatting ───────────────────────────────────────────────
@@ -200,7 +201,11 @@ export function PayUserAddClient() {
         // how requireAdmin() sends an expired session to /login. Swallowing it
         // cancels the redirect and prints the raw "NEXT_REDIRECT" at the admin.
         if (isNextControlFlowError(e)) throw e;
+        // 🔴 owner 2026-07-28 (PR189): แบนเนอร์ "An error occurred in the Server
+        // Components render…" เคยขึ้นบนหน้านี้แล้ว **ไม่มีใบใน /admin/incidents เลย**
+        // → เราไม่มีทางรู้ว่าอะไรพัง. จับแล้วต้องรายงานด้วย ไม่ใช่แค่โชว์ให้ผู้ใช้ทน.
         setErr(describeActionDispatchError(e));
+        void reportClientIncident(e as Error);
       }
     });
   }
@@ -465,6 +470,7 @@ export function PayUserAddClient() {
     });
     closeModal();
     setErr(describeActionDispatchError(e, { mutating: true }));
+    void reportClientIncident(e as Error); // เงินไม่รู้ผล = ต้องมีใบให้ตามเสมอ
   }
 
   const hasRows = keyType === "2" ? fwdRows.length > 0 : shopRows.length > 0;
