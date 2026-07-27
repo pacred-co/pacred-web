@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runDataHealthChecks, type HealthCheckResult } from "@/lib/admin/data-health/checks";
 import { Link } from "@/i18n/navigation";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -77,7 +78,7 @@ export default async function DataHealthPage() {
       <p className="max-w-3xl text-sm text-muted">
         ทุกหัวข้อ = กติกาที่เคยพังจริงบน production (ลูกค้าเจอก่อนเรา) — หน้านี้ตรวจสดตอนเปิด ·
         cron ตรวจซ้ำทุกชั่วโมงและยิงเข้า <Link href="/admin/incidents" className="text-primary-600 underline underline-offset-2">แจ้งเตือนระบบ</Link> เมื่อพบ ·
-        อ่านอย่างเดียว 100% (ไม่มีการแก้ข้อมูลจากหน้านี้) · ตรวจล่าสุด {new Date(report.ranAt).toLocaleString("th-TH")}
+        อ่านอย่างเดียว 100% (ไม่มีการแก้ข้อมูลจากหน้านี้) · ตรวจล่าสุด {formatThaiDateTime(report.ranAt)}
       </p>
 
       {failing.length > 0 && (

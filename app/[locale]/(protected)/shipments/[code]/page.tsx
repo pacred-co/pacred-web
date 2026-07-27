@@ -5,6 +5,7 @@ import { getMyShipment } from "@/actions/shipments";
 import { relativeTimeTh, freshnessClass } from "@/lib/utils/relative-time";
 import { CARGO_TYPE_LABEL_TH, isCargoType } from "@/lib/warehouse/cargo-type";
 import { Explain } from "@/components/ui/tooltip";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 // Wave 3 cleanup (2026-05-20 ค่ำ): the cargo_shipments + cargo_shipment_tracking
 // spine was retired under D1 Option A. `getMyShipment` is now a STUB that
@@ -135,7 +136,7 @@ export default async function ShipmentDetailPage({
             {latestScannedAt && (
               <span
                 className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${FRESHNESS_PILL[freshness]}`}
-                title={t("lastScan", { time: new Date(latestScannedAt).toLocaleString("th-TH") })}
+                title={t("lastScan", { time: formatThaiDateTime(latestScannedAt) })}
               >
                 🔄 {relativeTimeTh(latestScannedAt)}
               </span>
@@ -165,7 +166,7 @@ export default async function ShipmentDetailPage({
                 {s.container.actual_arrival && (
                   <Cell
                     label={t("actualArrival")}
-                    value={new Date(s.container.actual_arrival).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                    value={formatThaiDateTime(s.container.actual_arrival)}
                   />
                 )}
                 {s.container.carrier_container_no && (
@@ -182,7 +183,7 @@ export default async function ShipmentDetailPage({
                 }`}>
                   ⏰ {t("containerCloseDate")}{" "}
                   <span className="font-medium">
-                    {new Date(s.container.close_at!).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                    {formatThaiDateTime(s.container.close_at!)}
                   </span>
                   {daysToClose === 0 ? <span className="ml-1 font-semibold">— {t("today")}</span>
                     : <span className="ml-1 font-semibold">({t("daysLeft", { count: daysToClose })})</span>}
@@ -289,7 +290,7 @@ export default async function ShipmentDetailPage({
                 />
                 <p className="text-sm font-medium">{EVENT_KEYS.has(e.event) ? t(`event.${e.event}`) : e.event}</p>
                 <p className="text-xs text-muted mt-0.5">
-                  {new Date(e.scanned_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                  {formatThaiDateTime(e.scanned_at)}
                   {e.location && <span> · 📍 {e.location}</span>}
                   {e.source !== "pacred" && <span className="ml-1 text-[11px] uppercase">[{e.source}]</span>}
                 </p>

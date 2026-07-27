@@ -93,7 +93,7 @@ export type CustomsDeclarationPdfData = {
 function formatDateTh(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return d.toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok", day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 function formatTaxId(id: string | null): string {

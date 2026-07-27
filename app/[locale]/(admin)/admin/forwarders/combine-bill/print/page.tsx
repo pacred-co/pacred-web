@@ -54,6 +54,7 @@ import {
   resolveBillingIdentity,
   corpRowFromName,
 } from "@/lib/admin/customer-identity";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -338,13 +339,7 @@ export default async function CombineBillPrintPage({
     .join(" · ");
 
   const headerDateLabel = header.fdate
-    ? new Date(header.fdate).toLocaleString("th-TH", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+    ? formatThaiDateTime(header.fdate)
     : "—";
 
   return (

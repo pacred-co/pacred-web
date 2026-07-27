@@ -9,6 +9,7 @@ import {
   requestTaxInvoice,
   type CustomerTaxInvoiceSummary,
 } from "@/actions/tax-invoices";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
@@ -247,9 +248,9 @@ function ExistingInvoiceCard({ existing, store }: { existing: CustomerTaxInvoice
             <span className="ml-2 text-muted">{t("taxIdLabel")} {existing.buyer_tax_id}</span>
           </p>
           <p className="text-muted">
-            {t("requestedAtLabel")} {new Date(existing.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+            {t("requestedAtLabel")} {formatThaiDateTime(existing.created_at)}
             {existing.issued_at && (
-              <span className="ml-2">· {t("issuedAtLabel")} {new Date(existing.issued_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</span>
+              <span className="ml-2">· {t("issuedAtLabel")} {formatThaiDateTime(existing.issued_at)}</span>
             )}
           </p>
         </div>

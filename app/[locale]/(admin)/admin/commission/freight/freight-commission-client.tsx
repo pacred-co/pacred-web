@@ -34,6 +34,7 @@ import {
   type CommissionWithdrawalRow,
   type FreightCommissionTierView,
 } from "@/actions/admin/freight-commission";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 const SCOPE_LABEL: Record<string, string> = {
   freight_quote: "ค่าเฟรท (Freight)",
@@ -60,9 +61,7 @@ function thb(n: number): string {
 }
 
 function fmtDate(s: string | null): string {
-  if (!s) return "—";
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("th-TH");
+  return formatThaiDate(s);
 }
 
 export function FreightCommissionClient({

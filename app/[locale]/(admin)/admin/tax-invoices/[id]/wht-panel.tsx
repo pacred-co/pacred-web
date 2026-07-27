@@ -30,6 +30,7 @@ import {
 } from "@/actions/admin/wht";
 import { Glossary, GLOSSARY_DEFS } from "@/components/ui/tooltip";
 import { WHT_RATES, computeWhtNumbers } from "@/lib/validators/withholding-tax";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export type WhtPanelEntry = {
   id:                 string;
@@ -377,7 +378,7 @@ function ReceivedDetail({ entry }: { entry: WhtPanelEntry }) {
       <p className="text-green-800 font-bold">✅ ได้รับใบ 50 ทวิ ครบแล้ว — gate ปลด</p>
       {entry.cert_received_at && (
         <p className="text-muted">
-          รับเมื่อ {new Date(entry.cert_received_at).toLocaleString("th-TH")}
+          รับเมื่อ {formatThaiDateTime(entry.cert_received_at)}
           {entry.cert_number && <> · เลขที่ <span className="font-mono">{entry.cert_number}</span></>}
         </p>
       )}
@@ -395,7 +396,7 @@ function WaivedDetail({ entry }: { entry: WhtPanelEntry }) {
     <div className="border-t border-amber-200 pt-3 space-y-1 text-xs">
       <p className="text-yellow-800 font-bold">⚠️ ยกเว้น (waived) — gate ปลด</p>
       {entry.waived_at && (
-        <p className="text-muted">เมื่อ {new Date(entry.waived_at).toLocaleString("th-TH")}</p>
+        <p className="text-muted">เมื่อ {formatThaiDateTime(entry.waived_at)}</p>
       )}
       {entry.waived_reason && (
         <p>เหตุผล: {entry.waived_reason}</p>

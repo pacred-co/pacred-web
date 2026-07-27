@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { legacyMemberUrl, normalizeImageUrl, applyResizeSuffix } from "@/lib/legacy-image";
 import { PaymentDueList, type PaymentDueItem } from "./payment-due-list";
 import type { ForwarderRow } from "../service-import/forwarder-row-view";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 /**
  * รายการที่ต้องชำระ — a cross-service "items awaiting payment" aggregator
@@ -39,10 +40,7 @@ export const dynamic = "force-dynamic";
 // dd/mm/yyyy — matches the /service-order list's fmtRelative output.
 function fmtDate(s: string | null): string {
   if (!s) return "";
-  const d = new Date(s.replace(" ", "T"));
-  if (isNaN(d.getTime())) return "";
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+  return formatThaiDate(s);
 }
 
 // Epoch ms for sorting the merged list newest-first (transient, not sent down).

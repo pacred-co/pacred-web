@@ -10,6 +10,7 @@ import { listBookingDocuments } from "@/actions/bookings";
 import type { BookingDocKind } from "@/types/booking";
 import { BookingActionPanel } from "./booking-action-panel";
 import { WorkItemThread } from "@/components/admin/work-item-thread";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 const DOC_KIND_LABEL_TH: Record<BookingDocKind, string> = {
   booking_invoice:       "ใบกำกับสินค้า",
@@ -236,10 +237,10 @@ export default async function AdminBookingDetailPage({
             {t("detailTitle")} <span className="font-mono">{row.booking_no ?? `(draft) ${row.id.slice(0, 8)}…`}</span>
           </h1>
           <p className="text-xs text-muted mt-1">
-            {`สร้าง ${new Date(row.created_at).toLocaleString("th-TH")}`}
-            {row.submitted_at && <> · {`ส่ง ${new Date(row.submitted_at).toLocaleString("th-TH")}`}</>}
-            {row.contacted_at && <> · {`ติดต่อ ${new Date(row.contacted_at).toLocaleString("th-TH")}`}</>}
-            {row.closed_at && <> · {`ปิด ${new Date(row.closed_at).toLocaleString("th-TH")}`}</>}
+            {`สร้าง ${formatThaiDateTime(row.created_at)}`}
+            {row.submitted_at && <> · {`ส่ง ${formatThaiDateTime(row.submitted_at)}`}</>}
+            {row.contacted_at && <> · {`ติดต่อ ${formatThaiDateTime(row.contacted_at)}`}</>}
+            {row.closed_at && <> · {`ปิด ${formatThaiDateTime(row.closed_at)}`}</>}
           </p>
         </div>
         <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_BADGE[row.status]}`}>
@@ -445,7 +446,7 @@ export default async function AdminBookingDetailPage({
                     <p className="text-[11px] text-muted">
                       {doc.mimeType ?? "unknown"}
                       {sizeKb !== null && ` · ${sizeKb < 1024 ? `${sizeKb} KB` : `${(sizeKb / 1024).toFixed(1)} MB`}`}
-                      {" · "}อัปโหลด {new Date(doc.uploadedAt).toLocaleString("th-TH")}
+                      {" · "}อัปโหลด {formatThaiDateTime(doc.uploadedAt)}
                     </p>
                   </div>
                   {doc.signedUrl && (

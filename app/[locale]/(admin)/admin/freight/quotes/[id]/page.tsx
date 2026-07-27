@@ -7,6 +7,7 @@ import {
   type QuoteStatus, type TransportMode, type Incoterm,
 } from "@/lib/validators/freight-quote";
 import { QuoteDetailClient, type QuoteDetailData, type LineItem } from "./quote-detail-client";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * V-E6 — /admin/freight/quotes/[id]
@@ -169,10 +170,10 @@ export default async function AdminFreightQuoteDetailPage({
             ใบเสนอราคา <span className="font-mono">{header.quote_no}</span>
           </h1>
           <p className="text-xs text-muted">
-            สร้าง {new Date(header.created_at).toLocaleString("th-TH")}
-            {header.approved_at && <> · อนุมัติ {new Date(header.approved_at).toLocaleString("th-TH")}</>}
-            {header.sent_at     && <> · ส่ง {new Date(header.sent_at).toLocaleString("th-TH")}</>}
-            {header.accepted_at && <> · ตอบรับ {new Date(header.accepted_at).toLocaleString("th-TH")}</>}
+            สร้าง {formatThaiDateTime(header.created_at)}
+            {header.approved_at && <> · อนุมัติ {formatThaiDateTime(header.approved_at)}</>}
+            {header.sent_at     && <> · ส่ง {formatThaiDateTime(header.sent_at)}</>}
+            {header.accepted_at && <> · ตอบรับ {formatThaiDateTime(header.accepted_at)}</>}
           </p>
         </div>
         <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_BADGE[header.status]}`}>
@@ -248,7 +249,7 @@ export default async function AdminFreightQuoteDetailPage({
             {audit.map((a) => (
               <li key={a.id} className="flex items-baseline gap-2">
                 <span className="font-mono text-[11px] text-muted whitespace-nowrap">
-                  {new Date(a.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                  {formatThaiDateTime(a.created_at)}
                 </span>
                 <span className="font-medium">{a.action}</span>
                 <span className="text-muted">

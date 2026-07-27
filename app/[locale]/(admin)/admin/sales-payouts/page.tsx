@@ -24,6 +24,7 @@ import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { getPendingSalesPayoutsTb } from "@/actions/admin/sales-payouts-tb";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportSalesPayoutsAll } from "@/actions/admin/export/sales-payouts";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,7 @@ export default async function AdminSalesPayoutsPage() {
 
   // Map the displayed rows to flat CSV rows (same keys as CSV_COLS).
   const csvRows: CsvRow[] = rows.map((r) => ({
-    date: r.date ? new Date(r.date).toLocaleString("th-TH") : "",
+    date: r.date ? formatThaiDateTime(r.date) : "",
     userIDMain: r.userIDMain ?? "",
     adminCreate: r.adminCreate ?? "",
     ...(showMoney ? { amount: Number(r.amount).toFixed(2) } : {}),
@@ -107,7 +108,7 @@ export default async function AdminSalesPayoutsPage() {
                   {rows.map((r) => (
                     <tr key={r.id} className="border-t border-border align-top">
                       <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
-                        {r.date ? new Date(r.date).toLocaleString("th-TH") : "—"}
+                        {r.date ? formatThaiDateTime(r.date) : "—"}
                       </td>
                       <td className="px-4 py-3 text-xs font-mono">{r.userIDMain}</td>
                       <td className="px-4 py-3 text-xs font-mono">{r.adminCreate ?? "—"}</td>

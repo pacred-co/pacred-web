@@ -42,6 +42,7 @@ import { legacyForwarderStatusThai } from "@/lib/legacy-status-map";
 import { parsePage } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -327,11 +328,11 @@ export default async function RefundsReport({
                   <tr key={r.id} className="border-t border-border">
                     <td className="px-4 py-3 text-xs whitespace-nowrap">
                       <div className="text-muted">
-                        {r.date ? new Date(r.date).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                        {r.date ? formatThaiDateTime(r.date) : "—"}
                       </div>
                       {r.dateslip && (
                         <div className="mt-0.5 text-foreground">
-                          ⏱ {new Date(r.dateslip).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                          ⏱ {formatThaiDateTime(r.dateslip)}
                         </div>
                       )}
                     </td>

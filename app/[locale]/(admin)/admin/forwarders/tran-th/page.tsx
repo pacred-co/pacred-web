@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { getTranThList } from "@/actions/admin/forwarder-tran-th";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportTranThAll } from "@/actions/admin/export/tran-th";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 /**
  * /admin/forwarders/tran-th — TH-transport batch list (legacy
@@ -23,10 +24,7 @@ import { exportTranThAll } from "@/actions/admin/export/tran-th";
 export const dynamic = "force-dynamic";
 
 function fmtDateLong(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "2-digit" });
+  return formatThaiDate(iso);
 }
 
 export default async function AdminTranThListPage({

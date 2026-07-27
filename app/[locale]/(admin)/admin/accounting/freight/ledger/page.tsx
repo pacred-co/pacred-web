@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { getFreightLedger } from "./ledger-data";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 /**
  * /admin/accounting/freight/ledger — Freight รายการเดินบัญชี (statement).
@@ -44,10 +45,7 @@ function thb(n: number): string {
 }
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("th-TH", { year: "numeric", month: "2-digit", day: "2-digit" });
+  return formatThaiDate(iso);
 }
 
 function defaultDateRange(): { from: string; to: string } {

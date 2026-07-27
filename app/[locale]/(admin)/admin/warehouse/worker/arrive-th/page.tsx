@@ -13,16 +13,12 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { loadWorkerQueue } from "@/lib/warehouse/worker-queries";
 import { ArriveThScanPanel } from "./arrive-th-scan-panel";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleDateString("th-TH", { dateStyle: "short" });
-  } catch {
-    return iso;
-  }
+  return formatThaiDate(iso);
 }
 
 export default async function WarehouseArriveThPage() {

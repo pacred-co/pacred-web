@@ -87,6 +87,7 @@ import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { loadLinkedForwarderPaymentBatch } from "@/lib/forwarder/linked-payment-batch";
 import { parseCashbackNoteTag } from "@/lib/cashback/note-tag";
 import { parseFrozenWalletPaymentQuote } from "@/lib/wallet/payment-quote-snapshot";
+import { bangkokClockParts } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -1241,8 +1242,8 @@ function KV({ label, value }: { label: string; value: string }) {
  * the clock by the Bangkok offset.
  */
 function formatLegacyStamp(raw: string): string {
-  const m = raw.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/);
-  if (m) return `${m[1]} ${m[2]}`;
-  const short = raw.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/);
-  return short ? `${short[1]} ${short[2]}:00` : raw;
+  const c = bangkokClockParts(raw);
+  if (!c) return raw;
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${c.year}-${p(c.month)}-${p(c.day)} ${p(c.hour)}:${p(c.minute)}:${p(c.second)}`;
 }

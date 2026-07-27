@@ -7,6 +7,7 @@ import {
   type QuoteStatus,
   type TransportMode,
 } from "@/lib/validators/freight-quote";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 /**
  * /admin/accounting/freight/quotes — Freight ใบเสนอราคา (quotation) list.
@@ -58,11 +59,7 @@ function thb(n: number | null | undefined): string {
   return "฿" + Number(n).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? "—"
-    : d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  return formatThaiDate(iso);
 }
 function modeLabel(m: string | null): string {
   if (!m) return "—";

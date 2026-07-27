@@ -53,6 +53,7 @@ function StarRow({ value, size = 13 }: { value: number; size?: number }) {
 function fmtDate(iso: string, locale: string) {
   try {
     return new Date(iso).toLocaleDateString(locale === "en" ? "en-US" : "th-TH", {
+      timeZone: "Asia/Bangkok",
       year: "numeric",
       month: "short",
       day: "numeric",

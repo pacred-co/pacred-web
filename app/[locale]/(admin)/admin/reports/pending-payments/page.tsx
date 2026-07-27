@@ -44,6 +44,7 @@ import {
   corpRowFromName,
 } from "@/lib/admin/customer-identity";
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -346,7 +347,7 @@ export default async function PendingPaymentsReport({
                       <td className="px-3 py-3 font-mono text-xs">#{r.id}</td>
                       <td className="px-3 py-3 text-xs whitespace-nowrap">
                         {r.date
-                          ? new Date(r.date).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })
+                          ? formatThaiDateTime(r.date)
                           : "—"}
                       </td>
                       <td className="px-3 py-3 text-xs">

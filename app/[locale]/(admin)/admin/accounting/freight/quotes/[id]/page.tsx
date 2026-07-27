@@ -10,6 +10,7 @@ import {
   type TransportMode,
 } from "@/lib/validators/freight-quote";
 import { QuoteStatusActions } from "./quote-status-actions";
+import { formatThaiDate, formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * /admin/accounting/freight/quotes/[id] — Freight ใบเสนอราคา detail.
@@ -46,18 +47,10 @@ function thb(n: number | null | undefined): string {
   return "฿" + Number(n).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function fmtDateTime(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? "—"
-    : d.toLocaleString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatThaiDateTime(iso);
 }
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? "—"
-    : d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return formatThaiDate(iso);
 }
 function modeLabel(m: string | null): string {
   if (!m) return "—";

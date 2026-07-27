@@ -11,6 +11,7 @@ import {
   type FreightPaymentMethod,
 } from "@/lib/validators/freight-payment";
 import { FreightInvoiceActions } from "./freight-invoice-actions";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * Freight ใบแจ้งหนี้ — admin DETAIL.
@@ -215,7 +216,7 @@ export default async function AdminFreightInvoiceDetailPage({
 
       {invoice.status === "cancelled" && invoice.cancellation_reason && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-          ใบแจ้งหนี้นี้ถูกยกเลิก{invoice.cancelled_at ? ` เมื่อ ${new Date(invoice.cancelled_at).toLocaleString("th-TH")}` : ""} ·
+          ใบแจ้งหนี้นี้ถูกยกเลิก{invoice.cancelled_at ? ` เมื่อ ${formatThaiDateTime(invoice.cancelled_at)}` : ""} ·
           เหตุผล: {invoice.cancellation_reason}
         </div>
       )}
@@ -338,7 +339,7 @@ export default async function AdminFreightInvoiceDetailPage({
               <tbody>
                 {payments.map((p) => (
                   <tr key={p.id} className={`border-t border-border ${p.status === "voided" ? "opacity-50 line-through" : ""}`}>
-                    <td className="px-3 py-2 text-xs">{new Date(p.paid_at).toLocaleString("th-TH")}</td>
+                    <td className="px-3 py-2 text-xs">{formatThaiDateTime(p.paid_at)}</td>
                     <td className="px-3 py-2 text-xs">{FREIGHT_PAYMENT_METHOD_LABEL[p.method] ?? p.method}</td>
                     <td className="px-3 py-2 text-right font-mono text-xs">{thb(p.amount_thb)}</td>
                     <td className="px-3 py-2 text-xs text-muted">{p.bank_ref ?? "—"}</td>

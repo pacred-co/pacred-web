@@ -17,6 +17,7 @@ import {
   type DeclarationDetailData,
   type DeclarationLineData,
 } from "@/app/[locale]/(admin)/admin/freight/declarations/[id]/declaration-detail-client";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * W8(C) 2026-06-09 — /admin/accounting/customs-declarations/[id]
@@ -206,7 +207,7 @@ export default async function AdminAccountingCustomsDeclarationDetailPage({
             </h1>
             <p className="text-xs text-muted">
               {CUSTOMS_DECLARATION_TYPE_LABEL[header.declaration_type]} ·{" "}
-              สร้าง {new Date(header.created_at).toLocaleString("th-TH")} · งาน{" "}
+              สร้าง {formatThaiDateTime(header.created_at)} · งาน{" "}
               {shipment?.job_no ? (
                 <Link href={`/admin/freight/shipments/${header.freight_shipment_id}`} className="font-mono text-primary-500 hover:underline">
                   {shipment.job_no}
@@ -296,12 +297,12 @@ export default async function AdminAccountingCustomsDeclarationDetailPage({
         {/* Lifecycle timestamps */}
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-1 text-xs">
           <h2 className="font-bold text-sm mb-2">เหตุการณ์ (Lifecycle)</h2>
-          <p>ร่าง: <span className="font-mono">{header.declared_at  ? new Date(header.declared_at).toLocaleString("th-TH")  : "—"}</span></p>
-          <p>ยื่นแล้ว: <span className="font-mono">{header.submitted_at ? new Date(header.submitted_at).toLocaleString("th-TH") : "—"}</span></p>
-          <p>ตรวจรับ: <span className="font-mono">{header.accepted_at  ? new Date(header.accepted_at).toLocaleString("th-TH")  : "—"}</span></p>
-          <p>ตรวจปล่อย: <span className="font-mono">{header.released_at  ? new Date(header.released_at).toLocaleString("th-TH")  : "—"}</span></p>
+          <p>ร่าง: <span className="font-mono">{header.declared_at  ? formatThaiDateTime(header.declared_at)  : "—"}</span></p>
+          <p>ยื่นแล้ว: <span className="font-mono">{header.submitted_at ? formatThaiDateTime(header.submitted_at) : "—"}</span></p>
+          <p>ตรวจรับ: <span className="font-mono">{header.accepted_at  ? formatThaiDateTime(header.accepted_at)  : "—"}</span></p>
+          <p>ตรวจปล่อย: <span className="font-mono">{header.released_at  ? formatThaiDateTime(header.released_at)  : "—"}</span></p>
           {header.cancelled_at && (
-            <p className="text-red-700">ยกเลิก: <span className="font-mono">{new Date(header.cancelled_at).toLocaleString("th-TH")}</span></p>
+            <p className="text-red-700">ยกเลิก: <span className="font-mono">{formatThaiDateTime(header.cancelled_at)}</span></p>
           )}
           {header.customs_office && (
             <p className="mt-2">
@@ -318,7 +319,7 @@ export default async function AdminAccountingCustomsDeclarationDetailPage({
               {audit.map((a) => (
                 <li key={a.id} className="flex items-baseline gap-2">
                   <span className="font-mono text-[11px] text-muted whitespace-nowrap">
-                    {new Date(a.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                    {formatThaiDateTime(a.created_at)}
                   </span>
                   <span className="font-medium">{a.action}</span>
                   <span className="text-muted">by {a.admin?.member_code ?? "—"}</span>

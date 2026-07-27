@@ -10,6 +10,7 @@ import {
   type RefundSource,
 } from "@/lib/validators/refund";
 import { RefundActions } from "./refund-actions";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * U1-6 — /admin/refunds/[id] detail page.
@@ -118,7 +119,7 @@ export default async function AdminRefundDetailPage({
         details: [
           { k: "สถานะ",     v: data.fstatus ?? "—" },
           { k: "ยอดรวม",    v: data.ftotalprice != null ? thb(Number(data.ftotalprice)) : "—" },
-          { k: "วันที่สร้าง", v: data.fdate ? new Date(data.fdate).toLocaleString("th-TH") : "—" },
+          { k: "วันที่สร้าง", v: data.fdate ? formatThaiDateTime(data.fdate) : "—" },
         ],
       };
     }
@@ -138,7 +139,7 @@ export default async function AdminRefundDetailPage({
         details: [
           { k: "สถานะ",     v: data.hstatus ?? "—" },
           { k: "ยอดรวม",    v: data.htotalpriceuser != null ? thb(Number(data.htotalpriceuser)) : "—" },
-          { k: "วันที่สร้าง", v: data.hdate ? new Date(data.hdate).toLocaleString("th-TH") : "—" },
+          { k: "วันที่สร้าง", v: data.hdate ? formatThaiDateTime(data.hdate) : "—" },
         ],
       };
     }
@@ -160,7 +161,7 @@ export default async function AdminRefundDetailPage({
           { k: "สถานะ",   v: data.paystatus ?? "—" },
           { k: "ยอด CNY", v: `¥${data.payyuan ?? "—"}` },
           { k: "ยอด THB", v: data.paythb != null ? thb(Number(data.paythb)) : "—" },
-          { k: "วันที่สร้าง", v: data.paydate ? new Date(data.paydate).toLocaleString("th-TH") : "—" },
+          { k: "วันที่สร้าง", v: data.paydate ? formatThaiDateTime(data.paydate) : "—" },
         ],
       };
     }
@@ -216,7 +217,7 @@ export default async function AdminRefundDetailPage({
     }
     if (w) {
       paidTxNote = `wallet_hs #${w.id} (type 5 คืนเงิน) +${thb(Number(w.amount))}` +
-        (w.date ? ` @ ${new Date(w.date).toLocaleString("th-TH")}` : "");
+        (w.date ? ` @ ${formatThaiDateTime(w.date)}` : "");
     }
   } else if (row.paid_wallet_tx_id) {
     const { data: w, error: wErr } = await admin
@@ -229,7 +230,7 @@ export default async function AdminRefundDetailPage({
       console.error(`[refunds/[id] paid wallet_tx lookup] txId=${row.paid_wallet_tx_id}`, { code: wErr.code, message: wErr.message });
     }
     if (w) {
-      paidTxNote = `wallet_tx ${w.id.slice(0, 8)}… +${thb(Number(w.amount))} @ ${new Date(w.created_at).toLocaleString("th-TH")}`;
+      paidTxNote = `wallet_tx ${w.id.slice(0, 8)}… +${thb(Number(w.amount))} @ ${formatThaiDateTime(w.created_at)}`;
     }
   }
 
@@ -244,10 +245,10 @@ export default async function AdminRefundDetailPage({
             คำขอคืนเงิน <span className="font-mono">{row.request_no}</span>
           </h1>
           <p className="text-xs text-muted">
-            สร้าง {new Date(row.created_at).toLocaleString("th-TH")}
-            {row.approved_at && <> · อนุมัติ {new Date(row.approved_at).toLocaleString("th-TH")}</>}
-            {row.paid_at     && <> · จ่าย {new Date(row.paid_at).toLocaleString("th-TH")}</>}
-            {row.rejected_at && <> · ปฏิเสธ {new Date(row.rejected_at).toLocaleString("th-TH")}</>}
+            สร้าง {formatThaiDateTime(row.created_at)}
+            {row.approved_at && <> · อนุมัติ {formatThaiDateTime(row.approved_at)}</>}
+            {row.paid_at     && <> · จ่าย {formatThaiDateTime(row.paid_at)}</>}
+            {row.rejected_at && <> · ปฏิเสธ {formatThaiDateTime(row.rejected_at)}</>}
             {row.created_by_admin_id ? " · admin-created" : " · customer-self-created"}
           </p>
         </div>
@@ -320,7 +321,7 @@ export default async function AdminRefundDetailPage({
             {audit.map((a) => (
               <li key={a.id} className="flex items-baseline gap-2">
                 <span className="font-mono text-[11px] text-muted whitespace-nowrap">
-                  {new Date(a.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                  {formatThaiDateTime(a.created_at)}
                 </span>
                 <span className="font-medium">{a.action}</span>
                 <span className="text-muted">

@@ -32,6 +32,7 @@ import { nowMs } from "@/lib/datetime-helpers";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { computeCommission } from "@/lib/sales-commission/calc";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 // The legacy per-team commission rate (`$percen` — report-user-sales-history.php
 // L46-55 · 0.01 for every VIP team). Single point of truth mirrored here.
@@ -69,7 +70,7 @@ function daysAgo(iso: string | null, now: number): number | null {
 }
 
 function fmtDateOnly(iso: string | null): string {
-  return iso ? String(iso).slice(0, 10) : "—";
+  return formatThaiDate(iso);
 }
 
 // ── Row shapes ──────────────────────────────────────────────────────

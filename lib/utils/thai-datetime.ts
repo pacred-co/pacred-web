@@ -156,6 +156,49 @@ export function formatThaiTimeWithSeconds(input: Date | string | number | null |
   return `${hour}:${minute}:${second} น.`;
 }
 
+/**
+ * Bangkok wall-clock calendar parts of a DB timestamp — Gregorian year, numeric
+ * fields (not zero-padded). null / invalid → null.
+ *
+ * For legacy-faithful helpers that must keep a BESPOKE format the four Thai
+ * formatters above can't reproduce (a `{date, time}` split · the PHP
+ * `d/m/Y H:i:s` · a Gregorian `YYYY-MM-DD HH:MM:SS` stamp) — assemble the exact
+ * shape from these parts and it stays faithful yet Bangkok-correct.
+ *
+ * Uses `parseDbInstant` so a tz-less DB string is treated as UTC (correct on a
+ * client too, where a bare `new Date(tzlessString)` would parse as local). A
+ * bare date-only string ("2026-07-15") is treated as that calendar day.
+ */
+export function bangkokClockParts(
+  input: Date | string | number | null | undefined,
+): { year: number; month: number; day: number; hour: number; minute: number; second: number } | null {
+  let v: Date | string | number | null | undefined = input;
+  if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.trim())) v = `${v.trim()}T00:00:00`;
+  const d = parseDbInstant(v);
+  if (!d) return null;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (t: Intl.DateTimeFormatPartTypes): string => parts.find((p) => p.type === t)?.value ?? "";
+  let hour = get("hour");
+  if (hour === "24") hour = "00";
+  return {
+    year: Number(get("year")),
+    month: Number(get("month")),
+    day: Number(get("day")),
+    hour: Number(hour),
+    minute: Number(get("minute")),
+    second: Number(get("second")),
+  };
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // วว/ดด/ปปปป ⇄ ISO — date-only form fields (owner 2026-07-23)
 //

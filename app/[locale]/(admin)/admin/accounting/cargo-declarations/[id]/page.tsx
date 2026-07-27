@@ -17,6 +17,7 @@ import { computeDeclarationFee } from "@/lib/customs/declaration-fees";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * /admin/accounting/cargo-declarations/[id] — CARGO ใบขนรวม detail (P3).
@@ -325,7 +326,7 @@ export default async function CargoDeclarationDetailPage({
             ใบขนรวม CARGO <span className="font-mono">{header.declaration_no ?? "(ร่าง)"}</span>
           </h1>
           <p className="text-xs text-muted">
-            สร้าง {new Date(header.created_at).toLocaleString("th-TH")} · ออเดอร์ฝากนำเข้า{" "}
+            สร้าง {formatThaiDateTime(header.created_at)} · ออเดอร์ฝากนำเข้า{" "}
             <Link href={`/admin/forwarders/${header.cargo_forwarder_id}`} className="font-mono text-primary-500 hover:underline">
               #{header.cargo_forwarder_id}
             </Link>
@@ -555,7 +556,7 @@ export default async function CargoDeclarationDetailPage({
             {audit.map((a) => (
               <li key={a.id} className="flex items-baseline gap-2">
                 <span className="font-mono text-[11px] text-muted whitespace-nowrap">
-                  {new Date(a.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                  {formatThaiDateTime(a.created_at)}
                 </span>
                 <span className="font-medium">{a.action}</span>
                 <span className="text-muted">by {a.admin?.member_code ?? "—"}</span>

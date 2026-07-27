@@ -19,6 +19,7 @@ import {
   warehouseLogLabelPrint,
 } from "@/actions/admin/warehouse-intake";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 type Sack = {
   id: number; sackNo: string; warehouse: string; container: string;
@@ -26,8 +27,7 @@ type Sack = {
 };
 
 function fmtTime(iso: string): string {
-  try { return new Date(iso).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }); }
-  catch { return iso; }
+  return formatThaiDateTime(iso);
 }
 
 export function SacksPanel({ sacks, isSupervisor }: { sacks: Sack[]; isSupervisor: boolean }) {

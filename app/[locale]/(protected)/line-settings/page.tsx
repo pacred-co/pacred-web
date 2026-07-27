@@ -31,6 +31,7 @@ import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { LineSettingsActions } from "./line-settings-actions";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -54,13 +55,7 @@ export default async function LineSettingsPage() {
   // Pre-format the linked-at timestamp on the server so the page never
   // hydrates an SSR/CSR mismatch from differing toLocaleDateString locales.
   const linkedAtLabel = linkedAt
-    ? new Date(linkedAt).toLocaleString("th-TH", {
-        year:   "numeric",
-        month:  "short",
-        day:    "numeric",
-        hour:   "2-digit",
-        minute: "2-digit",
-      })
+    ? formatThaiDateTime(linkedAt)
     : null;
 
   // The LIFF URL the connect CTA navigates to. https://liff.line.me/<id>

@@ -27,6 +27,7 @@ import {
   adminRejectCommissionWithdrawal,
   type CommissionWithdrawalRow,
 } from "@/actions/admin/freight-commission";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 type StatusFilter = "pending" | "approved" | "paid" | "rejected" | "all";
 
@@ -57,10 +58,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" });
+  return formatThaiDate(iso);
 }
 
 export function FreightThWithdrawalList({

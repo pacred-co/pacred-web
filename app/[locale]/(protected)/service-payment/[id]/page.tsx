@@ -31,6 +31,7 @@ import { getMyTaxInvoiceForOrder } from "@/actions/tax-invoices";
 import { TaxInvoiceRequestPanel } from "@/components/tax-invoice-request-panel";
 import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
 import { Explain } from "@/components/ui/tooltip";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -121,9 +122,9 @@ export default async function YuanPaymentDetailPage({
             <p className="text-xs font-semibold tracking-widest text-primary-600">{t("detailKicker")}</p>
             <h1 className="mt-1 text-2xl font-bold font-mono text-foreground">#{yp.id}</h1>
             <p className="text-xs text-muted mt-1">
-              {t("detailCreatedAt", { date: new Date(yp.created_at).toLocaleString("th-TH") })}
+              {t("detailCreatedAt", { date: formatThaiDateTime(yp.created_at) })}
               {yp.paydateadmin && (
-                <> · {t("detailReviewedAt", { date: new Date(yp.paydateadmin).toLocaleString("th-TH") })}</>
+                <> · {t("detailReviewedAt", { date: formatThaiDateTime(yp.paydateadmin) })}</>
               )}
             </p>
           </div>

@@ -32,6 +32,7 @@ import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { SHIP_BY_LABEL } from "@/actions/admin/reports-profit-types";
 import { PurchaserCell } from "@/components/admin/purchaser-cell";
 import type { SalesAdminOption } from "@/actions/admin/customer-profile";
+import { formatThaiDate, formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * 2026-06-17 (ภูม flag · "fvolume = total, ไม่ ×กล่อง") — total parcel CBM for
@@ -226,13 +227,7 @@ const BULK_STATUS_OPTIONS: ReadonlyArray<{ v: BulkStatusValue; l: string }> = [
 ];
 
 function fmtDate(iso: string | null | undefined, withTime = false): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  if (withTime) {
-    return d.toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" });
-  }
-  return d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  return withTime ? formatThaiDateTime(iso) : formatThaiDate(iso);
 }
 
 function relativeAgo(iso: string | null | undefined): string {
@@ -1029,7 +1024,7 @@ export function ForwardersTable({
                       </td>
                       <td className="px-2 py-2.5 font-mono whitespace-nowrap">{r.id}</td>
                       <td className="px-2 py-2.5 whitespace-nowrap text-muted">
-                        {r.created_at ? new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                        {r.created_at ? formatThaiDateTime(r.created_at) : "—"}
                         {/* Wave 18-B — diffDateTimeNow elapsed-time stamp
                             (port of legacy function.php L1399 · forwarder.php
                             L673 "ผ่านมา : ...") next to fdate. SLA visibility

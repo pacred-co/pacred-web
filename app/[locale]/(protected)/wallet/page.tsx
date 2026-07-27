@@ -5,6 +5,7 @@ import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { Explain } from "@/components/ui/tooltip";
+import { bangkokClockParts } from "@/lib/utils/thai-datetime";
 
 /**
  * Customer wallet screen — a FAITHFUL 1:1 TRANSCRIPTION of the legacy
@@ -108,15 +109,10 @@ const THAI_MONTH_CUT = [
   "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
 ];
 function dateThaiWallet(strDate: string | null): { date: string; time: string } {
-  if (!strDate) return { date: "", time: "" };
-  const d = new Date(strDate.replace(" ", "T"));
-  if (isNaN(d.getTime())) return { date: "", time: "" };
-  const day = d.getDate();
-  const month = THAI_MONTH_CUT[d.getMonth() + 1];
-  const year = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return { date: `${day} ${month} ${year}`, time: `${hh}:${mm} น.` };
+  const c = bangkokClockParts(strDate);
+  if (!c) return { date: "", time: "" };
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return { date: `${c.day} ${THAI_MONTH_CUT[c.month]} ${c.year}`, time: `${pad(c.hour)}:${pad(c.minute)} น.` };
 }
 
 // PHP `number_format($n, 2)` — 2 decimals, comma thousands separator.

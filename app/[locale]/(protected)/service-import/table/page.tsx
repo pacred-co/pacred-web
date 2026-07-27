@@ -24,6 +24,7 @@ import {
 import { type ForwarderRow as PayModalRow, PendingSlipBadge } from "../forwarder-row-view";
 import { resolvePendingSlipForwarderIds } from "@/lib/forwarder/pending-slip";
 import { resolveOpenBillForwarderIds } from "@/lib/forwarder/open-bill";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 /**
  * Import-forwarder list — TABLE VIEW. A FAITHFUL 1:1 TRANSCRIPTION of
@@ -1332,9 +1333,5 @@ function buildFullAddress(
  */
 function fmtDate(value: string | null): string {
   if (!value) return "";
-  // tb_* dates arrive as ISO ('2026-05-19' or full timestamp).
-  const datePart = value.slice(0, 10);
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datePart);
-  if (!m) return value;
-  return `${m[3]}/${m[2]}/${m[1]}`;
+  return formatThaiDate(value);
 }

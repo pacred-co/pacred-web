@@ -37,6 +37,7 @@ import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { parsePage } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -433,7 +434,7 @@ export default async function AdminReportShopPage({
                   return (
                     <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30 align-top">
                       <td className="px-4 py-3 text-xs whitespace-nowrap text-muted">
-                        {r.hdate ? new Date(r.hdate).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                        {r.hdate ? formatThaiDateTime(r.hdate) : "—"}
                       </td>
                       <td className="px-4 py-3 font-mono text-xs">
                         <Link href={`/admin/service-orders/${encodeURIComponent(r.hno)}`} className="text-primary-600 hover:underline">

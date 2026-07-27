@@ -57,7 +57,12 @@ export function ShopOrderPayButton({
   const payAmount = computeShopOrderTransferAmount(totalThb, taxDocPref);
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [qr, setQr] = useState<{ dataUrl: string; promptPayId: string } | null>(null);
+  // 🔴 stale-QR guard (คลาสเดียวกับที่ owner เจอใน ฝากโอนหยวน 2026-07-23): เก็บ QR
+  // คู่กับ "ยอด (สตางค์)" ที่มันเข้ารหัสไว้ · โชว์เฉพาะเมื่อยอดตรงยอดปัจจุบัน → ถ้า
+  // ยอดกลางเปลี่ยน (admin แก้ราคา) แล้วเปิด modal ใหม่โดยไม่ remount จะไม่โชว์ QR
+  // ยอดเก่าให้ลูกค้าสแกนผิด (ระหว่างโหลดไม่โชว์ QR แทนที่จะโชว์ผิด).
+  const payAmountSatang = Math.round(payAmount * 100);
+  const [qr, setQr] = useState<{ amountSatang: number; dataUrl: string; promptPayId: string } | null>(null);
   const [qrErr, setQrErr] = useState<string | null>(null);
   const [slipPath, setSlipPath] = useState<string | null>(null);
   const [slipName, setSlipName] = useState<string>("");
@@ -73,20 +78,24 @@ export function ShopOrderPayButton({
   // returns the GENERATED SERVICE PromptPay amount-QR (exact total encoded).
   useEffect(() => {
     if (!open) return;
-    if (qr) return;
+    // มี QR ที่ตรงยอดปัจจุบันแล้ว → ไม่ต้อง fetch ซ้ำ. ยอดเปลี่ยน (amountSatang ไม่ตรง)
+    // → fetch ใหม่ (แทนที่จะค้าง QR ยอดเก่า).
+    if (qr && qr.amountSatang === payAmountSatang) return;
     let alive = true;
     (async () => {
       const r = await getForwarderPaymentQr(payAmount);
       if (!alive) return;
       if (r.ok && r.data) {
-        setQr({ dataUrl: r.data.dataUrl, promptPayId: r.data.promptPayId });
+        setQr({ amountSatang: payAmountSatang, dataUrl: r.data.dataUrl, promptPayId: r.data.promptPayId });
         setQrErr(null);
       } else setQrErr(t("qrError"));
     })();
     return () => {
       alive = false;
     };
-  }, [open, payAmount, qr, t]);
+  }, [open, payAmount, payAmountSatang, qr, t]);
+  // โชว์ QR เฉพาะตัวที่เข้ารหัสยอดปัจจุบัน (กัน QR ยอดเก่าโผล่ระหว่างโหลดยอดใหม่).
+  const qrToShow = qr && qr.amountSatang === payAmountSatang ? qr : null;
 
   async function onSlipChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -191,7 +200,7 @@ export function ShopOrderPayButton({
                     DISPLAY-ONLY — slip/record path unchanged. */}
                 <div className="mt-4 flex flex-col items-center">
                   <p className="mb-1 text-[13px] text-gray-500">{t("scanToPay", { amount: fmt(payAmount) })}</p>
-                  {!qr && !qrErr && account.channel === "promptpay" && (
+                  {!qrToShow && !qrErr && account.channel === "promptpay" && (
                     <Loader2 className="h-8 w-8 animate-spin text-gray-300" />
                   )}
                   {qrErr && account.channel === "promptpay" && (
@@ -200,7 +209,7 @@ export function ShopOrderPayButton({
                   <PayDestination
                     account={account}
                     amountThb={payAmount}
-                    serviceQrDataUrl={account.channel === "promptpay" ? qr?.dataUrl ?? null : null}
+                    serviceQrDataUrl={account.channel === "promptpay" ? qrToShow?.dataUrl ?? null : null}
                     className="mt-2 w-full"
                   />
                   <p className="mt-2 text-[12.5px] leading-relaxed text-gray-500 text-center">

@@ -13,13 +13,10 @@ import { Explain } from "@/components/ui/tooltip";
 import { PaymentBoardSettle } from "./payment-board-settle";
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import type { PaymentBoardRow } from "@/actions/admin/payment-board-types";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 const baht = (n: number) => `฿${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const fmtDate = (iso: string | null) => {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "2-digit" });
-};
+const fmtDate = (iso: string | null): string => formatThaiDate(iso);
 
 type PayFilter = "unpaid" | "paid" | "all";
 type MoneyFilter = "all" | "cash" | "credit";

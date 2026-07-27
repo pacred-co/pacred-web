@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { adminAssignDriverToForwarder } from "@/actions/admin/forwarder-drivers";
 import { DriverCombobox } from "./driver-combobox";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
@@ -110,7 +111,7 @@ export function DriverAssignForm({
                       )}
                     </p>
                     <p className="text-muted">
-                      มอบหมาย {new Date(a.fd_date).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                      มอบหมาย {formatThaiDateTime(a.fd_date)}
                       {a.driver?.phone && <> · ☎ {a.driver.phone}</>}
                     </p>
                   </div>

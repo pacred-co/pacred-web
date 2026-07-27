@@ -8,6 +8,7 @@ import {
   getForwarderAgingReport,
   type AgingBucket,
 } from "@/actions/admin/ar-aging";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * /admin/accounting/ar-aging — AR-aging cockpit (ลูกหนี้ค้างชำระ).
@@ -48,10 +49,7 @@ export default async function AdminARAgingPage() {
   await requireAdmin(["super", "accounting", "sales_admin"]);
 
   const report = await getForwarderAgingReport();
-  const asOfDisplay = new Date(report.asOf).toLocaleString("th-TH", {
-    dateStyle: "long",
-    timeStyle: "short",
-  });
+  const asOfDisplay = formatThaiDateTime(report.asOf);
 
   // CSV rows — flatten top-customer table for accounting collection workflow
   const csvRows: CsvRow[] = report.topCustomers.map((c, idx) => ({

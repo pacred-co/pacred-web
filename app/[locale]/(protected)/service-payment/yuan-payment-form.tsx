@@ -17,6 +17,7 @@ import { PayDestination } from "@/components/payment/pay-destination";
 import { describeActionDispatchError } from "@/lib/observability/action-dispatch-error";
 import { isNextControlFlowError } from "@/lib/observability/next-control-flow";
 import { reportClientIncident } from "@/lib/observability/client-report";
+import { formatThaiTime } from "@/lib/utils/thai-datetime";
 
 const inputCls = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 
@@ -245,7 +246,7 @@ export function YuanPaymentForm({ rate, rateUpdatedAt, walletBalance, customerNa
               className="text-white"
               def="เรทหยวน = อัตราแลกเปลี่ยน 1 หยวน เป็นกี่บาท ที่ใช้คิดยอดออเดอร์นี้ · ระบบอัปเดตเรทเป็นช่วงๆ ยอดบาทคิดจากเรท ณ ตอนที่คุณกดสร้างรายการ"
             />
-            <span className="ml-1 opacity-70">{t("rateUpdatedTime", { time: new Date(rateUpdatedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) })}</span>
+            <span className="ml-1 opacity-70">{t("rateUpdatedTime", { time: formatThaiTime(rateUpdatedAt) })}</span>
           </p>
           {/* 2026-06-19 (owner) — "เติมเงิน" (wallet top-up) removed platform-wide.
               ฝากโอนหยวน pays by slip directly (DIRECT-CUT), no wallet needed. */}

@@ -78,6 +78,7 @@ import { parseCorporateDocs } from "@/lib/admin/corporate-docs";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { resolveActiveSalesRep, CENTRAL_SALES_LABEL } from "@/lib/admin/resolve-active-rep";
 import { CustomerTypeTag } from "@/components/admin/customer-type-tag";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 type URow = {
   userID: string;
@@ -747,13 +748,13 @@ export async function renderLegacyCustomerView(
               <div className="min-w-0">
                 <div className="text-xs text-muted">วันที่สมัคร</div>
                 <div className="truncate">
-                  {u.userRegistered ? new Date(u.userRegistered).toLocaleString("th-TH") : "-"}
+                  {u.userRegistered ? formatThaiDateTime(u.userRegistered) : "-"}
                 </div>
               </div>
               <div className="min-w-0">
                 <div className="text-xs text-muted">ล่าสุดล็อกอิน</div>
                 <div className="truncate">
-                  {u.userLastLogin ? new Date(u.userLastLogin).toLocaleString("th-TH") : "-"}
+                  {u.userLastLogin ? formatThaiDateTime(u.userLastLogin) : "-"}
                 </div>
               </div>
             </div>
@@ -823,7 +824,7 @@ export async function renderLegacyCustomerView(
             <tbody>
               {hos.map((r) => (
                 <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
-                  <Td>{r.hdate ? new Date(r.hdate).toLocaleString("th-TH") : "-"}</Td>
+                  <Td>{r.hdate ? formatThaiDateTime(r.hdate) : "-"}</Td>
                   <Td>
                     <span className="font-mono">{u.userID}</span>
                     <SaleBadge adminId={u.adminIDSale} activeIds={activeSalesIds} activeLoaded={salesAdminsLoaded} />
@@ -843,7 +844,7 @@ export async function renderLegacyCustomerView(
                   </Td>
                   <Td>
                     <div className="text-[11px] text-muted whitespace-nowrap">
-                      {r.hdateupdate ? new Date(r.hdateupdate).toLocaleString("th-TH") : "-"}
+                      {r.hdateupdate ? formatThaiDateTime(r.hdateupdate) : "-"}
                     </div>
                     {r.adminidupdate ? <div className="text-[11px]">{r.adminidupdate}</div> : null}
                   </Td>
@@ -906,7 +907,7 @@ export async function renderLegacyCustomerView(
                   .join(" ");
                 return (
                   <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
-                    <Td>{r.fdate ? new Date(r.fdate).toLocaleString("th-TH") : "-"}</Td>
+                    <Td>{r.fdate ? formatThaiDateTime(r.fdate) : "-"}</Td>
                     <Td>
                       <span className="font-mono">{u.userID}</span>
                       <SaleBadge adminId={u.adminIDSale} activeIds={activeSalesIds} activeLoaded={salesAdminsLoaded} />
@@ -976,7 +977,7 @@ export async function renderLegacyCustomerView(
                     </Td>
                     <Td>
                       <div className="text-[11px] text-muted whitespace-nowrap">
-                        {r.fdateadminstatus ? new Date(r.fdateadminstatus).toLocaleString("th-TH") : "-"}
+                        {r.fdateadminstatus ? formatThaiDateTime(r.fdateadminstatus) : "-"}
                       </div>
                       {r.adminidkey ? <div className="text-[11px]">{r.adminidkey}</div> : null}
                     </Td>
@@ -1031,7 +1032,7 @@ export async function renderLegacyCustomerView(
             <tbody>
               {pys.map((r) => (
                 <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
-                  <Td>{r.paydate ? new Date(r.paydate).toLocaleString("th-TH") : "-"}</Td>
+                  <Td>{r.paydate ? formatThaiDateTime(r.paydate) : "-"}</Td>
                   <Td mono>{r.id}</Td>
                   <Td>
                     <div className="font-mono">{u.userID}</div>
@@ -1103,7 +1104,7 @@ export async function renderLegacyCustomerView(
                 // magnitude, red only when the stored value is actually negative.
                 return (
                   <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30">
-                    <Td>{r.date ? new Date(r.date).toLocaleString("th-TH") : "-"}</Td>
+                    <Td>{r.date ? formatThaiDateTime(r.date) : "-"}</Td>
                     <Td>
                       <Link href={`/admin/wallet/${r.id}`} className="font-mono text-primary-600 hover:underline">
                         {r.id}

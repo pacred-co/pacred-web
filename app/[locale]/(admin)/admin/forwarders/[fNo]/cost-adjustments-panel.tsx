@@ -8,6 +8,7 @@ import {
   adminCancelCostAdjustment,
 } from "@/actions/admin/forwarder-cost-adjustments";
 import { confirm, prompt } from "@/components/ui/confirm";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 const inputCls =
   "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
@@ -157,9 +158,9 @@ export function CostAdjustmentsPanel({ forwarderId, fNo, existing }: Props) {
                   </p>
                   {r.note && <p className="text-muted text-[11px] mt-0.5">📝 {r.note}</p>}
                   <p className="text-[11px] text-muted mt-0.5">
-                    เพิ่มเมื่อ {new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                    เพิ่มเมื่อ {formatThaiDateTime(r.created_at)}
                     {r.paid_at && (
-                      <> · ชำระเมื่อ {new Date(r.paid_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</>
+                      <> · ชำระเมื่อ {formatThaiDateTime(r.paid_at)}</>
                     )}
                   </p>
                   {r.cancellation_reason && (

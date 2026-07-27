@@ -30,6 +30,7 @@ import {
   type ReceiptListRow,
 } from "@/actions/admin/accounting-receipts";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 // Pacred-native status palette (NOT legacy) — do not remap to legacy codes.
 // `dot` = the legacy PCS colored ● dot style (● + label) shown in the สถานะ column.
@@ -53,10 +54,7 @@ function fmtThb(n: number): string {
 }
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("th-TH", { year: "numeric", month: "2-digit", day: "2-digit" });
+  return formatThaiDate(iso);
 }
 
 /** A receipt can be voided only when it's currently paid ('1') or pending ('3'). */

@@ -43,6 +43,7 @@ import {
   endOfDayTs,
   DEFAULT_REFUND_WINDOW_DAYS,
 } from "@/lib/admin/refund-history-helpers";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -120,18 +121,7 @@ function thb(n: number): string {
 }
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("th-TH", {
-      year:   "numeric",
-      month:  "short",
-      day:    "numeric",
-      hour:   "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso.slice(0, 16).replace("T", " ");
-  }
+  return formatThaiDateTime(iso);
 }
 
 export default async function ShopRefundHistoryPage({

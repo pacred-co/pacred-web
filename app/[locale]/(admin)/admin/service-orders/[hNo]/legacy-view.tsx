@@ -74,6 +74,7 @@ import { formatCartPriceDisplay } from "@/lib/forwarder/cart-price-display";
 import { deriveOrderCurrencyInfo, yuanToForeign } from "@/lib/forwarder/usd-order-pricing";
 import { ShopCollapseAll } from "./shop-collapse-all";
 import { shopPieces, splitAveragePerPiece } from "@/lib/shop-order/shop-group-summary";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 // ── inline-edits labels mirrored here for read-only display (the editor in
 // inline-edits.tsx owns the canonical maps; we duplicate the 3 small ones
@@ -390,7 +391,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
             />
           </div>
           {r.hdate && (
-            <p className="text-xs text-muted">วันที่เปิดออเดอร์: {new Date(r.hdate).toLocaleString("th-TH")}</p>
+            <p className="text-xs text-muted">วันที่เปิดออเดอร์: {formatThaiDateTime(r.hdate)}</p>
           )}
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -631,7 +632,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
           <p className="text-[11px] text-muted">*ชำระเงิน เพิ่ม/ลด จะถูกคำนวณกำไรในรายการฝากนำเข้าสินค้า</p>
           {r.hdatepayment && status === "2" && (
             <p className="rounded-md bg-orange-50 px-2 py-1 text-xs text-orange-700">
-              กรุณาชำระภายใน: {new Date(r.hdatepayment).toLocaleString("th-TH")}
+              กรุณาชำระภายใน: {formatThaiDateTime(r.hdatepayment)}
             </p>
           )}
         </div>

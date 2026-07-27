@@ -1534,7 +1534,16 @@ async function createBillingRunInvoiceImpl(
         console.error("[createBillingRunInvoice already-billed check] failed", {
           code: billedErr.code, message: billedErr.message,
         });
-        // non-fatal: fall through (race rare; downstream uniqueness covers)
+        // 💰 FAIL-CLOSED (2026-07-23): this app-level check is the ONLY thing that
+        // stops a forwarder row going on a 2nd active invoice — the sole DB unique
+        // is (invoice_id, forwarder_id) = "not twice on the SAME invoice", NOT
+        // "not on two different invoices" (mig 0138 L117). If the check errored we
+        // do NOT know it's safe, so we refuse rather than risk เก็บเงินซ้ำ (mirror
+        // commit-momo-row-core's fail-CLOSED on unverifiable dedup).
+        return {
+          ok: false,
+          error: "ตรวจสอบรายการที่วางบิลแล้วไม่สำเร็จ — กรุณาลองใหม่อีกครั้ง (กันเก็บเงินซ้ำ)",
+        };
       }
       const collisions: Array<{ forwarder_id: number; doc_no: string }> = [];
       for (const row of (billed ?? []) as unknown as Array<{

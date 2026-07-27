@@ -52,6 +52,7 @@ import {
 } from "@/lib/legacy-status-map";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -674,7 +675,7 @@ export default async function AdminReportsPage({
     ชื่อบัญชี: r.account_name ?? "",
     หมายเหตุ: r.note ?? "",
     สถานะ: PAYMENT_LABEL[r.status] ?? r.status,
-    วันที่: r.created_at ? new Date(r.created_at).toLocaleString("th-TH") : "",
+    วันที่: r.created_at ? formatThaiDateTime(r.created_at) : "",
   }));
 
   const activeCsv =
@@ -1066,7 +1067,7 @@ export default async function AdminReportsPage({
             const renderedAmount = isOutflow ? -Math.abs(r.amount) : Math.abs(r.amount);
             return (
               <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30 align-top">
-                <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleString("th-TH") : "—"}</td>
+                <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.created_at ? formatThaiDateTime(r.created_at) : "—"}</td>
                 <td className="px-4 py-3 text-xs">
                   <CustomerCodeLink code={r.user?.userID} className="text-xs" />
                   <div>{userDisplayName(r.user, corpNames)}</div>

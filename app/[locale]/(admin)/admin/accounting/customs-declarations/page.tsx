@@ -5,6 +5,7 @@ import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { FileText, Anchor, CheckCircle2, Send, XCircle } from "lucide-react";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 /**
  * /admin/accounting/customs-declarations — ใบขนสินค้า admin hub (read-only V1).
@@ -65,10 +66,7 @@ function thb(n: number | null): string {
   return v.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  return formatThaiDate(iso);
 }
 
 function defaultDateRange(): { from: string; to: string } {

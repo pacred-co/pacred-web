@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { SlipImage } from "@/components/admin/slip-image";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export type DupSlip = {
   id: number;
@@ -25,11 +26,7 @@ export type DupSlip = {
 
 /** `2026-07-15 14:30` — Gregorian, to the minute. */
 function fmtStamp(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return formatThaiDateTime(iso);
 }
 
 /** a clickable slip — ภาพเต็มความกว้างกรอบ · กดเพื่อเปิด lightbox. */

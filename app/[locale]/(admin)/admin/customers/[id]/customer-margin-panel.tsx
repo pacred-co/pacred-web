@@ -21,6 +21,7 @@ import type {
 import { TrendingUp, AlertTriangle, CircleAlert, BarChart3 } from "lucide-react";
 // Cost-reveal blur gate (owner ภูม 2026-06-16) — blur margin/ต้นทุน until the PIN.
 import { CostRevealRegion, CostRevealToggle } from "@/components/admin/cost-reveal";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 const BUCKET_LABEL: Record<CustomerMarginBucket, string> = {
   "negative": "ขาดทุน",
@@ -43,10 +44,7 @@ function thb(n: number): string {
 }
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  return formatThaiDate(iso);
 }
 
 export function CustomerMarginPanel({

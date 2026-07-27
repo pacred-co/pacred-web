@@ -17,6 +17,7 @@ import {
   type WorkerForwarderRow,
 } from "@/lib/warehouse/worker-queries";
 import { legacyForwarderStatusThai } from "@/lib/legacy-status-map";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -33,8 +34,7 @@ const STEP_LABEL: Record<string, string> = {
 };
 
 function fmtTime(iso: string): string {
-  try { return new Date(iso).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }); }
-  catch { return iso; }
+  return formatThaiDateTime(iso);
 }
 
 export default async function WarehouseFollowPage({

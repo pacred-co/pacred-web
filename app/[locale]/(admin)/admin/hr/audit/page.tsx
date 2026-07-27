@@ -6,6 +6,7 @@ import {
   Star, FileText, AlertTriangle, ShieldX, GraduationCap, TrendingUp, MoreHorizontal,
 } from "lucide-react";
 import { NewAuditButton, AuditDeleteButton } from "./audit-actions";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 type Profile = {
   id: string;
@@ -201,7 +202,7 @@ export default async function AdminHRAuditPage({
                         เกิดเหตุ {new Date(e.related_at).toLocaleDateString("th-TH")}
                       </span>
                     )}
-                    <span className="text-[11px]">บันทึกเมื่อ {new Date(e.created_at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}</span>
+                    <span className="text-[11px]">บันทึกเมื่อ {formatThaiDateTime(e.created_at)}</span>
                   </div>
 
                   {e.description && (

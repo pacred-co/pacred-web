@@ -37,6 +37,7 @@ import { exportRatesCustomHsAll } from "@/actions/admin/export/rates-custom-hs";
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { HsRateEditForm, type HsCellInitial } from "./edit-form";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName, type CorporateIdentityRow } from "@/lib/admin/customer-identity";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -232,7 +233,7 @@ export default async function CustomHsRatesPage({
       name,
       tel: u?.userTel ?? "—",
       coID: u?.coID ?? "—",
-      date: h.date ? new Date(h.date).toLocaleString("th-TH") : "—",
+      date: h.date ? formatThaiDateTime(h.date) : "—",
       adminid: h.adminid ?? "—",
     };
   });
@@ -320,7 +321,7 @@ export default async function CustomHsRatesPage({
                           )}
                         </td>
                         <td className="px-3 py-2 text-xs">
-                          {h.date ? new Date(h.date).toLocaleString("th-TH") : "—"}
+                          {h.date ? formatThaiDateTime(h.date) : "—"}
                         </td>
                         <td className="px-3 py-2 font-mono text-xs">{h.adminid ?? "—"}</td>
                         <td className="px-3 py-2">

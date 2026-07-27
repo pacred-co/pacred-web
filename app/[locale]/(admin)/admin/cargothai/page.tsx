@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageHeader } from "@/components/admin/page-header";
 import { SyncForm } from "./sync-form";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * /admin/cargothai — Sprint-7 foundation (Gap #4 — เดฟ owned).
@@ -80,7 +81,7 @@ export default async function AdminCargoThaiPage() {
         <StatCard label="Items (tb_tmp_forwarder_item_cargothai)" value={itemCount.toLocaleString("th-TH")} />
         <StatCard
           label="Last sync"
-          value={lastSyncAt ? new Date(lastSyncAt).toLocaleString("th-TH") : "—"}
+          value={lastSyncAt ? formatThaiDateTime(lastSyncAt) : "—"}
         />
       </section>
 
@@ -121,7 +122,7 @@ export default async function AdminCargoThaiPage() {
                     <td className="px-4 py-2 text-xs font-mono">{r.customer_code ?? "—"}</td>
                     <td className="px-4 py-2 text-xs">{r.eta ? new Date(r.eta).toLocaleDateString("th-TH") : "—"}</td>
                     <td className="px-4 py-2 text-xs text-muted">
-                      {r.api_lasttimeupdated ? new Date(r.api_lasttimeupdated).toLocaleString("th-TH") : "—"}
+                      {r.api_lasttimeupdated ? formatThaiDateTime(r.api_lasttimeupdated) : "—"}
                     </td>
                   </tr>
                 ))}

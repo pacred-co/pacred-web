@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { RetryDispatchButton } from "./retry-button";
+import { formatThaiTime, formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * Sprint-11 P2.3.B — /admin/notifications/dispatch
@@ -323,10 +324,10 @@ export default async function AdminNotificationsDispatchPage({
                       <p className="mt-0.5 text-[11px] text-muted">
                         → <span className="font-medium text-foreground">{recipientLabel}</span>
                         {" · "}
-                        {new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
-                        {r.delivered_line_notify_at && <> · LN ✓ {new Date(r.delivered_line_notify_at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}</>}
-                        {r.delivered_line_at && <> · LM ✓ {new Date(r.delivered_line_at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}</>}
-                        {r.delivered_email_at && <> · ✉ ✓ {new Date(r.delivered_email_at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}</>}
+                        {formatThaiDateTime(r.created_at)}
+                        {r.delivered_line_notify_at && <> · LN ✓ {formatThaiTime(r.delivered_line_notify_at)}</>}
+                        {r.delivered_line_at && <> · LM ✓ {formatThaiTime(r.delivered_line_at)}</>}
+                        {r.delivered_email_at && <> · ✉ ✓ {formatThaiTime(r.delivered_email_at)}</>}
                       </p>
                     </div>
                     {canRetry && <RetryDispatchButton notificationId={r.id} />}

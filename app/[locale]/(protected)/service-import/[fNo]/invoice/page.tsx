@@ -10,6 +10,7 @@ import { CONTACT, ADDRESSES, TAX_ID } from "@/components/seo/site";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { sumNamedFees, namedNonFreight } from "@/lib/forwarder/fee-breakdown";
 import { getSalesRepContactForUserid } from "@/lib/admin/sales-rep-contact";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 /**
  * Customer-side ใบแจ้งหนี้ (invoice) view —
@@ -55,11 +56,7 @@ function numberFormat2(n: number): string {
   });
 }
 function fmtDate(d: string | null | undefined): string {
-  if (!d) return "—";
-  const dt = new Date(d.replace(" ", "T"));
-  if (Number.isNaN(dt.getTime())) return "—";
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(dt.getDate())}/${p(dt.getMonth() + 1)}/${dt.getFullYear()}`;
+  return formatThaiDate(d);
 }
 
 // tb_receipt.rstatus encoding (legacy):

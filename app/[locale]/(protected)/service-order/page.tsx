@@ -34,6 +34,7 @@ import {
   Package as PackageIcon,
   type LucideIcon,
 } from "lucide-react";
+import { bangkokClockParts } from "@/lib/utils/thai-datetime";
 
 // One order-card action — ALWAYS rendered. When `enabled` is false it shows
 // greyed out + non-clickable (a <span>, not a link) so every card displays the
@@ -128,24 +129,15 @@ function StatusBadge({ hStatus, label }: { hStatus: string; label: string }) {
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
-function parseDT(s: string | null): Date | null {
-  if (!s) return null;
-  const m = s.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
-  if (!m) return null;
-  return new Date(
-    Number(m[1]), Number(m[2]) - 1, Number(m[3]),
-    Number(m[4]), Number(m[5]), Number(m[6]),
-  );
-}
 function fmtDMYHMS(s: string | null): string {
-  const d = parseDT(s);
-  if (!d) return "";
-  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  const c = bangkokClockParts(s);
+  if (!c) return "";
+  return `${pad2(c.day)}/${pad2(c.month)}/${c.year} ${pad2(c.hour)}:${pad2(c.minute)}`;
 }
 function fmtRelative(s: string | null): string {
-  const d = parseDT(s);
-  if (!d) return "";
-  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
+  const c = bangkokClockParts(s);
+  if (!c) return "";
+  return `${pad2(c.day)}/${pad2(c.month)}/${c.year}`;
 }
 function numberFormat2(n: number): string {
   return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });

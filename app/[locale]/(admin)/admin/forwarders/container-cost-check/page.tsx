@@ -30,6 +30,7 @@ import { fetchContainerCostSheet } from "@/lib/integrations/google-sheets/contai
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportContainerCostCheckAll } from "@/actions/admin/export/container-cost-check";
 import { FileSpreadsheet, ExternalLink, AlertTriangle, RefreshCw } from "lucide-react";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -230,7 +231,7 @@ export default async function ContainerCostCheckPage() {
               ซิงค์ล่าสุด:{" "}
               <span className="font-medium text-foreground">
                 {state?.last_synced_at
-                  ? new Date(state.last_synced_at).toLocaleString("th-TH")
+                  ? formatThaiDateTime(state.last_synced_at)
                   : usingLiveFallback
                     ? "ยังไม่เคยซิงค์ (อ่านสดจากชีต)"
                     : "—"}

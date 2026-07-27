@@ -32,6 +32,7 @@ import { exportWithdrawalsAll } from "@/actions/admin/export/withdrawals";
 import { fetchCorporateNameMap, resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 import { ArrowLeft } from "lucide-react";
 import { WithdrawRowActions } from "./withdraw-row-actions";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -294,7 +295,7 @@ export default async function AdminWithdrawalsQueuePage({
                       <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30 align-top">
                         <td className="px-3 py-3 text-xs whitespace-nowrap">
                           {r.date
-                            ? new Date(r.date).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })
+                            ? formatThaiDateTime(r.date)
                             : "—"}
                         </td>
                         <td className="px-3 py-3 text-xs">

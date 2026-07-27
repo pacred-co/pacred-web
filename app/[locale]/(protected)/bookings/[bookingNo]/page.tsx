@@ -7,6 +7,7 @@ import { getServiceConfig } from "@/lib/booking/service-config";
 import { createClient } from "@/lib/supabase/server";
 import { CONTACT, LINE_OA } from "@/components/seo/site";
 import type { BookingDocKind, QuoteLine } from "@/types/booking";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 // i18n-key: booking.detail.docKind.{key}
 const DOC_LABEL_KEYS: Record<BookingDocKind, string> = {
@@ -233,10 +234,7 @@ export default async function BookingDetailPage({
           {b.submitted_at && (
             <Row
               label={t("fieldSubmittedAt")}
-              value={new Date(b.submitted_at).toLocaleString("th-TH", {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}
+              value={formatThaiDateTime(b.submitted_at)}
             />
           )}
         </dl>
@@ -446,10 +444,7 @@ function HistoryItem({
         </p>
         {at && (
           <p className="text-[11px] text-muted mt-0.5">
-            {new Date(at).toLocaleString("th-TH", {
-              dateStyle: "short",
-              timeStyle: "short",
-            })}
+            {formatThaiDateTime(at)}
           </p>
         )}
       </div>

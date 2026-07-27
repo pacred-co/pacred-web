@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { getTranThDetail } from "@/actions/admin/forwarder-tran-th";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 /**
  * /admin/forwarders/tran-th/[id] — TH-transport batch detail.
@@ -16,10 +17,7 @@ import { getTranThDetail } from "@/actions/admin/forwarder-tran-th";
 export const dynamic = "force-dynamic";
 
 function fmtDateLong(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "2-digit" });
+  return formatThaiDate(iso);
 }
 
 const FSTATUS_LABEL: Record<string, string> = {

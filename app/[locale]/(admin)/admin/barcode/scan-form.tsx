@@ -4,6 +4,7 @@ import { useState, useTransition, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { adminBarcodeScan, type BarcodeScanResult } from "@/actions/admin/barcode";
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
+import { formatThaiTimeWithSeconds } from "@/lib/utils/thai-datetime";
 
 // Extend Window for BarcodeDetector (Chrome/Android native API)
 declare global {
@@ -93,7 +94,7 @@ export function ScanForm({
     startTransition(async () => {
       const res = await adminBarcodeScan({ mode, code: raw });
       const entry: LogEntry = {
-        ts:     new Date().toLocaleTimeString("th-TH"),
+        ts:     formatThaiTimeWithSeconds(new Date()),
         code:   raw,
         ok:     res.ok,
         msg:    res.ok ? (res.data?.message ?? "บันทึกแล้ว") : (res.error ?? "error"),

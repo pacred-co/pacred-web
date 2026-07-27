@@ -47,6 +47,7 @@ import {
   type CustomsDeclarationType,
 } from "@/lib/validators/customs-declaration";
 import { WorkItemThread } from "@/components/admin/work-item-thread";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * V-E1 — /admin/freight/shipments/[id]
@@ -495,7 +496,7 @@ export default async function AdminFreightShipmentDetailPage({
           </h1>
           <p className="text-xs text-muted">
             {FREIGHT_TRANSPORT_MODE_LABEL[header.transport_mode]} ·{" "}
-            สร้าง {new Date(header.created_at).toLocaleString("th-TH")}
+            สร้าง {formatThaiDateTime(header.created_at)}
             {header.source_quote_id && (
               <> · ↗ มาจาก <Link href={`/admin/freight/quotes/${header.source_quote_id}`} className="text-primary-500 hover:underline">quotation</Link></>
             )}
@@ -668,7 +669,7 @@ export default async function AdminFreightShipmentDetailPage({
             {audit.map((a) => (
               <li key={a.id} className="flex items-baseline gap-2">
                 <span className="font-mono text-[11px] text-muted whitespace-nowrap">
-                  {new Date(a.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                  {formatThaiDateTime(a.created_at)}
                 </span>
                 <span className="font-medium">{a.action}</span>
                 <span className="text-muted">by {a.admin?.member_code ?? "—"}</span>

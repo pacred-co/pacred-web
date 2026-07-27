@@ -36,6 +36,7 @@ import { exportYuanPaymentsAll } from "@/actions/admin/export/yuan-payments";
 import { fetchCorporateNameMap, resolveBillingIdentity, corpRowFromName } from "@/lib/admin/customer-identity";
 import { TbYuanBulkBar, TbYuanRowCheckbox } from "./tb-bulk-bar";
 import { Explain } from "@/components/ui/tooltip";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -507,10 +508,7 @@ export default async function AdminYuanPaymentsPage({
                       </td>
                       <td className="px-3 py-3 text-xs whitespace-nowrap">
                         {r.paydate
-                          ? new Date(r.paydate).toLocaleString("th-TH", {
-                              dateStyle: "short",
-                              timeStyle: "short",
-                            })
+                          ? formatThaiDateTime(r.paydate)
                           : "—"}
                       </td>
                       <td className="px-3 py-3 text-xs">

@@ -27,6 +27,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { adminIssueForwarderInvoice } from "@/actions/admin/forwarder-invoice";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 export type CandidateRow = {
   id: number;
@@ -51,9 +52,7 @@ function fmtBaht(n: number): string {
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "-";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleDateString("th-TH", { year: "numeric", month: "2-digit", day: "2-digit" });
+  return formatThaiDate(iso);
 }
 
 export default function AddInvoiceForm({

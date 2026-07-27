@@ -49,6 +49,7 @@ import {
   type CabinetBillingCoverage,
 } from "@/lib/admin/cabinet-billing-coverage";
 import { CabinetBillingCoverageStrip } from "@/components/admin/cabinet-billing-coverage";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -349,12 +350,12 @@ export default async function CntHsDetailPage({
           value={`฿${linkedSellTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })} (${linkedCount} รายการ ฝากนำเข้า)`}
           mono
         />
-        <KV label="วันที่สร้าง" value={cnt.date ? new Date(cnt.date).toLocaleString("th-TH") : "—"} />
+        <KV label="วันที่สร้าง" value={cnt.date ? formatThaiDateTime(cnt.date) : "—"} />
         <KV label="แอดมินผู้สร้าง" value={cnt.adminIDCreate ?? "—"} mono />
         {cnt.dateUpdate && (
           <KV
             label="แก้ไขล่าสุด"
-            value={`${new Date(cnt.dateUpdate).toLocaleString("th-TH")} (${cnt.adminIDUpdate ?? "—"})`}
+            value={`${formatThaiDateTime(cnt.dateUpdate)} (${cnt.adminIDUpdate ?? "—"})`}
           />
         )}
       </div>

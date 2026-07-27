@@ -45,6 +45,7 @@ import {
 } from "@/lib/admin/customer-rate-tables";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -58,16 +59,7 @@ const productLabel = (id: string): string =>
 
 // ── date formatter (no helper in lib; inline like other report pages) ──────
 function fmtDate(raw: string | null): string {
-  if (!raw) return "—";
-  const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return raw;
-  return d.toLocaleString("th-TH", {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatThaiDateTime(raw);
 }
 
 function num(v: number | null | undefined): string {

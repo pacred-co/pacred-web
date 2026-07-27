@@ -46,6 +46,7 @@ import {
 } from "@/actions/admin/barcode-import";
 import { PacredDialog } from "@/components/ui/pacred-dialog";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 // Legacy L192-199 — the 46 hardcoded location codes that switch
 // `fPallet` when scanned.
@@ -192,7 +193,7 @@ function ResultCard({ data }: { data: BarcodeImportScanOk }) {
           </div>
         )}
         <div className="col-span-2 text-xs text-slate-600">
-          วันที่บันทึก : {new Date(data.dateSave).toLocaleString("th-TH")}
+          วันที่บันทึก : {formatThaiDateTime(data.dateSave)}
         </div>
       </div>
 

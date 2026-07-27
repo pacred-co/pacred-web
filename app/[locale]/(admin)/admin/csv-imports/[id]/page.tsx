@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { notFound } from "next/navigation";
 import { CsvImportDetailActions } from "./detail-actions";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 const STATUS_BADGE: Record<string, string> = {
   uploaded:  "bg-amber-50 text-amber-700 border-amber-200",
@@ -85,9 +86,9 @@ export default async function CsvImportDetailPage({
               {row.imported_count > 0 && (
                 <li>นำเข้าสำเร็จ: <span className="font-mono text-green-700">{row.imported_count}</span></li>
               )}
-              <li>อัปโหลด: {new Date(row.created_at).toLocaleString("th-TH")}</li>
+              <li>อัปโหลด: {formatThaiDateTime(row.created_at)}</li>
               {row.imported_at && (
-                <li>นำเข้าเมื่อ: {new Date(row.imported_at).toLocaleString("th-TH")}</li>
+                <li>นำเข้าเมื่อ: {formatThaiDateTime(row.imported_at)}</li>
               )}
               {uploader && (
                 <li>โดย: <span className="font-mono">{uploader.member_code ?? "—"}</span> {uploader.first_name} {uploader.last_name}</li>

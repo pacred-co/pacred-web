@@ -10,6 +10,7 @@ import {
   isActiveStatus,
   type DbdLookupData,
 } from "@/lib/dbd/parse-juristic";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 type Props = {
   /** Legacy member code (tb_users.userID / tb_corporate.userid). */
@@ -242,7 +243,7 @@ export function JuristicActions({ userid, status, taxId, docUrls }: Props) {
 
                   {dbd.fetchedAt && (
                     <p className="text-[11px] text-muted">
-                      ข้อมูล DBD ณ {new Date(dbd.fetchedAt).toLocaleString("th-TH")}
+                      ข้อมูล DBD ณ {formatThaiDateTime(dbd.fetchedAt)}
                       {dbd.cached && " (จากแคช)"}
                     </p>
                   )}

@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { Copy, Check, ExternalLink, FileText, RefreshCw } from "lucide-react";
 import { listCustomerQuotations, type QuoteHistoryRow } from "@/actions/admin/save-quotation";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 const THB = (n: number) => n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -24,14 +25,7 @@ const selectCls =
   "rounded-md border border-border bg-white px-2 py-1 text-[12px] text-foreground focus:outline-none focus:ring-2 focus:ring-primary-500/40 dark:bg-surface";
 
 function fmtDate(iso: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return (
-    d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" }) +
-    " " +
-    d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })
-  );
+  return formatThaiDateTime(iso);
 }
 
 export function QuoteHistoryTab({ userid }: { userid: string }) {

@@ -12,6 +12,7 @@ import { detectLink, usesIframe, type LinkInfo, type PreviewType, type YouTubeSt
 import { fmtNum } from "@/lib/marketing-planner/util";
 import { fetchYouTubeStats } from "@/actions/admin/youtube-stats";
 import { cx, iconBtn } from "./ui";
+import { formatThaiTime } from "@/lib/utils/thai-datetime";
 
 function TypeIcon({ type, className }: { type: PreviewType; className?: string }) {
   switch (type) {
@@ -71,7 +72,7 @@ function YouTubeStatsBar({ videoId }: { videoId: string }) {
       setLoading(false);
     }
   };
-  const time = stats ? new Date(stats.fetchedAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }) : "";
+  const time = stats ? formatThaiTime(stats.fetchedAt) : "";
   return (
     <div className="rounded-lg border border-border bg-primary-50/30 px-2.5 py-1.5 dark:bg-primary-900/10">
       {stats ? (

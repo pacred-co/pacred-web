@@ -150,6 +150,7 @@ export default async function BillingRunPrintPage({
         issuedBy={header.issued_by}
         pages={pages}
         qrDataUrl={qrDataUrl}
+        cancelled={header.status === "cancelled"}
       />
     </>
   );

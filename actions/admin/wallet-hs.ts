@@ -1537,9 +1537,20 @@ export async function adminUpdateWalletHsPendingAmount(
       // Rewrite the amount — ATOMIC on the status we read (a concurrent
       // approve/reject that changed it wins; this edit then no-ops safely).
       // Pending → status='1'; approved-shop-fix → status='2' (type='8', delta=0).
+      //
+      // 🔴 2026-07-23: on a PENDING slip (status='1' · type 1/4/8 need round-1),
+      // changing the amount INVALIDATES an existing round-1 review — it was signed
+      // off for the OLD figure. Clear reviewed_at so round-1 must be re-done for
+      // the new amount before approve (round-2) can settle it. The type='8'
+      // status='2' branch (delta=0, already blocked above) never reaches here.
+      const amountPatch: Record<string, unknown> = { amount: newAmount, adminidupdate: legacyAdminId };
+      if ((rowRaw.status ?? "1") === "1") {
+        amountPatch.reviewed_at = null;
+        amountPatch.reviewed_by_admin_id = null;
+      }
       const { data: claimed, error: updErr } = await admin
         .from("tb_wallet_hs")
-        .update({ amount: newAmount, adminidupdate: legacyAdminId })
+        .update(amountPatch)
         .eq("id", id)
         .eq("status", rowRaw.status ?? "1")
         .select("id")
@@ -3219,14 +3230,31 @@ export async function adminRejectWalletDeposit(
         adminidupdate: legacyAdminId,
       };
       if (reason && reason.length > 0) patch.note = reason;
-      const { error: updHsErr } = await admin
+      // ATOMIC CLAIM (2026-07-23): fold the '1'→'3' flip into a claim + check the
+      // affected row — mirror every approve path. Without the row-count check a
+      // concurrent approve/reject leaves 0 rows updated (no error), and the reject
+      // cascade below would then revert an ALREADY-settled parent (double-cascade:
+      // un-pay a paid order). 0 rows = someone won the race → idempotent OK, no cascade.
+      const { data: rejectClaimed, error: updHsErr } = await admin
         .from("tb_wallet_hs")
         .update(patch)
         .eq("id", id)
-        .eq("status", "1");
+        .eq("status", "1")
+        .select("id")
+        .maybeSingle();
       if (updHsErr) {
         console.error(`[tb_wallet_hs mutation] failed`, { code: updHsErr.code, message: updHsErr.message });
         return { ok: false, error: updHsErr.message };
+      }
+      if (!rejectClaimed) {
+        return {
+          ok: true,
+          data: {
+            ok: true, walletHsId: id, alreadyDone: true,
+            customer: { userid, walletTotalBefore: NaN, walletTotalAfter: NaN },
+            refundedAmount: 0, cascadedRows: [], hadPaydepositLinks: hasLinks,
+          },
+        };
       }
       cascadedRows.push({
         table: "tb_wallet_hs",

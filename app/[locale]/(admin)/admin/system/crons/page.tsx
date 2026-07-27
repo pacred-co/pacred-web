@@ -3,6 +3,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { CRON_REGISTRY, type CronEntry } from "@/lib/cron/registry";
 import { CronTriggerButton } from "./trigger-button";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * U4-1 — /admin/system/crons cron-health panel.
@@ -193,7 +194,7 @@ function CronCard({
         <dt className="text-muted">Last fire</dt>
         <dd>
           {last
-            ? new Date(last.fired_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "medium" })
+            ? formatThaiDateTime(last.fired_at)
             : <span className="text-muted">— ยังไม่เคยรัน</span>
           }
         </dd>

@@ -32,6 +32,7 @@ import {
 } from "@/actions/admin/wallet-hs";
 import { WorkNoteField } from "@/components/admin/work-note-field";
 import { RejectReasonPicker } from "@/components/admin/reject-reason-picker";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 type Props = {
   open:    boolean;
@@ -265,12 +266,12 @@ export function SlipReviewModal({ open, onClose, tx }: Props) {
               <Field
                 label="วันโอนตามสลิป"
                 value={tx.slip_transferred_at
-                  ? new Date(tx.slip_transferred_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })
+                  ? formatThaiDateTime(tx.slip_transferred_at)
                   : "—"}
               />
               <Field
                 label="วันที่ส่งคำขอ"
-                value={new Date(tx.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                value={formatThaiDateTime(tx.created_at)}
               />
               <Field label="หมายเหตุลูกค้า" value={tx.note ?? "—"} />
             </dl>

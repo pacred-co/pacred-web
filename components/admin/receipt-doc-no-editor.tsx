@@ -26,14 +26,15 @@ import {
   checkReceiptRidAvailable,
   type ReceiptDocNoPreview,
 } from "@/actions/admin/wallet-hs";
+import { bangkokClockParts } from "@/lib/utils/thai-datetime";
 
 /** Legacy stamp: `2026-07-15 09:33:00` — Gregorian, to the second (matches PCS). */
 function fmtDT(iso: string | null): string {
   if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
+  const c = bangkokClockParts(iso);
+  if (!c) return iso;
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return `${c.year}-${p(c.month)}-${p(c.day)} ${p(c.hour)}:${p(c.minute)}:${p(c.second)}`;
 }
 
 /** One legacy label/value row — rose label cell (right-aligned) + zebra value cell. */

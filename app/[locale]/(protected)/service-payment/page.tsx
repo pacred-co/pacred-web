@@ -5,6 +5,7 @@ import { CircleDollarSign, Plus, Inbox } from "lucide-react";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Explain } from "@/components/ui/tooltip";
+import { bangkokClockParts } from "@/lib/utils/thai-datetime";
 
 /**
  * Customer ฝากชำระ / โอนหยวน screen — the customer ฝากโอนหยวน list,
@@ -138,20 +139,14 @@ function numberFormat2(n: number): string {
 // payment.php L408/L410 — DATE(payDate) + TIME(payDate). Legacy MySQL
 // renders DATE() as "YYYY-MM-DD" and TIME() as "HH:MM:SS".
 function splitDateTime(strDate: string | null): { date: string; time: string } {
-  if (!strDate) return { date: "", time: "" };
-  const d = new Date(strDate.replace(" ", "T"));
-  if (isNaN(d.getTime())) {
+  const c = bangkokClockParts(strDate);
+  if (!c) {
     // Fall back to a raw split if it is already "YYYY-MM-DD HH:MM:SS".
-    const [date = "", time = ""] = strDate.split(" ");
+    const [date = "", time = ""] = (strDate ?? "").split(" ");
     return { date, time };
   }
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mi = String(d.getMinutes()).padStart(2, "0");
-  const ss = String(d.getSeconds()).padStart(2, "0");
-  return { date: `${yyyy}-${mm}-${dd}`, time: `${hh}:${mi}:${ss}` };
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return { date: `${c.year}-${pad(c.month)}-${pad(c.day)}`, time: `${pad(c.hour)}:${pad(c.minute)}:${pad(c.second)}` };
 }
 
 // A single tb_payment row as payment.php L406-430 renders it.

@@ -7,6 +7,7 @@ import {
   submitDeliveryFeedback,
   uploadDeliveryFeedbackPhoto,
 } from "@/actions/delivery-feedback";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * <DeliveryFeedbackCard> — customer-side rating + comment + photo capture
@@ -338,12 +339,5 @@ export function DeliveryFeedbackCard({
 }
 
 function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return iso;
-    const p = (n: number) => String(n).padStart(2, "0");
-    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
-  } catch {
-    return iso;
-  }
+  return formatThaiDateTime(iso);
 }

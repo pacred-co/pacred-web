@@ -10,6 +10,7 @@ import {
 } from "@/actions/admin/imported-leads";
 import { IMPORTED_LEAD_CALL_STATUSES } from "@/lib/validators/imported-lead";
 import type { AssignRep } from "./lead-assign-bar";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 const digits = (p: string) => (p ?? "").replace(/\D/g, "");
 const STATUS_STYLE: Record<string, string> = {
@@ -187,7 +188,7 @@ export function LeadCallReport({ reps }: { reps: AssignRep[] }) {
                             <span className="font-semibold text-foreground">{d.name || "— ไม่มีชื่อ —"}</span>
                             {digits(d.phone) ? <a href={`tel:${digits(d.phone)}`} onClick={(e) => e.stopPropagation()} className="font-mono text-primary-600 hover:underline">{digits(d.phone)}</a> : <span className="text-muted">ไม่มีเบอร์</span>}
                             <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-[11px] font-semibold ${STATUS_STYLE[d.callStatus] ?? "border-border text-muted"}`}>{STATUS_LABEL[d.callStatus] ?? (d.callStatus || "โทรแล้ว")}</span>
-                            {d.lastCalledAt ? <span className="text-muted">· {new Date(d.lastCalledAt).toLocaleString("th-TH", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span> : null}
+                            {d.lastCalledAt ? <span className="text-muted">· {formatThaiDateTime(d.lastCalledAt)}</span> : null}
                             {d.callCount > 0 ? <span className="text-muted">· โทร {d.callCount} ครั้ง</span> : null}
                           </li>
                         ))}

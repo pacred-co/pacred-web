@@ -18,6 +18,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adminSetWalletTxSlipTransferredAt } from "@/actions/admin/wallet-hs";
 import { adminSetYuanSlipTransferredAt } from "@/actions/admin/yuan-payments";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 // V-A1 — inline cell for editing slip_transferred_at (the actual bank-
 // transfer time from the customer's slip). Reused on /admin/wallet +
@@ -69,7 +70,7 @@ export function SlipTransferredAtCell(props: Props) {
       <div className="text-xs">
         {props.currentValue ? (
           <span className="text-foreground">
-            {new Date(props.currentValue).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+            {formatThaiDateTime(props.currentValue)}
           </span>
         ) : (
           <span className="text-muted italic">— ไม่ได้บันทึก</span>

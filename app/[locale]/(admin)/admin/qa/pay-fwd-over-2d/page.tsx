@@ -30,6 +30,7 @@ import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { exportQaPayFwdOver2dAll } from "@/actions/admin/export/qa-pay-fwd-over-2d";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 const CSV_COLS: CsvCol[] = [
   { key: "fno", label: "เลขที่ F" },
@@ -248,10 +249,7 @@ export default async function AdminQaPayFwdOver2dPage({
                       </td>
                       <td className="px-3 py-3 text-xs whitespace-nowrap">
                         {r.fdate
-                          ? new Date(r.fdate).toLocaleString("th-TH", {
-                              dateStyle: "short",
-                              timeStyle: "short",
-                            })
+                          ? formatThaiDateTime(r.fdate)
                           : "—"}
                       </td>
                       <td className="px-3 py-3 text-right text-xs">

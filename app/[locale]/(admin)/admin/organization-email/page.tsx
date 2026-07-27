@@ -2,6 +2,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { OrgEmailForms } from "./client";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * Admin > "อีเมลในองค์กร" — a FAITHFUL 1:1 TRANSCRIPTION of the
@@ -63,7 +64,7 @@ type Row = {
 function showNotNULLDateTime(s: string | null | undefined): string {
   if (!s) return "-";
   try {
-    return new Date(s).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" });
+    return formatThaiDateTime(s);
   } catch {
     return "-";
   }

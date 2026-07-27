@@ -8,7 +8,7 @@ import { confirm } from "@/components/ui/confirm";
 import { Explain } from "@/components/ui/tooltip";
 import { bulkUpdateShopOrderStatus } from "@/actions/admin/service-orders-bulk";
 import { SHOP_STATUSES, type ShopOrderStatus } from "@/actions/admin/service-orders-bulk-types";
-import { parseDbInstant } from "@/lib/utils/thai-datetime";
+import { parseDbInstant, formatThaiDate, formatThaiDateTime, formatThaiTime } from "@/lib/utils/thai-datetime";
 import { PurchaserCell } from "@/components/admin/purchaser-cell";
 import type { SalesAdminOption } from "@/actions/admin/customer-profile";
 
@@ -104,27 +104,16 @@ const STATUS_BADGE: Record<string, string> = Object.fromEntries(
 type SortField = "id" | "hdate" | "hno" | "userid" | "price" | "hstatus" | "hdateupdate";
 
 function fmtDate(iso: string | null | undefined, withTime = false): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  if (withTime) {
-    return d.toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" });
-  }
-  return d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  return withTime ? formatThaiDateTime(iso) : formatThaiDate(iso);
 }
 
 function fmtDateOnly(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return formatThaiDate(iso);
 }
 
 function fmtTimeOnly(iso: string | null | undefined): string {
   if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+  return formatThaiTime(iso);
 }
 
 /** Legacy `diffDateTimeNow($date)` — function.php → "ผ่านมา X นาที / ชม / วัน". */

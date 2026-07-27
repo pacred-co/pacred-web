@@ -6,6 +6,7 @@ import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { CommBatchPayForm } from "@/components/admin/comm-batch/comm-batch-pay-form";
 import { getBatchDetail } from "@/actions/admin/withdraw-comm-batch";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 /**
  * /admin/accounting/withdraw/comm-sale/[id] — Sales-rep batch detail.
@@ -32,10 +33,7 @@ function thb(n: number): string {
 }
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("th-TH", { year: "numeric", month: "2-digit", day: "2-digit" });
+  return formatThaiDate(iso);
 }
 
 export default async function AdminWithdrawCommSaleDetailPage({
