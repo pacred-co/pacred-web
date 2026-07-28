@@ -249,3 +249,211 @@ Before changing code:
 3. test the current actions against the formulas and status transitions above;
 4. produce a route-by-route fidelity/gap table;
 5. only then design the consolidated monthly overview and drill-down.
+
+## Pacred owner extension — six internal earning groups
+
+Owner clarification received 2026-07-28 expands the target beyond the three
+legacy PCS flows:
+
+| Group | Named roster / owner input | Proposed earning unit | Money/document gate | Rate status |
+|---|---|---|---|---|
+| warehouse | warehouse staff (roster still to confirm) | one unique forwarder queue (`fid`) at its first real warehouse intake | active paid receipt covers the `fid` | **pending owner confirmation** |
+| interpreter | `admin_web`, `admin_manow` | one paid shop-order/interpreter job, preserving yuan-margin snapshot | paid + issued document for that job | use legacy margin formula only after owner confirms applicability |
+| sales | `admin_bam`, `admin_looknut`, `admin_may`, `admin_pee` (normalized candidates; verify against live roster) | one receipt-covered source job attributed to its sales owner | active paid receipt | legacy Cargo 1% is evidence, but final Pacred rate needs owner confirmation |
+| CS | roster still to confirm | one receipt-covered source job attributed to `tb_users.adminIDCS` | active paid receipt | **pending owner confirmation** |
+| driver | driver owning `tb_forwarder_driver.fdadminid` | one **unique delivered location**, not one tracking/fid | every included job paid + receipt issued; delivery status 2 with completed timestamp | **10 THB per location** (owner-confirmed) |
+| customer sales-agent | four VIP team codes | existing `tb_user_sales` earn row per delivered forwarder | existing paid/delivered contract | existing 1%, 3% WHT, net ≥1,000 |
+
+The local historical PCS database does not contain the current full roster.
+Repository evidence confirms the current sales IDs `admin_bam`,
+`admin_looknut`, `admin_may`, and `admin_pee`; the final implementation must
+still validate each against the live `tb_admin` / `admin_contact_extras`
+bridge. Do not silently create an accrual under a misspelled or inactive id.
+
+### Non-negotiable eligibility gate
+
+An operational event alone does not mint payable commission.
+
+```text
+eligible =
+  source work completed
+  AND payment approved/settled
+  AND a non-cancelled receipt/document exists
+  AND an eligible active owner can be resolved
+  AND an owner-confirmed rate exists
+```
+
+For Cargo forwarders, the strongest existing document proof is:
+
+```text
+tb_receipt_item.fid = source fid
+→ tb_receipt.rid = tb_receipt_item.rid
+→ tb_receipt.rstatus = '1'  (paid/active)
+```
+
+`tb_receipt.rstatus='2'` is cancelled and must never earn. A pending/manual
+receipt (`rstatus='3'`) is not paid evidence. The accrual must snapshot
+`receipt_id`, `rid`, `issuedate`, source owner and rate so later edits do not
+rewrite payroll history.
+
+Shop-order document linkage is not represented by legacy
+`tb_receipt_item` (it only has `rid,fid`). Pacred's shop document path uses
+`tb_shop_tax_invoice.hno` and its `receipt_id`; that exact paid-state contract
+must be verified before interpreter/CS shop-order accrual is enabled.
+
+### Warehouse earning contract
+
+Evidence already available:
+
+- `actions/admin/warehouse-intake.ts` writes one audit event to
+  `warehouse_intake_log` with `step='intake'`, `fid`, `admin_id`,
+  `warehouse_code`, before/after status and timestamp.
+- The same action flips `tb_forwarder` into warehouse status and stamps
+  `fdatestatus2`.
+
+Proposed canonical unit:
+
+```text
+one accrual per (role=warehouse, fid, first valid intake event)
+```
+
+Duplicate scans must not double-pay. Month should be a stated business basis:
+the owner described “เดือนนี้มีของเข้ามาที่โกดังเรากี่คิว”, so the default
+period is **warehouse intake month**, while receipt eligibility is a gate and
+not the grouping date. If a queue enters in June but is paid/receipted in July,
+it belongs to June operational volume but becomes payable in July. Reports
+must show both `work_month` and `eligible_at`; silently choosing one date will
+create reconciliation drift.
+
+### Driver earning contract — 10 THB per delivered location
+
+Existing proof:
+
+- `tb_forwarder_driver.fdadminid` = assigned driver;
+- `tb_forwarder_driver_item.fdistatus='2'` = delivered;
+- `fdicompletedat` = precise delivery timestamp;
+- delivery action also flips `tb_forwarder.fstatus` to 7.
+
+A driver item is one `fid`, but the owner explicitly pays per **location**.
+Multiple fids/trackings delivered together must therefore collapse into one
+stop. Proposed idempotency key:
+
+```text
+(driver batch fdid, normalized delivery-address fingerprint)
+```
+
+The fingerprint should derive from the frozen delivery address fields, not a
+free-text display label. All fids grouped into the stop remain visible as
+detail rows. The stop earns exactly 10 THB once:
+
+```text
+all included driver items delivered
+AND all included fids covered by active paid receipts
+AND stop not already accrued
+```
+
+Do not pay `10 × tracking count`; that overpays grouped deliveries. Failed
+items (`fdistatus='3'`) and re-uploaded delivery photos must not mint another
+accrual.
+
+### Sales and CS attribution
+
+For Cargo, both roles can be resolved from the customer owning the receipt
+covered `fid`:
+
+- sales: `tb_forwarder.userid → tb_users.adminIDSale`;
+- CS: `tb_forwarder.userid → tb_users.adminIDCS`.
+
+The assignment must be snapshotted at accrual time. Reassigning a customer next
+month must not transfer historical commission to the new staff member.
+
+There is a policy choice still requiring owner/Claude architecture approval:
+whether both Sales and CS earn on every paid receipt, or only when a separate
+job action proves that role completed its work. Until that is confirmed, the
+report may show “eligible source candidates” but must not mint payable rows for
+CS or apply an invented rate.
+
+### Interpreter attribution warning
+
+Legacy `tb_header_order.adminidip` currently contains placeholders such as
+`customer` and `admin_web`; existing Pacred code deliberately excludes
+`admin_web` from the legacy interpreter payee list. The new owner instruction
+explicitly names `admin_web` and `admin_manow` as interpreters, so that legacy
+placeholder assumption is no longer safe.
+
+Before enabling accrual:
+
+1. ensure each order has an explicit interpreter assignment (prefer the
+   order-level `adminidip`; customer-level `adminIDInterpreter` is only a
+   fallback);
+2. distinguish a real `admin_web` assignment from old placeholder rows;
+3. backfill only from auditable evidence, never all historical
+   `adminidip='admin_web'` rows;
+4. snapshot yuan margin, exchange rate and percentage.
+
+### Data model direction (draft; no migration yet)
+
+Do not extend the frozen/dead `commission_accruals` family from ADR-0020, and
+do not overload the legacy sale/interpreter withdrawal tables with warehouse,
+CS or driver rows.
+
+Claude architecture review should choose an isolated Pacred staff ledger with:
+
+- owner-confirmed effective-dated rules;
+- one immutable accrual per `(role_kind, source_kind, source_ref,
+  earner_admin_id)`;
+- source work timestamp and `eligible_at` timestamp;
+- payment/receipt proof snapshot;
+- role-specific calculation payload (warehouse intake, yuan margin, driver
+  stop grouping);
+- batch withdrawal header + item links;
+- pending → approved → paid/rejected state with slip and audit trail.
+
+The monthly report should present operational month and payout month side by
+side instead of forcing all roles onto one ambiguous “เดือน”.
+
+### Payment/receipt audit addendum — do not infer eligibility from status alone
+
+The current shop-order payment paths are not yet symmetrical:
+
+- linked wallet-payment approval can issue a shop tax document, but that
+  feature remains dormant behind `tax_invoice.shop_yuan_enabled`;
+- direct shop-order slip approval (`tb_wallet_hs.type='8'`,
+  `typeservice='1'`) flips the slip to paid and the order from `hstatus=2` to
+  `hstatus=3`, then returns without issuing a receipt;
+- `tb_shop_tax_invoice.receipt_id` is optional, and a tax invoice is not by
+  itself proof that the receipt remains active.
+
+Therefore `hstatus='3'`, `paydeposit='1'`, or the existence of a shop tax
+invoice must **not** mint commission. The direct-slip missing-receipt handoff is
+a P0 prerequisite for shop-order interpreter/Sales/CS commission.
+
+For Cargo, the verified proof is:
+
+```text
+tb_wallet_hs.status = '2'
+AND tb_receipt_item.fid = source fid
+AND tb_receipt.rstatus = '1'
+```
+
+For shop orders, Claude architecture must first choose and implement an
+equivalent canonical receipt/payment link. Until that exists, the commission
+reconciler should report shop rows as `blocked_missing_receipt_proof`, never
+guess eligibility from order status.
+
+### Reconciliation is mandatory, not only event hooks
+
+Warehouse intake or delivery can happen before accounting approves the slip.
+If accrual runs only inside the intake/delivery action, the row will be missed
+forever when receipt proof appears later. Conversely, a payment hook alone
+cannot know that later warehouse/delivery work has completed.
+
+The safe design is:
+
+1. event actions record immutable work facts;
+2. payment/receipt actions record immutable money facts;
+3. an idempotent reconciliation job intersects both sets and mints accruals;
+4. cancellation/void produces an auditable reversal, never a silent delete.
+
+Run the same reconciler after relevant actions and on a scheduled/admin
+backfill path. Its unique source key makes retries safe.
