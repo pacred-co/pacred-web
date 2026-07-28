@@ -11,7 +11,14 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const SCAN_DIRS = ["actions", "lib", "app", "components", "i18n", "scripts"];
+// NOTE (2026-07-28): `scripts/` is DELIBERATELY excluded. One-off ops/prod-data
+// scripts read operator-supplied secrets + local paths at runtime (PGPW /
+// PROD_DB_PW / DBPW / PACKING_DIR / WX_ACCOUNT / TEMP …) that must NEVER be in
+// `.env.example` (they're secret / machine-specific). Scanning scripts/ made
+// this audit go RED every time a session added a new prod-data script — the
+// chronic "บางทีก็เป็น" CI failure. The audit's job is the DEPLOYED APP runtime
+// (below), not throwaway tooling.
+const SCAN_DIRS = ["actions", "lib", "app", "components", "i18n"];
 const SCAN_FILES = ["proxy.ts", "next.config.ts", "instrumentation.ts", "instrumentation-client.ts", "sentry.client.config.ts", "sentry.server.config.ts", "sentry.edge.config.ts"];
 
 // 1. Parse .env.example — accept both `KEY=value` (required) and `# KEY=`
