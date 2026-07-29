@@ -211,30 +211,55 @@ export async function getActivePurchaserReps(): Promise<SalesRep[]> {
 }
 
 /**
- * Driver roster (ตำแหน่ง "คนขับรถ") — คนขับ Pacred = `admins.role='driver'` (active) ผูก
- * `profiles.member_code` (รหัส AD เช่น AD020 = admin Ben) ที่เก็บใน tb_forwarder_driver.fdadminid.
- * (owner 2026-07-29: "admin ben ก็คนขับรถ ทำไมไม่มีชื่อเขา" — roster นี้ทำให้ Ben ขึ้น dropdown).
+ * Driver roster (ตำแหน่ง "คนขับรถ") — owner 2026-07-29: **ไม่จำเป็นต้อง role='driver'** ·
+ * "แค่ได้รับมอบหมายงานคนขับ = คนขับ". roster = DISTINCT `tb_forwarder_driver.fdadminid`
+ * (คนที่เคยถูกมอบงานจริง · เอา ปอนด์=admin_pond[owner test] ออก) resolve ชื่อจาก
+ * `profiles.member_code` (fdadminid = member_code AD/PR เช่น AD020 = admin Ben). แพทเทิร์น
+ * เดียวกับ getActivePurchaserReps (roster ตามงานจริง ไม่ใช่ role flag).
  */
 export async function getActiveDriverReps(): Promise<SalesRep[]> {
   const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("admins")
-    .select("is_active, profiles!profile_id(member_code, first_name, last_name)")
-    .eq("role", "driver")
-    .eq("is_active", true);
-  if (error) {
-    logger.warn(SCOPE, "driver roster lookup failed", { reason: error.message });
-    return [];
+  const seen = new Set<string>();
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await admin
+      .from("tb_forwarder_driver")
+      .select("fdadminid")
+      .neq("fdadminid", "")
+      .range(from, from + pageSize - 1);
+    if (error) {
+      logger.warn(SCOPE, "driver batch scan failed", { reason: error.message });
+      break;
+    }
+    const rows = (data ?? []) as unknown as { fdadminid: string | null }[];
+    for (const r of rows) {
+      const id = (r.fdadminid ?? "").trim();
+      if (id && id !== "admin_pond") seen.add(id); // เอา ปอนด์(owner test) ออก
+    }
+    if (rows.length < pageSize) break;
   }
-  type Prof = { member_code: string | null; first_name: string | null; last_name: string | null };
-  const reps: SalesRep[] = [];
-  for (const d of (data ?? []) as { profiles: Prof | Prof[] | null }[]) {
-    const p = Array.isArray(d.profiles) ? d.profiles[0] : d.profiles;
-    const code = (p?.member_code ?? "").trim();
-    if (!code) continue;
-    const name = `${p?.first_name ?? ""} ${p?.last_name ?? ""}`.trim() || code;
-    reps.push({ adminID: code, name, fullName: name, phone: "", phoneDisplay: "", photo: null });
+  if (seen.size === 0) return [];
+
+  const ids = [...seen];
+  const nameByCode = new Map<string, string>();
+  // fdadminid = member_code (AD/PR เช่น AD020) → profiles.member_code
+  for (let i = 0; i < ids.length; i += 300) {
+    const { data, error } = await admin
+      .from("profiles")
+      .select("member_code, first_name, last_name")
+      .in("member_code", ids.slice(i, i + 300));
+    if (error) {
+      logger.warn(SCOPE, "driver name lookup failed", { reason: error.message });
+      continue;
+    }
+    for (const p of (data ?? []) as { member_code: string; first_name: string | null; last_name: string | null }[]) {
+      if (p.member_code) nameByCode.set(p.member_code, `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || p.member_code);
+    }
   }
+  const reps: SalesRep[] = ids.map((id) => {
+    const name = nameByCode.get(id) ?? id;
+    return { adminID: id, name, fullName: name, phone: "", phoneDisplay: "", photo: null };
+  });
   reps.sort((a, b) => a.adminID.localeCompare(b.adminID));
   return reps;
 }

@@ -13,10 +13,12 @@ import { getActiveSalesReps, getActiveCsReps, getActivePurchaserReps, getActiveD
 import { getSalesCommissionReport } from "@/lib/admin/sales-commission-report";
 import { getPurchaseCommissionReport } from "@/lib/admin/purchase-commission-report";
 import { getDriverWorkReport } from "@/lib/admin/driver-work-report";
+import { getWarehouseWorkReport, getActiveWarehouseReps } from "@/lib/admin/warehouse-work-report";
 import { ReportFilters } from "./report-filters";
 import { CommissionTable } from "./commission-table";
 import { PurchaseTable } from "./purchase-table";
 import { DriverTable } from "./driver-table";
+import { WarehouseTable } from "./warehouse-table";
 
 export const dynamic = "force-dynamic";
 
@@ -30,17 +32,19 @@ export default async function SystemReportsPage({
 
   // ผู้รับผิดชอบ = รายชื่อตาม "ตำแหน่ง" — เซลล์/Cs = tb_admin flag · สั่งซื้อ = ผู้สั่งซื้อ
   // (roster = tb_header_order.adminidpurchaser ที่ assign จริง) · คนขับ/โกดัง ยังไม่มี roster
-  const [salesReps, csReps, purchaserReps, driverReps] = await Promise.all([
+  const [salesReps, csReps, purchaserReps, driverReps, warehouseReps] = await Promise.all([
     getActiveSalesReps(),
     getActiveCsReps(),
     getActivePurchaserReps(),
     getActiveDriverReps(),
+    getActiveWarehouseReps(),
   ]);
   const reps = [
     ...salesReps.map((r) => ({ position: "sales", id: r.adminID, name: r.name })),
     ...csReps.map((r) => ({ position: "cs", id: r.adminID, name: r.name })),
     ...purchaserReps.map((r) => ({ position: "purchase", id: r.adminID, name: r.name })),
     ...driverReps.map((r) => ({ position: "driver", id: r.adminID, name: r.name })),
+    ...warehouseReps.map((r) => ({ position: "warehouse", id: r.adminID, name: r.name })),
   ];
 
   // default range = the current calendar month (1st → last day)
@@ -66,6 +70,7 @@ export default async function SystemReportsPage({
     position === "sales" ? "sales" : position === "cs" ? "cs" : null;
   const isPurchase = position === "purchase";
   const isDriver = position === "driver";
+  const isWarehouse = position === "warehouse";
   // rep ว่าง = "ทั้งหมด" → ดึงทุกคนของตำแหน่งนั้นรวมกัน (ไม่ต้องเลือกก่อน)
   const fwdReport =
     isCommission && fwdPosition
@@ -78,6 +83,10 @@ export default async function SystemReportsPage({
   const driverReport =
     isCommission && isDriver
       ? await getDriverWorkReport({ repId: rep, dateFrom, dateTo, page, sort, dir })
+      : null;
+  const warehouseReport =
+    isCommission && isWarehouse
+      ? await getWarehouseWorkReport({ repId: rep, dateFrom, dateTo, page, sort, dir })
       : null;
   const repName = rep
     ? (reps.find((r) => r.position === position && r.id === rep)?.name ?? "")
@@ -105,12 +114,7 @@ export default async function SystemReportsPage({
 
       {driverReport && <DriverTable report={driverReport} repName={repName} page={page} />}
 
-      {isCommission && !fwdPosition && !isPurchase && !isDriver && (
-        <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-8 text-center text-sm text-muted">
-          ตอนนี้รองรับ <span className="font-medium text-foreground">เซลล์ · Cs · สั่งซื้อ · คนขับรถ</span> —{" "}
-          ตำแหน่ง <span className="font-medium text-foreground">โกดังคลังสินค้า</span> กำลังทำต่อ
-        </div>
-      )}
+      {warehouseReport && <WarehouseTable report={warehouseReport} repName={repName} page={page} />}
     </div>
   );
 }

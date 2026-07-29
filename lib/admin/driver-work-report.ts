@@ -90,7 +90,7 @@ const EMPTY = (start: string, end: string): DriverWorkReport => ({
 const DRIVER_SORT_KEYS: readonly (keyof DriverWorkRow)[] = [
   "assignDate", "orderId", "assignerName", "driverName", "tracking", "boxes",
   "weight", "cbm", "deliverTo", "carrierLabel", "deadline", "deliveredAt",
-  "durationMin", "statusCode", "note",
+  "durationMin", "statusCode",
 ];
 
 function chunk<T>(arr: T[], size: number): T[][] {

@@ -23,9 +23,8 @@ const HEADERS: { label: string; key: string | null }[] = [
   { label: "บริษัทขนส่ง", key: "carrierLabel" },
   { label: "กำหนดเวลา", key: "deadline" },
   { label: "เวลาที่ไปส่ง", key: "deliveredAt" },
-  { label: "ใช้เวลาทำงาน (นาที)", key: "durationMin" },
+  { label: "เวลาที่ใช้ (นาที)", key: "durationMin" },
   { label: "สถานะ", key: "statusCode" },
-  { label: "หมายเหตุ", key: "note" },
 ];
 
 const fmt = (n: number, dp: number) =>
@@ -87,7 +86,7 @@ export function DriverTable({
         <div className="space-y-1">
           <span className="text-sm font-semibold text-foreground">สรุปต่อคนขับรถ</span>
           <div className="overflow-x-auto rounded-xl border border-border">
-            <table className="w-full min-w-[720px] border-collapse text-xs">
+            <table className="w-full min-w-[720px] border-collapse text-xs [&_th]:text-center [&_td]:text-center">
               <thead>
                 <tr className="bg-gradient-to-r from-slate-600 to-slate-500 text-white">
                   <th className={th}>คนขับรถ</th>
@@ -126,7 +125,7 @@ export function DriverTable({
       )}
 
       <div className="overflow-x-auto rounded-xl border border-border">
-        <table className="w-full min-w-[1500px] border-collapse text-xs">
+        <table className="w-full min-w-[1500px] border-collapse text-xs [&_th]:text-center [&_td]:text-center">
           <thead>
             <tr className="bg-gradient-to-r from-amber-500 to-orange-500 text-white">
               {HEADERS.map((h) => (
@@ -140,7 +139,7 @@ export function DriverTable({
               <td className="border border-white/25 px-2 py-1.5 text-right">{fmt(totals.boxes, 0)}</td>
               <td className="border border-white/25 px-2 py-1.5 text-right">{fmt(totals.weight, 2)}</td>
               <td className="border border-white/25 px-2 py-1.5 text-right">{fmt(totals.cbm, 4)}</td>
-              <td className="border border-white/25 px-2 py-1.5" colSpan={7} />
+              <td className="border border-white/25 px-2 py-1.5" colSpan={6} />
             </tr>
           </thead>
           <tbody>
@@ -176,7 +175,6 @@ export function DriverTable({
                     {r.durationMin == null ? "-" : fmt(r.durationMin, 0)}
                   </td>
                   <td className={td}>{statusChip(r.statusCode, r.statusLabel)}</td>
-                  <td className={`${td} min-w-[10rem] max-w-[16rem] whitespace-normal text-muted`}>{r.note || "-"}</td>
                 </tr>
               ))
             )}

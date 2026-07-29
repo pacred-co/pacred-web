@@ -77,7 +77,7 @@ export function CommissionTable({
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-border">
-        <table className="w-full min-w-[1200px] border-collapse text-xs">
+        <table className="w-full min-w-[1200px] border-collapse text-xs [&_th]:text-center [&_td]:text-center">
           <thead>
             <tr className="bg-gradient-to-r from-amber-500 to-orange-500 text-white">
               {HEADERS.map((h) => (
