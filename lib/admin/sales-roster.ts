@@ -57,6 +57,27 @@ type Row = {
   adminPicture: string | null;
 };
 
+/** tb_admin row → SalesRep (null when no adminID). Shared by all roster fetchers. */
+function mapAdminRow(r: Row): SalesRep | null {
+  const id = r.adminID?.trim();
+  if (!id) return null;
+  const nick = r.adminNickname?.trim();
+  const first = r.adminName?.trim() ?? "";
+  const last = r.adminLastName?.trim() ?? "";
+  const tel = (r.adminTel ?? "").trim();
+  const pic = r.adminPicture?.trim();
+  return {
+    adminID: id,
+    name: nick || first || id,
+    fullName: `${first} ${last}`.trim() || nick || id,
+    phone: tel,
+    phoneDisplay: tel ? displayPhone(tel) : "",
+    // Null anything next/image can't load. A bare legacy filename ("user.jpg")
+    // crashed every roster consumer's <Image> → home `/` error boundary 2026-06-22.
+    photo: isUsableImageSrc(pic) ? pic : null,
+  };
+}
+
 /**
  * The LIVE active roster for a position flag — flagged staff, ordered for stable
  * display + deterministic round-robin tie-breaks. Returns [] (never throws) on a
@@ -77,30 +98,7 @@ async function getActiveRosterByFlag(
     logger.warn(SCOPE, "active roster lookup failed", { flag, reason: error.message });
     return [];
   }
-
-  const reps: SalesRep[] = [];
-  for (const r of (data ?? []) as Row[]) {
-    const id = r.adminID?.trim();
-    if (!id) continue;
-    const nick = r.adminNickname?.trim();
-    const first = r.adminName?.trim() ?? "";
-    const last = r.adminLastName?.trim() ?? "";
-    const tel = (r.adminTel ?? "").trim();
-    const pic = r.adminPicture?.trim();
-    reps.push({
-      adminID: id,
-      name: nick || first || id,
-      fullName: `${first} ${last}`.trim() || nick || id,
-      phone: tel,
-      phoneDisplay: tel ? displayPhone(tel) : "",
-      // Null anything next/image can't load. The old `pic !== ""` guard let a
-      // bare legacy filename ("user.jpg") through → it crashed every roster
-      // consumer's <Image> (contact-sales, sales-carousel) → home `/` error
-      // boundary on 2026-06-22. Now EVERY consumer is safe at the source.
-      photo: isUsableImageSrc(pic) ? pic : null,
-    });
-  }
-  return reps;
+  return ((data ?? []) as Row[]).map(mapAdminRow).filter((r): r is SalesRep => r !== null);
 }
 
 /** Active sales reps (adminStatusSale='1'). The customer's `adminIDSale` points here. */
@@ -111,4 +109,103 @@ export async function getActiveSalesReps(): Promise<SalesRep[]> {
 /** Active CS reps (adminStatusCS='1' · migration 0141). The customer's `adminIDCS` points here. */
 export async function getActiveCsReps(): Promise<SalesRep[]> {
   return getActiveRosterByFlag("adminStatusCS");
+}
+
+/**
+ * Purchaser reps (ตำแหน่ง "สั่งซื้อ" = ฝากสั่งซื้อ · owner ยืนยัน 2026-07-29). Roster = the DISTINCT
+ * `tb_header_order.adminidpurchaser` (mig 0241) actually assigned, resolved to names via tb_admin
+ * (legacy · admin_web) และ profiles (modern admin เช่น เบญจพร=มะนาว · adminidpurchaser = profiles.id
+ * ตัดสั้น 20 ตัว). เอา ปอนด์ (admin_pond = ชูเกียรติ/owner) ออก. ไม่มี tb_admin flag สำหรับ purchaser.
+ */
+/**
+ * Resolve modern-admin display names for TRUNCATED profiles.id values. `adminidpurchaser` stores
+ * profiles.id ตัดสั้น 20 ตัว สำหรับ modern admin (เช่น เบญจพร=มะนาว). profiles.id เป็น uuid → `.like`
+ * prefix ใช้ไม่ได้ → ดึง admin (is_active) profiles มา prefix-match ใน JS. คืน Map<truncatedId, name>.
+ */
+export async function resolveModernAdminNames(truncatedIds: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const wanted = truncatedIds.filter((id) => id.includes("-"));
+  if (wanted.length === 0) return out;
+  const admin = createAdminClient();
+  const { data: adminRows, error: aerr } = await admin.from("admins").select("profile_id").eq("is_active", true);
+  if (aerr) {
+    logger.warn(SCOPE, "modern-admin roster failed", { reason: aerr.message });
+    return out;
+  }
+  const profileIds = [
+    ...new Set(
+      ((adminRows ?? []) as { profile_id: string | null }[]).map((a) => a.profile_id).filter((x): x is string => !!x),
+    ),
+  ];
+  if (profileIds.length === 0) return out;
+  const profs: { id: string; first_name: string | null; last_name: string | null }[] = [];
+  for (let i = 0; i < profileIds.length; i += 300) {
+    const { data, error } = await admin
+      .from("profiles")
+      .select("id, first_name, last_name")
+      .in("id", profileIds.slice(i, i + 300));
+    if (error) {
+      logger.warn(SCOPE, "modern-admin profiles lookup failed", { reason: error.message });
+      continue;
+    }
+    for (const p of (data ?? []) as typeof profs) profs.push(p);
+  }
+  for (const tid of wanted) {
+    const match = profs.find((p) => p.id.startsWith(tid));
+    if (match) out.set(tid, `${match.first_name ?? ""} ${match.last_name ?? ""}`.trim() || tid);
+  }
+  return out;
+}
+
+export async function getActivePurchaserReps(): Promise<SalesRep[]> {
+  const admin = createAdminClient();
+  const seen = new Set<string>();
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await admin
+      .from("tb_header_order")
+      .select("adminidpurchaser")
+      .neq("adminidpurchaser", "")
+      .range(from, from + pageSize - 1);
+    if (error) {
+      logger.warn(SCOPE, "purchaser scan failed", { reason: error.message });
+      break;
+    }
+    const rows = (data ?? []) as unknown as { adminidpurchaser: string | null }[];
+    for (const r of rows) {
+      const id = (r.adminidpurchaser ?? "").trim();
+      if (id && id !== "admin_pond") seen.add(id); // เอา ปอนด์(owner) ออก
+    }
+    if (rows.length < pageSize) break;
+  }
+  if (seen.size === 0) return [];
+
+  const ids = [...seen];
+  const reps: SalesRep[] = [];
+  const resolved = new Set<string>();
+  // legacy · tb_admin (เช่น admin_web = เว็บ)
+  for (let i = 0; i < ids.length; i += 300) {
+    const { data, error } = await admin
+      .from("tb_admin")
+      .select("adminID, adminName, adminLastName, adminNickname, adminTel, adminPicture")
+      .in("adminID", ids.slice(i, i + 300));
+    if (error) {
+      logger.warn(SCOPE, "purchaser tb_admin lookup failed", { reason: error.message });
+      continue;
+    }
+    for (const r of (data ?? []) as Row[]) {
+      const rep = mapAdminRow(r);
+      if (rep) {
+        reps.push(rep);
+        resolved.add(rep.adminID);
+      }
+    }
+  }
+  // modern · profiles.id ตัดสั้น (uuid → prefix-match ใน JS)
+  const modernNames = await resolveModernAdminNames(ids.filter((i) => !resolved.has(i)));
+  for (const [tid, name] of modernNames) {
+    reps.push({ adminID: tid, name, fullName: name, phone: "", phoneDisplay: "", photo: null });
+  }
+  reps.sort((a, b) => a.adminID.localeCompare(b.adminID));
+  return reps;
 }
