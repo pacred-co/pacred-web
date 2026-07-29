@@ -35,6 +35,7 @@ import {
 import { baseTracking, filterCountableForwarderRows } from "@/lib/admin/momo-bill-header";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { bangkokClockParts } from "@/lib/utils/thai-datetime";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -203,6 +204,8 @@ function defaultRatesForCabinet(
 // ═══════════════════════════════════════════════════════════════════════
 
 type ProfitFwRow = FwCostRow & {
+  /** ต้องมี — ใช้เป็น key เรียงหน้าเพจของ fetchAllRows (กันหน้าซ้อน/ข้าม) */
+  id: number;
   userid: string | null;
   ftotalprice: number | string | null;
   ftrackingchn: string | null;
@@ -272,16 +275,22 @@ export async function getContainerProfitByMonth(
   };
 
   // ── 1) ทุกแถวที่อยู่ตู้จริง + เป็นงาน PR ──
-  const { data: fwRaw, error: fwErr } = await admin
-    .from("tb_forwarder")
-    .select(
-      "fcabinetnumber, fwarehousename, fwarehousechina, ftransporttype, fproductstype, fvolume, famount, famountcount, fweight, fcosttotalprice, userid, ftotalprice, ftrackingchn, fdatecontainerclose, fdatetothai",
-    )
-    .neq("fstatus", "99")
-    .neq("fcabinetnumber", "")
-    .neq("fcabinetnumber", "0")
-    .like("userid", "PR%")
-    .limit(100_000);
+  // ⚠️ ต้อง fetchAllRows — PostgREST ตัดที่ ~1000 แถวแม้ใส่ .limit(100_000)
+  // (prod 2026-07-29: 1,115 แถว PR / 66 ตู้ → รายงานหาย 6 ตู้เงียบๆ · ตู้ที่หายเป็น
+  // แบบสุ่มเพราะไม่ได้ order → ตัวเลขกำไรทั้งรายงานต่ำกว่าจริง). ต้องมี .order คงที่
+  // บนคอลัมน์ unique ไม่งั้นหน้าเพจซ้อน/ข้าม.
+  const { data: fwRaw, error: fwErr } = await fetchAllRows<ProfitFwRow>(() =>
+    admin
+      .from("tb_forwarder")
+      .select(
+        "id, fcabinetnumber, fwarehousename, fwarehousechina, ftransporttype, fproductstype, fvolume, famount, famountcount, fweight, fcosttotalprice, userid, ftotalprice, ftrackingchn, fdatecontainerclose, fdatetothai",
+      )
+      .neq("fstatus", "99")
+      .neq("fcabinetnumber", "")
+      .neq("fcabinetnumber", "0")
+      .like("userid", "PR%")
+      .order("id", { ascending: true }),
+  );
   if (fwErr) {
     console.error(`[getContainerProfitByMonth tb_forwarder] failed`, {
       code: fwErr.code, message: fwErr.message,
