@@ -43,7 +43,7 @@ import {
 import type { AdminRole } from "@/lib/auth/require-admin";
 import { isGodRole } from "@/lib/admin/god-role";
 import {
-  menuForStaffer, menuShowAll, primaryRole,
+  menuForStaffer, menuShowAll, primaryRole, withUltraReports,
   type BadgeCounts, type MenuItem, type MenuSection,
 } from "@/lib/admin/sidebar-menu";
 
@@ -539,9 +539,11 @@ export function AdminSidebar({
   // regardless of any in-page role simulation. Otherwise the menu is
   // position-scoped (menuForStaffer): ultra/super = full · has-position = that
   // workspace · no-position = role menu (normies → full, back-compat).
-  const rawSections: MenuSection[] = (isSuper && showAll)
+  const rawSectionsBase: MenuSection[] = (isSuper && showAll)
     ? menuShowAll()
     : menuForStaffer(roles, workspaceRole);
+  // ออกรายงานระบบ = ultra-only (owner ปอน 2026-07-29) — inject only when roles include ultra.
+  const rawSections: MenuSection[] = withUltraReports(rawSectionsBase, roles);
   const sections: MenuSection[] = rawSections.map((sec) => ({
     ...sec,
     items: filterByPhase(sec.items, role),

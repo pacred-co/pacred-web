@@ -3153,6 +3153,7 @@
       "taxInvoice": "Issue Tax Invoice",
       "domesticShipping": "Domestic Shipping"
     },
+    "systemReports": "System Reports",
     "workspaceNav": {
       "booking": {
         "title": "Booking",
