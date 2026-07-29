@@ -209,3 +209,32 @@ export async function getActivePurchaserReps(): Promise<SalesRep[]> {
   reps.sort((a, b) => a.adminID.localeCompare(b.adminID));
   return reps;
 }
+
+/**
+ * Driver roster (ตำแหน่ง "คนขับรถ") — คนขับ Pacred = `admins.role='driver'` (active) ผูก
+ * `profiles.member_code` (รหัส AD เช่น AD020 = admin Ben) ที่เก็บใน tb_forwarder_driver.fdadminid.
+ * (owner 2026-07-29: "admin ben ก็คนขับรถ ทำไมไม่มีชื่อเขา" — roster นี้ทำให้ Ben ขึ้น dropdown).
+ */
+export async function getActiveDriverReps(): Promise<SalesRep[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("admins")
+    .select("is_active, profiles!profile_id(member_code, first_name, last_name)")
+    .eq("role", "driver")
+    .eq("is_active", true);
+  if (error) {
+    logger.warn(SCOPE, "driver roster lookup failed", { reason: error.message });
+    return [];
+  }
+  type Prof = { member_code: string | null; first_name: string | null; last_name: string | null };
+  const reps: SalesRep[] = [];
+  for (const d of (data ?? []) as { profiles: Prof | Prof[] | null }[]) {
+    const p = Array.isArray(d.profiles) ? d.profiles[0] : d.profiles;
+    const code = (p?.member_code ?? "").trim();
+    if (!code) continue;
+    const name = `${p?.first_name ?? ""} ${p?.last_name ?? ""}`.trim() || code;
+    reps.push({ adminID: code, name, fullName: name, phone: "", phoneDisplay: "", photo: null });
+  }
+  reps.sort((a, b) => a.adminID.localeCompare(b.adminID));
+  return reps;
+}

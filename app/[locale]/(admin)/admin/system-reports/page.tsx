@@ -9,12 +9,14 @@
  */
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageHeader } from "@/components/admin/page-header";
-import { getActiveSalesReps, getActiveCsReps, getActivePurchaserReps } from "@/lib/admin/sales-roster";
+import { getActiveSalesReps, getActiveCsReps, getActivePurchaserReps, getActiveDriverReps } from "@/lib/admin/sales-roster";
 import { getSalesCommissionReport } from "@/lib/admin/sales-commission-report";
 import { getPurchaseCommissionReport } from "@/lib/admin/purchase-commission-report";
+import { getDriverWorkReport } from "@/lib/admin/driver-work-report";
 import { ReportFilters } from "./report-filters";
 import { CommissionTable } from "./commission-table";
 import { PurchaseTable } from "./purchase-table";
+import { DriverTable } from "./driver-table";
 
 export const dynamic = "force-dynamic";
 
@@ -28,15 +30,17 @@ export default async function SystemReportsPage({
 
   // ผู้รับผิดชอบ = รายชื่อตาม "ตำแหน่ง" — เซลล์/Cs = tb_admin flag · สั่งซื้อ = ผู้สั่งซื้อ
   // (roster = tb_header_order.adminidpurchaser ที่ assign จริง) · คนขับ/โกดัง ยังไม่มี roster
-  const [salesReps, csReps, purchaserReps] = await Promise.all([
+  const [salesReps, csReps, purchaserReps, driverReps] = await Promise.all([
     getActiveSalesReps(),
     getActiveCsReps(),
     getActivePurchaserReps(),
+    getActiveDriverReps(),
   ]);
   const reps = [
     ...salesReps.map((r) => ({ position: "sales", id: r.adminID, name: r.name })),
     ...csReps.map((r) => ({ position: "cs", id: r.adminID, name: r.name })),
     ...purchaserReps.map((r) => ({ position: "purchase", id: r.adminID, name: r.name })),
+    ...driverReps.map((r) => ({ position: "driver", id: r.adminID, name: r.name })),
   ];
 
   // default range = the current calendar month (1st → last day)
@@ -53,20 +57,27 @@ export default async function SystemReportsPage({
   const dateFrom = sp.from ?? defaultFrom;
   const dateTo = sp.to ?? defaultTo;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const sort = sp.sort; // คอลัมน์ที่เรียง (หัวตารางกดเรียง) · dir = asc|desc
+  const dir = sp.dir;
 
   const isCommission = type === "commission";
   // เซลล์/Cs = ฝากนำเข้า (forwarder report) · สั่งซื้อ = ฝากสั่งซื้อ (shop report · คนละ data source)
   const fwdPosition: "sales" | "cs" | null =
     position === "sales" ? "sales" : position === "cs" ? "cs" : null;
   const isPurchase = position === "purchase";
+  const isDriver = position === "driver";
   // rep ว่าง = "ทั้งหมด" → ดึงทุกคนของตำแหน่งนั้นรวมกัน (ไม่ต้องเลือกก่อน)
   const fwdReport =
     isCommission && fwdPosition
-      ? await getSalesCommissionReport({ position: fwdPosition, repId: rep, dateFrom, dateTo, page })
+      ? await getSalesCommissionReport({ position: fwdPosition, repId: rep, dateFrom, dateTo, page, sort, dir })
       : null;
   const purchaseReport =
     isCommission && isPurchase
-      ? await getPurchaseCommissionReport({ repId: rep, dateFrom, dateTo, page })
+      ? await getPurchaseCommissionReport({ repId: rep, dateFrom, dateTo, page, sort, dir })
+      : null;
+  const driverReport =
+    isCommission && isDriver
+      ? await getDriverWorkReport({ repId: rep, dateFrom, dateTo, page, sort, dir })
       : null;
   const repName = rep
     ? (reps.find((r) => r.position === position && r.id === rep)?.name ?? "")
@@ -92,10 +103,12 @@ export default async function SystemReportsPage({
 
       {purchaseReport && <PurchaseTable report={purchaseReport} repName={repName} page={page} />}
 
-      {isCommission && !fwdPosition && !isPurchase && (
+      {driverReport && <DriverTable report={driverReport} repName={repName} page={page} />}
+
+      {isCommission && !fwdPosition && !isPurchase && !isDriver && (
         <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-8 text-center text-sm text-muted">
-          ตอนนี้รองรับ <span className="font-medium text-foreground">เซลล์ · Cs · สั่งซื้อ</span> —{" "}
-          ตำแหน่ง <span className="font-medium text-foreground">คนขับรถ / โกดัง</span> กำลังทำต่อ
+          ตอนนี้รองรับ <span className="font-medium text-foreground">เซลล์ · Cs · สั่งซื้อ · คนขับรถ</span> —{" "}
+          ตำแหน่ง <span className="font-medium text-foreground">โกดังคลังสินค้า</span> กำลังทำต่อ
         </div>
       )}
     </div>

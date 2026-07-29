@@ -7,23 +7,24 @@
 import { Link } from "@/i18n/navigation";
 import { COMMISSION_PAGE_SIZE, type CommissionReport } from "@/lib/admin/sales-commission-report";
 import { Pagination } from "./pagination";
+import { SortHeader } from "./sort-header";
 
-const HEADERS = [
-  "วันที่ชำระเงิน",
-  "วันที่สร้าง",
-  "เลขที่ออเดอร์",
-  "แทรกกิ้ง",
-  "เลขตู้",
-  "โกดังจีน",
-  "ขนส่งทาง",
-  "ประเภทสินค้า",
-  "น้ำหนัก",
-  "ปริมาตร",
-  "ราคานำเข้าจีน - ไทย",
-  "ส่วนลด",
-  "ค่าคอมมิชชั่น",
-  "รหัสสมาชิก",
-  "สลิปการชำระ",
+const HEADERS: { label: string; key: string | null }[] = [
+  { label: "วันที่ชำระเงิน", key: "paidDate" },
+  { label: "วันที่สร้าง", key: "createdDate" },
+  { label: "เลขที่ออเดอร์", key: "orderId" },
+  { label: "แทรกกิ้ง", key: "tracking" },
+  { label: "เลขตู้", key: "cabinet" },
+  { label: "โกดังจีน", key: "warehouseLabel" },
+  { label: "ขนส่งทาง", key: "transportLabel" },
+  { label: "ประเภทสินค้า", key: "productLabel" },
+  { label: "น้ำหนัก", key: "weight" },
+  { label: "ปริมาตร", key: "cbm" },
+  { label: "ราคานำเข้าจีน - ไทย", key: "price" },
+  { label: "ส่วนลด", key: "discount" },
+  { label: "ค่าคอมมิชชั่น", key: null },
+  { label: "รหัสสมาชิก", key: "memberCode" },
+  { label: "สลิปการชำระ", key: null },
 ];
 
 const fmt = (n: number, dp: number) =>
@@ -80,9 +81,7 @@ export function CommissionTable({
           <thead>
             <tr className="bg-gradient-to-r from-amber-500 to-orange-500 text-white">
               {HEADERS.map((h) => (
-                <th key={h} className={th}>
-                  {h}
-                </th>
+                <SortHeader key={h.label} label={h.label} colKey={h.key} className={th} />
               ))}
             </tr>
             <tr className="bg-teal-500 font-semibold text-white">

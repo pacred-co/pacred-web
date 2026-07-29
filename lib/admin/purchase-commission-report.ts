@@ -7,12 +7,15 @@
  *
  * เอา ปอนด์ (admin_pond = ชูเกียรติ/owner) ออกจากรายงาน (owner สั่ง). คอลัมน์ตามภาพ +
  * สลิป (walletHsId → /admin/wallet/[id]) ให้ตรวจว่าจ่ายจริง. % (ค่าคอม) ยังไม่คำนวณ = null.
- * 🟡 DISCOUNT(¥) ยังไม่ยืนยัน field → 0. ชื่อผู้สั่งซื้อ modern (เบญจพร=มะนาว) resolve จาก profiles.
+ * เงิน (owner 2026-07-29): COST=ราคารวมหยวนจีน (htotalpricechn+hshippingchn) · DISCOUNT=ราคาซื้อจริง
+ * (hcostall · ¥ actually paid) · DIFFERANCE=COST−DISCOUNT (ส่วนต่างที่ต่อได้ = ฐานค่าคอม) · EX=hratecost ·
+ * TOTAL(฿)=DIFFERANCE×EX (ส่วนต่างเป็นบาท). ชื่อ modern (เบญจพร=มะนาว) resolve จาก profiles.
  */
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
 import { COMMISSION_PAGE_SIZE } from "./sales-commission-report";
+import { sortRows, pickSortKey, normalizeDir } from "./report-sort";
 import { resolveModernAdminNames } from "./sales-roster";
 
 const SCOPE = "purchase-commission-report";
@@ -36,12 +39,12 @@ export type PurchaseCommissionRow = {
   memberCode: string; // รหัสสมาชิก (userid)
   orderNo: string; // เลขที่ออเดอร์ (hno)
   purchaserName: string; // แอดมินสั่งจีน (adminidpurchaser → tb_admin/profiles)
-  costYuan: number; // COST (YUAN) = htotalpricechn
-  discountYuan: number; // DISCOUNT (YUAN) — 🟡 ยังไม่ยืนยัน field (0)
-  diffYuan: number; // DIFFERANCE (YAUN) = COST − DISCOUNT
-  ex: number; // EX = hrate
+  costYuan: number; // COST (YUAN) = htotalpricechn + hshippingchn (ราคารวมหยวนจีน)
+  discountYuan: number; // DISCOUNT (YUAN) = hcostall (ราคาซื้อจริง · ¥ actually paid)
+  diffYuan: number; // DIFFERANCE (YAUN) = COST − DISCOUNT (ส่วนต่างที่ต่อได้ · ฐานค่าคอม)
+  ex: number; // EX = hratecost (อัตราแลกเปลี่ยนจริง)
   commissionPct: number | null; // % — null = ยังไม่คำนวณ ("—")
-  totalBaht: number; // TOTAL (BAHT) = htotalpriceuser
+  totalBaht: number; // TOTAL (BAHT) = DIFFERANCE × EX (ส่วนต่างเป็นบาท)
   statusLabel: string; // สถานะออเดอร์
   statusCode: string;
   walletHsId: number | null; // สลิป → /admin/wallet/[id]
@@ -53,6 +56,12 @@ export type PurchaseCommissionReport = {
   rangeStart: string;
   rangeEnd: string;
 };
+
+/** คอลัมน์ที่กดเรียงได้ (ตรงกับ field ของ PurchaseCommissionRow · หัวตาราง SortHeader) */
+const PURCHASE_SORT_KEYS: readonly (keyof PurchaseCommissionRow)[] = [
+  "paidDate", "createdDate", "memberCode", "orderNo", "purchaserName", "costYuan",
+  "discountYuan", "diffYuan", "ex", "commissionPct", "totalBaht", "statusCode",
+];
 
 const EMPTY = (start: string, end: string): PurchaseCommissionReport => ({
   rows: [],
@@ -102,6 +111,8 @@ export async function getPurchaseCommissionReport(opts: {
   dateFrom: string; // YYYY-MM-DD (inclusive)
   dateTo: string; // YYYY-MM-DD (inclusive)
   page?: number;
+  sort?: string; // คอลัมน์ที่เรียง (keyof PurchaseCommissionRow · default paidDate)
+  dir?: string; // asc | desc (default asc)
 }): Promise<PurchaseCommissionReport> {
   const { repId, dateFrom, dateTo } = opts;
   const startInclusive = dateFrom;
@@ -114,15 +125,16 @@ export async function getPurchaseCommissionReport(opts: {
     userid: string | null;
     hdate: string | null;
     hstatus: string | null;
-    htotalpricechn: string | number | null;
-    htotalpriceuser: string | number | null;
-    hrate: string | number | null;
+    htotalpricechn: string | number | null; // ราคาสินค้า ¥ (Σ cprice×qty)
+    hshippingchn: string | number | null;   // ค่าส่งในจีน ¥
+    hcostall: string | number | null;        // ราคาซื้อจริง ¥ (actually paid หลัง pricing ต่อ) = DISCOUNT
+    hratecost: string | number | null;       // อัตราแลกเปลี่ยนจริง (cost FX) = EX
     adminidpurchaser: string | null;
   };
   const orders = await pageAll<OrderRow>(async (from, to) => {
     let q = admin
       .from("tb_header_order")
-      .select("hno, userid, hdate, hstatus, htotalpricechn, htotalpriceuser, hrate, adminidpurchaser");
+      .select("hno, userid, hdate, hstatus, htotalpricechn, hshippingchn, hcostall, hratecost, adminidpurchaser");
     q = repId
       ? q.eq("adminidpurchaser", repId)
       : q.neq("adminidpurchaser", "").neq("adminidpurchaser", "admin_pond");
@@ -199,9 +211,18 @@ export async function getPurchaseCommissionReport(opts: {
   for (const [hno, pay] of payByHno) {
     const o = orderByHno.get(hno);
     if (!o) continue;
-    const costYuan = num(o.htotalpricechn);
-    const discountYuan = 0; // 🟡 รอ owner ยืนยัน field
-    const totalBaht = num(o.htotalpriceuser);
+    // owner 2026-07-29 (ยืนยันจากหน้า report จริง):
+    //   COST       = ราคารวมหยวนจีน = ราคาสินค้า + ค่าส่งในจีน (htotalpricechn + hshippingchn)
+    //   DISCOUNT   = ราคาซื้อจริง = ยอดที่สั่งซื้อจริง (hcostall · ¥ actually paid หลัง pricing ต่อ)
+    //   DIFFERANCE = ส่วนต่างที่ต่อได้ = COST − DISCOUNT  →  cost − discount = diff ✓ (ฐานคิดค่าคอม)
+    //   EX         = อัตราแลกเปลี่ยนจริง (hratecost · ไม่ใช่ hrate ฝั่งขาย)
+    //   TOTAL(฿)   = ส่วนต่างเป็นบาท = DIFFERANCE × EX (total diff แปลงเป็นบาท)
+    const costYuan = num(o.htotalpricechn) + num(o.hshippingchn);
+    const actualYuan = num(o.hcostall);
+    const discountYuan = actualYuan > 0 ? actualYuan : costYuan; // hcostall ว่าง → ถือว่าจ่ายเต็มราคาร้าน
+    const diffYuan = costYuan - discountYuan; // ส่วนต่างที่ต่อได้ · cost − discount = diff
+    const ex = num(o.hratecost);
+    const totalBaht = diffYuan * ex; // ส่วนต่างเป็นบาท (total diff)
     const statusCode = (o.hstatus ?? "").trim();
     const pid = (o.adminidpurchaser ?? "").trim();
     rows.push({
@@ -212,8 +233,8 @@ export async function getPurchaseCommissionReport(opts: {
       purchaserName: nameByPurchaser.get(pid) ?? pid,
       costYuan,
       discountYuan,
-      diffYuan: costYuan - discountYuan,
-      ex: num(o.hrate),
+      diffYuan,
+      ex,
       commissionPct: null,
       totalBaht,
       statusLabel: HSTATUS_LABEL[statusCode] ?? (statusCode || "-"),
@@ -225,7 +246,8 @@ export async function getPurchaseCommissionReport(opts: {
     totals.count += 1;
   }
 
-  rows.sort((a, b) => (a.paidDate ?? "").localeCompare(b.paidDate ?? ""));
+  // เรียงทั้ง dataset ก่อน paginate (กดหัวคอลัมน์ ?sort=&dir=) · default paidDate asc · tiebreak orderNo
+  sortRows(rows, pickSortKey<PurchaseCommissionRow>(opts.sort, PURCHASE_SORT_KEYS, "paidDate"), normalizeDir(opts.dir), "orderNo");
   const page = Math.max(1, opts.page ?? 1);
   const start = (page - 1) * COMMISSION_PAGE_SIZE;
   return {

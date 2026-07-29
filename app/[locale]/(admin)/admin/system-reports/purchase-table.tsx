@@ -8,21 +8,22 @@ import { Link } from "@/i18n/navigation";
 import { COMMISSION_PAGE_SIZE } from "@/lib/admin/sales-commission-report";
 import type { PurchaseCommissionReport } from "@/lib/admin/purchase-commission-report";
 import { Pagination } from "./pagination";
+import { SortHeader } from "./sort-header";
 
-const HEADERS = [
-  "วันที่ชำระเงิน",
-  "วันที่สร้าง",
-  "รหัสสมาชิก",
-  "เลขที่ออเดอร์",
-  "แอดมินสั่งจีน",
-  "COST (YUAN)",
-  "DISCOUNT (YUAN)",
-  "DIFFERANCE (YAUN)",
-  "EX",
-  "%",
-  "TOTAL (BAHT)",
-  "สถานะออเดอร์",
-  "สลิป",
+const HEADERS: { label: string; key: string | null }[] = [
+  { label: "วันที่ชำระเงิน", key: "paidDate" },
+  { label: "วันที่สร้าง", key: "createdDate" },
+  { label: "รหัสสมาชิก", key: "memberCode" },
+  { label: "เลขที่ออเดอร์", key: "orderNo" },
+  { label: "แอดมินสั่งจีน", key: "purchaserName" },
+  { label: "COST (YUAN)", key: "costYuan" },
+  { label: "DISCOUNT (YUAN)", key: "discountYuan" },
+  { label: "DIFFERANCE (YAUN)", key: "diffYuan" },
+  { label: "EX", key: "ex" },
+  { label: "%", key: "commissionPct" },
+  { label: "TOTAL (BAHT)", key: "totalBaht" },
+  { label: "สถานะออเดอร์", key: "statusCode" },
+  { label: "สลิป", key: null },
 ];
 
 const fmt = (n: number, dp: number) =>
@@ -83,9 +84,7 @@ export function PurchaseTable({
           <thead>
             <tr className="bg-gradient-to-r from-amber-500 to-orange-500 text-white">
               {HEADERS.map((h) => (
-                <th key={h} className={th}>
-                  {h}
-                </th>
+                <SortHeader key={h.label} label={h.label} colKey={h.key} className={th} />
               ))}
             </tr>
             <tr className="bg-teal-500 font-semibold text-white">

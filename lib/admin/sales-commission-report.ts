@@ -22,6 +22,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
+import { sortRows, pickSortKey, normalizeDir } from "./report-sort";
 import { logger } from "@/lib/logger";
 
 const SCOPE = "sales-commission-report";
@@ -66,6 +67,12 @@ export type CommissionReport = {
   rangeStart: string; // YYYY-MM-DD (display)
   rangeEnd: string; // YYYY-MM-DD (last day of month · display)
 };
+
+/** คอลัมน์ที่กดเรียงได้ (ตรงกับ field ของ CommissionRow · หัวตาราง SortHeader) */
+const COMMISSION_SORT_KEYS: readonly (keyof CommissionRow)[] = [
+  "paidDate", "createdDate", "orderId", "tracking", "cabinet", "warehouseLabel",
+  "transportLabel", "productLabel", "weight", "cbm", "price", "discount", "memberCode",
+];
 
 const EMPTY = (start: string, end: string): CommissionReport => ({
   rows: [],
@@ -118,6 +125,8 @@ export async function getSalesCommissionReport(opts: {
   dateFrom: string; // YYYY-MM-DD (inclusive)
   dateTo: string; // YYYY-MM-DD (inclusive)
   page?: number; // หน้า (1-based · COMMISSION_PAGE_SIZE แถว/หน้า) · totals ยังคิดทั้งหมด
+  sort?: string; // คอลัมน์ที่เรียง (keyof CommissionRow · default paidDate)
+  dir?: string; // asc | desc (default asc)
 }): Promise<CommissionReport> {
   const { position, repId, dateFrom, dateTo } = opts;
   const startInclusive = dateFrom;
@@ -249,7 +258,8 @@ export async function getSalesCommissionReport(opts: {
     totals.count += 1;
   }
 
-  rows.sort((a, b) => (a.paidDate ?? "").localeCompare(b.paidDate ?? ""));
+  // เรียงทั้ง dataset ก่อน paginate (กดหัวคอลัมน์ ?sort=&dir=) · default paidDate asc · tiebreak orderId
+  sortRows(rows, pickSortKey<CommissionRow>(opts.sort, COMMISSION_SORT_KEYS, "paidDate"), normalizeDir(opts.dir), "orderId");
   // แบ่งหน้า COMMISSION_PAGE_SIZE แถว/หน้า · totals (แถบรวม) + totals.count ยังคิดทั้งหมดเสมอ
   // walletHsId ผูกไว้ตั้งแต่ตอน map row แล้ว → ตารางลิงก์ /admin/wallet/[id] (ดูสลิป)
   const page = Math.max(1, opts.page ?? 1);
