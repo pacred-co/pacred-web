@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup v3 — ออกใบกำกับ/ใบขน (เลือกออเดอร์รวมใบ) · DOC</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --p50:#fff0f0;--p100:#ffe0e0;--p600:#b30000;--p700:#8c0000;
+    --bg:#ffffff;--fg:#171717;--border:#e0e0e0;--muted:#737373;
+    --key:#fffbeb;--keyb:#f59e0b;--auto:#ecfdf5;--autob:#10b981;--calc:#f1f5f9;--calcb:#64748b;
+    --barbg:#1a1a2e;--barfg:#00d4ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Prompt','Noto Sans Thai',system-ui,sans-serif;background:#f6f7f9;color:var(--fg);font-size:14px}
+  .wrap{max-width:1160px;margin:0 auto;padding:20px}
+  .top{background:linear-gradient(90deg,var(--p600),var(--p700));color:#fff;border-radius:14px;padding:16px 22px;box-shadow:0 6px 18px rgba(179,0,0,.18)}
+  .top h1{margin:0;font-size:19px;font-weight:700}
+  .top .sub{opacity:.92;font-size:12.5px;margin-top:4px}
+  .flow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .step{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:6px 11px;font-size:12px;font-weight:500}
+  .step b{background:#fff;color:var(--p700);border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;margin-right:5px;font-weight:700}
+  .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-top:16px}
+  .card h2{margin:0 0 4px;font-size:15px;font-weight:700;color:var(--p700);display:flex;align-items:center;gap:8px}
+  .card h2 .n{background:var(--p600);color:#fff;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+  .hint{font-size:12px;color:var(--muted);margin:2px 0 12px;line-height:1.6}
+  .filters{display:flex;gap:16px;flex-wrap:wrap;align-items:end}
+  .fld{display:flex;flex-direction:column;gap:4px}
+  .fld label{font-size:11.5px;color:var(--muted);font-weight:500}
+  .fld select,.fld input{border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13.5px;background:#fff;min-width:120px}
+  .fld input.rate{background:var(--key);border-color:var(--keyb);font-weight:700}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{border:1px solid var(--border);padding:8px 10px;text-align:center}
+  th{background:#374151;color:#fff;font-weight:600;font-size:11.5px}
+  td.l{text-align:left}
+  td.money{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+  tr.sel{background:var(--p50)}
+  tr.sel td{border-color:var(--p100)}
+  .chk{width:17px;height:17px;accent-color:var(--p600)}
+  .st{display:inline-block;background:#fef9c3;color:#854d0e;border-radius:6px;padding:1px 9px;font-size:11px;font-weight:600}
+  .way{display:inline-block;border-radius:6px;padding:1px 8px;font-size:11px;font-weight:700;color:#fff}
+  .way.ek{background:#7c3aed}.way.sea{background:#0891b2}
+  .bar{background:var(--barbg);color:var(--barfg);border-radius:12px;padding:14px 18px;margin-top:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;font-weight:700;box-shadow:0 6px 18px rgba(26,26,46,.25)}
+  .bar .big{font-size:18px}
+  .bar .frame{color:#ffd166;font-size:12.5px;background:rgba(255,209,102,.12);border:1px solid rgba(255,209,102,.35);padding:4px 10px;border-radius:8px}
+  .invset{display:flex;gap:16px;flex-wrap:wrap;align-items:end;margin-top:14px}
+  .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px}
+  .btn{border:none;border-radius:10px;padding:12px 18px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;display:inline-flex;gap:8px}
+  .btn.pdf{background:var(--p600);color:#fff}.btn.pk{background:#0f766e;color:#fff}.btn.csv{background:#1d4ed8;color:#fff}.btn.ghost{background:#fff;color:var(--fg);border:1px solid var(--border)}
+  details{margin-top:8px}summary{cursor:pointer;font-weight:600;color:var(--p700);font-size:13.5px;padding:6px 0}
+  .tblwrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border);margin-top:8px}
+  td.key{background:var(--key)}td.auto{background:var(--auto)}td.calc{background:var(--calc);color:#334155;font-weight:600}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin:10px 2px 0;font-size:11.5px}
+  .lg{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:14px;height:14px;border-radius:4px;border:1px solid}
+  .sw.key{background:var(--key);border-color:var(--keyb)}.sw.auto{background:var(--auto);border-color:var(--autob)}.sw.calc{background:var(--calc);border-color:var(--calcb)}
+  .chip{display:inline-block;background:var(--auto);color:#047857;border:1px solid var(--autob);border-radius:999px;padding:0 7px;font-size:10px;font-weight:700;margin-left:4px}
+  .prev{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px}
+  .doc{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:10px}
+  .doc .dh{text-align:center;font-weight:700;font-size:10.5px}
+  .doc table{font-size:9px}.doc th,.doc td{padding:2px 4px}
+  .note{font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.7}
+  @media(max-width:900px){.prev{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <h1>📄 ออกใบกำกับ / Invoice / Packing / ใบขน — แผนก DOC</h1>
+    <div class="sub">MOCKUP v3 · หน้าใหม่แยก · แก้ตามภูม: ตัดคอลัมน์ "ตู้" ออก — ลิสต์ = เฉพาะงานที่ยังไม่มีเลขตู้ (ยังไม่ออกใบ)</div>
+    <div class="flow">
+      <span class="step"><b>1</b>งานที่ยังไม่ออกใบ (ไม่มีเลขตู้)</span>
+      <span class="step"><b>2</b>ติ๊กรวมหลายออเดอร์เป็นใบเดียว</span>
+      <span class="step"><b>3</b>อากร+ภาษีรวมสด → ปรับให้อยู่ในกรอบ</span>
+      <span class="step"><b>4</b>ใส่เลข Invoice/ตู้ + เรท USD</span>
+      <span class="step"><b>5</b>กดออก → งานกลายเป็น done หลุดจากลิสต์</span>
+    </div>
+  </div>
+
+  <!-- 1 เลือก+ติ๊ก ออเดอร์ -->
+  <div class="card">
+    <h2><span class="n">1</span> งานนำเข้าที่ยังไม่ออกใบ <span style="font-size:12px;color:var(--muted);font-weight:500">(ยังไม่มีเลขตู้)</span></h2>
+    <div class="hint">
+      แสดง<b>เฉพาะงานที่ยังไม่มีเลขตู้/ยังไม่ยิงใบขน</b> — พองานได้เลขตู้แล้ว = ทำแล้ว จะ<b>หลุดจากลิสต์เอง</b> ไม่เอามาให้เลือกซ้ำ ·
+      <b>ติ๊กหลายออเดอร์รวมเป็น 1 Invoice</b> → อากร+ภาษีรวมให้สดด้านล่าง
+    </div>
+    <div class="filters">
+      <div class="fld"><label>ทาง SEA/EK</label><select><option>ทั้งหมด</option><option>SEA</option><option>EK</option></select></div>
+      <div class="fld"><label>เดือน</label><select><option>ก.ค. 2026</option><option>ทั้งหมด</option></select></div>
+      <div class="fld"><label>ลูกค้า</label><select><option>ทั้งหมด</option></select></div>
+      <div class="fld"><label>ค้นหา PR</label><input placeholder="PR10497..."/></div>
+    </div>
+    <div class="tblwrap">
+    <table>
+      <thead><tr><th style="width:36px">☑</th><th>ออเดอร์ / PR</th><th>ทาง</th><th>ลูกค้า</th><th>สถานะ</th><th>อากร (฿)</th><th>ยอด VAT (฿)</th></tr></thead>
+      <tbody>
+        <tr class="sel"><td><input type="checkbox" class="chk" checked></td><td>PR10497 / #52310</td><td><span class="way sea">SEA</span></td><td class="l">บัญญาเคมีภัณฑ์ จำกัด</td><td><span class="st">รอออกใบ</span></td><td class="money">5,413.88</td><td class="money">1,436.02</td></tr>
+        <tr class="sel"><td><input type="checkbox" class="chk" checked></td><td>PR9826 / #52318</td><td><span class="way sea">SEA</span></td><td class="l">สยามพ่อย 45</td><td><span class="st">รอออกใบ</span></td><td class="money">12,928.04</td><td class="money">5,429.76</td></tr>
+        <tr class="sel"><td><input type="checkbox" class="chk" checked></td><td>PR10508 / #52331</td><td><span class="way sea">SEA</span></td><td class="l">กรินด์ไลท์ / GIFF</td><td><span class="st">รอออกใบ</span></td><td class="money">799.14</td><td class="money">1,655.15</td></tr>
+        <tr><td><input type="checkbox" class="chk"></td><td>PR9969 / #52340</td><td><span class="way ek">EK</span></td><td class="l">จัดจ้อ เอ็นจิเนียริ่ง</td><td><span class="st">รอออกใบ</span></td><td class="money">0.00</td><td class="money">11,548.78</td></tr>
+        <tr><td><input type="checkbox" class="chk"></td><td>PR10497 / #52355</td><td><span class="way ek">EK</span></td><td class="l">แทรกเตอร์ร้อม</td><td><span class="st">รอออกใบ</span></td><td class="money">203.70</td><td class="money">1,440.14</td></tr>
+        <tr><td colspan="7" style="color:#737373;background:#fafafa;font-style:italic">⋯ อีก 22 ออเดอร์ที่ยังไม่ออกใบ ⋯</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <!-- แถบสรุปสด (สีเดียวกับเครื่องมือเดิม) -->
+    <div class="bar">
+      <span>✅ เลือก <span class="big">3 ออเดอร์</span> รวมเป็น 1 Invoice</span>
+      <span>อากรรวม: <span class="big">19,141.06 ฿</span> &nbsp;|&nbsp; ภาษีรวม: <span class="big">47,155.61 ฿</span></span>
+      <span class="frame">🎯 ปรับติ๊กให้อากร+ภาษี อยู่ในกรอบที่ต้องการ</span>
+    </div>
+
+    <!-- ตั้งค่า invoice + ปุ่มออก -->
+    <div class="invset">
+      <div class="fld"><label>เลข Invoice / ตู้ (กำหนดตอนออกใบ)</label><input placeholder="เช่น GZS260625-5T"/></div>
+      <div class="fld"><label>วันที่</label><input value="02/07/2026"/></div>
+      <div class="fld"><label>💱 เรท USD (แก้ได้ต่อใบ)</label><input class="rate" value="31.41"/></div>
+    </div>
+    <div class="actions">
+      <button class="btn pdf">📄 Commercial Invoice (PDF)</button>
+      <button class="btn pk">📦 Packing List (PDF)</button>
+      <button class="btn csv">📊 NetBay CSV (ทำใบขน)</button>
+      <button class="btn ghost">⬇ Invoice+Packing (.xlsx)</button>
+    </div>
+    <div class="hint" style="margin-top:10px">📌 พอกดออกใบ → 3 ออเดอร์นี้ได้เลขตู้ = <b>done → หลุดจากลิสต์อัตโนมัติ</b> (จะไม่โผล่มาให้ทำซ้ำ)</div>
+  </div>
+
+  <!-- 2 รายละเอียดข้างในออเดอร์ -->
+  <div class="card">
+    <h2><span class="n">2</span> รายการสินค้าข้างในออเดอร์ (กดดู/แก้ก่อนออกไฟล์)</h2>
+    <div class="hint">รวมทุกบรรทัดของออเดอร์ที่ติ๊ก = 30 รายการ · <b>HS ดึงจากคลัง HS เรามาให้</b> (พนักงานแค่รีเช็ค) · อากร/VAT คิดสูตรเดิม</div>
+    <details open><summary>▸ ดูรายการสินค้า (30 บรรทัด รวม 3 ออเดอร์)</summary>
+    <div class="tblwrap">
+    <table>
+      <thead><tr><th>#</th><th>พิกัด HS</th><th>EN Description</th><th>TH</th><th>ลัง CT</th><th>Qty</th><th>น้ำหนัก</th><th>USD/หน่วย</th><th>รวม USD</th><th>มูลค่าบาท</th><th>%อากร</th><th>อากร ฿</th><th>VAT ฿</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td class="auto">8413.20<span class="chip">คลัง</span></td><td class="l key">HAND PUMPS</td><td class="l key">สูบลม</td><td class="auto">1</td><td class="key">1</td><td class="auto">114.73</td><td class="key">50.38</td><td class="calc">50.38</td><td class="calc">1,582.44</td><td class="key">1%</td><td class="calc">15.82</td><td class="calc">111.86</td></tr>
+        <tr><td>3</td><td class="auto">6805.30<span class="chip">คลัง</span></td><td class="l key">SYNTHETIC FIBER FLAP WHEEL</td><td class="l key">ลูกขัด</td><td class="auto">20</td><td class="key">200</td><td class="auto">751.78</td><td class="key">2.6477</td><td class="calc">529.54</td><td class="calc">16,632.85</td><td class="key">5%</td><td class="calc">831.64</td><td class="calc">1,222.51</td></tr>
+        <tr><td>17</td><td class="auto">4202.92<span class="chip">คลัง</span></td><td class="l key">BAG</td><td class="l key">กระเป๋า</td><td class="auto">350</td><td class="key">3500</td><td class="auto">5,501.70</td><td class="key">0.5863</td><td class="calc">2,052.07</td><td class="calc">64,455.52</td><td class="key">20%</td><td class="calc">12,891.10</td><td class="calc">5,414.26</td></tr>
+        <tr><td>18</td><td class="auto">8501.32<span class="chip">คลัง</span></td><td class="l key">MOTOR</td><td class="l key">มอเตอร์</td><td class="auto">100</td><td class="key">100</td><td class="auto">3,512.40</td><td class="key">52.3754</td><td class="calc">5,237.54</td><td class="calc">164,511.03</td><td class="key">0%</td><td class="calc">0.00</td><td class="calc">11,515.77</td></tr>
+        <tr><td colspan="13" style="color:#737373;background:#fafafa;font-style:italic">⋯ อีก 26 บรรทัด ⋯</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="legend">
+      <span class="lg"><span class="sw auto"></span> ดึงให้อัตโนมัติ — HS จากคลังเรา · น้ำหนัก/ลัง จากงานนำเข้า (แค่รีเช็ค)</span>
+      <span class="lg"><span class="sw key"></span> DOC กรอก/วาง — EN · ราคา USD · %อากร (ถ้าคลังยังไม่มี HS)</span>
+      <span class="lg"><span class="sw calc"></span> ระบบคำนวณ — บาท · อากร · VAT (สูตรเดิม)</span>
+    </div>
+    </details>
+  </div>
+
+  <!-- 3 พรีวิว output -->
+  <div class="card">
+    <h2><span class="n">3</span> ผลลัพธ์ (ยึดหน้าตาไฟล์จริง)</h2>
+    <div class="prev">
+      <div class="doc">
+        <div class="dh">YIWU SHENGYI IMPORT AND EXPORT CO.,LTD — INVOICE</div>
+        <div style="font-size:9px">NO. GZS260625-5T · 2/7/2026 · SHIP TO Pacred (Thailand) Co., Ltd. 0105564077716 · BY SEA → LAEM CHABANG · CIF · T/T</div>
+        <table><thead><tr><th>Item</th><th>Description</th><th>Qty</th><th>U/Price$</th><th>Amount$</th></tr></thead><tbody>
+          <tr><td>1</td><td style="text-align:left">HAND PUMPS</td><td>1 PCS</td><td>50.38</td><td>50.38</td></tr>
+          <tr><td>17</td><td style="text-align:left">BAG</td><td>3500 PCS</td><td>0.59</td><td>2,052.07</td></tr>
+          <tr><td>18</td><td style="text-align:left">MOTOR</td><td>100 PCS</td><td>52.38</td><td>5,237.54</td></tr>
+          <tr><td colspan="5" style="color:#888">⋯ 30 รายการ ⋯</td></tr>
+          <tr style="font-weight:700"><td colspan="2">CIF LAEM CHABANG</td><td>4,167</td><td>USD</td><td>12,092.49</td></tr>
+        </tbody></table>
+      </div>
+      <div class="doc">
+        <div class="dh">PACKING LIST — GZS260625-5T · 2/7/2026</div>
+        <div style="font-size:9px">TO Pacred (Thailand) Co., Ltd. 0105564077716</div>
+        <table><thead><tr><th>Item</th><th>CT</th><th>Description</th><th>Qty</th><th>Gross Wt</th></tr></thead><tbody>
+          <tr><td>1</td><td>1</td><td style="text-align:left">HAND PUMPS</td><td>1 PCS</td><td>114.73</td></tr>
+          <tr><td>17</td><td>350</td><td style="text-align:left">BAG</td><td>3500 PCS</td><td>5,501.70</td></tr>
+          <tr><td>18</td><td>100</td><td style="text-align:left">MOTOR</td><td>100 PCS</td><td>3,512.40</td></tr>
+          <tr><td colspan="5" style="color:#888">⋯ 30 รายการ ⋯</td></tr>
+          <tr style="font-weight:700"><td>Total</td><td>601</td><td>CTNS</td><td>4,167</td><td>14,150.00</td></tr>
+        </tbody></table>
+      </div>
+    </div>
+    <div class="note">
+      📊 <b>NetBay CSV</b> = 28 คอลัมน์ตรง format ที่ภูมส่ง · <b>Importer = PACRED (THAILAND) CO., LTD.</b> · encoding ตามไฟล์เดิม → กดปุ่มเดียวโหลดไปอัพ NetBay ทำใบขนได้เลย ไม่ต้องกอปวางเอง<br>
+      ⚠️ %อากร/อากร/VAT เป็นตัวอย่าง — ตัวจริงดึง %อากร จากคลัง HS + DOC ยืนยัน · Invoice/Packing ที่ส่งจีน+ศุลกากรไม่โชว์ VAT (เหมือนไฟล์จริง)
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
