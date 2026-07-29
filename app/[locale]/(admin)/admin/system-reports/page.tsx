@@ -7,6 +7,7 @@
  * adminidpurchaser · purchase-commission-report · คอลัมน์ COST/DISCOUNT/DIFF/EX/%/TOTAL ตามภาพ).
  * เฉพาะงานที่ลูกค้าจ่ายแล้ว · แบ่งเดือนตามวันจ่าย · ค่าคอมยังไม่คำนวณ · คนขับ/โกดัง = ทำต่อ.
  */
+import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageHeader } from "@/components/admin/page-header";
 import { getActiveSalesReps, getActiveCsReps, getActivePurchaserReps, getActiveDriverReps } from "@/lib/admin/sales-roster";
@@ -27,7 +28,13 @@ export default async function SystemReportsPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  await requireAdmin();
+  // 🔒 ultra-only (2026-07-29 · integrate): sidebar inject แถบนี้เฉพาะ roles.includes("ultra")
+  // (withUltraReports · super/normies ไม่เห็น) แต่ page เดิม `requireAdmin()` = admin ทุก role
+  // → driver/warehouse พิมพ์ URL ตรงเห็นค่าคอม/ต้นทุนได้ (§0d/§0c gap). enforce ที่ page ให้
+  // ตรง sidebar เป๊ะ — strictly "ultra" (ไม่ใช้ requireAdmin(["ultra"]) เพราะ isGodRole จะปล่อย
+  // super เข้า ซึ่งขัดกับ sidebar ที่ตั้งใจกัน super ออก).
+  const { roles } = await requireAdmin();
+  if (!roles.includes("ultra")) notFound();
   const sp = await searchParams;
 
   // ผู้รับผิดชอบ = รายชื่อตาม "ตำแหน่ง" — เซลล์/Cs = tb_admin flag · สั่งซื้อ = ผู้สั่งซื้อ
