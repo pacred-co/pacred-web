@@ -17,7 +17,12 @@ import { Search, CalendarDays, ChevronDown, Check } from "lucide-react";
 
 type Rep = { position: string; id: string; name: string };
 
-const REPORT_TYPES = [{ key: "commission", label: "ค่าคอมมิชชั่น" }];
+const REPORT_TYPES = [
+  { key: "commission", label: "ค่าคอมมิชชั่น" },
+  // กำไรตู้ (owner 2026-07-29): กำไรต้นทุนรายตู้ จัดกลุ่มรายเดือนตามเลขตู้ —
+  // ไม่ใช้ ตำแหน่ง/ผู้รับผิดชอบ/ช่วงวันที่ (เดือนอ่านจากเลขตู้ตรงๆ) → ซ่อนตัวกรองพวกนั้น
+  { key: "container-profit", label: "กำไรตู้ (รายเดือน)" },
+];
 
 const POSITIONS = [
   { key: "sales", label: "เซลล์" },
@@ -220,13 +225,18 @@ export function ReportFilters({
     ...reps.filter((r) => r.position === position).map((r) => ({ value: r.id, label: r.name })),
   ];
 
+  // กำไรตู้ = ทั้งระบบจัดกลุ่มรายเดือนจากเลขตู้ — ตำแหน่ง/ผู้รับผิดชอบ/วันที่ ไม่เกี่ยว
+  const isContainerProfit = reportType === "container-profit";
+
   const onSearch = () => {
     const q = new URLSearchParams();
     q.set("type", reportType);
-    q.set("pos", position);
-    if (rep) q.set("rep", rep);
-    if (dateFrom) q.set("from", dateFrom);
-    if (dateTo) q.set("to", dateTo);
+    if (!isContainerProfit) {
+      q.set("pos", position);
+      if (rep) q.set("rep", rep);
+      if (dateFrom) q.set("from", dateFrom);
+      if (dateTo) q.set("to", dateTo);
+    }
     router.push(`${pathname}?${q.toString()}`);
   };
 
@@ -240,37 +250,41 @@ export function ReportFilters({
         className={fieldClass}
       />
 
-      <SelectPill
-        label="ตำแหน่ง"
-        value={position}
-        onChange={onPositionChange}
-        options={POSITIONS.map((p) => ({ value: p.key, label: p.label }))}
-        className={fieldClass}
-      />
+      {!isContainerProfit && (
+        <>
+          <SelectPill
+            label="ตำแหน่ง"
+            value={position}
+            onChange={onPositionChange}
+            options={POSITIONS.map((p) => ({ value: p.key, label: p.label }))}
+            className={fieldClass}
+          />
 
-      <SelectPill
-        label="ผู้รับผิดชอบ"
-        value={rep}
-        onChange={setRep}
-        options={respOptions}
-        className={fieldClass}
-      />
+          <SelectPill
+            label="ผู้รับผิดชอบ"
+            value={rep}
+            onChange={setRep}
+            options={respOptions}
+            className={fieldClass}
+          />
 
-      <DateField
-        label="ตั้งแต่วันที่"
-        value={dateFrom}
-        max={dateTo || undefined}
-        onChange={setDateFrom}
-        className={dateFieldClass}
-      />
+          <DateField
+            label="ตั้งแต่วันที่"
+            value={dateFrom}
+            max={dateTo || undefined}
+            onChange={setDateFrom}
+            className={dateFieldClass}
+          />
 
-      <DateField
-        label="ถึงวันที่"
-        value={dateTo}
-        min={dateFrom || undefined}
-        onChange={setDateTo}
-        className={dateFieldClass}
-      />
+          <DateField
+            label="ถึงวันที่"
+            value={dateTo}
+            min={dateFrom || undefined}
+            onChange={setDateTo}
+            className={dateFieldClass}
+          />
+        </>
+      )}
 
       <button
         type="button"

@@ -15,11 +15,14 @@ import { getSalesCommissionReport } from "@/lib/admin/sales-commission-report";
 import { getPurchaseCommissionReport } from "@/lib/admin/purchase-commission-report";
 import { getDriverWorkReport } from "@/lib/admin/driver-work-report";
 import { getWarehouseWorkReport, getActiveWarehouseReps } from "@/lib/admin/warehouse-work-report";
+import { getContainerProfitByMonth } from "@/lib/admin/container-cost-rollup";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { ReportFilters } from "./report-filters";
 import { CommissionTable } from "./commission-table";
 import { PurchaseTable } from "./purchase-table";
 import { DriverTable } from "./driver-table";
 import { WarehouseTable } from "./warehouse-table";
+import { ContainerProfitTable } from "./container-profit-table";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +75,10 @@ export default async function SystemReportsPage({
   const dir = sp.dir;
 
   const isCommission = type === "commission";
+  // กำไรตู้รายเดือน (owner 2026-07-29): ทั้งระบบ · เดือนอ่านจากเลขตู้ · PR-only —
+  // ไม่ใช้ pos/rep/date เลย (ตัวกรองฝั่ง client ซ่อนให้แล้ว)
+  const containerProfit =
+    type === "container-profit" ? await getContainerProfitByMonth(createAdminClient()) : null;
   // เซลล์/Cs = ฝากนำเข้า (forwarder report) · สั่งซื้อ = ฝากสั่งซื้อ (shop report · คนละ data source)
   const fwdPosition: "sales" | "cs" | null =
     position === "sales" ? "sales" : position === "cs" ? "cs" : null;
@@ -122,6 +129,8 @@ export default async function SystemReportsPage({
       {driverReport && <DriverTable report={driverReport} repName={repName} page={page} />}
 
       {warehouseReport && <WarehouseTable report={warehouseReport} repName={repName} page={page} />}
+
+      {containerProfit && <ContainerProfitTable data={containerProfit} />}
     </div>
   );
 }
