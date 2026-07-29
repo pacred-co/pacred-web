@@ -26,6 +26,9 @@ import { logger } from "@/lib/logger";
 
 const SCOPE = "sales-commission-report";
 
+/** แถว/หน้า สำหรับ pagination ของตารางค่าคอม (totals + totals.count ยังคิดทั้งหมดเสมอ) */
+export const COMMISSION_PAGE_SIZE = 50;
+
 const WAREHOUSE_LABEL: Record<string, string> = { "1": "กวางโจว", "2": "อี้อู" };
 const PRODUCT_LABEL: Record<string, string> = {
   "1": "ทั่วไป",
@@ -53,7 +56,8 @@ export type CommissionRow = {
   price: number; // ราคานำเข้าจีน - ไทย
   discount: number; // ส่วนลด
   memberCode: string; // รหัสสมาชิก (tb_users.userID)
-  customerName: string; // ชื่อ-นามสกุล
+  customerName: string; // ชื่อ-นามสกุล (เก็บไว้ · ตารางไม่แสดงแล้ว)
+  walletHsId: number | null; // tb_wallet_hs.id ของการชำระที่ settle → ลิงก์ /admin/wallet/[id] (ดูสลิป)
 };
 
 export type CommissionReport = {
@@ -110,26 +114,25 @@ const num = (v: string | number | null): number => {
 
 export async function getSalesCommissionReport(opts: {
   position: CommissionPosition;
-  repId: string;
+  repId: string; // ว่าง = ทั้งหมด (ทุกเซลล์รวมกัน)
   dateFrom: string; // YYYY-MM-DD (inclusive)
   dateTo: string; // YYYY-MM-DD (inclusive)
+  page?: number; // หน้า (1-based · COMMISSION_PAGE_SIZE แถว/หน้า) · totals ยังคิดทั้งหมด
 }): Promise<CommissionReport> {
   const { position, repId, dateFrom, dateTo } = opts;
   const startInclusive = dateFrom;
   const endExclusive = addOneDay(dateTo);
-  if (!repId) return EMPTY(dateFrom, dateTo);
 
   const admin = createAdminClient();
   const attrField = position === "cs" ? "adminIDCS" : "adminIDSale";
 
-  // 1) the rep's customers (attribution = the customer's assigned rep)
+  // 1) the rep's customers (attribution = the customer's assigned rep).
+  // repId ว่าง = "ทั้งหมด" → ลูกค้าทุกคนที่มีเซลล์ผู้รับผิดชอบ (attrField ไม่ว่าง)
   type CustomerRow = { userID: string; userName: string | null; userLastName: string | null };
   const customers = await pageAll<CustomerRow>(async (from, to) => {
-    const res = await admin
-      .from("tb_users")
-      .select("userID, userName, userLastName")
-      .eq(attrField, repId)
-      .range(from, to);
+    let q = admin.from("tb_users").select("userID, userName, userLastName");
+    q = repId ? q.eq(attrField, repId) : q.not(attrField, "is", null).neq(attrField, "");
+    const res = await q.range(from, to);
     return { data: res.data as CustomerRow[] | null, error: res.error };
   });
   if (customers.length === 0) return EMPTY(dateFrom, dateTo);
@@ -141,13 +144,13 @@ export async function getSalesCommissionReport(opts: {
   const userIds = customers.map((c) => c.userID);
 
   // 2) their settled wallet payments IN the month (the pay date drives the bucket)
-  type WalletRow = { reforder: string | null; userid: string | null; date: string | null };
+  type WalletRow = { id: number; reforder: string | null; userid: string | null; date: string | null };
   const wallet: WalletRow[] = [];
   for (const grp of chunk(userIds, 300)) {
     const part = await pageAll<WalletRow>(async (from, to) => {
       const res = await admin
         .from("tb_wallet_hs")
-        .select("reforder, userid, date")
+        .select("id, reforder, userid, date")
         .eq("status", "2")
         .in("userid", grp)
         .gte("date", startInclusive)
@@ -162,11 +165,15 @@ export async function getSalesCommissionReport(opts: {
   // reforder → latest pay date in the month (one row per order · legacy GROUP BY f.ID)
   const payDateByOrder = new Map<string, string>();
   const walletUserByOrder = new Map<string, string>();
+  const walletIdByOrder = new Map<string, number>(); // → ลิงก์ /admin/wallet/[id] (ดูสลิป)
   for (const w of wallet) {
     const ref = (w.reforder ?? "").trim();
     if (!ref || !w.userid || !w.date) continue;
     const prev = payDateByOrder.get(ref);
-    if (!prev || w.date > prev) payDateByOrder.set(ref, w.date);
+    if (!prev || w.date > prev) {
+      payDateByOrder.set(ref, w.date);
+      walletIdByOrder.set(ref, w.id);
+    }
     walletUserByOrder.set(ref, w.userid);
   }
   const orderIds = [...payDateByOrder.keys()];
@@ -233,6 +240,7 @@ export async function getSalesCommissionReport(opts: {
       discount,
       memberCode: f.userid ?? "",
       customerName: nameByUser.get(f.userid ?? "") ?? "",
+      walletHsId: walletIdByOrder.get(key) ?? null,
     });
     totals.weight += weight;
     totals.cbm += cbm;
@@ -242,5 +250,14 @@ export async function getSalesCommissionReport(opts: {
   }
 
   rows.sort((a, b) => (a.paidDate ?? "").localeCompare(b.paidDate ?? ""));
-  return { rows, totals, rangeStart: dateFrom, rangeEnd: dateTo };
+  // แบ่งหน้า COMMISSION_PAGE_SIZE แถว/หน้า · totals (แถบรวม) + totals.count ยังคิดทั้งหมดเสมอ
+  // walletHsId ผูกไว้ตั้งแต่ตอน map row แล้ว → ตารางลิงก์ /admin/wallet/[id] (ดูสลิป)
+  const page = Math.max(1, opts.page ?? 1);
+  const start = (page - 1) * COMMISSION_PAGE_SIZE;
+  return {
+    rows: rows.slice(start, start + COMMISSION_PAGE_SIZE),
+    totals,
+    rangeStart: dateFrom,
+    rangeEnd: dateTo,
+  };
 }

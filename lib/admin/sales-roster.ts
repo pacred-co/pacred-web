@@ -58,21 +58,23 @@ type Row = {
 };
 
 /**
- * The LIVE active sales pool — flagged reps, ordered for stable display +
- * deterministic round-robin tie-breaks. Returns [] (never throws) on a read
- * error so a consuming page degrades gracefully (the round-robin keeps its own
- * never-null central fallback in assign-sales-rep.ts).
+ * The LIVE active roster for a position flag — flagged staff, ordered for stable
+ * display + deterministic round-robin tie-breaks. Returns [] (never throws) on a
+ * read error so a consuming page degrades gracefully (the round-robin keeps its
+ * own never-null central fallback in assign-sales-rep.ts).
  */
-export async function getActiveSalesReps(): Promise<SalesRep[]> {
+async function getActiveRosterByFlag(
+  flag: "adminStatusSale" | "adminStatusCS",
+): Promise<SalesRep[]> {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("tb_admin")
     .select("adminID, adminName, adminLastName, adminNickname, adminTel, adminPicture")
     .eq("adminStatusA", "1")
-    .eq("adminStatusSale", "1")
+    .eq(flag, "1")
     .order("adminID", { ascending: true });
   if (error) {
-    logger.warn(SCOPE, "active sales reps lookup failed", { reason: error.message });
+    logger.warn(SCOPE, "active roster lookup failed", { flag, reason: error.message });
     return [];
   }
 
@@ -99,4 +101,14 @@ export async function getActiveSalesReps(): Promise<SalesRep[]> {
     });
   }
   return reps;
+}
+
+/** Active sales reps (adminStatusSale='1'). The customer's `adminIDSale` points here. */
+export async function getActiveSalesReps(): Promise<SalesRep[]> {
+  return getActiveRosterByFlag("adminStatusSale");
+}
+
+/** Active CS reps (adminStatusCS='1' · migration 0141). The customer's `adminIDCS` points here. */
+export async function getActiveCsReps(): Promise<SalesRep[]> {
+  return getActiveRosterByFlag("adminStatusCS");
 }

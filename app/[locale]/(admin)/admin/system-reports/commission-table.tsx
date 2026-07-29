@@ -5,7 +5,8 @@
  * scroll แนวนอนในกล่องตัวเอง (overflow-x-auto) ไม่ดันทั้งหน้า (responsive กับ sidebar).
  */
 import { Link } from "@/i18n/navigation";
-import type { CommissionReport } from "@/lib/admin/sales-commission-report";
+import { COMMISSION_PAGE_SIZE, type CommissionReport } from "@/lib/admin/sales-commission-report";
+import { Pagination } from "./pagination";
 
 const HEADERS = [
   "วันที่ชำระเงิน",
@@ -22,7 +23,7 @@ const HEADERS = [
   "ส่วนลด",
   "ค่าคอมมิชชั่น",
   "รหัสสมาชิก",
-  "ชื่อ-นามสกุล",
+  "สลิปการชำระ",
 ];
 
 const fmt = (n: number, dp: number) =>
@@ -33,7 +34,7 @@ function transportChip(mode: string, label: string) {
   const cls =
     mode === "2" ? "bg-emerald-500" : mode === "3" ? "bg-sky-500" : "bg-blue-500";
   return (
-    <span className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium text-white ${cls}`}>
+    <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium text-white ${cls}`}>
       {label}
     </span>
   );
@@ -42,13 +43,19 @@ function transportChip(mode: string, label: string) {
 export function CommissionTable({
   report,
   repName,
+  page = 1,
 }: {
   report: CommissionReport;
   repName: string;
+  page?: number;
 }) {
   const { rows, totals, rangeStart, rangeEnd } = report;
   const th = "border border-white/25 px-2 py-2 text-left font-semibold whitespace-nowrap";
   const td = "border border-border/50 px-2 py-1 align-top";
+
+  const totalPages = Math.max(1, Math.ceil(totals.count / COMMISSION_PAGE_SIZE));
+  const rangeFrom = totals.count === 0 ? 0 : (page - 1) * COMMISSION_PAGE_SIZE + 1;
+  const rangeTo = (page - 1) * COMMISSION_PAGE_SIZE + rows.length;
 
   return (
     <section className="space-y-2">
@@ -59,6 +66,11 @@ export function CommissionTable({
           ผลลัพธ์การค้นหา ตั้งแต่วันที่ : {rangeStart} - {rangeEnd}
         </span>
         <span className="text-muted">({totals.count} รายการ)</span>
+        {totals.count > rows.length && (
+          <span className="text-amber-600">
+            · แสดง {rangeFrom}–{rangeTo} · หน้า {page}/{totalPages} (ยอดรวมคิดจากทั้งหมด)
+          </span>
+        )}
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-border">
@@ -114,13 +126,29 @@ export function CommissionTable({
                   <td className={`${td} text-right whitespace-nowrap`}>{fmt(r.discount, 2)}</td>
                   <td className={`${td} text-right text-muted`}>—</td>
                   <td className={`${td} whitespace-nowrap`}>{r.memberCode}</td>
-                  <td className={`${td} whitespace-nowrap`}>{r.customerName || "-"}</td>
+                  <td className={`${td} whitespace-nowrap`}>
+                    {r.walletHsId != null ? (
+                      <a
+                        href={`/admin/wallet/${r.walletHsId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-medium text-primary-600 hover:underline"
+                        title="เปิดดูสลิปการชำระ (ตรวจว่าลูกค้าจ่ายจริง)"
+                      >
+                        ดูสลิป
+                      </a>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
+
+      <Pagination page={page} totalPages={totalPages} />
     </section>
   );
 }

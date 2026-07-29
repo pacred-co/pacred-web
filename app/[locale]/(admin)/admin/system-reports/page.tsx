@@ -8,7 +8,7 @@
  */
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageHeader } from "@/components/admin/page-header";
-import { getActiveSalesReps } from "@/lib/admin/sales-roster";
+import { getActiveSalesReps, getActiveCsReps } from "@/lib/admin/sales-roster";
 import { getSalesCommissionReport } from "@/lib/admin/sales-commission-report";
 import { ReportFilters } from "./report-filters";
 import { CommissionTable } from "./commission-table";
@@ -23,7 +23,13 @@ export default async function SystemReportsPage({
   await requireAdmin();
   const sp = await searchParams;
 
-  const reps = await getActiveSalesReps();
+  // ผู้รับผิดชอบ = รายชื่อตาม "ตำแหน่ง" — เซลล์/Cs มี roster จริง (tb_admin flags)
+  // ตำแหน่งอื่น (สั่งซื้อ/คนขับ/โกดัง) ยังไม่มี roster → ว่างไว้ก่อน (รายงานยังขึ้น "กำลังทำต่อ")
+  const [salesReps, csReps] = await Promise.all([getActiveSalesReps(), getActiveCsReps()]);
+  const reps = [
+    ...salesReps.map((r) => ({ position: "sales", id: r.adminID, name: r.name })),
+    ...csReps.map((r) => ({ position: "cs", id: r.adminID, name: r.name })),
+  ];
 
   // default range = the current calendar month (1st → last day)
   const now = new Date();
@@ -38,20 +44,23 @@ export default async function SystemReportsPage({
   const rep = sp.rep ?? "";
   const dateFrom = sp.from ?? defaultFrom;
   const dateTo = sp.to ?? defaultTo;
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const isCommissionSales = type === "commission" && position === "sales";
-  const report =
-    isCommissionSales && rep
-      ? await getSalesCommissionReport({ position: "sales", repId: rep, dateFrom, dateTo })
-      : null;
-  const repName = reps.find((r) => r.adminID === rep)?.name ?? "";
+  // rep ว่าง = "ทั้งหมด" → ดึงทุกเซลล์รวมกัน (ไม่ต้องเลือกก่อน)
+  const report = isCommissionSales
+    ? await getSalesCommissionReport({ position: "sales", repId: rep, dateFrom, dateTo, page })
+    : null;
+  const repName = rep
+    ? (reps.find((r) => r.position === position && r.id === rep)?.name ?? "")
+    : "ทั้งหมด";
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
       <PageHeader eyebrow="REPORTS" title="ออกรายงานระบบ" subtitle="เลือกตัวกรองเพื่อออกรายงาน" />
 
       <ReportFilters
-        reps={reps.map((r) => ({ id: r.adminID, name: r.name }))}
+        reps={reps}
         curType={type}
         curPosition={position}
         curRep={rep}
@@ -59,13 +68,7 @@ export default async function SystemReportsPage({
         curTo={dateTo}
       />
 
-      {report && <CommissionTable report={report} repName={repName} />}
-
-      {isCommissionSales && !rep && (
-        <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-8 text-center text-sm text-muted">
-          เลือก <span className="font-medium text-foreground">ผู้รับผิดชอบ (เซลล์)</span> + ปี/เดือน แล้วกด “ค้นหาข้อมูล”
-        </div>
-      )}
+      {report && <CommissionTable report={report} repName={repName} page={page} />}
 
       {type === "commission" && position !== "sales" && (
         <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-8 text-center text-sm text-muted">
