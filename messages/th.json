@@ -3153,6 +3153,7 @@
       "taxInvoice": "เปิดใบกำกับภาษี",
       "domesticShipping": "ขนส่งภายในประเทศ"
     },
+    "systemReports": "ออกรายงานระบบ",
     "workspaceNav": {
       "booking": {
         "title": "Booking",

@@ -1399,6 +1399,16 @@ const blockWorkspaceList: MenuItem = {
   ],
 };
 
+/** ออกรายงานระบบ (System Reports) — ปอน 2026-07-28 · แถบใหม่ แยกเป็น section
+ *  ของตัวเอง (ไม่รวมกับ Additional Services) · ชื่อไม่ซ้ำกับ "ออกรายงาน"
+ *  (itemReportsAll) เดิม. Blank scaffold ที่ /admin/system-reports ให้ ปอน
+ *  ทำต่อ ("ขึ้นแถบเฉยๆ · หน้าเปล่าๆ"). */
+const itemSystemReports: MenuItem = {
+  labelKey: "systemReports",
+  href: "/admin/system-reports",
+  icon: "BarChart3",
+};
+
 const menuSuper: MenuSection[] = [
   // 2026-06-10 (ปอน) — "แดชบอร์ดผู้บริหาร" + "Inbox งานของฉัน" promoted to
   // top-level next to Dashboard (cockpit above inbox).
@@ -2500,6 +2510,21 @@ function withWorkspaceLanding(sections: MenuSection[]): MenuSection[] {
   if (sections.length === 0) return [{ header: "", items: [itemWorkspace] }];
   const [first, ...rest] = sections;
   return [{ ...first, items: [itemWorkspace, ...first.items] }, ...rest];
+}
+
+/** ออกรายงานระบบ — ULTRA-ONLY section (owner ปอน 2026-07-29). Deliberately NOT baked
+ *  into menuSuper (that array is shared by super/normies too) — injected here ONLY
+ *  when the role set includes `ultra`, so super/normies never see it. Applied in
+ *  admin-sidebar.tsx to the resolved sections (covers menuForStaffer + menuShowAll). */
+const reportsSection: MenuSection = { header: "Reports", items: [itemSystemReports] };
+
+export function withUltraReports(sections: MenuSection[], roles: AdminRole[]): MenuSection[] {
+  if (!roles.includes("ultra")) return sections;
+  if (sections.some((s) => s.items.some((it) => it.href === itemSystemReports.href))) return sections;
+  const idx = sections.findIndex((s) => s.header === learningSection.header);
+  return idx === -1
+    ? [...sections, reportsSection]
+    : [...sections.slice(0, idx), reportsSection, ...sections.slice(idx)];
 }
 
 /** The role whose menu is being shown — for the sidebar role badge. */
