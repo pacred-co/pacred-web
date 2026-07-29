@@ -2,9 +2,9 @@
  * /admin/system-reports — "ออกรายงานระบบ" (System Reports)
  * 2026-07-28 (ปอน) — nav entry in lib/admin/sidebar-menu.ts (itemSystemReports ·
  * menuSuper "Reports" section, separate from Additional Services).
- * 2026-07-29 (ปอน) — ประเภทรายงาน "ค่าคอมมิชชั่น" · ตำแหน่ง "เซลล์" → per-order
- * commission dataset (ตามภาพ legacy · แบ่งเดือนตามวันลูกค้าจ่ายจริง). ค่าคอมมิชชั่น
- * ยังไม่คำนวณ (ปอน สั่ง) · ตำแหน่งอื่น/cs = ทำต่อ.
+ * 2026-07-29 (ปอน) — ประเภทรายงาน "ค่าคอมมิชชั่น" · ตำแหน่ง "เซลล์" + "Cs" → per-order
+ * commission dataset (ตามภาพ legacy · แบ่งเดือนตามวันลูกค้าจ่ายจริง · เซลล์=adminIDSale ·
+ * Cs=adminIDCS). ค่าคอมมิชชั่นยังไม่คำนวณ (ปอน สั่ง) · ตำแหน่งอื่น (สั่งซื้อ/คนขับ/โกดัง) = ทำต่อ.
  */
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageHeader } from "@/components/admin/page-header";
@@ -46,14 +46,19 @@ export default async function SystemReportsPage({
   const dateTo = sp.to ?? defaultTo;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
-  const isCommissionSales = type === "commission" && position === "sales";
-  // rep ว่าง = "ทั้งหมด" → ดึงทุกเซลล์รวมกัน (ไม่ต้องเลือกก่อน)
-  const report = isCommissionSales
-    ? await getSalesCommissionReport({ position: "sales", repId: rep, dateFrom, dateTo, page })
-    : null;
+  const isCommission = type === "commission";
+  // รองรับ เซลล์ + Cs (data layer แยก attrField adminIDSale/adminIDCS ให้แล้ว)
+  const commissionPosition: "sales" | "cs" | null =
+    position === "sales" ? "sales" : position === "cs" ? "cs" : null;
+  // rep ว่าง = "ทั้งหมด" → ดึงทุกคนของตำแหน่งนั้นรวมกัน (ไม่ต้องเลือกก่อน)
+  const report =
+    isCommission && commissionPosition
+      ? await getSalesCommissionReport({ position: commissionPosition, repId: rep, dateFrom, dateTo, page })
+      : null;
   const repName = rep
     ? (reps.find((r) => r.position === position && r.id === rep)?.name ?? "")
     : "ทั้งหมด";
+  const positionLabel = position === "cs" ? "Cs" : "เซลล์";
 
   return (
     <div className="p-6 lg:p-8 space-y-6">
@@ -68,11 +73,14 @@ export default async function SystemReportsPage({
         curTo={dateTo}
       />
 
-      {report && <CommissionTable report={report} repName={repName} page={page} />}
+      {report && (
+        <CommissionTable report={report} repName={repName} page={page} positionLabel={positionLabel} />
+      )}
 
-      {type === "commission" && position !== "sales" && (
+      {isCommission && !commissionPosition && (
         <div className="rounded-xl border border-dashed border-border/60 bg-muted/20 p-8 text-center text-sm text-muted">
-          ตอนนี้รองรับเฉพาะตำแหน่ง <span className="font-medium text-foreground">“เซลล์”</span> ก่อน — ตำแหน่งอื่นกำลังทำต่อ
+          ตอนนี้รองรับตำแหน่ง <span className="font-medium text-foreground">“เซลล์”</span> และ{" "}
+          <span className="font-medium text-foreground">“Cs”</span> — ตำแหน่งอื่นกำลังทำต่อ
         </div>
       )}
     </div>
