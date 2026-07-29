@@ -45,15 +45,35 @@ import { parseYiwuPackingXlsx } from "@/lib/admin/yiwu-packing-xlsx-parser";
 import { detectPackingFormat, type PackingFormat } from "@/lib/admin/packing-xlsx-dispatch";
 import { baseTrackingOf } from "@/lib/admin/momo-raw-helpers";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
-import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
+import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { createMissingMomoForwarderRow } from "./momo-add-missing";
+import {
+  buildPackingTruthMap,
+  type PackingContainerLine,
+  type RawPackingSnapshotRow,
+} from "@/lib/admin/momo-container-truth";
+import { loadContainerTruthFor, describeContainerTruth, type ContainerTruthHint } from "@/lib/admin/container-truth-loader";
+import {
+  isNonParcelPackingRow,
+  describeMissingCreatable,
+  decideContainerWrite,
+  containerWriteNote,
+  overlayPackingLines,
+  type ContainerWriteAction,
+  type NonParcelReason,
+} from "@/lib/admin/packing-upload-plan";
 
 // base64 of a ≤~35MB file (~47MB base64) sits under the 50mb serverActions body limit.
 // createMissingBases = the OPT-IN allowlist of missing bases the admin ticked "สร้าง".
+// uploadId = the momo_packing_upload row THIS file was recorded as (owner 2026-07-30):
+//   the apply stamps EXACTLY that history row "ใช้แล้ว" instead of every 'uploaded'
+//   row of the container (prod has 10 containers with 2-3 uploads each → the old
+//   blanket stamp made the history unable to say which file was actually applied).
 const schema = z.object({
   fileBase64: z.string().min(1).max(70_000_000),
   createMissingBases: z.array(z.string().max(60)).max(500).optional(),
+  uploadId: z.number().int().positive().optional(),
 });
 
 const BILLED = new Set(["5", "6", "7"]);
@@ -116,12 +136,32 @@ export type MomoPackingPreviewRow = {
   isBilled: boolean;           // matched but EVERY sibling is billed (frozen)
   statusStale: boolean;        // real container but a non-billed sibling still 1/2
   willAdvanceTo: string | null; // "3" when ≥1 non-billed sibling is early
+  /** writeFid's fcabinet_locked (mig 0150) — the cabinet write guard reads it */
+  cabinetLocked: boolean;
   // diff + verdict
   wtDiff: boolean;
   volDiff: boolean;
   cabDiff: boolean;
   amtDiff: boolean;
-  verdict: "ok" | "update" | "box_short" | "billed" | "missing" | "multi_row";
+  /**
+   * `cab_diff`   = ตู้เท่านั้นที่ต่าง (owner 2026-07-30 — เดิมโดนตีเป็น "🟡 น้ำหนัก/คิวต่าง"
+   *                ซึ่งเป็นเหตุผลผิด และไม่มีที่ไหนบนจอบอกเลยว่าตู้ไม่ตรง)
+   * `not_parcel` = แถวนี้ไม่ใช่พัสดุ (หัวตารางที่ติดมาในไฟล์ / เลขกระสอบ CBX) → เลิกนับเป็น 🔴 ไม่พบ
+   */
+  verdict: "ok" | "update" | "box_short" | "cab_diff" | "billed" | "missing" | "multi_row" | "not_parcel";
+  /** เหตุผลว่าทำไมไม่ใช่พัสดุ (verdict = not_parcel) */
+  nonParcelReason: NonParcelReason | null;
+  /** ข้อความไทยของ not_parcel */
+  nonParcelNote: string | null;
+  /** 🔴 ไม่พบ: null = สร้างได้ · มีข้อความ = สร้างไม่ได้เพราะเหตุนี้ */
+  createBlockedReason: string | null;
+  // ── "ตู้ไหนกันแน่" (SOT lib/admin/momo-container-truth ผ่าน container-truth-loader) ──
+  /** คำตอบพร้อมแสดง (null = โหลด SOT ไม่ได้ → พฤติกรรมเดิม) */
+  containerHint: ContainerTruthHint | null;
+  /** apply จะทับ fcabinetnumber หรือไม่ (ตัวเดียวกันทั้งจอและ apply) */
+  containerAction: ContainerWriteAction;
+  /** ข้อความไทยเมื่อ apply จะไม่ทับเลขตู้ */
+  containerNote: string | null;
 };
 
 export type MomoPackingPreview = {
@@ -136,12 +176,17 @@ export type MomoPackingPreview = {
   rows: MomoPackingPreviewRow[];
   summary: {
     total: number;
-    willUpdate: number;    // non-billed writable rows (update + box_short)
+    willUpdate: number;    // non-billed writable rows (update + box_short + cab_diff)
     boxShort: number;      // 🟠 system under-counts boxes/weight
+    cabDiff: number;       // 🔵 เลขตู้ไม่ตรงกับไฟล์ (นับทุกแถวที่เขียนได้ ไม่ใช่แค่ cab-only)
+    cabOnly: number;       // ในนั้น กี่แถวที่ "ตู้" เป็นความต่างเดียว (verdict cab_diff)
+    cabSkipped: number;    // 🔵 ตู้ไม่ตรงแต่ apply จะไม่ทับ (ของอยู่ตู้อื่น / ชี้ไม่ได้)
     willAdvance: number;   // non-billed sibling fids that will move 1/2 → 3
     billedDiffer: number;  // 🔒 fully-billed rows (skipped)
     alreadyOk: number;
     missing: number;       // 🔴 in the file but not in tb_forwarder
+    missingCreatable: number; // ในนั้น กี่แถวที่กด "สร้าง" ได้จริง (รหัสเป็น PR)
+    notParcel: number;     // ⬜ หัวตารางในไฟล์ / เลขกระสอบ — ไม่ใช่พัสดุ
     multiRow: number;      // 🟣 split shipment (>1 non-billed) — never auto-write
     statusStale: number;   // 📦 real container but a sibling still early
   };
@@ -155,9 +200,56 @@ type FwdRow = {
   fvolume: number | string | null;
   famount: number | string | null;
   fcabinetnumber: string | null;
+  fcabinet_locked: boolean | null;
   ftransporttype: string | null;
   userid: string | null;
 };
+
+/**
+ * "ตู้ไหนกันแน่" — โหลดคำตอบจาก SOT ให้ base ทุกตัวในไฟล์.
+ *
+ * ยึด **สมองเดียวกับหน้าตรวจต้นทุน MOMO** (`lib/admin/momo-container-truth` +
+ * `container-truth-loader`) เพื่อไม่ให้แต่ละหน้าตอบ "ตู้ไม่ตรง" คนละอย่าง.
+ *
+ * ทำไมไม่เรียก `loadPackingTruthMap` ตรงๆ: มันดึง `parsed_snapshot` ทั้งก้อน (รวม rawGrid
+ * ถึง 3,000 แถว/ไฟล์) — ที่นี่ขอเฉพาะ `->rows` (prod: 349KB/138ms → 145KB/64ms) แล้วป้อน
+ * `buildPackingTruthMap` ตัวเดียวกันของ SOT = ไม่มี logic ซ้อน แค่ I/O แคบลง.
+ *
+ * แล้ว **overlay ไฟล์ที่กำลังพรีวิว** ทับตู้เดียวกัน — ไฟล์ที่เพิ่งลากเข้ามาอาจยังไม่ถูก
+ * บันทึกลงประวัติ (ฝั่งจอบันทึกแบบ fire-and-forget) → ถ้าไม่ overlay จะตอบ "ยังไม่มี
+ * แพคกิ้งลิส" ทั้งที่คนกำลังมองแพคกิ้งลิสอยู่.
+ *
+ * READ-ONLY · fail-soft: พังแล้วคืนแผนที่ว่าง → ไม่มี hint → พฤติกรรมเดิมทุกอย่าง.
+ */
+async function loadContainerTruth(
+  admin: ReturnType<typeof createAdminClient>,
+  container: string | null,
+  fileRows: Array<{ baseTracking: string; boxes: number | null; weight: number | null; cbm: number | null; subCount: number; cg: string | null }>,
+): Promise<Awaited<ReturnType<typeof loadContainerTruthFor>>> {
+  const bases = fileRows.map((r) => r.baseTracking).filter(Boolean);
+  if (bases.length === 0) return new Map();
+  try {
+    const { data, error } = await admin
+      .from("momo_packing_upload")
+      .select("container_no, rows:parsed_snapshot->rows")
+      .not("container_no", "is", null)
+      .neq("container_no", "")
+      .order("uploaded_at", { ascending: false })
+      .limit(500);
+    if (error) {
+      console.error("[momo-packing truth] packing history read failed", { code: error.code, message: error.message });
+      return new Map();
+    }
+    const dbMap: Map<string, PackingContainerLine[]> = buildPackingTruthMap(
+      ((data ?? []) as Array<{ container_no: string; rows: RawPackingSnapshotRow[] | null }>)
+        .map((f) => ({ containerNo: f.container_no, rows: Array.isArray(f.rows) ? f.rows : [] })),
+    );
+    return await loadContainerTruthFor(admin, bases, overlayPackingLines(dbMap, container, fileRows));
+  } catch (e) {
+    console.error("[momo-packing truth] threw (fail-soft)", e);
+    return new Map();
+  }
+}
 
 async function buildPreview(bytes: Uint8Array): Promise<MomoPackingPreview> {
   // อี้อู(Yiwu) vs กวางโจว(MOMO) auto-detect from the bytes. Yiwu flows through this SAME
@@ -181,7 +273,7 @@ async function buildPreview(bytes: Uint8Array): Promise<MomoPackingPreview> {
   if (candidates.length > 0) {
     const { data, error } = await admin
       .from("tb_forwarder")
-      .select("id, ftrackingchn, fstatus, fweight, fvolume, famount, fcabinetnumber, ftransporttype, userid")
+      .select("id, ftrackingchn, fstatus, fweight, fvolume, famount, fcabinetnumber, fcabinet_locked, ftransporttype, userid")
       .in("ftrackingchn", candidates)
       .limit(5000);
     if (error) console.error("[momo-packing match] failed", { code: error.code, message: error.message });
@@ -197,6 +289,20 @@ async function buildPreview(bytes: Uint8Array): Promise<MomoPackingPreview> {
   // The container is meta-level (every parcel row inherits it) — derive the mode once.
   const container = parsed.container;
   const containerMode = container ? resolveTransportMode(container, null) : null;
+
+  // "ตู้ไหนกันแน่" — ONE lookup for the whole file (fail-soft: empty map = old behaviour).
+  const truthByBase = await loadContainerTruth(
+    admin,
+    container,
+    parsed.aggregated.map((a) => ({
+      baseTracking: a.baseTracking,
+      boxes: a.parcelCount,
+      weight: a.totalWeight,
+      cbm: a.totalCbm,
+      subCount: a.subTrackings.length,
+      cg: a.cg,
+    })),
+  );
 
   const rows: MomoPackingPreviewRow[] = parsed.aggregated.map((a) => {
     const siblings = sysByBase.get(a.baseTracking) ?? [];
@@ -222,10 +328,34 @@ async function buildPreview(bytes: Uint8Array): Promise<MomoPackingPreview> {
     const curCab = primary?.fcabinetnumber ?? null;
     const isBilled = matched && nonBilled.length === 0;
 
+    // ── "ตู้ไหนกันแน่" ต่อแถว (ยึด writeFid — แถวที่ apply จะเขียนจริง) ──
+    const hint = truthByBase.has(a.baseTracking)
+      ? describeContainerTruth(truthByBase.get(a.baseTracking), writeFid, curCab)
+      : null;
+    const containerAction = decideContainerWrite({
+      fileContainer: container,
+      shouldBe: hint?.shouldBe ?? null,
+      multiContainer: hint?.multiContainer ?? false,
+    });
+    const containerNote = containerWriteNote(containerAction, {
+      fileContainer: container,
+      shouldBe: hint?.shouldBe ?? null,
+      packingCabinets: hint?.packingCabinets ?? [],
+    });
+
+    // ⬜ แถวที่ไม่ใช่พัสดุ (หัวตารางที่ติดมาในไฟล์ / เลขกระสอบ CBX) — ตรวจเฉพาะแถวที่
+    // จับคู่กับระบบไม่ได้ (จับคู่ได้ = มีของจริงในระบบ ห้ามตีว่าไม่ใช่พัสดุ).
+    const nonParcel = matched
+      ? { nonParcel: false as const }
+      : isNonParcelPackingRow({
+          baseTracking: a.baseTracking, code: a.code,
+          boxes: a.parcelCount, weight: a.totalWeight, cbm: a.totalCbm,
+        });
+
     let verdict: MomoPackingPreviewRow["verdict"];
     let wtDiff = false, volDiff = false, cabDiff = false, amtDiff = false;
     if (!matched) {
-      verdict = "missing";
+      verdict = nonParcel.nonParcel ? "not_parcel" : "missing";
     } else if (isBilled) {
       verdict = "billed";
     } else if (nonBilled.length > 1) {
@@ -238,12 +368,17 @@ async function buildPreview(bytes: Uint8Array): Promise<MomoPackingPreview> {
       const boxShort =
         (a.parcelCount != null && curAmt != null && curAmt < a.parcelCount) ||
         (a.totalWeight != null && (curWt == null || curWt + WT_EPS < a.totalWeight));
-      const anyDiff = wtDiff || volDiff || cabDiff || amtDiff;
-      verdict = boxShort ? "box_short" : anyDiff ? "update" : "ok";
+      const measureDiff = wtDiff || volDiff || amtDiff;
+      // owner 2026-07-30 — ตู้ไม่ตรง ต้องมีผลของตัวเอง ห้ามไปโผล่เป็น "🟡 น้ำหนัก/คิวต่าง"
+      // (เดิม cabDiff ถูกยุบรวมใน anyDiff → ป้ายบอกเหตุผลผิด และไม่มีที่ไหนบอกว่าตู้ต่าง).
+      // ⚠️ ชุดแถวที่ถูกเขียน (update|box_short|cab_diff) ต้องเท่าเดิมเป๊ะ = ไม่มีเงินเปลี่ยน.
+      verdict = boxShort ? "box_short" : measureDiff ? "update" : cabDiff ? "cab_diff" : "ok";
     }
 
     const statusStale = matched && !!container && advanceFids.length > 0;
     const willAdvanceTo = advanceFids.length > 0 ? "3" : null;
+    const createBlocked =
+      verdict === "missing" ? describeMissingCreatable({ code: a.code }) : ({ creatable: true } as const);
 
     return {
       baseTracking: a.baseTracking,
@@ -277,8 +412,16 @@ async function buildPreview(bytes: Uint8Array): Promise<MomoPackingPreview> {
       isBilled,
       statusStale,
       willAdvanceTo,
+      cabinetLocked:
+        (nonBilled.find((s) => s.id === writeFid)?.fcabinet_locked ?? primary?.fcabinet_locked ?? false) === true,
       wtDiff, volDiff, cabDiff, amtDiff,
       verdict,
+      nonParcelReason: nonParcel.nonParcel ? nonParcel.reason : null,
+      nonParcelNote: nonParcel.nonParcel ? nonParcel.message : null,
+      createBlockedReason: createBlocked.creatable ? null : createBlocked.reason,
+      containerHint: hint,
+      containerAction,
+      containerNote,
     };
   });
 
@@ -294,16 +437,33 @@ async function buildPreview(bytes: Uint8Array): Promise<MomoPackingPreview> {
     rows,
     summary: {
       total: rows.length,
-      willUpdate: rows.filter((r) => r.verdict === "update" || r.verdict === "box_short").length,
+      willUpdate: rows.filter(isWritableVerdict).length,
       boxShort: rows.filter((r) => r.verdict === "box_short").length,
+      // 🔵 นับ "ตู้ไม่ตรง" ทุกแถวที่ apply แตะได้ (ไม่ใช่แค่แถวที่ตู้เป็นความต่างเดียว) —
+      // ตัวเลขบนชิปจึงตอบตรงคำถาม "มีกี่แถวที่เลขตู้มีปัญหา".
+      cabDiff: rows.filter((r) => isWritableVerdict(r) && r.cabDiff).length,
+      cabOnly: rows.filter((r) => r.verdict === "cab_diff").length,
+      cabSkipped: rows.filter(
+        (r) => isWritableVerdict(r) && r.cabDiff && r.containerAction !== "write" && r.containerAction !== "none",
+      ).length,
       willAdvance: rows.reduce((n, r) => n + r.advanceFids.length, 0),
       billedDiffer: rows.filter((r) => r.verdict === "billed").length,
       alreadyOk: rows.filter((r) => r.verdict === "ok").length,
       missing: rows.filter((r) => r.verdict === "missing").length,
+      missingCreatable: rows.filter((r) => r.verdict === "missing" && !r.createBlockedReason).length,
+      notParcel: rows.filter((r) => r.verdict === "not_parcel").length,
       multiRow: rows.filter((r) => r.verdict === "multi_row").length,
       statusStale: rows.filter((r) => r.statusStale).length,
     },
   };
+}
+
+/**
+ * แถวที่ apply จะเขียนค่าลง tb_forwarder — **ชุดเดียวกับก่อนแยก `cab_diff` ออกมา**
+ * (เดิม cab-only ถูกตีเป็น `update` และถูกเขียนอยู่แล้ว) → ไม่มีเงินเปลี่ยนจากการแยกป้าย.
+ */
+function isWritableVerdict(r: Pick<MomoPackingPreviewRow, "verdict">): boolean {
+  return r.verdict === "update" || r.verdict === "box_short" || r.verdict === "cab_diff";
 }
 
 /** Read-only preview — parse + aggregate + match + diff. NO writes. */
@@ -322,7 +482,7 @@ export async function previewMomoPacking(input: unknown): Promise<AdminActionRes
 }
 
 export type MomoPackingApplyResult = {
-  updated: number;        // rows whose measurement basis was written (update + box_short)
+  updated: number;        // rows whose measurement basis was written (update + box_short + cab_diff)
   boxShort: number;       // of those, how many were box-short under-counts
   repriced: number;       // of the basis writes, how many had the SELL price re-derived
   repriceFailed: number;  // basis written but no rate card → set price manually
@@ -333,6 +493,12 @@ export type MomoPackingApplyResult = {
   skippedBilled: number;  // 🔒 fully-billed rows, left frozen
   multiRow: number;       // 🟣 split shipments — basis never auto-written
   notFound: number;       // 🔴 in the file but not created (not opted-in)
+  notParcel: number;      // ⬜ หัวตารางในไฟล์ / เลขกระสอบ — ไม่ใช่พัสดุ (ข้าม)
+  cabinetWritten: number;      // 🔵 เลขตู้ที่เขียนจริง
+  cabinetSkippedOther: number; // 🔵 ไม่ทับ เพราะแพคกิ้งบอกว่าของอยู่ตู้อื่น
+  cabinetSkippedUnsure: number;// 🔵 ไม่ทับ เพราะชิปเม้นแยกหลายตู้แต่ชี้ไม่ได้
+  cabinetRefused: number;      // 🔒 ไม่ทับ เพราะ cabinetWriteGuard ปฏิเสธ (ล็อกเลขตู้ / ไม่ใช่เลขตู้)
+  cabinetRefusedReasons: string[]; // เหตุผลรายแถว (ตัดที่ 10 แถวสำหรับแสดง)
   total: number;
   warnings: string[];
 };
@@ -366,11 +532,13 @@ export async function applyMomoPacking(input: unknown): Promise<AdminActionResul
 
     let updated = 0, boxShort = 0, repriced = 0, repriceFailed = 0, advanced = 0;
     let created = 0, createSkipped = 0, createFailed = 0;
+    let cabinetWritten = 0, cabinetSkippedOther = 0, cabinetSkippedUnsure = 0, cabinetRefused = 0;
+    const cabinetRefusedReasons: string[] = [];
     const repriceFailedTracks: string[] = [];
 
-    // ── Loop 1: BASIS write (non-billed · update|box_short · single target) + reprice ──
+    // ── Loop 1: BASIS write (non-billed · update|box_short|cab_diff · single target) + reprice ──
     for (const r of preview.rows) {
-      if (r.verdict !== "update" && r.verdict !== "box_short") continue;
+      if (!isWritableVerdict(r)) continue;
       if (r.writeFid == null) continue; // multi_row / no single target → never write
       const transport = r.container ? resolveTransportMode(r.container, null) : null;
       const updates: Record<string, unknown> = { famountcount: "1" };
@@ -382,10 +550,32 @@ export async function applyMomoPacking(input: unknown): Promise<AdminActionResul
       if (r.packingWidth != null)  updates.fwidth  = r.packingWidth;
       if (r.packingLength != null) updates.flength = r.packingLength;
       if (r.packingHeight != null) updates.fheight = r.packingHeight;
-      // 🔒 cabinet tier guard (owner 2026-07-20) — a sack (CBX…)/MOMO-placeholder id
-      // in the file must never land at the ตู้ tier (TTW ตู้ ids pass as-sent).
-      if (r.container && !isNonContainerCabinetId(r.container)) updates.fcabinetnumber = r.container;
-      if (transport) updates.ftransporttype = transport;
+      // ── 🔒 เลขตู้ (owner 2026-07-30) ───────────────────────────────────────
+      // (1) ยึด SOT "ตู้ไหนกันแน่": ถ้าแพคกิ้งบอกว่าแถวนี้อยู่ตู้อื่น หรือชิปเม้นแยกหลายตู้
+      //     แต่ชี้ไม่ได้ → **ไม่ทับ** (กันทับงานที่เพิ่ง data-fix + กันประทับตู้เดียวให้ทั้ง
+      //     ครอบครัวที่ MOMO แยกส่งจริง = ต้นเหตุอาการ "ตู้ไม่ตรงแปลกๆ").
+      // (2) แล้วผ่าน `cabinetWriteGuard` ตัวเดียวกับทุก write path — เดิมพาธนี้เช็คแค่
+      //     `isNonContainerCabinetId` จึง **ลอด fcabinet_locked (mig 0150)** ไปได้.
+      //     ไม่ส่ง isGod: การเขียนเป็นก้อนแบบนี้ห้าม override ล็อก (ให้คนไปแก้รายแถว).
+      let cabinetOk = false;
+      if (r.container && r.containerAction === "write") {
+        const cabGuard = cabinetWriteGuard({ next: r.container, current: r.curCab, locked: r.cabinetLocked });
+        if (cabGuard.ok) {
+          cabinetOk = true;
+          if (r.cabDiff) cabinetWritten += 1;
+          updates.fcabinetnumber = r.container;
+        } else {
+          cabinetRefused += 1;
+          cabinetRefusedReasons.push(`${r.baseTracking}: ${cabGuard.reason}`);
+        }
+      } else if (r.containerAction === "skip_conflict") {
+        cabinetSkippedOther += 1;
+      } else if (r.containerAction === "skip_ambiguous") {
+        cabinetSkippedUnsure += 1;
+      }
+      // ftransporttype มาจาก "ตู้" ตัวเดียวกัน → ถ้าไม่เชื่อเลขตู้ของไฟล์สำหรับแถวนี้ ก็ห้าม
+      // เขียนโหมดขนส่งที่ derive จากมันด้วย (โหมดเป็นตัวเลือกคอลัมน์เรทต้นทุน เรือ/รถ).
+      if (transport && cabinetOk) updates.ftransporttype = transport;
 
       // TOCTOU: re-assert non-billed in the WHERE so a row billed between preview and
       // apply is never overwritten.
@@ -495,24 +685,64 @@ export async function applyMomoPacking(input: unknown): Promise<AdminActionResul
     // Audit P2 (2026-07-18) — stamp the upload-history row so it distinguishes
     // "uploaded only (previewed)" from "APPLIED to tb_forwarder". The client
     // records the upload at PREVIEW time (status='uploaded'); this closes the loop
-    // on APPLY. Match the newest still-'uploaded' row for this container. Best-effort.
+    // on APPLY. Best-effort (never fails the apply).
+    //
+    // 🔴 owner 2026-07-30 — stamp EXACTLY ONE row. The old statement had no
+    // `.order()/.limit(1)` despite its comment claiming "the newest", so a container
+    // uploaded several times (prod: 10 containers · GZS260718-1 อัพ 3 รอบ) had ALL its
+    // 'uploaded' rows flipped to ✓ ใช้แล้ว → the history could no longer say which file
+    // was actually applied. Prefer the uploadId the client recorded for THIS file;
+    // otherwise fall back to the newest still-'uploaded' row of the container.
     if (containerNo) {
-      const { error: appliedErr } = await admin
-        .from("momo_packing_upload")
-        .update({ applied_at: new Date().toISOString(), status: "applied" })
-        .eq("container_no", containerNo)
-        .eq("status", "uploaded");
-      if (appliedErr) console.error("[momo-packing apply] applied_at stamp failed", { container: containerNo, code: appliedErr.code, message: appliedErr.message });
+      let stampId: number | null = null;
+      if (parsed.data.uploadId != null) {
+        // Guard the id against the container + status so a stale/foreign id can never
+        // stamp another container's row.
+        const { data: own, error: ownErr } = await admin
+          .from("momo_packing_upload")
+          .select("id")
+          .eq("id", parsed.data.uploadId)
+          .eq("container_no", containerNo)
+          .eq("status", "uploaded")
+          .maybeSingle<{ id: number }>();
+        if (ownErr) console.error("[momo-packing apply] uploadId lookup failed", { uploadId: parsed.data.uploadId, code: ownErr.code, message: ownErr.message });
+        stampId = own?.id ?? null;
+      }
+      if (stampId == null) {
+        const { data: newest, error: pickErr } = await admin
+          .from("momo_packing_upload")
+          .select("id")
+          .eq("container_no", containerNo)
+          .eq("status", "uploaded")
+          .order("uploaded_at", { ascending: false })
+          .order("id", { ascending: false })
+          .limit(1)
+          .maybeSingle<{ id: number }>();
+        if (pickErr) console.error("[momo-packing apply] newest-upload lookup failed", { container: containerNo, code: pickErr.code, message: pickErr.message });
+        stampId = newest?.id ?? null;
+      }
+      if (stampId != null) {
+        const { error: appliedErr } = await admin
+          .from("momo_packing_upload")
+          .update({ applied_at: new Date().toISOString(), status: "applied" })
+          .eq("id", stampId)
+          .eq("status", "uploaded"); // TOCTOU — never re-stamp an already-applied row
+        if (appliedErr) console.error("[momo-packing apply] applied_at stamp failed", { uploadId: stampId, container: containerNo, code: appliedErr.code, message: appliedErr.message });
+      }
     }
 
     await logAdminAction(adminId, "momo_packing.apply", "tb_forwarder", "", {
       container: preview.container,
+      uploadId: parsed.data.uploadId ?? null,
       updated, boxShort, repriced, repriceFailed, advanced,
       created, createSkipped, createFailed,
+      cabinetWritten, cabinetSkippedOther, cabinetSkippedUnsure, cabinetRefused,
       skippedBilled: preview.summary.billedDiffer,
       multiRow: preview.summary.multiRow,
       notFound: preview.summary.missing,
+      notParcel: preview.summary.notParcel,
       repriceFailedTracks: repriceFailedTracks.slice(0, 50),
+      cabinetRefusedReasons: cabinetRefusedReasons.slice(0, 50),
     });
 
     return {
@@ -529,6 +759,12 @@ export async function applyMomoPacking(input: unknown): Promise<AdminActionResul
         skippedBilled: preview.summary.billedDiffer,
         multiRow: preview.summary.multiRow,
         notFound: preview.summary.missing - created - createSkipped,
+        notParcel: preview.summary.notParcel,
+        cabinetWritten,
+        cabinetSkippedOther,
+        cabinetSkippedUnsure,
+        cabinetRefused,
+        cabinetRefusedReasons: cabinetRefusedReasons.slice(0, 10),
         total: preview.rows.length,
         warnings: preview.warnings,
       },
