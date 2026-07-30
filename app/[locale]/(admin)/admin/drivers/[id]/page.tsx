@@ -26,11 +26,11 @@ import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "
 import {
   Truck, Clock, CheckCircle2, XCircle, MapPin, Phone,
   Package, AlertTriangle, ArrowLeft, Printer, Camera, Link2, ClipboardList, Tag, ChevronRight,
+  ReceiptText,
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
 import { routeOrderOf } from "@/lib/admin/driver-route-order";
-import { BILL_BADGE_CLASS, DriverBillViewModal } from "./driver-bill-view-modal";
 import { BatchManage, RemoveItemButton } from "./batch-manage";
 import { DriverStopCard } from "./driver-stop-card";
 import { CourierUrlInput } from "./courier-url-input";
@@ -536,45 +536,6 @@ export default async function AdminDriverBatchDetailPage({
     googleMapsHref ? `นำทางทุกจุด: ${googleMapsHref}` : "",
   ].filter((l) => l !== undefined && l !== null).join("\n");
 
-  // "ดูบิลใบเสร็จในรายการนี้" — consolidated grouped view (legacy addFromBill action=3 ·
-  // ภูม 2026-07-10). Reuses the already-loaded stops (no extra fetch).
-  const billGroups = stopsWithPhotos.map((stop) => {
-    const f = stop.forwarder;
-    const address = [
-      f.faddressno,
-      f.faddresssubdistrict ? `ตำบล/แขวง ${f.faddresssubdistrict}` : "",
-      f.faddressdistrict ? `อำเภอ/เขต ${f.faddressdistrict}` : "",
-      f.faddressprovince ? `จังหวัด ${f.faddressprovince}` : "",
-      f.faddresszipcode,
-    ].filter(Boolean).join(" ");
-    const phones = [f.faddresstel, f.faddresstel2]
-      .map((p) => (p ?? "").trim())
-      .filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
-    return {
-      key: stop.addressKey,
-      pr: f.userid ?? "—",
-      customerName: customerNameOf(f.userid),
-      carrier: shipByLabel(f.fshipby),
-      address,
-      phones,
-      items: stop.items.map(({ forwarder }, i) => ({
-        no: i + 1,
-        fid: forwarder.id,
-        orderNo: forwarder.fidorco ?? `#${forwarder.id}`,
-        pr: forwarder.userid ?? "—",
-        customerName: customerNameOf(forwarder.userid),
-        tracking: forwarder.ftrackingchn ?? "—",
-        location: forwarder.fpallet ?? "",
-        boxes: Number(forwarder.famount ?? 0),
-        weight: Number(forwarder.fweight ?? 0),
-        cbm: Number(forwarder.fvolume ?? 0),
-      })),
-      totalBoxes: stop.totalBoxes,
-      totalWeight: stop.totalWeight,
-      totalCbm: stop.totalVolume,
-    };
-  });
-
   return (
     // พื้นเทา #f4f5fa เหมือนหน้า list — กันพื้นขาวโผล่ท้ายหน้า/ใต้แถบเมนูล่างบนมือถือ
     // (ปอน 2026-07-25) · min-h กันพื้นขาวเวลาเนื้อหาสั้น
@@ -733,18 +694,6 @@ export default async function AdminDriverBatchDetailPage({
               )}
             </div>
 
-            {/* ดูบิลใบเสร็จในรายการนี้ (legacy #listBill → addFromBill action=3 · ภูม 2026-07-10).
-                ปอน 2026-07-23 — ยกขึ้นมาไว้ใต้ข้อมูลรอบ: staff เปิดดูบิลบ่อยกว่าสั่งพิมพ์มาก
-                แต่เดิมมันไปอยู่ท้ายแถวปุ่มพิมพ์ ต้องกวาดตาหา. */}
-            <div className="mt-2">
-              <DriverBillViewModal
-                groups={billGroups}
-                batchName={batch.fdname ?? `#${batch.id}`}
-                printHref={`/admin/drivers/${batch.id}/print`}
-                slipHref={`/admin/drivers/${batch.id}/delivery-slip`}
-                triggerClassName={BILL_BADGE_CLASS}
-              />
-            </div>
           </div>
 
           {/* right cluster: รูปขึ้นรถ panel (ภูม 2026-07-10) + status/countdown col */}
@@ -803,6 +752,16 @@ export default async function AdminDriverBatchDetailPage({
 
         {/* Actions row */}
         <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
+          {/* พิมพ์ใบส่งสินค้าทั้งหมดในรอบ (owner 2026-07-30) — route แตกเป็น 1 แผ่น/ที่อยู่ ·
+              เปิดแล้วกด Ctrl+P พิมพ์ทุกแผ่นทีเดียว. วางเป็นปุ่มแรกให้หาง่าย. */}
+          <Link
+            href={`/admin/drivers/${batch.id}/delivery-slip`}
+            target="_blank"
+            className={`${PRINT_BADGE_CLS} px-3 py-1.5 text-xs`}
+          >
+            <ReceiptText className="h-3.5 w-3.5" />
+            พิมพ์ใบส่งสินค้าทั้งหมด
+          </Link>
           {googleMapsHref && (
             <a
               href={googleMapsHref}

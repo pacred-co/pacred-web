@@ -1,34 +1,40 @@
+/* eslint-disable @next/next/no-img-element */
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import { ShoppingCart, Pencil, ArrowRight, ArrowLeft } from "lucide-react";
-import { CartAddUrlForm } from "./cart-add-url-form";
+import { ArrowLeft } from "lucide-react";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { CartAddMultiLink } from "./cart-add-multi-link";
 
 /**
- * `/cart/add` — "เพิ่มสินค้าในรถเข็น" — the dedicated add-a-product entry.
+ * `/cart/add` — "เพิ่มสินค้าเข้ารถเข็น" — the multi-link add-a-product entry
+ * (owner 2026-07-30 · "อยากได้แบบในภาพ" — see the approved mockup).
  *
- * Reached from the cart header CTA ("เพิ่มสินค้า" / "สั่งสินค้าเพิ่ม") and the
- * empty-cart state. A focused, centered screen whose single job is: paste a
- * 1688 / Taobao / Tmall product URL → order it.
+ * The interactive multi-link flow lives in <CartAddMultiLink> (paste up to 20
+ * links → verify all → pick qty → add the batch). It reuses the proven money
+ * path (searchProductByUrl + addCartItemsBulk → tb_cart), so this page is a
+ * thin Server Component: load the live yuan rate for the ฿ preview + render the
+ * form beside the Pacred marketing panel.
  *
- * The centered <CartAddUrlForm> submits to the real wired flow
- * (`GET /search?url=…` → product card → `addCartItem` → `tb_cart`), the same
- * mechanism the home-hero SearchBar uses. Customers without a link get a
- * secondary card into the manual-entry workflow at `/service-order/add`.
- *
- * (Earlier this route re-rendered the whole `/cart` page with an auto-focus
- * effect — a faithful 1:1 of legacy `cart.php?page=add`. The owner asked for
- * a dedicated paste-to-order screen with a prominent centered search bar, so
- * this is now its own page — a Phase-C UX improvement over the legacy, per
- * AGENTS.md §0a "we copy the working system, polish the look ourselves".)
+ * (Was a single-link paste box → /search. Kept AGENTS.md §0a: we copy the
+ * working system, polish the look ourselves.)
  */
 export const dynamic = "force-dynamic";
 
-const SUPPORTED_SITES = ["1688", "Taobao", "Tmall", "Alibaba"] as const;
-
 export default async function CartAddPage() {
   const t = await getTranslations("cartPage");
+
+  // tb_settings.rsdefault — live yuan rate for the ฿ preview (5.0 fallback =
+  // legacy default). Same load the /service-order/add page uses.
+  const admin = createAdminClient();
+  const settingsRes = await admin
+    .from("tb_settings")
+    .select("rsdefault")
+    .eq("id", 1)
+    .maybeSingle<{ rsdefault: number | string | null }>();
+  const rsDefault = Number(settingsRes.data?.rsdefault ?? 5.0);
+
   return (
-    <div className="pcs-content-pad w-full px-3 md:px-6 pt-4 pb-24 md:py-6 max-w-[860px] mx-auto">
+    <div className="pcs-content-pad w-full px-3 md:px-6 pt-4 pb-24 md:py-6 max-w-[1080px] mx-auto">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-[11px] text-muted mb-4">
         <Link href="/dashboard" className="hover:text-foreground transition-colors">
@@ -42,63 +48,24 @@ export default async function CartAddPage() {
         <span className="text-foreground font-medium">{t("addItem")}</span>
       </div>
 
-      {/* Hero — title + the centered URL-paste search bar */}
-      <div className="rounded-2xl bg-white border border-border shadow-sm p-5 md:p-6 text-center">
-        <span className="inline-flex w-11 h-11 rounded-xl bg-gradient-to-br from-primary-500 to-primary-700 text-white items-center justify-center shadow-sm mb-3">
-          <ShoppingCart className="w-5 h-5" strokeWidth={2} />
-        </span>
-        <h2 className="text-lg md:text-xl font-bold tracking-tight text-foreground">
-          {t("addHeroTitle")}
-        </h2>
-        <p className="mt-1.5 text-[13px] text-muted max-w-lg mx-auto">
-          {t.rich("addHeroDesc", {
-            b: (chunks) => <b className="text-foreground">{chunks}</b>,
-          })}
-        </p>
+      {/* Form (left) + Pacred marketing panel (right, desktop only).
+          Default align = stretch → the image column matches the form card's
+          height (no dangling tall image · owner 2026-07-30 "ขยับให้พอดี responsive"). */}
+      <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
+        <CartAddMultiLink rsDefault={rsDefault} />
 
-        {/* The centered search bar */}
-        <div className="mt-4 max-w-xl mx-auto">
-          <CartAddUrlForm />
-        </div>
-
-        {/* Supported sites */}
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[12px] text-muted">
-          <span>{t("supportedShops")}</span>
-          {SUPPORTED_SITES.map((s) => (
-            <span
-              key={s}
-              className="inline-flex items-center rounded-full bg-surface-alt/60 px-3 py-1 font-semibold text-foreground"
-            >
-              {s}
-            </span>
-          ))}
-        </div>
+        {/* ภาพแนวตั้งด้านขวา (owner 2026-07-30 · "ภาพเฉยๆ ~1080×1920 portrait ·
+            ดึงภาพอะไรก็ได้มาแปะ"). placeholder = แบนเนอร์มือถือ Pacred · เดสก์ท็อปเท่านั้น
+            · h-full = สูงเท่าการ์ดฟอร์ม (พอดีกันไม่ห้อย) · object-cover เต็มกรอบ.
+            สลับภาพจริงได้ที่ src เดียว. */}
+        <aside className="hidden lg:block self-stretch">
+          <img
+            src="/images/bannermobile/pacredbannermobile01.png"
+            alt="Pacred Shipping"
+            className="h-full min-h-[440px] w-full rounded-2xl object-cover shadow-md"
+          />
+        </aside>
       </div>
-
-      {/* Divider → manual entry fallback */}
-      <div className="my-6 flex items-center gap-3 text-[12px] text-muted">
-        <span className="h-px flex-1 bg-border" />
-        <span>{t("noProductLink")}</span>
-        <span className="h-px flex-1 bg-border" />
-      </div>
-
-      <Link
-        href="/service-order/add"
-        className="flex items-center gap-3 rounded-2xl border border-border bg-white p-4 md:p-5 hover:border-primary-300 hover:shadow-md transition group"
-      >
-        <span className="inline-flex w-11 h-11 rounded-xl bg-primary-50 text-primary-600 items-center justify-center shrink-0 group-hover:bg-primary-100 transition">
-          <Pencil className="w-5 h-5" />
-        </span>
-        <span className="flex-1 min-w-0">
-          <span className="block text-[14px] md:text-[15px] font-bold text-foreground">
-            {t("manualEntryTitle")}
-          </span>
-          <span className="block text-[12px] text-muted">
-            {t("manualEntryHint")}
-          </span>
-        </span>
-        <ArrowRight className="w-5 h-5 text-muted group-hover:text-primary-600 transition shrink-0" />
-      </Link>
 
       {/* Back to cart */}
       <div className="mt-6 text-center">

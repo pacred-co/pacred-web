@@ -158,6 +158,8 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             label={t("orderService")}
             badge={<MenuBadge n={data.countShops2 + data.countCart} />}
           >
+            {/* owner 2026-07-30: "เพิ่มสินค้าในรถเข็น" ขยับขึ้นบนสุด */}
+            <CardSubLink href="/cart/add">{t("addToCart")}</CardSubLink>
             <CardSubLink href="/service-order">{t("allOrders")}</CardSubLink>
             <CardSubLink href="/service-order?q=2">
               <SubLabel label={t("pendingPayment")} n={data.countShops2} />
@@ -165,7 +167,6 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
             <CardSubLink href="/cart">
               <SubLabel label={t("cart")} n={data.countCart} />
             </CardSubLink>
-            <CardSubLink href="/cart/add">{t("addToCart")}</CardSubLink>
           </MenuRow>
 
           {/* โอน — ฝากโอน / yuan transfer (expandable) */}

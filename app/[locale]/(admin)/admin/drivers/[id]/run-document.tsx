@@ -463,9 +463,12 @@ export async function DriverRunDocument({
                   <td className="border border-slate-200 px-2 py-1 text-center">
                     {g.carriers.join(", ") || "—"}
                   </td>
-                  {/* สรุปจำนวนแทรคกิ้งในจุดนี้ (แทนการแจกแจงทีละเลข) */}
-                  <td className="border border-slate-200 px-2 py-1 text-center align-middle font-bold">
-                    {fmt(g.trackings.length, 0)} แทรคกิ้ง
+                  {/* เลขแทรคกิ้งในจุดนี้ — โชว์เลขจริงทุกอัน (owner 2026-07-30:
+                      "ใส่เป็นเลข Tracking ดีกว่า" · เดิมโชว์แค่จำนวน) */}
+                  <td className="border border-slate-200 px-2 py-1 text-center align-middle font-bold break-words leading-snug">
+                    {g.trackings.length > 0
+                      ? g.trackings.map((t) => <div key={t}>{t}</div>)
+                      : "—"}
                   </td>
                   <td className="border border-slate-200 px-2 py-1 text-center align-middle text-slate-300">
                     ____________

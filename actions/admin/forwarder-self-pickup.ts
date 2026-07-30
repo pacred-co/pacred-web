@@ -51,9 +51,13 @@ import type { AdminRole } from "@/lib/auth/require-admin";
 // the driver-delivery path).
 const ROLES: AdminRole[] = ["ops", "super", "warehouse"];
 
-// The carriers that go through the รับเองหน้าโกดัง tab (legacy filter
-// forwarder-driver.php:729 / :793 — `fShipBy IN ('PCS','2','4')`).
-const SELF_PICKUP_SHIPBY = new Set(["PCS", "2", "4"]);
+// Carriers closed via this hand-off path (NO Pacred driver — ขนส่งมารับ/ลูกค้ารับเอง):
+//   PCS = ลูกค้ารับเองที่โกดัง · 2 = Flash · 24 = J&T · 11 = ไปรษณีย์ไทย/EMS
+// owner 2026-07-30: Flash/J&T/ไปรษณีย์ = ขนส่งมารับของที่โกดังเอง → ปิดงานเหมือน "รับเอง"
+// (แต่ละเจ้ามีแท็บของตัวเองใน /admin/drivers/new · ทุกแท็บ pickup-style เรียก action นี้).
+//   "4" = legacy J&T code จากข้อมูลเก่า — เก็บไว้ไม่ให้ของเก่าปิดงานไม่ได้.
+// Express (Kerry/DHL/SCG/…) ไม่อยู่ในนี้ → ยังปิดผ่านสายมอบคนขับ (driver batch) ตามเดิม.
+const SELF_PICKUP_SHIPBY = new Set(["PCS", "2", "4", "24", "11"]);
 
 type ParsedInput =
   | { ok: true; forwarderIds: number[]; photo: File | null }
@@ -131,7 +135,7 @@ export async function markForwarderSelfPickupDelivered(
     if (eligibleIds.length === 0) {
       return {
         ok: false,
-        error: "ไม่มีรายการที่ปิดงานได้ — ต้องเป็นรับเอง/ไปรษณีย์/J&T ที่สถานะ \"เตรียมส่ง\" (6)",
+        error: "ไม่มีรายการที่ปิดงานได้ — ต้องเป็นรับเอง/Flash/J&T/ไปรษณีย์ ที่สถานะ \"เตรียมส่ง\" (6)",
       };
     }
 
