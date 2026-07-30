@@ -108,6 +108,8 @@ export function CreateBatchForm({
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [page, setPage] = useState<number>(1);
   const [exporting, setExporting] = useState(false);
+  // กาง/ย่อ ตารางแทรคกิ้งย่อยต่อจุดส่ง (owner 2026-07-30 · พนักงานคลังไม่ต้องกดทีละจุด)
+  const [openTracking, setOpenTracking] = useState<Set<string>>(new Set());
 
   // Column sort (legacy DataTables ⇅) — click a header to sort asc → desc → off
   // (off = back to the default ลำดับส่ง route order). WORKS (not a decorative icon).
@@ -382,6 +384,24 @@ export function CreateBatchForm({
         </div>
       )}
 
+      {/* กาง/ย่อ แทรคกิ้งทุกจุดส่งพร้อมกัน (owner 2026-07-30 · พนักงานคลังไม่ต้องกดทีละจุด) */}
+      {visibleGroups.length > 0 && (
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              const allOpen = visibleGroups.every((g) => openTracking.has(g.key));
+              setOpenTracking(allOpen ? new Set() : new Set(visibleGroups.map((g) => g.key)));
+            }}
+            className="inline-flex items-center gap-1.5 rounded-full border border-primary-300 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 transition-colors hover:bg-primary-100"
+          >
+            {visibleGroups.every((g) => openTracking.has(g.key))
+              ? "▲ ย่อแทรคกิ้งทั้งหมด"
+              : "▼ กางแทรคกิ้งทั้งหมด"}
+          </button>
+        </div>
+      )}
+
       {/* ── The dense legacy PCS table — ONE ROW per delivery group ──
           Columns (legacy forwarder-driver.php?page=add): [☑] · จำนวน · บริษัทขนส่ง ·
           เลขแทรคกิ้ง (nested sub-table) · ลำดับส่ง · ที่อยู่. */}
@@ -515,8 +535,22 @@ export function CreateBatchForm({
                         กล่อง / น้ำหนัก / ปริมาตร → รวม row) */}
                     <td className="p-0 align-top" onClick={(e) => e.stopPropagation()}>
                       {/* หุบเป็นสรุป กดกาง (owner 2026-07-25 · แบบหน้า detail) — หัวชมพู = ยอดรวม
-                          (กดได้ · พับไว้ก่อน) · table-fixed + % widths ให้คอลัมน์ตรงกันทุกแถว */}
-                      <details className="group m-1.5 overflow-hidden rounded-lg border border-[#dcdfe4]">
+                          (กดได้ · พับไว้ก่อน) · table-fixed + % widths ให้คอลัมน์ตรงกันทุกแถว
+                          controlled ด้วย openTracking เพื่อให้ปุ่ม "กางทั้งหมด" คุมได้ (owner 2026-07-30) */}
+                      <details
+                        open={openTracking.has(g.key)}
+                        onToggle={(e) => {
+                          const isOpen = (e.currentTarget as HTMLDetailsElement).open;
+                          setOpenTracking((prev) => {
+                            if (prev.has(g.key) === isOpen) return prev;
+                            const next = new Set(prev);
+                            if (isOpen) next.add(g.key);
+                            else next.delete(g.key);
+                            return next;
+                          });
+                        }}
+                        className="group m-1.5 overflow-hidden rounded-lg border border-[#dcdfe4]"
+                      >
                         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 bg-[#f5aab0] px-2 py-1.5 font-semibold text-[#7a0012] [&::-webkit-details-marker]:hidden">
                           <span className="flex items-center gap-1.5 text-xs">
                             <ChevronRight className="h-3.5 w-3.5 transition group-open:rotate-90" />

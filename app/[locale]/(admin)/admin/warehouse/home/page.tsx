@@ -21,7 +21,6 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { loadWarehouseDispatchHome } from "@/lib/warehouse/dispatch-home";
 import { ShoppingCart, PackageX, Truck, Warehouse, History, Info } from "lucide-react";
-import { WarehouseBottomNav } from "./warehouse-bottom-nav";
 import { HomeTrackingSearch } from "./home-search";
 import { HomeLocation } from "./home-location";
 
@@ -123,8 +122,8 @@ export default async function WarehouseHome() {
         <HomeTrackingSearch />
       </section>
 
-      {/* Fixed mobile bottom tab-bar (blue-circled in the owner's photo) */}
-      <WarehouseBottomNav failedDelivery={d.failedDelivery} containers={d.containers} />
+      {/* แถบเมนูล่างมือถือ (blue-circled ในรูป owner) ย้ายไป admin layout แล้ว
+          (owner 2026-07-30 · โชว์ทุกหน้าสำหรับ role คลัง · ไม่ render ซ้ำที่นี่). */}
     </main>
   );
 }

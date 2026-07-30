@@ -93,3 +93,44 @@ export async function loadWarehouseDispatchHome(): Promise<WarehouseDispatchHome
 
   return { ...EMPTY, assignDriver, batchHistory, failedDelivery, selfPickup, containers };
 }
+
+/**
+ * loadWarehouseNavBadges — the 2 counts the mobile bottom tab-bar shows
+ * (งานส่งไม่สำเร็จ + หมายเลขตู้). Lightweight (2 cheap head-counts) so the admin
+ * LAYOUT can mount the bar on EVERY page for a warehouse-role staffer (owner
+ * 2026-07-30 "ทำให้ขึ้นทุกหน้าเวลาใช้มือถือ") without pulling the full home load.
+ * Same query shape + best-effort semantics as loadWarehouseDispatchHome.
+ */
+export async function loadWarehouseNavBadges(): Promise<{ failedDelivery: number; containers: number }> {
+  const admin = createAdminClient();
+  const headCount = async (build: () => PromiseLike<{ count: number | null; error: unknown }>): Promise<number> => {
+    try {
+      const { count, error } = await build();
+      if (error) {
+        console.error("[loadWarehouseNavBadges] count failed", error);
+        return 0;
+      }
+      return count ?? 0;
+    } catch (e) {
+      console.error("[loadWarehouseNavBadges] count threw", e);
+      return 0;
+    }
+  };
+  const [failedDelivery, containers] = await Promise.all([
+    headCount(() =>
+      admin
+        .from("tb_forwarder_driver_item")
+        .select("id", { count: "exact", head: true })
+        .eq("fdistatus", "3"),
+    ),
+    headCount(() =>
+      admin
+        .from("tb_forwarder")
+        .select("id", { count: "exact", head: true })
+        .not("fcabinetnumber", "is", null)
+        .neq("fcabinetnumber", "")
+        .neq("fcabinetnumber", "0"),
+    ),
+  ]);
+  return { failedDelivery, containers };
+}

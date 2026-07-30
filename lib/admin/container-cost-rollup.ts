@@ -158,6 +158,115 @@ export async function getContainerCostRollupBatch(
   return result;
 }
 
+/** เรท + โกดัง + สถานะจ่ายค่าตู้ ของตู้หนึ่ง — พอสำหรับคิดต้นทุน "รายแถว"
+ *  ด้วย resolveRowContainerCost (lib/forwarder/container-cost-engine). */
+export type CabinetCostContext = {
+  rates: ContainerRates;
+  containerWarehouse: string;
+  cabinetIsPaid: boolean;
+};
+
+/**
+ * บริบทต้นทุน "ต่อตู้" — สำหรับหน้าที่ต้องคิดต้นทุน/กำไร **รายแถว** (ไม่ใช่ยอดรวมตู้)
+ * เช่น /admin/forwarder-check ที่คอลัมน์ ต้นทุน/กำไร เป็นของแต่ละแทรคกิ้ง.
+ *
+ * ก่อนหน้านี้หน้านั้นอ่าน `fcosttotalprice` ที่เก็บไว้ตรงๆ (=0 เมื่อยังไม่ backfill) →
+ * ขึ้น "ไม่คำนวณ" + กำไรพองเกินจริง (บัญชีทักมา owner 2026-07-30). helper นี้คืน
+ * เรท (tb_cost_container ชนะ ▸ defaultRatesForCabinet ▸ tb_settings) + โกดังระดับตู้
+ * + ธง "จ่ายค่าตู้แล้ว" ต่อตู้ → caller เอาไป `resolveRowContainerCost(row, ctx)` ราย
+ * แถว ได้ต้นทุน **เครื่องเดียวกับ report-cnt/DETAIL** (คิดสดจนกว่าจะจ่ายค่าตู้).
+ *
+ * ยึด SOT ตัวเดียวกับ getContainerCostRollupBatch (แชร์ resolveContainerWarehouse +
+ * defaultRatesForCabinet — ไม่ก๊อปสูตร). READ-ONLY · fail-soft (ตู้ที่ไม่มีข้อมูลจะไม่
+ * มี key → caller fallback ไปค่าที่เก็บไว้เอง).
+ */
+export async function getCabinetCostContextBatch(
+  admin: AdminClient,
+  cabinets: string[],
+  paidCabinets: Set<string>,
+): Promise<Record<string, CabinetCostContext>> {
+  const uniqCabs = Array.from(new Set(cabinets.filter(Boolean)));
+  if (uniqCabs.length === 0) return {};
+
+  // ── 1) แถวสินค้าของตู้ที่เกี่ยวข้อง (ดึงทั้งตู้เพื่อ resolve โกดังระดับตู้ให้ตรง DETAIL/LIST) ──
+  const { data: fwRaw, error: fwErr } = await admin
+    .from("tb_forwarder")
+    .select(
+      "fcabinetnumber, fwarehousename, fwarehousechina, ftransporttype, fproductstype, fvolume, famount, famountcount, fweight, fcosttotalprice",
+    )
+    .in("fcabinetnumber", uniqCabs)
+    .neq("fstatus", "99")
+    .limit(100_000);
+  if (fwErr) {
+    console.error(`[getCabinetCostContextBatch tb_forwarder] failed`, {
+      code: fwErr.code, message: fwErr.message, cabinetCount: uniqCabs.length,
+    });
+    return {};
+  }
+  const rows = (fwRaw ?? []) as FwCostRow[];
+  if (rows.length === 0) return {};
+  const byCabinet = new Map<string, FwCostRow[]>();
+  for (const r of rows) {
+    const key = r.fcabinetnumber;
+    if (!key) continue;
+    const arr = byCabinet.get(key);
+    if (arr) arr.push(r);
+    else byCabinet.set(key, [r]);
+  }
+
+  // ── 2) เรทที่บัญชีตั้งไว้ต่อตู้ (tb_cost_container ชนะเสมอ) ──
+  const rateByCab = new Map<string, ContainerRates>();
+  {
+    const { data: crRaw, error: crErr } = await admin
+      .from("tb_cost_container")
+      .select("fcabinetnumber, fproductstype1, fproductstype2, fproductstype3, fproductstype4")
+      .in("fcabinetnumber", uniqCabs);
+    if (crErr) {
+      console.error(`[getCabinetCostContextBatch tb_cost_container] failed`, {
+        code: crErr.code, message: crErr.message,
+      });
+    }
+    for (const c of (crRaw ?? []) as Array<{
+      fcabinetnumber: string;
+      fproductstype1: number | string | null;
+      fproductstype2: number | string | null;
+      fproductstype3: number | string | null;
+      fproductstype4: number | string | null;
+    }>) {
+      rateByCab.set(c.fcabinetnumber, {
+        p1: Number(c.fproductstype1 ?? 0) || 0,
+        p2: Number(c.fproductstype2 ?? 0) || 0,
+        p3: Number(c.fproductstype3 ?? 0) || 0,
+        p4: Number(c.fproductstype4 ?? 0) || 0,
+      });
+    }
+  }
+
+  // ── 3) tb_settings (fallback เมื่อบัญชียังไม่ตั้งเรทให้ตู้นั้น) — ดึงครั้งเดียว ──
+  let settingsRow: Record<string, number | string | null> | null = null;
+  if (Array.from(byCabinet.keys()).some((cab) => !rateByCab.has(cab))) {
+    const { data: sRaw, error: sErr } = await admin
+      .from("tb_settings")
+      .select("*")
+      .eq("id", SETTINGS_ID)
+      .maybeSingle<Record<string, number | string | null>>();
+    if (sErr) {
+      console.error(`[getCabinetCostContextBatch tb_settings] failed`, { code: sErr.code, message: sErr.message });
+    }
+    settingsRow = sRaw ?? null;
+  }
+
+  // ── 4) บริบทต่อตู้ (เรท + โกดัง + จ่ายแล้วหรือยัง) ──
+  const result: Record<string, CabinetCostContext> = {};
+  for (const [cab, cabRows] of byCabinet) {
+    const containerWarehouse = resolveContainerWarehouse(cabRows);
+    const rates =
+      rateByCab.get(cab) ?? defaultRatesForCabinet(cab, cabRows, containerWarehouse, settingsRow);
+    result[cab] = { rates, containerWarehouse, cabinetIsPaid: paidCabinets.has(cab) };
+  }
+  return result;
+}
+
 /**
  * เรทมาตรฐานเมื่อบัญชียังไม่ตั้ง tb_cost_container ให้ตู้นั้น:
  * โกดัง × โหมดขนส่ง × ประเภทสินค้า × เมืองต้นทาง.
