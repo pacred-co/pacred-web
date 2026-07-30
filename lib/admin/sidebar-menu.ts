@@ -65,6 +65,7 @@
  */
 
 import type { AdminRole } from "@/lib/auth/require-admin";
+import { canViewSystemReports } from "@/lib/admin/reports-access";
 
 // ──────────────────────────────────────────────────────────────
 // Badge keys — every key maps to one count in the batched query.
@@ -2518,8 +2519,13 @@ function withWorkspaceLanding(sections: MenuSection[]): MenuSection[] {
  *  admin-sidebar.tsx to the resolved sections (covers menuForStaffer + menuShowAll). */
 const reportsSection: MenuSection = { header: "Reports", items: [itemSystemReports] };
 
-export function withUltraReports(sections: MenuSection[], roles: AdminRole[]): MenuSection[] {
-  if (!roles.includes("ultra")) return sections;
+export function withUltraReports(
+  sections: MenuSection[],
+  roles: AdminRole[],
+  department?: string | null,
+): MenuSection[] {
+  // owner 2026-07-30: += HR (แผนก). SOT canViewSystemReports ตัดสินให้ตรงกับ page gate.
+  if (!canViewSystemReports(roles, department)) return sections;
   if (sections.some((s) => s.items.some((it) => it.href === itemSystemReports.href))) return sections;
   const idx = sections.findIndex((s) => s.header === learningSection.header);
   return idx === -1

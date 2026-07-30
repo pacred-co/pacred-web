@@ -490,6 +490,7 @@ function SidebarHeader({
 export function AdminSidebar({
   roles,
   workspaceRole = null,
+  department = null,
   positionLabel = null,
   counts = {},
   adminLabel = "Admin",
@@ -499,6 +500,9 @@ export function AdminSidebar({
   /** The staffer's POSITION workspace_role (ปอน 2026-06-27) — scopes the menu
    *  when set. null = no position → full/role menu (back-compat). */
   workspaceRole?: AdminRole | null;
+  /** The staffer's POSITION department (owner 2026-07-30) — HR (='hr') gets the
+   *  "ออกรายงานระบบ" section even without the ultra role. null = no position. */
+  department?: string | null;
   /** "แผนก / ตำแหน่ง" line for the profile card (ปอน 2026-06-28). null = omit. */
   positionLabel?: string | null;
   /** Live-count badges, resolved server-side (getSidebarCounts). */
@@ -542,8 +546,9 @@ export function AdminSidebar({
   const rawSectionsBase: MenuSection[] = (isSuper && showAll)
     ? menuShowAll()
     : menuForStaffer(roles, workspaceRole);
-  // ออกรายงานระบบ = ultra-only (owner ปอน 2026-07-29) — inject only when roles include ultra.
-  const rawSections: MenuSection[] = withUltraReports(rawSectionsBase, roles);
+  // ออกรายงานระบบ = ultra หรือ HR (owner 2026-07-29 ultra · 2026-07-30 += HR แผนก) —
+  // SOT canViewSystemReports ตัดสิน (ตรงกับ page gate เป๊ะ · ไม่มี drift).
+  const rawSections: MenuSection[] = withUltraReports(rawSectionsBase, roles, department);
   const sections: MenuSection[] = rawSections.map((sec) => ({
     ...sec,
     items: filterByPhase(sec.items, role),

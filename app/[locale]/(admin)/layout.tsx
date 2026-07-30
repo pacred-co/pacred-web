@@ -139,7 +139,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           sidebar on print so receipts/invoices/tax-invoices don't show admin
           chrome bleeding into the page. Side-effect-free for screen rendering. */}
       <div className="print:hidden">
-        <AdminSidebar roles={displayRoles} workspaceRole={displayWorkspaceRole} positionLabel={viewAsRole ? null : positionLabel} counts={counts} adminLabel={adminLabel} adminAvatar={profile?.avatar_url ?? null} />
+        <AdminSidebar roles={displayRoles} workspaceRole={displayWorkspaceRole} department={viewAsRole ? null : posInfo.department} positionLabel={viewAsRole ? null : positionLabel} counts={counts} adminLabel={adminLabel} adminAvatar={profile?.avatar_url ?? null} />
         {/* 2026-06-13 (ปอน · owner "ทำให้ left sidebar responsive เหมือนหน้านำเข้าทุกหน้า"):
             collapse the desktop sidebar to a hover-expand icon rail on EVERY admin
             page (was page-scoped to /admin/forwarders/[fNo]). Lifted here so the
