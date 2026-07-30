@@ -23,6 +23,10 @@ type Rep = { position: string; id: string; name: string };
 // HR เห็นหน้านี้ได้แต่ไม่เห็นแท็บนี้ (page ก็ coerce type กลับ commission กันพิมพ์ URL ตรง).
 const COMMISSION_TYPE = { key: "commission", label: "ค่าคอมมิชชั่น" };
 const CONTAINER_PROFIT_TYPE = { key: "container-profit", label: "กำไรตู้ (รายเดือน)" };
+// งานที่ลูกค้าจ่ายแล้ว (owner 2026-07-30): นับตามเดือนที่จ่าย · แยก สั่งซื้อ/นำเข้า · รถ/เรือ ·
+// กวางโจว/อี้อู. โชว์กำไร → ultra เท่านั้น (เหมือน กำไรตู้). ใช้ตัวกรอง "ช่วงวันที่" (นับตามวันจ่าย)
+// แต่ไม่ใช้ ตำแหน่ง/ผู้รับผิดชอบ.
+const PAID_WORK_TYPE = { key: "paid-work", label: "งานที่จ่ายแล้ว" };
 
 const POSITIONS = [
   { key: "sales", label: "เซลล์" },
@@ -208,7 +212,7 @@ export function ReportFilters({
   allowContainerProfit?: boolean;
 }) {
   const reportTypes = allowContainerProfit
-    ? [COMMISSION_TYPE, CONTAINER_PROFIT_TYPE]
+    ? [COMMISSION_TYPE, CONTAINER_PROFIT_TYPE, PAID_WORK_TYPE]
     : [COMMISSION_TYPE];
   const router = useRouter();
   const pathname = usePathname();
@@ -225,6 +229,16 @@ export function ReportFilters({
     setRep("");
   };
 
+  // เปลี่ยนประเภทรายงาน → ถ้าเป็น "งานที่จ่ายแล้ว" ล้างช่วงวันที่ (default = ทั้งหมด · ไม่เอา
+  // เดือนปัจจุบันที่ค้างมาจาก commission) ให้ตรงกับตอนเปิดจาก URL สดๆ
+  const onReportTypeChange = (v: string) => {
+    setReportType(v);
+    if (v === "paid-work") {
+      setDateFrom("");
+      setDateTo("");
+    }
+  };
+
   // ผู้รับผิดชอบ = รายชื่อของตำแหน่งที่เลือก (เซลล์→เซลล์ · Cs→CS · ตำแหน่งอื่นยังไม่มี roster)
   const respOptions = [
     { value: "", label: "ทั้งหมด" },
@@ -233,13 +247,19 @@ export function ReportFilters({
 
   // กำไรตู้ = ทั้งระบบจัดกลุ่มรายเดือนจากเลขตู้ — ตำแหน่ง/ผู้รับผิดชอบ/วันที่ ไม่เกี่ยว
   const isContainerProfit = reportType === "container-profit";
+  // งานที่จ่ายแล้ว = ทั้งระบบ · ใช้ช่วงวันที่ (นับตามวันจ่าย) แต่ไม่ใช้ ตำแหน่ง/ผู้รับผิดชอบ
+  const isPaidWork = reportType === "paid-work";
+  const hidePosRep = isContainerProfit || isPaidWork;
+  const hideDates = isContainerProfit; // paid-work ยังใช้ช่วงวันที่
 
   const onSearch = () => {
     const q = new URLSearchParams();
     q.set("type", reportType);
-    if (!isContainerProfit) {
+    if (!hidePosRep) {
       q.set("pos", position);
       if (rep) q.set("rep", rep);
+    }
+    if (!hideDates) {
       if (dateFrom) q.set("from", dateFrom);
       if (dateTo) q.set("to", dateTo);
     }
@@ -251,12 +271,12 @@ export function ReportFilters({
       <SelectPill
         label="ประเภทรายงาน"
         value={reportType}
-        onChange={setReportType}
+        onChange={onReportTypeChange}
         options={reportTypes.map((t) => ({ value: t.key, label: t.label }))}
         className={fieldClass}
       />
 
-      {!isContainerProfit && (
+      {!hidePosRep && (
         <>
           <SelectPill
             label="ตำแหน่ง"
@@ -273,9 +293,13 @@ export function ReportFilters({
             options={respOptions}
             className={fieldClass}
           />
+        </>
+      )}
 
+      {!hideDates && (
+        <>
           <DateField
-            label="ตั้งแต่วันที่"
+            label={isPaidWork ? "วันจ่าย ตั้งแต่" : "ตั้งแต่วันที่"}
             value={dateFrom}
             max={dateTo || undefined}
             onChange={setDateFrom}
@@ -283,7 +307,7 @@ export function ReportFilters({
           />
 
           <DateField
-            label="ถึงวันที่"
+            label={isPaidWork ? "วันจ่าย ถึง" : "ถึงวันที่"}
             value={dateTo}
             min={dateFrom || undefined}
             onChange={setDateTo}
