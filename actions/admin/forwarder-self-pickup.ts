@@ -3,12 +3,14 @@
 /**
  * actions/admin/forwarder-self-pickup.ts — "รับเองหน้าโกดัง" mark-done
  *
- * The self-pickup / hand-off close for the legacy
- * `forwarder-driver.php?page=add&q=pcs` tab — the parcels that do NOT get a
- * Pacred driver assigned:
+ * The warehouse HAND-OFF close for the legacy `forwarder-driver.php?page=add`
+ * tabs — the parcels that do NOT get a Pacred driver assigned (the warehouse
+ * either hands them to the customer, or books the courier's truck to collect
+ * them AT the โกดัง). Carrier codes = the LIVE SHIP_BY_LABEL (drivers/new):
  *   - fShipBy='PCS' → ลูกค้ามารับเองที่โกดัง
- *   - fShipBy='2'   → ไปรษณีย์ (Thai Post)
- *   - fShipBy='4'   → J&T
+ *   - fShipBy='2'   → Flash Express      ┐ พนักงานโกดังบุ๊ครถขนส่งมารับที่โกดัง
+ *   - fShipBy='24'  → J&T Express        │ → กด "ส่งสำเร็จ" ปิด 6→7 (พี่ป๊อป 2026-07-30)
+ *   - fShipBy='11'  → ไปรษณีย์ไทย/EMS      ┘
  *
  * Legacy mark-done (forwarder-driver.php:166 / :580 / :1328 — same SQL in all
  * three photo-upload handlers):
@@ -51,9 +53,18 @@ import type { AdminRole } from "@/lib/auth/require-admin";
 // the driver-delivery path).
 const ROLES: AdminRole[] = ["ops", "super", "warehouse"];
 
-// The carriers that go through the รับเองหน้าโกดัง tab (legacy filter
-// forwarder-driver.php:729 / :793 — `fShipBy IN ('PCS','2','4')`).
-const SELF_PICKUP_SHIPBY = new Set(["PCS", "2", "4"]);
+// The carriers whose parcels close via the WAREHOUSE HAND-OFF (fstatus 6→7, NO
+// Pacred driver assigned) — พี่ป๊อป 2026-07-30 "พนักงานโกดังต้องบุ๊ครถขนส่งเข้ามารับ
+// ของที่โกดังเรา":
+//   'PCS' = ลูกค้ามารับเองที่โกดัง
+//   '2'   = Flash Express   ┐ external couriers whose truck the warehouse BOOKS to
+//   '24'  = J&T Express     │ come collect AT our warehouse → hand-off = ส่งแล้ว (7)
+//   '11'  = ไปรษณีย์ไทย/EMS   ┘  (no Pacred driver — the courier delivers to the customer)
+// Codes = the canonical legacy nameShipBy numbers (SHIP_BY_LABEL in /admin/drivers/new:
+//   "2" Flash · "24" J&T · "11" ไปรษณีย์). ⚠️ The earlier {'PCS','2','4'} came from a
+// STALE code map (that era: '2'=ไปรษณีย์, '4'=J&T) → corrected to the LIVE codes, else
+// J&T('24')/ไปรษณีย์('11') rows would be refused ("ไม่มีรายการที่ปิดงานได้").
+const SELF_PICKUP_SHIPBY = new Set(["PCS", "2", "24", "11"]);
 
 type ParsedInput =
   | { ok: true; forwarderIds: number[]; photo: File | null }
@@ -131,7 +142,7 @@ export async function markForwarderSelfPickupDelivered(
     if (eligibleIds.length === 0) {
       return {
         ok: false,
-        error: "ไม่มีรายการที่ปิดงานได้ — ต้องเป็นรับเอง/ไปรษณีย์/J&T ที่สถานะ \"เตรียมส่ง\" (6)",
+        error: "ไม่มีรายการที่ปิดงานได้ — ต้องเป็นรับเอง/Flash/J&T/ไปรษณีย์ ที่สถานะ \"เตรียมส่ง\" (6)",
       };
     }
 
