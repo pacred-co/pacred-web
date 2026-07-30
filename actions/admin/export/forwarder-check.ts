@@ -37,6 +37,8 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { logAdminExport } from "@/actions/admin/export-log";
 import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
+import { getCabinetCostContextBatch } from "@/lib/admin/container-cost-rollup";
+import { resolveRowContainerCost } from "@/lib/forwarder/container-cost-engine";
 import type { CsvRow } from "@/components/admin/csv-button";
 import {
   resolveBillingIdentity,
@@ -65,6 +67,7 @@ type ForwarderRawRow = {
   fvolume: number | null;
   fweight: number | null;
   ftransporttype: string;
+  fproductstype: string | null;
   frefrate: number | null;
   frefprice: string;
   fdetail: string | null;
@@ -155,7 +158,7 @@ export async function exportForwarderCheckAll(
     .from("tb_forwarder")
     .select(
       "id, fstatus, fidorco, ftrackingchn, fcabinetnumber, userid, " +
-        "famount, famountcount, fvolume, fweight, ftransporttype, frefrate, frefprice, " +
+        "famount, famountcount, fvolume, fweight, ftransporttype, fproductstype, frefrate, frefprice, " +
         "fdetail, fnote, fcover, " +
         "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
         "pricecrate, ftransportpricechnthb, priceother, fdiscount, " +
@@ -197,6 +200,27 @@ export async function exportForwarderCheckAll(
 
   // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
   const corpNames = await fetchCorporateNameMap(admin, uniqueUserIds);
+
+  // ต้นทุนคิดสด — CSV ต้องตรงกับคอลัมน์บนจอ (owner 2026-07-30 · บัญชีเอาไปทำงานจริง).
+  // เครื่องเดียวกับหน้า page.tsx: เรทตู้ × คิว · ล็อกค่าที่เก็บเมื่อจ่ายค่าตู้แล้ว.
+  const costCabs = Array.from(
+    new Set(forwarders.map((r) => (r.fcabinetnumber ?? "").trim()).filter((c) => c !== "" && c !== "0")),
+  );
+  const paidCabinets = new Set<string>();
+  if (costCabs.length > 0) {
+    const { data: paidRaw, error: paidErr } = await admin
+      .from("tb_cnt_item")
+      .select("fCabinetNumber")
+      .in("fCabinetNumber", costCabs);
+    if (paidErr) {
+      console.error(`[exportForwarderCheckAll tb_cnt_item paid]`, { code: paidErr.code, message: paidErr.message });
+    }
+    for (const p of (paidRaw ?? []) as { fCabinetNumber: string | null }[]) {
+      const cab = (p.fCabinetNumber ?? "").trim();
+      if (cab) paidCabinets.add(cab);
+    }
+  }
+  const cabCostCtx = await getCabinetCostContextBatch(admin, costCabs, paidCabinets);
 
   // NOTE: the page also joins tb_forwarder_import2 (partial-import amount) +
   // tb_promotion (promo badge) for its on-screen cells, but NEITHER is a CSV
@@ -259,10 +283,15 @@ export async function exportForwarderCheckAll(
       customerCompany === 1 && priceFull > 0
         ? Math.round(priceFull * 0.01 * 100) / 100
         : 0;
+    // ต้นทุนนำเข้าคิดสด (เครื่องเดียวกับหน้าจอ) — แทน fcosttotalprice ที่เก็บไว้ (=0
+    // บนแถวยังไม่ backfill). ตู้ไม่มี context → fallback ค่าที่เก็บ.
+    const cab = (r.fcabinetnumber ?? "").trim();
+    const rowCostCtx = cab ? cabCostCtx[cab] : undefined;
+    const importCost = rowCostCtx ? resolveRowContainerCost(r, rowCostCtx).cost : Number(r.fcosttotalprice ?? 0);
     const profit =
       priceFull -
       onePercent -
-      (Number(r.fcosttotalprice ?? 0) +
+      (importCost +
         Number(r.fshippingservice ?? 0) +
         Number(r.pricecrate ?? 0) +
         Number(r.ftransportpricechnthb ?? 0) +
@@ -289,7 +318,7 @@ export async function exportForwarderCheckAll(
       address_zipcode: r.faddresszipcode,
       check_added_at: queueRow?.date ?? null,
       check_added_by: queueRow?.adminID ?? null,
-      cost_total_price: Number(r.fcosttotalprice ?? 0),
+      cost_total_price: importCost,
       one_percent: onePercent,
       profit_item: Math.round(profit * 100) / 100,
     };
