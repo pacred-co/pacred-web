@@ -55,6 +55,11 @@ export function WarehouseBottomNav({
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
 
+  // ซ่อนแถบล่างบนหน้า "มอบงานรถ" — หน้านั้นมีแถบดำเนินการล่างของตัวเองอยู่แล้ว
+  // (มอบคนขับ / รับเองหน้าโกดัง) → กันซ้อน 2 แถบล่าง เมื่อแถบนี้ขึ้นทุกหน้าผ่าน layout
+  // (owner 2026-07-30). usePathname ตัด locale + query แล้ว → เทียบ path ตรง ๆ พอ.
+  if (pathname === "/admin/drivers/new") return null;
+
   const tabs: Tab[] = [
     { href: "/admin/warehouse/home", label: "หน้าแรก", icon: Home },
     { href: "/admin/barcode/driver/import", label: "สแกนหาสินค้า", icon: ScanLine },

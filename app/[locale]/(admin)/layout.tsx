@@ -16,6 +16,8 @@ import { getStafferPositionInfo } from "@/lib/admin/positions";
 import { departmentLabel } from "@/lib/admin/departments";
 import { AdminSidebar } from "@/components/sections/admin-sidebar";
 import { DriverBottomNav } from "@/components/sections/driver-bottom-nav";
+import { WarehouseBottomNav } from "@/components/sections/warehouse-bottom-nav";
+import { loadWarehouseNavBadges } from "@/lib/warehouse/dispatch-home";
 import { countDriverOpenBatches } from "@/lib/admin/driver-todo-count";
 import { getDriverConsultTel } from "@/lib/admin/consult-contact";
 import { CollapseAdminSidebar } from "@/components/sections/collapse-admin-sidebar";
@@ -76,6 +78,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // แถบเมนูล่างมือถือ ของ role คนขับ (ปอน 2026-07-24) — โชว์เฉพาะตอน effective role
   // = driver ล้วน (คนขับจริง หรือ god ที่ view-as-driver) · ติดทุกหน้าผ่าน layout นี้.
   const isDriverView = displayRoles.length > 0 && displayRoles.every((r) => r === "driver");
+  // แถบเมนูล่างมือถือ ของ role พนักงานคลัง (owner 2026-07-30 "ทำให้ขึ้นทุกหน้าเวลาใช้
+  // มือถือ") — โชว์เฉพาะ effective role = warehouse ล้วน (พนักงานคลังจริง หรือ god
+  // ที่ view-as-warehouse) · mobile-only (component เอง lg:hidden) · ติดทุกหน้าผ่าน layout นี้.
+  const isWarehouseView = displayRoles.length > 0 && displayRoles.every((r) => r === "warehouse");
 
   const profile = withProfile?.profile ?? null;
 
@@ -86,6 +92,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     : 0;
   // เบอร์ "ปรึกษา" (keetar) ดึงสดจากระบบ เฉพาะตอนโชว์แถบล่างคนขับ (owner 2026-07-25)
   const driverConsultTel = isDriverView ? await getDriverConsultTel() : null;
+  // badge แถบล่างคลัง (ส่งไม่สำเร็จ + หมายเลขตู้) — นับ 2 ตัวแบบเบา เฉพาะตอนโชว์แถบคลัง
+  // (ไม่เพิ่ม query ให้ role อื่น). best-effort → 0.
+  const whNavBadges = isWarehouseView ? await loadWarehouseNavBadges() : null;
   const adminLabel =
     [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim() ||
     profile?.member_code ||
@@ -162,6 +171,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <RouteFade>{children}</RouteFade>
         </CostRevealProvider>
         {isDriverView && <DriverBottomNav todoBadge={driverTodoCount} consultTel={driverConsultTel ?? undefined} />}
+        {isWarehouseView && whNavBadges && (
+          <WarehouseBottomNav failedDelivery={whNavBadges.failedDelivery} containers={whNavBadges.containers} />
+        )}
       </div>
     </div>
     </AdminHeaderNavProvider>
