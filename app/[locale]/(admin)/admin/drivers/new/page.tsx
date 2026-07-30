@@ -377,6 +377,12 @@ export default async function CreateDriverBatchPage({
       : sp.tab === "post" ? "post"
       : sp.tab === "express" ? "express"
       : "driver";
+
+  // owner 2026-07-30 — Flash / J&T / ไปรษณีย์ = ขนส่งมารับของที่โกดังเอง → ไม่มอบคนขับ
+  // Pacred · ทำงานเหมือนแท็บ "รับเองหน้าโกดัง" (ส่งมอบ + ปิดงาน 6→7). Express (Kerry/DHL/…)
+  // ยังเป็นแบบมอบคนขับ Pacred ไปส่ง (คนละความหมาย จึงไม่รวมในนี้).
+  const isPickupStyle =
+    activeTab === "pickup" || activeTab === "flash" || activeTab === "jt" || activeTab === "post";
   // Single-carrier tab label (Flash / J&T / ไปรษณีย์) for the header copy.
   const parcelLabel =
     activeTab === "flash" ? "Flash Express"
@@ -486,17 +492,17 @@ export default async function CreateDriverBatchPage({
 
   // Pickup tab → group BY CUSTOMER (userid) into per-customer cards.
   const pickupGroups: PickupGroup[] =
-    activeTab === "pickup" ? buildPickupGroups(pickupEligible, customerById) : [];
+    isPickupStyle ? buildPickupGroups(eligible, customerById) : [];
 
   // Stop groups for the driver/express tabs (address-based — a driver delivers
   // to a physical address; for placeholder rows we fold in the customer so each
   // card stays one customer). The pickup tab uses pickupGroups above instead.
-  const groups = activeTab === "pickup" ? [] : buildStops(eligible, customerById);
+  const groups = isPickupStyle ? [] : buildStops(eligible, customerById);
 
-  // 4. Driver picker — every tab EXCEPT รับเองหน้าโกดัง assigns a Pacred driver
-  //    (the driver takes the parcels out to the courier / delivers · unchanged flow).
+  // 4. Driver picker — only the driver + Express tabs assign a Pacred driver.
+  //    รับเองหน้าโกดัง + Flash/J&T/ไปรษณีย์ (ขนส่งมารับเอง) ไม่มอบคนขับ → ไม่ต้องโหลด.
   let drivers: DriverOption[] = [];
-  if (activeTab !== "pickup") {
+  if (!isPickupStyle) {
     const { data: driversData, error: driversErr } = await admin
       .from("admins")
       .select("profile_id, role, is_active, profile:profiles!profile_id(member_code, first_name, last_name)")
@@ -547,7 +553,7 @@ export default async function CreateDriverBatchPage({
             : activeTab === "express"
             ? "Express — มอบงานขนส่งภายนอกให้คนขับไปส่ง"
             : parcelLabel
-            ? `${parcelLabel} — มอบงานให้คนขับไปส่ง`
+            ? `${parcelLabel} — ขนส่งมารับที่โกดัง (ปิดงานส่งสำเร็จ)`
             : "สร้างรายการขนส่ง — มอบงานให้คนขับรถ"}
         </h1>
         <p className="mt-1 text-sm text-muted">
@@ -556,7 +562,7 @@ export default async function CreateDriverBatchPage({
             : activeTab === "express"
             ? "งานที่ส่งผ่านบริษัทขนส่งภายนอก (Kerry · DHL · SCG · เฟิร์ส · จันทร์สว่าง · …) — เลือกบริษัทขนส่งจากตัวกรอง 🚚 ด้านล่าง · มอบคนขับ Pacred ไปส่งให้ขนส่ง · สร้างรอบจัดส่ง"
             : parcelLabel
-            ? `งานที่ส่งผ่าน${parcelLabel} เจ้าเดียว — แยกออกมาเป็นแท็บของตัวเอง · มอบคนขับ Pacred ไปส่งให้ขนส่ง · สร้างรอบจัดส่ง`
+            ? `งานที่ส่งผ่าน${parcelLabel} — ขนส่งมารับของที่โกดังเอง ไม่ต้องมอบคนขับ · แยกการ์ดตามลูกค้า · ติ๊กพัสดุที่ส่งมอบให้ขนส่งแล้ว แนบรูป (ถ้ามี) → กด "บันทึกส่งสำเร็จ" ปิดงานทีละลูกค้า`
             : "ส่งโดยคนขับ Pacred เอง (เหมาๆ / Pacred Express) — เลือกจุดส่ง · เลือกคนขับ · กำหนดเวลา · สร้างรอบจัดส่ง. แต่ละ \"จุดส่ง\" คือกลุ่มที่อยู่ปลายทางเดียวกัน"}
         </p>
       </div>
@@ -569,12 +575,13 @@ export default async function CreateDriverBatchPage({
         {/* คอม (≥lg) = แถวเดียว ไม่มี scrollbar (owner 2026-07-25) — ย่อ padding แท็บบนคอม
             (lg:px-2.5) ให้พอดีแถวเดียว · จอเล็ก = wrap ครบทุกแท็บ */}
         <ul className="flex flex-wrap lg:flex-nowrap items-stretch gap-y-1 -mb-px">
+          {/* owner 2026-07-30: ย้าย Express มาอยู่ติด "มอบงานให้คนขับรถ" */}
           <li><PcsDriverTab href="/admin/drivers/new" active={activeTab === "driver"} icon={<Truck className="h-4 w-4" />} label="มอบงานให้คนขับรถ" count={driverStops} /></li>
+          <li><PcsDriverTab href="/admin/drivers/new?tab=express" active={activeTab === "express"} icon={<Zap className="h-4 w-4" />} label="Express (ขนส่งภายนอก)" count={expressStops} /></li>
           <li><PcsDriverTab href="/admin/drivers/new?tab=pickup" active={activeTab === "pickup"} icon={<Home className="h-4 w-4" />} label="รายการรับเองหน้าโกดัง" count={pickupStops} /></li>
           <li><PcsDriverTab href="/admin/drivers/new?tab=flash" active={activeTab === "flash"} icon={<Package className="h-4 w-4" />} label="Flash Express" count={flashStops} /></li>
           <li><PcsDriverTab href="/admin/drivers/new?tab=jt" active={activeTab === "jt"} icon={<Package className="h-4 w-4" />} label="J&T Express" count={jtStops} /></li>
           <li><PcsDriverTab href="/admin/drivers/new?tab=post" active={activeTab === "post"} icon={<Package className="h-4 w-4" />} label="ไปรษณีย์ไทย" count={postStops} /></li>
-          <li><PcsDriverTab href="/admin/drivers/new?tab=express" active={activeTab === "express"} icon={<Zap className="h-4 w-4" />} label="Express (ขนส่งภายนอก)" count={expressStops} /></li>
           <li><PcsDriverTab href="/admin/drivers" active={false} icon={<Send className="h-4 w-4" />} label="กำลังจัดส่ง" count={inProgress} /></li>
           {/* Legacy tab (forwarder-driver.php:762) — a health/stat indicator: are all
               payment-approved ready-to-ship rows accounted for? numerator = ยังไม่มอบ +
@@ -616,16 +623,17 @@ export default async function CreateDriverBatchPage({
         </div>
       )}
 
-      {/* Form per tab — pickup = hand-off close; driver/express = driver batch
-          (Express adds the ขนส่ง carrier filter, มอบคนขับ doesn't) */}
-      {activeTab === "pickup" ? (
+      {/* Form per tab — pickup-style (รับเอง + Flash/J&T/ไปรษณีย์ · ขนส่งมารับเอง) =
+          hand-off close ไม่มอบคนขับ · driver/Express = driver batch (Express มีตัวกรอง
+          บริษัทขนส่ง). owner 2026-07-30. */}
+      {isPickupStyle ? (
         <SelfPickupForm groups={pickupGroups} />
       ) : (
         <CreateBatchForm
           groups={groups}
           drivers={drivers}
           showCarrierFilter={activeTab === "express"}
-          showFlashExport={activeTab === "flash"}
+          showFlashExport={false}
         />
       )}
     </main>
