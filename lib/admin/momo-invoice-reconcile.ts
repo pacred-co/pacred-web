@@ -72,11 +72,25 @@ const num = (n: number | null | undefined): number => (Number.isFinite(Number(n)
  * identical and the conservative reading.
  */
 export function invoiceLineCbm(
-  line: { cbm: number | null | undefined; qty: number | null | undefined },
+  line: {
+    cbm: number | null | undefined;
+    qty: number | null | undefined;
+    /** คิวที่ MOMO "เก็บเงินจริง" = รวม ÷ เรท (parser คำนวณให้ · null = ไม่มีเรทให้หาร) */
+    billedCbm?: number | null;
+    /** MOMO พิมพ์คอลัมน์คิวเกินมา ×จำนวนกล่อง (parser ตรวจจับ · เงินที่เก็บยังถูก) */
+    cbmInflatedByQty?: boolean;
+  },
   basis: MomoCbmBasis | null,
 ): number {
   const cbm = num(line.cbm);
   if (cbm <= 0) return 0;
+  // 🔴 owner 2026-07-30 "ทำไมคิวมันถึงห่างกันขนาดนี้ · บิลนี้ดิฟกับระบบเราไป 64 CBM":
+  // MOMO พิมพ์คอลัมน์คิวเกินมา ×จำนวนกล่อง บน 9/23 บรรทัด (รวมเกิน 64.6398 คิว) แต่
+  // **เก็บเงินถูก** (รวม ÷ 2,500 = คิวของเราเป๊ะทุกบรรทัด · ดิฟทุนทั้งใบ ฿0.65).
+  // เอาเลขที่พิมพ์มาเทียบ = เทียบคนละของ → ดิฟหลอก −64 บนจอเงิน. ใช้ "คิวที่เก็บเงินจริง"
+  // แทนเมื่อ parser ยืนยันว่าบรรทัดนั้นพิมพ์เกิน → ดิฟเหลือ ≈0 (เทียบของที่เทียบได้จริง).
+  // ⚠️ ไม่กลบปัญหา: parser ยังคง totalMismatch=true บรรทัดนั้นไว้ + จอมีป้ายบอกเหตุผล.
+  if (line.cbmInflatedByQty && num(line.billedCbm) > 0) return round6(num(line.billedCbm));
   if (basis !== "per_box") return round6(cbm);
   const qty = num(line.qty);
   return round6(cbm * (qty > 0 ? qty : 1));
