@@ -51,6 +51,8 @@ import { carrierLabel } from "@/lib/freight/shipping-methods";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { buildDefaultLandingRedirect } from "@/lib/admin/default-queue-filter";
 import { resolvePackingConfirmedCabs } from "@/lib/admin/packing-confirmed-cabs";
+import { getCabinetCostContextBatch } from "@/lib/admin/container-cost-rollup";
+import { resolveRowContainerCost } from "@/lib/forwarder/container-cost-engine";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportForwarderCheckAll } from "@/actions/admin/export/forwarder-check";
 import {
@@ -349,6 +351,35 @@ export default async function AdminForwarderCheckPage({
     "cover",
   );
 
+  // ── Step 7b: ต้นทุน/กำไร คิดสด (owner 2026-07-30 · บัญชีทัก "คอลัมน์ต้นทุนไม่คำนวณ") ──
+  // เดิมคอลัมน์ ต้นทุน/กำไร อ่าน `fcosttotalprice` ที่เก็บไว้ตรงๆ → แถวที่ยังไม่ backfill
+  // (=0) ขึ้น "⚠ ไม่คำนวณ" และกำไรพองเกินจริง (เพราะฐานต้นทุนหายไปจากสูตรกำไรด้วย).
+  // คิดสดด้วยเครื่องเดียวกับ report-cnt/DETAIL (resolveRowContainerCost): เรทตู้
+  // (tb_cost_container ▸ tb_settings) × คิว · ล็อกค่าที่เก็บเมื่อ "จ่ายค่าตู้แล้ว".
+  // READ-ONLY (ไม่เขียน fcosttotalprice) — แค่แสดงผลให้ถูก. ยอดที่เก็บลูกค้า
+  // (outstanding_thb) เป็นขา "ขาย" ไม่ใช้ต้นทุน → ไม่กระทบการเรียกเก็บเงินเลย.
+  const costCabs = Array.from(
+    new Set(forwarders.map((r) => (r.fcabinetnumber ?? "").trim()).filter((c) => c !== "" && c !== "0")),
+  );
+  const paidCabinets = new Set<string>();
+  if (costCabs.length > 0) {
+    const { data: paidRaw, error: paidErr } = await admin
+      .from("tb_cnt_item")
+      // prod เก็บเป็นคอลัมน์ quoted mixed-case `"fCabinetNumber"` (เหมือน read ที่พิสูจน์
+      // แล้วใน actions/admin/cnt-payment.ts — PostgREST รับ unquoted ตรงนี้ อย่า "แก้").
+      .select("fCabinetNumber")
+      .in("fCabinetNumber", costCabs);
+    if (paidErr) {
+      console.error("[forwarder-check: tb_cnt_item paid lookup]", { code: paidErr.code, message: paidErr.message });
+    }
+    for (const p of (paidRaw ?? []) as { fCabinetNumber: string | null }[]) {
+      const cab = (p.fCabinetNumber ?? "").trim();
+      if (cab) paidCabinets.add(cab);
+    }
+  }
+  // เรท + โกดัง + ธงจ่ายค่าตู้ ต่อตู้ (SOT เดียวกับ report-cnt — ห้ามก๊อปสูตร).
+  const cabCostCtx = await getCabinetCostContextBatch(admin, costCabs, paidCabinets);
+
   // ── Step 8: Shape rows for the client + apply ?q= tab filter ────────────
   let rows: ForwarderCheckRow[] = forwarders.map((r) => {
     const user = usersById.get(r.userid);
@@ -378,11 +409,17 @@ export default async function AdminForwarderCheckPage({
     // owner 2026-07-22: juristic 1% on ANY positive amount (no ฿1,000 minimum).
     const onePercent =
       customerCompany === 1 && priceFull > 0 ? Math.round(priceFull * 0.01 * 100) / 100 : 0;
+    // ต้นทุนนำเข้าจีน-ไทย — คิดสดด้วยเครื่องเดียวกับ report-cnt/DETAIL (แทนการอ่าน
+    // fcosttotalprice ที่เก็บไว้ ซึ่งเป็น 0 บนแถวที่ยังไม่ backfill → เดิมขึ้น "ไม่คำนวณ"
+    // + กำไรพองเกินจริง). ตู้ที่ไม่มี context (ไม่มีเลขตู้ / ไม่มีเรท) → fallback ค่าที่เก็บ.
+    const cab = (r.fcabinetnumber ?? "").trim();
+    const rowCostCtx = cab ? cabCostCtx[cab] : undefined;
+    const importCost = rowCostCtx ? resolveRowContainerCost(r, rowCostCtx).cost : Number(r.fcosttotalprice ?? 0);
     // Profit (legacy profitItem formula at forwarder-check.php L405)
     const profit =
       priceFull -
       onePercent -
-      (Number(r.fcosttotalprice ?? 0) +
+      (importCost +
         Number(r.fshippingservice ?? 0) +
         Number(r.pricecrate ?? 0) +
         Number(r.ftransportpricechnthb ?? 0) +
@@ -422,7 +459,7 @@ export default async function AdminForwarderCheckPage({
       discount: Number(r.fdiscount ?? 0),
       outstanding_thb: outstanding,
       one_percent: onePercent,
-      cost_total_price: Number(r.fcosttotalprice ?? 0),
+      cost_total_price: importCost,
       cost_total_price_sheet: Number(r.fcosttotalpricesheet ?? 0),
       profit_item: Math.round(profit * 100) / 100,
       status: r.fstatus,
@@ -487,33 +524,10 @@ export default async function AdminForwarderCheckPage({
   // see whether the container's cost已 left our account — a ตู้ we haven't paid yet
   // is where a cost surprise still hides. READ-ONLY: one scoped .in() lookup, no
   // money write, no gate — the badge is informational (it never blocks แจ้งชำระ).
+  // Badge นี้ใช้ `paidCabinets` ที่คิวไว้ตอนคิดต้นทุน (Step 7b) — ไม่ query tb_cnt_item
+  // ซ้ำ และการันตีว่า "จ่ายค่าตู้แล้ว" ตรงกับตัวที่ล็อกต้นทุน (cabinetIsPaid) เสมอ.
   const cntPaidByCab: Record<string, boolean> = {};
-  {
-    const cabs = Array.from(
-      new Set(rows.map((r) => (r.cabinet_number ?? "").trim()).filter((c) => c !== "" && c !== "0")),
-    );
-    if (cabs.length > 0) {
-      const { data, error } = await admin
-        .from("tb_cnt_item")
-        // prod stores this as the quoted mixed-case column `"fCabinetNumber"`;
-        // PostgREST takes it UNQUOTED here (same shape as the proven read in
-        // actions/admin/cnt-payment.ts — do not "fix" it to a quoted literal).
-        .select("fCabinetNumber")
-        .in("fCabinetNumber", cabs);
-      if (error) {
-        // §0c — never swallow: a failed lookup must be visible in the log, but it
-        // must not break the collect queue (the badge simply renders "ยังไม่จ่าย").
-        console.error(`[forwarder-check: tb_cnt_item cabinet lookup]`, {
-          code: error.code, message: error.message, cabs: cabs.length,
-        });
-      } else {
-        for (const r of (data ?? []) as { fCabinetNumber: string | null }[]) {
-          const cab = (r.fCabinetNumber ?? "").trim();
-          if (cab) cntPaidByCab[cab] = true;
-        }
-      }
-    }
-  }
+  for (const cab of paidCabinets) cntPaidByCab[cab] = true;
 
   return (
     <>

@@ -111,6 +111,42 @@ export type ReconcileRow = {
   ourSell: number | null;
 };
 
+/**
+ * 🔴 "ขายต่ำกว่าทุนที่ MOMO เก็บ" — owner 2026-07-30 (verbatim):
+ * *"ขอแค่เงินที่เราเก็บมามันไม่ติดลบนะครับ"*
+ *
+ * เทียบ **ต่อแทรคกิ้ง** เพราะนั่นคือ grain ที่ MOMO เรียกเก็บ: ค่านำเข้าที่เราขายลูกค้า
+ * (`ourSell` = ftotalprice) เทียบกับยอดที่ MOMO เก็บเราสำหรับแทรคกิ้งเดียวกัน (`invoiceCost`
+ * = "รวม" บนบรรทัดนั้น) — ไม่ใช่ `currentCost` ที่ระบบบันทึกไว้ เพราะคำถามคือ "พอบันทึกใบนี้แล้ว
+ * เราจะติดลบไหม" ซึ่งวัดกับยอดที่ MOMO เก็บจริง.
+ *
+ * 3 เงื่อนไข — แต่ละตัวปิดคำเตือนหลอกคนละแบบ:
+ *   · `matched`      — บรรทัดที่หาแถวไม่เจอ ไม่มีราคาขายของเราให้เทียบเลย
+ *   · `ourSell > 0`  — แถวที่ **ยังไม่ตั้งราคา** (ftotalprice = 0) ไม่ใช่การขายขาดทุน
+ *                      มันคือ "ยังไม่ได้ตั้งราคา" ซึ่งรายงานแยกที่ `sellMissingLines` อยู่แล้ว
+ *                      (ถ้านับรวม จะได้คำเตือนแดงปลอมทุกแถวที่ยังรอตั้งราคา = คนเลิกเชื่อจอ)
+ *   · `ourSell < invoiceCost` — ขายเท่าทุนพอดี = ไม่ขาด (ไม่ใช่กำไร แต่ไม่ติดลบ)
+ *
+ * ⚠️ นี่คือ **คำเตือน ไม่ใช่ด่าน** — owner: *"ก็ไม่ว่าอะไรครับ ขอแค่…ไม่ติดลบ"* คือขอให้
+ * **เห็น** ไม่ใช่ขอให้ระบบห้ามบันทึก. การตัดสินใจเรื่องราคาเป็นของ owner/pricing.
+ *
+ * ⚠️ กล่องเดียวติดลบ ≠ งานนี้ขาดทุน — ขายคิดตามน้ำหนัก ทุนคิดตามคิว กล่องเบาแต่ใหญ่จึงติดลบ
+ * รายกล่องได้ทั้งที่ทั้งชิปเม้นยังกำไร (บทเรียน 2026-07-23). ตัวนี้ตอบ "แถวไหนขายต่ำกว่าทุน"
+ * ตรงๆ ตามที่ owner ถาม · จอเป็นคนเอายอดทั้งชิปเม้น (byShipment) มากำกับข้างๆ ให้ไม่เข้าใจผิด.
+ */
+export function lossVsInvoice(row: Pick<ReconcileRow, "matched" | "ourSell" | "invoiceCost">): boolean {
+  if (!row.matched) return false;
+  const sell = num(row.ourSell);
+  if (sell <= 0) return false;
+  return sell < num(row.invoiceCost);
+}
+
+/** ขาดไปเท่าไร (บาท) = ทุนที่ MOMO เก็บ − ราคาขายของเรา · 0 เมื่อไม่ได้ติดลบ. */
+export function lineLossShortfall(row: Pick<ReconcileRow, "matched" | "ourSell" | "invoiceCost">): number {
+  if (!lossVsInvoice(row)) return 0;
+  return round2(num(row.invoiceCost) - num(row.ourSell));
+}
+
 export type ReconcileTotals = {
   lines: number;
   matchedLines: number;
@@ -149,6 +185,12 @@ export type ReconcileTotals = {
   profitAfter: number;
   /** profitAfter − profitNow (= −costDiff) · − = บันทึกใบนี้แล้วกำไรลด. */
   profitDiff: number;
+
+  // ── 🔴 ขายต่ำกว่าทุน (owner 2026-07-30) ──────────────────
+  /** จำนวนแทรคกิ้งที่ **ราคาขาย < ทุนที่ MOMO เก็บ** (ดู `lossVsInvoice`). */
+  lossLines: number;
+  /** Σ ส่วนที่ขาด (บาท) ของบรรทัดพวกนั้น — "เก็บลูกค้าขาดไปเท่าไรรวมทั้งใบ". */
+  lossAmount: number;
 };
 
 /**
@@ -166,6 +208,8 @@ export function buildReconcileTotals(rows: readonly ReconcileRow[]): ReconcileTo
   let sell = 0;
   let matchedLines = 0;
   let sellMissingLines = 0;
+  let lossLines = 0;
+  let lossAmount = 0;
 
   for (const r of rows) {
     const lineCbm = num(r.invoiceCbm);
@@ -187,6 +231,13 @@ export function buildReconcileTotals(rows: readonly ReconcileRow[]): ReconcileTo
     const rowSell = num(r.ourSell);
     sell += rowSell;
     if (rowSell <= 0) sellMissingLines += 1;
+
+    // 🔴 owner: "ขอแค่เงินที่เราเก็บมามันไม่ติดลบ" — นับ + รวมยอดที่ขาด (ดู lossVsInvoice)
+    const shortfall = lineLossShortfall(r);
+    if (shortfall > 0) {
+      lossLines += 1;
+      lossAmount += shortfall;
+    }
   }
 
   const cbmDiff = round6(ourCbm - invoiceCbm);
@@ -215,5 +266,8 @@ export function buildReconcileTotals(rows: readonly ReconcileRow[]): ReconcileTo
     profitNow,
     profitAfter,
     profitDiff: round2(profitAfter - profitNow),
+
+    lossLines,
+    lossAmount: round2(lossAmount),
   };
 }
