@@ -74,6 +74,13 @@ import {
   buildReconcileTotals,
   type ReconcileTotals,
 } from "@/lib/admin/momo-invoice-reconcile";
+import { loadCustomerPaymentForFids } from "@/lib/admin/momo-invoice-customer-payment";
+import {
+  buildCustomerPaymentSummary,
+  NO_PAYMENT,
+  type CustomerPaymentInfo,
+  type CustomerPaymentSummary,
+} from "@/lib/admin/momo-invoice-customer-payment-core";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { baseTrackingOf } from "@/lib/integrations/momo-web/live-parcel-metrics";
 import { MOMO_INVOICE_PDF_MAX_BYTES } from "@/lib/admin/momo-invoice-pdf-text";
@@ -253,6 +260,12 @@ export type MomoIngestPreviewRow = {
   blockReason: string | null;
   /** "อยู่ตู้ไหนกันแน่" ตามแพคกิ้งลิส (null = พรีวิวนี้ไม่ได้โหลดคำตอบ/โหลดไม่สำเร็จ). */
   containerTruth: MomoRowContainerTruth | null;
+  /**
+   * "MOMO เก็บเงินเราแล้ว — เราเก็บเงินลูกค้ามาหรือยัง" (owner 2026-07-30) พร้อมตัวอ้างอิง
+   * ใบเสร็จ/สลิป และรายการแทรคกิ้งที่การชำระเดียวกันคลุม. null = พรีวิวนี้ไม่ได้โหลด
+   * (ทาง apply/ตัดจ่ายไม่ต้องใช้) — ไม่ใช่ "ยังไม่จ่าย". DISPLAY-ONLY.
+   */
+  customerPayment: CustomerPaymentInfo | null;
 };
 
 /**
@@ -356,6 +369,11 @@ export type MomoIngestPreview = {
   reconcile: ReconcileTotals;
   /** ยอดทั้งชิปเม้นต่อครอบครัวแทรคกิ้ง — ใช้ตอบ "ทำไมกล่องนี้ติดลบ" (ดู type ข้างบน). */
   byShipment: MomoInvoiceShipmentRollup[];
+  /**
+   * สรุป "MOMO เก็บเรา N แทรค · เก็บลูกค้าแล้ว X · ยังไม่เก็บ Y · ไม่พบงานในระบบ Z"
+   * (owner 2026-07-30) — ตอบได้โดยไม่ต้องไล่อ่านทีละแถว. null = พรีวิวนี้ไม่ได้โหลด.
+   */
+  customerPaymentSummary: CustomerPaymentSummary | null;
   /** "หักภาษีค่าขนส่ง ณ ที่จ่าย (WHT 1%)" ที่พิมพ์บนใบ (null = อ่านไม่เจอ). */
   whtThb: number | null;
   summary: {
@@ -616,10 +634,12 @@ async function buildShipmentRollup(
  * @param opts.withContainerTruth โหลดคำตอบ "อยู่ตู้ไหน" จากแพคกิ้งลิสมาแนบทุกแถว.
  *   เปิดเฉพาะตอน **พรีวิวให้คนดู** (หน้าตรวจต้นทุน) — ทาง apply/ตัดจ่ายไม่ต้องใช้
  *   และไม่ควรจ่ายค่า query เพิ่มบนเส้นทางเงิน. ค่าที่ได้เป็น display-only 100%.
+ * @param opts.withCustomerPayment โหลด "เก็บเงินลูกค้าแล้วหรือยัง" + ตัวอ้างอิงใบเสร็จ/สลิป.
+ *   เงื่อนไขเดียวกัน: พรีวิวให้คนดูเท่านั้น · READ-ONLY · display-only.
  */
 async function buildPreview(
   text: string,
-  opts?: { withContainerTruth?: boolean },
+  opts?: { withContainerTruth?: boolean; withCustomerPayment?: boolean },
 ): Promise<MomoIngestPreview> {
   const parsed = parseMomoInvoiceText(text);
   const admin = createAdminClient();
@@ -841,8 +861,26 @@ async function buildPreview(
       containerTruth: truthMap
         ? describeContainerTruth(truthMap.get(truthKeys[i] ?? ""), f?.id ?? null, f?.fcabinetnumber ?? null)
         : null,
+      customerPayment: null, // เติมด้านล่างเมื่อ withCustomerPayment (ดูบล็อกถัดไป)
     };
   });
+
+  // ── "เก็บเงินลูกค้าแล้วหรือยัง" (owner 2026-07-30) ────────────────────────
+  // MOMO เก็บเราเป็นแทรคกิ้ง — คำถามที่บัญชีต้องตอบคู่กันคือ "แล้วเราเก็บลูกค้ามาหรือยัง".
+  // อ่านอย่างเดียวผ่านโมดูลแยก (กฎ paid-detection = ตัวเดียวกับรายงานค่าคอม) แล้วแนบกับแถว.
+  // fail-soft: โหลดไม่ได้ → customerPayment = null ทุกแถว = จอบอกว่า "ยังไม่ได้ตรวจ"
+  // (ไม่ใช่ "ยังไม่จ่าย") · ตัวเลข reconcile/ต้นทุน ไม่ถูกแตะเลย.
+  let customerPaymentSummary: CustomerPaymentSummary | null = null;
+  if (opts?.withCustomerPayment) {
+    const payFids = rows.map((r) => r.fid).filter((v): v is number => v != null);
+    const payMap = await loadCustomerPaymentForFids(admin, payFids);
+    for (const r of rows) {
+      if (r.fid != null) r.customerPayment = payMap.get(r.fid) ?? NO_PAYMENT;
+    }
+    customerPaymentSummary = buildCustomerPaymentSummary(
+      rows.map((r) => ({ matched: r.matched, ourSell: r.ourSell, payment: r.customerPayment })),
+    );
+  }
 
   const byCabinet = await buildCabinetRollup(admin, rows, paidCabs);
   // ยอดทั้งชิปเม้น — เฉพาะครอบครัวที่แถวบนใบนี้แตะ (อธิบายกำไรรายกล่องที่ติดลบ)
@@ -858,6 +896,7 @@ async function buildPreview(
     byCabinet,
     reconcile: buildReconcileTotals(rows),
     byShipment,
+    customerPaymentSummary,
     whtThb: parsed.whtThb,
     summary: {
       total: rows.length,
@@ -907,8 +946,11 @@ export async function previewMomoInvoiceCost(input: unknown): Promise<AdminActio
     if (denied) return { ok: false, error: denied };
     const src = await resolveInvoiceText(parsed.data);
     if (!src.ok) return { ok: false, error: src.error };
-    // พรีวิวให้คนดู → แนบคำตอบ "อยู่ตู้ไหน" จากแพคกิ้งลิสด้วย (display-only)
-    return { ok: true, data: await buildPreview(src.text, { withContainerTruth: true }) };
+    // พรีวิวให้คนดู → แนบคำตอบ "อยู่ตู้ไหน" จากแพคกิ้งลิส + "เก็บเงินลูกค้าแล้วยัง" (display-only)
+    return {
+      ok: true,
+      data: await buildPreview(src.text, { withContainerTruth: true, withCustomerPayment: true }),
+    };
   });
 }
 

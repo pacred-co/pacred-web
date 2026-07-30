@@ -180,4 +180,22 @@ ok("real shape: INV-20260708-0002 GZS260620-2 partial round (3 of 7 rows)", () =
   assert.equal(t.cbmDiff, 0.000004);
 });
 
+// owner 2026-07-30: MOMO พิมพ์คอลัมน์คิวเกิน x จำนวนกล่อง (เงินยังถูก) — เคสจริง 9/23 บรรทัด
+// รวมเกิน 64.6398 คิว ทำให้จอโชว์ดิฟ -64 ทั้งที่ MOMO เก็บเงินตามคิวของเราเป๊ะ
+// (รวม / 2500 = คิวเรา · ดิฟทุนทั้งใบ 0.65 บาท) => ต้องเทียบ "คิวที่เก็บเงินจริง".
+ok("MOMO พิมพ์คิวเกิน -> ใช้คิวที่เก็บเงินจริง ไม่ใช่เลขที่พิมพ์", () => {
+  assert.equal(invoiceLineCbm({ cbm: 29.2824, qty: 14, billedCbm: 2.0916, cbmInflatedByQty: true }, "line_total"), 2.0916);
+  assert.equal(invoiceLineCbm({ cbm: 13.14, qty: 10, billedCbm: 1.314, cbmInflatedByQty: true }, "line_total"), 1.314);
+});
+
+ok("บรรทัดปกติไม่ถูกแตะ แม้ส่ง billedCbm มาด้วย (ธง false = ทางเดิม)", () => {
+  assert.equal(invoiceLineCbm({ cbm: 2.0366, qty: 6, billedCbm: 2.0366, cbmInflatedByQty: false }, "line_total"), 2.0366);
+  assert.equal(invoiceLineCbm({ cbm: 0.3108, qty: 5, billedCbm: 1.554, cbmInflatedByQty: false }, "per_box"), 1.554);
+});
+
+ok("ติดธงแต่ไม่มีคิวที่เก็บจริง (ไม่มีเรทให้หาร) -> ไม่เดา ใช้ทางเดิม", () => {
+  assert.equal(invoiceLineCbm({ cbm: 29.2824, qty: 14, billedCbm: null, cbmInflatedByQty: true }, "line_total"), 29.2824);
+  assert.equal(invoiceLineCbm({ cbm: 29.2824, qty: 14, billedCbm: 0, cbmInflatedByQty: true }, "line_total"), 29.2824);
+});
+
 console.log(`\n✅ momo-invoice-reconcile: ${passed} assertions passed`);
