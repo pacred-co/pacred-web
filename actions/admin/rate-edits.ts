@@ -44,6 +44,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { getCbmCostFloor, isCbmRateBelowCost } from "@/lib/admin/sell-cost-floor";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — duplicated from wallet-hs.ts /
@@ -274,6 +275,43 @@ export async function adminUpdateGeneralRateCells(
         `${r.sourcewarehouse}|${r.rgtransporttype}|${r.rgproductstype}`;
       const kgIndex = new Map<string, ExistKg>(((kgRaw ?? []) as unknown as ExistKg[]).map((r) => [key(r), r]));
       const cbmIndex = new Map<string, ExistCbm>(((cbmRaw ?? []) as unknown as ExistCbm[]).map((r) => [key(r), r]));
+
+      // 🔴 ห้ามตั้ง "เรทกลาง" ต่ำกว่าทุนจริง (owner 2026-07-30 "ต่อไปจากนี้ ห้ามมีงาน
+      //    ขาดทุนอีกแล้วนะครับ" · *"ถ้าไม่ได้ออกใบเสนอราคา ก็อิงเรทราคากลาง"*)
+      // เรทกลางคือฐานของลูกค้า **ส่วนใหญ่ทั้งระบบ** (ที่ไม่มีเรทเฉพาะตัว) — ถ้าตั้งต่ำกว่าทุน
+      // ที่นี่ ทุกงานของทุกคนขาดทุนพร้อมกัน = รุนแรงกว่าเรทเฉพาะตัวหลายเท่า แต่หน้านี้
+      // กลับไม่เคยมีพื้นกันขาดทุนเลย (ต่างจาก adminSaveCustomerRate ที่มีตั้งแต่ 19/06).
+      // ปิดให้ครบทั้ง 3 ทางที่เขียนราคาขายได้: เรทกลาง (นี่) · เรทเฉพาะตัว · เรทกำหนดเองรายงาน.
+      //
+      // บล็อกก่อนเขียนทั้งชุด (ไม่มีเซลไหนลง DB ถ้ามีเซลผิด) · เฉพาะฐานคิว —
+      // ฐานกิโลเทียบทุนต่อคิวตรงๆ ไม่ได้ (ตัวคุมคือ CHARGE_HIGHER_BASIS · owner 21/07)
+      // เท่าทุนพอดี = ผ่าน (owner 2026-07-30 เคาะ "45 ช่องปล่อยเลยครับ")
+      {
+        const cbmCost = await getCbmCostFloor();
+        const belowCost: string[] = [];
+        for (const c of d.cells) {
+          const wh = c.sourcewarehouse === "2" ? "2" : "1";
+          const tt = c.rgtransporttype === "2" ? "2" : "1";
+          if (c.rgtransporttype !== "1" && c.rgtransporttype !== "2") continue; // ทางอากาศ = ไม่มีทุนในตาราง
+          const cost = cbmCost[wh][tt];
+          for (const [tier, v] of [["ขั้นที่ 1", c.cbm1], ["ขั้นที่ 2", c.cbm2], ["ขั้นที่ 3", c.cbm3]] as const) {
+            if (v != null && isCbmRateBelowCost(v, cost)) {
+              belowCost.push(
+                `${wh === "2" ? "อี้อู" : "กวางโจว"}/${tt === "1" ? "รถ" : "เรือ"}`
+                + `/ประเภท ${c.rgproductstype} ${tier} ฿${v.toLocaleString("th-TH")} (ทุน ฿${cost.toLocaleString("th-TH")}/คิว)`,
+              );
+            }
+          }
+        }
+        if (belowCost.length > 0) {
+          return {
+            ok: false,
+            error:
+              `❌ ห้ามตั้งเรทกลางต่ำกว่าทุนจริง (ขายแล้วขาดทุนทุกงานของทุกลูกค้าที่ใช้เรทกลาง) — `
+              + `${belowCost.join(" · ")}. ปรับขึ้นอย่างน้อยให้เท่าทุนก่อนบันทึก`,
+          };
+        }
+      }
 
       let kgWrites = 0;
       let cbmWrites = 0;
