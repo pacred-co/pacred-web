@@ -125,7 +125,7 @@ const pagerBtn = (active: boolean, disabled: boolean) =>
   );
 
 export function KeywordPlanner() {
-  const { keywords, deleteKeyword, loadSampleKeywords } = usePlanner();
+  const { keywords, deleteKeyword, clearAllKeywords, loadSampleKeywords } = usePlanner();
   const confirm = useConfirm();
   const [formOpen, setFormOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -185,12 +185,18 @@ export function KeywordPlanner() {
   const onDelete = async (k: KeywordItem) => {
     if (await confirm({ title: "ลบคีย์เวิร์ด", message: `ลบ "${k.keyword}"?`, danger: true, confirmText: "ลบ" })) deleteKeyword(k.id);
   };
+  const onClearAll = async () => {
+    if (await confirm({ title: "ล้างคีย์เวิร์ดทั้งหมด", message: `ลบคีย์เวิร์ดทั้งหมด ${fmtNum(keywords.length)} คำออกจากระบบ? (กู้คืนไม่ได้)`, danger: true, confirmText: "ล้างทั้งหมด" })) clearAllKeywords();
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="inline-flex items-center gap-2 text-base font-bold text-foreground"><Search className="h-5 w-5 text-primary-600" /> Keyword บริการ (SEO)</h2>
         <div className="flex flex-wrap gap-2">
+          {keywords.length > 0 && (
+            <button type="button" className={cx(btnGhost, "text-red-600 hover:border-red-300 hover:bg-red-50")} onClick={onClearAll}><Trash2 className="h-4 w-4" /> ล้างทั้งหมด</button>
+          )}
           <button type="button" className={btnGhost} onClick={() => setImportOpen(true)}><FileUp className="h-4 w-4" /> นำเข้า CSV</button>
           <button type="button" className={btnPrimary} onClick={openAdd}><Plus className="h-4 w-4" /> เพิ่มคีย์เวิร์ด</button>
         </div>

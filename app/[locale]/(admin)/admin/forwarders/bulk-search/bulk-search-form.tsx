@@ -55,6 +55,8 @@ export function BulkSearchForm({ initialQuery = "" }: { initialQuery?: string })
     if (didAutoRun.current) return;
     if (initialQuery.trim()) {
       didAutoRun.current = true;
+      // ตั้งใจ auto-run ครั้งเดียวตอน mount (มี didAutoRun ref กันวิ่งซ้ำ → ไม่ cascade)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       runSearch(initialQuery);
     }
   }, [initialQuery, runSearch]);
