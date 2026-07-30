@@ -102,9 +102,10 @@ export function SacksPanel({ sacks, isSupervisor }: { sacks: Sack[]; isSuperviso
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4 space-y-3">
           <div className="text-sm font-medium text-amber-800 flex items-center gap-1.5"><Boxes className="h-4 w-4" /> สร้างกระสอบ</div>
-          <div className="flex gap-2">
+          {/* มือถือ: select + ปุ่ม stack เต็มจอ (แตะง่าย) · desktop: อยู่แถวเดียว */}
+          <div className="flex flex-col sm:flex-row gap-2">
             <select value={warehouseCode} onChange={(e) => setWarehouseCode(e.target.value)}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+              className="w-full sm:w-auto rounded-lg border border-gray-300 px-3 py-2 text-sm">
               <option value="">— ไม่ระบุโกดัง —</option>
               <option value="1">กวางโจว (1)</option>
               <option value="2">อี้อู (2)</option>
@@ -112,7 +113,7 @@ export function SacksPanel({ sacks, isSupervisor }: { sacks: Sack[]; isSuperviso
               <option value="4">โกดังอื่น (4)</option>
             </select>
             <button type="button" disabled={pending} onClick={() => void createSack()}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50">
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-50">
               <PackagePlus className="h-4 w-4" /> สร้าง
             </button>
           </div>
