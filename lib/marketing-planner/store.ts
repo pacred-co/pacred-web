@@ -20,7 +20,7 @@ import { buildSeed, DEFAULT_KEYWORDS, DEFAULT_TARGETS } from "./seed";
 import { buildDemoContent, DEMO_CONTENT_ID } from "./demo-content";
 import { enrichResult } from "./performance";
 import { distributeMonth, type PlanOverrides } from "./production-plan";
-import { deleteMarketingRow, resetMarketing as resetMarketingAction, saveMarketing } from "@/actions/admin/marketing-planner";
+import { clearMarketingKeywords as clearMarketingKeywordsAction, deleteMarketingRow, resetMarketing as resetMarketingAction, saveMarketing } from "@/actions/admin/marketing-planner";
 
 const EMPTY: PlannerData = { version: PLANNER_SCHEMA_VERSION, settings: [], contents: [] };
 
@@ -119,6 +119,8 @@ export type PlannerContextValue = {
   importKeywords: (items: Omit<KeywordItem, "id">[]) => { added: number; updated: number };
   updateKeyword: (id: string, patch: Partial<KeywordItem>) => void;
   deleteKeyword: (id: string) => void;
+  /** ล้าง keyword ทั้งหมด (memory + DB) — owner 2026-07-30. */
+  clearAllKeywords: () => void;
   loadSampleKeywords: () => void;
   /** ใส่งานตัวอย่างกรอกครบทุกช่อง 1 ชิ้น ลงวันที่นั้น → คืน id. กดซ้ำ = ทับตัวเดิม. */
   loadDemoContent: (publishDate: string) => string;
@@ -485,6 +487,9 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
   }, [apply, data.keywords]);
   const updateKeyword = useCallback<PlannerContextValue["updateKeyword"]>((id, patch) => apply((d) => ({ ...d, keywords: (d.keywords ?? []).map((k) => (k.id === id ? { ...k, ...patch, id: k.id } : k)) })), [apply]);
   const deleteKeyword = useCallback<PlannerContextValue["deleteKeyword"]>((id) => { apply((d) => ({ ...d, keywords: (d.keywords ?? []).filter((k) => k.id !== id) })); void deleteMarketingRow("mkt_keywords", id); }, [apply]);
+  // ล้างทั้งหมด: เคลียร์ทั้ง in-memory (จอ) และลบแถวใน DB (saveMarketing เป็น upsert-only
+  // ไม่ลบให้ · ต้อง hard-delete ที่ action เอง ไม่งั้น auto-save รอบถัดไป upsert กลับมา).
+  const clearAllKeywords = useCallback<PlannerContextValue["clearAllKeywords"]>(() => { apply((d) => ({ ...d, keywords: [] })); void clearMarketingKeywordsAction(); }, [apply]);
   const loadSampleKeywords = useCallback<PlannerContextValue["loadSampleKeywords"]>(() => apply((d) => ({ ...d, keywords: [...DEFAULT_KEYWORDS] })), [apply]);
 
   /** ใส่งานตัวอย่างที่กรอกครบทุกช่อง 1 ชิ้น ลงวันที่ที่เลือก (owner 2026-07-21).
@@ -511,7 +516,7 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
       setResult, setContentDate, setContentStatus, resetAll,
       targets, presets, savePreset, deletePreset, applyPresetTargets, setLongTotal, setShortTarget, setArticlePerDay, generateFromPlan,
       currentUserId, jobs, createJob, claimJob, addJobMessage, submitJob, rejectJob, approveJob,
-      keywords, addKeyword, importKeywords, updateKeyword, deleteKeyword, loadSampleKeywords, loadDemoContent,
+      keywords, addKeyword, importKeywords, updateKeyword, deleteKeyword, clearAllKeywords, loadSampleKeywords, loadDemoContent,
     }),
     [
       ready, users, userById, userName, userColor, data.settings, data.contents, byGroup, allByGroup, byId, labelOf, colorOf, isSettingInUse,
@@ -519,7 +524,7 @@ export function PlannerProvider({ children, users = [], currentUserId = "", init
       duplicateContent, archiveContent, restoreContent, setResult, setContentDate, setContentStatus, resetAll,
       targets, presets, savePreset, deletePreset, applyPresetTargets, setLongTotal, setShortTarget, setArticlePerDay, generateFromPlan,
       currentUserId, jobs, createJob, claimJob, addJobMessage, submitJob, rejectJob, approveJob,
-      keywords, addKeyword, importKeywords, updateKeyword, deleteKeyword, loadSampleKeywords, loadDemoContent,
+      keywords, addKeyword, importKeywords, updateKeyword, deleteKeyword, clearAllKeywords, loadSampleKeywords, loadDemoContent,
     ],
   );
 

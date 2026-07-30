@@ -94,6 +94,17 @@ export async function deleteMarketingRow(table: MarketingTable, id: string): Pro
   if (error) console.error(`[marketing] delete ${table}/${id} failed`, { message: error.message });
 }
 
+/** Clear ALL keyword rows (owner 2026-07-30 "ล้าง keyword ให้หมด") — keywords ONLY,
+ *  leaves contents/jobs/settings/targets intact. Needed because saveMarketing is
+ *  upsert-only (never deletes) — so a "clear" must hard-delete the rows here while the
+ *  store also empties the in-memory keywords (else the next auto-save re-upserts them). */
+export async function clearMarketingKeywords(): Promise<void> {
+  await requireAdmin([...ROLES]);
+  const admin = createAdminClient();
+  const { error } = await admin.from("mkt_keywords").delete().neq("id", "__never__");
+  if (error) console.error("[marketing] clear keywords failed", { message: error.message });
+}
+
 /** Wipe everything + re-seed. Returns the fresh seed for the client to adopt. */
 export async function resetMarketing(): Promise<PlannerData> {
   await requireAdmin([...ROLES]);
