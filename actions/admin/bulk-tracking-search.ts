@@ -98,7 +98,12 @@ export async function adminBulkTrackingSearch(
   // let a stray "-" token fan out to every placeholder row.
   const thTrackings = trackings.filter((t) => t !== "-");
 
-  return withAdmin(["super", "ops", "accounting"], async () => {
+  // "warehouse" included (พี่ป๊อป 2026-07-30) — the /admin/forwarders/bulk-search
+  // PAGE gate already exposes this tool to warehouse (menuWarehouse forwarder.searchMulti),
+  // and the warehouse-home tracking search hands one tracking straight here → so a
+  // warehouse worker firing the search must NOT be blocked at the action (before, the
+  // action gate was stricter than the page → warehouse got a 404 on every search).
+  return withAdmin(["super", "ops", "accounting", "warehouse"], async () => {
     const admin = createAdminClient();
 
     type FwdRow = {

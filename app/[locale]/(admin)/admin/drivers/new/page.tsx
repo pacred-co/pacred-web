@@ -378,17 +378,28 @@ export default async function CreateDriverBatchPage({
       : sp.tab === "express" ? "express"
       : "driver";
 
-  // owner 2026-07-30 — Flash / J&T / ไปรษณีย์ = ขนส่งมารับของที่โกดังเอง → ไม่มอบคนขับ
-  // Pacred · ทำงานเหมือนแท็บ "รับเองหน้าโกดัง" (ส่งมอบ + ปิดงาน 6→7). Express (Kerry/DHL/…)
-  // ยังเป็นแบบมอบคนขับ Pacred ไปส่ง (คนละความหมาย จึงไม่รวมในนี้).
-  const isPickupStyle =
-    activeTab === "pickup" || activeTab === "flash" || activeTab === "jt" || activeTab === "post";
   // Single-carrier tab label (Flash / J&T / ไปรษณีย์) for the header copy.
   const parcelLabel =
     activeTab === "flash" ? "Flash Express"
       : activeTab === "jt" ? "J&T Express"
       : activeTab === "post" ? "ไปรษณีย์ไทย/EMS"
       : "";
+
+  // HAND-OFF tabs (พี่ป๊อป 2026-07-30) — the parcels the WAREHOUSE hands off at the
+  // โกดัง WITHOUT a Pacred driver: customer self-pickup (PCS) + the 3 external couriers
+  // whose truck the warehouse BOOKS to come collect (Flash · J&T · ไปรษณีย์). All four
+  // use the same "รับเองหน้าโกดัง" flow — group by ลูกค้า, tick handed-off parcels, กด
+  // "ส่งสำเร็จ" → ปิด 6→7 (SelfPickupForm · NO driver picker). driver + express still
+  // assign a Pacred driver (CreateBatchForm). Before this, Flash/J&T/ไปรษณีย์ wrongly
+  // used the driver-assignment flow.
+  const isHandoffTab =
+    activeTab === "pickup" || activeTab === "flash" || activeTab === "jt" || activeTab === "post";
+  // Short label for the hand-off form's empty state ("ไม่มีรายการ <X>").
+  const pickupContextLabel =
+    activeTab === "flash" ? "Flash Express"
+      : activeTab === "jt" ? "J&T Express"
+      : activeTab === "post" ? "ไปรษณีย์ไทย"
+      : "รับเองหน้าโกดัง";
 
   // 1. Eligible forwarders: fstatus='6' (เตรียมส่ง) AND paydeposit NOT '1'
   //    (paydeposit='1' = credit-pending; legacy excludes these).
@@ -490,19 +501,22 @@ export default async function CreateDriverBatchPage({
     }
   }
 
-  // Pickup tab → group BY CUSTOMER (userid) into per-customer cards.
+  // Hand-off tabs → group BY CUSTOMER (userid) into per-customer cards (the
+  // SelfPickupForm shape). Uses `eligible` (the active tab's rows: PCS / Flash /
+  // J&T / ไปรษณีย์) so every hand-off tab gets one card per customer.
   const pickupGroups: PickupGroup[] =
-    isPickupStyle ? buildPickupGroups(eligible, customerById) : [];
+    isHandoffTab ? buildPickupGroups(eligible, customerById) : [];
 
   // Stop groups for the driver/express tabs (address-based — a driver delivers
   // to a physical address; for placeholder rows we fold in the customer so each
-  // card stays one customer). The pickup tab uses pickupGroups above instead.
-  const groups = isPickupStyle ? [] : buildStops(eligible, customerById);
+  // card stays one customer). Hand-off tabs use pickupGroups above instead.
+  const groups = isHandoffTab ? [] : buildStops(eligible, customerById);
 
-  // 4. Driver picker — only the driver + Express tabs assign a Pacred driver.
-  //    รับเองหน้าโกดัง + Flash/J&T/ไปรษณีย์ (ขนส่งมารับเอง) ไม่มอบคนขับ → ไม่ต้องโหลด.
+  // 4. Driver picker — ONLY the driver + Express tabs assign a Pacred driver.
+  //    The hand-off tabs (รับเอง / Flash / J&T / ไปรษณีย์) close AT the โกดัง with no
+  //    driver, so skip the (unused) driver lookup for them.
   let drivers: DriverOption[] = [];
-  if (!isPickupStyle) {
+  if (!isHandoffTab) {
     const { data: driversData, error: driversErr } = await admin
       .from("admins")
       .select("profile_id, role, is_active, profile:profiles!profile_id(member_code, first_name, last_name)")
@@ -575,7 +589,7 @@ export default async function CreateDriverBatchPage({
         {/* คอม (≥lg) = แถวเดียว ไม่มี scrollbar (owner 2026-07-25) — ย่อ padding แท็บบนคอม
             (lg:px-2.5) ให้พอดีแถวเดียว · จอเล็ก = wrap ครบทุกแท็บ */}
         <ul className="flex flex-wrap lg:flex-nowrap items-stretch gap-y-1 -mb-px">
-          {/* owner 2026-07-30: ย้าย Express มาอยู่ติด "มอบงานให้คนขับรถ" */}
+          {/* ลำดับแท็บ (owner 2026-07-30): มอบคนขับ → Express (ติดกัน) → รับเองโกดัง → Flash → J&T → ไปรษณีย์ */}
           <li><PcsDriverTab href="/admin/drivers/new" active={activeTab === "driver"} icon={<Truck className="h-4 w-4" />} label="มอบงานให้คนขับรถ" count={driverStops} /></li>
           <li><PcsDriverTab href="/admin/drivers/new?tab=express" active={activeTab === "express"} icon={<Zap className="h-4 w-4" />} label="Express (ขนส่งภายนอก)" count={expressStops} /></li>
           <li><PcsDriverTab href="/admin/drivers/new?tab=pickup" active={activeTab === "pickup"} icon={<Home className="h-4 w-4" />} label="รายการรับเองหน้าโกดัง" count={pickupStops} /></li>
@@ -601,7 +615,7 @@ export default async function CreateDriverBatchPage({
 
       {/* Plain legacy-style count line (PCS has no stat cards — just a summary row) */}
       <div className="text-xs text-muted">
-        {activeTab !== "pickup" ? (
+        {!isHandoffTab ? (
           <>
             แทรคกิ้งรอมอบหมาย <b className="text-foreground">{eligible.length.toLocaleString("th-TH")}</b> ·
             {" "}จุดส่งจัดกลุ่มแล้ว <b className="text-foreground">{groups.length.toLocaleString("th-TH")}</b> ·
@@ -623,11 +637,15 @@ export default async function CreateDriverBatchPage({
         </div>
       )}
 
-      {/* Form per tab — pickup-style (รับเอง + Flash/J&T/ไปรษณีย์ · ขนส่งมารับเอง) =
-          hand-off close ไม่มอบคนขับ · driver/Express = driver batch (Express มีตัวกรอง
-          บริษัทขนส่ง). owner 2026-07-30. */}
-      {isPickupStyle ? (
-        <SelfPickupForm groups={pickupGroups} />
+      {/* Form per tab — hand-off (รับเอง/Flash/J&T/ไปรษณีย์) = close 6→7 AT the
+          โกดัง with no driver (SelfPickupForm · Flash tab keeps its "ส่งออกไฟล์
+          Flash นัดรับ" helper) · driver/express = assign a Pacred driver batch. */}
+      {isHandoffTab ? (
+        <SelfPickupForm
+          groups={pickupGroups}
+          contextLabel={pickupContextLabel}
+          flashExport={activeTab === "flash"}
+        />
       ) : (
         <CreateBatchForm
           groups={groups}

@@ -35,6 +35,7 @@ import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { Camera, CheckCircle2, Phone, ChevronsUpDown, ChevronUp, ChevronDown } from "lucide-react";
 import { markForwarderSelfPickupDelivered } from "@/actions/admin/forwarder-self-pickup";
+import { exportFlashPickupCsv } from "@/actions/admin/export/flash-pickup";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { compressImageFile } from "@/lib/image-compress";
@@ -64,9 +65,22 @@ type PickupGroup = {
   totalVolume:  number;
 };
 
-export function SelfPickupForm({ groups }: { groups: PickupGroup[] }) {
+export function SelfPickupForm({
+  groups,
+  contextLabel = "รับเองหน้าโกดัง",
+  flashExport = false,
+}: {
+  groups: PickupGroup[];
+  /** Short label for the empty state — the carrier context (Flash / J&T / ไปรษณีย์)
+   *  when this form drives an external-courier hand-off tab (else "รับเองหน้าโกดัง"). */
+  contextLabel?: string;
+  /** Flash tab only — show the "ส่งออกไฟล์ Flash (นัดรับ)" helper (export listed
+   *  parcels as the Flash "Import ข้อมูลผู้รับ" CSV → upload to Flash → Flash picks up). */
+  flashExport?: boolean;
+}) {
   const router = useRouter();
   const { confirm, alert, dialogs } = useConfirmDialogs();
+  const [exporting, setExporting] = useState(false);
 
   // Legacy list controls (DataTable "แสดง N รายการ" + "ค้นหา") — presentation
   // only; they narrow which customer cards render, never any submit payload.
@@ -98,35 +112,75 @@ export function SelfPickupForm({ groups }: { groups: PickupGroup[] }) {
     [filteredGroups, pageStart, pageLength],
   );
 
+  // "ส่งออกไฟล์ Flash (นัดรับ)" — Flash tab helper: export every LISTED parcel as the
+  // Flash "Import ข้อมูลผู้รับ" CSV → upload to the Flash web back-office → Flash sends a
+  // truck to collect at the โกดัง. EXPORT-ONLY (re-reads by id · no mutation).
+  async function handleExportFlash() {
+    const exportIds = filteredGroups.flatMap((g) => g.forwarderIds);
+    if (exportIds.length === 0) { await alert("ไม่มีรายการ Flash ให้ส่งออก"); return; }
+    setExporting(true);
+    try {
+      const res = await exportFlashPickupCsv({ forwarderIds: exportIds });
+      if (!res.rowCount) { await alert("ไม่พบข้อมูลสำหรับ export"); return; }
+      const blob = new Blob([res.csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `flash-นัดรับ-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      if (res.truncated) await alert("ส่งออกได้สูงสุด 500 แถว — กรองรายการให้แคบลงเพื่อให้ครบ");
+    } catch (e) {
+      console.error("[SelfPickupForm handleExportFlash] failed:", e);
+      await alert("ส่งออกไฟล์ Flash ไม่สำเร็จ ลองใหม่อีกครั้ง");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div className="space-y-3">
       {dialogs}
 
-      {/* ── Legacy PCS list controls: "แสดง N รายการ" (left) + "ค้นหา" (right) ── */}
+      {/* ── Legacy PCS list controls: "แสดง N รายการ" + Flash export (left) + "ค้นหา"
+          (right). Mobile: search goes full-width on its own line. ── */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-        <div className="flex items-center gap-1.5 text-muted">
-          <span>แสดง</span>
-          <select
-            value={pageLength}
-            onChange={(e) => { setPageLength(Number(e.target.value)); setPage(1); }}
-            className="rounded border border-border bg-white px-2 py-1 text-sm"
-            aria-label="จำนวนลูกค้าต่อหน้า"
-          >
-            {[25, 50, 100, 250, 500].map((n) => (
-              <option key={n} value={n}>{n}</option>
-            ))}
-          </select>
-          <span>ราย</span>
+        <div className="flex flex-wrap items-center gap-2 text-muted">
+          <span className="inline-flex items-center gap-1.5">
+            <span>แสดง</span>
+            <select
+              value={pageLength}
+              onChange={(e) => { setPageLength(Number(e.target.value)); setPage(1); }}
+              className="rounded border border-border bg-white px-2 py-1 text-sm"
+              aria-label="จำนวนลูกค้าต่อหน้า"
+            >
+              {[25, 50, 100, 250, 500].map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+            <span>ราย</span>
+          </span>
+          {flashExport && (
+            <button
+              type="button"
+              onClick={handleExportFlash}
+              disabled={exporting || filteredGroups.length === 0}
+              title="ดาวน์โหลด → อัพโหลดเข้าเวป Flash (Import ข้อมูลผู้รับ) → Flash มารับที่โกดัง"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-3.5 py-1.5 text-sm text-foreground hover:bg-surface-alt disabled:opacity-40 shrink-0"
+            >
+              {exporting ? "⏳ กำลังส่งออก…" : "📄 ส่งออกไฟล์ Flash (นัดรับ)"}
+            </button>
+          )}
         </div>
-        <div className="flex items-center gap-1.5">
-          <label htmlFor="pickup-search" className="text-muted">ค้นหา:</label>
+        <div className="flex items-center gap-1.5 w-full sm:w-auto">
+          <label htmlFor="pickup-search" className="text-muted shrink-0">ค้นหา:</label>
           <input
             id="pickup-search"
             type="text"
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
             placeholder="ชื่อ / รหัสลูกค้า / แทรคกิ้ง / เลขออเดอร์"
-            className="rounded border border-border bg-white px-2.5 py-1 text-sm min-w-[200px]"
+            className="min-w-0 flex-1 rounded border border-border bg-white px-2.5 py-1 text-sm sm:min-w-[200px] sm:flex-none"
           />
         </div>
       </div>
@@ -134,7 +188,7 @@ export function SelfPickupForm({ groups }: { groups: PickupGroup[] }) {
       {groups.length === 0 ? (
         <div className="overflow-x-auto scrollbar-x-visible rounded border border-border bg-white">
           <div className="px-3 py-10 text-center text-muted">
-            ไม่มีรายการรับเองหน้าโกดัง — ทุกอย่างปิดงานแล้ว
+            ไม่มีรายการ ({contextLabel}) — ปิดงานหมดแล้ว
           </div>
         </div>
       ) : visibleGroups.length === 0 ? (
@@ -466,14 +520,17 @@ function CustomerPickupCard({
           the running เลือก / หนัก / ปริมาตร totals inline. Closes ONLY this
           customer's selected parcels. */}
       <div className="border-t border-border p-2.5">
-        <div className="flex flex-wrap items-center gap-2 rounded-full border border-emerald-700/40 bg-emerald-600 px-2.5 py-2 text-white shadow-sm ring-1 ring-black/5">
+        {/* Mobile (< sm): a full-width rounded-2xl card — the button + photo stack
+            full-width so they're thumb-tappable, the totals wrap below. sm+ keeps the
+            compact rounded-full pill row (พี่ป๊อป 2026-07-30 "มือถือดูไม่รู้เรื่อง"). */}
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-700/40 bg-emerald-600 px-3 py-2.5 text-white shadow-sm ring-1 ring-black/5 sm:rounded-full sm:px-2.5 sm:py-2">
           {/* Submit — kept CLICKABLE at 0-select so the "กรุณาเลือกรายการ" popup
               fires (a disabled button would swallow it). Only disabled in-flight. */}
           <button
             type="button"
             onClick={handleSubmit}
             disabled={pending}
-            className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-4 py-2 text-sm font-bold text-emerald-700 shadow-sm hover:bg-white disabled:opacity-60 disabled:cursor-not-allowed min-h-[40px]"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-white/95 px-4 py-2 text-sm font-bold text-emerald-700 shadow-sm hover:bg-white disabled:opacity-60 disabled:cursor-not-allowed min-h-[40px] sm:w-auto"
           >
             <CheckCircle2 className="h-4 w-4" />
             {pending ? "กำลังบันทึก..." : "บันทึกส่งสำเร็จ"}
@@ -482,7 +539,7 @@ function CustomerPickupCard({
           {/* รูปหลักฐาน — inline in the colored bar (photo input on white pill) */}
           <label
             htmlFor={`pickup-photo-${group.key}`}
-            className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-medium text-emerald-800 cursor-pointer hover:bg-white min-h-[36px]"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-medium text-emerald-800 cursor-pointer hover:bg-white min-h-[36px] sm:w-auto"
             title="รูปหลักฐานการรับ/ส่ง (ถ้ามี · ไม่บังคับ)"
           >
             <Camera className="h-3.5 w-3.5" />

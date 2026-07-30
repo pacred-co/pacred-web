@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { Link } from "@/i18n/navigation";
 import {
   adminBulkTrackingSearch,
@@ -44,6 +44,20 @@ export function BulkSearchForm({ initialQuery = "" }: { initialQuery?: string })
       }
     });
   }, []);
+
+  // Auto-run the search on mount when a tracking was handed in from the warehouse
+  // home (?q=...) — so the worker sees the result IMMEDIATELY without pressing
+  // "🔍 ค้นหา" a second time (พี่ป๊อป 2026-07-30 "ใส่เลขแทรคกดค้นหา มันมาโผล่หน้านี้เฉย
+  // จะให้กดหาหลายรอบหละ งง"). home-search.tsx already promised this auto-run — it
+  // just was never wired here. Runs once (ref guard) so re-renders don't re-search.
+  const didAutoRun = useRef(false);
+  useEffect(() => {
+    if (didAutoRun.current) return;
+    if (initialQuery.trim()) {
+      didAutoRun.current = true;
+      runSearch(initialQuery);
+    }
+  }, [initialQuery, runSearch]);
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
