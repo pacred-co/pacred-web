@@ -2,7 +2,31 @@
 
 > SAVEPOINT 2026-07-28 (ภูม + Claude) · **ขั้น MOCKUP — ยังไม่ลงโค้ดจริง** · รอ ภูม/เดฟ/พี่ป๊อป คอนเฟิร์ม mockup ก่อน
 > mockup ล่าสุด = `docs/research/inv-draft-2026-07-28/mockup.html` (v3)
-> resume พรุ่งนี้: `cp docs/research/inv-draft-2026-07-28/mockup.html public/_tmp/inv-draft-mockup.html` → เปิด `localhost:3000/_tmp/inv-draft-mockup.html` (⚠️ ลบออกจาก public/ ก่อน commit เสมอ · §0j)
+> resume: `cp docs/research/inv-draft-2026-07-28/mockup.html public/_tmp/inv-draft-mockup.html` → เปิด `localhost:3000/_tmp/inv-draft-mockup.html` (⚠️ ลบออกจาก public/ ก่อน commit เสมอ · §0j)
+
+---
+
+## 🆕 อัพเดต 2 (savepoint ล่าสุด · หลังคุยกับ ภูม รอบ 2) — architecture เคาะแล้ว · รอทำพร้อมทีม (งานใหญ่)
+
+**✅ ARCHITECTURE เคาะ (ภูม):** **เชื่อม 2 Google Sheets เดิม · DOC ยังคีย์ในชีต · ไม่ย้ายมาคีย์ในระบบ Pacred** → Pacred = อ่านจากชีต + โชว์ + ติ๊กเลือก + รวมอากร/ภาษี + ออกไฟล์ + เก็บบางอย่างเผื่อแก้ + เติม HS จากคลัง
+
+**✅ Q1/Q2/Q3 ตอบแล้ว:**
+- **Q1 (2 ช่อง Qty ใน NetBay CSV):** ยึดจำนวนตาม **Invoice** (ช่อง Qty ที่ตรงกับ Amount)
+- **Q2 (งานไหน "ยังไม่ออกใบ"):** ดูจาก **ช่องสถานะในชีต** (`filter_rows` = `not done` · done = สถานะมีคำใน `MARKS_DONE_LIST` เช่น "ยิงใบขนแล้ว/ลงครบแล้ว") — **ไม่ใช่ field ในระบบเรา** · ลิสต์ = แถวที่ยังไม่มีเลขตู้/ยังไม่ done
+- **Q3 (ชื่อ EN + ราคา USD สำแดง):** **ให้ Pacred เก็บไว้** เผื่อกลับมาแก้/ทำใบเดิมซ้ำ
+
+**🏗️ โครงที่จะทำ (ให้ ภูม โชว์ เดฟ/พี่ป๊อป คอนเฟิร์มก่อนลงโค้ด):**
+1. **หน้าใหม่แยก** (role DOC) — ลิสต์ออเดอร์จากชีต → ☑ ติ๊กหลายออเดอร์รวม 1 Invoice → แถบรวมอากร+ภาษีสด (ปรับให้อยู่ในกรอบ) → ใส่เลข Invoice/วันที่/เรท USD → กดออก 3 ไฟล์
+2. **เชื่อม Google Sheets API** — service account อ่าน 3 ชีต · port ตรรกะ parse จาก processor.py (`parse_main_sheet`/`filter_rows`/`parse_dest_sheet`) · ⚠️ **credential = secret/env ห้าม commit ไฟล์ .json** + ต้องแชร์ชีตให้อีเมล service account (ภูม ตั้งฝั่ง Google)
+3. **ตาราง DB ใหม่ 2 ตาราง** — `inv_draft_document` (ใบที่ออก: เลข Invoice/วันที่/เรท/ออเดอร์ที่รวม/ใครออก) + `inv_draft_line` (รายบรรทัด EN/USD/HS/%อากร/CT/น้ำหนัก/อากร/VAT) = ตอบ Q3 (กลับมาแก้ได้)
+4. **Reuse** — `import-duty-vat.ts` (สูตร) · คลัง HS (mig 0224) · PDF/print · CSV export เขียนใหม่ 28 คอลัมน์
+5. **ออก 3 ไฟล์** — Invoice PDF + Packing PDF (ยึดหน้าตาไฟล์จริง) + NetBay CSV (Importer=Pacred · encoding TIS-620) + .xlsx
+
+**เพิ่มจากรอบ 1:** ตัดคอลัมน์ "ตู้" ออกจากลิสต์เลือกออเดอร์ (มีเลขตู้=ทำแล้ว=หลุดลิสต์) · ไม่เอาช่อง "เป้าหมายอากร/ภาษี" (ภูม ไม่เอา) · mockup ยังเป็น v3 (คอลัมน์ลิสต์เป็น placeholder — **ต้องแก้ให้ตรงชีต "สถานะงาน" จริง** พอ ภูม copy หัวตาราง+ตัวอย่างแถวมาให้)
+
+**🔴 เหลือทำ (พร้อมทีม):** (1) ภูม copy หัวตาราง+2แถว ชีต "สถานะงาน" → ผมแก้ mockup ให้ตรงชีตจริง (Google Sheets grid อ่านอัตโนมัติไม่ได้ = canvas) (2) โชว์ เดฟ/พี่ป๊อป คอนเฟิร์ม โครง+mockup (3) ลงโค้ดจริง
+
+---
 
 ## เป้าหมาย
 ยกโปรแกรม **inv_draft_system2** (Python Tkinter ที่ ภูม เขียนตอนเป็น DOC บริษัทเก่า) เข้า Pacred — ให้พนักงาน DOC ทำ **Commercial Invoice + Packing List + ไฟล์ NetBay (ใบขน)** ได้โดยไม่ต้องคีย์มือ/กอปวางเอง.
