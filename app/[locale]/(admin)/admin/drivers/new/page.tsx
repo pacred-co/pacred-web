@@ -377,6 +377,7 @@ export default async function CreateDriverBatchPage({
       : sp.tab === "post" ? "post"
       : sp.tab === "express" ? "express"
       : "driver";
+
   // Single-carrier tab label (Flash / J&T / ไปรษณีย์) for the header copy.
   const parcelLabel =
     activeTab === "flash" ? "Flash Express"
@@ -566,7 +567,7 @@ export default async function CreateDriverBatchPage({
             : activeTab === "express"
             ? "Express — มอบงานขนส่งภายนอกให้คนขับไปส่ง"
             : parcelLabel
-            ? `${parcelLabel} — บุ๊ครถขนส่งมารับที่โกดัง`
+            ? `${parcelLabel} — ขนส่งมารับที่โกดัง (ปิดงานส่งสำเร็จ)`
             : "สร้างรายการขนส่ง — มอบงานให้คนขับรถ"}
         </h1>
         <p className="mt-1 text-sm text-muted">
@@ -575,7 +576,7 @@ export default async function CreateDriverBatchPage({
             : activeTab === "express"
             ? "งานที่ส่งผ่านบริษัทขนส่งภายนอก (Kerry · DHL · SCG · เฟิร์ส · จันทร์สว่าง · …) — เลือกบริษัทขนส่งจากตัวกรอง 🚚 ด้านล่าง · มอบคนขับ Pacred ไปส่งให้ขนส่ง · สร้างรอบจัดส่ง"
             : parcelLabel
-            ? `พนักงานโกดังบุ๊ครถ ${parcelLabel} เข้ามารับพัสดุที่โกดัง — แยกการ์ดตามลูกค้า · ติ๊กพัสดุที่ส่งให้ขนส่งแล้ว แนบรูป (ถ้ามี) → กด \"บันทึกส่งสำเร็จ\" ปิดงาน (สถานะ \"ส่งแล้ว\") โดยไม่ต้องมอบคนขับ Pacred`
+            ? `งานที่ส่งผ่าน${parcelLabel} — ขนส่งมารับของที่โกดังเอง ไม่ต้องมอบคนขับ · แยกการ์ดตามลูกค้า · ติ๊กพัสดุที่ส่งมอบให้ขนส่งแล้ว แนบรูป (ถ้ามี) → กด "บันทึกส่งสำเร็จ" ปิดงานทีละลูกค้า`
             : "ส่งโดยคนขับ Pacred เอง (เหมาๆ / Pacred Express) — เลือกจุดส่ง · เลือกคนขับ · กำหนดเวลา · สร้างรอบจัดส่ง. แต่ละ \"จุดส่ง\" คือกลุ่มที่อยู่ปลายทางเดียวกัน"}
         </p>
       </div>
@@ -588,9 +589,9 @@ export default async function CreateDriverBatchPage({
         {/* คอม (≥lg) = แถวเดียว ไม่มี scrollbar (owner 2026-07-25) — ย่อ padding แท็บบนคอม
             (lg:px-2.5) ให้พอดีแถวเดียว · จอเล็ก = wrap ครบทุกแท็บ */}
         <ul className="flex flex-wrap lg:flex-nowrap items-stretch gap-y-1 -mb-px">
-          {/* ลำดับแท็บ (พี่ป๊อป 2026-07-30): Express → มอบคนขับ → รับเองโกดัง → Flash → J&T → ไปรษณีย์ */}
-          <li><PcsDriverTab href="/admin/drivers/new?tab=express" active={activeTab === "express"} icon={<Zap className="h-4 w-4" />} label="Express (ขนส่งภายนอก)" count={expressStops} /></li>
+          {/* ลำดับแท็บ (owner 2026-07-30): มอบคนขับ → Express (ติดกัน) → รับเองโกดัง → Flash → J&T → ไปรษณีย์ */}
           <li><PcsDriverTab href="/admin/drivers/new" active={activeTab === "driver"} icon={<Truck className="h-4 w-4" />} label="มอบงานให้คนขับรถ" count={driverStops} /></li>
+          <li><PcsDriverTab href="/admin/drivers/new?tab=express" active={activeTab === "express"} icon={<Zap className="h-4 w-4" />} label="Express (ขนส่งภายนอก)" count={expressStops} /></li>
           <li><PcsDriverTab href="/admin/drivers/new?tab=pickup" active={activeTab === "pickup"} icon={<Home className="h-4 w-4" />} label="รายการรับเองหน้าโกดัง" count={pickupStops} /></li>
           <li><PcsDriverTab href="/admin/drivers/new?tab=flash" active={activeTab === "flash"} icon={<Package className="h-4 w-4" />} label="Flash Express" count={flashStops} /></li>
           <li><PcsDriverTab href="/admin/drivers/new?tab=jt" active={activeTab === "jt"} icon={<Package className="h-4 w-4" />} label="J&T Express" count={jtStops} /></li>

@@ -17,12 +17,12 @@ import { Search, CalendarDays, ChevronDown, Check } from "lucide-react";
 
 type Rep = { position: string; id: string; name: string };
 
-const REPORT_TYPES = [
-  { key: "commission", label: "ค่าคอมมิชชั่น" },
-  // กำไรตู้ (owner 2026-07-29): กำไรต้นทุนรายตู้ จัดกลุ่มรายเดือนตามเลขตู้ —
-  // ไม่ใช้ ตำแหน่ง/ผู้รับผิดชอบ/ช่วงวันที่ (เดือนอ่านจากเลขตู้ตรงๆ) → ซ่อนตัวกรองพวกนั้น
-  { key: "container-profit", label: "กำไรตู้ (รายเดือน)" },
-];
+// กำไรตู้ (owner 2026-07-29): กำไรต้นทุนรายตู้ จัดกลุ่มรายเดือนตามเลขตู้ —
+// ไม่ใช้ ตำแหน่ง/ผู้รับผิดชอบ/ช่วงวันที่ (เดือนอ่านจากเลขตู้ตรงๆ) → ซ่อนตัวกรองพวกนั้น.
+// owner 2026-07-30: margin ต่อตู้ = ข้อมูลผู้บริหาร → โชว์เฉพาะ ultra (allowContainerProfit) ·
+// HR เห็นหน้านี้ได้แต่ไม่เห็นแท็บนี้ (page ก็ coerce type กลับ commission กันพิมพ์ URL ตรง).
+const COMMISSION_TYPE = { key: "commission", label: "ค่าคอมมิชชั่น" };
+const CONTAINER_PROFIT_TYPE = { key: "container-profit", label: "กำไรตู้ (รายเดือน)" };
 
 const POSITIONS = [
   { key: "sales", label: "เซลล์" },
@@ -196,6 +196,7 @@ export function ReportFilters({
   curRep = "",
   curFrom = "",
   curTo = "",
+  allowContainerProfit = false,
 }: {
   reps?: Rep[];
   curType?: string;
@@ -203,7 +204,12 @@ export function ReportFilters({
   curRep?: string;
   curFrom?: string;
   curTo?: string;
+  /** owner 2026-07-30 — แท็บ "กำไรตู้" (margin) โชว์เฉพาะ ultra · HR = false */
+  allowContainerProfit?: boolean;
 }) {
+  const reportTypes = allowContainerProfit
+    ? [COMMISSION_TYPE, CONTAINER_PROFIT_TYPE]
+    : [COMMISSION_TYPE];
   const router = useRouter();
   const pathname = usePathname();
 
@@ -246,7 +252,7 @@ export function ReportFilters({
         label="ประเภทรายงาน"
         value={reportType}
         onChange={setReportType}
-        options={REPORT_TYPES.map((t) => ({ value: t.key, label: t.label }))}
+        options={reportTypes.map((t) => ({ value: t.key, label: t.label }))}
         className={fieldClass}
       />
 

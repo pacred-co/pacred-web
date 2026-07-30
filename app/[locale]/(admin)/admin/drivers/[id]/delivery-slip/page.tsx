@@ -263,7 +263,7 @@ export default async function DeliverySlipPage({
   );
   if (scoped.length === 0) notFound();
 
-  let forwarders: Forwarder[] = [];
+  let allForwarders: Forwarder[] = [];
   {
     const { data: fwdData, error: fwdErr } = await admin
       .from("tb_forwarder")
@@ -277,30 +277,29 @@ export default async function DeliverySlipPage({
       });
       throw new Error(`ไม่สามารถอ่านรายการสินค้า: ${fwdErr.message}`);
     }
-    forwarders = (fwdData ?? []) as unknown as Forwarder[];
+    allForwarders = (fwdData ?? []) as unknown as Forwarder[];
   }
-  if (forwarders.length === 0) notFound();
+  if (allForwarders.length === 0) notFound();
 
-  // 4. Consignee — taken from the first row (the slip is issued per address, so
-  //    every row shares it).
-  const head = forwarders[0];
-  const consigneeName = [head.faddressname, head.faddresslastname]
-    .map((s) => (s ?? "").trim())
-    .filter(Boolean)
-    .join(" ");
-  const consigneeAddress = [
-    head.faddressno,
-    head.faddresssubdistrict ? `ตำบล/แขวง ${head.faddresssubdistrict}` : "",
-    head.faddressdistrict ? `อำเภอ/เขต ${head.faddressdistrict}` : "",
-    head.faddressprovince ? `จังหวัด ${head.faddressprovince}` : "",
-    head.faddresszipcode,
-  ]
-    .map((s) => (s ?? "").trim())
-    .filter(Boolean)
-    .join(" ");
-  const consigneePhones = [head.faddresstel, head.faddresstel2]
-    .map((p) => (p ?? "").trim())
-    .filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
+  // owner 2026-07-30 "พิมพ์ใบส่งสินค้าทั้งหมด" — ใบส่งสินค้าเป็นเอกสาร "1 แผ่น/ที่อยู่"
+  // (ลูกค้าแต่ละคนเซ็นรับของตัวเอง) → จัดกลุ่ม forwarder ตามที่อยู่จัดส่ง แล้วเรนเดอร์
+  // ทีละกลุ่ม คั่นหน้าใหม่ตอนพิมพ์ (break-before-page). กด Ctrl+P ครั้งเดียว = ได้ทุกแผ่น.
+  const groupsMap = new Map<string, Forwarder[]>();
+  for (const f of allForwarders) {
+    const key = [
+      (f.faddressname ?? "").trim(),
+      (f.faddresslastname ?? "").trim(),
+      (f.faddressno ?? "").trim(),
+      (f.faddresssubdistrict ?? "").trim(),
+      (f.faddressdistrict ?? "").trim(),
+      (f.faddressprovince ?? "").trim(),
+      (f.faddresszipcode ?? "").trim(),
+    ].join("|");
+    const arr = groupsMap.get(key);
+    if (arr) arr.push(f);
+    else groupsMap.set(key, [f]);
+  }
+  const addrGroups = [...groupsMap.values()]; // 1 กลุ่ม = 1 แผ่น
 
   // ── ชื่อคนขับ (owner 2026-07-23 "เอาชื่อจริงมาใส่ ไม่ใช่ user") ──────────────
   // `tb_forwarder_driver.fdadminid` เก็บ "รหัสพนักงาน" (AD###) แต่ของเก่าบางแถว
@@ -357,7 +356,6 @@ export default async function DeliverySlipPage({
   // หาชื่อไม่เจอ → โชว์รหัสไว้ ดีกว่าเว้นว่างจนไม่รู้ว่าใครขับ
   const driverLabel = driverName || batch.fdadminid || "—";
 
-  const docNo = forwarders.map((f) => f.id).join(",");
   // วันที่อย่างเดียว ไม่เอาเวลา (owner 2026-07-23) — ใบส่งสินค้าเป็นเอกสารราย "วัน"
   // เวลาที่สร้างรอบไม่ได้ให้ข้อมูลอะไรกับคนรับของ. ใช้ทั้งกล่องเลขที่และใต้ลายเซ็น.
   const dateLabel = batch.fddate
@@ -367,10 +365,6 @@ export default async function DeliverySlipPage({
         day: "2-digit",
       })
     : "—";
-
-  const totalWeight = forwarders.reduce((s, f) => s + Number(f.fweight ?? 0), 0);
-  const totalCbm = forwarders.reduce((s, f) => s + totalCbmOf(f), 0);
-  const totalBoxes = forwarders.reduce((s, f) => s + Number(f.famount ?? 0), 0);
 
   // QR = a real link to this run's detail page, mirroring legacy PCS whose slip
   // QR opened `…/forwarder-driver/detail/<id>/`. Scanning the printed sheet on
@@ -425,7 +419,7 @@ export default async function DeliverySlipPage({
             บิลจัดส่ง (คนขับ · ทั้งรอบ) →
           </Link>
           <span className="text-xs text-gray-500">
-            ใบส่งสินค้า · เลขที่ #{docNo} · {forwarders.length} รายการ
+            ใบส่งสินค้า · {addrGroups.length} แผ่น · {allForwarders.length} รายการ
           </span>
         </div>
         <PrintButton label="🖨 พิมพ์ใบส่งสินค้า" />
@@ -442,7 +436,27 @@ export default async function DeliverySlipPage({
           = 324px → ล้น คอลัมน์ซ้ายถูกบีบจนแบน. ทุกจุดที่ล็อกความกว้างจึงปลดเป็น
           "เต็มแถวบนมือถือ · ค่าเดิมตั้งแต่ sm ขึ้นไป" — จอใหญ่และตอนพิมพ์ (กระดาษ
           A4 ≈ 794px = ผ่าน sm) หน้าตาเหมือนเดิมทุกประการ. */}
-      <main className="print-area mx-auto my-6 flex max-w-[820px] flex-col bg-white p-4 sm:p-8 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_6px_20px_rgba(0,0,0,0.06)]">
+      {addrGroups.map((forwarders, gi) => {
+        // per-address (แต่ละแผ่น) — ผู้รับ/เลขที่/ยอดรวม คิดจากกลุ่มนี้เท่านั้น
+        const head = forwarders[0];
+        const consigneeName = [head.faddressname, head.faddresslastname]
+          .map((s) => (s ?? "").trim()).filter(Boolean).join(" ");
+        const consigneeAddress = [
+          head.faddressno,
+          head.faddresssubdistrict ? `ตำบล/แขวง ${head.faddresssubdistrict}` : "",
+          head.faddressdistrict ? `อำเภอ/เขต ${head.faddressdistrict}` : "",
+          head.faddressprovince ? `จังหวัด ${head.faddressprovince}` : "",
+          head.faddresszipcode,
+        ].map((s) => (s ?? "").trim()).filter(Boolean).join(" ");
+        const consigneePhones = [head.faddresstel, head.faddresstel2]
+          .map((p) => (p ?? "").trim())
+          .filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
+        const docNo = forwarders.map((f) => f.id).join(",");
+        const totalWeight = forwarders.reduce((s, f) => s + Number(f.fweight ?? 0), 0);
+        const totalCbm = forwarders.reduce((s, f) => s + totalCbmOf(f), 0);
+        const totalBoxes = forwarders.reduce((s, f) => s + Number(f.famount ?? 0), 0);
+        return (
+      <main key={gi} className={`print-area mx-auto my-6 flex max-w-[820px] flex-col bg-white p-4 sm:p-8 shadow-[0_1px_3px_rgba(0,0,0,0.08),0_6px_20px_rgba(0,0,0,0.06)] ${gi > 0 ? "break-before-page" : ""}`}>
         {/* Header — sender (left) · document title + no./date (right) */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
           <div className="min-w-0">
@@ -685,6 +699,8 @@ export default async function DeliverySlipPage({
           กดปุ่ม &quot;พิมพ์ใบส่งสินค้า&quot; ด้านบนเพื่อพิมพ์ หรือใช้คีย์บอร์ด Ctrl+P
         </p>
       </main>
+        );
+      })}
     </div>
   );
 }

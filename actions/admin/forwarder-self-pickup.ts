@@ -54,17 +54,18 @@ import type { AdminRole } from "@/lib/auth/require-admin";
 const ROLES: AdminRole[] = ["ops", "super", "warehouse"];
 
 // The carriers whose parcels close via the WAREHOUSE HAND-OFF (fstatus 6→7, NO
-// Pacred driver assigned) — พี่ป๊อป 2026-07-30 "พนักงานโกดังต้องบุ๊ครถขนส่งเข้ามารับ
-// ของที่โกดังเรา":
+// Pacred driver assigned) — owner 2026-07-30 "พนักงานโกดังต้องบุ๊ครถขนส่งเข้ามารับ
+// ของที่โกดังเรา" · Flash/J&T/ไปรษณีย์ = ขนส่งมารับของที่โกดังเอง → ปิดงานเหมือน "รับเอง"
+// (แต่ละเจ้ามีแท็บของตัวเองใน /admin/drivers/new · ทุกแท็บ pickup-style เรียก action นี้):
 //   'PCS' = ลูกค้ามารับเองที่โกดัง
 //   '2'   = Flash Express   ┐ external couriers whose truck the warehouse BOOKS to
 //   '24'  = J&T Express     │ come collect AT our warehouse → hand-off = ส่งแล้ว (7)
 //   '11'  = ไปรษณีย์ไทย/EMS   ┘  (no Pacred driver — the courier delivers to the customer)
+//   '4'   = legacy J&T code จากข้อมูลเก่า — เก็บไว้ไม่ให้ของเก่าปิดงานไม่ได้.
 // Codes = the canonical legacy nameShipBy numbers (SHIP_BY_LABEL in /admin/drivers/new:
-//   "2" Flash · "24" J&T · "11" ไปรษณีย์). ⚠️ The earlier {'PCS','2','4'} came from a
-// STALE code map (that era: '2'=ไปรษณีย์, '4'=J&T) → corrected to the LIVE codes, else
-// J&T('24')/ไปรษณีย์('11') rows would be refused ("ไม่มีรายการที่ปิดงานได้").
-const SELF_PICKUP_SHIPBY = new Set(["PCS", "2", "24", "11"]);
+//   "2" Flash · "24" J&T · "11" ไปรษณีย์). Express (Kerry/DHL/SCG/…) ไม่อยู่ในนี้ →
+// ยังปิดผ่านสายมอบคนขับ (driver batch) ตามเดิม.
+const SELF_PICKUP_SHIPBY = new Set(["PCS", "2", "4", "24", "11"]);
 
 type ParsedInput =
   | { ok: true; forwarderIds: number[]; photo: File | null }
