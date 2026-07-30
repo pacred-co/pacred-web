@@ -624,8 +624,13 @@ export function CreateBatchForm({
           (brand red) bar pinned bottom-LEFT: the truck action button + the
           driver/endtime selectors + the running หนัก / ปริมาตร / ระบบแนะนำ pills all
           inline in ONE slim row — NOT a tall gray panel. 2026-07-01 เอาแบบ PCS. */}
-      <div className="sticky bottom-3 z-20 flex justify-start">
-        <div className="inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border border-primary-700/40 bg-primary-600 px-2.5 py-2 text-white shadow-lg ring-1 ring-black/5">
+      <div className="sticky bottom-3 z-20">
+        {/* Mobile (< sm): a full-width rounded-2xl card — the button + the two selects
+            stack so they fit + are thumb-tappable, the totals wrap below. sm+ keeps the
+            compact rounded-full pill bar pinned bottom-left (พี่ป๊อป 2026-07-30 "มือถือ
+            ดูไม่รู้เรื่อง"). sm:contents on the inner wrappers makes them transparent on
+            desktop so their children flow back into the flex-wrap pill row as before. */}
+        <div className="flex w-full flex-col gap-2 rounded-2xl border border-primary-700/40 bg-primary-600 px-3 py-2.5 text-white shadow-lg ring-1 ring-black/5 sm:inline-flex sm:w-auto sm:max-w-full sm:flex-row sm:flex-wrap sm:items-center sm:rounded-full sm:px-2.5 sm:py-2">
           {/* Submit — the legacy "เลือกคนขับรถ" truck pill. Deliberately NOT disabled
               by the selection: clicking with 0 ticked must fire the legacy
               "กรุณาเลือกรายการ" POPUP (handleSubmit → alert) — a disabled button
@@ -633,43 +638,48 @@ export function CreateBatchForm({
           <button
             type="submit"
             disabled={pending}
-            className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-4 py-2 text-sm font-bold text-primary-700 shadow-sm hover:bg-white disabled:opacity-60 disabled:cursor-not-allowed min-h-[40px]"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-full bg-white/95 px-4 py-2 text-sm font-bold text-primary-700 shadow-sm hover:bg-white disabled:opacity-60 disabled:cursor-not-allowed min-h-[40px] sm:w-auto"
           >
             <Truck className="h-4 w-4" />
             {pending ? "กำลังสร้าง..." : "เลือกคนขับรถ"}
           </button>
 
-          {/* คนขับ + เวลา selectors — inline in the colored bar (legacy bottom-left).
+          {/* คนขับ + เวลา selectors — a full-width row on mobile (driver flex-1 · เวลา
+              shrink) · sm:contents lets them flow into the pill bar on desktop.
               Disabled until ≥1 row is ticked (the whole bar is unusable at 0). */}
-          <select
-            id="driver"
-            aria-label="คนขับรถ"
-            value={driverCode}
-            onChange={(e) => setDriverCode(e.target.value)}
-            disabled={pending || drivers.length === 0 || !anySelected}
-            className="rounded-full border-0 bg-white/95 px-3 py-2 text-sm text-foreground min-h-[40px] max-w-[200px] disabled:opacity-60 disabled:cursor-not-allowed"
-            title={!anySelected ? "เลือกรายการที่จะส่งก่อน แล้วจึงเลือกคนขับ" : undefined}
-          >
-            <option value="">— เลือกพนักงานขับรถ —</option>
-            {drivers.map((d) => (
-              <option key={d.member_code} value={d.member_code}>{d.display}</option>
-            ))}
-          </select>
-          <select
-            id="endtime"
-            aria-label="ครบอายุมอบหมายงาน"
-            value={endTimeHours}
-            onChange={(e) => setEndTimeHours(Number(e.target.value) as 17 | 24 | 30)}
-            disabled={pending || !anySelected}
-            className="rounded-full border-0 bg-white/95 px-3 py-2 text-sm text-foreground min-h-[40px] disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            <option value={17}>17 ชั่วโมง</option>
-            <option value={24}>24 ชั่วโมง</option>
-            <option value={30}>30 ชั่วโมง</option>
-          </select>
+          <div className="flex w-full gap-2 sm:contents">
+            <select
+              id="driver"
+              aria-label="คนขับรถ"
+              value={driverCode}
+              onChange={(e) => setDriverCode(e.target.value)}
+              disabled={pending || drivers.length === 0 || !anySelected}
+              className="min-w-0 flex-1 rounded-full border-0 bg-white/95 px-3 py-2 text-sm text-foreground min-h-[40px] disabled:opacity-60 disabled:cursor-not-allowed sm:flex-none sm:max-w-[200px]"
+              title={!anySelected ? "เลือกรายการที่จะส่งก่อน แล้วจึงเลือกคนขับ" : undefined}
+            >
+              <option value="">— เลือกพนักงานขับรถ —</option>
+              {drivers.map((d) => (
+                <option key={d.member_code} value={d.member_code}>{d.display}</option>
+              ))}
+            </select>
+            <select
+              id="endtime"
+              aria-label="ครบอายุมอบหมายงาน"
+              value={endTimeHours}
+              onChange={(e) => setEndTimeHours(Number(e.target.value) as 17 | 24 | 30)}
+              disabled={pending || !anySelected}
+              className="shrink-0 rounded-full border-0 bg-white/95 px-3 py-2 text-sm text-foreground min-h-[40px] disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <option value={17}>17 ชั่วโมง</option>
+              <option value={24}>24 ชั่วโมง</option>
+              <option value={30}>30 ชั่วโมง</option>
+            </select>
+          </div>
 
-          {/* Running totals — legacy pills (หนัก / ปริมาตร / ระบบแนะนำ · call.php),
-              inline in the colored bar. */}
+          {/* Running totals — legacy pills (หนัก / ปริมาตร / ระบบแนะนำ · call.php).
+              Wrapped so they wrap horizontally on mobile · sm:contents flattens the
+              wrapper on desktop so they flow into the pill bar as before. */}
+          <div className="flex w-full flex-wrap gap-2 sm:contents">
           <span className="inline-flex items-center rounded-full bg-primary-700/40 px-3 py-1.5 text-xs font-medium whitespace-nowrap">
             เลือก <b className="mx-1 tabular-nums">{summary.stops}</b> จุด
           </span>
@@ -691,6 +701,7 @@ export function CreateBatchForm({
           >
             ระบบแนะนำ : {recommendedVehicle}
           </span>
+          </div>
         </div>
       </div>
 

@@ -367,6 +367,127 @@ ok(p6.reconciles === true, `INV0006 Σ foots`);
 ok(p6.lines.every((l) => l.rateMissing && !l.totalMismatch), `0.00-rate lines → rateMissing, not a fake mismatch`);
 ok(p6.lines.every((l) => l.qty === 1), `every qty = 1`);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 🔴 2026-07-30 — MOMO's CBM COLUMN INFLATED ×qty (owner: "ทำไมคิวมันถึงห่างกัน
+// ขนาดนี้ครับ · บิลนี้ดิฟกับระบบเราไป 64 CBM"). Rows transcribed VERBATIM from the
+// REAL INV-20260723-0006 (re-downloaded from storage and re-parsed 2026-07-30).
+//
+// The file is line_total and the parser ALREADY read it that way (votes 6/0) — the
+// gap is NOT a basis defect. On 9 of its 23 lines MOMO prints cbm = (the CBM it
+// charges for) × qty while charging ฿2,500 × the single-line CBM. Subset below keeps
+// 3 inflated + 3 healthy lines (incl. a qty-20 healthy line, the hardest non-trigger).
+const INFLATED = `NO: INV-20260723-0006
+1 ค่าขนส่งสินค้าจากจีน GZS260710-1
+1783582423-8 706.00 KG/29.2824 CBM
+PR179 14 2,500.00
+คิดตาม CBM
+5,229.00
+2 ค่าขนส่งสินค้าจากจีน GZS260710-1
+1783582423-11 320.00 KG/13.1400 CBM
+PR179 10 2,500.00
+คิดตาม CBM
+3,285.00
+3 ค่าขนส่งสินค้าจากจีน GZS260710-1
+1783156487 96.00 KG/0.8210 CBM
+PR331 2 2,500.00
+คิดตาม CBM
+1,026.50
+4 ค่าขนส่งสินค้าจากจีน GZS260710-1
+1783582423-18 84.00 KG/0.4482 CBM
+PR179 3 2,500.00
+คิดตาม CBM
+1,120.50
+5 ค่าขนส่งสินค้าจากจีน GZS260710-1
+SF5117720747498-2 210.00 KG/1.1800 CBM
+PR047 20 2,500.00
+คิดตาม CBM
+2,950.00
+6 ค่าขนส่งสินค้าจากจีน GZS260710-1
+1783582423-14 92.00 KG/0.5608 CBM
+PR179 4 2,500.00
+คิดตาม CBM
+1,402.00
+ค่าขนส่งทั้งหมด (Sub-total): 15,013.00`;
+const inf = parseMomoInvoiceText(INFLATED);
+const ti = Object.fromEntries(inf.lines.map((l) => [l.tracking, l]));
+ok(inf.lines.length === 6, `INFLATED line count: ${inf.lines.length}`);
+ok(inf.reconciles === true, `INFLATED Σ foots its Sub-total`);
+// 🔴 the regression-lock on the WRONG diagnosis: this file is line_total, NOT per_box.
+// If this ever flips to per_box, invoiceLineCbm() starts multiplying and every healthy
+// multi-box line grows ×qty — the 64-CBM gap would then be OUR bug, not MOMO's.
+ok(inf.cbmBasis === "line_total", `real ก.ค. file resolves line_total (never per_box): ${inf.cbmBasis}`);
+ok(inf.cbmBasisVotes.perBox === 0, `zero per_box votes: ${JSON.stringify(inf.cbmBasisVotes)}`);
+ok(inf.cbmBasisUsable === true, `file is usable — nothing here refuses it`);
+// The 3 inflated lines are named precisely…
+ok(ti["1783582423-8"].cbmInflatedByQty === true, `qty 14: printed 29.2824 = 2.0916 × 14 → inflated`);
+ok(ti["1783582423-11"].cbmInflatedByQty === true, `qty 10: printed 13.1400 = 1.3140 × 10 → inflated`);
+ok(ti["1783156487"].cbmInflatedByQty === true, `qty 2 with 4dp rounding (Δ0.0002) still detected`);
+// …and the healthy ones are NOT touched (a false positive here would fake a defect).
+ok(ti["1783582423-18"].cbmInflatedByQty === false, `healthy qty 3 not flagged`);
+ok(ti["SF5117720747498-2"].cbmInflatedByQty === false, `healthy qty 20 not flagged (hardest case)`);
+ok(ti["1783582423-14"].cbmInflatedByQty === false, `healthy qty 4 not flagged`);
+ok(inf.cbmInflatedLines === 3, `cbmInflatedLines: ${inf.cbmInflatedLines}`);
+// billedCbm = the volume MOMO actually charged for → what CBM must be compared against.
+ok(ti["1783582423-8"].billedCbm === 2.0916, `billedCbm 5,229 ÷ 2,500 = 2.0916: ${ti["1783582423-8"].billedCbm}`);
+ok(ti["1783582423-11"].billedCbm === 1.314, `billedCbm 3,285 ÷ 2,500 = 1.3140`);
+ok(ti["1783582423-18"].billedCbm === 0.4482, `healthy line: billedCbm === printed cbm`);
+// The over-print Σ is the whole explanation for the scary คิว gap.
+ok(
+  Math.abs(inf.cbmOverPrinted - (29.2824 - 2.0916 + (13.14 - 1.314) + (0.821 - 0.4106))) < 1e-6,
+  `cbmOverPrinted Σ: ${inf.cbmOverPrinted}`,
+);
+// The money is RIGHT — every line is ฿2,500 × its billedCbm, so the bill is payable.
+ok(
+  inf.lines.every((l) => Math.abs(l.lineTotal - 2500 * (l.billedCbm ?? 0)) < 0.02),
+  `every line charges exactly ฿2,500 × billedCbm — the MONEY is correct`,
+);
+// …but they still fail the formula, and we must NEVER silence that (§0f).
+ok(ti["1783582423-8"].totalMismatch === true, `inflated line STILL flagged totalMismatch`);
+ok(inf.lines.filter((l) => l.totalMismatch).length === 3, `exactly the 3 inflated lines flagged`);
+// An inflated line must never cast a basis vote (it fits neither formula).
+ok(inf.cbmBasisVotes.lineTotal === 3, `only the 3 healthy multi-box lines vote: ${inf.cbmBasisVotes.lineTotal}`);
+
+// A genuine per_box invoice must still be detected — the new flag must not eat it.
+// (qty 4 · 0.1000 per box · 2,500 → 1,000.00 = rate × cbm × qty.)
+const PERBOX = `NO: INV-20260799-0001
+1 ค่าขนส่งสินค้าจากจีน GZS260710-1
+AAA111 40.00 KG/0.1000 CBM
+PR001 4 2,500.00
+คิดตาม CBM
+1,000.00
+2 ค่าขนส่งสินค้าจากจีน GZS260710-1
+BBB222 60.00 KG/0.2000 CBM
+PR001 3 2,500.00
+คิดตาม CBM
+1,500.00
+ค่าขนส่งทั้งหมด (Sub-total): 2,500.00`;
+const pbx = parseMomoInvoiceText(PERBOX);
+ok(pbx.cbmBasis === "per_box", `a real per_box shape still resolves per_box: ${pbx.cbmBasis}`);
+ok(pbx.cbmBasisVotes.perBox === 2 && pbx.cbmBasisVotes.lineTotal === 0, `per_box votes ${JSON.stringify(pbx.cbmBasisVotes)}`);
+ok(pbx.cbmInflatedLines === 0, `per_box lines are NOT mistaken for inflated ones`);
+ok(pbx.lines.every((l) => !l.totalMismatch), `per_box lines fit their own basis → no noise`);
+
+// qty === 1 can never discriminate NOR be "inflated" (×1 is a no-op) → must abstain.
+const ONEBOX = `NO: INV-20260799-0002
+1 ค่าขนส่งสินค้าจากจีน GZS260710-1
+CCC333 40.00 KG/0.1000 CBM
+PR001 1 2,500.00
+คิดตาม CBM
+250.00
+ค่าขนส่งทั้งหมด (Sub-total): 250.00`;
+const one = parseMomoInvoiceText(ONEBOX);
+ok(one.cbmBasis === null && one.cbmBasisMaterial === false, `qty=1 only → abstain, no basis guessed`);
+ok(one.cbmBasisUsable === true, `qty=1 only → still usable (both readings identical)`);
+ok(one.lines[0].cbmInflatedByQty === false, `qty=1 never "inflated" (×1 is a no-op)`);
+ok(one.lines[0].billedCbm === 0.1, `qty=1 billedCbm === printed cbm`);
+// A rate-less line can imply nothing → billedCbm null, never guessed.
+ok(p2.lines.find((l) => l.tracking === "SF0215892795945")!.billedCbm === null, `rate 0.00 → billedCbm null (not 0, not a guess)`);
+ok(p2.lines.find((l) => l.tracking === "SF0215892795945")!.cbmInflatedByQty === false, `rate 0.00 → cannot be called inflated`);
+
+// One odd line must not flip a clear file (the dominance rule still governs).
+ok(oc.cbmBasis === "line_total", `3-vs-1 still line_total after the change`);
+ok(oc.cbmInflatedLines === 0, `a ×qty OVER-CHARGE is NOT an inflated-CBM print — the money differs`);
+
 // Empty / junk input → no crash, and never reconciles.
 ok(parseMomoInvoiceText("").lines.length === 0, `empty text`);
 ok(parseMomoInvoiceText("").reconciles === false, `empty text never reconciles`);

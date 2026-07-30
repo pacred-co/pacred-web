@@ -15,6 +15,7 @@ import {
   getMomoSettledFids,
 } from "@/actions/admin/momo-invoice-settlement";
 import { recordMomoInvoiceUpload } from "@/actions/admin/momo-invoice-history";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 import { InvoiceHistoryPanel } from "./invoice-history-panel";
 
 const baht = (n: number | null) =>
@@ -413,6 +414,168 @@ function ContainerTruthNote({ r }: { r: MomoIngestPreviewRow }) {
           <strong>ระบบเราถูก · ใบ MOMO ระบุตู้ผิด</strong> — แจ้ง MOMO ให้แก้ใบ{" "}
           <strong>ห้ามแก้เลขตู้ในระบบให้ตรงใบ</strong> (จะทำให้กำไรรายตู้เพี้ยน)
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * "เก็บเงินลูกค้าแล้วหรือยัง" รายแถว (owner 2026-07-30) — MOMO เก็บเราเป็นแทรคกิ้ง
+ * คำถามคู่กันที่บัญชีต้องตอบคือ "แล้วเราเก็บลูกค้ามาหรือยัง" + ต้องกดเข้าไปดู
+ * ใบเสร็จ/สลิป อ้างอิงกันได้ (§0g self-explaining row).
+ *
+ * แยก 4 สถานะให้ชัด — ห้ามยุบรวม (คนละเรื่อง คนละสิ่งที่ต้องทำต่อ):
+ *   ⏳ ยังไม่ได้ตรวจ  = พรีวิวนี้ไม่ได้โหลด (customerPayment = null) ≠ ยังไม่จ่าย
+ *   — ไม่พบงานในระบบ = จับคู่ไม่ได้ ⇒ ตอบเรื่องเก็บเงินไม่ได้เลย (คนละเรื่องกับยังไม่เก็บ)
+ *   ✅ เก็บแล้ว        = พบการชำระ (บอกช่องทาง: กระเป๋า/สลิป หรือ ใบวางบิล)
+ *   ⏳ ยังไม่เก็บ      = จับคู่ได้ แต่ยังไม่พบการชำระ
+ */
+function CustomerPaymentCell({ r }: { r: MomoIngestPreviewRow }) {
+  const p = r.customerPayment;
+  if (!r.matched) {
+    return (
+      <span className="text-[11px] text-muted" title="จับคู่กับงานในระบบไม่ได้ จึงตอบไม่ได้ว่าเก็บเงินหรือยัง — คนละเรื่องกับ 'ยังไม่เก็บ'">
+        — ไม่พบงานในระบบ
+      </span>
+    );
+  }
+  if (!p) {
+    return (
+      <span className="text-[11px] text-muted" title="พรีวิวรอบนี้ไม่ได้โหลดข้อมูลการชำระ (ไม่ได้แปลว่ายังไม่จ่าย)">
+        ⏳ ยังไม่ได้ตรวจ
+      </span>
+    );
+  }
+
+  if (!p.paid) {
+    return (
+      <div className="space-y-1">
+        <span className="inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+          ⏳ ยังไม่เก็บ
+        </span>
+        {r.ourSell != null && r.ourSell > 0 && (
+          <div className="text-[11px] text-muted">ค่านำเข้า ฿{baht(r.ourSell)}</div>
+        )}
+        {/* ใบเสร็จอาจถูกออกไว้ก่อน — ถ้ามีก็ให้กดดูได้ ไม่ปิดข้อมูลอ้างอิง */}
+        {p.receiptId != null && (
+          <Link
+            href={`/admin/accounting/forwarder-invoice/${p.receiptId}`}
+            className="inline-block rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-primary-600 hover:bg-surface-alt"
+          >
+            🧾 {p.receiptNo ?? "ใบเสร็จ"}
+          </Link>
+        )}
+        {r.fid != null && (
+          <div>
+            <Link
+              href={`/admin/forwarders/${r.fid}`}
+              className="text-[11px] text-primary-600 underline decoration-dotted underline-offset-2"
+            >
+              เปิดงาน #{r.fid} →
+            </Link>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const viaBilling = p.channel === "billing_run";
+  const others = p.coveredFids.filter((f) => f !== r.fid);
+
+  return (
+    <div className="space-y-1">
+      <span className="inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+        ✅ เก็บแล้ว
+      </span>
+      <div className="text-[11px] text-muted">
+        {p.paidAt ? formatThaiDate(p.paidAt) : "—"}
+        {p.amountThb != null && <> · ฿{baht(p.amountThb)}</>}
+      </div>
+      <div className="text-[11px] text-muted">
+        {viaBilling ? "ผ่านใบวางบิล" : "ผ่านการชำระ/สลิป"}
+      </div>
+
+      {/* ปุ่มอ้างอิง — owner: "มีปุ่ม เข้าไปดู ใบเสร็จ หรือ สลิป ได้ด้วย" */}
+      <div className="flex flex-wrap gap-1">
+        {p.receiptId != null && (
+          <Link
+            href={`/admin/accounting/forwarder-invoice/${p.receiptId}`}
+            className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-primary-600 hover:bg-surface-alt"
+            title={`เปิดใบเสร็จ ${p.receiptNo ?? ""}`}
+          >
+            🧾 {p.receiptNo ?? "ใบเสร็จ"}
+          </Link>
+        )}
+        {/* สลิป: ชี้ไปแถวที่ "ถือไฟล์สลิปจริง" (ทรงเติม-แล้วจ่าย สลิปอยู่บนรายการเติมเงิน) */}
+        {p.hasSlip && p.slipWalletHsId != null && (
+          <Link
+            href={`/admin/wallet/${p.slipWalletHsId}`}
+            className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-primary-600 hover:bg-surface-alt"
+            title="เปิดสลิปของการชำระนี้"
+          >
+            📎 สลิป
+          </Link>
+        )}
+        {p.hasSlip && viaBilling && p.billingInvoiceId != null && (
+          <Link
+            href={`/admin/billing-run/${p.billingInvoiceId}`}
+            className="rounded border border-border px-1.5 py-0.5 text-[11px] font-medium text-primary-600 hover:bg-surface-alt"
+            title="เปิดใบวางบิล (มีสลิปแนบ)"
+          >
+            📎 สลิป
+          </Link>
+        )}
+        {p.walletHsId != null && (
+          <Link
+            href={`/admin/wallet/${p.walletHsId}`}
+            className="rounded border border-border px-1.5 py-0.5 text-[11px] text-primary-600 hover:bg-surface-alt"
+            title="เปิดรายการชำระเงินของงานนี้"
+          >
+            💳 การชำระ
+          </Link>
+        )}
+        {viaBilling && p.billingInvoiceId != null && (
+          <Link
+            href={`/admin/billing-run/${p.billingInvoiceId}`}
+            className="rounded border border-border px-1.5 py-0.5 text-[11px] text-primary-600 hover:bg-surface-alt"
+            title={`เปิดใบวางบิล ${p.billingDocNo ?? ""}`}
+          >
+            📄 {p.billingDocNo ?? "ใบวางบิล"}
+          </Link>
+        )}
+        {!p.hasSlip && (
+          <span className="text-[11px] text-muted" title="การชำระนี้ไม่มีไฟล์สลิปแนบไว้">
+            (ไม่มีสลิป)
+          </span>
+        )}
+      </div>
+
+      {/* "ถ้ารวมชิปเม้นก็แจงมาด้วย" — 1 การชำระคลุมหลายแทรคกิ้ง → แจงให้กดดูได้ทีละตัว */}
+      {others.length > 0 && (
+        <details className="text-[11px]">
+          <summary className="cursor-pointer text-sky-700">
+            รวมชิปเม้น — คลุม {p.coveredFids.length} แทรค
+            {p.groupTotalThb != null && <> · รวม ฿{baht(p.groupTotalThb)}</>}
+          </summary>
+          <div className="mt-1 space-y-0.5 rounded bg-surface-alt/60 px-2 py-1">
+            <div className="text-muted">
+              การชำระเดียวกันนี้จ่ายให้ {p.coveredFids.length} รายการ (รวมแถวนี้)
+            </div>
+            {p.coveredFids.map((fid, i) => (
+              <div key={fid}>
+                <Link
+                  href={`/admin/forwarders/${fid}`}
+                  className={`font-mono underline decoration-dotted underline-offset-2 ${
+                    fid === r.fid ? "font-semibold text-foreground" : "text-primary-600"
+                  }`}
+                >
+                  {p.coveredTrackings[i] || `#${fid}`}
+                </Link>
+                {fid === r.fid && <span className="ml-1 text-muted">(แถวนี้)</span>}
+              </div>
+            ))}
+          </div>
+        </details>
       )}
     </div>
   );
@@ -891,6 +1054,48 @@ export function MomoInvoiceCostClient() {
             <span className="ml-1 text-muted">· {preview.cbmBasisReason}</span>
           </div>
 
+          {/* 💰 "MOMO เก็บเงินเรามา — เราเก็บเงินลูกค้ามาหรือยัง" (owner 2026-07-30)
+              ตอบทั้งใบในบรรทัดเดียว ไม่ต้องไล่อ่านทีละแถว · แยก "ยังไม่เก็บ" ออกจาก
+              "ไม่พบงานในระบบ" เพราะเป็นคนละเรื่องและต้องทำคนละอย่าง (§0f อย่ามั่ว). */}
+          {preview.customerPaymentSummary && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-[13px]">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="font-semibold text-emerald-900">💰 เก็บเงินลูกค้า:</span>
+                <span className="text-muted">
+                  MOMO เก็บเรา {preview.customerPaymentSummary.lines} แทรค
+                </span>
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                  ✅ เก็บแล้ว {preview.customerPaymentSummary.paid} แทรค · ฿
+                  {baht(preview.customerPaymentSummary.paidAmountThb)}
+                </span>
+                {preview.customerPaymentSummary.unpaid > 0 && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                    ⏳ ยังไม่เก็บ {preview.customerPaymentSummary.unpaid} แทรค · ค่านำเข้า ฿
+                    {baht(preview.customerPaymentSummary.unpaidSellThb)}
+                  </span>
+                )}
+                {preview.customerPaymentSummary.unmatched > 0 && (
+                  <span
+                    className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700"
+                    title="จับคู่กับงานในระบบไม่ได้ จึงตอบไม่ได้ว่าเก็บเงินหรือยัง — คนละเรื่องกับ 'ยังไม่เก็บ'"
+                  >
+                    ไม่พบงานในระบบ {preview.customerPaymentSummary.unmatched} แทรค
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 text-[11px] text-muted">
+                {preview.customerPaymentSummary.paidViaBillingRun > 0 ? (
+                  <>
+                    รู้จาก 2 ช่องทาง: การชำระ/สลิป {preview.customerPaymentSummary.paidViaWallet} แทรค ·
+                    ใบวางบิลที่จ่ายแล้ว {preview.customerPaymentSummary.paidViaBillingRun} แทรค ·{" "}
+                  </>
+                ) : null}
+                กดปุ่ม 🧾 ใบเสร็จ / 📎 สลิป ในแต่ละแถวเพื่อเปิดดูเอกสารอ้างอิง ·
+                แถวที่การชำระเดียวคลุมหลายแทรคกิ้งจะมีป้าย “รวมชิปเม้น” ให้กางดูรายตัว
+              </div>
+            </div>
+          )}
+
           {preview.summary.cabinetConflicts > 0 && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
               🔴 <strong>ตู้ไม่ตรง {preview.summary.cabinetConflicts} บรรทัด</strong> — MOMO วางบิลเป็นแทรคกิ้ง แต่เราคิดต้นทุนเป็นตู้
@@ -920,6 +1125,7 @@ export function MomoInvoiceCostClient() {
                   <th className="px-2 py-2 text-right">ดิฟต้นทุน</th>
                   <th className="px-2 py-2 text-right">ราคาขาย</th>
                   <th className="px-2 py-2 text-right">กำไร</th>
+                  <th className="px-2 py-2 text-left">เก็บเงินลูกค้าแล้วยัง</th>
                   <th className="px-2 py-2 text-left">ผล / ต้องทำอะไร</th>
                 </tr>
               </thead>
@@ -1088,6 +1294,11 @@ export function MomoInvoiceCostClient() {
                             )}
                           </>
                         )}
+                      </td>
+
+                      {/* "MOMO เก็บเราแล้ว — เราเก็บลูกค้าหรือยัง" + ปุ่มอ้างอิงใบเสร็จ/สลิป */}
+                      <td className="px-2 py-2 align-top">
+                        <CustomerPaymentCell r={r} />
                       </td>
 
                       <td className="px-2 py-2 text-[11px]">

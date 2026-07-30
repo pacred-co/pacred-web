@@ -95,13 +95,13 @@ export async function getStafferPositionInfo(profileId: string): Promise<{
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("admin_contact_extras")
-    .select("department, position:admin_positions!position_id ( name_th, workspace_role, is_active )")
+    .select("department, position:admin_positions!position_id ( name_th, department, workspace_role, is_active )")
     .eq("profile_id", profileId)
     .maybeSingle<{
       department: string | null;
       position:
-        | { name_th: string; workspace_role: AdminRole; is_active: boolean }
-        | { name_th: string; workspace_role: AdminRole; is_active: boolean }[]
+        | { name_th: string; department: string | null; workspace_role: AdminRole; is_active: boolean }
+        | { name_th: string; department: string | null; workspace_role: AdminRole; is_active: boolean }[]
         | null;
     }>();
   if (error) {
@@ -112,7 +112,10 @@ export async function getStafferPositionInfo(profileId: string): Promise<{
   const active = pos && pos.is_active ? pos : null;
   return {
     workspaceRole: active?.workspace_role ?? null,
-    department:    data?.department ?? null,
+    // แผนก = ช่อง department ของ contact_extras ก่อน · ไม่มีก็ fallback จากแผนกของ "ตำแหน่ง"
+    // (owner 2026-07-30): assign HR ได้ทั้ง 2 ทาง — เซ็ต department ตรงๆ หรือเลือกตำแหน่ง
+    // ที่แผนก=hr แล้วให้ผ่าน gate รายงานระบบเหมือนกัน.
+    department:    data?.department ?? active?.department ?? null,
     positionName:  active?.name_th ?? null,
   };
 }

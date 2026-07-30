@@ -111,7 +111,7 @@ export default async function WarehouseFollowPage({
                 {legacyForwarderStatusThai(selected.fstatus)}
               </span>
             </div>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm">
               <div><dt className="inline text-gray-500">Tracking: </dt><dd className="inline font-mono text-xs">{selected.ftrackingchn ?? "—"}</dd></div>
               <div><dt className="inline text-gray-500">ลูกค้า: </dt><dd className="inline">{selected.userid ?? "—"}</dd></div>
               <div><dt className="inline text-gray-500">ตู้: </dt><dd className="inline">{selected.fcabinetnumber || "—"}</dd></div>
