@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { formatThaiTime, formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * U4-1 — /admin/system/notifications notification delivery log.
@@ -271,9 +272,9 @@ export default async function AdminNotificationsLogPage({
                       <p className="mt-0.5 text-[11px] text-muted">
                         → <span className="font-medium text-foreground">{recipientLabel}</span>
                         {" · "}
-                        {new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
-                        {r.delivered_line_at && <> · 📱 LINE {new Date(r.delivered_line_at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}</>}
-                        {r.delivered_email_at && <> · ✉ email {new Date(r.delivered_email_at).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}</>}
+                        {formatThaiDateTime(r.created_at)}
+                        {r.delivered_line_at && <> · 📱 LINE {formatThaiTime(r.delivered_line_at)}</>}
+                        {r.delivered_email_at && <> · ✉ email {formatThaiTime(r.delivered_email_at)}</>}
                       </p>
                     </div>
                     {r.link_href && (

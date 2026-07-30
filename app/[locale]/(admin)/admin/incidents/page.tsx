@@ -21,6 +21,7 @@ import {
 } from "@/lib/validators/platform-incident";
 import { IncidentTriagePanel } from "./incident-triage-panel";
 import { PageHeader } from "@/components/admin/page-header";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * IO-1 — /admin/incidents triage queue (design doc §6.5).
@@ -346,7 +347,7 @@ export default async function AdminIncidentsPage({
                         {" · "}
                         {r.route && <span className="font-mono">{r.route}</span>}
                         {r.route && " · "}
-                        ล่าสุด {new Date(r.last_seen).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                        ล่าสุด {formatThaiDateTime(r.last_seen)}
                       </p>
                       {assigneeLabel && (
                         <p className="text-[11px] text-muted">

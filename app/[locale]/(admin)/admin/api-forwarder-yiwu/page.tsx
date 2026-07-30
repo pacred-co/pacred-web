@@ -16,6 +16,7 @@ import { Link } from "@/i18n/navigation";
 import { WarehouseWorkspaceNav } from "@/components/admin/warehouse-workspace-nav";
 import { YiwuDeliveryClient } from "./yiwu-client";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -33,10 +34,7 @@ type HistRow = {
 };
 
 function fmtDate(v: string | null): string {
-  if (!v) return "—";
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return formatThaiDate(v);
 }
 const num = (v: number | string | null, dp = 0) =>
   v == null ? "—" : Number(v).toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });

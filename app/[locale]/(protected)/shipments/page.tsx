@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { listMyShipments, type ShipmentSummary } from "@/actions/shipments";
 import { relativeTimeTh, freshnessClass } from "@/lib/utils/relative-time";
 import { Explain } from "@/components/ui/tooltip";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * U1-7 freshness pill — displayed prominently so customer knows whether
@@ -88,7 +89,7 @@ export default async function ShipmentsPage() {
         {latestEventAt && (
           <div
             className={`shrink-0 inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${FRESHNESS_PILL[freshness]}`}
-            title={new Date(latestEventAt).toLocaleString("th-TH")}
+            title={formatThaiDateTime(latestEventAt)}
           >
             🔄 {t("latestData")}: {relativeTimeTh(latestEventAt)}
             <Explain
@@ -203,10 +204,7 @@ function ShipmentCard({
           <span className="font-medium">{s.latest_event.event}</span>
           {s.latest_event.location && <span className="text-muted"> · {s.latest_event.location}</span>}
           <p className="text-muted mt-0.5">
-            {new Date(s.latest_event.scanned_at).toLocaleString("th-TH", {
-              dateStyle: "short",
-              timeStyle: "short",
-            })}
+            {formatThaiDateTime(s.latest_event.scanned_at)}
           </p>
         </div>
       )}

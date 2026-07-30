@@ -9,6 +9,7 @@ import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-butt
 import { exportWhtCertsAll } from "@/actions/admin/export/acc-wht-certs";
 import { WhtCertRowActions } from "./wht-cert-row-actions";
 import { ReceiptCertRowActions } from "./receipt-cert-row-actions";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 /**
  * /admin/accounting/wht-certs — 50-ทวิ certificate tracking queue.
@@ -46,10 +47,7 @@ function thb(n: number): string {
 }
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("th-TH", { year: "numeric", month: "2-digit", day: "2-digit" });
+  return formatThaiDate(iso);
 }
 
 export default async function AdminWhtCertsPage({

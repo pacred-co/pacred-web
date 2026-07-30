@@ -49,6 +49,7 @@ import {
   checkSlipDuplicatePreview,
   type SlipDuplicateMatch,
 } from "@/actions/admin/wallet-hs";
+import { bangkokClockParts } from "@/lib/utils/thai-datetime";
 
 // ────────────────────────────────────────────────────────────
 // <EditDateSlipForm>
@@ -990,8 +991,8 @@ function toLocalInput(iso: string | null | undefined): string {
 /** Duplicate-slip stamp: `2026-07-15 09:33` (Gregorian, minute) for the dup list. */
 function fmtDupStamp(iso: string | null): string {
   if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
+  const c = bangkokClockParts(iso);
+  if (!c) return iso;
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${c.year}-${pad(c.month)}-${pad(c.day)} ${pad(c.hour)}:${pad(c.minute)}`;
 }

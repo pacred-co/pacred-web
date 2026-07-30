@@ -2,6 +2,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { OrgChannelsClient } from "./client";
+import { formatThaiDate, formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * Admin > "ช่องทางองค์กร" — combined editor for the 4 organization
@@ -53,20 +54,12 @@ type DomainRow = {
 /** legacy showNotNULLDateTime — Thai datetime or "-" when empty. */
 function fmtDateTime(s: string | null | undefined): string {
   if (!s) return "-";
-  try {
-    return new Date(s).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" });
-  } catch {
-    return "-";
-  }
+  return formatThaiDateTime(s);
 }
 /** date-only fields (start_date / end_date / pay_date). */
 function fmtDate(s: string | null | undefined): string {
   if (!s) return "-";
-  try {
-    return new Date(s).toLocaleDateString("th-TH", { dateStyle: "short" });
-  } catch {
-    return "-";
-  }
+  return formatThaiDate(s);
 }
 /** keep an ISO date as "YYYY-MM-DD" for <input type="date"> defaults. */
 function toInputDate(s: string | null | undefined): string {

@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { markAllRead, markRead } from "@/actions/notifications";
 import type { NotificationRow } from "@/lib/notifications/types";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 const SEVERITY_DOT: Record<NotificationRow["severity"], string> = {
   info:    "bg-blue-500",
@@ -93,7 +94,7 @@ export function NotificationsList({ initial }: { initial: NotificationRow[] }) {
                       {n.title}
                     </h3>
                     <span className="text-[11px] text-muted whitespace-nowrap">
-                      {new Date(n.created_at).toLocaleString("th-TH", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "short" })}
+                      {formatThaiDateTime(n.created_at)}
                     </span>
                   </div>
                   <p className="text-sm text-muted mt-0.5">{n.body}</p>

@@ -30,6 +30,7 @@ import { bankName } from "@/lib/admin/bank-names";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { SlipImage } from "@/components/admin/slip-image";
 import { ShopDisbursementPayForm } from "./pay-form";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -203,7 +204,7 @@ export default async function AdminShopDisbursementBatchPage({
                 <p className="text-sm font-bold text-emerald-800">จ่ายแล้ว · หลักฐานการโอน</p>
                 {batch.dateupdate ? (
                   <p className="text-xs text-muted">
-                    วันที่จ่าย: {new Date(batch.dateupdate).toLocaleString("th-TH")}
+                    วันที่จ่าย: {formatThaiDateTime(batch.dateupdate)}
                     {batch.adminidupdate ? ` · โดย ${batch.adminidupdate}` : ""}
                   </p>
                 ) : null}

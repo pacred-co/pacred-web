@@ -120,6 +120,13 @@ export type BillingRunCommonProps = {
   note:          string;
   issuedBy:      string;
   qrDataUrl:     string;
+  /**
+   * 🔴 owner 2026-07-23: ใบวางบิลที่ถูกยกเลิก (status='cancelled') ต้องไม่ render
+   * เหมือนใบจริง + **ต้องไม่พิมพ์เลขบัญชีที่ให้โอน** (ลูกค้าอาจโอนตามบิลที่ยกเลิก
+   * ไปแล้ว). true → banner ⛔ + ซ่อนกล่องบัญชี (mirror /r receipt banner ที่
+   * rstatus='2'). issued/paid → false → พิมพ์ปกติทุกอย่าง.
+   */
+  cancelled?:    boolean;
 };
 
 /** Props for the full `<BillingRunPaper>` wrapper — items pre-chunked into pages. */
@@ -199,6 +206,22 @@ function BillingRunPage({
             </div>
           </div>
         </div>
+
+        {/* 🔴 owner 2026-07-23 — ใบวางบิลที่ยกเลิกแล้ว: banner ชัด (mirror /r receipt
+            ที่ rstatus='2') · ห้ามอ่านเป็นใบที่ใช้ได้ · กล่องบัญชีถูกซ่อนด้านล่างด้วย. */}
+        {p.cancelled && (
+          <div style={{
+            border: "2px solid #dc2626", background: "#fef2f2", color: "#b91c1c",
+            borderRadius: "3mm", padding: "2mm 3mm", marginBottom: "2mm", textAlign: "center",
+          }}>
+            <p style={{ margin: 0, fontSize: "15px", fontWeight: "bold", letterSpacing: "0.5px" }}>
+              ⛔ ใบวางบิลนี้ถูกยกเลิก / CANCELLED
+            </p>
+            <p style={{ margin: "1px 0 0", fontSize: "10px", color: "#dc2626" }}>
+              เลขที่ {p.docNo} ถูกยกเลิกแล้ว — ไม่ถือเป็นเอกสารที่ใช้ได้ · กรุณาอย่าชำระเงินตามบิลนี้
+            </p>
+          </div>
+        )}
 
         {/* ── INFO ROW: issuer+customer LEFT · meta-box RIGHT ─────────────── */}
         <div style={{ display: "flex", gap: "8mm", marginBottom: "1.5mm" }}>
@@ -375,9 +398,18 @@ function BillingRunPage({
                 <DocSectionLabel emoji="💵" text="การชำระเงิน" />
                 <div style={{ flex: 1, display: "flex", gap: "6mm" }}>
                   <div style={{ minWidth: "44mm" }}>
-                    <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>{BILL_ACCOUNT.bankName}</p>
-                    <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#111827" }}>{BILL_ACCOUNT.accountType} {BILL_ACCOUNT.accountNo}</p>
-                    <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>{BILL_ACCOUNT.accountName}</p>
+                    {p.cancelled ? (
+                      /* บิลยกเลิก → ไม่พิมพ์เลขบัญชี (กันลูกค้าโอนตามบิลที่ยกเลิก) */
+                      <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#b91c1c" }}>
+                        — ยกเลิกแล้ว · ไม่มีบัญชีรับชำระ —
+                      </p>
+                    ) : (
+                      <>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#374151" }}>{BILL_ACCOUNT.bankName}</p>
+                        <p style={{ margin: 0, fontSize: "10px", fontWeight: "bold", color: "#111827" }}>{BILL_ACCOUNT.accountType} {BILL_ACCOUNT.accountNo}</p>
+                        <p style={{ margin: 0, fontSize: "10px", color: "#6b7280" }}>{BILL_ACCOUNT.accountName}</p>
+                      </>
+                    )}
                   </div>
                   {/* owner 2026-07-06: label + value were spread across a too-wide
                       column (big gap). Cap the width + push right so each row reads

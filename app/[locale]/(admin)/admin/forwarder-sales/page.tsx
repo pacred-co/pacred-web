@@ -10,6 +10,7 @@ import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { computeCommission } from "@/lib/sales-commission/calc";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * /admin/forwarder-sales — sales-rep attribution report.
@@ -267,7 +268,7 @@ export default async function AdminForwarderSalesPage({
 
   // ── 7. CSV ──
   const csvRows: CsvRow[] = rows.map((r) => ({
-    srdate:        r.srdate ? new Date(r.srdate).toLocaleString("th-TH") : "",
+    srdate:        r.srdate ? formatThaiDateTime(r.srdate) : "",
     rep:           r.sradminidsale,
     fid:           r.fid,
     tracking:      r.fTrackingCHN ?? "",

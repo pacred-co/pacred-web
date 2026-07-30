@@ -33,6 +33,7 @@ import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { exportQaPayShopOver1dAll } from "@/actions/admin/export/qa-pay-shop-over-1d";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -246,10 +247,7 @@ export default async function AdminQaPayShopOver1dPage({
                       </td>
                       <td className="px-3 py-3 text-xs whitespace-nowrap">
                         {r.hdate
-                          ? new Date(r.hdate).toLocaleString("th-TH", {
-                              dateStyle: "short",
-                              timeStyle: "short",
-                            })
+                          ? formatThaiDateTime(r.hdate)
                           : "—"}
                       </td>
                       <td className="px-3 py-3 text-right text-xs">

@@ -43,6 +43,7 @@ import { CoverThumb } from "./_shared/cover-thumb";
 import { cancelOwnForwarder } from "@/actions/forwarder";
 import { confirm } from "@/components/ui/confirm";
 import { Explain } from "@/components/ui/tooltip";
+import { bangkokClockParts } from "@/lib/utils/thai-datetime";
 
 // ────────────────────────────────────────────────────────────────────
 //  Status badge — legacy `statusForwarderAll2($fStatus,$fStatusDriver)`
@@ -191,25 +192,22 @@ export function numberFormat2(n: number): string {
 
 // PHP DATE_FORMAT helpers.
 export function dmyHms(ts: string | null): string {
-  if (!ts) return "";
-  const d = new Date(ts.replace(" ", "T"));
-  if (isNaN(d.getTime())) return "";
+  const c = bangkokClockParts(ts);
+  if (!c) return "";
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return `${p(c.day)}/${p(c.month)}/${c.year} ${p(c.hour)}:${p(c.minute)}:${p(c.second)}`;
 }
 export function dmy(ts: string | null): string {
-  if (!ts) return "";
-  const d = new Date(ts.replace(" ", "T"));
-  if (isNaN(d.getTime())) return "";
+  const c = bangkokClockParts(ts);
+  if (!c) return "";
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+  return `${p(c.day)}/${p(c.month)}/${c.year}`;
 }
 export function hms(ts: string | null): string {
-  if (!ts) return "";
-  const d = new Date(ts.replace(" ", "T"));
-  if (isNaN(d.getTime())) return "";
+  const c = bangkokClockParts(ts);
+  if (!c) return "";
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return `${p(c.hour)}:${p(c.minute)}:${p(c.second)}`;
 }
 export function modifyDmy(dmyStr: string, days: number): string {
   const m = dmyStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);

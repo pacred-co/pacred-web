@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { LeadTriageClient } from "./lead-triage-client";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * /admin/freight/leads/[ref] — RFQ lead detail + triage.
@@ -130,7 +131,7 @@ export default async function AdminFreightLeadDetailPage({
             RFQ <span className="font-mono">{lead.ref}</span>
           </h1>
           <p className="text-xs text-muted">
-            รับเข้า {new Date(lead.created_at).toLocaleString("th-TH")}
+            รับเข้า {formatThaiDateTime(lead.created_at)}
             {lead.contact_pref === "call" && <> · <span className="text-red-600 font-medium">⚡ ลูกค้าขอให้โทรกลับ</span></>}
           </p>
         </div>

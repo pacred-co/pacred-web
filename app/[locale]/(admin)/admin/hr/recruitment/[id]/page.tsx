@@ -13,6 +13,7 @@ import {
 import {
   DeletePostingButton, AddApplicantInline, ApplicantActions,
 } from "./posting-actions";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 // requireAdmin() reads cookies → without this the page hits DYNAMIC_SERVER_USAGE
 // (500) at request time in production. Mirror customers/[id].
@@ -257,7 +258,7 @@ export default async function PostingDetailPage({ params }: { params: Promise<{ 
                         <span>ที่มา: <b className="text-foreground">{SOURCE_LABEL[a.source] ?? a.source}</b>{a.source_note ? ` · ${a.source_note}` : ""}</span>
                         {a.interview_scheduled_at && (
                           <span className="text-amber-700 font-semibold">
-                            📅 นัดสัมภาษณ์ {new Date(a.interview_scheduled_at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}
+                            📅 นัดสัมภาษณ์ {formatThaiDateTime(a.interview_scheduled_at)}
                             {a.interview_location ? ` @ ${a.interview_location}` : ""}
                           </span>
                         )}

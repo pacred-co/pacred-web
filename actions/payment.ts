@@ -355,6 +355,32 @@ export async function createYuanPayment(
   const nowIso = new Date().toISOString();
   const paytype = channelToPaytype(d.channel);
 
+  // 🔴 CREATE-side idempotency (2026-07-23): a straight INSERT let a double-click /
+  // resubmit-after-a-lost-response create TWO pending ฝากโอน → risk of the admin
+  // paying the ¥ payout twice (the approve-time findDuplicateYuanSlips only catches
+  // same-day same-amount, and misses a cross-midnight / retyped-amount resubmit).
+  // The slip storage path is unique per upload, so a resubmit of the SAME slip is an
+  // exact duplicate (two genuine payments never share a slip path) — block it here.
+  {
+    const { data: dup, error: dupErr } = await admin
+      .from("tb_payment")
+      .select("id")
+      .eq("userid", memberCode)
+      .eq("imagesslip", d.slip_url)
+      .in("paystatus", ["1", "2"])
+      .limit(1)
+      .maybeSingle<{ id: number }>();
+    if (dupErr) {
+      console.error(`[tb_payment dup precheck] failed`, { code: dupErr.code, message: dupErr.message });
+      // fail-CLOSED on an unverifiable dedup (money · mirror commit-momo guard):
+      // we can't confirm it's not a resubmit, so refuse rather than risk a 2nd payout.
+      return { ok: false, error: "ตรวจสอบรายการซ้ำไม่สำเร็จ — กรุณาลองใหม่อีกครั้ง" };
+    }
+    if (dup) {
+      return { ok: false, error: "already_submitted: สลิปนี้ถูกส่งเข้ามาแล้ว (กำลังรอตรวจสอบ) — ไม่ต้องส่งซ้ำ" };
+    }
+  }
+
   const { data: created, error } = await admin
     .from("tb_payment")
     .insert({

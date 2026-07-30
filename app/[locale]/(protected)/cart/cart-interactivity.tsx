@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } f
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { useRouter } from "next/navigation";
+import { describeActionDispatchError } from "@/lib/observability/action-dispatch-error";
+import { isNextControlFlowError } from "@/lib/observability/next-control-flow";
+import { reportClientIncident } from "@/lib/observability/client-report";
 import {
   ShoppingBag,
   Trash2,
@@ -479,31 +482,43 @@ export function CartInteractivity({
     if (!(await confirm(t("confirmSubmit", { count: selectedIds.size })))) return;
     setSubmitting(true);
     startTransition(async () => {
-      const res = await submitCartOrder({
-        ids: Array.from(selectedIds),
-        addressID,
-        hTransportType,
-        crate,
-        hShipBy: hShipBy ? String(hShipBy) : null,
-        payMethod: payMethod ? String(payMethod) : null,
-        pro: pro ? String(pro) : null,
-        pro2,
-        hNote: hNote ? String(hNote) : null,
-        taxDocPref: taxDocPref ? String(taxDocPref) : null,
-        taxDocTaxId: taxDocTaxId ? String(taxDocTaxId) : null,
-        taxDocBillingName: taxDocBillingName ? String(taxDocBillingName) : null,
-        taxDocAddress: taxDocAddress ? String(taxDocAddress) : null,
-      });
-      setSubmitting(false);
-      if (!res.ok) {
-        await alert(t("submitFailed") + res.error);
-        return;
-      }
-      if (res.data?.hNo) {
-        await alert(
-          t("submitSuccess", { hNo: res.data.hNo }),
-        );
-        router.push(`/service-order/${res.data.hNo}`);
+      // 🔴 คลาส PR106 (owner 2026-07-27 "แนบสลิปแล้วกดยืนยันไม่ได้") — ปุ่มสั่งซื้อ
+      // ก็เป็นคลาสเดียวกัน: ไม่มี try/catch แล้ว dispatch พัง (deploy churn / net drop /
+      // re-thrown incident) = ปุ่มค้าง "กำลังส่ง…" ตลอดกาล + unhandled rejection · ลูกค้า
+      // สั่งซื้อไม่ได้ ไม่รู้ว่าต้อง reload. mutating=true → ห้ามชวนกดซ้ำ (ไม่รู้ว่า commit
+      // ไปหรือยัง). success path เดิมไม่แตะ.
+      try {
+        const res = await submitCartOrder({
+          ids: Array.from(selectedIds),
+          addressID,
+          hTransportType,
+          crate,
+          hShipBy: hShipBy ? String(hShipBy) : null,
+          payMethod: payMethod ? String(payMethod) : null,
+          pro: pro ? String(pro) : null,
+          pro2,
+          hNote: hNote ? String(hNote) : null,
+          taxDocPref: taxDocPref ? String(taxDocPref) : null,
+          taxDocTaxId: taxDocTaxId ? String(taxDocTaxId) : null,
+          taxDocBillingName: taxDocBillingName ? String(taxDocBillingName) : null,
+          taxDocAddress: taxDocAddress ? String(taxDocAddress) : null,
+        });
+        if (!res.ok) {
+          await alert(t("submitFailed") + res.error);
+          return;
+        }
+        if (res.data?.hNo) {
+          await alert(
+            t("submitSuccess", { hNo: res.data.hNo }),
+          );
+          router.push(`/service-order/${res.data.hNo}`);
+        }
+      } catch (e) {
+        if (isNextControlFlowError(e)) throw e;
+        await alert(describeActionDispatchError(e, { mutating: true }));
+        void reportClientIncident(e as Error);
+      } finally {
+        setSubmitting(false);
       }
     });
   }

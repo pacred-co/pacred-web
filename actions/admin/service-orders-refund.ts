@@ -583,12 +583,21 @@ export async function adminRefundShopOrderShipping(
       }
     }
 
-    // 5. UPDATE header — new hshippingchn + recomputed htotalpriceuser
-    //    (canonical formula: (chn + newShip) × rate + svc). htotalpricechn is
-    //    the product subtotal — unchanged by a shipping adjust.
+    // 5. UPDATE header — new hshippingchn + recomputed htotalpriceuser.
+    //    htotalpricechn (product subtotal) is unchanged by a shipping adjust.
+    //    💰 owner 2026-07-27 (P22456 class · sweep ตกหล่นตัวนี้): recompute ผ่าน SOT
+    //    shopSellTotalThb → รวมค่าลังไม้ (crate='1') เหมือน item-refund path ด้านบน
+    //    + จอ/ใบเสนอราคา. ไม่ตีลัง → crateCnyOf=0 → ยุบเป็นสูตรเดิมเป๊ะ (chn+ship)×rate+svc.
     const chn            = Number(header.htotalpricechn ?? 0);
     const svc            = Number(header.hshippingservice ?? 0);
-    const newHeaderTotal = roundUp((chn + d.new_hshippingchn) * orderHrate + svc, 2);
+    const newHeaderTotal = shopSellTotalThb({
+      htotalpricechn:   chn,
+      hshippingchn:     d.new_hshippingchn,
+      hrate:            orderHrate,
+      hshippingservice: svc,
+      crate:            (header as { crate?: string | null }).crate,
+      pricecrate:       (header as { pricecrate?: number | string | null }).pricecrate,
+    });
     const { error: headerUpdErr } = await admin
       .from("tb_header_order")
       .update({

@@ -34,6 +34,7 @@ import { CNTHS_ROW_TINT, CNTSTATUS_CFG } from "@/lib/admin/forwarder-status";
 import { CabinetListCell } from "./cabinet-list-cell";
 import { CabinetBillingCoverageChip } from "@/components/admin/cabinet-billing-coverage";
 import type { CabinetBillingState } from "@/lib/admin/cabinet-billing-coverage";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 // ─────────────────────────────────────────────────────────────────────
 // Row shape — JSON-serializable subset passed from server page.tsx
@@ -126,10 +127,7 @@ function numberFormat2(n: number | string | null | undefined): string {
 
 /** Format a YYYY-MM-DD / ISO date into Thai short date. Returns "—" on failure. */
 function formatDate(raw: string | null | undefined): string {
-  if (!raw) return "—";
-  const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return raw;
-  return d.toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" });
+  return formatThaiDate(raw);
 }
 
 export function CntHsTable({ rows }: { rows: CntHsRow[] }) {

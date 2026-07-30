@@ -97,6 +97,7 @@ import {
   PackageCheck,
   AlertTriangle,
 } from "lucide-react";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 // W-1: requireAdmin reads auth cookies; a page under a dynamic [fNo]
 // segment that reads cookies MUST be force-dynamic (AGENTS.md §11).
@@ -1005,7 +1006,7 @@ async function tryRenderTbForwarder(
              อีเมล · โทร · location · ตีลัง · เก็บเงิน · บริษัทขนส่ง · ที่อยู่ ·
              เลขพัสดุไทย. (ปอน 2026-06-10 — admin-only block added back per owner.) */}
           <div className="space-y-2.5">
-            <p className="text-foreground"><b className="font-semibold">วันที่สร้าง : </b>{r.fdate ? new Date(r.fdate).toLocaleString("th-TH") : "—"}</p>
+            <p className="text-foreground"><b className="font-semibold">วันที่สร้าง : </b>{r.fdate ? formatThaiDateTime(r.fdate) : "—"}</p>
             {/* จาก : ลูกค้า (avatar + ชื่อ + ลิงก์โปรไฟล์) */}
             <div className="text-foreground">
               <b className="font-semibold">จาก : </b>

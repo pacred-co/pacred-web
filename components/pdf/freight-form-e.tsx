@@ -75,7 +75,7 @@ export type FreightFormEData = {
 
 function formatDateEn(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  return d.toLocaleDateString("en-GB", { timeZone: "Asia/Bangkok", day: "2-digit", month: "short", year: "numeric" });
 }
 
 function formatTaxId(id: string | null): string {

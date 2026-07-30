@@ -1052,6 +1052,83 @@ const CHECKS: CheckDef[] = [
       return { count: out.length, sample: cap(out) };
     },
   },
+  {
+    id: "driver_stop_never_closed",
+    title: "งานส่งสำเร็จแล้ว แต่ stop คนขับไม่เคยถูกปิด ('2') เลย",
+    severity: "warn",
+    why: "2026-07-29 — เจอ 11 งาน fstatus=7 (ส่งสำเร็จ · ส่วนใหญ่ staff bulk-flip จากหลังบ้าน) ที่ไม่มี stop คนขับปิดเลยสักรอบ → รายงานงานคนขับนับไม่ครบ = ค่าคอม/ยอดงานหาย พนักงานท้อ",
+    action: "ปิด stop ตัวล่าสุดของงานนั้นเป็น '2' (แพทเทิร์น scripts/reconcile-driver-stops-2026-07-29.mjs · dry-run ก่อน) — ตัวเก่ากว่าเก็บเป็น '3' ประวัติล้มจริง",
+    run: async (admin) => {
+      // stop ที่ไม่ใช่ '2' ทั้งหมด → เช็คว่างานถึง 7 แล้ว + fid นั้นไม่มี '2' ที่ไหนเลย
+      const { data: stale, error: sErr } = await admin
+        .from("tb_forwarder_driver_item")
+        .select("id, fid, fdistatus")
+        .or("fdistatus.eq.,fdistatus.eq.1,fdistatus.eq.3,fdistatus.is.null")
+        .limit(20_000);
+      if (sErr) throw new Error(`${sErr.code} ${sErr.message}`);
+      const staleRows = (stale ?? []) as Array<{ id: number; fid: number; fdistatus: string | null }>;
+      if (staleRows.length === 0) return { count: 0, sample: [] };
+      const fids = Array.from(new Set(staleRows.map((r) => r.fid)));
+      const delivered = new Set<number>();
+      for (let i = 0; i < fids.length; i += 200) {
+        const { data, error } = await admin
+          .from("tb_forwarder")
+          .select("id")
+          .in("id", fids.slice(i, i + 200))
+          .eq("fstatus", "7");
+        if (error) throw new Error(`${error.code} ${error.message}`);
+        for (const r of (data ?? []) as Array<{ id: number }>) delivered.add(r.id);
+      }
+      if (delivered.size === 0) return { count: 0, sample: [] };
+      const deliveredFids = Array.from(delivered);
+      const hasClosed = new Set<number>();
+      for (let i = 0; i < deliveredFids.length; i += 200) {
+        const { data, error } = await admin
+          .from("tb_forwarder_driver_item")
+          .select("fid")
+          .in("fid", deliveredFids.slice(i, i + 200))
+          .eq("fdistatus", "2");
+        if (error) throw new Error(`${error.code} ${error.message}`);
+        for (const r of (data ?? []) as Array<{ fid: number }>) hasClosed.add(r.fid);
+      }
+      const out = deliveredFids
+        .filter((fid) => !hasClosed.has(fid))
+        .map((fid) => ({ fid, staleStops: staleRows.filter((r) => r.fid === fid).length }));
+      return { count: out.length, sample: cap(out) };
+    },
+  },
+  {
+    id: "driver_stop_stuck_open_batch_closed",
+    title: "stop คนขับค้างสถานะเปิด (''/'1') ในรอบที่ปิดไปแล้ว",
+    severity: "warn",
+    why: "2026-07-29 — stop '1' (ขึ้นรถ) ในรอบที่หมดเวลา/ปิดแล้ว เคยบล็อกงานออกจากคิวมอบหมายถาวร (ตัวกรองเดิมไม่ดูสถานะรอบ) · cron หมดเวลา cascade เฉพาะ '' ปล่อย '1' ค้าง — แก้ทั้งคู่แล้ว check นี้เฝ้าไม่ให้ทางเขียนใหม่หลุด",
+    action: "ตีเป็น '3' (= เกณฑ์หมดเวลา → งานกลับเข้าคิวมอบใหม่) — แพทเทิร์น scripts/reconcile-driver-stops-2026-07-29.mjs เป้า 2",
+    run: async (admin) => {
+      const { data: open, error: oErr } = await admin
+        .from("tb_forwarder_driver_item")
+        .select("id, fid, fdid, fdistatus")
+        .or("fdistatus.eq.,fdistatus.eq.1,fdistatus.is.null")
+        .limit(20_000);
+      if (oErr) throw new Error(`${oErr.code} ${oErr.message}`);
+      const openRows = (open ?? []) as Array<{ id: number; fid: number; fdid: number; fdistatus: string | null }>;
+      if (openRows.length === 0) return { count: 0, sample: [] };
+      const batchIds = Array.from(new Set(openRows.map((r) => r.fdid).filter((n): n is number => typeof n === "number")));
+      const closedBatches = new Set<number>();
+      for (let i = 0; i < batchIds.length; i += 200) {
+        const { data, error } = await admin
+          .from("tb_forwarder_driver")
+          .select("id, fdstatus")
+          .in("id", batchIds.slice(i, i + 200))
+          .neq("fdstatus", "1");
+        if (error) throw new Error(`${error.code} ${error.message}`);
+        for (const r of (data ?? []) as Array<{ id: number }>) closedBatches.add(r.id);
+      }
+      const out = openRows
+        .filter((r) => closedBatches.has(r.fdid))
+        .map((r) => ({ item: r.id, fid: r.fid, batch: r.fdid, stop: r.fdistatus ?? "" }));
+      return { count: out.length, sample: cap(out) };
+    },
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────

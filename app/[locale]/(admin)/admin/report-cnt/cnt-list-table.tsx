@@ -38,6 +38,7 @@ import type { BoxDimGroup } from "@/lib/warehouse/container-box-breakdown";
 import type { MomoContainerInfo } from "@/lib/admin/momo-container-resolve";
 import { isMomoRoutingPlaceholder } from "@/lib/admin/momo-container-resolve";
 import { isNonContainerCabinetId } from "@/lib/forwarder/cabinet-class";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 // ─────────────────────────────────────────────────────────────────────
 // Row shape (mirrors `Grouped` in page.tsx — kept independent so
@@ -191,8 +192,9 @@ function SortableTH({
   );
 }
 
-function fmtDate(d: string | null) {
-  return d ? d.slice(0, 10) : "-";
+function fmtDate(d: string | null): string {
+  if (!d) return "-";
+  return formatThaiDate(d);
 }
 
 // Legacy ขนส่ง-column pill colors — faithful to nameTransportType2()

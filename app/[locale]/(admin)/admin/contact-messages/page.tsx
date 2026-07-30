@@ -7,6 +7,7 @@ import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-butt
 import { PageHeader } from "@/components/admin/page-header";
 import { exportContactMessagesAll } from "@/actions/admin/export/contact-messages";
 import { ContactMessageActions } from "./actions-cell";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 // CSV columns mirror the <thead> 1:1 (with the joined sender profile fields
 // split out for the export).
@@ -181,7 +182,7 @@ export default async function AdminContactMessagesPage({
                 {rows.map((r) => (
                   <tr key={r.id} className="border-t border-border align-top">
                     <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
-                      {new Date(r.created_at).toLocaleString("th-TH")}
+                      {formatThaiDateTime(r.created_at)}
                     </td>
                     <td className="px-4 py-3 text-xs">
                       <div className="font-medium">{r.name}</div>

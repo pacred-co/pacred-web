@@ -34,6 +34,7 @@ import {
   DocStat,
   DocTitle,
 } from "@/components/admin/driver-doc-paper";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -346,13 +347,7 @@ export async function DriverRunDocument({
   }
 
   const dateLabel = batch.fddate
-    ? new Date(batch.fddate).toLocaleString("th-TH", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+    ? formatThaiDateTime(batch.fddate)
     : "—";
 
   return (

@@ -39,6 +39,7 @@ import { TranslateButton } from "@/components/translate/translate-button";
 // lines the admin box shows, so the customer sees Pacred picked the best rate.
 // NO money recompute, NO write.
 import { buildPriceBreakdownDisplay } from "@/lib/forwarder/price-breakdown-display";
+import { bangkokClockParts } from "@/lib/utils/thai-datetime";
 
 /**
  * Customer "รายการฝากนำเข้าสินค้า — รายละเอียด" (forwarder detail) screen —
@@ -153,19 +154,17 @@ function numberFormat2(n: number): string {
 
 // PHP `DATE_FORMAT(x,'%d/%m/%Y %T')` — d/m/Y H:i:s of a timestamp.
 function dmyHms(ts: string | null): string {
-  if (!ts) return "";
-  const d = new Date(ts.replace(" ", "T"));
-  if (isNaN(d.getTime())) return "";
+  const c = bangkokClockParts(ts);
+  if (!c) return "";
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return `${p(c.day)}/${p(c.month)}/${c.year} ${p(c.hour)}:${p(c.minute)}:${p(c.second)}`;
 }
 // PHP `DATE(x)` → d/m/Y of a timestamp.
 function dmy(ts: string | null): string {
-  if (!ts) return "";
-  const d = new Date(ts.replace(" ", "T"));
-  if (isNaN(d.getTime())) return "";
+  const c = bangkokClockParts(ts);
+  if (!c) return "";
   const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+  return `${p(c.day)}/${p(c.month)}/${c.year}`;
 }
 // hasRealStamp / computeSteps / finalizeMoneySteps / StepState / PhysicalStamps
 // moved to lib/forwarder/customer-tracker-steps.ts (pure · unit-tested) — imported above.

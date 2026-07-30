@@ -6,6 +6,7 @@ import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { getNearChurnReport } from "@/actions/admin/near-churn";
 import { AlertCircle, Phone, MessageCircle, Mail } from "lucide-react";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 /**
  * /admin/accounting/near-churn — inactive customer win-back report.
@@ -36,10 +37,7 @@ function thb(n: number): string {
 }
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("th-TH", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  return formatThaiDate(iso);
 }
 
 export default async function AdminNearChurnPage({

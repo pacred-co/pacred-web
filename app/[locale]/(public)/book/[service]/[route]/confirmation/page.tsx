@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getServiceConfig } from "@/lib/booking/service-config";
 import { CONTACT, LINE_OA } from "@/components/seo/site";
 import type { QuoteLine } from "@/types/booking";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * BK-1.11 — booking confirmation.
@@ -184,10 +185,7 @@ export default async function BookingConfirmationPage({
             {booking.submitted_at && (
               <Row
                 label={t("confirmation.field.bookedDate")}
-                value={new Date(booking.submitted_at).toLocaleString("th-TH", {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                })}
+                value={formatThaiDateTime(booking.submitted_at)}
               />
             )}
           </dl>

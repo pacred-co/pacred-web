@@ -60,6 +60,7 @@ import {
   fetchCorporateNameMap,
   corpRowFromName,
 } from "@/lib/admin/customer-identity";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -1018,7 +1019,7 @@ export default async function AdminAccountingPage({
                   </td>
                   <td className="px-4 py-3 text-xs text-muted">{r.note ?? "—"}</td>
                   <td className="px-4 py-3"><PaymentStatusBadge s={r.status} /></td>
-                  <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleString("th-TH") : "—"}</td>
+                  <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.created_at ? formatThaiDateTime(r.created_at) : "—"}</td>
                 </tr>
               );
             })}

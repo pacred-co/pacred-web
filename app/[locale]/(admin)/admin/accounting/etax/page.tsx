@@ -8,6 +8,7 @@ import { getEtaxBundle, getShopEtaxBundle } from "@/actions/admin/etax-export";
 import { buildEtaxXml } from "@/lib/etax/build-xml";
 import { EtaxRowDownloads } from "./etax-row-downloads";
 import { EtaxBulkDownload } from "./etax-bulk-download";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 /**
  * /admin/accounting/etax — e-Tax (RD Code 86) export hub.
@@ -46,10 +47,7 @@ function thb(n: number): string {
 }
 
 function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("th-TH", { year: "numeric", month: "2-digit", day: "2-digit" });
+  return formatThaiDate(iso);
 }
 
 // Destination account at issuance (mig 0236 · 3-account SOT). null = legacy row

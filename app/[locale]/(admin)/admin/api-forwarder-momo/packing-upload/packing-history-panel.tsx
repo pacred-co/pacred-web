@@ -8,6 +8,7 @@ import {
   type MomoPackingUploadDetail,
 } from "@/actions/admin/momo-packing-history";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { markSupersededUploads } from "@/lib/admin/packing-upload-plan";
 
 const n3 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 6 }));
 const n2 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 2 }));
@@ -44,6 +45,11 @@ export function PackingHistoryPanel({ nonce }: { nonce: number }) {
     return () => { alive = false; };
   }, [applyResult, nonce]);
 
+  // ตู้เดียวอัพซ้ำหลายไฟล์ → ไฟล์เก่า = "แทนที่แล้ว" (ตัวตัดสิน pure + มีเทส)
+  const supersededIds = markSupersededUploads(
+    rows.map((r) => ({ id: r.id, containerNo: r.containerNo, uploadedAt: r.uploadedAt })),
+  );
+
   async function openDetail(id: number) {
     if (expandedId === id) { setExpandedId(null); setDetail(null); return; }
     setExpandedId(id);
@@ -59,7 +65,10 @@ export function PackingHistoryPanel({ nonce }: { nonce: number }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold">ประวัติ packing list ที่อัพ</h2>
-          <p className="text-[11px] text-muted">เก็บทุกไฟล์ที่อัพ · กดพรีวิวย้อนดู + เช็คแทร็กที่ MOMO(API) ไม่มี แต่มีใน packing list</p>
+          <p className="text-[11px] text-muted">
+            เก็บทุกไฟล์ที่อัพ · กดพรีวิวย้อนดู + เช็คแทร็กที่ MOMO(API) ไม่มี แต่มีใน packing list ·
+            ตู้เดียวอัพซ้ำได้ — <strong>ไฟล์ล่าสุดของตู้นั้นคือตัวจริง</strong> ไฟล์ก่อนหน้าจะขึ้น &quot;แทนที่แล้ว&quot;
+          </p>
         </div>
         <button type="button" onClick={reload} disabled={loading}
           className="rounded-full border border-border px-3 py-1 text-xs hover:bg-surface-alt disabled:opacity-50">
@@ -91,11 +100,12 @@ export function PackingHistoryPanel({ nonce }: { nonce: number }) {
             <tbody>
               {rows.map((r) => {
                 const missing = r.reverseCheck.missing.length;
+                const superseded = supersededIds.has(r.id);
                 return (
                   <Fragment key={r.id}>
-                    <tr className="border-t border-border align-top">
+                    <tr className={`border-t border-border align-top ${superseded ? "bg-surface-alt/30 text-muted" : ""}`}>
                       <td className="px-2 py-1.5 text-[11px] whitespace-nowrap">{formatThaiDateTime(r.uploadedAt)}</td>
-                      <td className="px-2 py-1.5 font-mono font-semibold text-sky-800">{r.containerNo ?? "—"}</td>
+                      <td className={`px-2 py-1.5 font-mono font-semibold ${superseded ? "text-muted" : "text-sky-800"}`}>{r.containerNo ?? "—"}</td>
                       <td className="px-2 py-1.5 text-[11px] max-w-[14rem] truncate" title={r.fileName ?? ""}>📎 {r.fileName ?? "—"}</td>
                       <td className="px-2 py-1.5 text-[11px] whitespace-nowrap" title={r.uploadedBy ?? ""}>{r.uploadedByName ?? r.uploadedBy ?? "—"}</td>
                       <td className="px-2 py-1.5 text-center">
@@ -103,6 +113,16 @@ export function PackingHistoryPanel({ nonce }: { nonce: number }) {
                           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800" title={r.appliedAt ? `ใช้แล้ว ${formatThaiDateTime(r.appliedAt)}` : "ใช้แล้ว"}>✓ ใช้แล้ว</span>
                         ) : (
                           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700" title="อัพไว้ · ยังไม่กด apply เข้าระบบ">อัพไว้</span>
+                        )}
+                        {/* ตู้เดียวอัพหลายไฟล์ → ไฟล์เก่าคือ "แทนที่แล้ว" (owner 2026-07-30 ·
+                            prod มี 10 ตู้ที่อัพ 2-3 รอบ ทำให้ลิสต์อ่านแล้วไม่รู้ว่าไฟล์ไหนคือตัวจริง) */}
+                        {superseded && (
+                          <div className="mt-0.5">
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600"
+                              title="ตู้นี้มีไฟล์ที่อัพใหม่กว่า — ระบบใช้ไฟล์ล่าสุดเป็นตัวจริง">
+                              แทนที่แล้ว
+                            </span>
+                          </div>
                         )}
                       </td>
                       <td className="px-2 py-1.5 text-right">{r.rowCount}</td>

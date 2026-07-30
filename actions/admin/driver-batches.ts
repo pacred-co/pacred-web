@@ -164,19 +164,13 @@ export async function createDriverBatch(
     // กับ เก็บตังออกเอกสาร"* — ที่อยู่กำหนดค่าส่งไทยที่ขึ้นบิล + ที่อยู่บนเอกสาร
     // ดังนั้นต้องกันตั้งแต่ก่อนออกบิล. มากันตอนมอบงานคนขับ = สายไป (บิลออกไปแล้ว).
 
-    // Check none of these forwarders are already in an open batch.
-    const { data: existingItems, error: itemErr } = await admin
-      .from("tb_forwarder_driver_item")
-      .select("fid")
-      .in("fid", forwarderIds)
-      .or("fdistatus.eq.,fdistatus.eq.1,fdistatus.is.null");
-    if (itemErr) {
-      console.error("createDriverBatch: existing item check failed", itemErr);
-      return { ok: false, error: itemErr.message };
-    }
-    if ((existingItems ?? []).length > 0) {
-      const dup = (existingItems ?? []).length;
-      return { ok: false, error: `${dup} รายการอยู่ในรอบจัดส่งอื่นแล้ว` };
+    // Check none of these forwarders are already in an OPEN batch — batch-aware
+    // (loadAssignedFids · 2026-07-29): stop ค้าง ''/'1' ในรอบที่หมดเวลา/ปิดแล้ว
+    // ไม่นับเป็นซ้ำ — ไม่งั้นงานที่รอบเก่าตายค้าง มอบใหม่ไม่ได้ตลอดกาล
+    // (เกณฑ์เดียวกับหน้า /admin/drivers/new ที่เสนอรายการ).
+    const assignedOpen = await loadAssignedFids(admin, forwarderIds);
+    if (assignedOpen.size > 0) {
+      return { ok: false, error: `${assignedOpen.size} รายการอยู่ในรอบจัดส่งอื่นที่ยังเปิดอยู่` };
     }
 
     // Build the batch row.

@@ -8,6 +8,7 @@ import { CreditLinePanel } from "../credit-panel";
 import { CancelPendingButton } from "./cancel-pending-button";
 import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { formatThaiDate, formatThaiTime } from "@/lib/utils/thai-datetime";
 
 // ADR-0018 §D-3 #1: distinguish a rebuilt `wallet_transactions` row (UUID id)
 // from a legacy `tb_wallet_hs` row (numeric id). Only UUID rows support the
@@ -209,8 +210,8 @@ export default async function WalletHistoryPage({ searchParams }: { searchParams
                     return (
                       <tr key={tx.id} className="hover:bg-surface-alt/30 transition-colors">
                         <td className="px-4 py-3 text-xs text-muted whitespace-nowrap align-top">
-                          <div>{created.toLocaleDateString("th-TH")}</div>
-                          <div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} {t("timeSuffix")}</div>
+                          <div>{formatThaiDate(created)}</div>
+                          <div>{formatThaiTime(created)} {t("timeSuffix")}</div>
                         </td>
                         <td className="px-4 py-3 align-top">
                           <p className="font-medium text-foreground">{t.has(`kind.${tx.kind}`) ? t(`kind.${tx.kind}`) : tx.kind}</p>

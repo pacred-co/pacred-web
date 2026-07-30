@@ -23,6 +23,7 @@ import { Link } from "@/i18n/navigation";
 import { getSalesPayoutDetailTb } from "@/actions/admin/sales-payouts-tb";
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { SalesPayoutPayForm } from "./pay-form";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -131,7 +132,7 @@ export default async function AdminSalesPayoutDetail({
             )}
           </div>
           {d.dateSlip && (
-            <KV label="วันที่จ่าย" value={new Date(d.dateSlip).toLocaleString("th-TH")} />
+            <KV label="วันที่จ่าย" value={formatThaiDateTime(d.dateSlip)} />
           )}
           {d.adminCreate && <KV label="ผู้ทำรายการ" value={d.adminCreate} mono />}
         </div>

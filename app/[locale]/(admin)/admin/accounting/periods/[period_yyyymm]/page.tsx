@@ -8,6 +8,7 @@ import {
   yyyymmSchema,
 } from "@/lib/validators/accounting-period";
 import { PeriodDetailActions } from "./period-detail-actions";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * V-E9 — /admin/accounting/periods/[period_yyyymm] detail.
@@ -143,16 +144,16 @@ export default async function AdminAccountingPeriodDetailPage({
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 space-y-2 text-xs">
         <h2 className="font-bold text-sm mb-2">เส้นเวลา</h2>
         <p>
-          <strong>เปิดงวด:</strong> {new Date(period.opened_at).toLocaleString("th-TH")} โดย {profileName(period.opened_by_profile)}
+          <strong>เปิดงวด:</strong> {formatThaiDateTime(period.opened_at)} โดย {profileName(period.opened_by_profile)}
         </p>
         {period.closing_marked_at && (
           <p>
-            <strong>ทำเครื่องหมายกำลังปิด:</strong> {new Date(period.closing_marked_at).toLocaleString("th-TH")}
+            <strong>ทำเครื่องหมายกำลังปิด:</strong> {formatThaiDateTime(period.closing_marked_at)}
           </p>
         )}
         {period.closed_at && (
           <p>
-            <strong>ปิดงวด:</strong> {new Date(period.closed_at).toLocaleString("th-TH")} โดย {profileName(period.closed_by_profile)}
+            <strong>ปิดงวด:</strong> {formatThaiDateTime(period.closed_at)} โดย {profileName(period.closed_by_profile)}
           </p>
         )}
         {period.closing_notes && (
@@ -162,7 +163,7 @@ export default async function AdminAccountingPeriodDetailPage({
         )}
         {period.reopened_at && (
           <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">
-            <strong>⚠️ เปิดใหม่:</strong> {new Date(period.reopened_at).toLocaleString("th-TH")} โดย {profileName(period.reopened_by_profile)}
+            <strong>⚠️ เปิดใหม่:</strong> {formatThaiDateTime(period.reopened_at)} โดย {profileName(period.reopened_by_profile)}
             <br />
             <strong>เหตุผล:</strong> {period.reopened_reason}
           </p>
@@ -200,7 +201,7 @@ export default async function AdminAccountingPeriodDetailPage({
                   <td className="px-3 py-2 text-right font-mono">{e.row_count.toLocaleString()}</td>
                   <td className="px-3 py-2 text-right font-mono">{thb(e.sum_thb)}</td>
                   <td className="px-3 py-2 text-muted">{e.sum_label ?? "—"}</td>
-                  <td className="px-3 py-2 text-muted">{new Date(e.closed_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</td>
+                  <td className="px-3 py-2 text-muted">{formatThaiDateTime(e.closed_at)}</td>
                   <td className="px-3 py-2 text-muted">{profileName(e.closed_by_profile)}</td>
                 </tr>
               ))}

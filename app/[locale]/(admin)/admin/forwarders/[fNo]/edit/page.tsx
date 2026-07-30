@@ -103,6 +103,7 @@ import {
   resolveBillingIdentity,
   corpRowFromName,
 } from "@/lib/admin/customer-identity";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -484,7 +485,7 @@ export default async function AdminForwarderEditPage({
             </p>
             {r.fdateadminstatus && (
               <p className="text-xs text-muted">
-                อัปเดตล่าสุด: {new Date(r.fdateadminstatus).toLocaleString("th-TH")}
+                อัปเดตล่าสุด: {formatThaiDateTime(r.fdateadminstatus)}
               </p>
             )}
             <div className="flex md:justify-end gap-1.5 flex-wrap pt-2">
@@ -602,7 +603,7 @@ export default async function AdminForwarderEditPage({
           {/* วันที่สร้าง */}
           {r.fdate && (
             <InfoLine label="วันที่สร้าง">
-              {new Date(r.fdate).toLocaleString("th-TH")}
+              {formatThaiDateTime(r.fdate)}
             </InfoLine>
           )}
 

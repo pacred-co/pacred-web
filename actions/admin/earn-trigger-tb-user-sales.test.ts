@@ -133,7 +133,15 @@ function buildFakeAdmin(fixtures: Fixtures) {
     if (!inFilter) return pool;
     return pool.filter((row) => {
       const r = row as Record<string, unknown>;
-      return inFilter.values.includes(r[inFilter.col]);
+      // Production tb_users keeps the legacy camelCase identifiers (`userID`,
+      // `coID`) while the SELECT aliases the returned payload to
+      // `{ userid, coid }`. Fixtures intentionally model that aliased payload,
+      // so translate the filter column the same way PostgREST does.
+      const fixtureCol =
+        table === "tb_users" && inFilter.col === "userID"
+          ? "userid"
+          : inFilter.col;
+      return inFilter.values.includes(r[fixtureCol]);
     });
   }
 

@@ -14,6 +14,8 @@ import {
   createMomoInvoiceSettlement,
   getMomoSettledFids,
 } from "@/actions/admin/momo-invoice-settlement";
+import { recordMomoInvoiceUpload } from "@/actions/admin/momo-invoice-history";
+import { InvoiceHistoryPanel } from "./invoice-history-panel";
 
 const baht = (n: number | null) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -39,6 +41,8 @@ function fileToBase64(file: File): Promise<string> {
 /** แหล่งที่มาของใบที่กำลังดูอยู่ — ส่งกลับไปตอนกดบันทึกให้ server แกะซ้ำเอง. */
 type Source = { kind: "pdf"; fileBase64: string; fileName: string } | { kind: "text"; text: string };
 const sourcePayload = (s: Source) => (s.kind === "pdf" ? { fileBase64: s.fileBase64 } : { text: s.text });
+/** กุญแจของ "ใบที่กำลังดูอยู่" — ใช้ผูกแถวประวัติกับใบใบนั้นเป๊ะๆ (กันประทับผิดแถว). */
+const sourceKey = (s: Source) => (s.kind === "pdf" ? `pdf:${s.fileBase64}` : `text:${s.text}`);
 
 const CBM_BASIS_LABEL: Record<string, string> = {
   line_total: "คิว = ยอดรวมทั้งบรรทัด (ต้นทุน = คิว × เรท · จำนวนกล่องไม่ใช่ตัวคูณ)",
@@ -333,6 +337,87 @@ function CabinetRollupCard({ rollup }: { rollup: MomoInvoiceCabinetRollup[] }) {
   );
 }
 
+/**
+ * 📦 "สรุปพัสดุนี้อยู่ตู้ไหนกันแน่" — owner 2026-07-29: *"ตอนตรวจต้นทุน momo ขึ้นเลขตู้
+ * ไม่ตรงแปลกๆ สรุปมันอยู่ตู้ไหนกันแน่ครับ ในแพคกิ้งลิส มีไหมครับ อยู่ในตู้ไหนครับ"*
+ *
+ * เดิมแถวที่ "ตู้ไม่ตรง" แค่ขึ้นแดงแล้วบล็อก — ไม่มีใครตอบได้ว่าตู้ที่ถูกคือตู้ไหน
+ * (เลขตู้ใน staging ของ MOMO คือ "รอบขนส่ง" ไม่ใช่เลขตู้ · เลขตู้จริงมาทางแพคกิ้งลิส).
+ * ตอนนี้คำตอบมาจาก SOT ตัวเดียวกับหน้าอัพแพคกิ้งลิส แล้วบอกต่อว่า **ต้องไปแก้ฝั่งไหน**:
+ *   • แพคกิ้ง = ใบ → ระบบเราผูกตู้ผิด → แก้ที่ระบบ (ห้ามแก้ใบ)
+ *   • แพคกิ้ง = ระบบ → ใบ MOMO ผิด → แจ้ง MOMO (ห้ามแก้ระบบให้ตรงใบ)
+ *   • ยังไม่มีแพคกิ้งลิส → ไปอัพก่อน จึงจะยืนยันได้
+ * READ-ONLY — ไม่มีปุ่ม override/บันทึกข้ามด่าน (ด่านตู้ไม่ตรงยังบล็อกเหมือนเดิม).
+ */
+function ContainerTruthNote({ r }: { r: MomoIngestPreviewRow }) {
+  const t = r.containerTruth;
+  if (!t) return null;
+  // โชว์เฉพาะแถวที่ "ตู้ไหน" เป็นคำถามจริง — กันตารางรกในใบ 39 บรรทัด
+  const asks = r.cabinetConflict || r.cabinetUnlinked || !r.matched || t.multiContainer;
+  if (!asks) return null;
+
+  const ourCab = (r.fcabinetnumber ?? "").trim();
+  const invCab = (r.invoiceCabinet ?? "").trim();
+
+  if (t.packingCabinets.length === 0) {
+    return (
+      <div className="mt-1 rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+        📦 ยังไม่มีแพคกิ้งลิสของชิปเม้นนี้ — ยืนยันตู้ยังไม่ได้ ·{" "}
+        <Link href="/admin/api-forwarder-momo/packing-upload" className="font-medium underline">
+          อัพแพคกิ้งลิสของตู้ก่อน →
+        </Link>
+      </div>
+    );
+  }
+
+  const systemWrong = !!t.shouldBe && !!ourCab && t.shouldBe !== ourCab;
+  const invoiceWrong = r.cabinetConflict && !!t.shouldBe && !!ourCab && t.shouldBe === ourCab;
+  const tone = systemWrong || invoiceWrong ? "bg-sky-50 text-sky-900" : "bg-surface-alt/60 text-muted";
+
+  return (
+    <div className={`mt-1 rounded px-2 py-1 text-[11px] ${tone}`}>
+      <div>📦 แพคกิ้งลิสว่า: {t.message}</div>
+
+      {systemWrong && (
+        <div className="mt-0.5">
+          {invCab && invCab === t.shouldBe ? (
+            <>
+              <strong>ใบวางบิลถูก · ระบบเราผูกตู้ผิด</strong> — แก้เลขตู้ในระบบให้เป็น{" "}
+              <span className="font-mono font-semibold">{t.shouldBe}</span> (ไม่ต้องแก้ใบ)
+            </>
+          ) : (
+            <>
+              <strong>ทั้งใบและระบบไม่ตรงแพคกิ้งลิส</strong> — แพคกิ้งว่า{" "}
+              <span className="font-mono font-semibold">{t.shouldBe}</span>
+              {invCab && <> · ใบว่า <span className="font-mono">{invCab}</span></>} · ระบบว่า{" "}
+              <span className="font-mono">{ourCab}</span> — ให้คนตรวจก่อนแก้
+            </>
+          )}
+          <span className="ml-1 inline-flex flex-wrap gap-1">
+            {r.fid != null && (
+              <Link href={`/admin/forwarders/${r.fid}`} className="font-medium underline">
+                แก้ตู้ที่รายการ #{r.fid} →
+              </Link>
+            )}
+            {t.shouldBe && (
+              <Link href={`/admin/report-cnt/${encodeURIComponent(t.shouldBe)}`} className="font-medium underline">
+                ดูตู้ {t.shouldBe} →
+              </Link>
+            )}
+          </span>
+        </div>
+      )}
+
+      {invoiceWrong && (
+        <div className="mt-0.5">
+          <strong>ระบบเราถูก · ใบ MOMO ระบุตู้ผิด</strong> — แจ้ง MOMO ให้แก้ใบ{" "}
+          <strong>ห้ามแก้เลขตู้ในระบบให้ตรงใบ</strong> (จะทำให้กำไรรายตู้เพี้ยน)
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** ผลของแถว — บอกสถานะ + สิ่งที่ต้องทำต่อ ในตาแรก (§0g). */
 function RowOutcome({ r }: { r: MomoIngestPreviewRow }) {
   if (!r.matched) return <span className="font-medium text-red-700">🔴 ไม่พบในระบบ</span>;
@@ -419,6 +504,12 @@ export function MomoInvoiceCostClient() {
   const [settled, setSettled] = useState<SettledMap>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pending, start] = useTransition();
+  // ── ประวัติการอัพใบ (mig 0283) ─────────────────────────────────────────
+  // เก็บ **คู่ (กุญแจของใบ, id แถวประวัติ)** ไว้ด้วยกัน: กันบันทึกประวัติซ้ำเมื่อพรีวิวใบเดิม
+  // ซ้ำใน session เดียว **และ** กันประทับ "บันทึกต้นทุนแล้ว" ลงแถวของใบอื่น — ถ้ากุญแจไม่ตรง
+  // ใบที่กำลังกดอยู่ เราไม่ส่ง uploadId ไปเลย (ดีกว่าประทับผิดใบ)
+  const uploadRef = useRef<{ key: string; id: number } | null>(null);
+  const [historyNonce, setHistoryNonce] = useState(0);
   /** เลขฐานชิปเม้น → ยอดทั้งครอบครัว · ใช้อธิบายกำไรรายกล่องที่ติดลบ (Σ มาจาก DB ฝั่ง server
    *  ไม่ใช่จากบรรทัดบนใบ — ครอบครัวอาจถูกบิลไม่ครบในรอบเดียว). */
   const shipByBase = new Map<string, MomoInvoiceShipmentRollup>(
@@ -451,6 +542,23 @@ export function MomoInvoiceCostClient() {
       if (!res.ok || !res.data) { setMsg({ kind: "err", text: res.ok ? "อ่านไม่สำเร็จ" : res.error }); return; }
       setPreview(res.data);
       void refreshSettled(res.data.rows);
+      // 📜 เก็บประวัติการอัพใบนี้ (ไฟล์ + ผลตรวจ) — owner: "ใบวางบิล momo ที่อัพเข้าไป
+      // ทำประวัติเก็บไว้ บันทึกให้เองเลย". ยิงแบบ fire-and-forget: พังก็ไม่กระทบผลบนจอ ·
+      // server แกะ+คิดใหม่เองทั้งหมด (ที่นี่ส่งแค่แหล่งที่มา ไม่ส่งตัวเลขใดๆ)
+      const key = sourceKey(s);
+      if (res.data.rows.length > 0 && uploadRef.current?.key !== key) {
+        uploadRef.current = null; // ใบใหม่ → ยังไม่มีแถวประวัติของใบนี้
+        void recordMomoInvoiceUpload({
+          ...sourcePayload(s),
+          ...(s.kind === "pdf" ? { fileName: s.fileName } : {}),
+        }).then((rec) => {
+          if (rec.ok && rec.data) {
+            uploadRef.current = { key, id: rec.data.id };
+            setHistoryNonce((v) => v + 1);
+          }
+          // เก็บไม่ได้ = ปล่อยว่างไว้ (รอบหน้าลองใหม่ · ไม่ประทับใบอื่นแทน)
+        });
+      }
       if (res.data.rows.length === 0) {
         setMsg({
           kind: "err",
@@ -510,12 +618,20 @@ export function MomoInvoiceCostClient() {
     setMsg(null);
     start(async () => {
       // ส่ง "แหล่งที่มา" กลับไป ไม่ใช่ผลที่อ่านได้ — server แกะ + คิดใหม่เองทั้งหมด (กติกาเงิน)
-      const res = await applyMomoInvoiceCost({ ...sourcePayload(source), ...(onlyFids ? { onlyFids } : {}) });
+      // uploadId = แถวประวัติของ "ใบนี้เท่านั้น" (เทียบกุญแจก่อนส่ง) → server ประทับให้ว่าใบนี้
+      // บันทึกต้นทุนแล้ว · ไม่มีผลต่อการคิด/เขียนเงินใดๆ
+      const up = uploadRef.current?.key === sourceKey(source) ? uploadRef.current.id : null;
+      const res = await applyMomoInvoiceCost({
+        ...sourcePayload(source),
+        ...(onlyFids ? { onlyFids } : {}),
+        ...(up != null ? { uploadId: up } : {}),
+      });
       if (!res.ok || !res.data) { setMsg({ kind: "err", text: res.ok ? "บันทึกไม่สำเร็จ" : res.error }); return; }
       const d = res.data;
       const skippedNote = d.skipped > 0 ? ` · ข้าม ${d.skipped} (ต้นทุนตรงอยู่แล้ว)` : "";
       setMsg({ kind: "ok", text: `✅ บันทึกต้นทุนแล้ว ${d.applied}/${d.requested} แทรคกิ้ง${skippedNote} (ใบ ${d.invoiceNo ?? "-"})` });
       await reloadPreview(source);
+      setHistoryNonce((v) => v + 1); // ให้ประวัติเด้งเป็น "✓ บันทึกต้นทุนแล้ว" ทันที
       router.refresh();
     });
   }
@@ -977,6 +1093,8 @@ export function MomoInvoiceCostClient() {
                       <td className="px-2 py-2 text-[11px]">
                         <RowOutcome r={r} />
                         {r.blockReason && <div className="mt-0.5 text-muted">{r.blockReason}</div>}
+                        {/* 📦 ตอบ "สรุปอยู่ตู้ไหนกันแน่" จากแพคกิ้งลิส + บอกว่าต้องแก้ฝั่งไหน */}
+                        <ContainerTruthNote r={r} />
                         <RowActions
                           r={r}
                           settled={settled}
@@ -993,6 +1111,10 @@ export function MomoInvoiceCostClient() {
           </div>
         </section>
       )}
+
+      {/* 📜 ประวัติใบวางบิลที่อัพ — owner: "ทำประวัติเก็บไว้ บันทึกให้เองเลย เหมือนฝั่ง
+          อัพแพคกิ้งลิสตู้". อยู่บนหน้าเดียวกัน (§0d ไม่มีหน้า orphan) · READ-ONLY */}
+      <InvoiceHistoryPanel nonce={historyNonce} />
     </div>
   );
 }

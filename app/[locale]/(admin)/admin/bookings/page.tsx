@@ -9,6 +9,7 @@ import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportBookingsAll } from "@/actions/admin/export/bookings";
 import { PageHeader } from "@/components/admin/page-header";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * BK-1 — /admin/bookings list page.
@@ -268,10 +269,7 @@ export default async function AdminBookingsListPage({
                       </td>
                       <td className="px-3 py-2 text-xs text-muted">
                         {r.submitted_at
-                          ? new Date(r.submitted_at).toLocaleString("th-TH", {
-                              dateStyle: "short",
-                              timeStyle: "short",
-                            })
+                          ? formatThaiDateTime(r.submitted_at)
                           : "—"}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted">

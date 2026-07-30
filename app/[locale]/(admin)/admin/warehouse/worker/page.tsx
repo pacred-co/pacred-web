@@ -20,6 +20,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { loadWarehouseDashboard } from "@/lib/warehouse/worker-queries";
 import { legacyForwarderStatusThai } from "@/lib/legacy-status-map";
 import { ScanLine, Calculator, Boxes, Truck, PackageSearch, PackageCheck, Clock } from "lucide-react";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -36,11 +37,7 @@ const STEP_LABEL: Record<string, string> = {
 };
 
 function fmtTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" });
-  } catch {
-    return iso;
-  }
+  return formatThaiDateTime(iso);
 }
 
 export default async function WarehouseWorkerDashboard() {

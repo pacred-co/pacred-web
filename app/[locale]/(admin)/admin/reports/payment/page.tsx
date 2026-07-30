@@ -38,6 +38,7 @@ import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { parsePage } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -381,7 +382,7 @@ export default async function AdminReportPaymentPage({
                   {rows.map((r) => (
                     <tr key={r.id} className="border-t border-border hover:bg-surface-alt/30 align-top">
                       <td className="px-4 py-3 text-xs whitespace-nowrap text-muted">
-                        {r.paydate ? new Date(r.paydate).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                        {r.paydate ? formatThaiDateTime(r.paydate) : "—"}
                       </td>
                       <td className="px-4 py-3 font-mono text-xs">
                         <Link href={`/admin/payment/update/${r.id}`} className="text-primary-600 hover:underline">

@@ -24,6 +24,7 @@ import {
   MessageSquare, Users, MessageCircle, PhoneCall, ImageIcon, ChevronLeft,
   Wallet, Package, BadgeCheck, UserX, MessagesSquare, Link2, Link2Off, ArrowRight,
 } from "lucide-react";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 // Reads PII (customer identity, phones, wallet) via createAdminClient on every
 // request — must render per-request, never statically.
@@ -466,12 +467,7 @@ function Bubble({ message }: { message: LineMessage }) {
         )}
         <p className={`mt-1 text-[11px] ${outbound ? "text-white/70 text-right" : "text-muted"}`}>
           {message.sent_at
-            ? new Date(message.sent_at).toLocaleString("th-TH", {
-                day: "numeric",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit",
-              })
+            ? formatThaiDateTime(message.sent_at)
             : "—"}
         </p>
       </div>

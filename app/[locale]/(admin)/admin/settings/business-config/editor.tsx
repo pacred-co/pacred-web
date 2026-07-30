@@ -19,6 +19,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { adminUpdateBusinessConfig } from "@/actions/admin/business-config";
 import type { BusinessConfigRow, BusinessConfigValueType } from "@/lib/business-config";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 type Group = { category: string; items: BusinessConfigRow[] };
 
@@ -133,7 +134,7 @@ function ConfigRow({ row }: { row: BusinessConfigRow }) {
           <p className="text-[11px] text-muted font-mono">
             {row.value_type}
             {row.updated_at && (
-              <span className="ml-2">· แก้ล่าสุด {new Date(row.updated_at).toLocaleString("th-TH")}</span>
+              <span className="ml-2">· แก้ล่าสุด {formatThaiDateTime(row.updated_at)}</span>
             )}
           </p>
           {row.description && (

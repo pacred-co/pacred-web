@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Link } from "@/i18n/navigation";
 import type { MomoContainerDetail } from "@/actions/admin/momo-container-detail";
 import { VERIFY_LABEL } from "@/lib/admin/momo-container-view";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 const n2 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 2 }));
 const n3 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 6 }));
@@ -166,7 +167,7 @@ export function ContainerDetailClient({ d }: { d: MomoContainerDetail }) {
           ) : (
             <>
               <div className="flex flex-wrap items-center gap-3 text-xs">
-                <span className="text-muted">อัพล่าสุด {new Date(d.packing.uploadedAt).toLocaleString("th-TH")}</span>
+                <span className="text-muted">อัพล่าสุด {formatThaiDateTime(d.packing.uploadedAt)}</span>
                 <span className="rounded-full bg-gray-100 px-2 py-0.5">กล่อง {d.packing.boxes ?? "—"}</span>
                 <span className="rounded-full bg-gray-100 px-2 py-0.5">นน. {n2(d.packing.weight)}</span>
                 <span className="rounded-full bg-gray-100 px-2 py-0.5">คิว {n3(d.packing.cbm)}</span>

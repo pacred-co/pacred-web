@@ -33,6 +33,7 @@ import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { exportQaChnShopOver2dAll } from "@/actions/admin/export/qa-chn-shop-over-2d";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -251,10 +252,7 @@ export default async function AdminQaChnShopOver2dPage({
                       </td>
                       <td className="px-3 py-3 text-xs whitespace-nowrap">
                         {effectiveStart
-                          ? new Date(effectiveStart).toLocaleString("th-TH", {
-                              dateStyle: "short",
-                              timeStyle: "short",
-                            })
+                          ? formatThaiDateTime(effectiveStart)
                           : "—"}
                         {!r.hdate3 ? (
                           <div className="text-[11px] text-muted">(ใช้ hdate · ไม่มี hdate3)</div>

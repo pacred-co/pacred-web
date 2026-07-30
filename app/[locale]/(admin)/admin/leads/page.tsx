@@ -20,6 +20,7 @@ import { CallStatusBadge, LeadCallAction } from "./lead-call-action";
 import { LeadKanban } from "./lead-kanban";
 import { LeadAssignPanel } from "./lead-assign-bar";
 import { LeadReportPanel, LeadAssignmentSummary } from "./lead-assignment-summary";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 // Reads PII (customer phones) via createAdminClient (RLS-bypass) on every
 // request — must be dynamic + cannot be statically rendered.
@@ -65,10 +66,7 @@ const SOURCE_TABS: { key: LeadSourceTab; label: string; hint: string }[] = [
 const LEAD_DATA_HIDDEN: boolean = true;
 
 function fmtDate(raw: string | null): string {
-  if (!raw) return "—";
-  const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("th-TH", { year: "2-digit", month: "short", day: "numeric" });
+  return formatThaiDate(raw);
 }
 
 function isStatusFilter(v: unknown): v is LeadCallStatus {

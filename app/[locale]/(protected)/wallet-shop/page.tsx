@@ -6,6 +6,7 @@ import {
   type ShopWalletTransaction,
 } from "@/actions/affiliate-shop-wallet";
 import { ShopWalletActions } from "./shop-wallet-actions";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * Customer shop-wallet (affiliate payouts) screen — D1 customer-backend
@@ -175,7 +176,7 @@ export default async function WalletShopPage() {
                         {t(`kind.${KIND_LABEL_KEYS[row.kind]}`)}
                       </div>
                       <div className="text-[11px] text-muted mt-0.5">
-                        {new Date(row.created_at).toLocaleString("th-TH")}
+                        {formatThaiDateTime(row.created_at)}
                       </div>
                       <div className="mt-1">
                         <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-medium ${STATUS_BADGE[row.status]}`}>

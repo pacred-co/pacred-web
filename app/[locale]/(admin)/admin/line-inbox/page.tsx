@@ -23,6 +23,7 @@ import {
   ImageIcon,
   ChevronLeft,
 } from "lucide-react";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 // Reads cookies (auth) + live DB → must render per-request.
 export const dynamic = "force-dynamic";
@@ -415,12 +416,7 @@ function MessageBubble({ message }: { message: LineMessage }) {
           }`}
         >
           {message.sent_at
-            ? new Date(message.sent_at).toLocaleString("th-TH", {
-                day: "numeric",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit",
-              })
+            ? formatThaiDateTime(message.sent_at)
             : "—"}
         </p>
       </div>

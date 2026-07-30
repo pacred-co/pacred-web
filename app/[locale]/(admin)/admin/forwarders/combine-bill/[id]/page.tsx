@@ -43,6 +43,7 @@ import {
   RemoveLineButton,
   DeleteBillButton,
 } from "./edit-actions";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -232,7 +233,7 @@ export default async function CombineBillDetailPage({
           <p className="text-xs text-muted flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" aria-hidden /> เวลาที่รวมบิล</p>
           <p className="mt-1 text-sm font-medium">
             {billData.date
-              ? new Date(billData.date).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })
+              ? formatThaiDateTime(billData.date)
               : "—"}
           </p>
         </div>

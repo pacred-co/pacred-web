@@ -4,6 +4,7 @@ import { Link } from "@/i18n/navigation";
 import { ChevronRight, Home, FileText, Plane, Calendar, Clock } from "lucide-react";
 import { LeaveDecideActions, NewLeaveButton } from "./leave-actions";
 import { LEAVE_TYPE_LABEL, LEAVE_DURATION_LABEL, LEAVE_STATUS_LABEL } from "../../_legacy-labels";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * D1 faithful port of time-attendance-system.php case 'leave-record' — reads
@@ -213,7 +214,7 @@ export default async function AdminHRLeavesPage({
                     {r.date && (
                       <span className="inline-flex items-center gap-1 text-[11px]">
                         <Clock className="w-3 h-3" />
-                        ยื่นเมื่อ {new Date(r.date).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}
+                        ยื่นเมื่อ {formatThaiDateTime(r.date)}
                       </span>
                     )}
                     {r.adminidcreate && <span className="text-[11px]">บันทึกโดย {r.adminidcreate}</span>}

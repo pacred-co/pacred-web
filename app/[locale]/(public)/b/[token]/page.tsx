@@ -169,6 +169,7 @@ export default async function PublicBillPage({
           issuedBy={header.issued_by}
           pages={pages}
           qrDataUrl={qrDataUrl}
+          cancelled={header.status === "cancelled"}
         />
       </div>
 

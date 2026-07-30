@@ -41,6 +41,7 @@ import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import { SlipVerifyStep } from "@/components/admin/slip-verify-step";
 import { adminUpdateYuanPayment, adminReviewYuanRound1 } from "@/actions/admin/yuan-payments";
 import { YuanRefundModal } from "../refund-modal";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 type Props = {
   id: string;
@@ -65,11 +66,7 @@ const fmtYuan = (n: number) => n.toLocaleString(undefined, { minimumFractionDigi
 
 /** `2026-07-23 14:05` — Gregorian to the minute (round-1 stamp display). */
 function fmtStamp(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  return formatThaiDateTime(iso);
 }
 
 export function YuanVerifyFlow(props: Props) {

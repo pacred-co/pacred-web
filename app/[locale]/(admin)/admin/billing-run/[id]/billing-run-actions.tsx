@@ -30,6 +30,7 @@ import {
 import { uploadSlip } from "@/lib/storage-upload";
 import { SlipImage } from "@/components/admin/slip-image";
 import { BillingRunVerifyFlow } from "./billing-run-verify-flow";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 type Props = {
   invoiceId: number;
@@ -67,10 +68,7 @@ const inputCls =
 
 /** Pure given the iso string (deterministic) — safe in render. */
 function fmtDateTime(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+  return formatThaiDateTime(iso);
 }
 
 export function BillingRunActions({

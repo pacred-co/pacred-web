@@ -29,6 +29,7 @@ import {
   bucketLeadSource,
   type ImportedLeadSource,
 } from "@/lib/validators/imported-lead";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * Imported-leads CRM workspace. TWO MODES (ปอน 2026-06-22 · "เข้าใจใหม่"):
@@ -545,7 +546,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "", sourceTab = "all"
       ) : <span className="text-xs text-muted">ไม่มีเบอร์</span>}
       {l.call_count > 0 ? (
         <button type="button" onClick={() => { setHandoffOpenId(null); setCloseOpenId(null); setCallOpenId(l.id); }} className="text-left text-[11px] font-semibold text-primary-600 hover:underline">
-          บันทึกผล · โทรแล้ว {l.call_count} ครั้ง{l.last_called_at ? ` · ${new Date(l.last_called_at).toLocaleString("th-TH", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}
+          บันทึกผล · โทรแล้ว {l.call_count} ครั้ง{l.last_called_at ? ` · ${formatThaiDateTime(l.last_called_at)}` : ""}
         </button>
       ) : null}
     </div>
@@ -618,7 +619,7 @@ export function LeadAssignPanel({ reps, segment, mode, q = "", sourceTab = "all"
       <ul className="space-y-1">
         {calls.map((c) => (
           <li key={c.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
-            <span className="font-mono text-muted">{c.calledAt ? new Date(c.calledAt).toLocaleString("th-TH", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
+            <span className="font-mono text-muted">{c.calledAt ? formatThaiDateTime(c.calledAt) : "—"}</span>
             <span className="text-foreground">โดย {repName(c.adminId)}</span>
             {c.status ? <span className={`inline-flex items-center rounded-full border px-1.5 py-0.5 font-semibold ${CALL_STATUS_STYLE[c.status] ?? "border-border text-muted"}`}>{CALL_STATUS_LABEL[c.status] ?? c.status}</span> : null}
             {c.status === "other_rep" && c.note ? <span className="text-slate-500">↩ ย้ายจาก {repName(c.note)}</span> : c.note ? <span className="text-muted">· {c.note}</span> : null}

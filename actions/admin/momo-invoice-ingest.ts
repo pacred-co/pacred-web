@@ -39,6 +39,18 @@
  *    PCS20260528-SEA01. Only the conflicting row is blocked; the rest of the file
  *    still applies (one bad line must not stop the round).
  *
+ * 📦 "สรุปอยู่ตู้ไหนกันแน่" (2026-07-29) — owner: *"ตอนตรวจต้นทุน momo ขึ้นเลขตู้ไม่ตรง
+ *    แปลกๆ สรุปมันอยู่ตู้ไหนกันแน่ครับ ในแพคกิ้งลิส มีไหมครับ … มันควรจะเชื่อมโยง ประมวลผลกัน
+ *    และ map match กันได้"*. การบล็อกแถวที่ตู้ไม่ตรงถูกแล้ว แต่ไม่มีใครตอบได้ว่า **ตู้ที่ถูก
+ *    คือตู้ไหน** (เลขตู้ที่ MOMO ส่งใน staging เป็น "รอบขนส่ง" ไม่ใช่เลขตู้ · เลขตู้จริงมาทาง
+ *    แพคกิ้งลิสต่อตู้). ตอนนี้พรีวิวแนบ `containerTruth` ทุกแถว จาก SOT
+ *    `lib/admin/momo-container-truth.ts` ผ่าน loader ตัวเดียวกับหน้าอัพแพคกิ้งลิส →
+ *    2 หน้าตอบด้วยสมองเดียวกัน. DISPLAY-ONLY: ไม่เคยเขียน `fcabinetnumber` และ **ไม่ผ่อน
+ *    ด่านตู้ไม่ตรงแม้แต่นิด** (ยังบล็อกเหมือนเดิม · ไม่มีปุ่ม override) · โหลดเฉพาะทางพรีวิว.
+ *
+ * 📜 ประวัติการอัพใบ (2026-07-29) — apply รับ `uploadId` (ตัวเลือก) เพื่อประทับแถวประวัติ
+ *    `momo_invoice_upload` (mig 0283) ว่า "ใบนี้บันทึกต้นทุนแล้ว" · best-effort · ไม่แตะเงิน.
+ *
  * 🔑 MATCHER (2026-07-17) — MOMO bills the first box of a split as `<base>-1/N`
  *    while we store it as the BARE base. Exact-match alone raised 3 false "ไม่พบใน
  *    ระบบ" on INV-20260708-0002 (฿5,091.50 / ฿34.78 / ฿181.42) — and an accountant
@@ -65,6 +77,13 @@ import {
 import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { baseTrackingOf } from "@/lib/integrations/momo-web/live-parcel-metrics";
 import { MOMO_INVOICE_PDF_MAX_BYTES } from "@/lib/admin/momo-invoice-pdf-text";
+import { baseOfTracking } from "@/lib/admin/momo-container-truth";
+import {
+  loadContainerTruthFor,
+  describeContainerTruth,
+  type ContainerTruthMap,
+} from "@/lib/admin/container-truth-loader";
+import { stampMomoInvoiceUploadApplied } from "@/lib/admin/momo-invoice-upload-stamp";
 
 /** base64 inflates ~4/3 → a 20 MB PDF is ~27 MB, well under the 50mb serverActions
  *  bodySizeLimit (next.config.ts). The real byte-length cap is re-asserted after decode
@@ -83,6 +102,10 @@ const ingestSchema = z
      *  WHICH re-derived line gets written; a client can no more inject a cost this way than
      *  through the source. */
     onlyFids: z.array(z.number().int().positive()).max(2000).optional(),
+    /** apply-only: แถวประวัติการอัพใบนี้ (mig 0283 `momo_invoice_upload`) เพื่อประทับว่า
+     *  "ใบนี้บันทึกต้นทุนแล้ว" ให้เองฝั่ง server. ไม่มีผลต่อการคิด/เขียนเงินเลย —
+     *  ถ้าไม่ส่งมา หรือประทับไม่สำเร็จ การบันทึกต้นทุนยังสมบูรณ์เหมือนเดิม. */
+    uploadId: z.number().int().positive().optional(),
   })
   .refine((v) => (v.text != null) !== (v.fileBase64 != null), {
     message: "ต้องส่งข้อความจากใบ หรือไฟล์ PDF อย่างใดอย่างหนึ่ง (ไม่ใช่ทั้งคู่)",
@@ -155,6 +178,29 @@ function corroborates(line: { kg: number; cbm: number }, row: ForwarderRow): boo
   return kgOk === true || cbmOk === true;
 }
 
+/**
+ * คำตอบ "พัสดุนี้อยู่ตู้ไหนกันแน่" ที่แนบมากับแถว — owner 2026-07-29:
+ * *"ตอนตรวจต้นทุน momo ขึ้นเลขตู้ไม่ตรงแปลกๆ สรุปมันอยู่ตู้ไหนกันแน่ครับ ในแพคกิ้งลิส
+ *   มีไหมครับ อยู่ในตู้ไหนครับ มันควรจะเชื่อมโยง ประมวลผลกัน และ map match กัน"*
+ *
+ * มาจาก SOT `lib/admin/momo-container-truth.ts` (เทสแล้ว · พิสูจน์กับ prod 15/15 กลุ่ม)
+ * ผ่าน loader ตัวเดียวกับที่หน้าอัพแพคกิ้งลิสใช้ → 2 หน้าตอบด้วยสมองเดียวกัน.
+ *
+ * ประกาศเป็น type ของตัวเอง (ไม่ import จาก loader ที่เป็น "server-only") เพื่อให้
+ * client ที่ import แต่ type ของแถวไปใช้ ไม่ต้องแตะโมดูล server-only เลย.
+ * READ-ONLY ทั้งหมด — ไม่มีการเขียน fcabinetnumber จากที่นี่.
+ */
+export type MomoRowContainerTruth = {
+  /** เลขตู้ที่แพคกิ้งลิสบอกว่าแถวนี้ควรอยู่ (null = ยังตอบไม่ได้). */
+  shouldBe: string | null;
+  /** ตู้ทั้งหมดที่แพคกิ้งลิสบอกว่ามีชิปเม้นนี้. */
+  packingCabinets: string[];
+  /** แพคกิ้งบอกว่า MOMO แยกส่งชิปเม้นนี้หลายตู้จริง. */
+  multiContainer: boolean;
+  /** ข้อความไทยพร้อมแสดง. */
+  message: string;
+};
+
 export type MomoIngestPreviewRow = {
   tracking: string;
   invoiceCost: number;
@@ -205,6 +251,8 @@ export type MomoIngestPreviewRow = {
   duplicateFid: boolean;
   /** เหตุผลไทยว่าทำไมแถวนี้ยังบันทึกไม่ได้ + ต้องทำอะไรต่อ (null = พร้อม/ไม่ต้องทำ). */
   blockReason: string | null;
+  /** "อยู่ตู้ไหนกันแน่" ตามแพคกิ้งลิส (null = พรีวิวนี้ไม่ได้โหลดคำตอบ/โหลดไม่สำเร็จ). */
+  containerTruth: MomoRowContainerTruth | null;
 };
 
 /**
@@ -564,7 +612,15 @@ async function buildShipmentRollup(
   });
 }
 
-async function buildPreview(text: string): Promise<MomoIngestPreview> {
+/**
+ * @param opts.withContainerTruth โหลดคำตอบ "อยู่ตู้ไหน" จากแพคกิ้งลิสมาแนบทุกแถว.
+ *   เปิดเฉพาะตอน **พรีวิวให้คนดู** (หน้าตรวจต้นทุน) — ทาง apply/ตัดจ่ายไม่ต้องใช้
+ *   และไม่ควรจ่ายค่า query เพิ่มบนเส้นทางเงิน. ค่าที่ได้เป็น display-only 100%.
+ */
+async function buildPreview(
+  text: string,
+  opts?: { withContainerTruth?: boolean },
+): Promise<MomoIngestPreview> {
   const parsed = parseMomoInvoiceText(text);
   const admin = createAdminClient();
 
@@ -695,6 +751,21 @@ async function buildPreview(text: string): Promise<MomoIngestPreview> {
     for (const r of (paid ?? []) as Array<{ fCabinetNumber: string | null }>) if (r.fCabinetNumber) paidCabs.add(r.fCabinetNumber);
   }
 
+  // ── "สรุปอยู่ตู้ไหนกันแน่" (owner 2026-07-29) ────────────────────────────
+  // เลขตู้ของ MOMO ใน staging เป็น "รอบขนส่ง" ไม่ใช่เลขตู้ → เลขตู้จริงมาทางแพคกิ้งลิส.
+  // โหลดคำตอบผ่าน loader ตัวเดียวกับหน้าอัพแพคกิ้งลิส (SOT เดียว) แล้วแนบไปกับแถว
+  // เพื่อให้แถวที่ "ตู้ไม่ตรง" บอกได้ว่าตู้ที่ถูกคือตู้ไหน แทนที่จะบล็อกแล้วเงียบ.
+  // fail-soft: พังแล้ว containerTruth = null → จอเหมือนเดิมทุกอย่าง (ไม่ล้ม ไม่บล็อกเพิ่ม).
+  const truthKeys = parsed.lines.map((l, i) => baseOfTracking(resolved[i]?.row.ftrackingchn ?? l.tracking));
+  let truthMap: ContainerTruthMap | null = null;
+  if (opts?.withContainerTruth) {
+    try {
+      truthMap = await loadContainerTruthFor(admin, truthKeys.filter(Boolean));
+    } catch (e) {
+      console.error(`[momo-ingest truth] failed`, { error: String(e) });
+    }
+  }
+
   const rows: MomoIngestPreviewRow[] = parsed.lines.map((l, i) => {
     const hit = resolved[i];
     const f = hit?.row ?? null;
@@ -706,9 +777,14 @@ async function buildPreview(text: string): Promise<MomoIngestPreview> {
     const invoiceCbm = invoiceLineCbm(l, parsed.cbmBasis);
     const ourCbm = f ? totalCbmOf(f) : null;
     const ourSell = f ? f.ftotalprice : null;
-    // เทียบตู้เฉพาะเมื่อมีทั้ง 2 ฝั่ง (ใบรุ่นเก่าไม่พิมพ์ตู้ → ไม่ถือว่าขัดแย้ง)
-    const cabinetConflict = !!l.cabinet && !!f?.fcabinetnumber && l.cabinet !== f.fcabinetnumber;
-    const cabinetUnlinked = !!l.cabinet && !!f && !f.fcabinetnumber;
+    // เทียบตู้เฉพาะเมื่อมีทั้ง 2 ฝั่ง (ใบรุ่นเก่าไม่พิมพ์ตู้ → ไม่ถือว่าขัดแย้ง) ·
+    // trim ทั้ง 2 ฝั่งก่อนเทียบ: ช่องว่างหลงมาท้ายเลขตู้ (คีย์มือ/ก๊อปจาก Excel) ไม่ควร
+    // บล็อกการบันทึกต้นทุนทั้งแถว. ไม่ fold ตัวพิมพ์ — เลขตู้เป็นตัวใหญ่ทั้งระบบ
+    // (ถ้าตัวเล็กมาจริงคือข้อมูลผิด ต้องให้คนดู ไม่ใช่กลืนให้ผ่าน)
+    const invCab = (l.cabinet ?? "").trim();
+    const ourCab = (f?.fcabinetnumber ?? "").trim();
+    const cabinetConflict = !!invCab && !!ourCab && invCab !== ourCab;
+    const cabinetUnlinked = !!invCab && !!f && !ourCab;
     const duplicateFid = !!f && (fidCount.get(f.id) ?? 0) > 1;
     const costDiffers = !!f && Math.abs((currentCost ?? 0) - l.lineTotal) > 0.005;
 
@@ -717,13 +793,13 @@ async function buildPreview(text: string): Promise<MomoIngestPreview> {
     if (!f) {
       blockReason = bareBaseOf(l.tracking)
         ? `ไม่พบในระบบ — MOMO บิลเป็นกล่องแรกของชุดแยก (${l.tracking}) และหาแถวเลขเปล่า "${bareBaseOf(l.tracking)}" ที่น้ำหนัก/คิวตรงกันไม่ได้ · ตรวจว่ามีรายการนำเข้านี้จริงไหม แล้วแจ้งทีมพัฒนา`
-        : `ไม่พบแทรคกิ้งนี้ในระบบ${l.cabinet ? ` (ใบระบุตู้ ${l.cabinet})` : ""} · MOMO อาจบิลของที่เรายังไม่ได้รับเข้า — ตรวจกับโกดังก่อน`;
+        : `ไม่พบแทรคกิ้งนี้ในระบบ${invCab ? ` (ใบระบุตู้ ${invCab})` : ""} · MOMO อาจบิลของที่เรายังไม่ได้รับเข้า — ตรวจกับโกดังก่อน`;
     } else if (duplicateFid) {
       blockReason = `มีหลายบรรทัดบนใบชี้มาที่รายการเดียวกัน (#${f.id} · ${f.ftrackingchn}) — บันทึกไม่ได้ เพราะต้นทุนจะเขียนทับกัน · แจ้งทีมพัฒนา`;
     } else if (cabinetConflict) {
-      blockReason = `🔴 ตู้ไม่ตรง — ใบว่า "${l.cabinet}" แต่ระบบเราผูกไว้กับ "${f.fcabinetnumber}" · ต้องตรวจให้ตรงกันก่อน จึงจะตัดจ่ายต้นทุนแถวนี้ได้`;
+      blockReason = `🔴 ตู้ไม่ตรง — ใบว่า "${invCab}" แต่ระบบเราผูกไว้กับ "${ourCab}" · ต้องตรวจให้ตรงกันก่อน จึงจะตัดจ่ายต้นทุนแถวนี้ได้`;
     } else if (cabinetPaid) {
-      blockReason = `ข้าม — ตู้ ${f.fcabinetnumber} จ่ายค่าตู้ไปแล้ว ต้นทุนถูกล็อก (แก้ที่หน้าจ่ายค่าตู้ถ้าจำเป็น)`;
+      blockReason = `ข้าม — ตู้ ${ourCab} จ่ายค่าตู้ไปแล้ว ต้นทุนถูกล็อก (แก้ที่หน้าจ่ายค่าตู้ถ้าจำเป็น)`;
     } else if (!costDiffers) {
       blockReason = null; // ตรงแล้ว — ไม่ต้องทำอะไร
     }
@@ -762,6 +838,9 @@ async function buildPreview(text: string): Promise<MomoIngestPreview> {
       cabinetUnlinked,
       duplicateFid,
       blockReason,
+      containerTruth: truthMap
+        ? describeContainerTruth(truthMap.get(truthKeys[i] ?? ""), f?.id ?? null, f?.fcabinetnumber ?? null)
+        : null,
     };
   });
 
@@ -828,7 +907,8 @@ export async function previewMomoInvoiceCost(input: unknown): Promise<AdminActio
     if (denied) return { ok: false, error: denied };
     const src = await resolveInvoiceText(parsed.data);
     if (!src.ok) return { ok: false, error: src.error };
-    return { ok: true, data: await buildPreview(src.text) };
+    // พรีวิวให้คนดู → แนบคำตอบ "อยู่ตู้ไหน" จากแพคกิ้งลิสด้วย (display-only)
+    return { ok: true, data: await buildPreview(src.text, { withContainerTruth: true }) };
   });
 }
 
@@ -934,6 +1014,14 @@ export async function applyMomoInvoiceCost(input: unknown): Promise<AdminActionR
       subTotal: preview.subTotal,
       cbmBasis: preview.cbmBasis,
     });
+
+    // 📜 ประวัติการอัพใบ (mig 0283) — ประทับว่าใบนี้ถูกนำไปบันทึกต้นทุนแล้ว เพื่อให้บัญชี
+    // เห็นบนหน้าประวัติว่า "ใบนี้ใช้แล้ว" ไม่ต้องเดา. best-effort + ประทับด้วย id ของแถว
+    // นั้นเท่านั้น (ดูหัวไฟล์ lib/admin/momo-invoice-upload-stamp.ts) · ไม่กระทบผลด้านบน.
+    if (parsed.data.uploadId != null) {
+      await stampMomoInvoiceUploadApplied(parsed.data.uploadId);
+    }
+
     return { ok: true, data: { applied, skipped: scoped.length - applied, invoiceNo: preview.invoiceNo, requested: scoped.length } };
   });
 }

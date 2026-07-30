@@ -51,6 +51,7 @@ import { Link, redirect } from "@/i18n/navigation";
 import { getLocale } from "next-intl/server";
 import { ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon, Users, UserX, XCircle, Eye, LayoutGrid, ArrowRight } from "lucide-react";
 import { relativeTimeTh } from "@/lib/utils/relative-time";
+import { formatThaiDate, formatThaiTime, formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -1417,7 +1418,7 @@ function UpdateCell({ r }: { r: RowShape }) {
     <div className="text-xs text-muted whitespace-nowrap">
       {d ? (
         <>
-          <div>{new Date(d).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</div>
+          <div>{formatThaiDateTime(d)}</div>
           <div>ผ่านมา <span className="text-red-600">{relativeTimeTh(d)}</span></div>
         </>
       ) : "—"}
@@ -1456,7 +1457,7 @@ function ShopTabTable({ rows }: { rows: RowShape[] }) {
               // zebra striping (สีสลับ · owner "ไม่ให้ลายตา")
               <tr key={r.id} className="border-b border-border/60 odd:bg-surface-alt/20 hover:bg-primary-50/30 transition-colors align-top">
                 <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
-                  {created ? (<><div>{created.toLocaleDateString("th-TH")}</div><div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div></>) : "—"}
+                  {created ? (<><div>{formatThaiDate(created)}</div><div>{formatThaiTime(created)} น.</div></>) : "—"}
                 </td>
                 <td className="px-3 py-3 whitespace-nowrap">
                   <Link href={`/admin/customers/${r.member_code ?? ""}`} className="text-blue-600 hover:underline font-mono text-xs">{r.member_code ?? "—"}</Link>
@@ -1533,7 +1534,7 @@ function ForwarderTabTable({ rows }: { rows: RowShape[] }) {
             return (
               <tr key={r.id} className="border-b border-border/60 odd:bg-surface-alt/20 hover:bg-primary-50/30 transition-colors align-top">
                 <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
-                  {created ? (<><div>{created.toLocaleDateString("th-TH")}</div><div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div></>) : "—"}
+                  {created ? (<><div>{formatThaiDate(created)}</div><div>{formatThaiTime(created)} น.</div></>) : "—"}
                 </td>
                 <td className="px-3 py-3 whitespace-nowrap">
                   <Link href={`/admin/customers/${r.member_code ?? ""}`} className="text-blue-600 hover:underline font-mono text-xs">{r.member_code ?? "—"}</Link>
@@ -1614,7 +1615,7 @@ function PaymentTabTable({ rows }: { rows: RowShape[] }) {
             return (
               <tr key={r.id} className="border-b border-border/60 odd:bg-surface-alt/20 hover:bg-primary-50/30 transition-colors align-top">
                 <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
-                  {created ? (<><div>{created.toLocaleDateString("th-TH")}</div><div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div></>) : "—"}
+                  {created ? (<><div>{formatThaiDate(created)}</div><div>{formatThaiTime(created)} น.</div></>) : "—"}
                 </td>
                 <td className="px-3 py-3 font-mono text-xs whitespace-nowrap">{r.orderNo ?? "—"}</td>
                 <td className="px-3 py-3 whitespace-nowrap">
@@ -1672,7 +1673,7 @@ function UsersActiveTable({ rows }: { rows: RowShape[] }) {
             return (
               <tr key={r.id} className="border-b border-border/60 odd:bg-surface-alt/20 hover:bg-primary-50/30 transition-colors align-top">
                 <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
-                  {created ? (<><div>{created.toLocaleDateString("th-TH")}</div><div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div></>) : "—"}
+                  {created ? (<><div>{formatThaiDate(created)}</div><div>{formatThaiTime(created)} น.</div></>) : "—"}
                 </td>
                 <td className="px-3 py-3 text-xs">{r.shopUserLabel ?? "—"}</td>
                 <td className="px-3 py-3 text-xs whitespace-normal max-w-[200px]">{r.channelLabel ?? "—"}</td>
@@ -1723,7 +1724,7 @@ function WithdrawTable({ rows }: { rows: RowShape[] }) {
               <tr key={r.id} className="border-b border-border/60 odd:bg-surface-alt/20 hover:bg-primary-50/30 transition-colors align-top">
                 <td className="px-3 py-3 text-center text-xs font-mono">{i + 1}</td>
                 <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
-                  {created ? (<><div>{created.toLocaleDateString("th-TH")}</div><div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div></>) : "—"}
+                  {created ? (<><div>{formatThaiDate(created)}</div><div>{formatThaiTime(created)} น.</div></>) : "—"}
                 </td>
                 <td className="px-3 py-3 whitespace-nowrap">
                   <Link href={`/admin/customers/${r.member_code ?? ""}`} className="text-blue-600 hover:underline font-mono text-xs">{r.member_code ?? "—"}</Link>
@@ -1782,7 +1783,7 @@ function PayShopTable({ rows }: { rows: RowShape[] }) {
             return (
               <tr key={r.id} className="border-b border-border/60 odd:bg-surface-alt/20 hover:bg-primary-50/30 transition-colors align-top">
                 <td className="px-3 py-3 text-xs text-muted whitespace-nowrap">
-                  {created ? (<><div>{created.toLocaleDateString("th-TH")}</div><div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div></>) : "—"}
+                  {created ? (<><div>{formatThaiDate(created)}</div><div>{formatThaiTime(created)} น.</div></>) : "—"}
                 </td>
                 <td className="px-3 py-3 text-xs font-mono">{r.member_code ?? "—"}</td>
                 <td className="px-3 py-3 text-right font-bold text-red-600 whitespace-nowrap tabular-nums">฿{formatTHB(r.amount)}</td>
@@ -1864,8 +1865,8 @@ function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
                 <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
                   {created ? (
                     <>
-                      <div>{created.toLocaleDateString("th-TH")}</div>
-                      <div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.</div>
+                      <div>{formatThaiDate(created)}</div>
+                      <div>{formatThaiTime(created)} น.</div>
                     </>
                   ) : (
                     <div>—</div>

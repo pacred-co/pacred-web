@@ -49,6 +49,7 @@ import { nameShipBy } from "@/lib/freight/shipping-methods";
 import { code128SvgDataUrl, qrSvgDataUrl } from "@/lib/barcode";
 import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
 import { routeOrderOf } from "@/lib/admin/driver-route-order";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 // รถ/เรือ/อากาศ ตามโหมดตู้ (ประเภทขนส่ง บนสติกเกอร์ · ปอน 2026-07-24)
 const MODE_LABEL: Record<string, string> = { "1": "รถ", "2": "เรือ", "3": "อากาศ" };
@@ -309,13 +310,7 @@ export default async function DriverStickerSheetPage({
   });
 
   const dateLabel = batch.fddate
-    ? new Date(batch.fddate).toLocaleString("th-TH", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+    ? formatThaiDateTime(batch.fddate)
     : "—";
 
   return (

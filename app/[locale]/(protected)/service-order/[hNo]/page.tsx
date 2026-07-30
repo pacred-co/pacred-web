@@ -13,6 +13,7 @@ import { ShopOrderEditShipByForm } from "./shop-order-edit-ship-by-form";
 import { ShopOrderEditAddressForm } from "./shop-order-edit-address-form";
 import { ProductDetailLines } from "@/components/shop/product-detail-lines";
 import { loadLinkedShopForwarders } from "@/lib/admin/shop-order-linked-forwarders";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 // Badge colours keyed by the legacy tb_header_order.hstatus code
 // ('1'-'6' + '40' ถึงโกดังจีน · owner 2026-06-16 MOMO arrival).
@@ -179,7 +180,7 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
               </span>
               <Explain def="สถานะออเดอร์ฝากสั่งซื้อ: รอตรวจสอบ → รอชำระเงิน → สั่งซื้อแล้ว → ของถึงโกดังจีน → สำเร็จ · บอกว่าตอนนี้ออเดอร์อยู่ขั้นไหน" />
             </div>
-            <p className="text-xs text-muted mt-1">{t("createdAt", { date: new Date(o.created_at).toLocaleString("th-TH") })}</p>
+            <p className="text-xs text-muted mt-1">{t("createdAt", { date: formatThaiDateTime(o.created_at) })}</p>
           </div>
           <div className="flex flex-col items-end gap-2">
             <Link href="/service-order" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
@@ -221,7 +222,7 @@ export default async function ServiceOrderDetailPage({ params }: { params: Promi
                   {t("rawTotalHintPrefix")} <span className="font-mono">( )</span> {t("rawTotalHintSuffix")}
                 </p>
               )}
-              <p className="text-xs text-yellow-700 mt-1">{t("payBy", { date: new Date(o.payment_due_at).toLocaleString("th-TH") })}</p>
+              <p className="text-xs text-yellow-700 mt-1">{t("payBy", { date: formatThaiDateTime(o.payment_due_at) })}</p>
             </div>
 
             {/* ADR-0028 — pay by PromptPay QR + slip (no forced wallet top-up).

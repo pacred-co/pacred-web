@@ -33,6 +33,7 @@ import { useRouter } from "next/navigation";
 import { bulkAssignDriver } from "@/actions/admin/forwarders-bulk";
 import { DriverCombobox } from "./driver-combobox";
 import { confirm } from "@/components/ui/confirm";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 type EndTimeHours = 17 | 24 | 30;
 
@@ -164,7 +165,7 @@ export function TbForwarderDriverAssignPanel(p: Props) {
             <p className="text-muted">
               คนขับ: <span className="font-mono text-foreground">{p.current.driverCode}</span>
               {p.current.assignedAt && (
-                <> · มอบหมาย {new Date(p.current.assignedAt).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}</>
+                <> · มอบหมาย {formatThaiDateTime(p.current.assignedAt)}</>
               )}
             </p>
           )}

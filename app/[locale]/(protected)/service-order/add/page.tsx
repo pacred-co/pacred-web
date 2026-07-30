@@ -21,6 +21,7 @@ import {
 // arriving at /service-order/add is the legacy "paste a 1688/taobao
 // link" workflow, not the order-history table.
 import { LinkPasteSearch } from "./link-paste-search";
+import { bangkokClockParts } from "@/lib/utils/thai-datetime";
 
 /**
  * รายการฝากสั่งซื้อสินค้า — `/service-order/add` route.
@@ -166,32 +167,21 @@ function StatusBadgeAllM({ hStatus, label }: { hStatus: string; label: string })
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
-function parseDT(s: string | null): Date | null {
-  if (!s) return null;
-  // tb_header_order.hdate is "timestamp without time zone" — treat the
-  // stored wall-clock value literally (no tz shift), like MySQL.
-  const m = s.match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
-  if (!m) return null;
-  return new Date(
-    Number(m[1]), Number(m[2]) - 1, Number(m[3]),
-    Number(m[4]), Number(m[5]), Number(m[6]),
-  );
-}
 // MySQL DATE(x) → 'YYYY-MM-DD'
 function fmtDate(s: string | null): string {
-  const d = parseDT(s);
-  return d ? `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` : "";
+  const c = bangkokClockParts(s);
+  return c ? `${c.year}-${pad2(c.month)}-${pad2(c.day)}` : "";
 }
 // MySQL TIME(x) → 'HH:MM:SS'
 function fmtTime(s: string | null): string {
-  const d = parseDT(s);
-  return d ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}` : "";
+  const c = bangkokClockParts(s);
+  return c ? `${pad2(c.hour)}:${pad2(c.minute)}:${pad2(c.second)}` : "";
 }
 // MySQL DATE_FORMAT(x,'%d/%m/%Y %T') → 'DD/MM/YYYY HH:MM:SS'
 function fmtDMYHMS(s: string | null): string {
-  const d = parseDT(s);
-  if (!d) return "";
-  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  const c = bangkokClockParts(s);
+  if (!c) return "";
+  return `${pad2(c.day)}/${pad2(c.month)}/${c.year} ${pad2(c.hour)}:${pad2(c.minute)}:${pad2(c.second)}`;
 }
 // PHP number_format($n,2) — thousands separator + 2 decimals.
 function numberFormat2(n: number): string {

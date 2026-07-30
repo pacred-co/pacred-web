@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { PageHeader } from "@/components/admin/page-header";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 // Admin audit-log viewer — surfaces every admin_audit_log row written by
 // `lib/auth/require-admin.ts::logAdminAction`. Lets super track WHO did
@@ -219,7 +220,7 @@ export default async function AdminAuditPage({
                       <p className="text-[11px] text-muted mt-0.5">
                         โดย <span className="font-medium text-foreground">{adminLabel}</span>
                         {" · "}
-                        {new Date(r.created_at).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })}
+                        {formatThaiDateTime(r.created_at)}
                       </p>
                     </div>
                     <Link

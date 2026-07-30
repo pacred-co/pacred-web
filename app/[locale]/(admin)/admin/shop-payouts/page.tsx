@@ -10,6 +10,7 @@ import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { ShopPayoutActions } from "./actions-cell";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportShopPayoutsAll } from "@/actions/admin/export/shop-payouts";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * Admin shop-wallet payout queue — Sprint-3 P2.3.
@@ -161,7 +162,7 @@ export default async function AdminShopPayoutsPage({
                 {rows.map((r) => (
                   <tr key={r.id} className="border-t border-border align-top">
                     <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
-                      {new Date(r.created_at).toLocaleString("th-TH")}
+                      {formatThaiDateTime(r.created_at)}
                     </td>
                     <td className="px-4 py-3 text-xs">
                       <div><CustomerCodeLink code={r.profile?.member_code} /></div>

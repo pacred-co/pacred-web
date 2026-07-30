@@ -4,6 +4,7 @@ import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { getPeakExportBundle } from "@/actions/admin/peak-export";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 /**
  * /admin/accounting/peak-export — PEAK / FlowAccount CSV export hub.
@@ -36,9 +37,7 @@ function defaultDateRange(): { from: string; to: string } {
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("th-TH", { year: "numeric", month: "2-digit", day: "2-digit" });
+  return formatThaiDate(iso);
 }
 
 function thb(n: number): string {

@@ -58,6 +58,7 @@ import { Link } from "@/i18n/navigation";
 import { YuanVerifyFlow } from "./verify-flow";
 import { paystatusToPacred } from "@/lib/legacy-paystatus-map";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -338,7 +339,7 @@ export default async function AdminYuanPaymentDetail({
               ) : null}
             </div>
             <p className="text-[11px] text-muted">
-              เวลาทำรายการ: {row.paydate ? new Date(row.paydate).toLocaleString("th-TH") : "—"}
+              เวลาทำรายการ: {row.paydate ? formatThaiDateTime(row.paydate) : "—"}
             </p>
           </div>
           <div className="text-right space-y-1">
@@ -356,7 +357,7 @@ export default async function AdminYuanPaymentDetail({
             ) : null}
             {row.paydateadmin ? (
               <p className="text-[11px] text-muted">
-                {new Date(row.paydateadmin).toLocaleString("th-TH")}
+                {formatThaiDateTime(row.paydateadmin)}
               </p>
             ) : null}
           </div>
@@ -543,7 +544,7 @@ export default async function AdminYuanPaymentDetail({
                   <span>
                     วันที่/เวลา:{" "}
                     <b className="font-mono">
-                      {tw.paydate ? new Date(tw.paydate).toLocaleString("th-TH") : "—"}
+                      {tw.paydate ? formatThaiDateTime(tw.paydate) : "—"}
                     </b>
                   </span>
                   <span>

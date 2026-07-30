@@ -42,6 +42,7 @@ import { Pagination } from "@/components/admin/pagination";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportCombineBillAll } from "@/actions/admin/export/combine-bill";
 import { CombineBillRowActions } from "./combine-bill-row-actions";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 // ^ Wired client island (delete + print buttons). Kept on the page so super
 //   role retains the existing functional delete; visual chrome of the
 //   buttons inside renders without `.pcs-legacy` wrapper — Wave 21 will
@@ -458,7 +459,7 @@ export default async function CombineBillPage({
                       <td className="px-4 py-3 text-xs font-mono">{row.adminid}</td>
                       <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
                         {row.date
-                          ? new Date(row.date).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" })
+                          ? formatThaiDateTime(row.date)
                           : "—"}
                       </td>
                       <td className="px-4 py-3 text-right">

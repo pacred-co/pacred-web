@@ -32,6 +32,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { notFound } from "next/navigation";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -105,8 +106,7 @@ function thb(n: number | null | undefined): string {
 }
 
 function fmtDateTime(iso: string | null): string {
-  if (!iso) return "—";
-  return `${String(iso).slice(0, 10)} ${String(iso).slice(11, 19)}`;
+  return formatThaiDateTime(iso);
 }
 
 const F_STATUS_LABEL: Record<string, string> = {

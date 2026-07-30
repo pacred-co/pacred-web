@@ -21,6 +21,7 @@ import {
   adminCollectConfirmedCustomsDraft,
 } from "@/actions/admin/cargo-declarations";
 import { PACRED_BANK_ACCOUNTS } from "@/lib/payment/bank-accounts";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 const fmt = (n: number) =>
   n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -246,7 +247,7 @@ export function CustomsOwnNamePanel({
         )}
         {status === "confirmed" && initial.confirmedAt && (
           <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700">
-            <BadgeCheck className="h-3.5 w-3.5" /> ลูกค้ายืนยันเมื่อ {new Date(initial.confirmedAt).toLocaleString("th-TH")}
+            <BadgeCheck className="h-3.5 w-3.5" /> ลูกค้ายืนยันเมื่อ {formatThaiDateTime(initial.confirmedAt)}
           </span>
         )}
       </div>

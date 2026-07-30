@@ -30,6 +30,7 @@ import {
   adminLinkReceiptItems,
   type AdminBackfillReceiptItemsCandidate,
 } from "@/actions/admin/forwarder-invoice";
+import { formatThaiDate } from "@/lib/utils/thai-datetime";
 
 type Phase =
   | { kind: "idle" }
@@ -48,9 +49,7 @@ function fmt2(n: number): string {
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "-";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleDateString("th-TH", { year: "2-digit", month: "2-digit", day: "2-digit" });
+  return formatThaiDate(iso);
 }
 
 export default function BackfillItemsButton({

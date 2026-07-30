@@ -21,6 +21,7 @@ import {
   customerConfirmCustomsDraft,
   customerRejectCustomsDraft,
 } from "@/actions/customs-confirm";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export function CustomsConfirmClient({
   token,
@@ -109,7 +110,7 @@ export function CustomsConfirmClient({
           <p className="mt-2 text-base font-bold text-emerald-800">ยืนยันยอดเรียบร้อย 🎉</p>
           <p className="mt-1 text-xs text-emerald-700">
             กรุณาชำระเงินตามช่องทางด้านล่าง แล้วแจ้งสลิปกับทีมงาน
-            {confirmedAt && ` · ยืนยันเมื่อ ${new Date(confirmedAt).toLocaleString("th-TH")}`}
+            {confirmedAt && ` · ยืนยันเมื่อ ${formatThaiDateTime(confirmedAt)}`}
           </p>
         </div>
         {docButtons}

@@ -44,6 +44,7 @@ import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { exportQaOrderCancellationsAll } from "@/actions/admin/export/qa-order-cancellations";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -311,10 +312,7 @@ export default async function AdminQaOrderCancellationsPage({
                       </td>
                       <td className="px-3 py-3 text-xs whitespace-nowrap">
                         {r.hdateupdate
-                          ? new Date(r.hdateupdate).toLocaleString("th-TH", {
-                              dateStyle: "short",
-                              timeStyle: "short",
-                            })
+                          ? formatThaiDateTime(r.hdateupdate)
                           : "—"}
                       </td>
                       <td className="px-3 py-3 text-right text-xs">

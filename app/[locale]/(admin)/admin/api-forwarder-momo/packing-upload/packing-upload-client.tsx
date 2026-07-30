@@ -7,9 +7,11 @@ import {
   applyMomoPacking,
   type MomoPackingPreview,
 } from "@/actions/admin/momo-packing-reconcile";
-import { recordMomoPackingUpload } from "@/actions/admin/momo-packing-history";
+import { recordMomoPackingUpload, listMomoPackingUploads } from "@/actions/admin/momo-packing-history";
 import { PackingHistoryPanel } from "./packing-history-panel";
 import { TranslateProvider, AutoTranslateText } from "@/components/translate/auto-translate";
+import { describeApplyPlan, describePriorUploads } from "@/lib/admin/packing-upload-plan";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 const n3 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 6 }));
 const n2 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 2 }));
@@ -23,14 +25,19 @@ const NO_FEED_ETD = "ไฟล์ packing list ของกวางโจว �
 const thNoFeed = "px-2 py-2 text-center font-normal italic text-muted/50";
 const tdNoFeed = "px-2 py-1.5 text-center text-gray-300";
 
+// ผลต่อแถว — สีต้องไม่ชนกัน (owner 2026-07-30: เพิ่ม 🔵 ตู้ไม่ตรง = น้ำเงิน · ⬜ ไม่ใช่พัสดุ = สเลท)
 const VERDICT: Record<string, { label: string; cls: string }> = {
-  ok:        { label: "✅ ตรงแล้ว",              cls: "bg-emerald-100 text-emerald-800 border border-emerald-300" },
-  update:    { label: "🟡 น้ำหนัก/คิวต่าง",       cls: "bg-amber-100 text-amber-800 border border-amber-300" },
-  box_short: { label: "🟠 กล่องขาด",             cls: "bg-orange-100 text-orange-800 border border-orange-300" },
-  billed:    { label: "🔒 วางบิลแล้ว",            cls: "bg-gray-200 text-gray-700 border border-gray-300" },
-  missing:   { label: "🔴 ไม่พบ — สร้างได้",      cls: "bg-red-100 text-red-700 border border-red-300" },
-  multi_row: { label: "🟣 หลายแถว · ตรวจเอง",     cls: "bg-purple-100 text-purple-800 border border-purple-300" },
+  ok:         { label: "✅ ตรงแล้ว",              cls: "bg-emerald-100 text-emerald-800 border border-emerald-300" },
+  update:     { label: "🟡 น้ำหนัก/คิวต่าง",       cls: "bg-amber-100 text-amber-800 border border-amber-300" },
+  box_short:  { label: "🟠 กล่องขาด",             cls: "bg-orange-100 text-orange-800 border border-orange-300" },
+  cab_diff:   { label: "🔵 ตู้ไม่ตรง",             cls: "bg-blue-100 text-blue-800 border border-blue-300" },
+  billed:     { label: "🔒 วางบิลแล้ว",            cls: "bg-gray-200 text-gray-700 border border-gray-300" },
+  missing:    { label: "🔴 ไม่พบ — สร้างได้",      cls: "bg-red-100 text-red-700 border border-red-300" },
+  multi_row:  { label: "🟣 หลายแถว · ตรวจเอง",     cls: "bg-purple-100 text-purple-800 border border-purple-300" },
+  not_parcel: { label: "⬜ ไม่ใช่พัสดุ",           cls: "bg-slate-100 text-slate-600 border border-slate-300" },
 };
+/** ป้ายเลขตู้ไม่ตรง ที่แปะเพิ่มบนแถวที่มีความต่างอื่นด้วย (ห้ามให้ "ตู้ไม่ตรง" หายไปในป้ายเดียว) */
+const CAB_CHIP = "bg-blue-100 text-blue-800 border border-blue-300";
 
 // 35MB file → ~47MB base64 sits under the 50mb serverActions body limit.
 const MAX_FILE_BYTES = 35 * 1024 * 1024;
@@ -64,6 +71,13 @@ export function MomoPackingUploadClient() {
   // or breaks the preview/apply money path.
   const recordedB64Ref = useRef<string | null>(null);
   const [historyNonce, setHistoryNonce] = useState(0);
+  // ประวัติของ "ตู้นี้" (owner 2026-07-30 · D4/D6) — ตู้เดียวอัพซ้ำได้หลายไฟล์
+  // (prod มี 10 ตู้ที่อัพ 2-3 รอบ) → บอกให้ชัดว่าตัวจริงคือไฟล์ล่าสุด + เคยกดบันทึกไปหรือยัง.
+  // uploadId = แถวประวัติของไฟล์นี้ → apply จะประทับ "✓ ใช้แล้ว" ที่แถวนั้นแถวเดียว.
+  const [uploadId, setUploadId] = useState<number | null>(null);
+  const [containerUploads, setContainerUploads] = useState<
+    { id: number; uploadedAt: string; appliedAt: string | null; status: string }[]
+  >([]);
   // อี้อู (Yiwu) ย้ายไปหน้าเฉพาะ /admin/api-forwarder-yiwu แล้ว — หน้านี้ = กวางโจว (MOMO) ล้วน.
   // ถ้าเผลออัปไฟล์อี้อูมา (detected format=yiwu) → ชี้ทางไปหน้าอี้อู แทนที่จะประมวลผลผิดที่.
   const [yiwuFile, setYiwuFile] = useState(false);
@@ -73,6 +87,8 @@ export function MomoPackingUploadClient() {
     setPreview(null);
     setYiwuFile(false);
     setToCreate(new Set());
+    setUploadId(null);          // ไฟล์ใหม่ = แถวประวัติใหม่ (ห้ามใช้ id ของไฟล์ก่อน)
+    setContainerUploads([]);
     if (!/\.xlsx$/i.test(file.name)) {
       setMsg({ kind: "err", text: "รองรับเฉพาะไฟล์ .xlsx (packing list ของกวางโจว)" });
       return;
@@ -93,6 +109,17 @@ export function MomoPackingUploadClient() {
     runPreview(b64, file.name);
   }
 
+  /** โหลดประวัติของตู้นี้ (ใช้บอก "ตัวจริงคือไฟล์ล่าสุด" + "เคยกดบันทึกแล้ว"). */
+  function loadContainerUploads(container: string | null) {
+    if (!container) { setContainerUploads([]); return; }
+    void listMomoPackingUploads(container).then((res) => {
+      if (!res.ok || !res.data) { setContainerUploads([]); return; }
+      setContainerUploads(
+        res.data.map((r) => ({ id: r.id, uploadedAt: r.uploadedAt, appliedAt: r.appliedAt, status: r.status })),
+      );
+    });
+  }
+
   function runPreview(b64: string, name?: string) {
     setMsg(null);
     setPreview(null);
@@ -108,6 +135,7 @@ export function MomoPackingUploadClient() {
         return;
       }
       setPreview(res.data);
+      loadContainerUploads(res.data.container);
       if (res.data.rows.length === 0) {
         setMsg({ kind: "err", text: res.data.warnings[0] ?? "อ่านไม่พบรายการพัสดุในไฟล์" });
         return;
@@ -115,8 +143,13 @@ export function MomoPackingUploadClient() {
       // record this upload into history once per distinct file (fire-and-forget).
       if (res.data.format === "momo" && recordedB64Ref.current !== b64) {
         recordedB64Ref.current = b64;
+        const cab = res.data.container;
         void recordMomoPackingUpload({ fileBase64: b64, fileName: name }).then((rec) => {
-          if (rec.ok) setHistoryNonce((v) => v + 1);
+          if (rec.ok) {
+            if (rec.data?.id) setUploadId(rec.data.id);
+            setHistoryNonce((v) => v + 1);
+            loadContainerUploads(cab); // ประวัติเพิ่งมีแถวใหม่ → โหลดซ้ำให้ตัวเลขตรง
+          }
         });
       }
     });
@@ -138,39 +171,75 @@ export function MomoPackingUploadClient() {
     });
   }
 
-  // อี้อู = โหมดพรีวิว → ไม่มีปุ่มนำเข้าระบบ (money-write guarded off ทั้ง client + server)
-  const hasWork =
-    !!preview && preview.format === "momo" &&
-    (preview.summary.willUpdate > 0 || preview.summary.willAdvance > 0 || toCreate.size > 0);
+  // ── ปุ่มยืนยัน = ต้องมีคำตอบเสมอ (owner "เดี๋ยวให้กดอัพเดท เดี๋ยวไม่มี งงไปหมดเลย") ──
+  // เดิมปุ่มโผล่เฉพาะเมื่อ hasWork แล้ว "หายเงียบ" ไม่บอกเหตุผล → ตัวตัดสินเดียว (pure +
+  // มีเทส) คืนทั้งป้ายปุ่ม และเหตุผลเมื่อไม่มีอะไรให้ทำ.
+  const appliedRows = containerUploads.filter((u) => u.status === "applied" || u.appliedAt);
+  const appliedBeforeText = appliedRows.length > 0
+    ? formatThaiDateTime(appliedRows[0].appliedAt ?? appliedRows[0].uploadedAt)
+    : null;
+  const applyPlan = preview
+    ? describeApplyPlan({
+        format: preview.format === "yiwu" ? "yiwu" : "momo",
+        total: preview.summary.total,
+        willUpdate: preview.summary.willUpdate,
+        willAdvance: preview.summary.willAdvance,
+        toCreateCount: toCreate.size,
+        alreadyOk: preview.summary.alreadyOk,
+        billedDiffer: preview.summary.billedDiffer,
+        multiRow: preview.summary.multiRow,
+        notParcel: preview.summary.notParcel,
+        missing: preview.summary.missing,
+        missingCreatable: preview.summary.missingCreatable,
+        appliedBeforeText,
+      })
+    : null;
+  const priorUploadsNote = preview
+    ? describePriorUploads({
+        count: containerUploads.length,
+        latestText: containerUploads[0] ? formatThaiDateTime(containerUploads[0].uploadedAt) : null,
+        appliedCount: appliedRows.length,
+      })
+    : null;
 
   function doApply() {
-    if (!preview || !fileB64) return;
-    if (!hasWork) { setMsg({ kind: "err", text: "ไม่มีรายการที่ต้องอัปเดต" }); return; }
+    if (!preview || !fileB64 || applyPlan?.kind !== "ready") return;
     const u = preview.summary.willUpdate;
     const a = preview.summary.willAdvance;
     const c = toCreate.size;
+    const cabSkip = preview.summary.cabSkipped;
     const parts = [
       u > 0 ? `แก้ ${u} แทรคกิ้ง (น้ำหนัก/คิว/กล่อง/ตู้) + คิดราคาขายใหม่` : null,
       c > 0 ? `สร้างของที่หาย ${c} รายการ` : null,
       a > 0 ? `เลื่อนสถานะ ${a} รายการ เป็น "กำลังส่งมาไทย" (3)` : null,
+      cabSkip > 0 ? `⚠ ไม่ทับเลขตู้ ${cabSkip} รายการ (แพคกิ้งบอกว่าอยู่ตู้อื่น/ชี้ไม่ได้)` : null,
     ].filter(Boolean);
     if (!window.confirm(`ตู้ ${preview.container ?? "-"}\n${parts.join("\n")}\nยืนยันเพิ่มเข้าระบบ?\n(รายการที่วางบิลแล้ว/หลายแถว จะถูกข้าม)`)) return;
     setMsg(null);
     const createMissingBases = [...toCreate];
     start(async () => {
-      const res = await applyMomoPacking({ fileBase64: fileB64, createMissingBases });
+      const res = await applyMomoPacking({
+        fileBase64: fileB64,
+        createMissingBases,
+        ...(uploadId != null ? { uploadId } : {}),
+      });
       if (!res.ok || !res.data) { setMsg({ kind: "err", text: res.ok ? "บันทึกไม่สำเร็จ" : res.error }); return; }
       const d = res.data;
       setMsg({
         kind: "ok",
         text: `แก้แล้ว ${d.updated} แทรคกิ้ง · คิดราคาใหม่ ${d.repriced}` +
+          (d.cabinetWritten > 0 ? ` · 🔵 แก้เลขตู้ ${d.cabinetWritten}` : "") +
           (d.created > 0 ? ` · สร้างของที่หาย ${d.created}` : "") +
           (d.advanced > 0 ? ` · เลื่อนสถานะ→มาไทย ${d.advanced}` : "") +
           (d.repriceFailed > 0 ? ` · ⚠ ไม่มีเรท ${d.repriceFailed} (ตั้งราคาเอง)` : "") +
+          (d.cabinetSkippedOther > 0 ? ` · ไม่ทับเลขตู้ ${d.cabinetSkippedOther} (ของอยู่ตู้อื่นตามแพคกิ้ง)` : "") +
+          (d.cabinetSkippedUnsure > 0 ? ` · ไม่ทับเลขตู้ ${d.cabinetSkippedUnsure} (แยกหลายตู้ · ชี้ไม่ได้)` : "") +
+          (d.cabinetRefused > 0 ? ` · 🔒 เลขตู้ถูกล็อก ${d.cabinetRefused}` : "") +
           (d.createSkipped > 0 ? ` · สร้างซ้ำข้าม ${d.createSkipped}` : "") +
           (d.createFailed > 0 ? ` · สร้างไม่สำเร็จ ${d.createFailed}` : "") +
           (d.multiRow > 0 ? ` · 🟣 หลายแถว ${d.multiRow}` : "") +
           (d.skippedBilled > 0 ? ` · ข้าม(วางบิลแล้ว) ${d.skippedBilled}` : "") +
+          (d.notParcel > 0 ? ` · ⬜ ไม่ใช่พัสดุ ${d.notParcel}` : "") +
           (d.notFound > 0 ? ` · 🔴 ยังไม่สร้าง ${d.notFound}` : ""),
       });
       runPreview(fileB64); // re-preview → now shows "ตรงแล้ว"
@@ -263,25 +332,70 @@ export function MomoPackingUploadClient() {
             <span className="rounded-full bg-gray-100 text-gray-700 px-2 py-0.5">ทั้งหมด {preview.summary.total}</span>
             <span className="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5">✅ ตรง {preview.summary.alreadyOk}</span>
             {preview.summary.boxShort > 0 && <span className="rounded-full bg-orange-100 text-orange-800 px-2 py-0.5 font-medium">🟠 กล่องขาด {preview.summary.boxShort}</span>}
-            {preview.summary.willUpdate - preview.summary.boxShort > 0 && <span className="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5">🟡 น้ำหนัก/คิวต่าง {preview.summary.willUpdate - preview.summary.boxShort}</span>}
-            {preview.summary.missing > 0 && <span className="rounded-full bg-red-100 text-red-700 px-2 py-0.5 font-medium">🔴 ไม่พบ {preview.summary.missing}</span>}
+            {preview.summary.willUpdate - preview.summary.boxShort - preview.summary.cabOnly > 0 && <span className="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5">🟡 น้ำหนัก/คิวต่าง {preview.summary.willUpdate - preview.summary.boxShort - preview.summary.cabOnly}</span>}
+            {/* 🔵 เลขตู้ไม่ตรง — เดิมคำนวณไว้ใน server แต่ไม่มีที่ไหนบนจอโชว์เลย (owner 2026-07-30) */}
+            {preview.summary.cabDiff > 0 && (
+              <span className="rounded-full bg-blue-100 text-blue-800 px-2 py-0.5 font-medium"
+                title="เลขตู้ในระบบไม่ตรงกับเลขตู้ของไฟล์นี้ — ดูคอลัมน์ ผล ว่าตู้ไหนถูก">
+                🔵 ตู้ไม่ตรง {preview.summary.cabDiff}
+                {preview.summary.cabSkipped > 0 ? ` (ไม่ทับ ${preview.summary.cabSkipped})` : ""}
+              </span>
+            )}
+            {preview.summary.missing > 0 && (
+              <span className="rounded-full bg-red-100 text-red-700 px-2 py-0.5 font-medium"
+                title="มีในไฟล์ packing list แต่ระบบไม่พบ">
+                🔴 ไม่พบ {preview.summary.missing}
+                {preview.summary.missingCreatable < preview.summary.missing
+                  ? ` (สร้างได้ ${preview.summary.missingCreatable})`
+                  : ""}
+              </span>
+            )}
             {preview.summary.multiRow > 0 && <span className="rounded-full bg-purple-100 text-purple-800 px-2 py-0.5">🟣 หลายแถว {preview.summary.multiRow}</span>}
             {preview.summary.billedDiffer > 0 && <span className="rounded-full bg-gray-200 text-gray-700 px-2 py-0.5">🔒 วางบิลแล้ว {preview.summary.billedDiffer}</span>}
+            {preview.summary.notParcel > 0 && (
+              <span className="rounded-full bg-slate-100 text-slate-600 px-2 py-0.5"
+                title="หัวตารางที่ติดมาในไฟล์ / เลขกระสอบ (CBX…) — ไม่ใช่พัสดุของลูกค้า">
+                ⬜ ไม่ใช่พัสดุ {preview.summary.notParcel}
+              </span>
+            )}
             {preview.summary.willAdvance > 0 && <span className="rounded-full bg-indigo-100 text-indigo-800 px-2 py-0.5 font-medium">→ เลื่อนสถานะมาไทย {preview.summary.willAdvance}</span>}
           </div>
 
-          {hasWork && (
-            <button
-              type="button"
-              onClick={doApply}
-              disabled={pending}
-              className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50"
-            >
-              ยืนยัน + อัปเดต (จะแก้ {preview.summary.willUpdate}
-              {toCreate.size > 0 ? ` · สร้าง ${toCreate.size}` : ""}
-              {preview.summary.willAdvance > 0 ? ` · เลื่อนสถานะ ${preview.summary.willAdvance}` : ""})
-            </button>
+          {/* ตู้นี้เคยอัพมาก่อน — บอกว่าตัวจริงคือไฟล์ล่าสุด (ไม่บล็อกการอัพซ้ำ) */}
+          {priorUploadsNote && (
+            <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] leading-relaxed text-sky-900">
+              🗂 {priorUploadsNote}
+            </div>
           )}
+
+          {/* ── ปุ่มยืนยัน หรือ เหตุผลที่ยังไม่มีอะไรให้กด (ห้ามหายเงียบ) ────────── */}
+          {applyPlan?.kind === "ready" ? (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={doApply}
+                disabled={pending}
+                className="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50"
+              >
+                {applyPlan.label}
+              </button>
+              {applyPlan.details.length > 0 && (
+                <ul className="space-y-0.5 text-[11px] leading-relaxed text-muted">
+                  {applyPlan.details.map((d) => <li key={d}>• {d}</li>)}
+                </ul>
+              )}
+            </div>
+          ) : applyPlan ? (
+            <div className="rounded-lg border border-border bg-surface-alt/40 px-3 py-2.5 text-xs leading-relaxed">
+              <div className="font-semibold text-foreground">ยังไม่มีอะไรต้องกดบันทึก</div>
+              <div className="mt-0.5 text-muted">{applyPlan.title}</div>
+              {applyPlan.details.length > 0 && (
+                <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted">
+                  {applyPlan.details.map((d) => <li key={d}>• {d}</li>)}
+                </ul>
+              )}
+            </div>
+          ) : null}
 
           <div className="overflow-x-auto scrollbar-x-visible">
             <table className="w-full text-xs border-collapse [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border min-w-[2200px]">
@@ -324,7 +438,13 @@ export function MomoPackingUploadClient() {
                   const v = VERDICT[r.verdict] ?? VERDICT.ok;
                   const isMissing = r.verdict === "missing";
                   return (
-                    <tr key={`${r.baseTracking}-${i}`} className={`border-t border-border align-top ${r.statusStale ? "bg-rose-50/60" : isMissing ? "bg-red-50/40" : ""}`}>
+                    <tr key={`${r.baseTracking}-${i}`} className={`border-t border-border align-top ${
+                      r.verdict === "not_parcel" ? "bg-slate-50/70 text-slate-500"
+                      : r.statusStale ? "bg-rose-50/60"
+                      : isMissing ? "bg-red-50/40"
+                      : r.verdict === "cab_diff" ? "bg-blue-50/40"
+                      : ""
+                    }`}>
                       <td className="px-2 py-1.5 text-center text-muted tabular-nums">{i + 1}</td>
                       {/* SM Date (B) */}
                       <td className="px-2 py-1.5 text-center text-[11px] tabular-nums whitespace-nowrap">{r.packingSmDate ?? DASH}</td>
@@ -389,9 +509,35 @@ export function MomoPackingUploadClient() {
                       <td className={tdNoFeed} title={NO_FEED_ETD}>—</td>
                       <td className={tdNoFeed} title={NO_FEED_ETD}>—</td>
                       {/* ผล — ของเรา (ไม่ใช่คอลัมน์ในชีท) */}
-                      <td className="px-2 py-1.5 text-center">
-                        <span className={`inline-block rounded-full px-1.5 py-0.5 text-[11px] font-medium ${v.cls}`}>{v.label}</span>
-                        {preview.format === "momo" && isMissing && r.code && /^PR\d+$/i.test(r.code) && (
+                      <td className="px-2 py-1.5 text-center align-top min-w-[15rem]">
+                        <span className={`inline-block rounded-full px-1.5 py-0.5 text-[11px] font-medium ${v.cls}`}>
+                          {/* 🔴 ไม่พบ — ป้ายต้องบอกตรงว่าสร้างได้หรือไม่ได้ (เดิมเขียน "สร้างได้" ทุกแถว
+                              แต่ช่องติ๊กโผล่แค่แถวที่รหัสเป็น PR → คนงงว่าทำไมกดไม่ได้) */}
+                          {isMissing && r.createBlockedReason ? "🔴 ไม่พบ — สร้างไม่ได้" : v.label}
+                        </span>
+                        {/* 🔵 ตู้ไม่ตรง — แปะเพิ่มเมื่อแถวมีความต่างอื่นด้วย เพื่อไม่ให้หายไปในป้ายเดียว */}
+                        {r.cabDiff && r.verdict !== "cab_diff" && (
+                          <span className={`mt-1 inline-block rounded-full px-1.5 py-0.5 text-[11px] font-medium ${CAB_CHIP}`}
+                            title="เลขตู้ในระบบไม่ตรงกับไฟล์นี้">
+                            🔵 ตู้ไม่ตรง
+                          </span>
+                        )}
+                        {/* "ตู้ไหนกันแน่" — คำตอบจาก SOT แพคกิ้ง+staging (ไม่เดา) */}
+                        {r.cabDiff && r.containerHint && (
+                          <div className="mt-1 text-left text-[11px] leading-snug text-blue-900">{r.containerHint.message}</div>
+                        )}
+                        {r.containerNote && (
+                          <div className="mt-1 text-left text-[11px] leading-snug text-amber-800">⚠ {r.containerNote}</div>
+                        )}
+                        {/* ⬜ ไม่ใช่พัสดุ — บอกว่าทำไม (หัวตารางในไฟล์ / เลขกระสอบ) */}
+                        {r.nonParcelNote && (
+                          <div className="mt-1 text-left text-[11px] leading-snug text-slate-500">{r.nonParcelNote}</div>
+                        )}
+                        {/* 🔴 สร้างไม่ได้ — บอกตัวขัดขวางจริง + ทางไปต่อ */}
+                        {isMissing && r.createBlockedReason && (
+                          <div className="mt-1 text-left text-[11px] leading-snug text-red-700">{r.createBlockedReason}</div>
+                        )}
+                        {preview.format === "momo" && isMissing && !r.createBlockedReason && (
                           <label className="mt-1 flex items-center justify-center gap-1 text-[11px] text-red-700 cursor-pointer">
                             <input
                               type="checkbox"
@@ -413,8 +559,12 @@ export function MomoPackingUploadClient() {
               หัวตาราง = ชีท &quot;ข้อมูลรายละเอียดสินค้าในตู้&quot; · <strong>Wt./Vol.</strong> = ค่าต่อกล่องที่ไฟล์เขียนมาเอง (คอลัมน์ M/N) ·{" "}
               <strong>Total Wt./Total Vol.</strong> = รวมทั้งแทรค = ค่าที่ใช้คิดเงิน · คอลัมน์ที่จางไว้ (SM Number · Note. · Service Fee · Return · ETD · ETA) = ไฟล์ packing list ของกวางโจว ไม่มี (18 คอลัมน์) ·{" "}
               [เลขในวงเล็บ] = สถานะ fstatus ปัจจุบัน · &quot;ระบบ→packing&quot; = ค่าปัจจุบันในระบบ → ค่าจาก packing list (รวมกล่องย่อยแล้ว) ·
-              🟠 กล่องขาด = ระบบนับกล่อง/น้ำหนักน้อยกว่า packing → จะแก้ให้ตรง · 🔴 ไม่พบ = กวางโจวมีแต่ระบบไม่รู้จัก → ติ๊ก &quot;สร้าง&quot; เพื่อสร้างรายการให้ ·
+              🟠 กล่องขาด = ระบบนับกล่อง/น้ำหนักน้อยกว่า packing → จะแก้ให้ตรง ·
+              🔵 <strong>ตู้ไม่ตรง</strong> = เลขตู้ในระบบไม่ตรงกับไฟล์นี้ → ระบบจะบอกใต้ป้ายว่า<strong>ตู้ไหนถูก</strong> (ยึดแพคกิ้งลิสทุกตู้ + ข้อมูล MOMO) ·
+              ⚠ ถ้าแพคกิ้งบอกว่าของอยู่<strong>ตู้อื่น</strong> หรือชิปเม้นนั้น MOMO <strong>แยกส่งหลายตู้</strong>แล้วชี้ไม่ได้ → ระบบ<strong>ไม่ทับเลขตู้</strong> (อัปเดตแค่น้ำหนัก/คิว/กล่อง) ·
+              🔴 ไม่พบ = กวางโจวมีแต่ระบบไม่รู้จัก → ติ๊ก &quot;สร้าง&quot; เพื่อสร้างรายการให้ (ถ้าไฟล์ไม่มีรหัส PR จะขึ้น &quot;สร้างไม่ได้&quot; พร้อมเหตุผล) ·
               🟣 หลายแถว = ระบบมีหลายรายการยังไม่วางบิลของแทรคเดียว → ไม่แก้อัตโนมัติ (ตรวจเอง กันคิดเงินซ้ำ) · 🔒 วางบิลแล้ว = ข้าม (แก้บิลเอง) ·
+              ⬜ ไม่ใช่พัสดุ = หัวตารางที่ติดมาในไฟล์ / เลขกระสอบ (CBX…) → ข้าม ไม่นับเป็น &quot;ไม่พบ&quot; ·
               เมื่อบันทึกจะคิดราคาขายใหม่จากค่าที่อัปเดต · famountcount ถูกตั้งเป็น 1 (คิวรวมอยู่แล้ว)
             </p>
           )}

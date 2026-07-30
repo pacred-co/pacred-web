@@ -30,6 +30,7 @@ import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { exportQaOrderOver10MinAll } from "@/actions/admin/export/qa-order-over-10min";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 const CSV_COLS = [
   { key: "hno", label: "เลขที่ออเดอร์" },
@@ -257,10 +258,7 @@ export default async function AdminQaOrderOver10MinPage({
                       </td>
                       <td className="px-3 py-3 text-xs whitespace-nowrap">
                         {r.hdate
-                          ? new Date(r.hdate).toLocaleString("th-TH", {
-                              dateStyle: "short",
-                              timeStyle: "short",
-                            })
+                          ? formatThaiDateTime(r.hdate)
                           : "—"}
                       </td>
                       <td className="px-3 py-3 text-right text-xs">

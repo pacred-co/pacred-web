@@ -19,6 +19,7 @@ import {
   type LoopOutcome,
 } from "@/lib/service-order/bulk-eligibility";
 import { Eye, Package, Printer, FileText, XCircle, Wallet } from "lucide-react";
+import { formatThaiDate, formatThaiTime, formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 // D1 Phase-B Wave 2: rows carry the legacy tb_header_order.hstatus code
 // ('1'-'6'). Badge colours + the per-row action gates are keyed by code.
@@ -276,8 +277,8 @@ export function ServiceOrderList({
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs text-muted whitespace-nowrap align-top">
-                      <div>{created.toLocaleDateString("th-TH")}</div>
-                      <div>{created.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} {tp("timeSuffix")}</div>
+                      <div>{formatThaiDate(created)}</div>
+                      <div>{formatThaiTime(created)} {tp("timeSuffix")}</div>
                     </td>
                     <td className="px-4 py-3 align-top">
                       {o.h_no ? (
@@ -287,7 +288,7 @@ export function ServiceOrderList({
                       ) : <span className="text-muted">—</span>}
                       {o.payment_due_at && o.status === "2" && (
                         <div className="mt-1 text-[11px] text-amber-700">
-                          {t("payBy", { date: new Date(o.payment_due_at).toLocaleString("th-TH") })}
+                          {t("payBy", { date: formatThaiDateTime(o.payment_due_at) })}
                         </div>
                       )}
                     </td>

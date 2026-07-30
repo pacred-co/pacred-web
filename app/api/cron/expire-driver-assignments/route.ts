@@ -76,17 +76,20 @@ export async function GET(request: Request) {
       const expiredIds   = (expired ?? []).map((r) => r.id).filter((v): v is number => typeof v === "number");
       const expiredCount = expiredIds.length;
 
-      // Step 2 — cascade into items (only the rows that haven't already been
-      // marked on/off-loaded). Legacy guards `fdiStatus=''` (empty string) so
-      // we mirror that filter; passing the same empty-string predicate to
-      // PostgREST as .eq("fdistatus", "").
+      // Step 2 — cascade into items that never reached "delivered" ('2').
+      // Legacy guards `fdiStatus=''` only — but legacy never writes '1'
+      // (dead value there); OUR driver app writes '1' = ขึ้นรถแล้ว. A stop
+      // still '1' when the batch deadline passes = ขึ้นรถแต่ไม่ได้ปิดงาน →
+      // must ALSO fail to '3' so the parcel re-enters the assignment pool.
+      // (2026-07-29 owner: '1' stops in expired batches were stuck forever —
+      // drivers/new excludes ''/'1' and nothing ever moved them.)
       let cascadeCount = 0;
       if (expiredIds.length > 0) {
         const { data: cascaded, error: itemErr } = await supabase
           .from("tb_forwarder_driver_item")
           .update({ fdistatus: "3" })
           .in("fdid", expiredIds)
-          .eq("fdistatus", "")
+          .or("fdistatus.eq.,fdistatus.eq.1,fdistatus.is.null")
           .select("id");
 
         if (itemErr) {

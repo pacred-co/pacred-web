@@ -7,6 +7,7 @@ import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-butt
 import { exportCsvImportsAll } from "@/actions/admin/export/csv-imports";
 import { CsvImportRowActions } from "./row-actions";
 import { PageHeader } from "@/components/admin/page-header";
+import { formatThaiTimeWithSeconds, formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 const CSV_COLS: CsvCol[] = [
   { key: "created_at", label: "วันที่" },
@@ -178,11 +179,11 @@ export default async function AdminCsvImportsPage({
                         href={`/admin/csv-imports/${r.id}`}
                         className="block text-primary-600 hover:underline mb-1"
                       >
-                        {new Date(r.created_at).toLocaleString("th-TH")}
+                        {formatThaiDateTime(r.created_at)}
                       </Link>
                       {r.imported_at && (
                         <div className="text-[11px]">
-                          เสร็จ {new Date(r.imported_at).toLocaleTimeString("th-TH")}
+                          เสร็จ {formatThaiTimeWithSeconds(r.imported_at)}
                         </div>
                       )}
                     </td>

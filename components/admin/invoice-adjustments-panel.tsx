@@ -9,6 +9,7 @@ import {
   type InvoiceAdjustmentRow,
   type InvoiceAdjustmentTargetType,
 } from "@/actions/admin/invoice-adjustments";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /**
  * V-A5 admin panel — manual ±amount adjustment line on any invoice.
@@ -156,17 +157,11 @@ export function InvoiceAdjustmentsPanel({ targetType, targetId, existing }: Prop
                     <p className="text-muted mt-0.5">{r.reason}</p>
                     <p className="text-[11px] text-muted mt-0.5">
                       เพิ่มเมื่อ{" "}
-                      {new Date(r.created_at).toLocaleString("th-TH", {
-                        dateStyle: "short",
-                        timeStyle: "short",
-                      })}
+                      {formatThaiDateTime(r.created_at)}
                       {r.reversed_at && (
                         <>
                           {" · ยกเลิกเมื่อ "}
-                          {new Date(r.reversed_at).toLocaleString("th-TH", {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                          })}
+                          {formatThaiDateTime(r.reversed_at)}
                         </>
                       )}
                     </p>

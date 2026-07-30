@@ -27,6 +27,7 @@
 
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { loadAssignedFids } from "@/lib/admin/pending-dispatch";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ArrowLeft, Truck, Home, Send, CheckCircle2, Zap, Package } from "lucide-react";
@@ -383,19 +384,7 @@ export default async function CreateDriverBatchPage({
       : activeTab === "post" ? "ไปรษณีย์ไทย/EMS"
       : "";
 
-  // 1. Forwarders already in an open assignment (fdistatus '' or '1') — these
-  //    must NOT be offered again.
-  const { data: openItems, error: openErr } = await admin
-    .from("tb_forwarder_driver_item")
-    .select("fid")
-    .or("fdistatus.eq.,fdistatus.eq.1,fdistatus.is.null")
-    .limit(50_000);
-  if (openErr) {
-    console.error("/admin/drivers/new: open items read failed", openErr);
-  }
-  const openFids = new Set(((openItems ?? []) as { fid: number }[]).map((r) => r.fid));
-
-  // 2. Eligible forwarders: fstatus='6' (เตรียมส่ง) AND paydeposit NOT '1'
+  // 1. Eligible forwarders: fstatus='6' (เตรียมส่ง) AND paydeposit NOT '1'
   //    (paydeposit='1' = credit-pending; legacy excludes these).
   const { data: eligibleData, error: eligibleErr } = await admin
     .from("tb_forwarder")
@@ -417,6 +406,12 @@ export default async function CreateDriverBatchPage({
   const paydOk = ((eligibleData ?? []) as unknown as (ForwarderRow & { paydeposit: string | null })[])
     .filter((r) => r.paydeposit !== "1");
   const totalReadyToShip = paydOk.length;
+  // 2. Exclude only stops whose BATCH is still open (fdstatus='1') — batch-aware
+  //    via the loadAssignedFids SOT (owner 2026-07-29 "งานไม่สำเร็จต้องวนกลับมามอบใหม่"):
+  //    ก่อนหน้านี้เช็คแค่ fdistatus ''/'1' ดิบๆ ไม่ดูสถานะรอบ → stop ค้าง '1' ในรอบที่
+  //    หมดเวลา/ปิดไปแล้ว บล็อกงานนั้นออกจากคิวมอบหมาย "ตลอดกาล" (legacy re-offers it —
+  //    ตัวกรอง legacy ตัดแค่ fdiStatus '2'/''; แถวที่รอบตายแล้วกลับเข้าคิวเอง).
+  const openFids = await loadAssignedFids(admin, paydOk.map((r) => r.id));
   const allEligible = paydOk.filter((r) => !openFids.has(r.id));
   const inProgress = totalReadyToShip - allEligible.length; // ออกส่งกับคนขับแล้ว
 

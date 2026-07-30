@@ -59,6 +59,7 @@ import {
   computeForwarderCollectTotal,
   type ForwarderCollectRow,
 } from "@/lib/forwarder/forwarder-collect-total";
+import { loadLinkedForwarderPaymentBatch } from "@/lib/forwarder/linked-payment-batch";
 import {
   isThShippingCostMissing,
   codBaseTrackings,
@@ -485,6 +486,14 @@ export async function adminCallPriceUser(
       // set → the notify amount == the portal charge for that same set (batch
       // เหมาๆ ฿100 once + batch-1%, COD legs excluded — never a per-row net).
       const billedRowsByUser = new Map<string, ForwarderCollectRow[]>();
+      // 🔴 2026-07-23: notify must quote the SAME engine the PORTAL charges
+      // (loadLinkedForwarderPaymentBatch → computeForwarderDebitBatch w/
+      // resolveMaoAnchorIds = mao per-SHIPMENT), NOT computeForwarderCollectTotal
+      // (mao once per whole batch). For a customer billed with ≥2 PCSF (เหมาๆ)
+      // shipments the two diverge by ฿100/extra-shipment → the SMS quotes LESS
+      // than the portal collects. We collect the fids here + re-price via the
+      // portal engine below so SMS == portal == receipt.
+      const billedFidsByUser = new Map<string, number[]>();
 
       // C2 (2026-07-13) — SHIPMENT-level COD set (any candidate whose base-tracking is
       // COD). Used to exempt box-split siblings that kept paymethod='1' from the ค่าส่งไทย
@@ -661,6 +670,9 @@ export async function adminCallPriceUser(
         const bucket = billedRowsByUser.get(row.userid);
         if (bucket) bucket.push(collectRow);
         else billedRowsByUser.set(row.userid, [collectRow]);
+        const fidBucket = billedFidsByUser.get(row.userid);
+        if (fidBucket) fidBucket.push(row.id);
+        else billedFidsByUser.set(row.userid, [row.id]);
       }
 
       // 3c. Per-CUSTOMER notify pass (G2). One SMS + one LINE/email per customer
@@ -668,11 +680,24 @@ export async function adminCallPriceUser(
       //     amount computeForwarderCollectTotal charges in the portal.
       for (const [userid, collectRows] of billedRowsByUser) {
         const user = usersById.get(userid);
-        const { total: collectTotal } = computeForwarderCollectTotal(collectRows, {
-          userId:      userid,
-          userCompany: String(user?.userCompany ?? ""),
-        });
         const count = collectRows.length;
+        // ยอดที่จะแจ้ง = ยอดที่พอร์ทัลเก็บจริง (portal/approve engine เดียวกัน · mao
+        // per-shipment). fail-soft: ถ้า re-price พลาด ใช้ collect-total เดิม (SMS ยัง
+        // ไปได้ · billing ที่ทำไปแล้วไม่กระทบ). ไม่มี COD/1% drift เพราะ engine เดียวกัน.
+        let collectTotal: number;
+        const portalFids = billedFidsByUser.get(userid) ?? [];
+        const portalQuote =
+          portalFids.length > 0
+            ? await loadLinkedForwarderPaymentBatch(admin, { userId: userid, forwarderIds: portalFids })
+            : null;
+        if (portalQuote && portalQuote.ok && portalQuote.missingIds.length === 0) {
+          collectTotal = portalQuote.batch.total_thb;
+        } else {
+          collectTotal = computeForwarderCollectTotal(collectRows, {
+            userId:      userid,
+            userCompany: String(user?.userCompany ?? ""),
+          }).total;
+        }
 
         // SMS (real · best-effort — billing already landed above).
         if (user?.userTel) {

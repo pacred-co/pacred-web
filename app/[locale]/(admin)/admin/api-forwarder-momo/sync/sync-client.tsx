@@ -38,6 +38,7 @@ import {
   MOMO_FIELD_TH,
   type MomoRawDisplay,
 } from "@/lib/admin/momo-raw-helpers";
+import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 /** 2026-06-29 (ภูม) — completeness lookup result keyed by BASE tracking. */
 type CompletenessHit = { inFwd: boolean; fid: number; fweight: number; fstatus: string | null };
@@ -1047,7 +1048,7 @@ function DbTable({ title, rows }: { title: string; rows: DbRow[] }) {
                 <td className="px-2 py-1"><StatusBadge status={r.shipment_status} /></td>
                 <td className="px-2 py-1">{r.admin_status_text ?? "—"}</td>
                 <td className="px-2 py-1 text-muted">
-                  {r.last_synced_at ? new Date(r.last_synced_at).toLocaleString("th-TH") : "—"}
+                  {r.last_synced_at ? formatThaiDateTime(r.last_synced_at) : "—"}
                 </td>
               </tr>
             ))}
