@@ -47,6 +47,7 @@ import {
   type WarehouseId,
 } from "@/lib/admin/customer-rate-tables";
 import { getResolvedFloor } from "@/lib/admin/sell-floor-config";
+import { getCbmCostFloor, isCbmRateBelowCost } from "@/lib/admin/sell-cost-floor";
 import { buildRateHistoryRows } from "@/lib/admin/customer-rate-history";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 
@@ -196,6 +197,8 @@ export async function adminSaveCustomerRate(
       // `floor[wh].kg[t][p]` read identically to COST_FLOOR — only the SOURCE
       // swaps to the resolved (config || constant) matrix.
       const floor = await getResolvedFloor();
+      // ทุนจริงต่อคิว (tb_settings · ชุดเดียวกับ resolve-cost) — พื้นกัน "ขายต่ำกว่าทุน"
+      const cbmCost = await getCbmCostFloor();
 
       // Verify the customer exists.
       const { data: customer, error: custErr } = await admin
@@ -238,12 +241,21 @@ export async function adminSaveCustomerRate(
       // NEW ones that gate the save.
       let belowFloor = 0;
       const blocked: string[] = [];
+      const belowCost: string[] = [];
       for (const c of d.cells) {
         const k = cellKey(c.t, c.p);
         const cbmFloor = floor[wh].cbm[c.t][c.p]; // resolved (config || constant)
         const kgFloor = floor[wh].kg[c.t][c.p]; // resolved (config || constant · 17/7)
         const tS = TRANSPORTS.find((x) => x.id === c.t)?.short ?? c.t;
         const pL = PRODUCTS.find((x) => x.id === c.p)?.label ?? c.p;
+        // 🔴 owner 2026-07-30 "ต่อไปจากนี้ ห้ามมีงานขาดทุนอีกแล้วนะครับ" — เซลที่
+        // **ต่ำกว่าทุนจริง** บล็อกเสมอ แม้เป็นเซลเก่าที่ไม่ได้แก้ (ไม่เข้าข้อยกเว้น
+        // grandfather ข้างล่าง): ปล่อยไว้ = ออเดอร์ถัดไปของลูกค้ารายนั้นขาดทุนแน่นอน
+        // ตั้งแต่วินาทีที่คิดราคา. ต่ำกว่า "พื้นราคา" แต่ยังเหนือทุน = ยกเว้นเหมือนเดิม.
+        // ดู lib/admin/sell-cost-floor.ts (ทุนมาจาก tb_settings ชุดเดียวกับ resolve-cost).
+        if (isCbmRateBelowCost(c.rcbm, cbmCost[wh][c.t])) {
+          belowCost.push(`CBM ${tS}/${pL} ฿${c.rcbm} (ทุนจริง ฿${cbmCost[wh][c.t]}/คิว)`);
+        }
         if (c.rcbm > 0 && cbmFloor != null && c.rcbm < cbmFloor) {
           belowFloor++;
           const exCbm = cbmIdx.get(k)?.rcbm;
@@ -258,6 +270,16 @@ export async function adminSaveCustomerRate(
             blocked.push(`KG ${tS}/${pL} ฿${c.rkg} (ขั้นต่ำ ฿${kgFloor})`);
           }
         }
+      }
+      // ต่ำกว่าทุนจริงมาก่อน — ข้อความต้องบอกว่า "ขาดทุน" ไม่ใช่แค่ "ต่ำกว่าขั้นต่ำ"
+      if (belowCost.length > 0) {
+        return {
+          ok: false,
+          error:
+            `❌ ห้ามตั้งเรทขายต่ำกว่าทุนจริง (ขายแล้วขาดทุนแน่นอน) — ${belowCost.join(" · ")}. ` +
+            `ต้องปรับขึ้นอย่างน้อยให้เท่าทุนก่อนบันทึก` +
+            `${blocked.length === 0 && belowFloor > 0 ? " (เซลนี้ค้างมาจากของเดิม ระบบเพิ่งเริ่มบังคับ — แก้ครั้งเดียวจบ)" : ""}`,
+        };
       }
       if (blocked.length > 0) {
         return {
