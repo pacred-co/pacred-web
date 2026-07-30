@@ -22,6 +22,7 @@
  *    ยังใช้งานได้ปกติ (ตัวเรียกยิงแบบ fire-and-forget).
  */
 
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAdminRoles } from "@/lib/auth/require-admin";
@@ -35,6 +36,10 @@ import {
   MOMO_INVOICE_UPLOAD_TABLE,
   stampMomoInvoiceUploadApplied,
 } from "@/lib/admin/momo-invoice-upload-stamp";
+import {
+  decideInvoiceUploadDedupe,
+  type UploadDedupeCandidate,
+} from "@/lib/admin/momo-invoice-upload-dedupe";
 
 const BUCKET = "csv-imports";
 const PREFIX = "momo-invoice";
@@ -69,6 +74,10 @@ export type InvoiceUploadSnapshotRow = {
   ourCbm: number | null;
   invoiceCbm: number;
   ourSell: number | null;
+  /** 🔴 ขายต่ำกว่าทุนที่ MOMO เก็บ ณ เวลาที่อัพ (owner 2026-07-30). */
+  lossVsInvoice: boolean;
+  /** ขาดไปเท่าไร ณ เวลานั้น. */
+  lossShortfall: number;
   matched: boolean;
   cabinetConflict: boolean;
   duplicateFid: boolean;
@@ -126,6 +135,10 @@ export type RecordInvoiceUploadResult = {
   invoiceNo: string | null;
   lineCount: number;
   fileStored: boolean;
+  /** true = ไฟล์นี้เคยอัพไว้แล้ว (เลขใบเดิม + เนื้อไฟล์เดิม) → ไม่เก็บแถว/ไฟล์ซ้ำ · `id` ชี้แถวเดิม. */
+  deduped: boolean;
+  /** เป็นการอัพครั้งที่เท่าไรของเลขใบนี้ (1 = ครั้งแรก · ≥2 = ใบถูกแก้ไข/ออกใหม่). */
+  revision: number;
 };
 
 export type MomoInvoiceUploadDetail = {
@@ -143,6 +156,56 @@ const safeName = (n: string | undefined) =>
   (n && n.trim() ? n : "invoice.pdf").replace(/[^\w.\-]+/g, "_").slice(0, 120);
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** ลายนิ้วมือเนื้อไฟล์ — ตัวชี้ขาด "ไฟล์เดียวกัน" (ไม่ใช่ชื่อ/ขนาด · ดู momo-invoice-upload-dedupe.ts). */
+const sha256Hex = (bytes: Buffer): string => createHash("sha256").update(bytes).digest("hex");
+
+/**
+ * รหัส error ที่แปลว่า **คอลัมน์ `file_hash` ยังไม่มีบน DB** (ยังไม่ได้ apply mig 0284).
+ *   · `42703` = undefined_column ของ Postgres (ตอน SELECT)
+ *   · `PGRST204` = PostgREST ไม่รู้จักคอลัมน์ใน schema cache (ตอน INSERT)
+ * เจอสองตัวนี้ = ถอยไปทำงานแบบเดิม (เก็บทุกครั้ง เหมือน 0283) ไม่ใช่ error ที่ต้องรายงาน —
+ * แอปต้องใช้ได้ทั้งก่อนและหลัง migration (deploy สลับลำดับกันได้).
+ */
+const isMissingHashColumn = (code: string | null | undefined): boolean =>
+  code === "42703" || code === "PGRST204";
+
+type HashLookup =
+  | { supported: false }
+  | { supported: true; existing: UploadDedupeCandidate[] };
+
+/**
+ * แถวประวัติเดิมของ "เลขที่ใบนี้" พร้อมแฮช — วัตถุดิบของ `decideInvoiceUploadDedupe`.
+ *
+ * ค้นด้วย `invoice_no` เท่านั้น (ไม่ค้นด้วยแฮชตรงๆ) เพราะต้องรู้ **จำนวนเวอร์ชันที่มีอยู่**
+ * ด้วย เพื่อบอกได้ว่าใบใหม่นี้คือ "แก้ไขครั้งที่เท่าไร".
+ *
+ * fail-soft: อ่านไม่ได้ (คอลัมน์ยังไม่มี / DB มีปัญหา) → `supported:false` = ไม่ dedupe
+ * และ **ไม่ใส่ file_hash ตอน INSERT** (ผูกกันโดยตั้งใจ: ถ้าอ่านคอลัมน์ไม่ได้ ก็อย่าเขียนมัน).
+ */
+async function loadUploadsForDedupe(
+  admin: ReturnType<typeof createAdminClient>,
+  invoiceNo: string | null,
+): Promise<HashLookup> {
+  if (!invoiceNo) return { supported: false };
+  const { data, error } = await admin
+    .from(MOMO_INVOICE_UPLOAD_TABLE)
+    .select("id, invoice_no, file_hash")
+    .eq("invoice_no", invoiceNo)
+    .order("uploaded_at", { ascending: true })
+    .limit(LIST_CAP);
+  if (error) {
+    if (!isMissingHashColumn(error.code)) {
+      console.error("[momo-invoice-history] dedupe lookup failed", { code: error.code, message: error.message });
+    }
+    return { supported: false };
+  }
+  const rows = (data ?? []) as Array<{ id: number; invoice_no: string | null; file_hash: string | null }>;
+  return {
+    supported: true,
+    existing: rows.map((r) => ({ id: r.id, invoiceNo: r.invoice_no, fileHash: r.file_hash })),
+  };
+}
 
 /** ผลตรวจ → สแนปช็อตที่เก็บลง jsonb (คัดเฉพาะช่องที่หน้าประวัติต้องใช้ · กัน jsonb บวม). */
 function buildSnapshot(
@@ -176,6 +239,8 @@ function buildSnapshot(
       ourCbm: r.ourCbm,
       invoiceCbm: r.invoiceCbm,
       ourSell: r.ourSell,
+      lossVsInvoice: r.lossVsInvoice,
+      lossShortfall: r.lossShortfall,
       matched: r.matched,
       cabinetConflict: r.cabinetConflict,
       duplicateFid: r.duplicateFid,
@@ -229,6 +294,35 @@ export async function recordMomoInvoiceUpload(input: unknown): Promise<AdminActi
     const supplier = supplierFromInvoiceText(text);
     const admin = createAdminClient();
 
+    // ── กันเก็บซ้ำ (owner 2026-07-30) ────────────────────────────────────
+    // "ไฟล์เดียวกัน เปลืองพื้นที่ครับ … อัพมาดูได้แหละ แต่ไม่ได้เซฟ".
+    // ตัดสิน **ก่อน**อัพไฟล์ขึ้น bucket โดยตั้งใจ — ถ้าอัพก่อนแล้วค่อยพบว่าซ้ำ จะเหลือ
+    // ไฟล์กำพร้าลอยอยู่ใน storage (คือปัญหาเดียวกับที่ owner บ่น แค่ย้ายที่).
+    const fileHash = bytes ? sha256Hex(bytes) : null;
+    const lookup = await loadUploadsForDedupe(admin, preview.invoiceNo);
+    const decision = decideInvoiceUploadDedupe({
+      invoiceNo: preview.invoiceNo,
+      fileHash: lookup.supported ? fileHash : null, // อ่านคอลัมน์ไม่ได้ = เทียบไม่ได้ → เก็บ
+      existing: lookup.supported ? lookup.existing : [],
+    });
+
+    if (decision.action === "skip") {
+      // ไม่เขียนแถว ไม่อัพไฟล์ — แต่ผลตรวจบนจอยังใช้ได้ปกติ (นี่คือ "ดูได้ แต่ไม่ได้เซฟ")
+      return {
+        ok: true,
+        data: {
+          id: decision.existingId,
+          invoiceNo: preview.invoiceNo,
+          lineCount: preview.rows.length,
+          fileStored: false,
+          deduped: true,
+          revision: lookup.supported
+            ? lookup.existing.findIndex((e) => e.id === decision.existingId) + 1
+            : 1,
+        },
+      };
+    }
+
     // ── เก็บไฟล์ต้นฉบับ (best-effort — เก็บไม่ได้ก็ยังบันทึกสแนปช็อต) ──
     let filePath: string | null = null;
     if (bytes) {
@@ -248,6 +342,9 @@ export async function recordMomoInvoiceUpload(input: unknown): Promise<AdminActi
         file_path: filePath,
         file_name: parsedInput.data.fileName ?? null,
         file_size: bytes?.length ?? null,
+        // ใส่เฉพาะเมื่อรู้ว่าคอลัมน์มีจริง (mig 0284 apply แล้ว) — ไม่งั้น INSERT ทั้งก้อนจะล้ม
+        // = ประวัติหายทุกใบเพียงเพราะ migration ยังไม่ลง
+        ...(lookup.supported && fileHash ? { file_hash: fileHash } : {}),
         invoice_no: preview.invoiceNo,
         invoice_date: invoiceDate,
         supplier,
@@ -270,6 +367,12 @@ export async function recordMomoInvoiceUpload(input: unknown): Promise<AdminActi
       .maybeSingle<{ id: number }>();
     if (insErr || !ins) {
       console.error("[momo-invoice-history] insert failed", { code: insErr?.code, message: insErr?.message });
+      // เก็บไฟล์ขึ้นไปแล้วแต่แถวไม่เกิด = ไฟล์กำพร้าใน bucket (ไม่มีใครชี้ถึง ลบเองไม่ได้) →
+      // เก็บกวาดทันที. ลบไม่สำเร็จก็แค่ log ต่อ — ห้ามกลบ error จริงของ INSERT
+      if (filePath) {
+        const { error: rmErr } = await admin.storage.from(BUCKET).remove([filePath]);
+        if (rmErr) console.error("[momo-invoice-history] orphan cleanup failed", { filePath, message: rmErr.message });
+      }
       return { ok: false, error: `บันทึกประวัติไม่สำเร็จ${insErr?.code ? ` (${insErr.code})` : ""}` };
     }
 
@@ -284,11 +387,19 @@ export async function recordMomoInvoiceUpload(input: unknown): Promise<AdminActi
       unmatched: preview.summary.unmatched,
       conflicts: preview.summary.cabinetConflicts,
       fileStored: !!filePath,
+      revision: decision.revision,
     });
 
     return {
       ok: true,
-      data: { id: ins.id, invoiceNo: preview.invoiceNo, lineCount: preview.rows.length, fileStored: !!filePath },
+      data: {
+        id: ins.id,
+        invoiceNo: preview.invoiceNo,
+        lineCount: preview.rows.length,
+        fileStored: !!filePath,
+        deduped: false,
+        revision: decision.revision,
+      },
     };
   });
 }
@@ -399,6 +510,7 @@ const EMPTY_SNAPSHOT: InvoiceUploadSnapshot = {
     invoiceCbmAll: 0, invoiceCbm: 0, ourCbm: 0, cbmDiff: 0,
     invoiceCostAll: 0, invoiceCost: 0, unmatchedCost: 0, currentCost: 0, costDiff: 0,
     sell: 0, sellMissingLines: 0, profitNow: 0, profitAfter: 0, profitDiff: 0,
+    lossLines: 0, lossAmount: 0,
   },
   rows: [],
 };

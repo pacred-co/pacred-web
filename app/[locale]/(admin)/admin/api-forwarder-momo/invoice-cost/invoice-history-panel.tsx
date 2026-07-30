@@ -10,6 +10,10 @@ import {
   type MomoInvoiceUploadDetail,
 } from "@/actions/admin/momo-invoice-history";
 import { formatThaiDateTime, isoToDdmmyyyy } from "@/lib/utils/thai-datetime";
+import {
+  groupUploadsByInvoiceNo,
+  describeUploadRevisionDiff,
+} from "@/lib/admin/momo-invoice-upload-dedupe";
 
 const baht = (v: number | null) =>
   v == null ? "—" : v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -27,6 +31,12 @@ const cbm = (v: number | null) =>
  * 🔒 READ-ONLY ทั้งแผง — ไม่มีปุ่มบันทึกต้นทุน/ตัดจ่ายที่นี่ (ของจริงอยู่ด้านบน กับใบที่
  *    กำลังเปิดอยู่). สแนปช็อตคือ "ผลตรวจ ณ เวลาที่อัพ" ไม่ใช่สถานะปัจจุบัน — ป้ายบอกไว้ชัด
  *    เพื่อไม่ให้ใครเอาเลขเก่าไปตัดสินใจแทนของสด.
+ *
+ * 📌 owner 2026-07-30: *"ถ้าเป็นเลขที่ใบซ้ำใบเดิม ก็โชว์แค่อันเดียวพอครับ … แต่ถ้าไม่เหมือนกัน
+ *    หรือมีอัพเดทข้อมูลเปลี่ยนไป ต้อง[เก็บ]"* → **1 ใบ = 1 แถว** (เวอร์ชันล่าสุด) และกางดู
+ *    เวอร์ชันเก่าได้พร้อมบรรทัดบอกว่า "อะไรเปลี่ยนไป". การอัพไฟล์เดิมซ้ำไม่สร้างแถวใหม่
+ *    ตั้งแต่ฝั่ง server แล้ว (ดู momo-invoice-upload-dedupe.ts) — ที่นี่จัดกลุ่มของที่มีอยู่จริง
+ *    ไม่ได้ "ซ่อน" อะไร.
  */
 export function InvoiceHistoryPanel({ nonce }: { nonce: number }) {
   const [rows, setRows] = useState<MomoInvoiceUploadRow[]>([]);
@@ -37,6 +47,8 @@ export function InvoiceHistoryPanel({ nonce }: { nonce: number }) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [downloadErr, setDownloadErr] = useState<string | null>(null);
+  /** เลขที่ใบที่กางดู "เวอร์ชันเก่า" อยู่ (คีย์กลุ่มจาก groupUploadsByInvoiceNo). */
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
   // setState อยู่ใน promise callback (คำตอบจากระบบภายนอก) — แพทเทินที่
   // react-hooks/set-state-in-effect ยอม (ห้าม set แบบ synchronous ใน effect body)
@@ -76,6 +88,44 @@ export function InvoiceHistoryPanel({ nonce }: { nonce: number }) {
     else if (!s.ok) setDownloadErr(s.error);
   }
 
+  function toggleGroup(key: string) {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  // 1 ใบ = 1 แถว (เวอร์ชันล่าสุด) · กางแล้วจึงเห็นเวอร์ชันเก่า — owner: "โชว์แค่อันเดียวพอ".
+  // `revision` นับจากเก่า→ใหม่ (1 = ครั้งแรก) · `diff` = อะไรเปลี่ยนจากเวอร์ชันก่อนหน้า
+  const visible = groupUploadsByInvoiceNo(rows).flatMap((g) => {
+    const open = openGroups.has(g.key);
+    const head = {
+      row: g.latest,
+      revision: g.revisions,
+      revisions: g.revisions,
+      groupKey: g.key,
+      isLatest: true,
+      open,
+      diff: g.older.length > 0 ? describeUploadRevisionDiff(g.older[0], g.latest) : null,
+    };
+    if (!open) return [head];
+    return [
+      head,
+      ...g.older.map((o, i) => ({
+        row: o,
+        revision: g.revisions - 1 - i,
+        revisions: g.revisions,
+        groupKey: g.key,
+        isLatest: false,
+        open,
+        // เทียบกับเวอร์ชันที่เก่ากว่าถัดไป · ตัวที่เก่าสุดไม่มีอะไรให้เทียบ
+        diff: g.older[i + 1] ? describeUploadRevisionDiff(g.older[i + 1], o) : null,
+      })),
+    ];
+  });
+
   return (
     <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -84,6 +134,9 @@ export function InvoiceHistoryPanel({ nonce }: { nonce: number }) {
           <p className="text-[11px] text-muted">
             เก็บทุกใบที่อัพเข้ามา (ไฟล์ต้นฉบับ + ผลตรวจตอนนั้น) · บอกว่าใบไหน
             <strong>บันทึกต้นทุนไปแล้ว</strong> · กด “ดูอีกครั้ง” เปิดผลตรวจย้อนหลังได้ทันที ไม่ต้องอัพซ้ำ
+            <br />
+            <strong>1 ใบ = 1 แถว</strong> — อัพไฟล์เดิมซ้ำจะไม่เก็บซ้ำ (ดูได้ แต่ไม่เปลืองที่) ·
+            ถ้าไฟล์เปลี่ยน/ข้อมูลอัพเดท จะเก็บเป็นเวอร์ชันใหม่ กดป้าย “แก้ไข N ครั้ง” เพื่อดูของเก่า
           </p>
         </div>
         <button
@@ -120,18 +173,58 @@ export function InvoiceHistoryPanel({ nonce }: { nonce: number }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => {
+              {visible.map((v) => {
+                const r = v.row;
                 const applied = r.status === "applied" || !!r.appliedAt;
                 return (
                   <Fragment key={r.id}>
-                    <tr className="border-t border-border align-top">
-                      <td className="px-2 py-1.5 whitespace-nowrap text-[11px]">{formatThaiDateTime(r.uploadedAt)}</td>
+                    <tr
+                      className={`border-t border-border align-top ${
+                        // เวอร์ชันเก่า = ของประกอบ ไม่ใช่ของที่ต้องอ่านก่อน → หรี่ลงให้หัวกลุ่มเด่น
+                        v.isLatest ? "" : "bg-surface-alt/30 text-muted"
+                      }`}
+                    >
+                      <td className="px-2 py-1.5 whitespace-nowrap text-[11px]">
+                        {!v.isLatest && <span className="mr-1 text-muted">↳</span>}
+                        {formatThaiDateTime(r.uploadedAt)}
+                      </td>
                       <td className="px-2 py-1.5 whitespace-nowrap">
-                        <span className="font-mono font-semibold text-sky-800">{r.invoiceNo ?? "—"}</span>
+                        <span className={`font-mono font-semibold ${v.isLatest ? "text-sky-800" : "text-muted"}`}>
+                          {r.invoiceNo ?? "—"}
+                        </span>
+                        {/* ใบเดียวถูกอัพหลายเวอร์ชัน (MOMO ออกใหม่/ข้อมูลเปลี่ยน) — owner สั่งให้เก็บ */}
+                        {v.revisions > 1 && (
+                          v.isLatest ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleGroup(v.groupKey)}
+                              className="ml-1.5 rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-800 hover:bg-violet-200"
+                              title={
+                                v.diff
+                                  ? `ใบนี้ถูกอัพ ${v.revisions} ครั้ง และข้อมูลเปลี่ยนไป — กดเพื่อดูเวอร์ชันเก่า`
+                                  : `ใบนี้ถูกอัพ ${v.revisions} ครั้ง (ยอด/จำนวนบรรทัดเท่าเดิม · ส่วนใหญ่เป็นแถวที่อัพก่อนมีระบบกันซ้ำ) — กดเพื่อดูทั้งหมด`
+                              }
+                            >
+                              {/* ⚠️ อย่ามั่ว (§0f): พูดว่า "แก้ไข" ได้ก็ต่อเมื่อเห็นว่ายอดเปลี่ยนจริง ·
+                                  แถวเก่าที่ไม่มีแฮช (ก่อน mig 0284) เราพิสูจน์ไม่ได้ว่าไฟล์ต่างกัน */}
+                              {v.open ? "▾" : "▸"} {v.diff ? `แก้ไข ${v.revisions - 1} ครั้ง` : `อัพ ${v.revisions} ครั้ง`}
+                            </button>
+                          ) : (
+                            <span className="ml-1.5 rounded bg-gray-200 px-1.5 py-0.5 text-[11px] text-gray-700">
+                              เวอร์ชันที่ {v.revision}
+                            </span>
+                          )
+                        )}
                         {r.invoiceDate && (
                           <div className="text-[11px] text-muted">ลงวันที่ {isoToDdmmyyyy(r.invoiceDate)}</div>
                         )}
                         {r.supplier && <div className="text-[11px] text-muted">{r.supplier}</div>}
+                        {/* อะไรเปลี่ยนจากเวอร์ชันก่อนหน้า — ไม่ต้องเปิด 2 ใบมาเทียบเอง */}
+                        {v.diff && (
+                          <div className="mt-0.5 text-[11px] font-medium text-violet-700" title="เทียบกับเวอร์ชันก่อนหน้าของใบเดียวกัน">
+                            เปลี่ยน: {v.diff}
+                          </div>
+                        )}
                       </td>
                       <td className="px-2 py-1.5 max-w-[14rem] truncate text-[11px]" title={r.fileName ?? ""}>
                         {r.filePath ? "📎 " : ""}
@@ -249,6 +342,14 @@ export function InvoiceHistoryPanel({ nonce }: { nonce: number }) {
                                     <strong className="tabular-nums text-foreground">฿{baht(detail.snapshot.whtThb)}</strong>
                                   </span>
                                 )}
+                                {/* 🔴 owner 2026-07-30: "ขอแค่เงินที่เราเก็บมามันไม่ติดลบ" —
+                                    ณ เวลาที่อัพ (ไม่ใช่สถานะสด · ราคาขายอาจถูกแก้ไปแล้ว) */}
+                                {detail.snapshot.reconcile.lossLines > 0 && (
+                                  <span className="rounded-full bg-red-100 px-2 py-0.5 font-medium text-red-800">
+                                    ⚠️ ขายต่ำกว่าทุน {detail.snapshot.reconcile.lossLines} แทรคกิ้ง · ขาด ฿
+                                    {baht(detail.snapshot.reconcile.lossAmount)}
+                                  </span>
+                                )}
                               </div>
 
                               {detail.snapshot.rows.length === 0 ? (
@@ -314,7 +415,17 @@ export function InvoiceHistoryPanel({ nonce }: { nonce: number }) {
                                             {baht(row.currentCost)} <span className="text-muted">/</span>{" "}
                                             <strong>{baht(row.invoiceCost)}</strong>
                                           </td>
-                                          <td className="px-2 py-1 text-right tabular-nums">{baht(row.ourSell)}</td>
+                                          <td className="px-2 py-1 text-right tabular-nums">
+                                            {/* สแนปช็อตเก่า (ก่อน 2026-07-30) ไม่มีธงนี้ → undefined = ไม่โชว์ ไม่ใช่ "ไม่ติดลบ" */}
+                                            <span className={row.lossVsInvoice ? "font-semibold text-red-700" : undefined}>
+                                              {baht(row.ourSell)}
+                                            </span>
+                                            {row.lossVsInvoice && (
+                                              <div className="text-[11px] font-medium text-red-700">
+                                                🔴 ต่ำกว่าทุน ฿{baht(row.lossShortfall)}
+                                              </div>
+                                            )}
+                                          </td>
                                           <td className="px-2 py-1">
                                             {!row.matched ? (
                                               <span className="font-medium text-red-700">🔴 ไม่พบในระบบ</span>

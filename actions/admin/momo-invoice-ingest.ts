@@ -72,6 +72,8 @@ import { extractMomoInvoicePdfText } from "@/lib/admin/momo-invoice-pdf";
 import {
   invoiceLineCbm,
   buildReconcileTotals,
+  lossVsInvoice,
+  lineLossShortfall,
   type ReconcileTotals,
 } from "@/lib/admin/momo-invoice-reconcile";
 import { loadCustomerPaymentForFids } from "@/lib/admin/momo-invoice-customer-payment";
@@ -242,6 +244,15 @@ export type MomoIngestPreviewRow = {
   profitNow: number | null;
   /** กำไรหลังบันทึกต้นทุนจากใบนี้ = ขาย − ต้นทุนใบแจ้งหนี้. */
   profitAfter: number | null;
+  /**
+   * 🔴 "ขายต่ำกว่าทุนที่ MOMO เก็บ" — owner 2026-07-30: *"ขอแค่เงินที่เราเก็บมามันไม่ติดลบ"*.
+   * มาจาก `lossVsInvoice` (lib/admin/momo-invoice-reconcile.ts) = สมองเดียวกับที่นับ
+   * `reconcile.lossLines` → แถวกับยอดสรุปหัวใบ drift กันไม่ได้. **คำเตือน ไม่ใช่ด่าน**:
+   * ไม่แตะ willApply / blockReason / การบันทึกใดๆ — แค่ให้เห็น.
+   */
+  lossVsInvoice: boolean;
+  /** ขาดไปเท่าไร (ทุนที่ MOMO เก็บ − ราคาขาย) · 0 = ไม่ได้ติดลบ. */
+  lossShortfall: number;
   /** เลขฐานของชิปเม้นที่แถวนี้สังกัด — คีย์ไปหา byShipment (อธิบายกำไรรายกล่องที่ติดลบ). */
   shipmentBase: string | null;
   cabinetPaid: boolean;
@@ -826,6 +837,11 @@ async function buildPreview(
 
     const willApply = !!f && !cabinetPaid && !cabinetConflict && !duplicateFid && costDiffers;
 
+    // 🔴 "ขายต่ำกว่าทุนที่ MOMO เก็บ" (owner 2026-07-30) — คิดจาก SOT ตัวเดียวกับยอดสรุปหัวใบ.
+    // ตั้งใจคิด **หลัง** willApply และไม่เอาไปประกอบ willApply/blockReason เลย: owner บอกว่า
+    // "ก็ไม่ว่าอะไรครับ ขอแค่…ไม่ติดลบ" = ขอให้เห็น ไม่ใช่ขอให้ระบบห้ามบันทึก.
+    const lossInput = { matched: !!f, ourSell, invoiceCost: l.lineTotal };
+
     return {
       tracking: l.tracking,
       invoiceCost: l.lineTotal,
@@ -849,6 +865,8 @@ async function buildPreview(
       ourSell,
       profitNow: ourSell == null ? null : round2(ourSell - (currentCost ?? 0)),
       profitAfter: ourSell == null ? null : round2(ourSell - l.lineTotal),
+      lossVsInvoice: lossVsInvoice(lossInput),
+      lossShortfall: lineLossShortfall(lossInput),
       shipmentBase: f ? baseTrackingOf(f.ftrackingchn) || null : null,
       cabinetPaid,
       willApply,

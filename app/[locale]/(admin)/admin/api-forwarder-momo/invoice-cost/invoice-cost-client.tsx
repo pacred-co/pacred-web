@@ -200,6 +200,100 @@ function ReconcileSummary({ p }: { p: MomoIngestPreview }) {
 }
 
 /**
+ * 🔴 "ขายต่ำกว่าทุนที่ MOMO เก็บ" — owner 2026-07-30 (verbatim):
+ * *"ขอแค่เงินที่เราเก็บมามันไม่ติดลบนะครับ"*
+ *
+ * เงื่อนไขข้อเดียวที่ owner ขอกับหน้านี้: อย่าให้มีแทรคกิ้งที่ **เก็บลูกค้าน้อยกว่าที่ MOMO
+ * เก็บเรา**. ก่อนหน้านี้ตัวเลขมีอยู่ในตาราง (ขาย · ทุน · กำไร) แต่ต้องไล่อ่านทีละบรรทัดถึงจะรู้
+ * → ยกขึ้นมาตอบตรงๆ ตรงนี้ **เหนือ**ปุ่มบันทึก เพื่อให้เห็นก่อนกด.
+ *
+ * ⚠️ เป็น **คำเตือน ไม่ใช่ด่าน** — ไม่บล็อกบันทึก/ตัดจ่าย (owner: "ก็ไม่ว่าอะไรครับ ขอแค่…
+ * ไม่ติดลบ" = ขอให้เห็น · การตัดสินใจเรื่องราคาเป็นของ owner/pricing).
+ *
+ * ⚠️ กล่องเดียวติดลบ ≠ งานนี้ขาดทุน — ขายคิดตามน้ำหนัก ทุนคิดตามคิว (บทเรียน 2026-07-23)
+ * → แถวไหนที่ **ทั้งชิปเม้นยังกำไร** จะกำกับไว้ข้างๆ เพื่อไม่ให้บัญชีตกใจผิดตัว.
+ *
+ * ตัวเลขทั้งหมดมาจาก server (`reconcile.lossLines/lossAmount` + `r.lossVsInvoice`) —
+ * หน้านี้ไม่ตัดสินเองว่าแถวไหนติดลบ.
+ */
+function LossVsInvoiceBanner({
+  p,
+  shipByBase,
+}: {
+  p: MomoIngestPreview;
+  shipByBase: Map<string, MomoInvoiceShipmentRollup>;
+}) {
+  const r = p.reconcile;
+
+  if (r.lossLines === 0) {
+    // ตอบคำถาม owner ให้ "เห็น" ไม่ใช่ให้เดาเอาจากการที่ไม่มีอะไรขึ้น (§0f)
+    return (
+      <p className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-2 text-[13px] font-medium text-emerald-800">
+        ✅ ไม่มีแทรคกิ้งไหนขายต่ำกว่าทุนที่ MOMO เก็บ — เงินที่เก็บลูกค้าคลุมต้นทุนของใบนี้ครบทุกบรรทัด
+      </p>
+    );
+  }
+
+  const lossRows = p.rows.filter((row) => row.lossVsInvoice);
+
+  return (
+    <section className="rounded-2xl border-2 border-red-400 bg-red-50 p-5 shadow-sm space-y-3 dark:bg-surface">
+      <div>
+        <h2 className="text-base font-bold text-red-800">
+          ⚠️ {r.lossLines} แทรคกิ้ง ขายต่ำกว่าทุนที่ MOMO เก็บ — รวมขาด ฿{baht(r.lossAmount)}
+        </h2>
+        <p className="mt-1 text-[12px] text-red-800">
+          ค่านำเข้าที่เก็บลูกค้า <strong>น้อยกว่า</strong>ยอดที่ MOMO เรียกเก็บเราสำหรับแทรคกิ้งเดียวกัน ·{" "}
+          <strong>ตรวจราคาขายก่อนบันทึกต้นทุน</strong> — ระบบไม่ได้ห้ามบันทึก แต่ต้องรู้ก่อนว่ารอบนี้เก็บลูกค้าขาดไปเท่าไร
+        </p>
+      </div>
+
+      <ul className="space-y-1">
+        {lossRows.map((row) => {
+          const ship = row.shipmentBase ? shipByBase.get(row.shipmentBase) : undefined;
+          // ทั้งชิปเม้นยังกำไร = อาการปกติของงานแตกกล่อง (ขาย=น้ำหนัก · ทุน=คิว) ไม่ใช่ขาดทุนจริง
+          const shipCovers = !!ship && ship.rows > 1 && ship.profit >= 0;
+          return (
+            <li
+              key={row.fid ?? row.tracking}
+              className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-lg bg-white/70 px-3 py-1.5 text-[12px] dark:bg-surface-alt/40"
+            >
+              {row.fid ? (
+                <Link
+                  href={`/admin/forwarders/${row.fid}`}
+                  className="font-mono font-medium text-primary-600 underline decoration-dotted underline-offset-2 hover:text-primary-700"
+                  title={`เปิดรายการนำเข้า #${row.fid} เพื่อตรวจ/แก้ราคาขาย`}
+                >
+                  {row.tracking}
+                </Link>
+              ) : (
+                <span className="font-mono font-medium">{row.tracking}</span>
+              )}
+              {row.userid && <span className="text-muted">{row.userid}</span>}
+              <span className="tabular-nums">
+                ขาย <strong>฿{baht(row.ourSell)}</strong> · MOMO เก็บ{" "}
+                <strong>฿{baht(row.invoiceCost)}</strong>
+              </span>
+              <span className="rounded-full bg-red-200 px-2 py-0.5 font-semibold tabular-nums text-red-900">
+                ขาด ฿{baht(row.lossShortfall)}
+              </span>
+              {shipCovers && (
+                <span
+                  className="text-[11px] text-muted"
+                  title={`ขายคิดตามน้ำหนัก แต่ทุนคิดตามคิว — กล่องเบาแต่ใหญ่จึงติดลบรายกล่อง · ทั้งชิปเม้น ${ship.rows} กล่อง ขาย ฿${baht(ship.sell)} − ทุน ฿${baht(ship.cost)} = ฿${baht(ship.profit)}`}
+                >
+                  (ทั้งชิปเม้น {ship.rows} กล่อง ยังกำไร ฿{baht(ship.profit)})
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/**
  * สรุป "ต่อตู้" + สะพานไปตัดจ่ายค่าตู้ — owner: "MOMO วางบิลเรามาเป็น Tracking ครับ แต่เรา
  * คิดเป็นตู้ ไปตรวจให้ตรงกันนะครับ" แล้ว "ทำตัดจ่ายต้นทุนตู้ในระบบเราได้เลย".
  *
@@ -673,6 +767,8 @@ export function MomoInvoiceCostClient() {
   // ใบที่กำลังกดอยู่ เราไม่ส่ง uploadId ไปเลย (ดีกว่าประทับผิดใบ)
   const uploadRef = useRef<{ key: string; id: number } | null>(null);
   const [historyNonce, setHistoryNonce] = useState(0);
+  /** ผลของการเก็บประวัติรอบนี้ — บอกเมื่อไฟล์นี้ "เคยอัพแล้ว" หรือ "เป็นใบที่ถูกแก้ไข". */
+  const [uploadNote, setUploadNote] = useState<string | null>(null);
   /** เลขฐานชิปเม้น → ยอดทั้งครอบครัว · ใช้อธิบายกำไรรายกล่องที่ติดลบ (Σ มาจาก DB ฝั่ง server
    *  ไม่ใช่จากบรรทัดบนใบ — ครอบครัวอาจถูกบิลไม่ครบในรอบเดียว). */
   const shipByBase = new Map<string, MomoInvoiceShipmentRollup>(
@@ -695,6 +791,7 @@ export function MomoInvoiceCostClient() {
     setMsg(null);
     setPreview(null);
     setSettled({});
+    setUploadNote(null);
     setSource(s);
   }
 
@@ -716,8 +813,18 @@ export function MomoInvoiceCostClient() {
           ...(s.kind === "pdf" ? { fileName: s.fileName } : {}),
         }).then((rec) => {
           if (rec.ok && rec.data) {
+            // ซ้ำ → id ที่ได้คือ "แถวเดิม" ของใบนี้ → การประทับ "บันทึกต้นทุนแล้ว" ยังลงถูกใบ
             uploadRef.current = { key, id: rec.data.id };
             setHistoryNonce((v) => v + 1);
+            // owner 2026-07-30: "อัพมาดูได้แหละ แต่ไม่ได้เซฟ" — ต้องบอกให้รู้ว่าไม่ได้เก็บซ้ำ
+            // ไม่ใช่เงียบไป (ไม่งั้นจะนึกว่าประวัติไม่ทำงาน)
+            setUploadNote(
+              rec.data.deduped
+                ? "ไฟล์นี้เคยอัพไว้แล้ว (เลขที่ใบและไฟล์เดียวกัน) — ดูผลตรวจได้ตามปกติ แต่ไม่บันทึกซ้ำในประวัติ"
+                : rec.data.revision > 1
+                  ? `บันทึกประวัติแล้ว — เป็นใบ ${rec.data.invoiceNo ?? ""} ที่ข้อมูลเปลี่ยนไป (แก้ไขครั้งที่ ${rec.data.revision})`
+                  : null,
+            );
           }
           // เก็บไม่ได้ = ปล่อยว่างไว้ (รอบหน้าลองใหม่ · ไม่ประทับใบอื่นแทน)
         });
@@ -925,10 +1032,21 @@ export function MomoInvoiceCostClient() {
             {msg.text}
           </div>
         )}
+
+        {/* ผลของการเก็บประวัติ (กันเก็บซ้ำ · owner 2026-07-30) — ไม่ใช่ error ของการตรวจใบ */}
+        {uploadNote && (
+          <p className="rounded-lg border border-sky-200 bg-sky-50/70 px-3 py-2 text-[12px] text-sky-800 dark:bg-surface-alt/40">
+            📜 {uploadNote}
+          </p>
+        )}
       </section>
 
       {/* สรุปเทียบทั้งใบ — คิว/ต้นทุน/ขาย/กำไร + ดิฟ (owner 2026-07-23) · อยู่บนสุดของผลตรวจ */}
       {preview && <ReconcileSummary p={preview} />}
+
+      {/* 🔴 "ขอแค่เงินที่เราเก็บมามันไม่ติดลบ" (owner 2026-07-30) — วางไว้ **เหนือปุ่มบันทึก**
+          โดยตั้งใจ: คำเตือนที่อยู่ใต้ปุ่มคือคำเตือนที่ไม่มีใครเห็นทัน. ไม่บล็อกการบันทึก */}
+      {preview && preview.rows.length > 0 && <LossVsInvoiceBanner p={preview} shipByBase={shipByBase} />}
 
       {/* ── ขั้นที่ 1 · บันทึกต้นทุน ─────────────────────────────────────────
           อยู่ "ใต้" สรุปโดยตั้งใจ: อ่านดิฟก่อน แล้วค่อยกดบันทึก (owner: แจงให้ถูก แล้วกดบันทึก
@@ -1138,11 +1256,15 @@ export function MomoInvoiceCostClient() {
                     <tr
                       key={r.tracking}
                       className={`align-top ${
-                        !r.matched || r.cabinetConflict || r.duplicateFid
-                          ? "bg-red-50/60"
-                          : r.willApply
-                            ? "bg-amber-50/40"
-                            : ""
+                        // 🔴 ขายต่ำกว่าทุน (owner 2026-07-30) มาก่อนสีอื่น — แถวนี้บันทึกได้ปกติ
+                        // แต่ต้องสะดุดตาที่สุด เพราะเป็นเงื่อนไขข้อเดียวที่ owner ขอ
+                        r.lossVsInvoice
+                          ? "bg-red-100/80 ring-1 ring-inset ring-red-300"
+                          : !r.matched || r.cabinetConflict || r.duplicateFid
+                            ? "bg-red-50/60"
+                            : r.willApply
+                              ? "bg-amber-50/40"
+                              : ""
                       }`}
                     >
                       {/* แทรคกิ้ง → เปิดรายการนำเข้าในระบบ */}
@@ -1252,10 +1374,21 @@ export function MomoInvoiceCostClient() {
                           <span className="text-muted">—</span>
                         ) : (
                           <>
-                            {baht(r.ourSell)}
+                            <span className={r.lossVsInvoice ? "font-semibold text-red-700" : undefined}>
+                              {baht(r.ourSell)}
+                            </span>
                             {r.ourSell <= 0 && (
                               <div className="text-[11px] text-amber-700" title="แถวนี้ยังไม่ตั้งราคาขาย">
                                 ยังไม่ตั้งราคา
+                              </div>
+                            )}
+                            {/* 🔴 owner 2026-07-30: "ขอแค่เงินที่เราเก็บมามันไม่ติดลบ" */}
+                            {r.lossVsInvoice && (
+                              <div
+                                className="mt-0.5 text-[11px] font-medium text-red-700"
+                                title={`ค่านำเข้าที่เก็บลูกค้า ฿${baht(r.ourSell)} น้อยกว่ายอดที่ MOMO เก็บเรา ฿${baht(r.invoiceCost)} — ตรวจราคาขายของงานนี้`}
+                              >
+                                🔴 ต่ำกว่าทุน ฿{baht(r.lossShortfall)}
                               </div>
                             )}
                           </>

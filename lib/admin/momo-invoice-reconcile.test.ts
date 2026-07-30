@@ -9,7 +9,13 @@
  * Run: tsx lib/admin/momo-invoice-reconcile.test.ts
  */
 import assert from "node:assert/strict";
-import { invoiceLineCbm, buildReconcileTotals, type ReconcileRow } from "./momo-invoice-reconcile";
+import {
+  invoiceLineCbm,
+  buildReconcileTotals,
+  lossVsInvoice,
+  lineLossShortfall,
+  type ReconcileRow,
+} from "./momo-invoice-reconcile";
 
 let passed = 0;
 function ok(name: string, fn: () => void) {
@@ -196,6 +202,76 @@ ok("บรรทัดปกติไม่ถูกแตะ แม้ส่ง
 ok("ติดธงแต่ไม่มีคิวที่เก็บจริง (ไม่มีเรทให้หาร) -> ไม่เดา ใช้ทางเดิม", () => {
   assert.equal(invoiceLineCbm({ cbm: 29.2824, qty: 14, billedCbm: null, cbmInflatedByQty: true }, "line_total"), 29.2824);
   assert.equal(invoiceLineCbm({ cbm: 29.2824, qty: 14, billedCbm: 0, cbmInflatedByQty: true }, "line_total"), 29.2824);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// owner 2026-07-30: *"ขอแค่เงินที่เราเก็บมามันไม่ติดลบนะครับ"*
+// เงื่อนไขข้อเดียวที่ owner ขอกับหน้านี้ — ล็อกไว้ทั้งตัวธงรายแถวและยอดรวมทั้งใบ
+// ─────────────────────────────────────────────────────────────────────────────
+console.log("\nlossVsInvoice — ขายต่ำกว่าทุนที่ MOMO เก็บ");
+
+ok("ขาย < ทุนที่ MOMO เก็บ → ติดธง + บอกยอดที่ขาด", () => {
+  const row = { matched: true, ourSell: 7200, invoiceCost: 11793.75 };
+  assert.equal(lossVsInvoice(row), true);
+  assert.equal(lineLossShortfall(row), 4593.75); // เคสจริง prod #52197 (PR067)
+});
+
+ok("ขาย > ทุน → ไม่ติดธง · ยอดขาด 0", () => {
+  const row = { matched: true, ourSell: 3700, invoiceCost: 2500 };
+  assert.equal(lossVsInvoice(row), false);
+  assert.equal(lineLossShortfall(row), 0);
+});
+
+ok("ขายเท่าทุนเป๊ะ = ไม่ขาด (ไม่กำไร แต่ไม่ติดลบ)", () => {
+  assert.equal(lossVsInvoice({ matched: true, ourSell: 2500, invoiceCost: 2500 }), false);
+  assert.equal(lineLossShortfall({ matched: true, ourSell: 2500, invoiceCost: 2500 }), 0);
+});
+
+ok("ยังไม่ตั้งราคา (ourSell = 0/null) ไม่ใช่ 'ขายขาดทุน' — ไปนับที่ sellMissingLines แทน", () => {
+  assert.equal(lossVsInvoice({ matched: true, ourSell: 0, invoiceCost: 2500 }), false);
+  assert.equal(lossVsInvoice({ matched: true, ourSell: null, invoiceCost: 2500 }), false);
+  assert.equal(lineLossShortfall({ matched: true, ourSell: 0, invoiceCost: 2500 }), 0);
+});
+
+ok("บรรทัดที่จับคู่ไม่ได้ ไม่มีราคาขายของเราให้เทียบ → ไม่ติดธง", () => {
+  assert.equal(lossVsInvoice({ matched: false, ourSell: 100, invoiceCost: 2500 }), false);
+  assert.equal(lossVsInvoice({ matched: false, ourSell: null, invoiceCost: 2500 }), false);
+});
+
+ok("ยอดขาดปัดทศนิยม 2 ตำแหน่ง (ไม่ปล่อย float noise ขึ้นจอเงิน)", () => {
+  assert.equal(lineLossShortfall({ matched: true, ourSell: 0.1, invoiceCost: 0.3 }), 0.2);
+});
+
+ok("Σ ทั้งใบ: นับเฉพาะบรรทัดที่ติดลบจริง + รวมยอดที่ขาด", () => {
+  const t = buildReconcileTotals([
+    matched({ ourSell: 7200, invoiceCost: 11793.75 }), // ขาด 4,593.75
+    matched({ ourSell: 2800, invoiceCost: 4987.13 }), // ขาด 2,187.13
+    matched({ ourSell: 3700, invoiceCost: 2500 }), // กำไร — ไม่นับ
+    matched({ ourSell: 0, invoiceCost: 2500 }), // ยังไม่ตั้งราคา — ไม่นับ
+    { matched: false, invoiceCbm: 1, ourCbm: null, invoiceCost: 9999, currentCost: null, ourSell: null },
+  ]);
+  assert.equal(t.lossLines, 2);
+  assert.equal(t.lossAmount, 6780.88);
+  assert.equal(t.sellMissingLines, 1, "แถวยังไม่ตั้งราคาต้องไปโผล่ที่ช่องของมันเอง");
+});
+
+ok("ใบที่ทุกบรรทัดขายเหนือทุน → lossLines/lossAmount = 0 (จอขึ้นเขียว)", () => {
+  const t = buildReconcileTotals([
+    matched({ ourSell: 3700, invoiceCost: 2500 }),
+    matched({ ourSell: 60, invoiceCost: 34.78 }),
+  ]);
+  assert.equal(t.lossLines, 0);
+  assert.equal(t.lossAmount, 0);
+});
+
+ok("ธงนี้ไม่แตะกำไร/ต้นทุน/คิว — เป็นคำเตือนล้วน", () => {
+  const rows = [matched({ ourSell: 7200, invoiceCost: 11793.75, currentCost: 11793.75 })];
+  const t = buildReconcileTotals(rows);
+  assert.equal(t.lossLines, 1);
+  assert.equal(t.invoiceCost, 11793.75);
+  assert.equal(t.currentCost, 11793.75);
+  assert.equal(t.costDiff, 0);
+  assert.equal(t.profitAfter, -4593.75, "กำไรยังคิดเหมือนเดิมทุกประการ");
 });
 
 console.log(`\n✅ momo-invoice-reconcile: ${passed} assertions passed`);
