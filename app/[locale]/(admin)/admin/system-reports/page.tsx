@@ -9,6 +9,8 @@
  */
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { getStafferPositionInfo } from "@/lib/admin/positions";
+import { canViewSystemReports, canViewContainerProfit } from "@/lib/admin/reports-access";
 import { PageHeader } from "@/components/admin/page-header";
 import { getActiveSalesReps, getActiveCsReps, getActivePurchaserReps, getActiveDriverReps } from "@/lib/admin/sales-roster";
 import { getSalesCommissionReport } from "@/lib/admin/sales-commission-report";
@@ -31,13 +33,16 @@ export default async function SystemReportsPage({
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  // 🔒 ultra-only (2026-07-29 · integrate): sidebar inject แถบนี้เฉพาะ roles.includes("ultra")
-  // (withUltraReports · super/normies ไม่เห็น) แต่ page เดิม `requireAdmin()` = admin ทุก role
-  // → driver/warehouse พิมพ์ URL ตรงเห็นค่าคอม/ต้นทุนได้ (§0d/§0c gap). enforce ที่ page ให้
-  // ตรง sidebar เป๊ะ — strictly "ultra" (ไม่ใช้ requireAdmin(["ultra"]) เพราะ isGodRole จะปล่อย
-  // super เข้า ซึ่งขัดกับ sidebar ที่ตั้งใจกัน super ออก).
-  const { roles } = await requireAdmin();
-  if (!roles.includes("ultra")) notFound();
+  // 🔒 gate = ultra หรือ HR (owner 2026-07-30 "ทำฟังชั่นนี้ให้ HR เห็นและใช้ได้").
+  // HR = แผนก (admin_positions.department='hr') ไม่ใช่ money-tier role → SOT
+  // canViewSystemReports (lib/admin/reports-access.ts) ตัดสินที่เดียวให้ page + sidebar
+  // ตรงกัน. คงกัน driver/warehouse พิมพ์ URL ตรง (§0d/§0c gap) — role พวกนั้น + แผนกอื่น
+  // ยัง notFound. (เดิม strictly "ultra"; ตอนนี้ ultra ∪ HR.)
+  const { user, roles } = await requireAdmin();
+  const posInfo = await getStafferPositionInfo(user.id);
+  if (!canViewSystemReports(roles, posInfo.department)) notFound();
+  // แท็บ "กำไรตู้" = margin ต่อตู้ (ข้อมูลผู้บริหาร) → ultra เท่านั้น · HR เห็นหน้าแต่ไม่เห็นแท็บนี้
+  const allowContainerProfit = canViewContainerProfit(roles);
   const sp = await searchParams;
 
   // ผู้รับผิดชอบ = รายชื่อตาม "ตำแหน่ง" — เซลล์/Cs = tb_admin flag · สั่งซื้อ = ผู้สั่งซื้อ
@@ -65,7 +70,9 @@ export default async function SystemReportsPage({
   const defaultFrom = `${y}-${mm}-01`;
   const defaultTo = `${y}-${mm}-${String(lastDay).padStart(2, "0")}`;
 
-  const type = sp.type ?? "commission";
+  // HR ที่พิมพ์ ?type=container-profit ตรงๆ → บังคับกลับเป็น commission (กันเห็น margin ผ่าน URL)
+  const rawType = sp.type ?? "commission";
+  const type = rawType === "container-profit" && !allowContainerProfit ? "commission" : rawType;
   const position = sp.pos ?? "sales";
   const rep = sp.rep ?? "";
   const dateFrom = sp.from ?? defaultFrom;
@@ -118,6 +125,7 @@ export default async function SystemReportsPage({
         curRep={rep}
         curFrom={dateFrom}
         curTo={dateTo}
+        allowContainerProfit={allowContainerProfit}
       />
 
       {fwdReport && (
