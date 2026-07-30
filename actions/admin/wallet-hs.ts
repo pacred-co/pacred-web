@@ -81,7 +81,10 @@ import { logger } from "@/lib/logger";
 // throw) are filed as incidents; handled `{ ok:false }` returns are untouched.
 import { withObservability } from "@/lib/observability/with-observability";
 import { loadLinkedForwarderPaymentBatch } from "@/lib/forwarder/linked-payment-batch";
-import { checkLinkedPaymentConsistency } from "@/lib/forwarder/linked-payment-consistency";
+import {
+  checkLinkedPaymentConsistency,
+  describeLinkedPaymentDifferences,
+} from "@/lib/forwarder/linked-payment-consistency";
 import {
   parseFrozenWalletPaymentQuote,
   type FrozenWalletPaymentQuote,
@@ -2287,9 +2290,25 @@ async function adminApproveWalletDepositImpl(
           const headerGross = Math.round((amount + cbCarried) * 100) / 100;
           const consistency = checkLinkedPaymentConsistency(headerGross, childRows ?? [], authoritative.batch);
           if (!consistency.ok) {
+            // owner 2026-07-30 — บอกให้ครบว่า "แถวไหน เปลี่ยนจากเท่าไรเป็นเท่าไร" ไม่ใช่แค่
+            // ยอดรวม (เดิมพนักงานเห็น "ควรเป็น X" แล้วไปต่อไม่ถูก เพราะจอโชว์ยอดที่แช่ไว้
+            // = เท่าสลิปเสมอ). สาเหตุที่พบจริงคือมีคนแก้ขนส่ง/ค่าส่งไทยของแถว **หลัง**
+            // ลูกค้าโอนเงินมาแล้ว → ยอดจริงขยับ. ดู describeLinkedPaymentDifferences.
+            const detail = describeLinkedPaymentDifferences(consistency.differences);
+            logger.warn("wallet-hs", "linked payment consistency mismatch", {
+              wallet_hs_id: id,
+              userid,
+              expected_total: consistency.expectedTotal,
+              differences: consistency.differences,
+            });
             return {
               ok: false,
-              error: `ยอดชำระไม่ตรงกับยอดรายการจริง (ควรเป็น ${consistency.expectedTotal.toFixed(2)} บาท) กรุณาแก้ยอดก่อนอนุมัติ`,
+              error:
+                `ยอดชำระไม่ตรงกับยอดรายการจริง (ควรเป็น ${consistency.expectedTotal.toFixed(2)} บาท)\n`
+                + `${detail.map((d) => `• ${d}`).join("\n")}\n`
+                + `สาเหตุที่พบบ่อย: มีคนแก้ "ขนส่งในไทย" หรือ "ค่าส่งไทย" ของแถวนั้นหลังลูกค้าโอนเงินมาแล้ว`
+                + ` — เปิด /admin/forwarders/<เลขรายการ> ดูประวัติการแก้ไข แล้วแก้ให้ตรงก่อนอนุมัติ`
+                + ` (เงินที่ลูกค้าโอนมายังอยู่ครบ ไม่ต้องให้ลูกค้าโอนซ้ำ)`,
             };
           }
           receiptQuote = {

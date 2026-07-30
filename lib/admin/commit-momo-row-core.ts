@@ -866,6 +866,70 @@ export async function commitMomoRowCore(
     }
   }
 
+  // ── 4a¾. TRUNCATED / EXTENDED TRACKING = พัสดุใบเดียวกันที่ MOMO ประกาศ 2 เลข ──
+  // 🔴 owner 2026-07-30 (/admin/report-cnt/GZE260723-1): *"สองงานนี้ทับกันงานเดียวกัน
+  // เหมือนกัน คือยังไงเนี่ยครับ · งานนี้ในตู้เดียวกันซะด้วย แก้ทีครับ"*
+  //   #53062 KY986180550 (23/07 · admin_bam) ⟷ #53093 KY98618055 (24/07 · sys-live)
+  // คิว 0.076096 ตรงกัน 6 ตำแหน่ง · น้ำหนัก 3.00 · ทุน 357.65 · PR626 · ตู้เดียวกัน
+  // = พัสดุใบเดียว แต่ MOMO ประกาศเลข**ขาดอักขระท้าย** ในรอบที่สอง (คลาสเดียวกับ `733`
+  // 2026-07-26). ทั้งคู่มีราคา ⇒ ถ้าปล่อยไว้ ลูกค้าโดนเก็บ 2 รอบ.
+  //
+  // dedup 4a½ ข้างบนมองไม่เห็นเคสนี้ เพราะทำงานบน **family base เดียวกัน**
+  // (`eq base` / `like base-%`) — "KY98618055" กับ "KY986180550" คนละ base คนละ family.
+  //
+  // กติกาที่ทำให้ปลอดภัย (ห้ามหลวมกว่านี้ — เลขจริงเป็น prefix กันได้ เช่น 1783582 vs
+  // 1783582423 ตามที่ mao-anchor เตือนไว้): ปฏิเสธก็ต่อเมื่อ **ครบทุกข้อ**
+  //   1. ลูกค้าคนเดียวกัน                                   (ต่างคน = คนละพัสดุแน่)
+  //   2. เลขหนึ่งเป็นส่วนหน้าของอีกเลข และยาวต่างกัน ≤ 2 ตัว (พิมพ์/ประกาศตกท้าย)
+  //   3. คิวตรงกันถึง 6 ตำแหน่ง **และ** น้ำหนักตรงกันถึง 2 ตำแหน่ง (ตัวยืนยันตัวจริง)
+  //   4. แถวเดิมยัง live (fstatus ไม่ใช่ ''/'0')
+  // ไม่ครบ = ปล่อยผ่านตามเดิม. lookup พัง = ปล่อยผ่าน (fail-OPEN) — ด่านนี้เป็นตัวเสริม
+  // ของ 4a½ ที่ fail-CLOSED อยู่แล้ว การ fail-closed ซ้ำจะบล็อกงานปกติทั้งกองเวลา DB สะดุด.
+  {
+    const incomingCbm = Number(metrics.cbm) || 0;
+    const incomingWt = Number(metrics.weight) || 0;
+    // ยิงเฉพาะตอนมีตัวยืนยัน — ไม่มีคิว/น้ำหนัก = ตัดสินไม่ได้ ห้ามเดา
+    if (incomingCbm > 0 && incomingWt > 0 && trackingNo.length >= 8) {
+      const stem = trackingNo.slice(0, trackingNo.length - 2);
+      const { data: nearRows, error: nearErr } = await admin
+        .from("tb_forwarder")
+        .select("id, ftrackingchn, fstatus, fvolume, fweight, fcabinetnumber")
+        .eq("userid", customer.userID)
+        .like("ftrackingchn", `${stem}%`)
+        .limit(40);
+      if (nearErr) {
+        console.error(`[momo truncated-dup lookup] failed`, { code: nearErr.code, message: nearErr.message });
+      } else {
+        const twin = ((nearRows ?? []) as Array<{
+          id: number; ftrackingchn: string | null; fstatus: string | null;
+          fvolume: number | string | null; fweight: number | string | null;
+          fcabinetnumber: string | null;
+        }>).find((r) => {
+          const t = String(r.ftrackingchn ?? "").trim();
+          if (!t || t === trackingNo) return false;                       // exact = 4a½ จัดการแล้ว
+          if (r.fstatus == null || r.fstatus === "" || r.fstatus === "0") return false; // ไม่ live
+          const prefixPair = t.startsWith(trackingNo) || trackingNo.startsWith(t);
+          if (!prefixPair) return false;
+          if (Math.abs(t.length - trackingNo.length) > 2) return false;   // ต่างเยอะ = คนละเลขจริง
+          const cbmSame = Math.abs((Number(r.fvolume) || 0) - incomingCbm) < 0.0000005;
+          const wtSame = Math.abs((Number(r.fweight) || 0) - incomingWt) < 0.005;
+          return cbmSame && wtSame;
+        });
+        if (twin) {
+          return {
+            ok: false,
+            error:
+              `พัสดุใบนี้มีในระบบแล้วด้วยเลขที่ต่างกันเล็กน้อย — tb_forwarder #${twin.id}`
+              + ` "${String(twin.ftrackingchn ?? "").trim()}" (คิว/น้ำหนักตรงกันเป๊ะ`
+              + `${twin.fcabinetnumber ? ` · ตู้ ${twin.fcabinetnumber}` : ""})`
+              + ` — MOMO น่าจะประกาศเลขไม่ครบ ไม่สร้างแถวซ้ำ (ถ้าเป็นคนละพัสดุจริง ให้แก้เลข`
+              + ` แทรคกิ้งบนหน้าตรวจตู้ให้ต่างกันก่อน)`,
+          };
+        }
+      }
+    }
+  }
+
   // ── 4b. ATOMICALLY CLAIM the source row before the billable INSERT ──
   // 💰 TOCTOU fix (2026-06-14 forwarder-fidelity audit): the L225 committed_at
   // check is read-at-load, so two concurrent commits (double-click / stale
