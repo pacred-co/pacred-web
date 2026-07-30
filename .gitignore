@@ -64,3 +64,6 @@ _backup-dup-profiles.json
 
 # PR-reassign data-op backups (PII · keep local only)
 reassign-*-backup-*.json
+
+# probe ชั่วคราวของ agent (ตั้งชื่อขึ้นต้น _ + probe) — ห้าม commit
+scripts/_*probe*

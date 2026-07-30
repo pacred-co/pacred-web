@@ -118,6 +118,9 @@ export const SHIPPING_METHODS: readonly ShippingMethod[] = [
   // owner 2026-07-21 — ขนส่งเอกชนเจ้าใหม่ · ทุกจังหวัด (ยังไม่ล็อกพื้นที่).
   // พื้นที่ให้บริการอยู่ที่ lib/forwarder/carrier-extra.ts (ยังไม่เข้าไฟล์ Excel).
   { code: "48",   name: "Ao Thai Transport",              nameTh: "อ่าวไทยทรานสปอรต",               type: "truck", etaDays: 4, description: "ทุกจังหวัด" },
+  // owner 2026-07-30 — เจ้าใหม่ 2 ราย (เคสลูกค้าจริง PR017 สตูล · PR102 ฉะเชิงเทรา)
+  { code: "49",   name: "Pattana Express",                nameTh: "หจก.พัฒนาเอ็กซ์เพลส",            type: "truck", etaDays: 4, description: "ภาคใต้ · กรุงเทพฯ · ศูนย์กระจายหาดใหญ่" },
+  { code: "50",   name: "Chawalakit Transport",           nameTh: "ชวาลกิตขนส่ง จำกัด",             type: "truck", etaDays: 3, description: "ฉะเชิงเทรา · กรุงเทพฯ" },
   { code: "PCS",  name: "Pacred Warehouse Pickup",        nameTh: "รับเองโกดัง Pacred (สมุทรสาคร)", type: "truck", etaDays: 1, description: "รับด้วยตนเองที่โกดัง Pacred สมุทรสาคร" },
   { code: "F",    name: "Auto-assigned by Pacred",        nameTh: "บริษัทจัดหาให้อัตโนมัติ",        type: "truck", etaDays: 4 },
   { code: "PCSF", name: "Pacred Mao Mao (bulk)",          nameTh: "PRF เหมาๆ",                      type: "truck", etaDays: 3, description: "Pacred เหมาส่งทั้งคันรถ (PRF)" },
