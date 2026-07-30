@@ -53,6 +53,32 @@
  *    The detection is nonetheless evidence-based, not hard-coded to line_total,
  *    so the day MOMO really does change, the votes flip and we notice.
  *
+ * 🔴 ROOT FIX 2026-07-30 (c) — MOMO's CBM COLUMN CAN BE INFLATED ×qty.
+ *    owner: *"ทำไมคิวมันถึงห่างกันขนาดนี้ครับ มันต่างจนมีนัยยะโคตรสำคัญ · บิลนี้ดิฟกับ
+ *    ระบบเราไป 64 CBM"*. Investigated on the REAL file (INV-20260723-0006, the only
+ *    row in `momo_invoice_upload`, re-downloaded from storage and re-parsed):
+ *
+ *      basis = line_total · votes 6/0 · reconciles ✓ · rate = 2,500 on ALL 23 lines
+ *      9 of 23 lines print a CBM that is EXACTLY (the CBM they charge for) × qty:
+ *        1783582423-8   printed 29.2824 · charged 5,229.00 ÷ 2,500 = 2.0916 (×14)
+ *        1783582423-9   printed 22.2066 · charged 4,270.50 ÷ 2,500 = 1.7082 (×13)
+ *        1783582423-11  printed 13.1400 · charged 3,285.00 ÷ 2,500 = 1.3140 (×10)
+ *        …+6 more (qty 2·2·2·3·4) — Σ over-printed = 64.6398 CBM = the owner's gap.
+ *
+ *    ⚠️ THE MONEY IS CORRECT. MOMO charges ฿2,500 × the SINGLE-line CBM on every one
+ *    of those lines (our stored CBM reconciles to ฿0.65 across the whole file — pure
+ *    4dp rounding). Only the printed CBM column is wrong. So this is NOT a basis
+ *    question at all: the invoice IS line_total and the parser already read it that
+ *    way. Such a line fits NEITHER formula, so it correctly casts no basis vote and
+ *    is correctly flagged `totalMismatch`.
+ *
+ *    What was missing is the DIAGNOSIS: "ยอดไม่ตรงสูตร" reads like "the money is
+ *    wrong" and left a scary, unexplained −64 CBM on the screen. `cbmInflatedByQty`
+ *    + `billedCbm` name the defect precisely, so the screen can say "MOMO พิมพ์คิว
+ *    เกินมา ×จำนวนกล่อง — เงินถูกต้อง" instead of frightening the accountant off a
+ *    perfectly payable round. `totalMismatch` is deliberately LEFT TRUE (§0f: never
+ *    silence a real arithmetic disagreement — one day it will be a genuine over-charge).
+ *
  * ⚠️ scripts/momo-invoice-cost-backfill-2026-06-26.mjs holds a FROZEN copy of the
  *    pre-fix regexes (a one-off backfill, already applied 2026-06-26, with its own
  *    Sub-total reconcile gate). It is intentionally not re-synced — do not treat it
@@ -81,6 +107,15 @@ export type MomoInvoiceLine = {
    *  reported honestly instead of being folded into totalMismatch (which would be
    *  a constant-true, i.e. zero information). */
   rateMissing: boolean;
+  /** The CBM the CHARGE actually implies = lineTotal ÷ unitPrice — i.e. the volume MOMO
+   *  really billed, regardless of what the CBM column prints. null when the rate or the
+   *  total is missing (nothing can be implied). On a healthy line this equals `cbm`. */
+  billedCbm: number | null;
+  /** 🔴 MOMO printed `cbm` = `billedCbm` × qty — the CBM column is inflated by the box
+   *  count while the money stays correct (real: INV-20260723-0006, 9 of 23 lines,
+   *  Σ 64.64 CBM over-printed). Purely a defect of the printed column: use `billedCbm`
+   *  when comparing CBM against our rows, and NEVER re-derive cost from `cbm` on these. */
+  cbmInflatedByQty: boolean;
   /** ตู้ MOMO asserts for this line ("ค่าขนส่งสินค้าจากจีน GZE260701-1") · null on the
    *  older "(Guangzhou - TH)" template. Cross-check vs our fcabinetnumber = the
    *  tracking↔ตู้ reconcile the owner calls "หัวใจ". */
@@ -116,6 +151,13 @@ export type ParsedMomoInvoice = {
   cbmBasisUsable: boolean;
   /** Thai, human-readable: how the basis was decided (or why it wasn't). */
   cbmBasisReason: string;
+  /** How many lines print a CBM inflated ×qty (see MomoInvoiceLine.cbmInflatedByQty). */
+  cbmInflatedLines: number;
+  /** Σ (cbm − billedCbm) over those lines = how much CBM this invoice over-prints in
+   *  total. This is the ENTIRE explanation for a large "คิว MOMO vs คิวระบบเรา" gap on
+   *  such a file (real: 64.6398 on INV-20260723-0006) — surface it next to the diff so
+   *  the accountant sees a named, benign cause instead of an unexplained −64 คิว. */
+  cbmOverPrinted: number;
   /** "หักภาษีค่าขนส่ง ณ ที่จ่าย (WHT 1%)" */
   whtThb: number | null;
   /** "ค่าตีลังไม้ทั้งหมด" */
@@ -128,6 +170,8 @@ export type ParsedMomoInvoice = {
 
 const num = (s: string): number => Number(String(s).replace(/,/g, "").trim());
 const round2 = (n: number): number => Math.round(n * 100) / 100;
+/** CBM keeps 6dp (we store 6dp · MOMO prints 4dp) — rounding to 2 would invent a diff. */
+const round6 = (n: number): number => Math.round(n * 1_000_000) / 1_000_000;
 
 /** Satang tolerance. Deliberately tight: MOMO computes from the CBM it prints, so
  *  across all 87 real lines the strict reading has ZERO false flags — a looser
@@ -190,7 +234,10 @@ function cabinetAbove(rows: string[], trackingIdx: number): string | null {
   return null;
 }
 
-type RawLine = Omit<MomoInvoiceLine, "totalMismatch" | "rateMissing">;
+type RawLine = Omit<
+  MomoInvoiceLine,
+  "totalMismatch" | "rateMissing" | "billedCbm" | "cbmInflatedByQty"
+>;
 
 /** Can this line tell the two readings apart? Only a real rate on more than one box
  *  can: at qty ≤ 1 (or rate/cbm = 0) both formulas give the identical number. */
@@ -203,6 +250,31 @@ function fitsLineTotal(l: RawLine): boolean {
 }
 function fitsPerBox(l: RawLine): boolean {
   return Math.abs(round2(l.unitPrice * l.cbm * l.qty) - l.lineTotal) <= SATANG;
+}
+
+/** The CBM the CHARGE implies (lineTotal ÷ unitPrice) · null when nothing can be implied. */
+function billedCbmOf(l: RawLine): number | null {
+  if (!(l.unitPrice > 0) || !(l.lineTotal > 0)) return null;
+  return l.lineTotal / l.unitPrice;
+}
+
+/**
+ * Does this line print `cbm` = (the CBM it charges for) × qty? — MOMO's ×qty column
+ * inflation (2026-07-30). Tolerance must SCALE with qty because MOMO rounds the printed
+ * CBM to 4dp *before* the comparison is undone: |round4(c×q) − round4(c)×q| ≤ 0.00005(q+1),
+ * so 0.0001×(qty+1) is exactly 2× that bound. Observed on the real file: 8 of the 9 lines
+ * land EXACT, the 9th (qty 2) is off 0.0002 — comfortably inside, and orders of magnitude
+ * tighter than any genuine per_box reading.
+ *
+ * `!fitsLineTotal` makes a false positive structurally impossible: a healthy line already
+ * fits the line-total formula and is excluded before the ×qty shape is even considered.
+ */
+function isCbmInflatedByQty(l: RawLine): boolean {
+  if (!(l.qty > 1) || !(l.cbm > 0)) return false;
+  const billed = billedCbmOf(l);
+  if (billed == null) return false;
+  if (fitsLineTotal(l)) return false;
+  return Math.abs(l.cbm - billed * l.qty) <= 0.0001 * (l.qty + 1);
 }
 
 type BasisResolution = {
@@ -354,15 +426,26 @@ export function parseMomoInvoiceText(text: string): ParsedMomoInvoice {
   const lines: MomoInvoiceLine[] = raw.map((l) => {
     const rateMissing = l.unitPrice <= 0 && l.lineTotal > 0;
     const checkable = evalBasis != null && !rateMissing && l.lineTotal > 0 && l.unitPrice > 0;
+    const billed = billedCbmOf(l);
     return {
       ...l,
       rateMissing,
+      billedCbm: billed == null ? null : round6(billed),
+      // Names WHY the line fails the formula: the money is right, the CBM column is not.
+      // (Reported alongside totalMismatch — it never suppresses it.)
+      cbmInflatedByQty: isCbmInflatedByQty(l),
       // Only ever claim a mismatch from a check we actually ran (§0f: อย่ามั่ว).
       totalMismatch: checkable
         ? !(evalBasis === "line_total" ? fitsLineTotal(l) : fitsPerBox(l))
         : false,
     };
   });
+
+  // How much CBM this invoice over-prints in total — the named cause of a big คิว gap.
+  const inflated = lines.filter((l) => l.cbmInflatedByQty);
+  const cbmOverPrinted = round6(
+    inflated.reduce((a, l) => a + (l.cbm - (l.billedCbm ?? l.cbm)), 0),
+  );
 
   const subTotal = moneyForLabel(rows, SUBTOTAL_LABEL);
   const linesTotal = round2(lines.reduce((a, l) => a + l.lineTotal, 0));
@@ -380,6 +463,8 @@ export function parseMomoInvoiceText(text: string): ParsedMomoInvoice {
     cbmBasisMaterial: b.material,
     cbmBasisUsable: b.usable,
     cbmBasisReason: b.reason,
+    cbmInflatedLines: inflated.length,
+    cbmOverPrinted,
     whtThb: moneyForLabel(rows, WHT_LABEL),
     crateTotal: moneyForLabel(rows, CRATE_LABEL),
     codTotal: moneyForLabel(rows, COD_LABEL),
