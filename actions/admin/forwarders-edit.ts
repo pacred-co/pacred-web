@@ -49,6 +49,7 @@ import {
   resolveTransportMode,
   type TransportMode,
 } from "@/lib/forwarder/cabinet-transport";
+import { getCbmCostFloor, isCbmRateBelowCost } from "@/lib/admin/sell-cost-floor";
 import { evaluateRateModeGuard, type RateModeGuard } from "@/lib/forwarder/rate-mode-guard";
 import { evaluateDeliveryAddressGate } from "@/lib/forwarder/delivery-address-gate";
 import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shipping";
@@ -751,6 +752,43 @@ export async function adminUpdateForwarderDimensions(
       if (advancedToFive) {
         update.fstatus = "5";
         update.fdatestatus5 = nowIso;
+      }
+
+      // 🔴 ห้ามตั้ง "เรทกำหนดเอง ฿/CBM" ต่ำกว่าทุนจริง (owner 2026-07-30
+      //    "ต่อไปจากนี้ ห้ามมีงานขาดทุนอีกแล้วนะครับ")
+      // ช่องนี้คือรูสุดท้าย: เรทการ์ดของลูกค้ามีพื้นกันขาดทุนแล้ว (adminSaveCustomerRate +
+      // sell-cost-floor) แต่ "คิดราคา · ค่าเทียบ แบบกำหนดเอง" บนหน้ารายงานรับค่าแค่
+      // z.number().min(0).max(99999.99) → พิมพ์ ฿1,000/คิว บนตู้รถ (ทุน 4,700) ก็เซฟผ่าน
+      // = ขาดทุนแน่นอนตั้งแต่วินาทีที่บันทึก. บล็อก **ก่อนเขียน** (ยังไม่มีอะไรลง DB).
+      //
+      // ยิงเฉพาะเมื่อ override เปิดใช้จริง + มีค่าเรทคิว + รู้ทุนของโหมดนั้น:
+      //   • ทางอากาศ ('3') ไม่มีทุนในตาราง → ข้าม (ห้ามเดา)
+      //   • เรท ฿/กก. ไม่บล็อก — เทียบทุนต่อคิวตรงๆ ไม่ได้ ต้องรู้ความหนาแน่นก่อน
+      //     (ตัวคุมฝั่งกิโล = CHARGE_HIGHER_BASIS · owner 2026-07-21 "เก็บค่าที่แพงกว่า"
+      //      พิสูจน์แล้วบน prod: หลัง 21/07 ตั้งราคา 287 แถว ขาดทุน 0 แถว)
+      //   • เท่าทุนพอดี = ผ่าน (กำไร 0 ยังไม่ขาดทุน)
+      //   • **งานที่เก็บเงินไปแล้ว (fstatus >= 6) = ข้าม** — ราคาถูก freeze แล้ว การบล็อก
+      //     ที่นั่นไม่กันขาดทุนอะไรเพิ่ม มีแต่ทำให้แก้โน้ต/ที่อยู่ของงานที่จบแล้วไม่ได้ =
+      //     งานหาย. prod 2026-07-30: 8 แถวเข้าข่ายต่ำกว่าทุน **ทั้งหมด fstatus=7 ส่งสำเร็จ
+      //     แล้ว** (มิ.ย.–ต้น ก.ค.) ⇒ ด่านนี้กระทบงานที่ยังทำอยู่ = 0 แถว
+      const effCustomRateOn = (d.customRate ?? String(before.customrate ?? "")) === "1";
+      const typedCbmRate = d.customRateCbm;
+      const stillChargeable = Number(before.fstatus ?? 0) < 6;
+      if (stillChargeable && effCustomRateOn && typedCbmRate !== undefined && typedCbmRate > 0
+          && (reconciledTransportType === "1" || reconciledTransportType === "2")) {
+        const costWh = effectiveWarehouseChina.trim() === "2" ? "2" : "1";
+        const cbmCost = (await getCbmCostFloor())[costWh][reconciledTransportType];
+        if (isCbmRateBelowCost(typedCbmRate, cbmCost)) {
+          const modeLabel = reconciledTransportType === "1" ? "ทางรถ" : "ทางเรือ";
+          const whLabel = costWh === "2" ? "อี้อู" : "กวางโจว";
+          return {
+            ok: false,
+            error:
+              `❌ ห้ามตั้งเรทขายต่ำกว่าทุนจริง — เรทกำหนดเอง ฿${typedCbmRate.toLocaleString("th-TH")}/คิว`
+              + ` แต่ทุน ${whLabel} ${modeLabel} = ฿${cbmCost.toLocaleString("th-TH")}/คิว`
+              + ` (ขายแล้วขาดทุนแน่นอน). ปรับขึ้นอย่างน้อยให้เท่าทุนก่อนบันทึก`,
+          };
+        }
       }
 
       // 2026-06-05 — write the override block + adders only when the admin
