@@ -127,6 +127,7 @@ export async function getSalesCommissionReport(opts: {
   page?: number; // หน้า (1-based · COMMISSION_PAGE_SIZE แถว/หน้า) · totals ยังคิดทั้งหมด
   sort?: string; // คอลัมน์ที่เรียง (keyof CommissionRow · default paidDate)
   dir?: string; // asc | desc (default asc)
+  all?: boolean; // true = คืนทุกแถว (ไม่ paginate) สำหรับ export CSV ทั้งหมด
 }): Promise<CommissionReport> {
   const { position, repId, dateFrom, dateTo } = opts;
   const startInclusive = dateFrom;
@@ -265,7 +266,7 @@ export async function getSalesCommissionReport(opts: {
   const page = Math.max(1, opts.page ?? 1);
   const start = (page - 1) * COMMISSION_PAGE_SIZE;
   return {
-    rows: rows.slice(start, start + COMMISSION_PAGE_SIZE),
+    rows: opts.all ? rows : rows.slice(start, start + COMMISSION_PAGE_SIZE),
     totals,
     rangeStart: dateFrom,
     rangeEnd: dateTo,
