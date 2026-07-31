@@ -30,11 +30,14 @@ import {
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
+import { DriverStopFailButton } from "./driver-stop-fail-button";
 import { routeOrderOf } from "@/lib/admin/driver-route-order";
 import { BatchManage, RemoveItemButton } from "./batch-manage";
 import { DriverStopCard } from "./driver-stop-card";
 import { CourierUrlInput } from "./courier-url-input";
 import { TruckBookingCopyBox } from "./truck-booking-copy-box";
+import { EditStopDeliveryAddress } from "./stop-address-edit";
+import { loadCustomerAddressRows, type CustomerAddressRow } from "@/lib/legacy/customer-address-options";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
@@ -260,6 +263,16 @@ export default async function AdminDriverBatchDetailPage({
   const customerNameOf = (uid: string | null | undefined): string =>
     custNameById.get((uid ?? "").trim()) ?? "—";
 
+  // สมุดที่อยู่ต่อลูกค้า — สำหรับปุ่ม "✏️ แก้/เพิ่มที่อยู่จัดส่ง" บนจุดส่ง. โหลดเฉพาะ
+  // ตอน isOpsOverride (คนที่มีสิทธิ์แก้) เพื่อไม่ยิง query ฟรีเมื่อ role แก้ไม่ได้. key = userid.
+  const addressRowsByUser = new Map<string, CustomerAddressRow[]>();
+  if (isOpsOverride && custIds.length > 0) {
+    const loaded = await Promise.all(
+      custIds.map(async (uid) => [uid, await loadCustomerAddressRows(admin, uid)] as const),
+    );
+    for (const [uid, rows] of loaded) addressRowsByUser.set(uid, rows);
+  }
+
   // A delivery row still on the warehouse self-pickup placeholder
   // ("รับที่โกดัง Pacred" — the legacy MOMO/commit default) has no real
   // recipient/address. Show WHOSE parcel it is (the customer) instead of the
@@ -442,11 +455,25 @@ export default async function AdminDriverBatchDetailPage({
   type RunPhoto = { url: string; kind: "on" | "off"; tracking: string };
   const loadPhotos: RunPhoto[] = [];
   const deliverPhotos: RunPhoto[] = [];
+  // 🔴 กันรูปซ้ำ (ภูม 2026-07-31): คนขับถ่าย 1 รูป/จุดส่ง แต่ระบบเขียนรูปเดียวกันลง
+  // "ทุกแทรคกิ้ง" ในจุดนั้น (DriverPhotoEditDialog รับหลาย itemIds) → รูปเดียวโผล่ N ครั้ง.
+  // dedupe ด้วย "path จริง" ของไฟล์ (fdipictureon/off) — ห้าม dedupe ด้วย signed URL
+  // เพราะ getSignedBucketUrl ออก token ใหม่ทุกครั้งแม้ไฟล์เดียวกัน → dedupe ไม่ติด.
+  const seenOnPath = new Set<string>();
+  const seenOffPath = new Set<string>();
   for (const stop of stopsWithPhotos) {
     for (const entry of stop.items) {
       const tracking = entry.forwarder.ftrackingchn ?? "";
-      if (entry.photoOnUrl) loadPhotos.push({ url: entry.photoOnUrl, kind: "on", tracking });
-      if (entry.photoOffUrl) deliverPhotos.push({ url: entry.photoOffUrl, kind: "off", tracking });
+      const onPath = (entry.item.fdipictureon ?? "").trim();
+      const offPath = (entry.item.fdipictureoff ?? "").trim();
+      if (entry.photoOnUrl && onPath && !seenOnPath.has(onPath)) {
+        seenOnPath.add(onPath);
+        loadPhotos.push({ url: entry.photoOnUrl, kind: "on", tracking });
+      }
+      if (entry.photoOffUrl && offPath && !seenOffPath.has(offPath)) {
+        seenOffPath.add(offPath);
+        deliverPhotos.push({ url: entry.photoOffUrl, kind: "off", tracking });
+      }
     }
   }
   const runPhotos = loadPhotos.length > 0 ? loadPhotos : deliverPhotos;
@@ -455,6 +482,16 @@ export default async function AdminDriverBatchDetailPage({
     : deliverPhotos.length > 0
       ? "รูปส่งของ (ยังไม่มีรูปขึ้นรถ)"
       : "รูปตอนขึ้นรถ";
+
+  // ปุ่ม "ถ่ายขึ้นรถ" ระดับรอบ (batch · ภูม 2026-07-31) — คนขับถ่ายรูปโหลดของขึ้นรถ
+  // ทั้งคัน "ทีเดียว" → เขียน fdipictureon ลงทุกแทรคกิ้งในรอบ (ยังไม่ '3') + มาร์คขึ้นรถ.
+  // ใช้ทั้งหัวมือถือ (lg:hidden) และหัวเดสก์ท็อป (hidden lg:block) → ปุ่มเดียวเสมอ.
+  const allLoadableItemIds = stops.flatMap((s) =>
+    s.items.filter((e) => e.item.fdistatus !== "3").map((e) => e.item.id),
+  );
+  const batchHasLoadPhoto = stops.some((s) =>
+    s.items.some((e) => (e.item.fdipictureon ?? "").trim() !== ""),
+  );
 
   // 7. Aggregates for header
   const totalItems     = items.length;
@@ -653,6 +690,12 @@ export default async function AdminDriverBatchDetailPage({
             <Tag className="h-4 w-4 shrink-0" /> พิมพ์สติ๊กเกอร์
           </Link>
         </div>
+
+        {/* ปุ่ม "ถ่ายรูปขึ้นรถ" ระดับรอบ — เต็มความกว้าง เด่นชัด (ภูม 2026-07-31) ·
+            คนขับกดถ่ายรูปโหลดของขึ้นรถทั้งคันทีเดียว (ไม่ต้องถ่ายทีละจุด). */}
+        {allLoadableItemIds.length > 0 && (
+          <DriverPhotoEditDialog itemIds={allLoadableItemIds} hasPhoto={batchHasLoadPhoto} kind="load" gradient />
+        )}
       </section>
 
       {/* Header card — เดสก์ท็อป (≥lg) */}
@@ -698,7 +741,16 @@ export default async function AdminDriverBatchDetailPage({
 
           {/* right cluster: รูปขึ้นรถ panel (ภูม 2026-07-10) + status/countdown col */}
           <div className="flex items-start gap-4 flex-wrap justify-end">
-          <LoadingPhotoPanel photos={runPhotos} label={photoPanelLabel} />
+          {/* พาเนลรูปขึ้นรถ + ปุ่ม "ถ่ายขึ้นรถ" ปุ่มเดียวระดับรอบ (batch-level · ภูม 2026-07-31):
+              คนขับถ่ายรูปโหลดของขึ้นรถทั้งคัน "ทีเดียว" → เขียน fdipictureon ลงทุกแทรคกิ้ง
+              ในรอบ (dedupe แล้วโชว์รูปเดียวในพาเนล) + มาร์ค "ขึ้นรถแล้ว". ห้ามใส่ปุ่มนี้ราย
+              จุดส่ง (จะถ่ายซ้ำ รูปโผล่ซ้ำ · owner). */}
+          <div className="flex flex-col items-stretch gap-2">
+            <LoadingPhotoPanel photos={runPhotos} label={photoPanelLabel} />
+            {allLoadableItemIds.length > 0 && (
+              <DriverPhotoEditDialog itemIds={allLoadableItemIds} hasPhoto={batchHasLoadPhoto} kind="load" gradient />
+            )}
+          </div>
           <div className="flex flex-col items-end gap-2">
             <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium ${BATCH_STATUS_CLS[fdstatus]}`}>
               {fdstatus === "1" && <Clock className="h-3.5 w-3.5" />}
@@ -869,9 +921,15 @@ export default async function AdminDriverBatchDetailPage({
             const mapHref = hasPin
               ? `https://www.google.com/maps/search/${f.faddresslatitude},${f.faddresslongitude}`
               : `https://www.google.com/maps/search/${encodeURIComponent(addrText)}`;
-            // delivery photos for this stop (the driver's drop-off shots)
+            // delivery photos for this stop (the driver's drop-off shots) —
+            // dedupe ด้วย path จริง (fdipictureoff) ไม่ใช่ signed URL เพราะรูปเดียวถูก
+            // เขียนลงทุกแทรคกิ้งในจุด → กันรูปซ้ำ (ภูม 2026-07-31 · เหมือนพาเนลหัว).
             const deliveryPhotos = Array.from(
-              new Set(stop.items.map((e) => e.photoOffUrl).filter((u): u is string => Boolean(u))),
+              new Map(
+                stop.items
+                  .filter((e) => e.photoOffUrl && (e.item.fdipictureoff ?? "").trim())
+                  .map((e) => [(e.item.fdipictureoff ?? "").trim(), e.photoOffUrl as string]),
+              ).values(),
             );
             const phones = [f.faddresstel, f.faddresstel2]
               .map((p) => (p ?? "").trim())
@@ -917,15 +975,30 @@ export default async function AdminDriverBatchDetailPage({
                         <Camera className="h-3.5 w-3.5" /> ยังไม่มีรูปส่ง
                       </div>
                     )}
-                    {/* ถ่าย/แก้ไขภาพส่งสินค้า (legacy takePhoto → update_fPhotoEnd · ภูม 2026-07-10)
-                        — applies to the stop's non-failed (fdistatus≠'3') driver-items. */}
+                    {/* งานคนขับต่อจุดส่ง — ถ่ายส่ง + หมายเหตุ (ส่งไม่ได้) · ภูม 2026-07-31.
+                        ถ่ายขึ้นรถ = ปุ่มเดียว batch-level บนหัว (รูปโหลดของทั้งคัน ไม่ใช่ต่อจุด). */}
                     {(() => {
                       const editableIds = stop.items
                         .filter((e) => e.item.fdistatus !== "3")
                         .map((e) => e.item.id);
-                      return editableIds.length > 0 ? (
-                        <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={deliveryPhotos.length > 0} />
-                      ) : null;
+                      const canFail = stop.items.some((e) => e.item.fdistatus === "" || e.item.fdistatus === "1");
+                      const failNote =
+                        stop.items.find((e) => e.item.fdistatus === "3" && (e.item.fdinote ?? "").trim())?.item.fdinote?.trim() ?? "";
+                      return (
+                        <div className="space-y-1.5">
+                          {editableIds.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={deliveryPhotos.length > 0} />
+                              {canFail && <DriverStopFailButton itemIds={editableIds} />}
+                            </div>
+                          )}
+                          {failNote && (
+                            <p className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+                              ⚠️ ส่งไม่ได้: {failNote}
+                            </p>
+                          )}
+                        </div>
+                      );
                     })()}
                   </div>
 
@@ -984,6 +1057,17 @@ export default async function AdminDriverBatchDetailPage({
                           จังหวัด {f.faddressprovince ?? ""} {f.faddresszipcode ?? ""}
                         </p>
                       </>
+                    )}
+                    {/* ✏️ แก้/เพิ่มที่อยู่จัดส่งของจุดนี้ — วางต่อท้ายที่อยู่เลย (ภูม 2026-07-31) ·
+                        reuse สมุดที่อยู่ลูกค้า (เพิ่มที่อยู่ = โผล่หน้าโปรไฟล์ด้วย) · เขียนแค่ที่อยู่ ไม่แตะเงิน. */}
+                    {isOpsOverride && f.userid && (
+                      <EditStopDeliveryAddress
+                        userid={f.userid}
+                        fids={stop.items.map((e) => e.forwarder.id)}
+                        batchId={batch.id}
+                        addresses={addressRowsByUser.get(f.userid) ?? []}
+                        itemCount={stop.items.length}
+                      />
                     )}
                     {phones.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 pt-0.5">
@@ -1165,6 +1249,11 @@ export default async function AdminDriverBatchDetailPage({
               : `https://www.google.com/maps/search/${encodeURIComponent(addrText)}`;
             const deliveryPhotos = Array.from(new Set(stop.items.map((e) => e.photoOffUrl).filter((u): u is string => Boolean(u))));
             const editableIds = stop.items.filter((e) => e.item.fdistatus !== "3").map((e) => e.item.id);
+            // ปุ่มงานคนขับต่อจุดส่ง (ภูม 2026-07-31): ยังมีรายการมาร์คส่งไม่ได้ได้? + เหตุผลที่ส่งไม่ได้
+            // (ถ่ายขึ้นรถ = ปุ่มเดียว batch-level บนหัว ไม่ใช่ต่อจุด).
+            const canFail = stop.items.some((e) => e.item.fdistatus === "" || e.item.fdistatus === "1");
+            const failNote =
+              stop.items.find((e) => e.item.fdistatus === "3" && (e.item.fdinote ?? "").trim())?.item.fdinote?.trim() ?? "";
             const phones = [f.faddresstel, f.faddresstel2].map((p) => (p ?? "").trim()).filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
             const placeholder = isWarehousePlaceholder(f.faddressname);
             const heroPhoto = deliveryPhotos[0] ?? stop.items.find((e) => e.coverUrl)?.coverUrl ?? null;
@@ -1187,8 +1276,19 @@ export default async function AdminDriverBatchDetailPage({
                 heroPhoto={heroPhoto}
                 editableIds={editableIds}
                 hasPhoto={deliveryPhotos.length > 0}
+                canFail={canFail}
+                failNote={failNote}
                 slipHref={`/admin/drivers/${batch.id}/delivery-slip?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
                 stickersHref={`/admin/drivers/${batch.id}/stickers?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
+                addressEdit={isOpsOverride && f.userid ? (
+                  <EditStopDeliveryAddress
+                    userid={f.userid}
+                    fids={stop.items.map((e) => e.forwarder.id)}
+                    batchId={batch.id}
+                    addresses={addressRowsByUser.get(f.userid) ?? []}
+                    itemCount={stop.items.length}
+                  />
+                ) : null}
                 items={stop.items.map((e) => ({
                   id: e.forwarder.id,
                   refCode: e.forwarder.fidorco ?? `#${e.forwarder.id}`,
@@ -1225,10 +1325,7 @@ export default async function AdminDriverBatchDetailPage({
 
       <p className="text-[11px] text-muted">
         ฐานข้อมูล: legacy <code className="rounded bg-surface-alt px-1">tb_forwarder_driver</code> #{batch.id}{" "}
-        — {stops.length} จุดส่ง · ดำเนินการสถานะรายการในหน้า{" "}
-        <Link href={`/admin/drivers/work?driver=${batch.fdadminid}`} className="text-primary-600 hover:underline">
-          /admin/drivers/work
-        </Link>
+        — {stops.length} จุดส่ง · ถ่ายรูปขึ้นรถ = ปุ่มเดียวบนหัว (ทั้งคัน) · ถ่ายรูปส่ง + หมายเหตุ = ต่อจุดส่ง
       </p>
     </main>
   );
