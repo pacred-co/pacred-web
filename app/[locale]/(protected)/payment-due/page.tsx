@@ -225,7 +225,7 @@ export default async function PaymentDuePage() {
         title: detail && detail !== "-" ? detail : t("importFallbackTitle"),
         dateText: fmtDate(r.fdate as string | null),
         amountThb: Number(r.ftotalprice ?? 0),
-        statusLabel: "รอชำระเงิน",
+        statusLabel: "รอชำระ/ใบแจ้งหนี้",
         ctaLabel: "ชำระเงิน",
         ctaHref: `/service-import?q=5`,
         forwarderRow,

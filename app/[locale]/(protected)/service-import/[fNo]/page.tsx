@@ -20,7 +20,7 @@ import {
 } from "./delivery-feedback-card";
 import { MissingItemReportCard } from "./missing-item-report-card";
 import type { ForwarderRow } from "../forwarder-row-view";
-import { PendingSlipBadge } from "../forwarder-row-view";
+import { PendingSlipBadge, StatusForwarderAll2 } from "../forwarder-row-view";
 import { resolvePendingSlipForwarderIds } from "@/lib/forwarder/pending-slip";
 import { resolveOpenBillForwarderIds } from "@/lib/forwarder/open-bill";
 // 2026-06-19 (Unit A · owner "แจงค่าหน้าอื่นด้วย") — READ-ONLY "ยอดเก็บจริง"
@@ -176,31 +176,6 @@ function modifyDmy(dmyStr: string, days: number): string {
   d.setDate(d.getDate() + days);
   const p = (n: number) => String(n).padStart(2, "0");
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
-}
-
-// Legacy `statusForwarderBadge($fStatus)` — member/include/function.php L581-592.
-// Bootstrap `badge badge-*` → Tailwind chips, matching the canonical
-// STATUS_CHIP palette in forwarder-row-view.tsx (same tones per status).
-const STATUS_BADGE_CHIP = "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold";
-function statusForwarderBadge(fStatus: string | null, t: T) {
-  switch (fStatus) {
-    case "1":
-      return <span className={`${STATUS_BADGE_CHIP} bg-amber-100 text-amber-700 border-amber-200`}>{t("status1")}</span>;
-    case "2":
-      return <span className={`${STATUS_BADGE_CHIP} bg-sky-100 text-sky-700 border-sky-200`}>{t("status2")}</span>;
-    case "3":
-      return <span className={`${STATUS_BADGE_CHIP} bg-pink-100 text-pink-700 border-pink-200`}>{t("status3")}</span>;
-    case "4":
-      return <span className={`${STATUS_BADGE_CHIP} bg-amber-200 text-amber-900 border-amber-300`}>{t("status4")}</span>;
-    case "5":
-      return <span className={`${STATUS_BADGE_CHIP} bg-red-100 text-red-700 border-red-200`}>{t("status5")}</span>;
-    case "6":
-      return <span className={`${STATUS_BADGE_CHIP} bg-indigo-100 text-indigo-700 border-indigo-200`}>{t("status6")}</span>;
-    case "7":
-      return <span className={`${STATUS_BADGE_CHIP} bg-emerald-100 text-emerald-700 border-emerald-200`}>{t("status7")}</span>;
-    default:
-      return null;
-  }
 }
 
 // Legacy `nameShipBy($fShipBy)` — function.php L91-143.
@@ -1248,7 +1223,11 @@ export default async function ServiceImportDetailPage({
               ) : (
                 <p className="flex items-center gap-2 md:justify-end text-sm md:text-base font-semibold text-foreground">
                   <b className="font-bold">{t("statusLabel")} :</b>
-                  {statusForwarderBadge(fStatusValue, t)}
+                  <StatusForwarderAll2
+                    fStatus={fStatusValue}
+                    fStatusDriver={FID_driver2}
+                    pendingSlip={hasPendingSlip}
+                  />
                   <Explain
                     align="right"
                     def="สถานะปัจจุบันของสินค้าในเส้นทาง: รอเข้าโกดังจีน → ถึงโกดังจีน → กำลังส่งมาไทย → ถึงไทย → รอชำระเงิน → เตรียมส่ง → ส่งแล้ว"

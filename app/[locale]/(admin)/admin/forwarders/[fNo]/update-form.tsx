@@ -95,7 +95,7 @@ export function AdminForwarderUpdateForm(p: Props) {
   }
 
   const STATUS_FLOW = [
-    { value: "pending_payment",  label: "รอชำระเงิน" },
+    { value: "pending_payment",  label: "รอชำระ/ใบแจ้งหนี้" },
     { value: "shipped_china",    label: "ออกจากจีน" },
     { value: "in_transit",       label: "กลางทาง" },
     { value: "arrived_thailand", label: "เข้าโกดังไทย" },
@@ -229,7 +229,7 @@ export function AdminForwarderUpdateForm(p: Props) {
       <label className="block space-y-1">
         <span className="text-xs font-medium">สถานะ (แก้ตรง)</span>
         <select value={status} onChange={(e) => setStatus(e.target.value)} className={inputCls}>
-          <option value="pending_payment">รอชำระเงิน</option>
+          <option value="pending_payment">รอชำระ/ใบแจ้งหนี้</option>
           <option value="shipped_china">ออกจากจีน</option>
           <option value="in_transit">ขนส่งกลางทาง</option>
           <option value="arrived_thailand">เข้าโกดังไทย</option>

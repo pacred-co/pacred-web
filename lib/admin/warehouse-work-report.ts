@@ -25,7 +25,7 @@ export const isSystemHandler = (id: string): boolean =>
 
 const FSTATUS_LABEL: Record<string, string> = {
   "4": "ถึงไทยแล้ว",
-  "5": "รอชำระเงิน",
+  "5": "รอชำระ/ใบแจ้งหนี้",
   "6": "เตรียมส่ง",
   "7": "ส่งแล้ว",
 };

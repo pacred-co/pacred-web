@@ -411,7 +411,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
               ))}
             </select>
             <p className="text-xs text-muted mt-1">
-              แสดงเฉพาะลูกค้าที่มีรายการสถานะ <strong>รอชำระเงิน (fStatus=5)</strong>
+              แสดงเฉพาะลูกค้าที่มีรายการสถานะ <strong>รอชำระ/ใบแจ้งหนี้ (fStatus=5)</strong>
             </p>
           </label>
           <label className="md:col-span-2">

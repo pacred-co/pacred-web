@@ -98,7 +98,9 @@ const Q = {
 
   // ── ฝากโอน / ชำระเงิน (yuan + wallet) — Accounting ─────────────────────────
   yuanPending:  { key: "yuanPending",  label: "ฝากโอน/ชำระ รอตรวจ",            badge: "yuanPending"  as BadgeKey, href: "/admin/yuan-payments",     nextAction: "ตรวจสลิป → อนุมัติ/ตัดจ่าย", icon: "Languages" },
-  walletTopup:  { key: "walletTopup",  label: "ชำระเงิน (สลิป) รอตรวจ",         badge: "walletTopup"  as BadgeKey, href: "/admin/wallet?view=tx",    nextAction: "ตรวจสลิป → อนุมัติ/ตัดจ่าย", icon: "Wallet" },
+  // Combined accounting queue: direct wallet slips + billing-run slips. Keep
+  // label, badge and destination identical to the /admin dashboard 5.1 gate.
+  walletTopup:  { key: "walletTopup",  label: "รอออก/ใบเสร็จรับเงิน",            badge: "walletTopup"  as BadgeKey, href: "/admin?tab=topup",          nextAction: "ตรวจสลิป → ออกใบเสร็จ → เตรียมส่ง", icon: "Wallet" },
   walletWdraw:  { key: "walletWdraw",  label: "ถอนเงิน รอจ่าย",                badge: "walletWithdraw" as BadgeKey, href: "/admin/wallet?view=tx",  nextAction: "ตรวจ → จ่ายเงินคืน",         icon: "Banknote" },
   cntDrawMoney: { key: "cntDrawMoney", label: "ค่าตู้รออนุมัติ",               badge: "cntDrawMoney" as BadgeKey, href: "/admin/cnt-hs",            nextAction: "ตรวจ → อนุมัติจ่ายค่าตู้",   icon: "Truck" },
   salesPayout:  { key: "salesPayout",  label: "เบิกค่าคอม/ค่าสินค้า รออนุมัติ",  badge: "salesPayout"  as BadgeKey, href: "/admin/sales-payouts",     nextAction: "ตรวจ → อนุมัติจ่าย",         icon: "BadgePercent" },

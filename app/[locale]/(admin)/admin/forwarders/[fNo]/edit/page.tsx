@@ -368,7 +368,7 @@ export default async function AdminForwarderEditPage({
   // (forwarder-inline-edits.tsx) interleaved into the 2-col data blocks.
   const STATUS_LABEL: Record<string, string> = {
     "1": "รอเข้าโกดังจีน", "2": "ถึงโกดังจีนแล้ว", "3": "กำลังส่งมาไทย",
-    "4": "ถึงไทยแล้ว", "5": "รอชำระเงิน", "6": "เตรียมส่ง", "7": "ส่งแล้ว",
+    "4": "ถึงไทยแล้ว", "5": "รอชำระ/ใบแจ้งหนี้", "6": "เตรียมส่ง", "7": "ส่งแล้ว",
     "99": "พิเศษ",
   };
   const WAREHOUSE_LABEL: Record<string, string> = {
@@ -557,7 +557,7 @@ export default async function AdminForwarderEditPage({
               { n: 2, rank: 2,   label: "ถึงโกดังจีน",      Icon: Warehouse },
               { n: 3, rank: 3,   label: "ส่งมาไทย",          Icon: r.ftransporttype === "3" ? Plane : Truck },
               { n: 4, rank: 4,   label: "ถึงไทย",             Icon: Warehouse },
-              { n: 5, rank: 5,   label: "รอชำระเงิน",        Icon: Clock },
+              { n: 5, rank: 5,   label: "รอชำระ/ใบแจ้งหนี้",        Icon: Clock },
               { n: 6, rank: 6,   label: "เตรียมส่ง",         Icon: Truck },
               { n: 7, rank: 6.5, label: "กำลังจัดส่ง",       Icon: Truck },
               { n: 8, rank: 8,   label: "ส่งแล้ว",            Icon: CheckCircle2 },

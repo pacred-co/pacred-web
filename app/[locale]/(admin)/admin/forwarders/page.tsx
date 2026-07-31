@@ -27,6 +27,11 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  resolvePendingSlipFidsAll,
+  resolvePendingSlipReviewTargetsAll,
+  type PendingSlipReviewTarget,
+} from "@/lib/forwarder/pending-slip";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { Link } from "@/i18n/navigation";
 import { redirect } from "next/navigation";
@@ -70,7 +75,7 @@ function buildForwarderMenubar(c: { s5: number; s6: number }): MenubarItem[] {
     label: "ตามประเภท",
     children: [
       { label: "ทั้งหมด",   href: "/admin/forwarders" },
-      { label: "รอชำระเงิน", href: "/admin/forwarders?status=5", badge: c.s5 },
+      { label: "รอชำระ/ใบแจ้งหนี้", href: "/admin/forwarders?status=5", badge: c.s5 },
       { label: "เตรียมส่ง", href: "/admin/forwarders?status=6", badge: c.s6 },
       { label: "เครดิต",   href: "/admin/forwarders?status=c" },
       { label: "พิเศษ",    href: "/admin/forwarders?status=p" },
@@ -306,6 +311,10 @@ export type Row = {
   credit_due_date: string | null;     // legacy fcreditdate · วันที่ครบกำหนด
   // 2026-07-07 — fstatus='6' + open driver item (fdistatus='') → กำลังจัดส่ง pill
   driverOpen: boolean;
+  /** owner 2026-07-31 — มีสลิปรอบัญชีตรวจ → สถานะย่อย 5.1 รอออก/ใบเสร็จรับเงิน */
+  pendingSlip: boolean;
+  /** ปลายทางตรวจสลิปจริง: wallet detail หรือ billing-run two-round gate */
+  pendingSlipReviewTarget: PendingSlipReviewTarget | null;
   paydeposit: string | null;   // '1' = paid · null/'' = ยอดค้างชำระ remaining
   note: string | null;
   /** 2026-07-06 — legacy fproductstype · nameProductsType 1=ทั่วไป 2=มอก. 3=อย. 4=พิเศษ */
@@ -463,7 +472,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
   // บนโปรไฟล์ลูกค้า — owner 2026-07-31 "มีสถานะเพิ่มไม่ต้องมาไล่แก้หากัน")
   const tabCountOf: Record<string, number> = {
     "": counts.total, "1": counts.s1, "2": counts.s2, "3": counts.s3, "4": counts.s4,
-    "5": counts.s5, "6": counts.s6, "6.1": counts.s6driver, "7": counts.s7,
+    "5": counts.s5, "5.1": counts.s5receipt, "6": counts.s6, "6.1": counts.s6driver, "7": counts.s7,
     c: counts.credit, p: counts.special,
   };
   const filterOpts: { v: string | undefined; l: string; n: number }[] =
@@ -750,7 +759,7 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
          end-of-row pill) so the current queue reads at a glance. */}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold text-muted mr-0.5 inline-flex items-center gap-1">
-          <Explain def="กรองรายการตามสถานะการเดินทาง/การเงิน — 1 รอเข้าโกดังจีน → 4 ถึงไทย → 5 รอชำระเงิน → 6 เตรียมส่ง → 7 ส่งแล้ว · เครดิต/พิเศษ = ลานพิเศษ" label="สถานะ:" />
+          <Explain def="กรองรายการตามสถานะการเดินทาง/การเงิน — 1 รอเข้าโกดังจีน → 4 ถึงไทย → 5 รอชำระ/ใบแจ้งหนี้ → 5.1 รอออก/ใบเสร็จรับเงิน → 6 เตรียมส่ง → 7 ส่งแล้ว · เครดิต/พิเศษ = ลานพิเศษ" label="สถานะ:" />
         </span>
         {filterOpts.map((o) => {
           const params = new URLSearchParams();
@@ -1045,7 +1054,7 @@ export async function fetchForwarderList(
   // is NO post-fetch shrink → we use the efficient DB count:exact + .range.
   const page = opts.page ?? 1;
   const { from, to } = pageRange(page);
-  const hasPostFetchFilter = !!(sp.q || sp.q_multi || sp.status === "6" || sp.status === "6.1");
+  const hasPostFetchFilter = !!(sp.q || sp.q_multi || sp.status === "6" || sp.status === "6.1" || sp.status === "5" || sp.status === "5.1");
 
   // ?filter=note — "หมายเหตุนำเข้า" (sidebar). Faithful to legacy
   // forwarder-action.php?action=Note = the SAME rich forwarder list, filtered
@@ -1167,10 +1176,24 @@ export async function fetchForwarderList(
     );
   }
 
+  // ── สลิปรอบัญชีตรวจ → สถานะย่อย 5.1 "รอออก/ใบเสร็จรับเงิน" (owner 2026-07-31) ──
+  // แผนเดียวกับ 6.1: derive จากข้อมูลจริง ไม่เพิ่มคอลัมน์. คำนวณเฉพาะ view ที่อาจมีแถว
+  // fstatus='5' (ข้ามแท็บสถานะเดี่ยวที่เป็นไปไม่ได้ + lane พิเศษ) — ดู isAwaitingReceipt.
+  let pendingSlipIds: Set<number> | null = null;
+  let pendingSlipReviewTargets: Map<number, PendingSlipReviewTarget> | null = null;
+  const needsSlipSet = sp.status !== "p" && !/^(?:[1-4]|6(?:\.1)?|7)$/.test(sp.status ?? "");
+  if (needsSlipSet) {
+    pendingSlipReviewTargets = await resolvePendingSlipReviewTargetsAll(admin);
+    pendingSlipIds = new Set(pendingSlipReviewTargets.keys());
+  }
+
   if (sp.status === "c") {
     q = q.eq("fcredit", "1");
   } else if (sp.status === "p") {
     q = q.eq("fstatus", "99");
+  } else if (sp.status === "5.1") {
+    q = q.eq("fstatus", "5");
+    // รอออก/ใบเสร็จรับเงิน = fstatus 5 ที่มีสลิปรอตรวจ (กรอง post-fetch ด้านล่าง)
   } else if (sp.status === "6") {
     q = q.eq("fstatus", "6");
     // เตรียมส่ง = NOT in driver_item with fdistatus='' (filtered post-fetch · see L~248)
@@ -1283,6 +1306,12 @@ export async function fetchForwarderList(
     raw = raw.filter((r) => !driverInProgressIds!.has(Number(r.id)));
   } else if (sp.status === "6.1" && driverInProgressIds) {
     raw = raw.filter((r) => driverInProgressIds!.has(Number(r.id)));
+  } else if (sp.status === "5" && pendingSlipIds) {
+    // owner 2026-07-31 — "รอชำระ/ใบแจ้งหนี้" = ยังไม่มีสลิปรอตรวจ
+    // (พอแนบสลิปแล้วย้ายไปแท็บ 5.1 รอออก/ใบเสร็จรับเงิน)
+    raw = raw.filter((r) => !pendingSlipIds!.has(Number(r.id)));
+  } else if (sp.status === "5.1" && pendingSlipIds) {
+    raw = raw.filter((r) => pendingSlipIds!.has(Number(r.id)));
   }
 
   // ─── 2nd query: tb_users for customer name/phone (+ VIP/Sale chips) ───
@@ -1409,6 +1438,8 @@ export async function fetchForwarderList(
       credit_date_granted: r.fdatestatus5 ?? null,
       credit_due_date: r.fcreditdate ?? null,
       driverOpen: driverInProgressIds?.has(Number(r.id)) ?? false,
+      pendingSlip: pendingSlipIds?.has(Number(r.id)) ?? false,
+      pendingSlipReviewTarget: pendingSlipReviewTargets?.get(Number(r.id)) ?? null,
       paydeposit: r.paydeposit,
       note: r.fnote,
       products_type: r.fproductstype,
@@ -1675,10 +1706,29 @@ async function loadStatusCounts(
     }
   }
 
+  // "รอออก/ใบเสร็จรับเงิน" (5.1) = ชิปเม้นสถานะ 5 ที่มีสลิปรอบัญชีตรวจ (owner 2026-07-31).
+  // แท็บ 5 จึงเหลือเฉพาะที่ยังไม่มีสลิป — สองแท็บรวมกัน = ยอดสถานะ 5 ทั้งหมด (ไม่นับซ้ำ).
+  let s5receipt = 0;
+  let s5waiting = cnt("5");
+  {
+    const slipFids = await resolvePendingSlipFidsAll(admin);
+    if (slipFids.size > 0) {
+      const withSlip = new Set<string>();
+      const noSlip = new Set<string>();
+      for (const r of shipRows) {
+        if (String(r.fstatus ?? "").trim() !== "5") continue;
+        (slipFids.has(r.id) ? withSlip : noSlip).add(shipKey(r));
+      }
+      s5receipt = withSlip.size;
+      // ชิปเม้นที่มีทั้งแถวมีสลิป/ไม่มีสลิป → นับเป็น "รอออกใบเสร็จ" (สลิปเข้าแล้ว)
+      s5waiting = [...noSlip].filter((k) => !withSlip.has(k)).length;
+    }
+  }
+
   return {
     total: allSet.size,
     s1: cnt("1"), s2: cnt("2"), s3: cnt("3"), s4: cnt("4"),
-    s5: cnt("5"), s6: cnt("6"), s6driver, s7: cnt("7"),
+    s5: s5waiting, s5receipt, s6: cnt("6"), s6driver, s7: cnt("7"),
     credit: creditSet.size, special: cnt("99"),
   };
 }

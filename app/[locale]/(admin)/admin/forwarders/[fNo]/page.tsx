@@ -3,7 +3,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
-import { fstatusBadge } from "@/lib/admin/forwarder-status";
+import {
+  fstatusVivid,
+  resolveRowStatusCode,
+  statusCodeLabel,
+} from "@/lib/admin/forwarder-status";
+import { resolvePendingSlipReviewTargetsAll } from "@/lib/forwarder/pending-slip";
 import { CreateOrderBillButton } from "./create-order-bill-button";
 import { IssueReceiptButton } from "./issue-receipt-button";
 import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
@@ -583,7 +588,7 @@ async function tryRenderTbForwarder(
 
   const STATUS_LABEL: Record<string, string> = {
     "1":"รอเข้าโกดังจีน","2":"ถึงโกดังจีนแล้ว","3":"กำลังส่งมาไทย","4":"ถึงไทยแล้ว",
-    "5":"รอชำระเงิน","6":"เตรียมส่ง","7":"ส่งแล้ว","99":"พิเศษ",
+    "5":"รอชำระ/ใบแจ้งหนี้","6":"เตรียมส่ง","7":"ส่งแล้ว","99":"พิเศษ",
   };
   // MODE_LABEL removed 2026-06-04 — transport mode is rendered with the status
   // timeline icon (Truck/Plane) above; the editable form lives on /edit.
@@ -609,6 +614,13 @@ async function tryRenderTbForwarder(
   };
 
   const currentStatusInt = parseInt(r.fstatus, 10);
+  const pendingSlipReviewTarget = r.fstatus === "5"
+    ? (await resolvePendingSlipReviewTargetsAll(admin, [r.id])).get(r.id) ?? null
+    : null;
+  const displayStatusCode = resolveRowStatusCode(r.fstatus, {
+    driverOpen: isDriverDispatched,
+    pendingSlip: Boolean(pendingSlipReviewTarget),
+  });
   // 2026-06-05 (ภูม flag): 8-step timeline with fstatus=6 split into
   // "เตรียมส่ง" (no driver yet) vs "กำลังจัดส่ง" (driver assigned · fdistatus='')
   // per legacy function.php L1225-1230. `rank` ≠ key when 6.5 is current.
@@ -633,7 +645,7 @@ async function tryRenderTbForwarder(
     { key: 2, rank: 2,   label: "ถึงโกดังจีน",   date: r.fdatestatus2 ?? null,  img: `${STEP_ICON_BASE}forwarder-2.png` },
     { key: 3, rank: 3,   label: "ส่งมาไทย",      date: r.fdatestatus3 ?? null,  img: `${STEP_ICON_BASE}forwarder-3.png` },
     { key: 4, rank: 4,   label: "ถึงไทย",         date: r.fdatestatus4 ?? null,  img: `${STEP_ICON_BASE}forwarder-4.png` },
-    { key: 5, rank: 5,   label: "รอชำระเงิน",    date: r.fdatestatus5 ?? null,  img: `${STEP_ICON_BASE}forwarder-5.png` },
+    { key: 5, rank: 5,   label: "รอชำระ/ใบแจ้งหนี้",    date: r.fdatestatus5 ?? null,  img: `${STEP_ICON_BASE}forwarder-5.png` },
     { key: 6, rank: 6,   label: "เตรียมส่ง",     date: r.fdatestatus6 ?? null,  img: "/images/hero-section/icon/cart.png" },
     { key: 7, rank: 6.5, label: "กำลังจัดส่ง",   date: r.fdatestatus6 ?? null,  img: `${STEP_ICON_BASE}forwarder-6.1.png` },
     { key: 8, rank: 8,   label: "ส่งแล้ว",        date: r.fdatestatus7 ?? null,  img: `${STEP_ICON_BASE}forwarder-7.png` },
@@ -926,11 +938,21 @@ async function tryRenderTbForwarder(
               <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
                 currentStatusInt === 99
                   ? "bg-orange-400 text-orange-950 border border-orange-600"
-                  : fstatusBadge(r.fstatus).chip
+                  : fstatusVivid(displayStatusCode)
               }`}>
-                {STATUS_LABEL[r.fstatus] ?? `สถานะ ${r.fstatus}`}
+                {displayStatusCode === r.fstatus
+                  ? (STATUS_LABEL[r.fstatus] ?? `สถานะ ${r.fstatus}`)
+                  : statusCodeLabel(displayStatusCode)}
               </span>
             </p>
+            {pendingSlipReviewTarget && (
+              <Link
+                href={pendingSlipReviewTarget.href}
+                className="inline-flex rounded-md border border-violet-700 bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700"
+              >
+                ตรวจสลิป/ออกใบเสร็จ →
+              </Link>
+            )}
             {etaFrom !== "" && (
               <p className="text-sm text-foreground">
                 จะมาถึงไทยประมาณ : <span className="text-sky-600">{etaFrom} ถึง {etaTo}</span>

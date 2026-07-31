@@ -49,7 +49,7 @@ const WALLET_STATUS_LABEL: Record<string, string> = {
 };
 
 const FORWARDER_STATUS_LABEL: Record<string, string> = {
-  pending_payment:   "รอชำระเงิน",
+  pending_payment:   "รอชำระ/ใบแจ้งหนี้",
   shipped_china:    "ออกจากจีนแล้ว",
   in_transit:        "กำลังขนส่ง",
   arrived_thailand:  "ถึงไทยแล้ว",

@@ -102,7 +102,7 @@ const STATUS_OPTIONS: { value: string; label: string; codes: string[] }[] = [
   { value: "7", label: "ส่งแล้ว", codes: ["7"] },
   { value: "6", label: "เตรียมส่ง", codes: ["6"] },
   { value: "ge5", label: "รอชำระขึ้นไป (รอชำระ/เตรียมส่ง/ส่งแล้ว)", codes: ["5", "6", "7"] },
-  { value: "5", label: "รอชำระเงิน", codes: ["5"] },
+  { value: "5", label: "รอชำระ/ใบแจ้งหนี้", codes: ["5"] },
   { value: "all", label: "ทั้งหมด", codes: ["1", "2", "3", "4", "5", "6", "7"] },
 ];
 
