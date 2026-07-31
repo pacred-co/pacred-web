@@ -483,6 +483,16 @@ export default async function AdminDriverBatchDetailPage({
       ? "รูปส่งของ (ยังไม่มีรูปขึ้นรถ)"
       : "รูปตอนขึ้นรถ";
 
+  // ปุ่ม "ถ่ายขึ้นรถ" ระดับรอบ (batch · ภูม 2026-07-31) — คนขับถ่ายรูปโหลดของขึ้นรถ
+  // ทั้งคัน "ทีเดียว" → เขียน fdipictureon ลงทุกแทรคกิ้งในรอบ (ยังไม่ '3') + มาร์คขึ้นรถ.
+  // ใช้ทั้งหัวมือถือ (lg:hidden) และหัวเดสก์ท็อป (hidden lg:block) → ปุ่มเดียวเสมอ.
+  const allLoadableItemIds = stops.flatMap((s) =>
+    s.items.filter((e) => e.item.fdistatus !== "3").map((e) => e.item.id),
+  );
+  const batchHasLoadPhoto = stops.some((s) =>
+    s.items.some((e) => (e.item.fdipictureon ?? "").trim() !== ""),
+  );
+
   // 7. Aggregates for header
   const totalItems     = items.length;
   const totalBoxes     = forwarders.reduce((s, f) => s + Number(f.famount ?? 0), 0);
@@ -680,6 +690,12 @@ export default async function AdminDriverBatchDetailPage({
             <Tag className="h-4 w-4 shrink-0" /> พิมพ์สติ๊กเกอร์
           </Link>
         </div>
+
+        {/* ปุ่ม "ถ่ายรูปขึ้นรถ" ระดับรอบ — เต็มความกว้าง เด่นชัด (ภูม 2026-07-31) ·
+            คนขับกดถ่ายรูปโหลดของขึ้นรถทั้งคันทีเดียว (ไม่ต้องถ่ายทีละจุด). */}
+        {allLoadableItemIds.length > 0 && (
+          <DriverPhotoEditDialog itemIds={allLoadableItemIds} hasPhoto={batchHasLoadPhoto} kind="load" gradient />
+        )}
       </section>
 
       {/* Header card — เดสก์ท็อป (≥lg) */}
@@ -731,18 +747,9 @@ export default async function AdminDriverBatchDetailPage({
               จุดส่ง (จะถ่ายซ้ำ รูปโผล่ซ้ำ · owner). */}
           <div className="flex flex-col items-stretch gap-2">
             <LoadingPhotoPanel photos={runPhotos} label={photoPanelLabel} />
-            {(() => {
-              const allLoadableIds = stops.flatMap((s) =>
-                s.items.filter((e) => e.item.fdistatus !== "3").map((e) => e.item.id),
-              );
-              if (allLoadableIds.length === 0) return null;
-              const batchHasLoadPhoto = stops.some((s) =>
-                s.items.some((e) => (e.item.fdipictureon ?? "").trim() !== ""),
-              );
-              return (
-                <DriverPhotoEditDialog itemIds={allLoadableIds} hasPhoto={batchHasLoadPhoto} kind="load" gradient />
-              );
-            })()}
+            {allLoadableItemIds.length > 0 && (
+              <DriverPhotoEditDialog itemIds={allLoadableItemIds} hasPhoto={batchHasLoadPhoto} kind="load" gradient />
+            )}
           </div>
           <div className="flex flex-col items-end gap-2">
             <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium ${BATCH_STATUS_CLS[fdstatus]}`}>
