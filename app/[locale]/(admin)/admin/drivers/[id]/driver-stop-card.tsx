@@ -47,8 +47,8 @@ export function DriverStopCard({
   heroPhoto,
   editableIds,
   hasPhoto,
-  hasLoadPhoto,
   canFail,
+  failNote,
   slipHref,
   stickersHref,
   items,
@@ -72,10 +72,10 @@ export function DriverStopCard({
   heroPhoto: string | null;
   editableIds: number[];
   hasPhoto: boolean;
-  /** มีรูป "ขึ้นรถ" แล้ว → ปุ่มอ่าน "แก้รูปขึ้นรถ" (ภูม 2026-07-31) */
-  hasLoadPhoto: boolean;
-  /** มีรายการที่ยังไม่ส่งสำเร็จ (มาร์ค "ส่งไม่ได้" ได้) → โชว์ปุ่มส่งไม่ได้ */
+  /** มีรายการที่ยังไม่ส่งสำเร็จ (มาร์ค "ส่งไม่ได้" ได้) → โชว์ปุ่ม "หมายเหตุ" (ภูม 2026-07-31) */
   canFail: boolean;
+  /** เหตุผลที่ส่งไม่ได้ (fdinote) — โชว์คาการ์ดถ้าจุดนี้มีรายการส่งไม่ได้ · "" = ไม่มี */
+  failNote: string;
   slipHref: string;
   stickersHref: string;
   items: DriverStopCardItem[];
@@ -199,32 +199,46 @@ export function DriverStopCard({
         </button>
       </div>
 
-      {/* ท้ายการ์ด — งานคนขับ (ขึ้นรถ · ถ่ายส่ง · ส่งไม่ได้) + แผนที่/โทร
-          (ยุบ flow จาก /admin/drivers/work มารวมหน้าเดียว · ภูม 2026-07-31) */}
+      {/* ท้ายการ์ด — งานคนขับต่อจุดส่ง (ถ่ายส่ง · หมายเหตุ) + แผนที่/โทร
+          (ยุบ flow จาก /admin/drivers/work มารวมหน้าเดียว · ภูม 2026-07-31).
+          ถ่ายขึ้นรถ = ปุ่มเดียว batch-level บนหัวหน้า (รูปโหลดทั้งคัน ไม่ใช่ต่อจุด). */}
       <div className="space-y-2">
         {editableIds.length > 0 ? (
-          <div className="grid grid-cols-3 gap-2">
-            <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={hasLoadPhoto} gradient kind="load" />
-            <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={hasPhoto} gradient />
-            {canFail ? (
-              <DriverStopFailButton itemIds={editableIds} gradient />
-            ) : (
-              <span
-                className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap ${
-                  done ? "border-white/40 bg-white/15 text-white" : "border-emerald-200 bg-emerald-50 text-emerald-700"
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={hasPhoto} gradient />
+              {canFail ? (
+                <DriverStopFailButton itemIds={editableIds} gradient />
+              ) : (
+                <span
+                  className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap ${
+                    done ? "border-white/40 bg-white/15 text-white" : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  <Check className="h-3.5 w-3.5" /> ส่งครบ
+                </span>
+              )}
+            </div>
+            {/* บางรายการในจุดนี้ส่งไม่ได้ (ยังมีรายการที่ส่งได้อยู่) — โชว์เหตุผล (ภูม 2026-07-31) */}
+            {failNote && (
+              <p
+                className={`rounded-lg border px-2 py-1.5 text-[11px] font-medium ${
+                  done ? "border-white/40 bg-white/15 text-white" : "border-amber-300 bg-amber-50 text-amber-800"
                 }`}
               >
-                <Check className="h-3.5 w-3.5" /> ส่งครบ
-              </span>
+                ⚠️ ส่งไม่ได้บางรายการ: {failNote}
+              </p>
             )}
-          </div>
+          </>
         ) : (
+          /* ทุกรายการในจุดนี้ = "ส่งไม่ได้" ('3') → ต้องขึ้นสถานะส่งไม่ได้ + เหตุผล
+             (ไม่ใช่ "ส่งครบ" · owner "มันไม่ขึ้นเลยว่าส่งไม่สำเร็จ" 2026-07-31) */
           <span
-            className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap ${
-              done ? "border-white/40 bg-white/15 text-white" : "border-emerald-200 bg-emerald-50 text-emerald-700"
+            className={`inline-flex w-full items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-semibold ${
+              done ? "border-white/40 bg-white/15 text-white" : "border-amber-300 bg-amber-50 text-amber-800"
             }`}
           >
-            <Check className="h-3.5 w-3.5" /> ส่งครบทั้งจุด
+            ⚠️ ส่งไม่ได้ทั้งจุด{failNote ? ` — ${failNote}` : " (ไม่ได้ระบุเหตุผล)"}
           </span>
         )}
         <div className="grid grid-cols-2 gap-2">

@@ -725,7 +725,25 @@ export default async function AdminDriverBatchDetailPage({
 
           {/* right cluster: รูปขึ้นรถ panel (ภูม 2026-07-10) + status/countdown col */}
           <div className="flex items-start gap-4 flex-wrap justify-end">
-          <LoadingPhotoPanel photos={runPhotos} label={photoPanelLabel} />
+          {/* พาเนลรูปขึ้นรถ + ปุ่ม "ถ่ายขึ้นรถ" ปุ่มเดียวระดับรอบ (batch-level · ภูม 2026-07-31):
+              คนขับถ่ายรูปโหลดของขึ้นรถทั้งคัน "ทีเดียว" → เขียน fdipictureon ลงทุกแทรคกิ้ง
+              ในรอบ (dedupe แล้วโชว์รูปเดียวในพาเนล) + มาร์ค "ขึ้นรถแล้ว". ห้ามใส่ปุ่มนี้ราย
+              จุดส่ง (จะถ่ายซ้ำ รูปโผล่ซ้ำ · owner). */}
+          <div className="flex flex-col items-stretch gap-2">
+            <LoadingPhotoPanel photos={runPhotos} label={photoPanelLabel} />
+            {(() => {
+              const allLoadableIds = stops.flatMap((s) =>
+                s.items.filter((e) => e.item.fdistatus !== "3").map((e) => e.item.id),
+              );
+              if (allLoadableIds.length === 0) return null;
+              const batchHasLoadPhoto = stops.some((s) =>
+                s.items.some((e) => (e.item.fdipictureon ?? "").trim() !== ""),
+              );
+              return (
+                <DriverPhotoEditDialog itemIds={allLoadableIds} hasPhoto={batchHasLoadPhoto} kind="load" gradient />
+              );
+            })()}
+          </div>
           <div className="flex flex-col items-end gap-2">
             <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium ${BATCH_STATUS_CLS[fdstatus]}`}>
               {fdstatus === "1" && <Clock className="h-3.5 w-3.5" />}
@@ -950,20 +968,28 @@ export default async function AdminDriverBatchDetailPage({
                         <Camera className="h-3.5 w-3.5" /> ยังไม่มีรูปส่ง
                       </div>
                     )}
-                    {/* งานคนขับ — ขึ้นรถ · ถ่ายส่ง · ส่งไม่ได้ (ยุบ flow /admin/drivers/work
-                        มารวมหน้าเดียว · ภูม 2026-07-31) — ทำกับทุกรายการในจุดที่ยังไม่ '3'. */}
+                    {/* งานคนขับต่อจุดส่ง — ถ่ายส่ง + หมายเหตุ (ส่งไม่ได้) · ภูม 2026-07-31.
+                        ถ่ายขึ้นรถ = ปุ่มเดียว batch-level บนหัว (รูปโหลดของทั้งคัน ไม่ใช่ต่อจุด). */}
                     {(() => {
                       const editableIds = stop.items
                         .filter((e) => e.item.fdistatus !== "3")
                         .map((e) => e.item.id);
-                      if (editableIds.length === 0) return null;
-                      const hasLoadPhoto = stop.items.some((e) => (e.item.fdipictureon ?? "").trim() !== "");
                       const canFail = stop.items.some((e) => e.item.fdistatus === "" || e.item.fdistatus === "1");
+                      const failNote =
+                        stop.items.find((e) => e.item.fdistatus === "3" && (e.item.fdinote ?? "").trim())?.item.fdinote?.trim() ?? "";
                       return (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={hasLoadPhoto} kind="load" />
-                          <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={deliveryPhotos.length > 0} />
-                          {canFail && <DriverStopFailButton itemIds={editableIds} />}
+                        <div className="space-y-1.5">
+                          {editableIds.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={deliveryPhotos.length > 0} />
+                              {canFail && <DriverStopFailButton itemIds={editableIds} />}
+                            </div>
+                          )}
+                          {failNote && (
+                            <p className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+                              ⚠️ ส่งไม่ได้: {failNote}
+                            </p>
+                          )}
                         </div>
                       );
                     })()}
@@ -1216,9 +1242,11 @@ export default async function AdminDriverBatchDetailPage({
               : `https://www.google.com/maps/search/${encodeURIComponent(addrText)}`;
             const deliveryPhotos = Array.from(new Set(stop.items.map((e) => e.photoOffUrl).filter((u): u is string => Boolean(u))));
             const editableIds = stop.items.filter((e) => e.item.fdistatus !== "3").map((e) => e.item.id);
-            // ปุ่มงานคนขับ (ภูม 2026-07-31): มีรูปขึ้นรถแล้ว? · ยังมีรายการมาร์คส่งไม่ได้ได้?
-            const hasLoadPhoto = stop.items.some((e) => (e.item.fdipictureon ?? "").trim() !== "");
+            // ปุ่มงานคนขับต่อจุดส่ง (ภูม 2026-07-31): ยังมีรายการมาร์คส่งไม่ได้ได้? + เหตุผลที่ส่งไม่ได้
+            // (ถ่ายขึ้นรถ = ปุ่มเดียว batch-level บนหัว ไม่ใช่ต่อจุด).
             const canFail = stop.items.some((e) => e.item.fdistatus === "" || e.item.fdistatus === "1");
+            const failNote =
+              stop.items.find((e) => e.item.fdistatus === "3" && (e.item.fdinote ?? "").trim())?.item.fdinote?.trim() ?? "";
             const phones = [f.faddresstel, f.faddresstel2].map((p) => (p ?? "").trim()).filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
             const placeholder = isWarehousePlaceholder(f.faddressname);
             const heroPhoto = deliveryPhotos[0] ?? stop.items.find((e) => e.coverUrl)?.coverUrl ?? null;
@@ -1241,8 +1269,8 @@ export default async function AdminDriverBatchDetailPage({
                 heroPhoto={heroPhoto}
                 editableIds={editableIds}
                 hasPhoto={deliveryPhotos.length > 0}
-                hasLoadPhoto={hasLoadPhoto}
                 canFail={canFail}
+                failNote={failNote}
                 slipHref={`/admin/drivers/${batch.id}/delivery-slip?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
                 stickersHref={`/admin/drivers/${batch.id}/stickers?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
                 addressEdit={isOpsOverride && f.userid ? (
@@ -1290,7 +1318,7 @@ export default async function AdminDriverBatchDetailPage({
 
       <p className="text-[11px] text-muted">
         ฐานข้อมูล: legacy <code className="rounded bg-surface-alt px-1">tb_forwarder_driver</code> #{batch.id}{" "}
-        — {stops.length} จุดส่ง · ถ่ายรูปขึ้นรถ/ส่ง + มาร์คส่งไม่ได้ ได้ที่แต่ละจุดส่งในหน้านี้
+        — {stops.length} จุดส่ง · ถ่ายรูปขึ้นรถ = ปุ่มเดียวบนหัว (ทั้งคัน) · ถ่ายรูปส่ง + หมายเหตุ = ต่อจุดส่ง
       </p>
     </main>
   );
