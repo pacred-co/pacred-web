@@ -156,5 +156,5 @@ owner: *"ลบคลีนไปเลยก็ได้ครับ เอา�
 ## เกี่ยวข้อง
 - [`ui-toggle-must-not-decide-money.md`](ui-toggle-must-not-decide-money.md) — เลขเดียวห้ามมี 2 เครื่องคิด
 - [`display-vs-stored-money-formula.md`](display-vs-stored-money-formula.md) — จอคิดสด vs ค่าที่เก็บ
-- [`wrong-error-message-hides-real-block.md`](wrong-error-message-hides-real-block.md) — error ที่ไม่บอกตัวจริงที่บล็อก
+- [[wrong-error-message-hides-real-block]] (memory) — error ที่ไม่บอกตัวจริงที่บล็อก
 - [`audit-discipline.md`](audit-discipline.md) — verify ทุก claimed-gap ก่อน build
