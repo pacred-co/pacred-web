@@ -38,7 +38,7 @@ import { ForwardersTable } from "./forwarders-table";
 import { ForwardersSearchBar } from "./search-bar";
 import { Suspense } from "react";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
-import { fstatusVivid, fstatusTabBadge } from "@/lib/admin/forwarder-status";
+import { fstatusVivid, fstatusTabBadge, FORWARDER_STATUS_TABS } from "@/lib/admin/forwarder-status";
 import { PageHeader } from "@/components/admin/page-header";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -115,19 +115,14 @@ function buildForwarderMenubar(c: { s5: number; s6: number }): MenubarItem[] {
   ];
 }
 
-// Legacy STATUS_LABEL — fStatus values (string in legacy too: char(2))
+// Legacy STATUS_LABEL — DERIVED from the one SOT (owner 2026-07-31 "ข้อมูลต้อง
+// ถูกดึงถูกใช้จากที่เดียวกัน · มีสถานะเพิ่มไม่ต้องมาไล่แก้หากัน"): the tab list
+// lives in lib/admin/forwarder-status.ts (FORWARDER_STATUS_TABS) and is shared
+// with the customer-profile section tabs. Add a status THERE → both pages update.
+// (also fixes the long-standing typo "เครติดสินค้า" → เครดิตสินค้า)
 const STATUS_LABEL: Record<string, string> = {
-  "1":   "รอเข้าโกดังจีน",
-  "2":   "ถึงโกดังจีนแล้ว",
-  "3":   "กำลังส่งมาไทย",
-  "4":   "ถึงไทยแล้ว",
-  "5":   "รอชำระเงิน",
-  "6":   "เตรียมส่ง",
-  "6.1": "กำลังจัดส่ง",
-  "7":   "ส่งแล้ว",
-  "c":   "เครติดสินค้า",
-  "p":   "สถานะพิเศษ",
-  "99":  "พิเศษ",
+  ...Object.fromEntries(FORWARDER_STATUS_TABS.filter((t) => t.code !== "").map((t) => [t.code, t.label])),
+  "99": "พิเศษ",
 };
 
 // Transport mode (ftransporttype char(1): '1'/'2'/'3')
@@ -464,19 +459,15 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
     rows.map((r) => `${baseTracking(r.tracking_chn) ?? `_${r.id}`}|${(r.customer?.userid ?? "").trim()}`),
   ).size;
 
-  const filterOpts: { v: string | undefined; l: string; n: number }[] = [
-    { v: undefined, l: "ทั้งหมด", n: counts.total },
-    { v: "1",   l: STATUS_LABEL["1"]!,   n: counts.s1 },
-    { v: "2",   l: STATUS_LABEL["2"]!,   n: counts.s2 },
-    { v: "3",   l: STATUS_LABEL["3"]!,   n: counts.s3 },
-    { v: "4",   l: STATUS_LABEL["4"]!,   n: counts.s4 },
-    { v: "5",   l: STATUS_LABEL["5"]!,   n: counts.s5 },
-    { v: "6",   l: STATUS_LABEL["6"]!,   n: counts.s6 },
-    { v: "6.1", l: STATUS_LABEL["6.1"]!, n: counts.s6driver },
-    { v: "7",   l: STATUS_LABEL["7"]!,   n: counts.s7 },
-    { v: "c",   l: STATUS_LABEL["c"]!,   n: counts.credit },
-    { v: "p",   l: STATUS_LABEL["p"]!,   n: counts.special },
-  ];
+  // แถบแท็บ = derive จาก SOT ตัวเดียว (FORWARDER_STATUS_TABS · แชร์กับหัวแถวสถานะ
+  // บนโปรไฟล์ลูกค้า — owner 2026-07-31 "มีสถานะเพิ่มไม่ต้องมาไล่แก้หากัน")
+  const tabCountOf: Record<string, number> = {
+    "": counts.total, "1": counts.s1, "2": counts.s2, "3": counts.s3, "4": counts.s4,
+    "5": counts.s5, "6": counts.s6, "6.1": counts.s6driver, "7": counts.s7,
+    c: counts.credit, p: counts.special,
+  };
+  const filterOpts: { v: string | undefined; l: string; n: number }[] =
+    FORWARDER_STATUS_TABS.map((t) => ({ v: t.code === "" ? undefined : t.code, l: t.label, n: tabCountOf[t.code] ?? 0 }));
 
   // 2026-05-21 ภูม brief — back-compat: if old `?segment=cargo-fcl` URL hit
   // is taken, split into the new dual-dimension `service` + `container`.

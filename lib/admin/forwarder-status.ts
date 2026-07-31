@@ -118,6 +118,44 @@ export function fstatusTabBadge(v: string | undefined): string {
 }
 
 /**
+ * แถบแท็บสถานะรายการนำเข้า — SOT เดียวทั้งระบบ (owner 2026-07-31)
+ * ═══════════════════════════════════════════════════════════════════════════
+ * owner: *"สีสถานะทั้งหัวข้อและรายการ...มันควรจะเหมือนกันหรือเปล่าครับ ยังลิงก์
+ * เชื่อมกันคนละจุดอยู่อีกหรอครับ ถ้าอนาคตมีสถานะงานเพิ่ม ไม่ต้องมาไล่แก้ไล่เติม
+ * หากันตายเลยหรอครับ ข้อมูลกระจัดกระจายไม่ได้ถูกดึงถูกใช้จากที่เดียวกัน"*
+ *
+ * ลิสต์นี้คือ **ที่เดียว** ที่นิยามว่าแถบสถานะนำเข้ามีแท็บอะไร เรียงยังไง สีอะไร:
+ *   • /admin/forwarders (หน้ารายการหลัก) — filterOpts สร้างจากลิสต์นี้
+ *   • /admin/customers/[id] (หัวแถวสถานะบนโปรไฟล์ · scoped ต่อ PR) — เช่นกัน
+ * เพิ่ม/แก้สถานะ → แก้ตรงนี้ + FSTATUS_TAB_BADGE/FSTATUS_VIVID ข้างบน = ขึ้นทุกจอเอง.
+ *
+ * `creditOnly` = แท็บที่โชว์เฉพาะลูกค้าเครดิต **เมื่ออยู่ใน scope ลูกค้ารายเดียว**
+ * (โปรไฟล์) — หน้ารายการหลักรวมทุกลูกค้าจึงโชว์เสมอ (owner เคาะ 2026-07-31).
+ * ความหมายของ code ตรง filter หน้าหลักเป๊ะ: "6" = fstatus 6 ที่ยังไม่มีคนขับเปิดรอบ ·
+ * "6.1" = fstatus 6 + tb_forwarder_driver_item.fdistatus='' · "c" = fcredit='1' ·
+ * "p" = fstatus='99'.
+ */
+export type ForwarderStatusTab = { code: string; label: string; creditOnly?: boolean };
+export const FORWARDER_STATUS_TABS: readonly ForwarderStatusTab[] = [
+  { code: "",    label: "ทั้งหมด" },
+  { code: "1",   label: "รอเข้าโกดังจีน" },
+  { code: "2",   label: "ถึงโกดังจีนแล้ว" },
+  { code: "3",   label: "กำลังส่งมาไทย" },
+  { code: "4",   label: "ถึงไทยแล้ว" },
+  { code: "5",   label: "รอชำระเงิน" },
+  { code: "6",   label: "เตรียมส่ง" },
+  { code: "6.1", label: "กำลังจัดส่ง" },
+  { code: "7",   label: "ส่งแล้ว" },
+  { code: "c",   label: "เครดิตสินค้า", creditOnly: true },
+  { code: "p",   label: "สถานะพิเศษ",  creditOnly: true },
+];
+
+/** สีพื้นแท็บตอน active — กติกาเดียวกับหน้ารายการหลัก (1-7 = vivid ของสถานะ · อื่นๆ = แดงหลัก) */
+export function fstatusTabActiveCls(code: string): string {
+  return /^[1-7]$/.test(code) ? fstatusVivid(code) : "bg-primary-600 text-white";
+}
+
+/**
  * วันที่ปิดตู้ derived from the container code when MOMO didn't send one
  * (ภูม 2026-07-10). A Pacred/MOMO cabinet code embeds the close date as the
  * 6 digits right after the 3-letter prefix in `YYMMDD` (พ.ศ.-style 25xx→20xx):

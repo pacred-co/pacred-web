@@ -49,7 +49,8 @@ import { getCustomerMarginSummary } from "@/actions/admin/customer-margin";
 // single-char tb_* status codes the order tables show.
 import { legacyOrderStatusThai, legacyForwarderStatusThai } from "@/lib/legacy-status-map";
 import { carrierLabel } from "@/lib/freight/shipping-methods";
-import { fstatusBadge } from "@/lib/admin/forwarder-status";
+import { fstatusBadge, FORWARDER_STATUS_TABS, fstatusTabActiveCls, fstatusTabBadge } from "@/lib/admin/forwarder-status";
+import { HSTATUS_CFG } from "@/lib/admin/service-order-status";
 import { CustomerRateEditor } from "./rate-editor";
 import { CustomerMarginPanel } from "./customer-margin-panel";
 import { HardDeletePanel } from "./hard-delete-panel";
@@ -555,42 +556,56 @@ export async function renderLegacyCustomerView(
   const pys = (yuanRows ?? []) as unknown as PRow[];
   const whs = (walletHsRowsRes.data ?? []) as unknown as WHRow[];
 
-  // ── นิยามแท็บต่อ section (label ตรงหน้ารายการหลัก · filter ตรง semantics เป๊ะ) ──
+  // ── นิยามแท็บต่อ section — ดึงจาก SOT ตัวเดียวกับหน้ารายการหลัก (owner 2026-07-31
+  //    "สีต้องเหมือนหน้าหลัก · ดึงจากที่เดียวกัน · มีสถานะเพิ่มไม่ต้องไล่แก้หากัน") ──
+  // forwarder: FORWARDER_STATUS_TABS + fstatusTabActiveCls/fstatusTabBadge
+  // (lib/admin/forwarder-status.ts) · shop: LEGACY_ORDER_TABS + HSTATUS_CFG.chip ·
+  // yuan: PAYSTATUS_LABEL. เพิ่มสถานะที่ SOT = ขึ้นทั้งหน้าหลักและโปรไฟล์เอง.
   const stCount = (st: string) => fwdScan.filter((r) => String(r.fstatus ?? "") === st).length;
-  const sixWaiting = sixIds.filter((id) => !driverOpenFids.has(id)).length;
-  const sixDelivering = sixIds.filter((id) => driverOpenFids.has(id)).length;
-  const fwdTabs: SectionTab[] = [
-    { code: "", label: "ทั้งหมด", count: fwdScan.length },
-    { code: "1", label: "รอเข้าโกดังจีน", count: stCount("1") },
-    { code: "2", label: "ถึงโกดังจีนแล้ว", count: stCount("2") },
-    { code: "3", label: "กำลังส่งมาไทย", count: stCount("3") },
-    { code: "4", label: "ถึงไทยแล้ว", count: stCount("4") },
-    { code: "5", label: "รอชำระเงิน", count: stCount("5") },
-    { code: "6", label: "เตรียมส่ง", count: sixWaiting },
-    { code: "6.1", label: "กำลังจัดส่ง", count: sixDelivering, hot: true },
-    { code: "7", label: "ส่งแล้ว", count: stCount("7") },
-    // เครดิตสินค้า + สถานะพิเศษ — เฉพาะลูกค้าที่ตั้งเป็นเครดิต (owner 2026-07-31)
-    ...(isCreditCustomer
-      ? ([
-          { code: "c", label: "เครดิตสินค้า", count: fwdScan.filter((r) => String(r.fcredit ?? "") === "1").length },
-          { code: "p", label: "สถานะพิเศษ", count: stCount("99") },
-        ] satisfies SectionTab[])
-      : []),
-  ];
+  const fwdTabCount = (code: string): number => {
+    if (code === "") return fwdScan.length;
+    if (code === "c") return fwdScan.filter((r) => String(r.fcredit ?? "") === "1").length;
+    if (code === "p") return stCount("99");
+    if (code === "6") return sixIds.filter((id) => !driverOpenFids.has(id)).length;
+    if (code === "6.1") return sixIds.filter((id) => driverOpenFids.has(id)).length;
+    return stCount(code);
+  };
+  const fwdTabs: SectionTab[] = FORWARDER_STATUS_TABS
+    // แท็บ creditOnly (เครดิตสินค้า/สถานะพิเศษ) โชว์เฉพาะลูกค้าเครดิต (owner เคาะ)
+    .filter((t) => !t.creditOnly || isCreditCustomer)
+    .map((t) => ({
+      code: t.code,
+      label: t.label,
+      count: fwdTabCount(t.code),
+      activeCls: t.code === "" ? undefined : fstatusTabActiveCls(t.code),
+      badgeCls: fstatusTabBadge(t.code === "" ? undefined : t.code),
+    }));
   const shopTabs: SectionTab[] = [
-    { code: "", label: "ทั้งหมด", count: shopScan.length },
-    ...LEGACY_ORDER_TABS.map((t) => ({
-      code: t.code as string,
-      label: t.thai,
-      count: shopScan.filter((r) => String(r.hstatus ?? "") === t.code).length,
-    })),
+    { code: "", label: "ทั้งหมด", count: shopScan.length, badgeCls: "bg-slate-500 text-white" },
+    ...LEGACY_ORDER_TABS.map((t) => {
+      const cfg = HSTATUS_CFG[t.code];
+      return {
+        code: t.code as string,
+        label: t.thai,
+        count: shopScan.filter((r) => String(r.hstatus ?? "") === t.code).length,
+        activeCls: cfg?.chip,
+        badgeCls: cfg?.chip,
+      };
+    }),
   ];
+  const YUAN_TAB_CLS: Record<string, string> = {
+    "1": "bg-amber-500 text-white",
+    "2": "bg-emerald-600 text-white",
+    "3": "bg-red-600 text-white",
+  };
   const yuanTabs: SectionTab[] = [
-    { code: "", label: "ทั้งหมด", count: yuanScan.length },
+    { code: "", label: "ทั้งหมด", count: yuanScan.length, badgeCls: "bg-slate-500 text-white" },
     ...(["1", "2", "3"] as const).map((c) => ({
       code: c as string,
       label: PAYSTATUS_LABEL[c],
       count: yuanScan.filter((r) => String(r.paystatus ?? "") === c).length,
+      activeCls: YUAN_TAB_CLS[c],
+      badgeCls: YUAN_TAB_CLS[c],
     })),
   ];
 

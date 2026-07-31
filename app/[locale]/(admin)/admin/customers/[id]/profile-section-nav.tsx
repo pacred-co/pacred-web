@@ -27,8 +27,13 @@ export type SectionTab = {
   code: string;
   label: string;
   count: number;
-  /** โทนแดงเข้ม (เช่น กำลังจัดส่ง บนหน้าหลัก) — ใช้เน้นแท็บที่ต้องจับตา */
-  hot?: boolean;
+  /**
+   * สีจาก SOT ของสถานะนั้น (owner 2026-07-31 "สีต้องเหมือนหน้าหลัก · ดึงจากที่เดียวกัน"):
+   * `activeCls` = พื้นแท็บตอน active (fstatusTabActiveCls / HSTATUS chip) ·
+   * `badgeCls` = สีเม็ดตัวเลข (fstatusTabBadge / ตาม chip สถานะ). ไม่ส่ง = โทนกลาง.
+   */
+  activeCls?: string;
+  badgeCls?: string;
 };
 
 /** สร้าง href ที่คงพารามิเตอร์เดิมทุกตัว แล้วทับเฉพาะที่สั่ง + ต่อ anchor */
@@ -71,14 +76,13 @@ export function SectionStatusTabs({
       {tabs.map((t) => {
         const isActive = active === t.code;
         const base =
-          "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition";
+          "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap transition";
+        // กติกาสีเดียวกับ tab strip หน้ารายการหลักเป๊ะ (page.tsx L776-791):
+        // active = พื้น vivid ของสถานะ + ring · ไม่ active = ขาว/ขอบ · เม็ดเลข =
+        // สีประจำสถานะ (จาก SOT) และตอน active เป็นขาวโปร่งให้อ่านบนพื้นสีได้
         const cls = isActive
-          ? t.hot
-            ? "border-red-700 bg-red-600 text-white"
-            : "border-primary-700 bg-primary-600 text-white"
-          : t.count === 0
-            ? "border-border/60 bg-white text-muted/70 dark:bg-surface"
-            : "border-border bg-white text-foreground hover:border-primary-400 hover:text-primary-700 dark:bg-surface";
+          ? `${t.activeCls ?? "bg-primary-600 text-white"} shadow-md ring-2 ring-black/10`
+          : "bg-white border border-border text-foreground hover:bg-surface-alt hover:border-primary-300 dark:bg-surface";
         return (
           <a
             key={t.code || "all"}
@@ -87,11 +91,11 @@ export function SectionStatusTabs({
           >
             {t.label}
             <span
-              className={`inline-flex min-w-[18px] items-center justify-center rounded-full px-1 text-[10.5px] font-bold tabular-nums ${
-                isActive ? "bg-white/25 text-white" : t.count > 0 ? "bg-primary-50 text-primary-700" : "bg-surface-alt text-muted/70"
+              className={`inline-flex min-w-[1.35rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-bold leading-none tabular-nums ${
+                isActive ? "bg-white/25 text-white" : t.badgeCls ?? "bg-slate-500 text-white"
               }`}
             >
-              {t.count}
+              {t.count.toLocaleString("th-TH")}
             </span>
           </a>
         );
