@@ -20,11 +20,12 @@
  * body text ≥ 16px on the paste box, single-column < md, CTA thumb-reachable.
  */
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { Link } from "@/i18n/navigation";
 import {
   Link2, Pencil, Search, Trash2, Plus, GripVertical,
   CheckCircle2, Clock, AlertTriangle, ShoppingCart, ArrowLeft, PartyPopper,
+  ClipboardList, ExternalLink, Globe,
 } from "lucide-react";
 import { searchProductByUrl, type ProductSearchOk } from "@/actions/product-search";
 import { addCartItemsBulk } from "@/actions/cart";
@@ -71,7 +72,7 @@ function numberFormat2(n: number): string {
 
 export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
   const [tab, setTab] = useState<"link" | "manual">("link");
-  const [subTab, setSubTab] = useState<"one" | "multi" | "clipboard">("one");
+  const [subTab, setSubTab] = useState<"one" | "multi">("one");
   const [rows, setRows] = useState<Row[]>([newRow(), newRow()]);
   const [multiText, setMultiText] = useState("");
   const [phase, setPhase] = useState<"input" | "results">("input");
@@ -119,18 +120,6 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
     setSubTab("one");
     setFlash(null);
   }
-  async function pasteFromClipboard() {
-    try {
-      const text = (await navigator.clipboard.readText())?.trim();
-      if (text) {
-        setRows(textToRows(text));
-        setSubTab("one");
-      }
-    } catch {
-      setFlash({ kind: "error", message: "อ่านคลิปบอร์ดไม่ได้ — วางลิงก์ในช่องด้านบนแทนได้ครับ" });
-    }
-  }
-
   // ── Verify every ready link (parallel) → results stage ──────────────
   function onVerify() {
     const ready = rows.filter((r) => detectSource(r.url) !== null);
@@ -211,9 +200,51 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
 
   // ════════════════════════════════════════════════════════════════
   return (
-    <div className="rounded-2xl bg-white border border-border shadow-sm p-4 md:p-5">
+    <div className="rounded-2xl bg-white p-4 md:p-5">
       <h2 className="text-lg md:text-xl font-bold text-foreground">เพิ่มสินค้าเข้ารถเข็น</h2>
       <p className="text-[12.5px] text-muted mt-0.5 mb-3.5">เลือกวิธีเพิ่มสินค้าได้ 2 แบบ</p>
+
+      {/* ประเทศต้นทาง (owner 2026-07-30 "แทรก sub ประเทศ + ตีกรอบข้างบน · ตอนนี้มีแค่จีน · แบบในภาพ").
+          display-only: จีน = ใช้ได้จริง (active) · ญี่ปุ่น/เกาหลีใต้/เวียดนาม = เร็ว ๆ นี้ (disabled ·
+          กันหลอกลูกค้า §0f). ธงวงกลมจาก flag-icon-css 1x1 (มีในโปรเจกต์). */}
+      <div className="mb-4 rounded-2xl border border-border p-3.5 md:p-4">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
+          <span className="mr-1 text-[13px] font-bold text-foreground">ประเทศต้นทาง</span>
+          <button
+            type="button"
+            aria-pressed
+            className="inline-flex items-center gap-2 rounded-xl border border-red-500 bg-red-50 px-3.5 py-2 text-[13px] font-bold text-primary-700 ring-2 ring-red-500/15"
+          >
+            <span className="h-[22px] w-[22px] shrink-0 overflow-hidden rounded-full ring-1 ring-black/5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/legacy/pcs/assets/fonts/flag-icon-css/flags/1x1/cn.svg" alt="" className="h-full w-full object-cover" />
+            </span>
+            จีน
+          </button>
+          {[
+            { code: "jp", label: "ญี่ปุ่น" },
+            { code: "kr", label: "เกาหลีใต้" },
+            { code: "vn", label: "เวียดนาม" },
+          ].map((c) => (
+            <button
+              key={c.code}
+              type="button"
+              disabled
+              title="เร็ว ๆ นี้"
+              className="inline-flex cursor-not-allowed items-center gap-2 rounded-xl border border-border bg-white px-3.5 py-2 text-[13px] font-bold text-muted opacity-60"
+            >
+              <span className="h-[22px] w-[22px] shrink-0 overflow-hidden rounded-full ring-1 ring-black/5">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/legacy/pcs/assets/fonts/flag-icon-css/flags/1x1/${c.code}.svg`} alt="" className="h-full w-full object-cover" />
+              </span>
+              {c.label}
+            </button>
+          ))}
+          <span className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-muted">
+            <Globe className="h-4 w-4" /> ประเทศอื่น ๆ เร็ว ๆ นี้
+          </span>
+        </div>
+      </div>
 
       {/* Tabs — มีลิงก์ / ไม่มีลิงก์ */}
       <div className="flex gap-2.5 mb-4">
@@ -266,40 +297,44 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
       {/* ── TAB: มีลิงก์ ── */}
       {tab === "link" && phase === "input" && (
         <>
+          {/* กรอบกลุ่มช่องวางลิงก์ (owner 2026-07-30 · "เอากรอบออก · ใช้กรอบแบบในภาพ" +
+              "อยู่ในกรอบเดียวกัน") — ถอดกรอบนอกการ์ด แล้วตีกรอบรวม หัวข้อ + steps + แท็บย่อย +
+              แถวลิงก์ + สรุป ไว้ในแผงเดียว. ปุ่มค้นหา / รองรับเว็บไซต์ / hint ยังอยู่นอกกรอบ. */}
+          <div className="mt-3 rounded-2xl border border-border p-4 md:p-5">
           <div className="text-[14.5px] font-bold text-foreground">
             เพิ่มลิงก์สินค้าที่ต้องการสั่งซื้อ
-            <span className="ml-2 text-[11.5px] font-semibold text-muted">เพิ่มได้สูงสุด {MAX_ROWS} ลิงก์</span>
+            <span className="ml-2 inline-block rounded-full border border-red-300 px-2.5 py-0.5 text-[11.5px] font-bold text-red-600">
+              เพิ่มได้สูงสุด {MAX_ROWS} ลิงก์
+            </span>
           </div>
-
-          {/* Step indicator */}
-          <div className="flex items-center gap-1.5 my-3 text-[11px] flex-wrap">
-            <Step n={1} label="วางลิงก์สินค้า" on />
-            <span className="text-gray-300">→</span>
-            <Step n={2} label="เพิ่มได้หลายรายการ" on={filledCount > 0} />
-            <span className="text-gray-300">→</span>
-            <Step n={3} label="ตรวจสอบทั้งหมด" on={false} />
+          {/* Step indicator — full-width stepper (owner 2026-07-30 "อยากได้เต็มกรอบ
+              พอดีๆ · มันโล้นๆไป"): 3 ขั้นกระจายเต็มความกว้างกรอบ + ไอคอน + เส้นเชื่อมยาว.
+              ไอคอนซ่อนบนจอแคบ (เหลือเลข+ป้าย) กันล้นบนมือถือ. */}
+          <div className="my-4 flex items-center">
+            <StepCell n={1} icon={<ClipboardList className="h-4 w-4" />} label="วางลิงก์สินค้า" on lineAfter lineOn={filledCount > 0} />
+            <StepCell n={2} icon={<Link2 className="h-4 w-4" />} label="เพิ่มได้หลายรายการ" on={filledCount > 0} lineAfter lineOn={false} />
+            <StepCell n={3} icon={<Search className="h-4 w-4" />} label="ตรวจสอบทั้งหมด" on={false} />
           </div>
 
           {/* Sub-tabs */}
-          <div className="inline-flex flex-wrap gap-0.5 rounded-xl border border-border bg-surface p-1 mb-3">
-            {([
-              ["one", "เพิ่มทีละลิงก์"],
-              ["multi", "วางหลายลิงก์พร้อมกัน"],
-              ["clipboard", "จากคลิปบอร์ด"],
-            ] as const).map(([key, label]) => (
+          {/* sub-tabs = แท็บเส้นใต้ (owner 2026-07-30 "ใส่กรอบ + ขีดแดงแบบในภาพ"):
+              เส้นคั่นล่างเต็มความกว้าง (กรอบ) + แท็บ active มีขีดแดงใต้ (ขีดแดง). */}
+          <div className="mb-3 flex flex-wrap gap-5 border-b border-border">
+            {[
+              { key: "one" as const, label: "เพิ่มทีละลิงก์", icon: <ExternalLink className="h-[18px] w-[18px]" /> },
+              { key: "multi" as const, label: "วางหลายลิงก์พร้อมกัน", icon: <ClipboardList className="h-[18px] w-[18px]" /> },
+            ].map(({ key, label, icon }) => (
               <button
                 key={key}
                 type="button"
-                onClick={() => {
-                  if (key === "clipboard") { void pasteFromClipboard(); return; }
-                  setSubTab(key);
-                }}
-                className={`rounded-lg px-3 py-1.5 text-[12px] font-bold transition ${
-                  subTab === key && key !== "clipboard"
-                    ? "bg-white text-primary-700 shadow-sm"
-                    : "text-muted hover:text-foreground"
+                onClick={() => setSubTab(key)}
+                className={`-mb-px inline-flex items-center gap-2 border-b-2 pb-2.5 text-[14px] font-bold transition ${
+                  subTab === key
+                    ? "border-red-500 text-primary-700"
+                    : "border-transparent text-muted hover:text-foreground"
                 }`}
               >
+                {icon}
                 {label}
               </button>
             ))}
@@ -332,12 +367,7 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
                   const src = detectSource(r.url);
                   const filled = !!r.url.trim();
                   return (
-                    <div
-                      key={r.id}
-                      className={`flex items-center gap-2 rounded-xl border p-2 ${
-                        src ? "border-emerald-200 bg-emerald-50/40" : "border-border bg-white"
-                      }`}
-                    >
+                    <div key={r.id} className="flex items-center gap-2">
                       <GripVertical className="h-4 w-4 shrink-0 text-gray-300" aria-hidden />
                       <span className="w-5 shrink-0 text-center text-[12px] font-bold text-muted">{i + 1}</span>
                       <input
@@ -346,7 +376,9 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
                         value={r.url}
                         onChange={(e) => setUrl(r.id, e.target.value)}
                         placeholder="วางลิงก์สินค้า 1688 / Taobao / Tmall ที่นี่"
-                        className="min-w-0 flex-1 h-10 rounded-lg border border-border px-3 text-[13.5px] outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
+                        className={`min-w-0 flex-1 h-10 rounded-lg border px-3 text-[13.5px] outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100 ${
+                          src ? "border-emerald-400 bg-emerald-50/40" : "border-border"
+                        }`}
                       />
                       {src && (
                         <span className={`shrink-0 rounded-lg px-2 py-1 text-[11px] font-extrabold ${SOURCE_BADGE[src].cls}`}>
@@ -396,6 +428,8 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
               </div>
             </>
           )}
+          </div>
+          {/* ปิดกรอบกลุ่มช่องวางลิงก์ */}
 
           {flash && <FlashBanner flash={flash} />}
 
@@ -409,11 +443,24 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
             {verifying ? "กำลังตรวจสอบสินค้า..." : `ค้นหาและตรวจสอบสินค้า ${readyCount} รายการ`}
           </button>
 
-          {/* supported */}
+          {/* supported — โลโก้จริงของแต่ละแพลตฟอร์ม (owner 2026-07-30 "ใช้ไอคอนจริงๆ
+              มาขึ้นจะดีกว่า"). โลโก้เป็น wordmark พื้นขาว (มีในโปรเจกต์อยู่แล้ว) → ใส่ในชิป
+              ขาวมีขอบ · normalize ความสูง h-5 · กว้าง auto (สัดส่วนโลโก้ต่างกันได้ตามจริง). */}
           <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-[12px] text-muted">
             <span>รองรับเว็บไซต์:</span>
-            {["1688", "Taobao", "Tmall", "Alibaba"].map((s) => (
-              <span key={s} className="rounded-lg bg-surface-alt/60 px-2.5 py-0.5 text-[11.5px] font-semibold text-foreground">{s}</span>
+            {[
+              { src: "/legacy/pcs/assets/images/shops/1688-logo-2.png", alt: "1688" },
+              { src: "/images/partners/taobaopartner.png", alt: "Taobao" },
+              { src: "/images/partners/tmallpartner.png", alt: "Tmall" },
+              { src: "/images/partners/alibabapartner.png", alt: "Alibaba" },
+            ].map((s) => (
+              <span
+                key={s.alt}
+                className="inline-flex items-center rounded-lg border border-border bg-white px-2.5 py-1 shadow-sm"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={s.src} alt={s.alt} className="h-5 w-auto object-contain" loading="lazy" />
+              </span>
             ))}
           </div>
 
@@ -529,15 +576,33 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
   );
 }
 
-// ── Step pip ──────────────────────────────────────────────────────────
-function Step({ n, label, on }: { n: number; label: string; on: boolean }) {
+// ── Step cell — even-thirds stepper (owner 2026-07-30 "จัดกลางเท่าๆ · พอดีกลางๆ").
+// แต่ละ cell = flex-1 (ช่อง 1/3 เท่าๆกัน) · เนื้อหา (เลข+ไอคอน+ป้าย) อยู่กึ่งกลางช่อง ·
+// เส้นเชื่อมลากหลังเนื้อหาจากกลางช่องนี้ไปกลางช่องถัดไป (bg-white บนเนื้อหาบังเส้นตรงกลาง).
+// มือถือ (< sm): ซ่อนไอคอน+ป้าย → เหลือวงเลขเรียงเท่าๆ + เส้นเชื่อม (กันล้น).
+function StepCell({
+  n, icon, label, on, lineAfter, lineOn,
+}: {
+  n: number; icon: ReactNode; label: string; on: boolean; lineAfter?: boolean; lineOn?: boolean;
+}) {
   return (
-    <span className={`flex items-center gap-1.5 ${on ? "font-bold text-foreground" : "text-muted"}`}>
-      <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-extrabold ${on ? "bg-red-600 text-white" : "bg-gray-100 text-muted"}`}>
-        {n}
-      </span>
-      {label}
-    </span>
+    <div className="relative flex flex-1 items-center justify-center">
+      {lineAfter && (
+        <span
+          aria-hidden
+          className={`pointer-events-none absolute left-1/2 top-1/2 h-px w-full -translate-y-1/2 ${lineOn ? "bg-red-300" : "bg-gray-200"}`}
+        />
+      )}
+      <div className="relative z-10 flex items-center gap-1.5 bg-white px-1.5 sm:gap-2">
+        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-extrabold ${on ? "bg-red-600 text-white shadow-sm" : "border border-gray-200 bg-white text-gray-400"}`}>
+          {n}
+        </span>
+        <span className={`hidden sm:flex ${on ? "text-red-600" : "text-gray-400"}`}>{icon}</span>
+        <span className={`hidden whitespace-nowrap font-bold sm:inline sm:text-[12.5px] ${on ? "text-foreground" : "text-muted"}`}>
+          {label}
+        </span>
+      </div>
+    </div>
   );
 }
 
