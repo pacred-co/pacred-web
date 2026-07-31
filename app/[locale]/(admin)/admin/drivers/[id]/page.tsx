@@ -691,10 +691,28 @@ export default async function AdminDriverBatchDetailPage({
           </Link>
         </div>
 
-        {/* ปุ่ม "ถ่ายรูปขึ้นรถ" ระดับรอบ — เต็มความกว้าง เด่นชัด (ภูม 2026-07-31) ·
-            คนขับกดถ่ายรูปโหลดของขึ้นรถทั้งคันทีเดียว (ไม่ต้องถ่ายทีละจุด). */}
-        {allLoadableItemIds.length > 0 && (
-          <DriverPhotoEditDialog itemIds={allLoadableItemIds} hasPhoto={batchHasLoadPhoto} kind="load" gradient />
+        {/* ถ่ายรูปขึ้นรถ ระดับรอบ (ภูม 2026-07-31) — โชว์รูปที่ถ่ายแล้ว (กดเปิดเต็มจอ) +
+            ปุ่มถ่าย/แก้เต็มความกว้าง. คนขับถ่ายรูปโหลดของขึ้นรถทั้งคันทีเดียว (ไม่ใช่ทีละจุด).
+            หัวเดสก์ท็อปโชว์รูปในพาเนล "รูปตอนขึ้นรถ" · หัวมือถือโชว์ thumbnail ตรงนี้. */}
+        {(loadPhotos.length > 0 || allLoadableItemIds.length > 0) && (
+          <div className="space-y-1.5">
+            {loadPhotos.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {loadPhotos.slice(0, 6).map((p) => (
+                  <a key={p.url} href={p.url} target="_blank" rel="noopener noreferrer" className="block">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={p.url} alt="รูปตอนขึ้นรถ" className="h-16 w-16 rounded-lg border border-border object-cover hover:ring-2 hover:ring-blue-300" />
+                  </a>
+                ))}
+                {loadPhotos.length > 6 && (
+                  <span className="text-[11px] font-medium text-muted">+ อีก {loadPhotos.length - 6} รูป</span>
+                )}
+              </div>
+            )}
+            {allLoadableItemIds.length > 0 && (
+              <DriverPhotoEditDialog itemIds={allLoadableItemIds} hasPhoto={batchHasLoadPhoto} kind="load" gradient />
+            )}
+          </div>
         )}
       </section>
 
