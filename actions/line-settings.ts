@@ -40,6 +40,8 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { verifyLiffLinkToken } from "@/lib/line/liff-link-token";
 import { sendNotification } from "@/lib/notifications";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { checkRateLimit, getClientIpFromHeaders } from "@/lib/rate-limit";
@@ -76,6 +78,16 @@ const LINE_USER_ID_RE = /^U[0-9a-f]{32}$/;
 export async function linkLineAccount(
   lineUserId: string,
   displayName: string = "",
+  /**
+   * 🔴 owner 2026-07-30 ("เชื่อมต่อไม่ได้สักที ลองหลายครั้งแล้ว") — LIFF ทำงานใน
+   * เบราว์เซอร์ของแอป LINE ซึ่ง **ไม่มีคุกกี้ session ของ Pacred** ⇒ `getUser()` ว่าง
+   * ทุกครั้ง → ฟีเจอร์นี้ไม่เคยสำเร็จเลย (prod: 0 จาก 9,465 profiles).
+   * token นี้เซ็นฝั่ง server ตอนลูกค้ากดปุ่มบนเว็บ (ยังมี session อยู่) และ
+   * **ให้อำนาจแค่ "ผูก LINE เข้ากับ profile นั้น" อย่างเดียว · อายุ 30 นาที**
+   * — อ่านข้อมูลไม่ได้ · แตะเงิน/ออเดอร์/รหัสผ่านไม่ได้ (lib/line/liff-link-token.ts).
+   * ใช้เฉพาะเมื่อไม่มี session เท่านั้น — มี session เมื่อไหร่ session ชนะเสมอ.
+   */
+  linkToken?: string,
 ): Promise<ActionResult> {
   // G-4 — impersonation is read-only; refuse customer-facing mutations.
   const impErr = await assertNotImpersonating();
@@ -97,15 +109,23 @@ export async function linkLineAccount(
   const supabase = await createClient();
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
   if (authErr) {
-    logger.error("line-settings", "auth getUser failed", authErr);
-    return { ok: false, error: "not_signed_in" };
+    // ไม่ใช่ error ที่ต้องหยุด — ในเบราว์เซอร์ LINE ไม่มี session เป็นเรื่องปกติ
+    logger.warn("line-settings", "auth getUser failed (จะลองใช้ token แทน)", { err: String(authErr.message ?? authErr) });
   }
-  if (!user) return { ok: false, error: "not_signed_in" };
+
+  // ตัวตนที่จะผูก: session ก่อนเสมอ · ไม่มี session จึงใช้ token (ดู docblock พารามิเตอร์)
+  const tokenProfileId = user ? null : verifyLiffLinkToken(linkToken);
+  const targetProfileId = user?.id ?? tokenProfileId;
+  if (!targetProfileId) return { ok: false, error: "not_signed_in" };
+
+  // เขียนด้วย service-role เฉพาะเส้นทาง token (RLS ไม่ปล่อยให้ anonymous เขียน);
+  // มี session = ใช้ client ของผู้ใช้เหมือนเดิม เพื่อให้ RLS ยังเป็นตัวกันชั้นสุดท้าย
+  const writer = user ? supabase : createAdminClient();
 
   // Defensive pre-check — the unique partial index would 23505 anyway,
   // but the lookup gives us a friendlier error string so the UI can show
   // "ติดต่อแอดมิน" rather than a raw Postgres code.
-  const { data: existing, error: existingErr } = await supabase
+  const { data: existing, error: existingErr } = await writer
     .from("profiles")
     .select("id")
     .eq("line_user_id", lineUserId)
@@ -117,20 +137,20 @@ export async function linkLineAccount(
     return { ok: false, error: existingErr.message };
   }
 
-  if (existing && existing.id !== user.id) {
+  if (existing && existing.id !== targetProfileId) {
     return { ok: false, error: "already_linked_other_account" };
   }
 
-  // Use the user-context client (not admin) — RLS will only let the user
-  // update their OWN profile row, which is exactly the safety property
-  // we want. No bypass needed here.
-  const { error } = await supabase
+  // มี session → ใช้ client ของผู้ใช้ (RLS ยอมให้แก้เฉพาะแถวตัวเอง = กันชั้นสุดท้าย)
+  // ไม่มี session (มาจาก LIFF ด้วย token) → service-role แต่ล็อกด้วย `.eq("id", …)`
+  // ที่มาจาก token ที่ตรวจลายเซ็นแล้วเท่านั้น จึงแตะได้แค่ profile เดียวที่ token ระบุ
+  const { error } = await writer
     .from("profiles")
     .update({
       line_user_id:   lineUserId,
       line_linked_at: new Date().toISOString(),
     })
-    .eq("id", user.id);
+    .eq("id", targetProfileId);
 
   if (error) {
     // Race-safe — if a second customer linked the same LINE userId
@@ -140,7 +160,7 @@ export async function linkLineAccount(
       return { ok: false, error: "already_linked_other_account" };
     }
     logger.error("line-settings", "link update failed", error, {
-      profileId:  redactId(user.id),
+      profileId:  redactId(targetProfileId),
       lineUserId: redactId(lineUserId),
     });
     return { ok: false, error: error.message };
@@ -152,7 +172,7 @@ export async function linkLineAccount(
   // Never blocks the success return — a transient push failure must not
   // make the customer think the link itself failed.
   try {
-    await sendNotification(user.id, {
+    await sendNotification(targetProfileId, {
       category: "system",
       severity: "success",
       title:    "เชื่อมต่อ LINE สำเร็จ",
@@ -165,7 +185,7 @@ export async function linkLineAccount(
     // Welcome push is informational — swallow + log; the link succeeded.
     logger.warn("line-settings", "welcome push failed (link still ok)", {
       err: String(e),
-      profileId: redactId(user.id),
+      profileId: redactId(targetProfileId),
     });
   }
 

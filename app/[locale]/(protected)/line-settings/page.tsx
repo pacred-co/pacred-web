@@ -32,6 +32,7 @@ import { Link } from "@/i18n/navigation";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { LineSettingsActions } from "./line-settings-actions";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { signLiffLinkToken } from "@/lib/line/liff-link-token";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,17 @@ export default async function LineSettingsPage() {
   // works in both the LINE in-app browser (opens in same window) and on
   // desktop (opens LINE Login on the channel; if user has LINE installed,
   // LINE app handles the OAuth; otherwise the LINE web login is used).
-  const liffUrl = `https://liff.line.me/${LIFF_ID}`;
+  //
+  // 🔴 owner 2026-07-30 ("ลูกค้าแจ้งว่า เชื่อมต่อไม่ได้สักที ลองหลายครั้งแล้ว") — เบราว์เซอร์
+  // ในแอป LINE เป็นคนละ context กับที่ลูกค้าล็อกอินไว้ ⇒ **ไม่มีคุกกี้ session ติดไป**
+  // → /liff/link เด้ง /login วนไม่จบ (prod: 0 จาก 9,465 profiles เคยเชื่อมสำเร็จ).
+  // แนบ token ที่เซ็นฝั่ง server ไปกับลิงก์ เพื่อพา "ตัวตน" ข้ามไปโดยไม่พึ่งคุกกี้
+  // (อายุ 30 นาที · ทำได้แค่ผูก LINE เข้าบัญชีนี้ · ดู lib/line/liff-link-token.ts).
+  // LINE ส่ง query string ต่อไปยัง endpoint URL ของ LIFF ให้เอง.
+  const linkToken = profile?.id ? signLiffLinkToken(profile.id) : null;
+  const liffUrl = linkToken
+    ? `https://liff.line.me/${LIFF_ID}?t=${encodeURIComponent(linkToken)}`
+    : `https://liff.line.me/${LIFF_ID}`;
 
   return (
     <main className="app-content content" style={{ paddingTop: 0 }}>

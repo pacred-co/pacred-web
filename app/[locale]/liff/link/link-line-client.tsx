@@ -36,10 +36,17 @@ type Status =
 
 export function LinkLineClient({
   liffId,
+  linkToken,
   alreadyLinked,
   accountLabel,
 }: {
   liffId: string | null;
+  /**
+   * token จาก `?t=` ที่ตรวจลายเซ็นผ่านฝั่ง server แล้ว (owner 2026-07-30) — ต้องส่งต่อ
+   * ให้ server action เพราะเบราว์เซอร์ในแอป LINE **ไม่มีคุกกี้ session ของ Pacred**
+   * (ดู lib/line/liff-link-token.ts). `null` = เปิดจากเบราว์เซอร์ปกติที่มี session แล้ว.
+   */
+  linkToken: string | null;
   alreadyLinked: boolean;
   accountLabel: string;
 }) {
@@ -106,7 +113,7 @@ export function LinkLineClient({
       // Pass both userId and displayName — the server action uses the name
       // to personalise the welcome push (task L, 2026-05-26 replacement
       // for the now-dead LINE Notify channel).
-      const res = await linkLineAccount(userId, name);
+      const res = await linkLineAccount(userId, name, linkToken ?? undefined);
       if (res.ok) {
         setStatus({ kind: "linked", displayName: name });
       } else {
