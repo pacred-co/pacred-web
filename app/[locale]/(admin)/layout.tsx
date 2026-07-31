@@ -16,8 +16,6 @@ import { getStafferPositionInfo } from "@/lib/admin/positions";
 import { departmentLabel } from "@/lib/admin/departments";
 import { AdminSidebar } from "@/components/sections/admin-sidebar";
 import { DriverBottomNav } from "@/components/sections/driver-bottom-nav";
-import { WarehouseBottomNav } from "@/components/sections/warehouse-bottom-nav";
-import { loadWarehouseNavBadges } from "@/lib/warehouse/dispatch-home";
 import { countDriverOpenBatches } from "@/lib/admin/driver-todo-count";
 import { getDriverConsultTel } from "@/lib/admin/consult-contact";
 import { CollapseAdminSidebar } from "@/components/sections/collapse-admin-sidebar";
@@ -87,14 +85,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   // แถบล่างคนขับ badge "งานที่ต้องส่ง" = รอบเปิดที่มอบให้คนขับคนนี้ (member_code) —
   // นับเฉพาะตอน isDriverView (ไม่เพิ่ม query ให้ role อื่น). best-effort → 0.
-  const driverTodoCount = isDriverView
+  // แถบล่างมือถือ = ตัวเดียวกันทั้งคนขับ + คลัง (ภูม 2026-07-31 "โกดังเอาแบบคนขับมาใช้เลย")
+  // → นับ badge/consult ให้ทั้ง 2 view. best-effort → 0.
+  const showDriverNav = isDriverView || isWarehouseView;
+  const driverTodoCount = showDriverNav
     ? await countDriverOpenBatches(profile?.member_code ?? null)
     : 0;
-  // เบอร์ "ปรึกษา" (keetar) ดึงสดจากระบบ เฉพาะตอนโชว์แถบล่างคนขับ (owner 2026-07-25)
-  const driverConsultTel = isDriverView ? await getDriverConsultTel() : null;
-  // badge แถบล่างคลัง (ส่งไม่สำเร็จ + หมายเลขตู้) — นับ 2 ตัวแบบเบา เฉพาะตอนโชว์แถบคลัง
-  // (ไม่เพิ่ม query ให้ role อื่น). best-effort → 0.
-  const whNavBadges = isWarehouseView ? await loadWarehouseNavBadges() : null;
+  // เบอร์ "ปรึกษา" (keetar) ดึงสดจากระบบ เฉพาะตอนโชว์แถบล่าง (owner 2026-07-25)
+  const driverConsultTel = showDriverNav ? await getDriverConsultTel() : null;
   const adminLabel =
     [profile?.first_name, profile?.last_name].filter(Boolean).join(" ").trim() ||
     profile?.member_code ||
@@ -170,10 +168,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <CostRevealProvider bypass={hasRole(displayRoles, ["accounting", "pricing"])}>
           <RouteFade>{children}</RouteFade>
         </CostRevealProvider>
-        {isDriverView && <DriverBottomNav todoBadge={driverTodoCount} consultTel={driverConsultTel ?? undefined} />}
-        {isWarehouseView && whNavBadges && (
-          <WarehouseBottomNav failedDelivery={whNavBadges.failedDelivery} containers={whNavBadges.containers} />
-        )}
+        {/* แถบเมนูล่างมือถือ = ตัวเดียวกันทั้งคนขับ + คลัง (ภูม 2026-07-31 "เอาแบบคนขับมาใช้เลย") */}
+        {showDriverNav && <DriverBottomNav todoBadge={driverTodoCount} consultTel={driverConsultTel ?? undefined} />}
       </div>
     </div>
     </AdminHeaderNavProvider>
