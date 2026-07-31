@@ -1277,8 +1277,12 @@ export function CorporateEditor({ userid, corp }: { userid: string; corp: Profil
     });
   }
 
-  // No corporate row → nothing to edit (legacy is UPDATE-only).
-  const canEdit = !!corp;
+  // 🔴 owner 2026-07-30 (PR005): *"เราจะเพิ่มข้อมูล ชื่อ หรือข้อมูลนิติ และอัพไฟล์ให้ลูกค้า
+  // เลยอะครับ จากหลังบ้าน"* — เดิม `!!corp` ปิดปุ่มทิ้งเมื่อยังไม่มีแถว tb_corporate
+  // (legacy UPDATE-only) ⇒ ลูกค้าที่ติ๊กนิติไว้แต่ยังไม่กรอก แอดมินทำแทนไม่ได้เลย.
+  // ตอนนี้ `adminUpdateCorporate` upsert แล้ว → เปิดปุ่มเสมอ (ป้ายเปลี่ยนเป็น "เพิ่มข้อมูล")
+  const canEdit = true;
+  const isNewCorp = !corp;
 
   return (
     <SectionShell
