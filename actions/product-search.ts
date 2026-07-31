@@ -79,6 +79,18 @@ export type ProductSearchOk = {
     promoPriceCny?: number;
     /** Source URL (the URL the customer pasted, normalised). */
     sourceUrl: string;
+    /** Main product image (rich-card gallery). */
+    mainImage?: string;
+    /** Extra gallery images. */
+    images?: string[];
+    /** Base price (before promo) in CNY. */
+    basePriceCny?: number;
+    /** SKU axes (สี/แบบ/ขนาด) — the variant grid. Mirrors ChinaProductDetail.sku_axes. */
+    skuAxes?: Array<{ name: string; values: Array<{ label: string; image?: string; data?: string; is_image?: boolean }> }>;
+    /** Flattened SKU rows (per-combination price + stock). Mirrors ChinaProductDetail.sku_map. */
+    skuMap?: Array<{ sku_id: string; prop_path: Record<string, string>; price_cny: number; stock: number; image?: string }>;
+    /** Total stock across SKUs. */
+    stockTotal?: number;
   };
 };
 
@@ -228,6 +240,12 @@ export async function searchProductByUrl(
       priceCny: d.base_price_cny ?? 0,
       promoPriceCny: d.promo_price_cny,
       sourceUrl: d.url,
+      mainImage: d.main_image,
+      images: d.images,
+      basePriceCny: d.base_price_cny,
+      skuAxes: d.sku_axes,
+      skuMap: d.sku_map,
+      stockTotal: d.stock_total,
     },
   };
 }
