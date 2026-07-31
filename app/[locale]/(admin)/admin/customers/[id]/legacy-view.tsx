@@ -35,6 +35,7 @@ import { RowLimitSelect } from "./row-limit-select";
 import { parseRowLimit } from "./row-limit-options";
 import { SectionStatusTabs, SectionPagination, buildSectionHref, parsePageNo, type SectionTab } from "./profile-section-nav";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { resolvePendingSlipFidsAll } from "@/lib/forwarder/pending-slip";
 import { LEGACY_ORDER_TABS } from "@/lib/legacy-status-map";
 import { Link } from "@/i18n/navigation";
 import { getAdminRoles, isGodRole } from "@/lib/auth/require-admin";
@@ -450,6 +451,13 @@ export async function renderLegacyCustomerView(
   // "กำลังจัดส่ง" (แท็บ 6.1 ของหน้าหลัก) = fstatus '6' + มีแถวคนขับเปิดอยู่
   // (tb_forwarder_driver_item.fdistatus='' — นิยามเดียวกับ /admin/forwarders L1186-1188)
   const sixIds = fwdScan.filter((r) => String(r.fstatus ?? "") === "6").map((r) => r.id);
+  // สลิปรอบัญชีตรวจ → สถานะย่อย 5.1 "รอออก/ใบเสร็จรับเงิน" (owner 2026-07-31 ·
+  // นิยาม/สัญญาณเดียวกับหน้ารายการหลัก · scoped เฉพาะงานสถานะ 5 ของลูกค้ารายนี้)
+  const fiveIds = fwdScan.filter((r) => String(r.fstatus ?? "") === "5").map((r) => r.id);
+  // ⚠️ ที่มาของสัญญาณ = SOT ตัวเดียวกับหน้ารายการหลัก + จอลูกค้า
+  // (lib/forwarder/pending-slip.ts) — ห้ามเขียน query เองซ้ำที่นี่ ไม่งั้นวันที่
+  // นิยาม "แนบสลิปแล้ว" เปลี่ยน จะได้คนละคำตอบคนละจอ (owner 2026-07-31).
+  const pendingSlipFids = await resolvePendingSlipFidsAll(admin, fiveIds);
   const driverOpenFids = new Set<number>();
   if (sixIds.length > 0) {
     const { data: dItems, error: dErr } = await admin
@@ -477,6 +485,8 @@ export async function renderLegacyCustomerView(
     if (fwdSt === "p") return st === "99";
     if (fwdSt === "6") return st === "6" && !driverOpenFids.has(r.id);
     if (fwdSt === "6.1") return st === "6" && driverOpenFids.has(r.id);
+    if (fwdSt === "5") return st === "5" && !pendingSlipFids.has(r.id);
+    if (fwdSt === "5.1") return st === "5" && pendingSlipFids.has(r.id);
     return st === fwdSt;
   };
   const byDateDesc = (a: string | null, b: string | null) => (b ?? "").localeCompare(a ?? "");
@@ -568,6 +578,8 @@ export async function renderLegacyCustomerView(
     if (code === "p") return stCount("99");
     if (code === "6") return sixIds.filter((id) => !driverOpenFids.has(id)).length;
     if (code === "6.1") return sixIds.filter((id) => driverOpenFids.has(id)).length;
+    if (code === "5") return fiveIds.filter((id) => !pendingSlipFids.has(id)).length;
+    if (code === "5.1") return fiveIds.filter((id) => pendingSlipFids.has(id)).length;
     return stCount(code);
   };
   const fwdTabs: SectionTab[] = FORWARDER_STATUS_TABS
@@ -1556,12 +1568,15 @@ function Thumb({ url, alt }: { url: string | null; alt: string }) {
   );
 }
 
+// owner 2026-07-31 ("สำเร็จตรงนี้ยังสีอ่อนอยู่เลยครับ ไม่เด่นชัด") — LOUD solid fill
+// ให้ตรงมาตรฐานเดียวกับ FSTATUS_VIVID / HSTATUS_CFG ที่ใช้ทั้งระบบ
+// (§0h · สีสถานะ = LOGIC ไม่ใช่ chrome — ต้องอ่านออกใน 1 วินาที ไม่ใช่ tint จางๆ)
 const PILL_TONE: Record<PillTone, string> = {
-  green: "bg-green-100 text-green-700 border-green-200",
-  red: "bg-red-100 text-red-700 border-red-200",
-  amber: "bg-amber-100 text-amber-700 border-amber-200",
-  blue: "bg-blue-50 text-blue-700 border-blue-200",
-  gray: "bg-gray-100 text-gray-600 border-gray-200",
+  green: "bg-emerald-600 text-white border-emerald-700 font-bold",
+  red: "bg-red-600 text-white border-red-700 font-bold",
+  amber: "bg-amber-500 text-white border-amber-600 font-bold",
+  blue: "bg-blue-600 text-white border-blue-700 font-bold",
+  gray: "bg-gray-500 text-white border-gray-600 font-bold",
 };
 function StatusPill({ label, tone = "gray" }: { label: string; tone?: PillTone }) {
   return (

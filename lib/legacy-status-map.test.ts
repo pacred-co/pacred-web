@@ -32,7 +32,7 @@ assertEq("unknown code → echoes the code", legacyOrderStatusThai("99"), "99");
 // ── forwarder status → Thai (ship → arrive → THEN pay) ──
 section("legacyForwarderStatusThai (fstatus)");
 assertEq("1 → รอสินค้าเข้าโกดังจีน", legacyForwarderStatusThai("1"), "รอสินค้าเข้าโกดังจีน");
-assertEq("5 → รอชำระเงิน (pay AFTER arrival — the COD inversion)", legacyForwarderStatusThai("5"), "รอชำระเงิน");
+assertEq("5 → รอชำระ/ใบแจ้งหนี้ (pay AFTER arrival — the COD inversion)", legacyForwarderStatusThai("5"), "รอชำระ/ใบแจ้งหนี้");
 assertEq("7 → ส่งแล้ว", legacyForwarderStatusThai("7"), "ส่งแล้ว");
 assertEq("empty → empty string", legacyForwarderStatusThai(""), "");
 

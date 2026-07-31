@@ -621,7 +621,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
           "2": "ถึงโกดังจีนแล้ว",
           "3": "กำลังส่งมาไทย",
           "4": "ถึงไทยแล้ว",
-          "5": "รอชำระเงิน",
+          "5": "รอชำระ/ใบแจ้งหนี้",
           "6": "เตรียมส่ง",
           "7": "ส่งแล้ว",
         }[row.f_fstatus ?? ""] ?? "",

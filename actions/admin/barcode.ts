@@ -51,7 +51,7 @@ const scanSchema = z.object({
 });
 
 const STATUS_LABEL: Record<string, string> = {
-  pending_payment:       "รอชำระเงิน",
+  pending_payment:       "รอชำระ/ใบแจ้งหนี้",
   shipped_china:         "สินค้าออกจากจีน",
   in_transit:            "ขนส่งกลางทาง",
   arrived_thailand:      "เข้าโกดังไทยแล้ว",
@@ -68,7 +68,7 @@ const TB_FSTATUS_LABEL: Record<string, string> = {
   "2":  "ถึงโกดังจีน",
   "3":  "ขนส่งกลางทาง",
   "4":  "ถึงไทยแล้ว",
-  "5":  "รอชำระเงิน",
+  "5":  "รอชำระ/ใบแจ้งหนี้",
   "6":  "เตรียมส่ง",
   "7":  "ส่งสำเร็จ",
   "99": "สถานะพิเศษ",

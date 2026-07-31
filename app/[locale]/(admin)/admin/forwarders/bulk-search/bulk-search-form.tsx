@@ -17,7 +17,7 @@ const FOUND_IN_LABEL: Record<TrackingMatch["found_in"], string> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  pending_payment:  "รอชำระเงิน",
+  pending_payment:  "รอชำระ/ใบแจ้งหนี้",
   shipped_china:    "ออกจากจีน",
   in_transit:       "กลางทาง",
   arrived_thailand: "เข้าโกดังไทย",

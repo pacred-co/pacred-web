@@ -583,7 +583,7 @@ async function tryRenderTbForwarder(
 
   const STATUS_LABEL: Record<string, string> = {
     "1":"รอเข้าโกดังจีน","2":"ถึงโกดังจีนแล้ว","3":"กำลังส่งมาไทย","4":"ถึงไทยแล้ว",
-    "5":"รอชำระเงิน","6":"เตรียมส่ง","7":"ส่งแล้ว","99":"พิเศษ",
+    "5":"รอชำระ/ใบแจ้งหนี้","6":"เตรียมส่ง","7":"ส่งแล้ว","99":"พิเศษ",
   };
   // MODE_LABEL removed 2026-06-04 — transport mode is rendered with the status
   // timeline icon (Truck/Plane) above; the editable form lives on /edit.
@@ -633,7 +633,7 @@ async function tryRenderTbForwarder(
     { key: 2, rank: 2,   label: "ถึงโกดังจีน",   date: r.fdatestatus2 ?? null,  img: `${STEP_ICON_BASE}forwarder-2.png` },
     { key: 3, rank: 3,   label: "ส่งมาไทย",      date: r.fdatestatus3 ?? null,  img: `${STEP_ICON_BASE}forwarder-3.png` },
     { key: 4, rank: 4,   label: "ถึงไทย",         date: r.fdatestatus4 ?? null,  img: `${STEP_ICON_BASE}forwarder-4.png` },
-    { key: 5, rank: 5,   label: "รอชำระเงิน",    date: r.fdatestatus5 ?? null,  img: `${STEP_ICON_BASE}forwarder-5.png` },
+    { key: 5, rank: 5,   label: "รอชำระ/ใบแจ้งหนี้",    date: r.fdatestatus5 ?? null,  img: `${STEP_ICON_BASE}forwarder-5.png` },
     { key: 6, rank: 6,   label: "เตรียมส่ง",     date: r.fdatestatus6 ?? null,  img: "/images/hero-section/icon/cart.png" },
     { key: 7, rank: 6.5, label: "กำลังจัดส่ง",   date: r.fdatestatus6 ?? null,  img: `${STEP_ICON_BASE}forwarder-6.1.png` },
     { key: 8, rank: 8,   label: "ส่งแล้ว",        date: r.fdatestatus7 ?? null,  img: `${STEP_ICON_BASE}forwarder-7.png` },

@@ -404,7 +404,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     { key: "shop3",             label: "สั่งสินค้า (ชำระแล้ว)", href: "/admin/service-orders?q=3" },
     { key: "shop4",             label: "รอร้านจีนจัดส่ง" },
     { key: "forwarder1",        label: "รอเข้าโกดังจีน" },
-    { key: "forwarder5",        label: "รอชำระเงินนำเข้า" },
+    { key: "forwarder5",        label: "รอชำระ/ใบแจ้งหนี้ (นำเข้า)" },
     { key: "forwarderC",        label: "เครดิตค้างนำเข้า" },
     { key: "forwarder6",        label: "เตรียมส่ง" },
     { key: "forwarder62",       label: "กำลังจัดส่ง" },
@@ -689,7 +689,7 @@ const FWD_STATUS: Record<string, { label: string; tone: StatusTone }> = {
   "2": { label: "ถึงโกดังจีน",      tone: "info" },
   "3": { label: "กำลังส่งมาไทย",    tone: "primary" },
   "4": { label: "ถึงไทยแล้ว",       tone: "info" },
-  "5": { label: "รอชำระเงินนำเข้า", tone: "danger" },
+  "5": { label: "รอชำระ/ใบแจ้งหนี้ (นำเข้า)", tone: "danger" },
   "6": { label: "เตรียมส่ง",        tone: "primary" },
   "7": { label: "ส่งแล้ว",          tone: "success" },
 };

@@ -4,7 +4,7 @@ import { Fragment, useMemo, useState, useTransition, type ChangeEvent } from "re
 import { useRouter } from "next/navigation";
 import { isGeneralCoid } from "@/lib/forwarder/coid";
 import { isForwarderPaid } from "@/lib/forwarder/outstanding";
-import { FSTATUS_CFG, listRowTint, fstatusVivid } from "@/lib/admin/forwarder-status";
+import { FSTATUS_CFG, listRowTint, fstatusVivid, resolveRowStatusCode, statusCodeLabel } from "@/lib/admin/forwarder-status";
 // 2026-06-12 — the MOMO หัวบิล (bill-header) box-count rule now lives in a
 // shared, unit-tested helper so the report / completeness / check-queue Σ
 // reuse the EXACT same detection. baseTracking/trackingSuffix moved there too.
@@ -119,6 +119,8 @@ export type Row = {
   credit_due_date: string | null;     // legacy fcreditdate · วันที่ครบกำหนด
   // 2026-07-07 — fstatus='6' + open driver item → "กำลังจัดส่ง" pill override
   driverOpen: boolean;
+  /** owner 2026-07-31 — สลิปรอบัญชีตรวจ → ป้าย 5.1 รอออก/ใบเสร็จรับเงิน */
+  pendingSlip: boolean;
   paydeposit: string | null;
   note: string | null;
   /** 2026-07-06 — legacy fproductstype · nameProductsType 1=ทั่วไป 2=มอก. 3=อย. 4=พิเศษ */
@@ -220,7 +222,7 @@ const BULK_STATUS_OPTIONS: ReadonlyArray<{ v: BulkStatusValue; l: string }> = [
   { v: "2",  l: "2 · ถึงโกดังจีนแล้ว" },
   { v: "3",  l: "3 · กำลังส่งมาไทย" },
   { v: "4",  l: "4 · ถึงไทยแล้ว" },
-  { v: "5",  l: "5 · รอชำระเงิน" },
+  { v: "5",  l: "5 · รอชำระ/ใบแจ้งหนี้" },
   { v: "6",  l: "6 · เตรียมส่ง" },
   { v: "7",  l: "7 · ส่งแล้ว" },
   { v: "99", l: "99 · สถานะพิเศษ" },
@@ -949,17 +951,17 @@ export function ForwardersTable({
                   // S1 (2026-07-07) — legacy statusForwarderAll2(): fStatus='6' WITH an
                   // open driver item → distinct "กำลังจัดส่ง" pill; else "เตรียมส่ง".
                   // Per-row override only — FSTATUS_CFG (6 = เตรียมส่ง) is unchanged.
-                  const isDelivering = r.status === "6" && r.driverOpen;
-                  const badgeCls = isDelivering
-                    ? "bg-indigo-600 text-white"
-                    : fstatusVivid(r.status);
-                  const sLabel = isDelivering
-                    ? r.fcredit === "1"
-                      ? "เครติด · กำลังจัดส่ง"
-                      : "กำลังจัดส่ง"
-                    : r.fcredit === "1"
-                      ? `เครติด · ${statusLabel[r.status] ?? r.status}`
-                      : statusLabel[statusKey] ?? statusKey;
+                  // owner 2026-07-31 — สถานะย่อยทั้งหมด derive จาก SOT ตัวเดียว
+                  // (resolveRowStatusCode: 6+คนขับเปิดรอบ → 6.1 กำลังจัดส่ง ·
+                  //  5+สลิปรอตรวจ → 5.1 รอออก/ใบเสร็จรับเงิน) แล้วเอา code ไปหยิบ
+                  // สี+ป้ายจาก SOT เดียวกับแถบแท็บ = เลิก hardcode สี/ข้อความรายจอ
+                  const rowCode = resolveRowStatusCode(r.status, {
+                    driverOpen: r.driverOpen,
+                    pendingSlip: r.pendingSlip,
+                  });
+                  const badgeCls = fstatusVivid(rowCode);
+                  const baseLabel = statusCodeLabel(rowCode);
+                  const sLabel = r.fcredit === "1" ? `เครดิต · ${baseLabel}` : baseLabel;
                   // next-action hint (self-explaining-row §0g) — what staff does NOW.
                   const fsCfg = FSTATUS_CFG[r.status as keyof typeof FSTATUS_CFG];
                   const fsNext = fsCfg?.next ?? "";

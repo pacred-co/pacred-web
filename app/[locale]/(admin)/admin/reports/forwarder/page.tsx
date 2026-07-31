@@ -80,7 +80,7 @@ const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "2",   label: "สินค้าถึงโกดังจีนแล้ว" },
   { value: "3",   label: "กำลังส่งมาประเทศไทย" },
   { value: "4",   label: "สินค้าถึงประเทศไทยแล้ว" },
-  { value: "5",   label: "รอชำระเงิน" },
+  { value: "5",   label: "รอชำระ/ใบแจ้งหนี้" },
   { value: "6",   label: "เตรียมส่ง" },
   { value: "7",   label: "ส่งแล้ว" },
 ];

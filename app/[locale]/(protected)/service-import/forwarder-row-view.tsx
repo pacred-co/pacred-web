@@ -57,7 +57,11 @@ const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
   "2":   { label: "สินค้าถึงโกดังจีนแล้ว", cls: "bg-sky-100 text-sky-700 border-sky-200"           },
   "3":   { label: "กำลังส่งมาประเทศไทย",   cls: "bg-pink-100 text-pink-700 border-pink-200"        },
   "4":   { label: "สินค้าถึงประเทศไทยแล้ว",cls: "bg-[#d7ccc8] text-[#5d4037] border-[#a1887f]"     },
-  "5":   { label: "รอชำระเงิน",            cls: "bg-red-100 text-red-700 border-red-200"           },
+  "5":   { label: "รอชำระ/ใบแจ้งหนี้",            cls: "bg-red-100 text-red-700 border-red-200"           },
+  // owner 2026-07-31 — สถานะย่อย 5.1 "รอออก/ใบเสร็จรับเงิน" = แนบสลิปแล้ว รอบัญชี
+  // ตรวจ+ออกใบเสร็จ. ทรงเดียวกับ 6·1 ข้างล่าง (dot-free key เพราะ next-intl แตก
+  // คีย์ที่จุด). ลูกค้าเห็นคำเดียวกับที่พนักงานเห็น — จอเดียวกันคนละฝั่งต้องตรงกัน.
+  "awaitingReceipt": { label: "รอออก/ใบเสร็จรับเงิน", cls: "bg-violet-100 text-violet-700 border-violet-200" },
   "6":   { label: "เตรียมส่ง",             cls: "bg-indigo-100 text-indigo-700 border-indigo-200"  },
   // key "outForDelivery" (was the dotted 6·1): next-intl splits a message key on
   // ".", so the dotted form tried to navigate status→6→1 and, since status.6 is a
@@ -70,15 +74,19 @@ const STATUS_CHIP: Record<string, { label: string; cls: string }> = {
 export function StatusForwarderAll2({
   fStatus,
   fStatusDriver,
+  pendingSlip = false,
 }: {
   fStatus: string | null;
   fStatusDriver: number;
+  /** แนบสลิปแล้ว รอบัญชีตรวจ → สถานะย่อย 5.1 (lib/forwarder/pending-slip.ts) */
+  pendingSlip?: boolean;
 }) {
   const t = useTranslations("forwarderRowView");
   // Status 6 has two sub-states: 6 = "เตรียมส่ง" by default, 6.1 = "กำลังจัดส่ง"
   // when the row is in the out-for-delivery (tb_forwarder_driver_item) set.
   let key: string = fStatus ?? "";
   if (fStatus === "6" && fStatusDriver === 1) key = "outForDelivery";
+  if (fStatus === "5" && pendingSlip) key = "awaitingReceipt";
   const chip = STATUS_CHIP[key];
   if (!chip) return null;
   return (
@@ -482,7 +490,7 @@ export function ForwarderRowView({
             #{row.id}
           </a>
           <TagPro id={row.promoid} />
-          <StatusForwarderAll2 fStatus={row.fstatus} fStatusDriver={fStatusDriver} />
+          <StatusForwarderAll2 fStatus={row.fstatus} fStatusDriver={fStatusDriver} pendingSlip={row.pendingSlip ?? false} />
           {/* "ส่งสลิปแล้ว · รอตรวจ" — beside the รอชำระเงิน pill when a pending
               import slip exists (gap-hunt 2026-06-29). READ-ONLY signal. */}
           {row.pendingSlip && <PendingSlipBadge />}

@@ -746,7 +746,7 @@ function fStatusLabel(fStatus: string): string {
     case "2": return "สินค้าถึงโกดังจีน";
     case "3": return "กำลังส่งมาประเทศไทย";
     case "4": return "สินค้าถึงประเทศไทยแล้ว (กำลังตรวจสอบ)";
-    case "5": return "รอชำระเงิน";
+    case "5": return "รอชำระ/ใบแจ้งหนี้";
     case "6": return "เตรียมส่ง";
     case "7": return "ส่งแล้ว";
     default:  return "—";
