@@ -34,6 +34,13 @@ export function SearchBar({ embedded = false, hideOnMobile = false, defaultColla
   const pathname = usePathname();
   const isMobileLaunchpad =
     !!pathname && /^(?:\/[a-z]{2})?\/m\/dashboard(?:\/|$)/.test(pathname);
+  // /cart/add renders its OWN in-form product-link search (CartAddMultiLink) →
+  // the sticky top search bar is redundant there and just added an ~85px gap
+  // above the content (owner 2026-07-30 "gap เยอะเกิน · ซ่อนแถบค้นหาเฉพาะหน้านี้").
+  // Hide ONLY the non-embedded (protected-layout) instance; the NavBar mobile
+  // dropdown search still works everywhere.
+  const isCartAdd =
+    !!pathname && /^(?:\/[a-z]{2})?\/cart\/add(?:\/|$)/.test(pathname);
 
   useEffect(() => {
     if (embedded || mobileOnly) return;
@@ -65,6 +72,10 @@ export function SearchBar({ embedded = false, hideOnMobile = false, defaultColla
       inputRef.current?.focus();
     }
   }, [embedded, expanded]);
+
+  // Hidden route — drop the sticky bar entirely (see isCartAdd above). Placed
+  // after ALL hooks so this early return never violates the rules of hooks.
+  if (!embedded && isCartAdd) return null;
 
   // ── Embedded + collapsed → render a single "fake input" trigger button only
   if (embedded && !expanded) {
