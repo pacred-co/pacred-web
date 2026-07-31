@@ -17,6 +17,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "@/i18n/navigation";
 import { Check, Phone, MapPin, ChevronRight, Printer, Tag, Camera } from "lucide-react";
 import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
+import { DriverStopFailButton } from "./driver-stop-fail-button";
 import { PinLocationButton } from "./pin-location-button";
 
 export type DriverStopCardItem = {
@@ -46,6 +47,8 @@ export function DriverStopCard({
   heroPhoto,
   editableIds,
   hasPhoto,
+  hasLoadPhoto,
+  canFail,
   slipHref,
   stickersHref,
   items,
@@ -69,6 +72,10 @@ export function DriverStopCard({
   heroPhoto: string | null;
   editableIds: number[];
   hasPhoto: boolean;
+  /** มีรูป "ขึ้นรถ" แล้ว → ปุ่มอ่าน "แก้รูปขึ้นรถ" (ภูม 2026-07-31) */
+  hasLoadPhoto: boolean;
+  /** มีรายการที่ยังไม่ส่งสำเร็จ (มาร์ค "ส่งไม่ได้" ได้) → โชว์ปุ่มส่งไม่ได้ */
+  canFail: boolean;
   slipHref: string;
   stickersHref: string;
   items: DriverStopCardItem[];
@@ -192,49 +199,66 @@ export function DriverStopCard({
         </button>
       </div>
 
-      {/* ท้ายการ์ด — ถ่ายส่ง · แผนที่ · โทร (owner 2026-07-24 · เรียงตามนี้ · ปุ่มกลมมน rounded-full) */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* ท้ายการ์ด — งานคนขับ (ขึ้นรถ · ถ่ายส่ง · ส่งไม่ได้) + แผนที่/โทร
+          (ยุบ flow จาก /admin/drivers/work มารวมหน้าเดียว · ภูม 2026-07-31) */}
+      <div className="space-y-2">
         {editableIds.length > 0 ? (
-          <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={hasPhoto} gradient />
+          <div className="grid grid-cols-3 gap-2">
+            <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={hasLoadPhoto} gradient kind="load" />
+            <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={hasPhoto} gradient />
+            {canFail ? (
+              <DriverStopFailButton itemIds={editableIds} gradient />
+            ) : (
+              <span
+                className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap ${
+                  done ? "border-white/40 bg-white/15 text-white" : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                }`}
+              >
+                <Check className="h-3.5 w-3.5" /> ส่งครบ
+              </span>
+            )}
+          </div>
         ) : (
           <span
             className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap ${
               done ? "border-white/40 bg-white/15 text-white" : "border-emerald-200 bg-emerald-50 text-emerald-700"
             }`}
           >
-            <Check className="h-3.5 w-3.5" /> ส่งครบ
+            <Check className="h-3.5 w-3.5" /> ส่งครบทั้งจุด
           </span>
         )}
-        <a
-          href={mapHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap ${
-            done
-              ? "border-white/40 bg-white/15 text-white"
-              : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-          }`}
-        >
-          <MapPin className="h-3.5 w-3.5" /> แผนที่
-        </a>
-        {phone ? (
+        <div className="grid grid-cols-2 gap-2">
           <a
-            href={`tel:${phone}`}
+            href={mapHref}
+            target="_blank"
+            rel="noopener noreferrer"
             className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap ${
-              done ? "border-white/40 bg-white/15 text-white" : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+              done
+                ? "border-white/40 bg-white/15 text-white"
+                : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
             }`}
           >
-            <Phone className="h-3.5 w-3.5" /> โทร
+            <MapPin className="h-3.5 w-3.5" /> แผนที่
           </a>
-        ) : (
-          <span
-            className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap opacity-50 ${
-              done ? "border-white/40 text-white" : "border-border text-muted"
-            }`}
-          >
-            <Phone className="h-3.5 w-3.5" /> โทร
-          </span>
-        )}
+          {phone ? (
+            <a
+              href={`tel:${phone}`}
+              className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap ${
+                done ? "border-white/40 bg-white/15 text-white" : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+              }`}
+            >
+              <Phone className="h-3.5 w-3.5" /> โทร
+            </a>
+          ) : (
+            <span
+              className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap opacity-50 ${
+                done ? "border-white/40 text-white" : "border-border text-muted"
+              }`}
+            >
+              <Phone className="h-3.5 w-3.5" /> โทร
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ดร็อปดาวน์ — รายละเอียดทั้งหมด (ที่อยู่เต็ม + ตารางออเดอร์ + พิมพ์) */}

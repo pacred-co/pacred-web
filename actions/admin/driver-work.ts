@@ -691,3 +691,133 @@ export async function adminEditDriverDeliveryPhoto(
     return { ok: true, data: { updated } };
   });
 }
+
+// ────────────────────────────────────────────────────────────────────────
+// ADMIN — ถ่าย/แก้ไขรูป "ขึ้นรถ" ทั้งจุดส่ง (per delivery-point · ภูม 2026-07-31)
+//
+// คู่กับ adminEditDriverDeliveryPhoto (ถ่ายส่ง) แต่เก็บรูปตอนโหลดของขึ้นรถ
+// (fdipictureon) ให้ทั้งจุดส่ง + มาร์ค "ขึ้นรถแล้ว" (fdistatus '' → '1') เฉพาะ
+// รายการที่ยังไม่ขึ้นรถ. ไม่แตะ tb_forwarder / เงิน / สถานะขนส่ง — การขึ้นรถ
+// ไม่ใช่เหตุการณ์ระดับ forwarder (fstatus คงเดิม). ใช้บนหน้า /admin/drivers/[id]
+// (ยุบ flow จาก /admin/drivers/work มารวมที่นี่ — พนักงานทำงานหน้าเดียว).
+// ────────────────────────────────────────────────────────────────────────
+export async function adminEditDriverLoadingPhoto(
+  formData: FormData,
+): Promise<AdminActionResult<{ updated: number }>> {
+  const idsRaw = formData.get("itemIds");
+  const itemIds =
+    typeof idsRaw === "string"
+      ? Array.from(
+          new Set(
+            idsRaw.split(",").map((s) => Number.parseInt(s.trim(), 10)).filter((n) => Number.isFinite(n) && n > 0),
+          ),
+        )
+      : [];
+  if (itemIds.length === 0) return { ok: false, error: "invalid_item_ids" };
+
+  const fileVal = formData.get("photo");
+  const photo = fileVal instanceof File && fileVal.size > 0 ? fileVal : null;
+  if (!photo) return { ok: false, error: "กรุณาแนบรูปถ่ายตอนขึ้นรถ" };
+
+  return withAdmin<{ updated: number }>([...PHOTO_EDIT_ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const { data: rolesRows, error: rolesRowsErr } = await admin
+      .from("admins").select("role").eq("profile_id", adminId).eq("is_active", true);
+    if (rolesRowsErr) console.error(`[admins list] failed`, { code: rolesRowsErr.code, message: rolesRowsErr.message });
+    const callerRoles = (rolesRows ?? []).map((r) => (r as { role: string }).role);
+
+    // อัปโหลดครั้งเดียว — รูปเดียวใช้ทั้งจุดส่ง (เหมือน adminEditDriverDeliveryPhoto).
+    const up = await uploadToBucket(photo, "forwarder-covers", `driver/edit-${itemIds[0]}-on`);
+    if (!up.ok) return { ok: false, error: `อัปโหลดรูปไม่สำเร็จ: ${up.error}` };
+    const filename = up.filename;
+
+    let updated = 0;
+    const touchedFdids = new Set<number>();
+    for (const itemId of itemIds) {
+      const authz = await loadItemAndAuthorise(itemId, adminId, callerRoles);
+      if (!authz.ok) continue; // ข้ามรายการที่ caller ไม่มีสิทธิ์
+      const { fdid, fdistatus } = authz.row;
+      // รูปขึ้นรถ = เขียนทับได้เสมอ · มาร์ค '' → '1' เฉพาะรายการที่ยังไม่ขึ้นรถ
+      // (loaded '1' / delivered '2' / failed '3' คงสถานะเดิม แค่เปลี่ยนรูป).
+      const itemUpdate: Record<string, string> = { fdipictureon: filename };
+      if (fdistatus === "") itemUpdate.fdistatus = "1";
+      const { error: itemErr } = await admin
+        .from("tb_forwarder_driver_item").update(itemUpdate).eq("id", itemId);
+      if (itemErr) {
+        console.error(`[adminEditDriverLoadingPhoto item]`, { itemId, message: itemErr.message });
+        continue;
+      }
+      updated++;
+      touchedFdids.add(fdid);
+    }
+    if (updated === 0) return { ok: false, error: "ไม่มีรายการที่แก้ไขได้ (สิทธิ์ไม่ถึง หรือไม่พบรายการ)" };
+
+    await logAdminAction(adminId, "tb_forwarder_driver_item.edit_loading_photo", "tb_forwarder_driver_item", itemIds.join(","), {
+      item_ids: itemIds, photo: filename, updated,
+    });
+    revalidatePath("/admin/drivers/work");
+    revalidatePath("/admin/drivers");
+    for (const fdid of touchedFdids) revalidatePath(`/admin/drivers/${fdid}`);
+    return { ok: true, data: { updated } };
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// ADMIN — "ส่งไม่ได้" ทั้งจุดส่ง (per delivery-point · ภูม 2026-07-31)
+//
+// เวอร์ชันต่อจุดของ markDriverItemFailed — มาร์ค fdistatus '3' + เก็บเหตุผล
+// (fdinote) ให้ทุกรายการในจุดที่ "ยังไม่ส่งสำเร็จ" ('' หรือ '1'). ข้ามรายการที่
+// ส่งสำเร็จ ('2') หรือล้มเหลวแล้ว ('3'). ไม่แตะ tb_forwarder — แถว '3' วนกลับ
+// เข้าคิวมอบงานเอง (self-heal). ใช้บนหน้า detail (ยุบ flow จาก /work).
+// ────────────────────────────────────────────────────────────────────────
+const markStopFailedSchema = z.object({
+  itemIds: z.array(z.number().int().positive()).min(1).max(200),
+  reason: z.string().trim().min(1, "กรุณาใส่เหตุผลที่ส่งไม่ได้").max(500),
+});
+export type MarkStopFailedInput = z.input<typeof markStopFailedSchema>;
+
+export async function adminMarkStopFailed(
+  input: MarkStopFailedInput,
+): Promise<AdminActionResult<{ updated: number }>> {
+  const parsed = markStopFailedSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const { itemIds, reason } = parsed.data;
+
+  return withAdmin<{ updated: number }>([...PHOTO_EDIT_ROLES], async ({ adminId }) => {
+    const admin = createAdminClient();
+    const { data: rolesRows, error: rolesRowsErr } = await admin
+      .from("admins").select("role").eq("profile_id", adminId).eq("is_active", true);
+    if (rolesRowsErr) console.error(`[admins list] failed`, { code: rolesRowsErr.code, message: rolesRowsErr.message });
+    const callerRoles = (rolesRows ?? []).map((r) => (r as { role: string }).role);
+
+    let updated = 0;
+    const touchedFdids = new Set<number>();
+    for (const itemId of itemIds) {
+      const authz = await loadItemAndAuthorise(itemId, adminId, callerRoles);
+      if (!authz.ok) continue;
+      const { fdid, fid, fdistatus } = authz.row;
+      // มาร์ค '3' เฉพาะรายการที่ยังไม่ส่งสำเร็จ · ส่งสำเร็จ '2' / ล้มเหลว '3' → ข้าม
+      // (เหมือน markDriverItemFailed).
+      if (fdistatus === "2" || fdistatus === "3") continue;
+      const { error: upErr } = await admin
+        .from("tb_forwarder_driver_item")
+        .update({ fdistatus: "3", fdinote: reason })
+        .eq("id", itemId);
+      if (upErr) {
+        console.error(`[adminMarkStopFailed item]`, { itemId, message: upErr.message });
+        continue;
+      }
+      updated++;
+      touchedFdids.add(fdid);
+      await logAdminAction(adminId, "tb_forwarder_driver_item.fail", "tb_forwarder_driver_item", String(itemId), {
+        fdid, fid, before_status: fdistatus, after_status: "3", reason,
+      });
+    }
+    if (updated === 0) return { ok: false, error: "ไม่มีรายการที่มาร์คส่งไม่ได้ (อาจส่งสำเร็จหมดแล้ว หรือสิทธิ์ไม่ถึง)" };
+
+    revalidatePath("/admin/drivers/work");
+    revalidatePath("/admin/drivers");
+    for (const fdid of touchedFdids) revalidatePath(`/admin/drivers/${fdid}`);
+    return { ok: true, data: { updated } };
+  });
+}

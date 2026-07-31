@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { BatchCountdown } from "./batch-countdown";
 import { DriverPhotoEditDialog } from "./driver-photo-edit-dialog";
+import { DriverStopFailButton } from "./driver-stop-fail-button";
 import { routeOrderOf } from "@/lib/admin/driver-route-order";
 import { BatchManage, RemoveItemButton } from "./batch-manage";
 import { DriverStopCard } from "./driver-stop-card";
@@ -949,15 +950,22 @@ export default async function AdminDriverBatchDetailPage({
                         <Camera className="h-3.5 w-3.5" /> ยังไม่มีรูปส่ง
                       </div>
                     )}
-                    {/* ถ่าย/แก้ไขภาพส่งสินค้า (legacy takePhoto → update_fPhotoEnd · ภูม 2026-07-10)
-                        — applies to the stop's non-failed (fdistatus≠'3') driver-items. */}
+                    {/* งานคนขับ — ขึ้นรถ · ถ่ายส่ง · ส่งไม่ได้ (ยุบ flow /admin/drivers/work
+                        มารวมหน้าเดียว · ภูม 2026-07-31) — ทำกับทุกรายการในจุดที่ยังไม่ '3'. */}
                     {(() => {
                       const editableIds = stop.items
                         .filter((e) => e.item.fdistatus !== "3")
                         .map((e) => e.item.id);
-                      return editableIds.length > 0 ? (
-                        <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={deliveryPhotos.length > 0} />
-                      ) : null;
+                      if (editableIds.length === 0) return null;
+                      const hasLoadPhoto = stop.items.some((e) => (e.item.fdipictureon ?? "").trim() !== "");
+                      const canFail = stop.items.some((e) => e.item.fdistatus === "" || e.item.fdistatus === "1");
+                      return (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={hasLoadPhoto} kind="load" />
+                          <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={deliveryPhotos.length > 0} />
+                          {canFail && <DriverStopFailButton itemIds={editableIds} />}
+                        </div>
+                      );
                     })()}
                   </div>
 
@@ -1208,6 +1216,9 @@ export default async function AdminDriverBatchDetailPage({
               : `https://www.google.com/maps/search/${encodeURIComponent(addrText)}`;
             const deliveryPhotos = Array.from(new Set(stop.items.map((e) => e.photoOffUrl).filter((u): u is string => Boolean(u))));
             const editableIds = stop.items.filter((e) => e.item.fdistatus !== "3").map((e) => e.item.id);
+            // ปุ่มงานคนขับ (ภูม 2026-07-31): มีรูปขึ้นรถแล้ว? · ยังมีรายการมาร์คส่งไม่ได้ได้?
+            const hasLoadPhoto = stop.items.some((e) => (e.item.fdipictureon ?? "").trim() !== "");
+            const canFail = stop.items.some((e) => e.item.fdistatus === "" || e.item.fdistatus === "1");
             const phones = [f.faddresstel, f.faddresstel2].map((p) => (p ?? "").trim()).filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
             const placeholder = isWarehousePlaceholder(f.faddressname);
             const heroPhoto = deliveryPhotos[0] ?? stop.items.find((e) => e.coverUrl)?.coverUrl ?? null;
@@ -1230,6 +1241,8 @@ export default async function AdminDriverBatchDetailPage({
                 heroPhoto={heroPhoto}
                 editableIds={editableIds}
                 hasPhoto={deliveryPhotos.length > 0}
+                hasLoadPhoto={hasLoadPhoto}
+                canFail={canFail}
                 slipHref={`/admin/drivers/${batch.id}/delivery-slip?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
                 stickersHref={`/admin/drivers/${batch.id}/stickers?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
                 addressEdit={isOpsOverride && f.userid ? (
@@ -1277,10 +1290,7 @@ export default async function AdminDriverBatchDetailPage({
 
       <p className="text-[11px] text-muted">
         ฐานข้อมูล: legacy <code className="rounded bg-surface-alt px-1">tb_forwarder_driver</code> #{batch.id}{" "}
-        — {stops.length} จุดส่ง · ดำเนินการสถานะรายการในหน้า{" "}
-        <Link href={`/admin/drivers/work?driver=${batch.fdadminid}`} className="text-primary-600 hover:underline">
-          /admin/drivers/work
-        </Link>
+        — {stops.length} จุดส่ง · ถ่ายรูปขึ้นรถ/ส่ง + มาร์คส่งไม่ได้ ได้ที่แต่ละจุดส่งในหน้านี้
       </p>
     </main>
   );

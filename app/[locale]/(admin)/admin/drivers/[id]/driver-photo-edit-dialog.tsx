@@ -17,24 +17,28 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
-import { Camera, Pencil, X } from "lucide-react";
+import { Camera, Pencil, X, Package } from "lucide-react";
 import { compressImageFile } from "@/lib/image-compress";
-import { adminEditDriverDeliveryPhoto } from "@/actions/admin/driver-work";
+import { adminEditDriverDeliveryPhoto, adminEditDriverLoadingPhoto } from "@/actions/admin/driver-work";
 
 export function DriverPhotoEditDialog({
   itemIds,
   hasPhoto,
   disabled = false,
   gradient = false,
+  kind = "deliver",
 }: {
   /** tb_forwarder_driver_item.id(s) covered by this delivery point. */
   itemIds: number[];
-  /** A delivery photo already exists → the button reads "แก้ภาพ". */
+  /** A photo (delivery/loading per `kind`) already exists → the button reads "แก้…". */
   hasPhoto: boolean;
   disabled?: boolean;
   /** ปุ่มพื้นหลัง gradient + text ขาว (หัวการ์ดมือถือ · ปอน 2026-07-24) · default = outline เดิม (เดสก์ท็อป zone-3 ไม่เปลี่ยน). */
   gradient?: boolean;
+  /** "deliver" = ถ่ายส่ง (มาร์คส่งสำเร็จ) · "load" = ถ่ายขึ้นรถ (มาร์คขึ้นรถ) · ภูม 2026-07-31 */
+  kind?: "load" | "deliver";
 }) {
+  const isLoad = kind === "load";
   const router = useRouter();
   const [pending, start] = useTransition();
   const [open, setOpen] = useState(false);
@@ -77,7 +81,7 @@ export function DriverPhotoEditDialog({
     fd.append("photo", previewFile, previewFile.name || "delivery.jpg");
     setErr(null);
     start(async () => {
-      const res = await adminEditDriverDeliveryPhoto(fd);
+      const res = await (isLoad ? adminEditDriverLoadingPhoto : adminEditDriverDeliveryPhoto)(fd);
       if (!res.ok) {
         setErr(res.error);
         return;
@@ -112,17 +116,25 @@ export function DriverPhotoEditDialog({
             ? "w-full rounded-full px-2 py-1 text-xs whitespace-nowrap " +
               (hasPhoto
                 ? "border-amber-600 bg-amber-600 text-white shadow-sm hover:bg-amber-700"
-                : "border-[#C82333] bg-[#C82333] text-white shadow-sm hover:bg-[#B21F2D]")
+                : isLoad
+                  ? "border-blue-600 bg-blue-600 text-white shadow-sm hover:bg-blue-700"
+                  : "border-[#C82333] bg-[#C82333] text-white shadow-sm hover:bg-[#B21F2D]")
             : "rounded-full px-2.5 py-1 text-[11px] " +
               (hasPhoto
                 ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
-                : "border-primary-300 bg-primary-50 text-primary-700 hover:bg-primary-100")
+                : isLoad
+                  ? "border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                  : "border-primary-300 bg-primary-50 text-primary-700 hover:bg-primary-100")
         }`}
       >
         {hasPhoto
           ? <Pencil className={gradient ? "h-3.5 w-3.5" : "h-3 w-3"} />
-          : <Camera className={gradient ? "h-3.5 w-3.5" : "h-3 w-3"} />}
-        {hasPhoto ? "แก้ภาพ" : gradient ? "ถ่ายส่ง" : "ถ่ายส่งสินค้า"}
+          : isLoad
+            ? <Package className={gradient ? "h-3.5 w-3.5" : "h-3 w-3"} />
+            : <Camera className={gradient ? "h-3.5 w-3.5" : "h-3 w-3"} />}
+        {hasPhoto
+          ? (isLoad ? "แก้รูปขึ้นรถ" : "แก้ภาพ")
+          : isLoad ? "ถ่ายขึ้นรถ" : gradient ? "ถ่ายส่ง" : "ถ่ายส่งสินค้า"}
       </button>
 
       {/* Modal — legacy "ถ่ายภาพสินค้าที่ส่ง" (ถ่ายใหม่ / บันทึกภาพ). */}
@@ -130,7 +142,7 @@ export function DriverPhotoEditDialog({
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <h3 className="text-sm font-bold text-foreground">ถ่ายภาพสินค้าที่ส่ง</h3>
+              <h3 className="text-sm font-bold text-foreground">{isLoad ? "ถ่ายรูปตอนขึ้นรถ" : "ถ่ายภาพสินค้าที่ส่ง"}</h3>
               <button
                 type="button"
                 onClick={close}
