@@ -4,7 +4,7 @@ import { ImpersonationBanner } from "@/components/sections/impersonation-banner"
 import { loadPcsChromeData } from "@/lib/legacy/pcs-chrome";
 import { PcsBodyClass } from "@/components/legacy/pcs-body-class";
 import { PcsLeftMenu } from "@/components/legacy/pcs-left-menu";
-import { PcsSidebarToggle } from "@/components/legacy/pcs-sidebar-toggle";
+import { PcsSidebarRailInit } from "@/components/legacy/pcs-sidebar-rail-init";
 import { PcsFooterNav } from "@/components/legacy/pcs-footer-nav";
 import { PcsChromeInit } from "@/components/legacy/pcs-chrome-init";
 import { NavBar } from "@/components/sections/navbar";
@@ -207,17 +207,24 @@ export default async function ProtectedLayout({
 
       {/* 3. Modern Pacred top chrome — replaces legacy PcsTopMenu.
             NavBar already knows auth state (reads Supabase from the client)
-            and SearchBar is the same component the public home renders. */}
-      <NavBar />
+            and SearchBar is the same component the public home renders.
+            hideTopMenu: drop the marketing mega-menu from the red bar — the
+            customer back-office navigates via the left sidebar below, so the
+            center menu is redundant (owner 2026-07-31). */}
+      <NavBar hideTopMenu />
       {/* Member chrome: search bar starts COLLAPSED on mobile (< xl, where the
           NavBar chevron toggle lives) and is force-shown on desktop (xl+, no
           chevron there). Tap the navbar chevron to expand. Per owner 2026-06-04
           ("หน้าเมนูในมือถือ ให้ search bar พับเป็น default แต่กดเปิดได้"). */}
       <SearchBar defaultCollapsed />
 
-      {/* 4. Legacy left sidebar — kept per ปอน 2026-05-23 (the "แถบซ้าย"). */}
+      {/* 4. Legacy left sidebar — kept per ปอน 2026-05-23 (the "แถบซ้าย").
+            Collapses to a 60px icon rail on every protected page (hover-expands,
+            pin to keep open) — same behaviour as the admin back-office sidebar
+            (owner 2026-07-31). The old floating toggle button is retired; the
+            rail default + pin live in <PcsSidebarRailInit> + <PcsSidebarPin>. */}
       <PcsLeftMenu data={chrome} />
-      <PcsSidebarToggle />
+      <PcsSidebarRailInit />
 
       {/* 5. The per-screen body. Wrapped in `.pcs-page-content` (display:contents
             → layout-transparent, the page stays the body's direct flex child) so

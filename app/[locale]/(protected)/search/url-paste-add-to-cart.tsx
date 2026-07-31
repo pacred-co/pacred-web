@@ -79,6 +79,7 @@ export function UrlPasteAddToCart({
   basePriceCny,
   promoPriceCny,
   fxRates,
+  richLayout = false,
 }: {
   url:        string;
   provider:   Provider;
@@ -108,6 +109,12 @@ export function UrlPasteAddToCart({
    *  island can show ราคาเริ่มต้น vs ราคา SKU ที่เลือก). */
   basePriceCny?:  number;
   promoPriceCny?: number;
+  /** Rich full-card presentation (owner 2026-07-31 mockup) — variant image
+   *  swatches + a sticky bottom price bar + red CTA, clean white/red theme.
+   *  Used by the /cart/add review page. Default (false) = the compact chip
+   *  layout the /search page uses (no regression). Money logic is identical
+   *  in both modes — only the presentation branches. */
+  richLayout?: boolean;
 }) {
   const t = useTranslations("searchPage");
   const minClamp = Math.max(1, minQty);
@@ -449,6 +456,26 @@ export function UrlPasteAddToCart({
 
   const lineTotalThb = effectivePriceThb * qty;
 
+  // Grand total for the rich sticky bar — the ¥ sum + its ฿ estimate, computed
+  // once for whichever mode is active (multi-pick grid vs single-pick qty).
+  const cartYuanTotal = isMultiPickMode ? multiPickTotalYuan : effectivePriceCny * qty;
+  const cartThbTotal = cartYuanTotal * rsDefault;
+  const richCtaDisabled =
+    pending || (isMultiPickMode ? totalSelectedQty === 0 || !title.trim() : !isReady);
+  const ctaLabel = pending
+    ? t("addingToCart")
+    : !title.trim()
+      ? t("noProductName")
+      : isMultiPickMode
+        ? totalSelectedQty === 0
+          ? "เลือกตัวเลือก + จำนวนก่อน"
+          : `${t("addToCart")} (${selectedSkuCount} ตัวเลือก · ${totalSelectedQty.toLocaleString()} ชิ้น)`
+        : axesIncomplete
+          ? t("selectAllOptionsFirst")
+          : effectivePriceCny <= 0
+            ? t("enterPriceAbove")
+            : t("addToCart");
+
   // ONE batch ZH→TH round-trip for everything Chinese on this card (the title + every
   // option label). Cached server-side (translation_cache · mig 0246), so a second view of
   // the listing — by anyone — is instant.
@@ -468,10 +495,10 @@ export function UrlPasteAddToCart({
           When product has ≥ 2 SKUs, render a row per SKU with qty stepper
           (mirrors 1688's "数量" column). Submit batches all qty>0 rows. */}
       {isMultiPickMode && skuMap && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 space-y-2">
-          <p className="text-sm font-semibold text-emerald-900">
+        <div className={richLayout ? "space-y-2" : "rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 space-y-2"}>
+          <p className={richLayout ? "text-[13px] font-semibold text-foreground" : "text-sm font-semibold text-emerald-900"}>
             {t("pickOptionsAndQty")}{" "}
-            <span className="text-xs font-normal text-emerald-700">
+            <span className={richLayout ? "text-xs font-normal text-muted" : "text-xs font-normal text-emerald-700"}>
               {t("pickOptionsHint", { count: skuMap.length })}
             </span>
           </p>
@@ -565,71 +592,134 @@ export function UrlPasteAddToCart({
       )}
 
       {!isMultiPickMode && skuAxes && skuAxes.length > 0 && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 space-y-3">
-          <p className="text-sm font-semibold text-emerald-900">
-            {t("selectProductOptions")}{" "}
-            {axesIncomplete && (
-              <span className="text-red-600 font-bold ml-1">{t("required")}</span>
-            )}
-            {matchedSku && (
-              <span className="text-emerald-700 ml-2 text-xs font-normal">
-                {t("allSelectedPrice", { price: matchedSku.price_cny.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })}
-              </span>
-            )}
-          </p>
+        <div
+          className={
+            richLayout
+              ? "space-y-3"
+              : "rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 space-y-3"
+          }
+        >
+          {!richLayout && (
+            <p className="text-sm font-semibold text-emerald-900">
+              {t("selectProductOptions")}{" "}
+              {axesIncomplete && (
+                <span className="text-red-600 font-bold ml-1">{t("required")}</span>
+              )}
+              {matchedSku && (
+                <span className="text-emerald-700 ml-2 text-xs font-normal">
+                  {t("allSelectedPrice", { price: matchedSku.price_cny.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) })}
+                </span>
+              )}
+            </p>
+          )}
           {skuAxes.map((axis) => {
             const selectedLabel = selectedVariants[axis.name];
+            // Image-bearing axis (color/style swatches) → render as picture
+            // cards in rich mode (screenshot 3 "สี / แบบ"). Text axes (size)
+            // stay as chips even in rich mode.
+            const isImageAxis = axis.values.some((v) => v.is_image && v.image);
+            const pick = (label: string) => {
+              setSelectedVariants((prev) => {
+                if (prev[axis.name] === label) {
+                  const next = { ...prev };
+                  delete next[axis.name];
+                  return next;
+                }
+                return { ...prev, [axis.name]: label };
+              });
+              setError(null);
+              setSuccess(false);
+            };
             return (
               <div key={axis.name}>
-                <p className="text-sm text-emerald-800 mb-1.5">
+                <p className={richLayout ? "text-[13px] mb-2" : "text-sm text-emerald-800 mb-1.5"}>
                   <strong className="text-foreground">{axis.name}</strong>
                   {selectedLabel && (
                     <span className="ml-2 text-primary-600 font-medium">: {selectedLabel}</span>
                   )}
-                  <span className="ml-1.5 text-xs text-emerald-600">{t("optionsCount", { count: axis.values.length })}</span>
+                  {axesIncomplete && richLayout && !selectedLabel && (
+                    <span className="ml-2 text-red-600 text-xs font-bold">{t("required")}</span>
+                  )}
+                  <span className={`ml-1.5 text-xs ${richLayout ? "text-muted" : "text-emerald-600"}`}>
+                    {t("optionsCount", { count: axis.values.length })}
+                  </span>
                 </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {axis.values.map((v) => {
-                    const isSelected = selectedLabel === v.label;
-                    const showThumb  = v.is_image && v.image;
-                    return (
-                      <button
-                        key={v.label}
-                        type="button"
-                        onClick={() => {
-                          setSelectedVariants((prev) => {
-                            // Toggle: clicking the selected chip clears it.
-                            if (prev[axis.name] === v.label) {
-                              const next = { ...prev };
-                              delete next[axis.name];
-                              return next;
-                            }
-                            return { ...prev, [axis.name]: v.label };
-                          });
-                          setError(null);
-                          setSuccess(false);
-                        }}
-                        disabled={pending}
-                        title={v.label}
-                        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm min-h-[44px] transition ${
-                          isSelected
-                            ? "border-primary-500 bg-primary-50 text-primary-700 ring-2 ring-primary-500/30 font-semibold"
-                            : "border-border bg-white hover:border-primary-300 text-foreground"
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
-                      >
-                        {showThumb && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={v.image}
-                            alt=""
-                            className="h-7 w-7 rounded object-contain bg-white border border-border/50"
-                          />
-                        )}
-                        <span className="max-w-[16rem] truncate">{v.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+
+                {richLayout && isImageAxis ? (
+                  // ── Rich swatch cards: image on top, label below ──
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+                    {axis.values.map((v) => {
+                      const isSelected = selectedLabel === v.label;
+                      return (
+                        <button
+                          key={v.label}
+                          type="button"
+                          onClick={() => pick(v.label)}
+                          disabled={pending}
+                          title={v.label}
+                          className={`group flex flex-col overflow-hidden rounded-xl border bg-white text-left transition disabled:opacity-50 ${
+                            isSelected
+                              ? "border-red-500 ring-2 ring-red-500/25"
+                              : "border-border hover:border-red-300"
+                          }`}
+                        >
+                          {v.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={v.image}
+                              alt=""
+                              loading="lazy"
+                              className="aspect-square w-full bg-white object-cover"
+                            />
+                          ) : (
+                            <div className="flex aspect-square w-full items-center justify-center bg-surface-alt text-xl">📦</div>
+                          )}
+                          <span
+                            className={`line-clamp-2 px-1.5 py-1 text-center text-[11px] leading-tight ${
+                              isSelected ? "font-semibold text-primary-700" : "text-foreground"
+                            }`}
+                          >
+                            <AutoTranslateText text={v.label} />
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  // ── Chip row (text axes, and everything in compact mode) ──
+                  <div className="flex flex-wrap gap-1.5">
+                    {axis.values.map((v) => {
+                      const isSelected = selectedLabel === v.label;
+                      const showThumb  = v.is_image && v.image;
+                      return (
+                        <button
+                          key={v.label}
+                          type="button"
+                          onClick={() => pick(v.label)}
+                          disabled={pending}
+                          title={v.label}
+                          className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm min-h-[44px] transition ${
+                            isSelected
+                              ? richLayout
+                                ? "border-red-500 bg-red-50 text-primary-700 ring-2 ring-red-500/20 font-semibold"
+                                : "border-primary-500 bg-primary-50 text-primary-700 ring-2 ring-primary-500/30 font-semibold"
+                              : "border-border bg-white hover:border-primary-300 text-foreground"
+                          } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                          {showThumb && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={v.image}
+                              alt=""
+                              className="h-7 w-7 rounded object-contain bg-white border border-border/50"
+                            />
+                          )}
+                          <span className="max-w-[16rem] truncate">{v.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -686,8 +776,10 @@ export function UrlPasteAddToCart({
         </label>
       ) : null}
 
-      {/* Color / size — single-pick only (multi-pick auto-derives from SKU axes) */}
-      {!isMultiPickMode && (
+      {/* Color / size — single-pick only (multi-pick auto-derives from SKU axes).
+          In rich mode with swatch axes present, the swatches already capture
+          color/style → hide the redundant text inputs (screenshot 3). */}
+      {!isMultiPickMode && !(richLayout && skuAxes && skuAxes.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <label className="block">
             <span className="text-sm text-muted block mb-1">{t("colorLabel")}</span>
@@ -767,16 +859,27 @@ export function UrlPasteAddToCart({
             </button>
           </div>
         </div>
-        <div className="flex flex-wrap items-baseline justify-between text-sm">
-          <span className="text-muted">{t("total")}</span>
-          <span>
-            <b className="text-red-600 text-lg">{lineTotalThb.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>
-            {" "}฿
-            <span className="text-xs text-muted">
-              ({effectivePriceCny.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}¥ × {qty} × {rsDefault}฿/¥)
+        {richLayout ? (
+          // Rich mode: the running total lives in the sticky bar below → show
+          // stock info here instead (screenshot 3 "ผลิต … · ขั้นต่ำ …").
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+            {matchedSku && matchedSku.stock > 0 && (
+              <span>คงเหลือ <b className="text-foreground">{matchedSku.stock.toLocaleString()}</b> ชิ้น</span>
+            )}
+            <span>ขั้นต่ำ <b className="text-foreground">{minClamp.toLocaleString()}</b> ชิ้น</span>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-baseline justify-between text-sm">
+            <span className="text-muted">{t("total")}</span>
+            <span>
+              <b className="text-red-600 text-lg">{lineTotalThb.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>
+              {" "}฿
+              <span className="text-xs text-muted">
+                ({effectivePriceCny.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}¥ × {qty} × {rsDefault}฿/¥)
+              </span>
             </span>
-          </span>
-        </div>
+          </div>
+        )}
       </div>
       )}
 
@@ -808,31 +911,52 @@ export function UrlPasteAddToCart({
         </div>
       )}
 
-      {/* Submit CTA */}
-      <button
-        type="button"
-        onClick={onSubmit}
-        disabled={
-          pending
-          || (isMultiPickMode ? totalSelectedQty === 0 || !title.trim() : !isReady)
-        }
-        className="w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-red-600 hover:bg-red-700 text-white text-base font-semibold px-6 py-3 min-h-[44px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <ShoppingCart className="h-5 w-5" />
-        {pending
-          ? t("addingToCart")
-          : !title.trim()
-            ? t("noProductName")
-            : isMultiPickMode
-              ? totalSelectedQty === 0
-                ? "เลือกตัวเลือก + จำนวนก่อน"
-                : `${t("addToCart")} (${selectedSkuCount} ตัวเลือก · ${totalSelectedQty.toLocaleString()} ชิ้น)`
-              : axesIncomplete
-                ? t("selectAllOptionsFirst")
-                : effectivePriceCny <= 0
-                  ? t("enterPriceAbove")
-                  : t("addToCart")}
-      </button>
+      {/* Submit CTA — compact mode only (rich mode uses the sticky bar below) */}
+      {!richLayout && (
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={richCtaDisabled}
+          className="w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-red-600 hover:bg-red-700 text-white text-base font-semibold px-6 py-3 min-h-[44px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <ShoppingCart className="h-5 w-5" />
+          {ctaLabel}
+        </button>
+      )}
+
+      {/* ── Rich sticky price bar (screenshot 3): ¥ total · เรท · ฿ ประมาณ + CTA.
+          Spans the card padding (-mx) + sticks to the viewport bottom so the
+          หยิบใส่รถเข็น button is always reachable however long the option list. ── */}
+      {richLayout && (
+        <div className="sticky bottom-0 z-10 -mx-3 -mb-3 mt-1 flex flex-wrap items-center justify-between gap-3 rounded-b-2xl border-t border-border bg-white/95 px-3 py-3 backdrop-blur md:-mx-4 md:-mb-4 md:px-4">
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 text-[13px]">
+            <span>
+              <span className="text-muted">ราคาสินค้า </span>
+              <b className="text-lg text-red-600">
+                {cartYuanTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </b>
+              <span className="text-muted"> หยวน</span>
+            </span>
+            <span className="text-muted">อัตราแลกเปลี่ยน {rsDefault} บาท/¥</span>
+            <span>
+              <span className="text-muted">ประมาณ </span>
+              <b className="text-lg text-red-600">
+                {cartThbTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </b>
+              <span className="text-muted"> บาท</span>
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={richCtaDisabled}
+            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full bg-red-600 px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          >
+            <ShoppingCart className="h-5 w-5" />
+            {ctaLabel}
+          </button>
+        </div>
+      )}
     </div>
     </TranslateProvider>
   );
