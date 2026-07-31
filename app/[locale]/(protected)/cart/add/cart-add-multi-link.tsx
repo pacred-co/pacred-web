@@ -5,12 +5,13 @@
  *
  * Redesign of the single-link `<CartAddUrlForm>`: paste up to 20 product links
  * (1688 / Taobao / Tmall / Alibaba) — one at a time, all-at-once, or from the
- * clipboard — verify them all in one click, pick quantities, then add the whole
- * batch to the cart.
+ * clipboard. "ค้นหาและตรวจสอบสินค้า" stashes the ready links in sessionStorage and
+ * navigates to /cart/add/review (owner 2026-07-31 "กดแล้วไปหน้าใหม่ + skeleton แบบ
+ * shopee") which fetches each + shows the full rich product detail.
  *
- * Money path is 100% REUSED (no new one):
- *   - verify a link  → searchProductByUrl()  (actions/product-search.ts)
- *   - add the batch  → addCartItemsBulk()     (actions/cart.ts · tb_cart · cap 10000)
+ * This file is the PASTE ENTRY only — the fetch / rich card / add-to-cart live on
+ * the review page (searchProductByUrl → <RichProductCard> → <UrlPasteAddToCart>
+ * island → addCartItem → tb_cart). Money path 100% REUSED, no new one.
  *
  * The "ไม่มีลิงก์สินค้า" tab points to the existing manual-entry flow
  * (/service-order/add) — no dead end, no new manual form for V1.
@@ -20,16 +21,13 @@
  * body text ≥ 16px on the paste box, single-column < md, CTA thumb-reachable.
  */
 
-import { useMemo, useState, useTransition, type ReactNode } from "react";
-import { Link } from "@/i18n/navigation";
+import { useMemo, useState, type ReactNode } from "react";
+import { Link, useRouter } from "@/i18n/navigation";
 import {
-  Link2, Pencil, Search, Trash2, Plus, GripVertical,
-  CheckCircle2, Clock, AlertTriangle, ShoppingCart, ArrowLeft, PartyPopper,
-  ClipboardList, ExternalLink, Globe,
+  Link as LinkIcon, Link2, Pencil, Search, Trash2, Plus, GripVertical,
+  CheckCircle2, Clock, AlertTriangle, PartyPopper,
+  ClipboardList, ClipboardPaste, ExternalLink, Globe, Info, ChevronRight,
 } from "lucide-react";
-import { searchProductByUrl, type ProductSearchOk } from "@/actions/product-search";
-import { addCartItemsBulk } from "@/actions/cart";
-import { clampOrderQty } from "@/lib/validators/order-qty";
 
 const MAX_ROWS = 20;
 
@@ -44,11 +42,11 @@ function detectSource(raw: string): Source | null {
   if (u.includes("alibaba.com")) return "alibaba";
   return null;
 }
-const SOURCE_BADGE: Record<Source, { label: string; cls: string }> = {
-  "1688":   { label: "1688",     cls: "bg-orange-50 text-orange-700" },
-  taobao:   { label: "Taobao",   cls: "bg-rose-50 text-rose-700" },
-  tmall:    { label: "Tmall",    cls: "bg-red-50 text-red-700" },
-  alibaba:  { label: "Alibaba",  cls: "bg-amber-50 text-amber-700" },
+const SOURCE_BADGE: Record<Source, { label: string; icon: string }> = {
+  "1688":   { label: "1688",     icon: "/legacy/pcs/assets/images/shops/1688-logo-2.png" },
+  taobao:   { label: "Taobao",   icon: "/images/partners/taobaopartner.png" },
+  tmall:    { label: "Tmall",    icon: "/images/partners/tmallpartner.png" },
+  alibaba:  { label: "Alibaba",  icon: "/images/partners/alibabapartner.png" },
 };
 
 type Row = { id: number; url: string };
@@ -57,28 +55,18 @@ function newRow(url = ""): Row {
   return { id: ROW_SEQ++, url };
 }
 
-type VerifiedRow =
-  | { key: number; url: string; ok: true; product: ProductSearchOk["product"]; qty: number; picked: boolean }
-  | { key: number; url: string; ok: false; message: string };
-
 type Flash =
   | { kind: "added"; count: number }
   | { kind: "cart_full" }
   | { kind: "error"; message: string };
 
-function numberFormat2(n: number): string {
-  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
-export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
+export function CartAddMultiLink() {
   const [tab, setTab] = useState<"link" | "manual">("link");
   const [subTab, setSubTab] = useState<"one" | "multi">("one");
   const [rows, setRows] = useState<Row[]>([newRow(), newRow()]);
   const [multiText, setMultiText] = useState("");
-  const [phase, setPhase] = useState<"input" | "results">("input");
-  const [results, setResults] = useState<VerifiedRow[]>([]);
-  const [verifying, startVerify] = useTransition();
-  const [adding, startAdd] = useTransition();
+  const router = useRouter();
   const [flash, setFlash] = useState<Flash | null>(null);
 
   // Ready = a row whose URL is a supported marketplace link.
@@ -92,6 +80,27 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
   function setUrl(id: number, url: string) {
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, url } : r)));
     setFlash(null);
+  }
+  // แยกข้อความที่วาง (หลายลิงก์ · เว้นวรรค/ขึ้นบรรทัด) ลงเป็นหลายช่องอัตโนมัติ เริ่มจากช่อง id นี้.
+  function spreadLinks(id: number, text: string) {
+    const links = text.split(/[\s\n]+/).map((s) => s.trim()).filter(Boolean).slice(0, MAX_ROWS);
+    if (!links.length) return;
+    setRows((rs) => {
+      const idx = rs.findIndex((r) => r.id === id);
+      if (idx < 0) return rs;
+      const inserted = links.map((u, k) => (k === 0 ? { ...rs[idx], url: u } : newRow(u)));
+      return [...rs.slice(0, idx), ...inserted, ...rs.slice(idx + 1)].slice(0, MAX_ROWS);
+    });
+    setFlash(null);
+  }
+  // วางลิงก์ที่คัดลอกไว้ด้วยคลิกเดียว (อ่านคลิปบอร์ด — user gesture · รองรับหลายลิงก์).
+  async function pasteInto(id: number) {
+    try {
+      const text = (await navigator.clipboard.readText()).trim();
+      if (text) spreadLinks(id, text);
+    } catch {
+      setFlash({ kind: "error", message: "ไม่สามารถอ่านคลิปบอร์ดได้ - กรุณากดวางเองด้วย Ctrl+V" });
+    }
   }
   function addRow() {
     setRows((rs) => (rs.length >= MAX_ROWS ? rs : [...rs, newRow()]));
@@ -120,7 +129,9 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
     setSubTab("one");
     setFlash(null);
   }
-  // ── Verify every ready link (parallel) → results stage ──────────────
+  // "ค้นหาและตรวจสอบสินค้า" → stash the ready links + navigate to the rich review
+  // page (owner 2026-07-31 "ไปหน้าใหม่ + skeleton แบบ shopee"). The fetch + skeleton
+  // happen on /cart/add/review — this page just collects the links + hands off.
   function onVerify() {
     const ready = rows.filter((r) => detectSource(r.url) !== null);
     if (ready.length === 0) {
@@ -128,84 +139,22 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
       return;
     }
     setFlash(null);
-    startVerify(async () => {
-      const settled = await Promise.all(
-        ready.map(async (r): Promise<VerifiedRow> => {
-          const res = await searchProductByUrl(r.url.trim());
-          if (res.ok) {
-            return { key: r.id, url: r.url, ok: true, product: res.product, qty: 1, picked: true };
-          }
-          return {
-            key: r.id,
-            url: r.url,
-            ok: false,
-            message: res.message || "ดึงข้อมูลสินค้าไม่สำเร็จ — ลองใหม่ หรือกรอกข้อมูลเอง",
-          };
-        }),
-      );
-      setResults(settled);
-      setPhase("results");
-    });
-  }
-
-  // ── Results-stage editing ───────────────────────────────────────────
-  function setResQty(key: number, qty: number) {
-    setResults((rs) =>
-      rs.map((r) => (r.key === key && r.ok ? { ...r, qty: clampOrderQty(qty) } : r)),
-    );
-  }
-  function togglePick(key: number) {
-    setResults((rs) =>
-      rs.map((r) => (r.key === key && r.ok ? { ...r, picked: !r.picked } : r)),
-    );
-  }
-
-  const okResults = results.filter((r): r is Extract<VerifiedRow, { ok: true }> => r.ok);
-  const pickedResults = okResults.filter((r) => r.picked && r.qty > 0);
-  const failCount = results.length - okResults.length;
-  const pickedPieces = pickedResults.reduce((s, r) => s + r.qty, 0);
-
-  function onAddSelected() {
-    if (pickedResults.length === 0) {
-      setFlash({ kind: "error", message: "เลือกอย่างน้อย 1 รายการก่อนเพิ่มลงรถเข็นครับ" });
-      return;
+    try {
+      sessionStorage.setItem("pacred_cart_add_links", JSON.stringify(ready.map((r) => r.url.trim())));
+    } catch {
+      /* private mode / storage disabled — the review page shows an empty state */
     }
-    setFlash(null);
-    const bulk = pickedResults.map((r) => ({
-      provider:   r.product.provider,
-      shop_name:  r.product.shopName || "pacred",
-      url:        r.product.sourceUrl,
-      title:      r.product.title,
-      image_path: r.product.imageUrl || "",
-      color:      undefined,
-      size:       undefined,
-      price_cny:  r.product.promoPriceCny ?? r.product.priceCny,
-      amount:     r.qty,
-      details:    undefined,
-    }));
-    startAdd(async () => {
-      const res = await addCartItemsBulk(bulk);
-      if (res.ok) {
-        setFlash({ kind: "added", count: res.data?.count ?? bulk.length });
-        setRows([newRow()]);
-        setResults([]);
-        setPhase("input");
-      } else if (/cart cap reached/i.test(res.error)) {
-        setFlash({ kind: "cart_full" });
-      } else {
-        setFlash({ kind: "error", message: res.error || "เพิ่มลงรถเข็นไม่สำเร็จ" });
-      }
-    });
+    router.push("/cart/add/review");
   }
 
   // ════════════════════════════════════════════════════════════════
   return (
     <div className="rounded-2xl bg-white p-4 md:p-5">
-      <h2 className="text-lg md:text-xl font-bold text-foreground">เพิ่มสินค้าเข้ารถเข็น</h2>
-      <p className="text-[12.5px] text-muted mt-0.5 mb-3.5">เลือกวิธีเพิ่มสินค้าได้ 2 แบบ</p>
+      <h2 className="text-lg md:text-xl font-bold text-foreground">เพิ่มสินค้านำเข้า</h2>
+      <p className="text-[12.5px] text-muted mt-0.5 mb-3.5">เลือกประเทศต้นทางและเพิ่มสินค้าที่ต้องการสั่งซื้อ</p>
 
       {/* ประเทศต้นทาง (owner 2026-07-30 "แทรก sub ประเทศ + ตีกรอบข้างบน · ตอนนี้มีแค่จีน · แบบในภาพ").
-          display-only: จีน = ใช้ได้จริง (active) · ญี่ปุ่น/เกาหลีใต้/เวียดนาม = เร็ว ๆ นี้ (disabled ·
+          display-only: จีน = ใช้ได้จริง (active) · ญี่ปุ่น/เกาหลีใต้/เวียดนาม/อินเดีย = เร็ว ๆ นี้ (disabled ·
           กันหลอกลูกค้า §0f). ธงวงกลมจาก flag-icon-css 1x1 (มีในโปรเจกต์). */}
       <div className="mb-4 rounded-2xl border border-border p-3.5 md:p-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
@@ -213,7 +162,7 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
           <button
             type="button"
             aria-pressed
-            className="inline-flex items-center gap-2 rounded-xl border border-red-500 bg-red-50 px-3.5 py-2 text-[13px] font-bold text-primary-700 ring-2 ring-red-500/15"
+            className="inline-flex items-center gap-2 rounded-full border border-red-500 bg-red-50 px-3.5 py-2 text-[13px] font-bold text-primary-700 ring-2 ring-red-500/15"
           >
             <span className="h-[22px] w-[22px] shrink-0 overflow-hidden rounded-full ring-1 ring-black/5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -225,13 +174,14 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
             { code: "jp", label: "ญี่ปุ่น" },
             { code: "kr", label: "เกาหลีใต้" },
             { code: "vn", label: "เวียดนาม" },
+            { code: "in", label: "อินเดีย" },
           ].map((c) => (
             <button
               key={c.code}
               type="button"
               disabled
               title="เร็ว ๆ นี้"
-              className="inline-flex cursor-not-allowed items-center gap-2 rounded-xl border border-border bg-white px-3.5 py-2 text-[13px] font-bold text-muted opacity-60"
+              className="inline-flex cursor-not-allowed items-center gap-2 rounded-full border border-border bg-white px-3.5 py-2 text-[13px] font-bold text-muted opacity-60"
             >
               <span className="h-[22px] w-[22px] shrink-0 overflow-hidden rounded-full ring-1 ring-black/5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -251,13 +201,13 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
         <button
           type="button"
           onClick={() => setTab("link")}
-          className={`relative flex-1 inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-bold transition ${
+          className={`relative flex-1 inline-flex items-center justify-center gap-2 rounded-full border px-3 py-3 text-sm font-bold transition ${
             tab === "link"
               ? "border-red-500 bg-red-50 text-primary-700 ring-2 ring-red-500/15"
               : "border-border bg-white text-muted hover:border-red-200"
           }`}
         >
-          <Link2 className="h-4 w-4" /> มีลิงก์สินค้า
+          <LinkIcon className="h-4 w-4" /> มีลิงก์สินค้า
           <span className="absolute -top-2 right-3 rounded-full bg-red-600 px-2 py-0.5 text-[9.5px] font-extrabold text-white">
             แนะนำ
           </span>
@@ -265,7 +215,7 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
         <button
           type="button"
           onClick={() => setTab("manual")}
-          className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-bold transition ${
+          className={`flex-1 inline-flex items-center justify-center gap-2 rounded-full border px-3 py-3 text-sm font-bold transition ${
             tab === "manual"
               ? "border-red-500 bg-red-50 text-primary-700 ring-2 ring-red-500/15"
               : "border-border bg-white text-muted hover:border-red-200"
@@ -295,13 +245,13 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
       )}
 
       {/* ── TAB: มีลิงก์ ── */}
-      {tab === "link" && phase === "input" && (
+      {tab === "link" && (
         <>
           {/* กรอบกลุ่มช่องวางลิงก์ (owner 2026-07-30 · "เอากรอบออก · ใช้กรอบแบบในภาพ" +
               "อยู่ในกรอบเดียวกัน") — ถอดกรอบนอกการ์ด แล้วตีกรอบรวม หัวข้อ + steps + แท็บย่อย +
               แถวลิงก์ + สรุป ไว้ในแผงเดียว. ปุ่มค้นหา / รองรับเว็บไซต์ / hint ยังอยู่นอกกรอบ. */}
           <div className="mt-3 rounded-2xl border border-border p-4 md:p-5">
-          <div className="text-[14.5px] font-bold text-foreground">
+          <div className="text-lg font-bold text-foreground">
             เพิ่มลิงก์สินค้าที่ต้องการสั่งซื้อ
             <span className="ml-2 inline-block rounded-full border border-red-300 px-2.5 py-0.5 text-[11.5px] font-bold text-red-600">
               เพิ่มได้สูงสุด {MAX_ROWS} ลิงก์
@@ -369,21 +319,43 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
                   return (
                     <div key={r.id} className="flex items-center gap-2">
                       <GripVertical className="h-4 w-4 shrink-0 text-gray-300" aria-hidden />
-                      <span className="w-5 shrink-0 text-center text-[12px] font-bold text-muted">{i + 1}</span>
-                      <input
-                        type="url"
-                        inputMode="url"
-                        value={r.url}
-                        onChange={(e) => setUrl(r.id, e.target.value)}
-                        placeholder="วางลิงก์สินค้า 1688 / Taobao / Tmall ที่นี่"
-                        className={`min-w-0 flex-1 h-10 rounded-lg border px-3 text-[13.5px] outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100 ${
-                          src ? "border-emerald-400 bg-emerald-50/40" : "border-border"
-                        }`}
-                      />
+                      <span className="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-[13px] font-extrabold text-gray-700">{i + 1}</span>
+                      <div className="relative min-w-0 flex-1">
+                        <input
+                          type="url"
+                          inputMode="url"
+                          value={r.url}
+                          onChange={(e) => setUrl(r.id, e.target.value)}
+                          onPaste={(e) => {
+                            const text = e.clipboardData.getData("text");
+                            if (/[\s\n]/.test(text.trim())) {
+                              e.preventDefault();
+                              spreadLinks(r.id, text);
+                            }
+                          }}
+                          placeholder="วางลิงก์สินค้า 1688 / Taobao / Tmall ที่นี่"
+                          className={`w-full h-10 rounded-full border pl-3 text-[13.5px] outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100 ${
+                            filled ? "pr-3" : "pr-[62px]"
+                          } ${src ? "border-emerald-400 bg-emerald-50/40" : "border-red-400 bg-red-50/40"}`}
+                        />
+                        {!filled && (
+                          <button
+                            type="button"
+                            onClick={() => pasteInto(r.id)}
+                            title="วางลิงก์ที่คัดลอกไว้"
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1 text-[11.5px] font-bold text-gray-600 hover:bg-gray-200 active:scale-95 transition"
+                          >
+                            <ClipboardPaste className="h-3.5 w-3.5" /> วาง
+                          </button>
+                        )}
+                      </div>
                       {src && (
-                        <span className={`shrink-0 rounded-lg px-2 py-1 text-[11px] font-extrabold ${SOURCE_BADGE[src].cls}`}>
-                          {SOURCE_BADGE[src].label}
-                        </span>
+                        <img
+                          src={SOURCE_BADGE[src].icon}
+                          alt={SOURCE_BADGE[src].label}
+                          className="shrink-0 h-7 w-auto object-contain"
+                          loading="lazy"
+                        />
                       )}
                       <span className="hidden sm:flex shrink-0 items-center gap-1 text-[11.5px] font-bold whitespace-nowrap">
                         {src ? (
@@ -412,18 +384,22 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
                 type="button"
                 onClick={addRow}
                 disabled={rows.length >= MAX_ROWS}
-                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-surface/50 py-2.5 text-[13px] font-bold text-muted hover:border-red-300 hover:text-primary-600 disabled:opacity-40"
+                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-full border border-dashed border-border bg-surface/50 py-2.5 text-[13px] font-bold text-muted hover:border-red-300 hover:text-primary-600 disabled:opacity-40"
               >
                 <Plus className="h-4 w-4" /> เพิ่มช่องลิงก์
               </button>
 
               {/* Footer summary */}
-              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted">
+              <div className="mt-3 flex items-start gap-1.5 text-[12px] text-muted">
+                <Info className="h-4 w-4 shrink-0 mt-0.5 text-gray-400" aria-hidden />
+                <span>สามารถวางหลายลิงก์พร้อมกันได้ ระบบจะแยกเป็นแต่ละรายการให้อัตโนมัติ</span>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] text-muted">
                 <span>ทั้งหมด <b className="text-foreground">{rows.length}</b> ช่อง</span>
                 <span className="text-emerald-700">· พร้อมตรวจสอบ <b>{readyCount}</b></span>
                 {filledCount - readyCount > 0 && <span>· ไม่รองรับ {filledCount - readyCount}</span>}
-                <button type="button" onClick={clearAll} className="ml-auto font-bold text-red-600 hover:text-red-700">
-                  ล้างทั้งหมด
+                <button type="button" onClick={clearAll} className="ml-auto inline-flex items-center gap-1 font-bold text-red-600 hover:text-red-700">
+                  <Trash2 className="h-4 w-4" /> ล้างทั้งหมด
                 </button>
               </div>
             </>
@@ -436,31 +412,35 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
           <button
             type="button"
             onClick={onVerify}
-            disabled={verifying || readyCount === 0}
-            className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 py-3.5 text-[15px] font-extrabold text-white shadow-sm hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={readyCount === 0}
+            className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-full bg-primary-600 py-3.5 text-[15px] font-extrabold text-white shadow-sm hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Search className="h-5 w-5" strokeWidth={2.4} />
-            {verifying ? "กำลังตรวจสอบสินค้า..." : `ค้นหาและตรวจสอบสินค้า ${readyCount} รายการ`}
+            ค้นหาและตรวจสอบสินค้า {readyCount} รายการ
           </button>
 
-          {/* supported — โลโก้จริงของแต่ละแพลตฟอร์ม (owner 2026-07-30 "ใช้ไอคอนจริงๆ
-              มาขึ้นจะดีกว่า"). โลโก้เป็น wordmark พื้นขาว (มีในโปรเจกต์อยู่แล้ว) → ใส่ในชิป
-              ขาวมีขอบ · normalize ความสูง h-5 · กว้าง auto (สัดส่วนโลโก้ต่างกันได้ตามจริง). */}
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-2 text-[12px] text-muted">
+          {/* supported — โลโก้จริงของแต่ละแพลตฟอร์ม (owner 2026-07-30/31 "ใช้ไอคอนจริงๆ ·
+              เอากรอบออก · ใหญ่ขึ้น · กดแล้วไปเว็บนั้นๆ"). โลโก้ wordmark พื้นขาวบนการ์ดขาว
+              = ไร้รอยต่อ ไม่ต้องมีกรอบ · h-8 · กว้าง auto · <a> เปิดเว็บจริงในแท็บใหม่. */}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-[12px] text-muted">
             <span>รองรับเว็บไซต์:</span>
             {[
-              { src: "/legacy/pcs/assets/images/shops/1688-logo-2.png", alt: "1688" },
-              { src: "/images/partners/taobaopartner.png", alt: "Taobao" },
-              { src: "/images/partners/tmallpartner.png", alt: "Tmall" },
-              { src: "/images/partners/alibabapartner.png", alt: "Alibaba" },
+              { src: "/legacy/pcs/assets/images/shops/1688-logo-2.png", alt: "1688", href: "https://www.1688.com" },
+              { src: "/images/partners/taobaopartner.png", alt: "Taobao", href: "https://www.taobao.com" },
+              { src: "/images/partners/tmallpartner.png", alt: "Tmall", href: "https://www.tmall.com" },
+              { src: "/images/partners/alibabapartner.png", alt: "Alibaba", href: "https://www.alibaba.com" },
             ].map((s) => (
-              <span
+              <a
                 key={s.alt}
-                className="inline-flex items-center rounded-lg border border-border bg-white px-2.5 py-1 shadow-sm"
+                href={s.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`ไปที่เว็บ ${s.alt}`}
+                className="inline-flex items-center hover:opacity-70 transition-opacity"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={s.src} alt={s.alt} className="h-5 w-auto object-contain" loading="lazy" />
-              </span>
+                <img src={s.src} alt={s.alt} className="h-8 w-auto object-contain" loading="lazy" />
+              </a>
             ))}
           </div>
 
@@ -476,100 +456,11 @@ export function CartAddMultiLink({ rsDefault }: { rsDefault: number }) {
             <button
               type="button"
               onClick={() => setTab("manual")}
-              className="shrink-0 rounded-lg border border-red-200 bg-white px-3 py-2 text-[12.5px] font-bold text-primary-700 hover:bg-red-50"
+              className="shrink-0 rounded-full border border-red-200 bg-white px-3 py-2 text-[12.5px] font-bold text-primary-700 hover:bg-red-50"
             >
               กรอกข้อมูลสินค้าเอง →
             </button>
           </div>
-        </>
-      )}
-
-      {/* ── TAB: มีลิงก์ · RESULTS ── */}
-      {tab === "link" && phase === "results" && (
-        <>
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-[14.5px] font-bold text-foreground">
-              ผลการตรวจสอบ
-              <span className="ml-2 text-[11.5px] font-semibold text-muted">
-                พบ {okResults.length} · ตรวจไม่พบ {failCount}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => { setPhase("input"); setFlash(null); }}
-              className="inline-flex items-center gap-1 text-[12.5px] font-bold text-muted hover:text-primary-600"
-            >
-              <ArrowLeft className="h-4 w-4" /> แก้ไขลิงก์
-            </button>
-          </div>
-
-          <div className="mt-3 space-y-2.5">
-            {results.map((r) =>
-              r.ok ? (
-                <div
-                  key={r.key}
-                  className={`flex items-center gap-3 rounded-xl border p-3 ${
-                    r.picked ? "border-emerald-300 bg-emerald-50/40" : "border-border bg-white opacity-70"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={r.picked}
-                    onChange={() => togglePick(r.key)}
-                    className="h-5 w-5 shrink-0 accent-emerald-600"
-                    aria-label="เลือกสินค้านี้"
-                  />
-                  {r.product.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={r.product.imageUrl} alt="" className="h-16 w-16 shrink-0 rounded-lg border border-border object-contain bg-white" loading="lazy" />
-                  ) : (
-                    <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-surface-alt text-2xl">📦</span>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="line-clamp-2 text-[13px] font-medium text-foreground">{r.product.title}</p>
-                    <p className="mt-0.5 text-[14px] font-extrabold text-red-600">
-                      ¥{numberFormat2(r.product.promoPriceCny ?? r.product.priceCny)}
-                      <span className="ml-1.5 text-[11.5px] font-medium text-muted">
-                        ≈ ฿{numberFormat2((r.product.promoPriceCny ?? r.product.priceCny) * rsDefault)}
-                      </span>
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-stretch overflow-hidden rounded-lg border border-border bg-white">
-                    <button type="button" onClick={() => setResQty(r.key, r.qty - 1)} disabled={adding || r.qty <= 1} className="w-8 text-lg text-gray-600 hover:bg-gray-100 disabled:text-gray-300">−</button>
-                    <input
-                      type="number" min={1} value={r.qty} disabled={adding}
-                      onChange={(e) => setResQty(r.key, Number(e.target.value) || 1)}
-                      className="w-11 border-x border-border text-center text-[13px] font-bold outline-none focus:bg-red-50"
-                    />
-                    <button type="button" onClick={() => setResQty(r.key, r.qty + 1)} disabled={adding} className="w-8 text-lg text-gray-600 hover:bg-gray-100">+</button>
-                  </div>
-                </div>
-              ) : (
-                <div key={r.key} className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-[12.5px] text-red-800">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-bold">ตรวจไม่พบสินค้า</p>
-                    <p className="truncate text-[11.5px] text-red-700/80">{r.url}</p>
-                    <p className="text-[11.5px]">{r.message}</p>
-                  </div>
-                </div>
-              ),
-            )}
-          </div>
-
-          {flash && <FlashBanner flash={flash} />}
-
-          <button
-            type="button"
-            onClick={onAddSelected}
-            disabled={adding || pickedResults.length === 0}
-            className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 py-3.5 text-[15px] font-extrabold text-white shadow-sm hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <ShoppingCart className="h-5 w-5" strokeWidth={2.4} />
-            {adding
-              ? "กำลังเพิ่มลงรถเข็น..."
-              : `เพิ่มที่เลือกลงรถเข็น (${pickedResults.length} รายการ · ${pickedPieces} ชิ้น)`}
-          </button>
         </>
       )}
     </div>
@@ -591,7 +482,13 @@ function StepCell({
         <span
           aria-hidden
           className={`pointer-events-none absolute left-1/2 top-1/2 h-px w-full -translate-y-1/2 ${lineOn ? "bg-red-300" : "bg-gray-200"}`}
-        />
+        >
+          {/* หัวลูกศรที่ "ปลายเส้น" — ชิดวงกลมสเต็ปถัดไป (เยื้องซ้าย = รัศมีวงกลม 14px) */}
+          <ChevronRight
+            strokeWidth={2.5}
+            className={`absolute right-[14px] top-1/2 h-4 w-4 -translate-y-1/2 ${lineOn ? "text-red-400" : "text-gray-300"}`}
+          />
+        </span>
       )}
       <div className="relative z-10 flex items-center gap-1.5 bg-white px-1.5 sm:gap-2">
         <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-extrabold ${on ? "bg-red-600 text-white shadow-sm" : "border border-gray-200 bg-white text-gray-400"}`}>
