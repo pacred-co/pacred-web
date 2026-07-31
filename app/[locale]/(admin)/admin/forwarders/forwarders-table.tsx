@@ -20,6 +20,7 @@ import {
   markForwarderPrinted,
   adminRestoreForwarderFromSpecial,
 } from "@/actions/admin/forwarders";
+import { adminReassignForwarderOwner } from "@/actions/admin/forwarders-field-edits";
 import { confirm } from "@/components/ui/confirm";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
 import { BulkActionsToolbar } from "./bulk-actions-toolbar";
@@ -822,6 +823,39 @@ export function ForwardersTable({
     });
   };
 
+  const onAssignNoCodeOwner = async (row: Row) => {
+    setError(null);
+    setSuccess(null);
+    const entered = window.prompt(
+      `ใส่รหัสลูกค้าให้ NO CODE #${row.id}\nTracking: ${row.tracking_chn || "—"}`,
+      "PR",
+    );
+    if (entered == null) return;
+    const newUserId = entered.trim().toUpperCase();
+    if (!/^PR\d+$/.test(newUserId)) {
+      setError("รหัสลูกค้าต้องเป็น PR ตามด้วยตัวเลข เช่น PR12345");
+      return;
+    }
+    if (!(await confirm(
+      `ยืนยันว่า ${newUserId} เป็นเจ้าของพัสดุ #${row.id}?\n\nระบบจะตรวจสมาชิกจริง แล้วส่งงานออกจากสถานะพิเศษกลับเข้า flow ปกติ พร้อมคำนวณราคาจากข้อมูลจริงของพัสดุ`,
+    ))) return;
+
+    startTransition(async () => {
+      const result = await adminReassignForwarderOwner({ fId: row.id, newUserId });
+      if (!result.ok) {
+        setError(result.error ?? "ใส่ PR ไม่สำเร็จ");
+        return;
+      }
+      if (result.data?.noCodeActivated && result.data.rateOk === false) {
+        setError(`ใส่ PR ${newUserId} ให้ #${row.id} สำเร็จแล้ว แต่ยังหาราคาไม่ได้ · งานกลับเข้า flow แล้ว กรุณาตรวจเรท/ประเภทสินค้าในหน้ารายละเอียดก่อนวางบิล`);
+        router.refresh();
+        return;
+      }
+      setSuccess(`ใส่ PR ${newUserId} ให้ #${row.id} สำเร็จ · งานกลับเข้า flow ปกติแล้ว`);
+      router.refresh();
+    });
+  };
+
   const allChecked = rows.length > 0 && selected.size === rows.length;
   const someChecked = selected.size > 0 && selected.size < rows.length;
 
@@ -1101,7 +1135,23 @@ export function ForwardersTable({
                       <td className="px-2 py-2.5">
                         {/* §0h — primary identity (รหัสลูกค้า) sized up to text-sm so
                             the eye lands on "whose row" first; name + phone stay secondary. */}
-                        <div className="text-sm"><CustomerCodeLink code={r.customer?.userid} /></div>
+                        {r.status === "99" && !r.customer?.userid ? (
+                          <div className="space-y-1">
+                            <span className="inline-flex rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800" title="งานไม่สมบูรณ์ · ยังไม่รู้เจ้าของ · ยอดเงินถูกล็อกไว้ที่ศูนย์">
+                              NO CODE
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => onAssignNoCodeOwner(r)}
+                              disabled={pending}
+                              className="block rounded border border-amber-500 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                            >
+                              ใส่ PR → กลับเข้า flow
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-sm"><CustomerCodeLink code={r.customer?.userid} /></div>
+                        )}
                         <div className="truncate max-w-[140px]" title={r.customer?.name ?? ""}>
                           {r.customer?.name || "—"}
                         </div>

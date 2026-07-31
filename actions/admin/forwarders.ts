@@ -611,6 +611,22 @@ export async function adminBulkUpdateForwarderTbStatus(
       if (wouldDemote) derivedFstatus = fstatus;
     }
 
+    // Ownerless fstatus=99 rows are MOMO NO CODE holdings. They may leave the
+    // lane only through adminReassignForwarderOwner, which validates a real PR,
+    // verifies zero money, restores the staging backlink, and then re-prices.
+    // A manual status picker would bypass every one of those invariants.
+    if (derivedFstatus !== "99") {
+      const ownerlessNoCode = beforeRows.filter(
+        (row) => row.fstatus === "99" && !(row.userid ?? "").trim(),
+      );
+      if (ownerlessNoCode.length > 0) {
+        return {
+          ok: false,
+          error: `NO CODE ต้องใส่ PR ที่มีจริงก่อนออกจากสถานะพิเศษ: ${ownerlessNoCode.slice(0, 8).map((row) => `#${row.id}`).join(", ")}`,
+        };
+      }
+    }
+
     // 🔴 ด่านที่อยู่จัดส่ง ก่อนเข้า "รอชำระเงิน(5)" (owner 2026-07-23 · MONEY) —
     // ทางนี้คือการเลื่อนสถานะเองของ Ultra Admin Z = ทางลัดที่ไม่ผ่านหน้าเก็บเงิน
     // ปกติ. ที่อยู่กำหนดค่าส่งไทยที่ขึ้นบิล + ที่อยู่ผู้รับบนเอกสาร → ต้องมีก่อน.
@@ -1242,6 +1258,15 @@ export async function adminRestoreForwarderFromSpecial(
       const eligible = beforeRows.filter((r) => r.fstatus === "99");
       if (eligible.length === 0) {
         return { ok: false, error: "no_special_rows: ไม่มีรายการที่อยู่ในสถานะพิเศษ (99)" };
+      }
+      const ownerlessNoCode = eligible.filter((r) => !(r.userid ?? "").trim());
+      if (ownerlessNoCode.length > 0) {
+        return {
+          ok: false,
+          error:
+            `NO CODE ต้องกด "ใส่ PR → กลับเข้า flow" ก่อน ไม่สามารถคืนสถานะแบบทั่วไปได้: ` +
+            ownerlessNoCode.slice(0, 8).map((r) => `#${r.id}`).join(", "),
+        };
       }
 
       const adminIdSafe = String(adminId).slice(0, 10);

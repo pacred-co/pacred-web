@@ -47,6 +47,7 @@ import {
   extractCrateFromMomoRaw,
   extractCoverFromMomoRaw,
   extractCgFromMomoRaw,
+  deriveMomoMemberCode,
 } from "@/lib/admin/momo-raw-helpers";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { splitAggregatedMomoBoxRows } from "@/lib/integrations/momo-web/split-box-rows";
@@ -133,7 +134,13 @@ const PAYMETHOD_OPTIONS    = ["1", "2"] as const; // 1=ต้นทาง (pay-a
 
 export const commitMomoRowSchema = z.object({
   rowId:        z.string().uuid("rowId ต้องเป็น uuid"),
-  userID:       z.string().trim().regex(/^PR\d+$/i, "userID ต้องเป็น PR####").max(20),
+  userID:       z.string().trim().max(20),
+  /**
+   * Explicit holding-lane import for MOMO rows that have no customer code.
+   * This is never inferred from a bad/blank PR: the caller must deliberately
+   * choose this mode so an ordinary commit cannot silently orphan a parcel.
+   */
+  mode:         z.enum(["normal", "special-no-code"]).optional().default("normal"),
   subUserID:    z.string().trim().max(20).optional().default(""),
   // ภูม 2026-06-25 ("ตัดออก") — ขนส่งเป็น optional ตอน commit MOMO. ว่าง = ยังไม่ระบุ
   // → เซล/ลูกค้ากรอกที่อยู่จัดส่ง+เลือกขนส่งเองภายหลัง (เลิก default "รับเองโกดัง").
@@ -147,6 +154,17 @@ export const commitMomoRowSchema = z.object({
   // cron path derives it from the carrier (derivePayMethod) so an upcountry
   // order gets '2' (เก็บเงินปลายทาง) per ภูม's province rule (Issue 4 v2).
   payMethod:    z.enum(PAYMETHOD_OPTIONS).optional(),
+}).superRefine((value, ctx) => {
+  const userID = value.userID.trim();
+  if (value.mode === "special-no-code") {
+    if (userID !== "") {
+      ctx.addIssue({ code: "custom", path: ["userID"], message: "โหมด NO CODE ต้องไม่มีรหัสลูกค้า" });
+    }
+    return;
+  }
+  if (!/^PR\d+$/i.test(userID)) {
+    ctx.addIssue({ code: "custom", path: ["userID"], message: "userID ต้องเป็น PR####" });
+  }
 });
 
 /**
@@ -236,6 +254,7 @@ export async function commitMomoRowCore(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
   const d = parsed.data;
+  const isSpecialNoCode = d.mode === "special-no-code";
 
   const admin         = createAdminClient();
   const legacyAdminId = ctx.legacyAdminId.slice(0, 10);
@@ -332,17 +351,25 @@ export async function commitMomoRowCore(
 
   // ── 2. Verify customer (tb_users) ─────────────────────────
   const userID = d.userID.toUpperCase();
-  const { data: customer, error: customerErr } = await admin
-    .from("tb_users")
-    .select("userID, coID, userCompany")
-    .eq("userID", userID)
-    .maybeSingle<{ userID: string; coID: string | null; userCompany: string | null }>();
-  if (customerErr) {
-    console.error(`[tb_users lookup] failed`, { code: customerErr.code, message: customerErr.message });
-    return { ok: false, error: `db_error:${customerErr.code ?? "unknown"}` };
-  }
-  if (!customer) {
-    return { ok: false, error: "ไม่พบสมาชิก (userID ไม่ตรงกับ tb_users)" };
+  let customer: { userID: string; coID: string | null; userCompany: string | null };
+  if (isSpecialNoCode) {
+    // Deliberately blank. Never manufacture a PR placeholder: a fake owner can
+    // leak the parcel into customer, pricing, wallet, and billing flows.
+    customer = { userID: "", coID: null, userCompany: null };
+  } else {
+    const { data: foundCustomer, error: customerErr } = await admin
+      .from("tb_users")
+      .select("userID, coID, userCompany")
+      .eq("userID", userID)
+      .maybeSingle<{ userID: string; coID: string | null; userCompany: string | null }>();
+    if (customerErr) {
+      console.error(`[tb_users lookup] failed`, { code: customerErr.code, message: customerErr.message });
+      return { ok: false, error: `db_error:${customerErr.code ?? "unknown"}` };
+    }
+    if (!foundCustomer) {
+      return { ok: false, error: "ไม่พบสมาชิก (userID ไม่ตรงกับ tb_users)" };
+    }
+    customer = foundCustomer;
   }
 
   // ── 2b. ขนส่ง: ว่าง → ยึดตามงานล่าสุดของลูกค้าคนนั้น (owner 2026-07-21) ──────
@@ -351,8 +378,9 @@ export async function commitMomoRowCore(
   // (prod 2026-07-21: 263 แถวค้าง). ลูกค้าเก่าส่วนใหญ่ส่งแบบเดิมทุกครั้ง → หยิบของ
   // ล่าสุดมาตั้งให้ · ลูกค้าใหม่ที่ไม่มีประวัติ = คืน null → ปล่อยว่างให้ CS/ลูกค้าเลือก
   // (ห้ามเดา — เดาผิดคือของไปผิดบ้าน). แก้ทีหลังได้ทุกเมื่อที่หน้างาน.
-  const fShipByResolved =
-    (d.fShipBy ?? "").trim() !== ""
+  const fShipByResolved = isSpecialNoCode
+    ? ""
+    : (d.fShipBy ?? "").trim() !== ""
       ? d.fShipBy
       : (await resolveLastUsedCarrier(admin, customer.userID)) ?? "";
   if (fShipByResolved !== (d.fShipBy ?? "")) {
@@ -362,7 +390,9 @@ export async function commitMomoRowCore(
 
   // ── 3. Resolve address ────────────────────────────────────
   let addr: ResolvedAddress;
-  if (dShip.fShipBy === "PCS") {
+  if (isSpecialNoCode) {
+    addr = { ...EMPTY_ADDRESS };
+  } else if (dShip.fShipBy === "PCS") {
     addr = { ...PCS_PICKUP_ADDRESS };
   } else if (d.addressID) {
     const { data: addrRow, error: addrErr } = await admin
@@ -485,7 +515,7 @@ export async function commitMomoRowCore(
   // checkCarrierForProvince ข้ามการเช็คพื้นที่ให้เอง (กติกา "จังหวัดไม่รู้ → ไม่เช็ค" ·
   // รายชื่อขนส่งปิด (closed list) ยังบังคับอยู่) — ด่านนี้จึงไม่บล็อกงานที่ยังไม่มีที่อยู่
   // แต่ยังกันการพิมพ์ชื่อขนส่งมั่วเหมือนเดิม.
-  {
+  if (!isSpecialNoCode) {
     const coverage = checkCarrierForProvince(dShip.fShipBy, addr.addressprovince);
     if (!coverage.ok) return { ok: false, error: coverage.error };
   }
@@ -495,6 +525,49 @@ export async function commitMomoRowCore(
   // MOMO คีย์ตกหล่นแต่รูปป้ายมีเลขเต็ม) ก่อนเลขดิบจาก MOMO เสมอ. ทุก dedup/family
   // guard ข้างล่างวิ่งบนเลขนี้ = เลขที่จะกลายเป็น ftrackingchn จริง.
   const trackingNo  = (srcRow.tracking_override ?? "").trim() || srcRow.momo_tracking_no;
+
+  // NO CODE must be true on the server, not merely a stale client label. The
+  // MOMO screen fills staging blanks from momo_box_detail (Live web truth), so
+  // read the same source here. If Live already knows a PR, force the ordinary
+  // owner commit. If Live knows the real container, preserve that grouping on
+  // the fstatus=99 row even though the staging API column is still blank.
+  if (isSpecialNoCode) {
+    const rawObj = srcRow.raw && typeof srcRow.raw === "object"
+      ? srcRow.raw as Record<string, unknown>
+      : {};
+    const rawMemberCode = deriveMomoMemberCode(rawObj.user_group, rawObj.user_code).trim().toUpperCase();
+    const liveBase = momoBaseOf(trackingNo);
+    const { data: liveRows, error: liveErr } = await admin
+      .from("momo_box_detail")
+      .select("member_code, container_name")
+      .eq("base_tracking", liveBase)
+      .limit(50);
+    if (liveErr) {
+      console.error("[commit-momo NO CODE live truth] failed", {
+        code: liveErr.code,
+        message: liveErr.message,
+        tracking: trackingNo,
+      });
+      return { ok: false, error: `ตรวจ NO CODE กับ MOMO Live ไม่สำเร็จ: ${liveErr.message}` };
+    }
+    const liveMeta = (liveRows ?? []) as Array<{ member_code: string | null; container_name: string | null }>;
+    const liveMemberCode = liveMeta
+      .map((row) => (row.member_code ?? "").trim().toUpperCase())
+      .find(Boolean) ?? "";
+    const knownMemberCode = rawMemberCode || liveMemberCode;
+    if (knownMemberCode) {
+      return {
+        ok: false,
+        error: `พัสดุนี้มีรหัสลูกค้า ${knownMemberCode} ในข้อมูล MOMO แล้ว — ใช้นำเข้าแบบปกติ ห้ามส่งเข้ากอง NO CODE`,
+      };
+    }
+    if (!(srcRow.container_batch_no ?? "").trim()) {
+      const liveContainer = liveMeta
+        .map((row) => (row.container_name ?? "").trim())
+        .find((value) => value !== "" && !isNonContainerCabinetId(value));
+      if (liveContainer) srcRow.container_batch_no = liveContainer;
+    }
+  }
 
   // 🔒 กันนำเข้า "เรคคอร์ดซ้ำของ MOMO" (owner 2026-07-25 · เคส 733 · fail-CLOSED)
   // MOMO เปิดได้ 2 เรคคอร์ดต่อพัสดุใบเดียว: ร้านประกาศเลขเต็ม (0kg ค้างตลอด) +
@@ -610,7 +683,7 @@ export async function commitMomoRowCore(
   // either propagated cid OR the routing batch number as a signal that
   // this tracking has been allocated, so status flips to 3.
   const hasContainer = !!cabinetForDisplay;
-  const fStatusNew = hasContainer ? "3" : "2";
+  const fStatusNew = isSpecialNoCode ? "99" : hasContainer ? "3" : "2";
 
   // reforder links a forwarder back to its originating ฝากสั่งซื้อ order
   // (tb_header_order.hno). MOMO-commit parcels aren't spawned from a shop
@@ -674,7 +747,7 @@ export async function commitMomoRowCore(
   // string for company customers. We match that here (verified in
   // prod tb_forwarder rows for PR124 / PR2503 / AIGA — all show "").
   // Convention: "" = company customer · "0" = individual customer.
-  const fUserCompany = customer.userCompany === "1" ? "" : "0";
+  const fUserCompany = !isSpecialNoCode && customer.userCompany === "1" ? "" : "0";
 
   const nowIso = new Date().toISOString();
 
@@ -944,7 +1017,7 @@ export async function commitMomoRowCore(
     .update({
       committed_at:  nowIso,
       committed_by:  ctx.committedBy,
-      commit_userid: customer.userID,
+      commit_userid: isSpecialNoCode ? null : customer.userID,
       updated_at:    nowIso,
     })
     .eq("id", srcRow.id)
@@ -981,7 +1054,7 @@ export async function commitMomoRowCore(
       // MOMO cron supplies d.payMethod (zone-aware). Admin /review omits it → derive
       // zone-aware from carrier+address zip (external courier upcountry → COD;
       // self-pickup 'PCS'/own-fleet → ต้นทาง via the own-fleet guard).
-      paymethod:             d.payMethod ?? derivePayMethodForDelivery(dShip.fShipBy, { addressID: null, zip: addr.addresszipcode }),
+      paymethod:             isSpecialNoCode ? "1" : d.payMethod ?? derivePayMethodForDelivery(dShip.fShipBy, { addressID: null, zip: addr.addresszipcode }),
       fusercompany:          fUserCompany,
       priceother:            0,
       // fwarehousename: "8" = MOMO (per WAREHOUSE_LABEL in /admin/report-cnt/
@@ -1028,7 +1101,9 @@ export async function commitMomoRowCore(
       // convention '1'=ตีลังไม้ · '2'=ไม่ตี (function.php L1691). Default-safe
       // to "2"/0 when MOMO sends no wooden_create=true. Admin editor overrides.
       crate:                 momoCrate.crate,
-      pricecrate:            momoCrate.pricecrate,
+      // NO CODE is an identity holding lane, never a money lane. Preserve the
+      // crate fact but do not post its fee until a real PR owns the parcel.
+      pricecrate:            isSpecialNoCode ? 0 : momoCrate.pricecrate,
       ftransportpricechnthb: 0,
       pricemore:             "0",
       customrate:            "0",
@@ -1054,10 +1129,17 @@ export async function commitMomoRowCore(
       paydeposit:            "0",
       ftrackingth:           "-",
       ffreeshipping:         "0",
-      fnote:                 (typeof (srcRow.raw as Record<string, unknown> | null)?.remark === "string" &&
-                              String((srcRow.raw as Record<string, unknown>).remark).trim() !== ""
-                                ? String((srcRow.raw as Record<string, unknown>).remark).slice(0, 500)
-                                : null),
+      fnote:                 isSpecialNoCode
+                              ? [
+                                  "NO CODE · รอระบุ PR",
+                                  typeof (srcRow.raw as Record<string, unknown> | null)?.remark === "string"
+                                    ? String((srcRow.raw as Record<string, unknown>).remark).trim()
+                                    : "",
+                                ].filter(Boolean).join(" · ").slice(0, 500)
+                              : (typeof (srcRow.raw as Record<string, unknown> | null)?.remark === "string" &&
+                                String((srcRow.raw as Record<string, unknown>).remark).trim() !== ""
+                                  ? String((srcRow.raw as Record<string, unknown>).remark).slice(0, 500)
+                                  : null),
       fnoteuser:             "0",
       fnoteuserread:         "0",
       // รูปที่แอดมินเพิ่มบนด่านนำเข้า (admin_patch.extra_images = key ใน bucket
@@ -1080,7 +1162,7 @@ export async function commitMomoRowCore(
       adminid:               legacyAdminId,
       adminidkey:            "",
       adminidupdate:         legacyAdminId,
-      session:               "admin-momo-review-commit",
+      session:               isSpecialNoCode ? "admin-momo-no-code" : "admin-momo-review-commit",
       reforder:              reforderValue,
       fcredit:               "0",
       fsendsms1day:          "0",
@@ -1126,15 +1208,17 @@ export async function commitMomoRowCore(
   //   notification has fired. The helper never persists a silent ฿0 (it
   //   skips the write on rateMissing), so leaving the row at 0 is safe and an
   //   admin can still set the rate manually via the edit form.
-  try {
-    const rateRes = await computeAndFillForwarderImportRate(admin, row.id);
-    if (!rateRes.ok) {
-      console.error(`[momo commit: auto-rate] did not resolve (id=${row.id})`, {
-        reason: rateRes.reason,
-      });
+  if (!isSpecialNoCode) {
+    try {
+      const rateRes = await computeAndFillForwarderImportRate(admin, row.id);
+      if (!rateRes.ok) {
+        console.error(`[momo commit: auto-rate] did not resolve (id=${row.id})`, {
+          reason: rateRes.reason,
+        });
+      }
+    } catch (e) {
+      console.error(`[momo commit: auto-rate] threw AFTER tb_forwarder INSERT (id=${row.id})`, e);
     }
-  } catch (e) {
-    console.error(`[momo commit: auto-rate] threw AFTER tb_forwarder INSERT (id=${row.id})`, e);
   }
 
   // ── 5b. Split the shipment into its N scannable box sub-rows (ภูม 2026-07-13) ──
@@ -1147,10 +1231,12 @@ export async function commitMomoRowCore(
   // shipment-level money (ค่าส่งไทย/เหมาๆ/ตีลัง) stays on the anchor only = ONE customer
   // bill. Best-effort — a miss (e.g. momo_box_detail not synced yet) never fails the
   // commit; the cron liveBoxSplit pass (allowPriced) retries. No-op for single-box.
-  try {
-    await splitAggregatedMomoBoxRows(admin, [trackingNo], undefined, { allowPriced: true });
-  } catch (e) {
-    console.error(`[momo commit: box-split] threw (tracking=${trackingNo})`, e);
+  if (!isSpecialNoCode) {
+    try {
+      await splitAggregatedMomoBoxRows(admin, [trackingNo], undefined, { allowPriced: true });
+    } catch (e) {
+      console.error(`[momo commit: box-split] threw (tracking=${trackingNo})`, e);
+    }
   }
 
   // ── 6. Back-fill the forwarder id on the already-claimed source row ──
@@ -1187,7 +1273,7 @@ export async function commitMomoRowCore(
   if (ctx.adminId) {
     await logAdminAction(
       ctx.adminId,
-      "forwarder.momo_review.commit",
+      isSpecialNoCode ? "forwarder.momo_no_code.commit_special" : "forwarder.momo_review.commit",
       "tb_forwarder",
       String(row.id),
       {
@@ -1197,7 +1283,8 @@ export async function commitMomoRowCore(
         momo_container_no:  containerNo,                // MOMO routing batch ID (bug 2c)
         container_batch_no: srcRow.container_batch_no,  // real cabinet from container_closed.cid
         momo_sack_no:       srcRow.momo_sack_no,
-        userid:             customer.userID,
+        userid:             isSpecialNoCode ? null : customer.userID,
+        mode:               d.mode,
         ship_by:            dShip.fShipBy,
         fStatusNew,
         fIDorCO,

@@ -18,7 +18,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
 import { CheckCircle2, AlertCircle, RefreshCw, X, PackageCheck, Truck, Check } from "lucide-react";
-import { commitMomoRowToForwarder } from "@/actions/admin/momo-commit";
+import { commitMomoNoCodeToSpecial, commitMomoRowToForwarder } from "@/actions/admin/momo-commit";
 import { propagateMomoLiveStatusNow } from "@/actions/admin/momo-web-live";
 import { addMissingMomoParcelsBulk } from "@/actions/admin/momo-add-missing";
 import { updateMomoImportTrackFields, adminAddMomoStagingImage } from "@/actions/admin/momo-ingest-edit";
@@ -609,7 +609,14 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     return ids;
   })();
   const selectedTracks = useMemo(() => tracks.filter((t) => sel.has(t.id) && !t.committed), [tracks, sel]);
-  const invalidSelected = useMemo(() => selectedTracks.filter((t) => t.userIdValid !== true).length, [selectedTracks]);
+  const noCodeSelected = useMemo(
+    () => selectedTracks.filter((t) => !(t.guessedUserId ?? "").trim()).length,
+    [selectedTracks],
+  );
+  const invalidSelected = useMemo(
+    () => selectedTracks.filter((t) => (t.guessedUserId ?? "").trim() !== "" && t.userIdValid !== true).length,
+    [selectedTracks],
+  );
   const allSelected = allPendingIds.length > 0 && allPendingIds.every((id) => sel.has(id));
   const someSelected = !allSelected && allPendingIds.some((id) => sel.has(id));
   function toggleAll() {
@@ -658,20 +665,43 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     // defense in depth (owner 2026-07-23) — แถวรอตรวจ (ข้อมูลไม่ครบ) ห้ามถูกกวาดเข้าระบบ
     // ตอนนำเข้าเป็นชุด แม้จะหลุดเข้ามาในชุดที่เลือก (เช่น ติ๊กรายตัว) → นำเข้าเฉพาะแถวที่พร้อม ·
     // แถวรอตรวจเก็บไว้ให้ตรวจ+นำเข้าทีละแถว.
-    const ready = selectedTracks.filter((t) => !isNotReady(t));
+    const ready = selectedTracks.filter((t) => {
+      const reasons = notReadyReasons(t);
+      // Missing PR now has an explicit destination (fstatus=99). It must not
+      // strand an otherwise valid physical parcel in staging.
+      const blocking = (t.guessedUserId ?? "").trim()
+        ? reasons
+        : reasons.filter((reason) => reason !== "ไม่มีรหัสลูกค้า");
+      return blocking.length === 0;
+    });
     const heldSkipped = selectedTracks.length - ready.length;
     for (const t of ready) {
       const label = t.tracking ?? t.id;
       try {
-        const res = await commitMomoRowToForwarder({
-          rowId: t.id,
-          userID: (t.guessedUserId ?? "").trim().toUpperCase(),
-          fShipBy: "",
-          fProductsType: t.guessedProductType,
-        } satisfies CommitMomoRowInput);
+        const noCode = !(t.guessedUserId ?? "").trim();
+        const res = noCode
+          ? await commitMomoNoCodeToSpecial({
+              rowId: t.id,
+              fProductsType: t.guessedProductType,
+            })
+          : await commitMomoRowToForwarder({
+              rowId: t.id,
+              userID: (t.guessedUserId ?? "").trim().toUpperCase(),
+              fShipBy: "",
+              fProductsType: t.guessedProductType,
+            } satisfies CommitMomoRowInput);
         if (res.ok) {
           ok++;
-          setRowResult((m) => ({ ...m, [t.id]: { ok: true, message: `เข้าระบบแล้ว #${res.data?.forwarderId}`, fid: res.data?.forwarderId } }));
+          setRowResult((m) => ({
+            ...m,
+            [t.id]: {
+              ok: true,
+              message: noCode
+                ? `เข้ากองสถานะพิเศษแล้ว #${res.data?.forwarderId} · รอใส่ PR`
+                : `เข้าระบบแล้ว #${res.data?.forwarderId}`,
+              fid: res.data?.forwarderId,
+            },
+          }));
           setSel((prev) => {
             const next = new Set(prev);
             next.delete(t.id);
@@ -885,6 +915,49 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
     } catch (err) {
       console.error("[momo ingest commit] threw", err);
       setRowResult((m) => ({ ...m, [modal.track.id]: { ok: false, message: err instanceof Error ? err.message : "เกิดข้อผิดพลาด (ดู console)" } }));
+    } finally {
+      setCommitting(false);
+    }
+  }
+
+  async function confirmSpecialNoCode() {
+    if (!modal || modal.userID.trim()) return;
+    const reasons = notReadyReasons(modal.track).filter((reason) => reason !== "ไม่มีรหัสลูกค้า");
+    const extraWarning = reasons.length > 0 ? `\n\nข้อมูลที่ยังต้องตรวจ: ${reasons.join(" · ")}` : "";
+    if (!(await confirm(
+      `นำพัสดุ ${modal.track.trackingOverride ?? modal.track.tracking ?? "รายการนี้"} เข้ากองสถานะพิเศษ / NO CODE?\n\n`
+      + `ระบบจะเก็บเลขตู้ Tracking น้ำหนัก คิว และรูปไว้ แต่ยังไม่คิดราคา ไม่สร้างยอด Wallet และไม่ออกเอกสารบัญชี จนกว่าจะใส่ PR ที่มีจริง.${extraWarning}`,
+    ))) return;
+
+    setCommitting(true);
+    try {
+      const res = await commitMomoNoCodeToSpecial({
+        rowId: modal.track.id,
+        fProductsType: modal.fProductsType,
+      });
+      if (res.ok) {
+        setRowResult((m) => ({
+          ...m,
+          [modal.track.id]: {
+            ok: true,
+            message: `เข้ากองสถานะพิเศษแล้ว #${res.data?.forwarderId} · รอใส่ PR`,
+            fid: res.data?.forwarderId,
+          },
+        }));
+        setModal(null);
+        startTransition(() => router.refresh());
+      } else {
+        setRowResult((m) => ({ ...m, [modal.track.id]: { ok: false, message: res.error } }));
+      }
+    } catch (err) {
+      console.error("[momo NO CODE special commit] threw", err);
+      setRowResult((m) => ({
+        ...m,
+        [modal.track.id]: {
+          ok: false,
+          message: err instanceof Error ? err.message : "เกิดข้อผิดพลาด (ดู console)",
+        },
+      }));
     } finally {
       setCommitting(false);
     }
@@ -1406,12 +1479,13 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           ให้ CS ตรวจเทียบกับโกดังจีน หรือเอารูป+แทรคกิ้งไปถามลูกค้า หรือตอนลูกค้าตามของมา") */}
       {tab === "nocode" && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
-          <div className="font-bold">❓ NO CODE = พัสดุที่ MOMO ไม่แนบรหัสลูกค้า (PR) มา — ของยังไม่มีเจ้าของในระบบ ถ้าไม่ตามหา ของจะค้างโกดัง + ไม่มีใครถูกเก็บเงิน</div>
+          <div className="font-bold">❓ NO CODE = งานไม่สมบูรณ์ที่ยังไม่รู้เจ้าของ — นำเข้าระบบเป็นสถานะพิเศษ (99) ก่อน โดยยังไม่คิดราคา/Wallet/เอกสารบัญชี</div>
           <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
             <li><b>เทียบกับโกดังจีน:</b> กด <b>📋 Copy</b> / <b>⬇ Excel</b> ด้านบน — จะได้เฉพาะรายการในแท็บนี้ ส่งให้โกดังจีน/MOMO ช่วยเช็คว่าของใคร</li>
             <li><b>ถามลูกค้า:</b> คลิก<b>รูปสินค้า</b>เปิดภาพเต็ม แล้วเอารูป + เลขแทรคกิ้ง ส่ง LINE ถามลูกค้าที่น่าจะใช่</li>
             <li><b>ตอนลูกค้าตามของ:</b> ลูกค้าทักมาว่าของไม่ถึง → เอาเลขแทรคกิ้งลูกค้ามาค้นในช่อง<b>ค้นหา</b>บนแท็บนี้ ถ้าเจอ = ของอยู่นี่แค่ไม่มี PR</li>
-            <li><b>เจอเจ้าของแล้ว:</b> กด ✎ ที่ช่อง <b>ลูกค้า (PR)</b> ของแถวนั้น → พิมพ์รหัส PR → บันทึก แล้วติ๊กนำเข้าระบบได้ทันที</li>
+            <li><b>นำเข้ากองงาน:</b> ติ๊ก NO CODE แล้วกด <b>นำเข้าระบบ</b> — งานจะคงอยู่ในตู้เดิมและไปที่ <b>สถานะพิเศษ / NO CODE</b></li>
+            <li><b>เจอเจ้าของแล้ว:</b> เปิดกองสถานะพิเศษแล้วกด <b>ใส่ PR</b> ระบบจะตรวจสมาชิกจริงก่อนส่งงานกลับเข้า flow ปกติ</li>
           </ul>
         </div>
       )}
@@ -1463,7 +1537,12 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           <span className="text-xs font-semibold text-primary-700 dark:text-primary-300">เลือก {sel.size} รายการ</span>
           {invalidSelected > 0 && (
             <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700">
-              <AlertCircle className="h-3 w-3" /> PR ไม่ถูกต้อง {invalidSelected} — ต้องแก้ทีละรายการ
+              <AlertCircle className="h-3 w-3" /> PR ที่ระบุไม่มีในระบบ {invalidSelected} — ต้องแก้ก่อน
+            </span>
+          )}
+          {noCodeSelected > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+              NO CODE {noCodeSelected} — จะเข้ากองสถานะพิเศษ
             </span>
           )}
           <button type="button" onClick={onImportClick} disabled={bulkRunning}
@@ -1915,12 +1994,24 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
               {invalidSelected > 0 && (
                 <p className="flex items-start gap-1.5 rounded bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
                   <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
-                  <span>{invalidSelected} รายการ PR ไม่ตรง tb_users → ระบบจะปฏิเสธเอง (ไม่เดา PR ให้) — ติ๊กทีละรายการเพื่อแก้ PR ก่อน</span>
+                  <span>{invalidSelected} รายการมี PR ระบุมาแต่ไม่ตรง tb_users → ระบบจะปฏิเสธเอง (ไม่เดา PR ให้)</span>
+                </p>
+              )}
+              {noCodeSelected > 0 && (
+                <p className="flex items-start gap-1.5 rounded bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+                  <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                  <span>{noCodeSelected} รายการ NO CODE จะเข้า <b>สถานะพิเศษ (99)</b> โดยคงตู้/Tracking/ขนาดไว้ และยอดเงินทุกช่องเป็นศูนย์จนกว่าจะใส่ PR</span>
                 </p>
               )}
               {/* owner 2026-07-23 — เตือนล่วงหน้าว่าแถวรอตรวจ (ข้อมูลไม่ครบ) จะถูกข้าม ไม่นำเข้า */}
               {(() => {
-                const held = selectedTracks.filter(isNotReady).length;
+                const held = selectedTracks.filter((t) => {
+                  const reasons = notReadyReasons(t);
+                  const blocking = (t.guessedUserId ?? "").trim()
+                    ? reasons
+                    : reasons.filter((reason) => reason !== "ไม่มีรหัสลูกค้า");
+                  return blocking.length > 0;
+                }).length;
                 return held > 0 ? (
                   <p className="flex items-start gap-1.5 rounded bg-rose-50 px-2 py-1.5 text-[11px] text-rose-700">
                     <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
@@ -2006,6 +2097,12 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
 
             <div className="flex items-center justify-end gap-2 pt-1">
               <button type="button" onClick={() => setModal(null)} disabled={committing} className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-surface-alt disabled:opacity-50">ยกเลิก</button>
+              {!modal.userID.trim() && (
+                <button type="button" onClick={confirmSpecialNoCode} disabled={committing}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-amber-600 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-100 disabled:opacity-50">
+                  {committing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <AlertCircle className="h-3.5 w-3.5" />} นำเข้าเป็นสถานะพิเศษ / NO CODE
+                </button>
+              )}
               <button type="button" onClick={confirmImport} disabled={committing || !modalUserValid}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-primary-700 bg-primary-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-primary-700 disabled:opacity-50">
                 {committing ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> กำลังนำเข้า…</> : <><Truck className="h-3.5 w-3.5" /> ยืนยันนำเข้าระบบ</>}

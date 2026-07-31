@@ -144,6 +144,12 @@ async function runLiveFillAfterCommit(): Promise<LiveFillSummary | null> {
 async function commitOneRow(
   rawInput: CommitMomoRowInput,
 ): Promise<AdminActionResult<{ forwarderId: number; fIDorCO: string }>> {
+  // The normal entry point must never infer/accept an ownerless import. NO CODE
+  // has its own explicitly named action below so the UI and audit trail show
+  // that staff intentionally placed the parcel in the special holding lane.
+  if (rawInput.mode === "special-no-code") {
+    return { ok: false, error: "ใช้คำสั่งนำเข้า NO CODE เป็นสถานะพิเศษโดยเฉพาะ" };
+  }
   return withAdmin<{ forwarderId: number; fIDorCO: string }>(
     ["super", "ops", "warehouse"],
     async ({ adminId }) => {
@@ -157,6 +163,46 @@ async function commitOneRow(
           revalidate: true,             // interactive → refresh /admin/* paths
         },
         rawInput,
+      );
+    },
+  );
+}
+
+/**
+ * Commit an ownerless MOMO parcel into the operational system without making
+ * it billable. The core writes fstatus=99, blank userid, zero money, preserves
+ * the real container/tracking/metrics, and stamps the staging backlink.
+ */
+export async function commitMomoNoCodeToSpecial(
+  input: { rowId: string; fProductsType: "1" | "2" | "3" | "4" },
+): Promise<AdminActionResult<{ forwarderId: number; fIDorCO: string }>> {
+  const parsed = z.object({
+    rowId: z.string().uuid("rowId ต้องเป็น uuid"),
+    fProductsType: z.enum(["1", "2", "3", "4"]),
+  }).safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  }
+
+  return withAdmin<{ forwarderId: number; fIDorCO: string }>(
+    ["super", "ops", "warehouse"],
+    async ({ adminId }) => {
+      const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
+      const me = await getCurrentUser();
+      return commitMomoRowCore(
+        {
+          adminId,
+          legacyAdminId,
+          committedBy: me?.id ?? null,
+          revalidate: true,
+        },
+        {
+          rowId: parsed.data.rowId,
+          userID: "",
+          mode: "special-no-code",
+          fShipBy: "",
+          fProductsType: parsed.data.fProductsType,
+        },
       );
     },
   );
