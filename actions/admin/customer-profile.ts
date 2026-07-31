@@ -775,9 +775,17 @@ export async function adminUploadCorporateDoc(formData: FormData): Promise<Admin
     // (สถานะ '1' รอตรวจสอบ · ข้อมูลบริษัทให้แอดมินมากรอกทีหลังได้) — ไม่ใช่นิติ = ปฏิเสธเหมือนเดิม
     let corpRow = corp;
     if (!corpRow) {
-      const { data: u } = await admin
+      const { data: u, error: userErr } = await admin
         .from("tb_users").select("userCompany").eq("userID", userid)
         .maybeSingle<{ userCompany: string | null }>();
+      if (userErr) {
+        console.error("[adminUploadCorporateDoc customer-read] failed", {
+          userid,
+          code: userErr.code,
+          message: userErr.message,
+        });
+        return { ok: false, error: userErr.message };
+      }
       if (String(u?.userCompany ?? "").trim() !== "1") {
         return { ok: false, error: "ลูกค้ายังไม่เป็นนิติบุคคล — กดอัปเกรดเป็นนิติฯ ก่อน" };
       }
