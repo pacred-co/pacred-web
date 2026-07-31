@@ -20,6 +20,7 @@ import { getWarehouseWorkReport, getActiveWarehouseReps } from "@/lib/admin/ware
 import { getContainerProfitByMonth } from "@/lib/admin/container-cost-rollup";
 import { getPaidWorkByMonth } from "@/lib/admin/paid-work-report";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { exportCommissionCsv } from "@/actions/admin/export/system-report";
 import { ReportFilters } from "./report-filters";
 import { CommissionTable } from "./commission-table";
 import { PurchaseTable } from "./purchase-table";
@@ -142,8 +143,17 @@ export default async function SystemReportsPage({
         allowContainerProfit={allowContainerProfit}
       />
 
-      {fwdReport && (
-        <CommissionTable report={fwdReport} repName={repName} page={page} positionLabel={positionLabel} />
+      {fwdReport && fwdPosition && (
+        <CommissionTable
+          report={fwdReport}
+          repName={repName}
+          page={page}
+          positionLabel={positionLabel}
+          exportAction={async () => {
+            "use server";
+            return exportCommissionCsv({ position: fwdPosition, repId: rep, dateFrom, dateTo, sort, dir });
+          }}
+        />
       )}
 
       {purchaseReport && <PurchaseTable report={purchaseReport} repName={repName} page={page} />}

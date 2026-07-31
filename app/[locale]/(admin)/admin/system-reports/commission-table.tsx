@@ -6,6 +6,8 @@
  */
 import { Link } from "@/i18n/navigation";
 import { COMMISSION_PAGE_SIZE, type CommissionReport } from "@/lib/admin/sales-commission-report";
+import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
+import { COMMISSION_CSV_COLS, commissionRowToCsv } from "@/lib/admin/system-report-csv";
 import { Pagination } from "./pagination";
 import { SortHeader } from "./sort-header";
 
@@ -46,11 +48,14 @@ export function CommissionTable({
   repName,
   page = 1,
   positionLabel = "เซลล์",
+  exportAction,
 }: {
   report: CommissionReport;
   repName: string;
   page?: number;
   positionLabel?: string;
+  /** bound "use server" closure → returns EVERY filtered row (CSV ทั้งหมด). */
+  exportAction?: () => Promise<{ rows: CsvRow[]; truncated?: boolean }>;
 }) {
   const { rows, totals, rangeStart, rangeEnd } = report;
   const th = "border border-white/25 px-2 py-2 text-left font-semibold whitespace-nowrap";
@@ -62,18 +67,26 @@ export function CommissionTable({
 
   return (
     <section className="space-y-2">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-        <span className="font-semibold text-foreground">ทำรายการเบิกค่าคอมของ{positionLabel}</span>
-        {repName && <span className="text-muted">· ผู้รับผิดชอบ: {repName}</span>}
-        <span className="text-primary-600">
-          ผลลัพธ์การค้นหา ตั้งแต่วันที่ : {rangeStart} - {rangeEnd}
-        </span>
-        <span className="text-muted">({totals.count} รายการ)</span>
-        {totals.count > rows.length && (
-          <span className="text-amber-600">
-            · แสดง {rangeFrom}–{rangeTo} · หน้า {page}/{totalPages} (ยอดรวมคิดจากทั้งหมด)
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          <span className="font-semibold text-foreground">ทำรายการเบิกค่าคอมของ{positionLabel}</span>
+          {repName && <span className="text-muted">· ผู้รับผิดชอบ: {repName}</span>}
+          <span className="text-primary-600">
+            ผลลัพธ์การค้นหา ตั้งแต่วันที่ : {rangeStart} - {rangeEnd}
           </span>
-        )}
+          <span className="text-muted">({totals.count} รายการ)</span>
+          {totals.count > rows.length && (
+            <span className="text-amber-600">
+              · แสดง {rangeFrom}–{rangeTo} · หน้า {page}/{totalPages} (ยอดรวมคิดจากทั้งหมด)
+            </span>
+          )}
+        </div>
+        <CsvButton
+          rows={rows.map(commissionRowToCsv)}
+          cols={COMMISSION_CSV_COLS}
+          filename={`ค่าคอมมิชชั่น-${positionLabel}-${rangeStart}_${rangeEnd}.csv`}
+          fetchAll={exportAction}
+        />
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-border">
