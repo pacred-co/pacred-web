@@ -49,6 +49,7 @@ export function DriverStopCard({
   slipHref,
   stickersHref,
   items,
+  addressEdit,
 }: {
   userId: string | null;
   /** แท็กขนส่ง + สถานะ (+ ส่งไม่ได้) render จาก server — คงสีเดิม ไม่ผูกกับ done */
@@ -71,6 +72,8 @@ export function DriverStopCard({
   slipHref: string;
   stickersHref: string;
   items: DriverStopCardItem[];
+  /** ปุ่ม "✏️ แก้/เพิ่มที่อยู่จัดส่ง" (server สร้าง element ส่งมา · render ใต้ที่อยู่) */
+  addressEdit?: ReactNode;
 }) {
   const [done, setDone] = useState(false);
   const [open, setOpen] = useState(false);
@@ -166,6 +169,8 @@ export function DriverStopCard({
               <span>{addrFace || "—"}</span>
             </div>
           )}
+          {/* ✏️ แก้/เพิ่มที่อยู่จัดส่ง (ภูม 2026-07-31) — โชว์เมื่อ role มีสิทธิ์ (server ส่ง element มา) */}
+          {addressEdit}
           {/* กล่อง · กก. · คิว (รวมทั้งจุด) — บรรทัดเดียว ตัวบาง · ดันชิดล่าง = พอดีขอบล่างรูป (owner 2026-07-24) */}
           <p className={`mt-auto whitespace-nowrap text-[11px] font-normal ${done ? "text-white" : "text-foreground"}`}>
             {boxes} กล่อง <span className={done ? "text-white/60" : "text-muted"}>•</span> {weight.toFixed(2)} KG{" "}

@@ -35,6 +35,8 @@ import { BatchManage, RemoveItemButton } from "./batch-manage";
 import { DriverStopCard } from "./driver-stop-card";
 import { CourierUrlInput } from "./courier-url-input";
 import { TruckBookingCopyBox } from "./truck-booking-copy-box";
+import { EditStopDeliveryAddress } from "./stop-address-edit";
+import { loadCustomerAddressRows, type CustomerAddressRow } from "@/lib/legacy/customer-address-options";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
@@ -259,6 +261,16 @@ export default async function AdminDriverBatchDetailPage({
   }
   const customerNameOf = (uid: string | null | undefined): string =>
     custNameById.get((uid ?? "").trim()) ?? "—";
+
+  // สมุดที่อยู่ต่อลูกค้า — สำหรับปุ่ม "✏️ แก้/เพิ่มที่อยู่จัดส่ง" บนจุดส่ง. โหลดเฉพาะ
+  // ตอน isOpsOverride (คนที่มีสิทธิ์แก้) เพื่อไม่ยิง query ฟรีเมื่อ role แก้ไม่ได้. key = userid.
+  const addressRowsByUser = new Map<string, CustomerAddressRow[]>();
+  if (isOpsOverride && custIds.length > 0) {
+    const loaded = await Promise.all(
+      custIds.map(async (uid) => [uid, await loadCustomerAddressRows(admin, uid)] as const),
+    );
+    for (const [uid, rows] of loaded) addressRowsByUser.set(uid, rows);
+  }
 
   // A delivery row still on the warehouse self-pickup placeholder
   // ("รับที่โกดัง Pacred" — the legacy MOMO/commit default) has no real
@@ -994,6 +1006,17 @@ export default async function AdminDriverBatchDetailPage({
                         ))}
                       </div>
                     )}
+                    {/* ✏️ แก้/เพิ่มที่อยู่จัดส่งของจุดนี้ (ภูม 2026-07-31) — reuse สมุดที่อยู่ลูกค้า
+                        (เพิ่มที่อยู่ = โผล่หน้าโปรไฟล์ด้วย) · เขียนแค่ที่อยู่ ทุกแถวในจุด · ไม่แตะเงิน. */}
+                    {isOpsOverride && f.userid && (
+                      <EditStopDeliveryAddress
+                        userid={f.userid}
+                        fids={stop.items.map((e) => e.forwarder.id)}
+                        batchId={batch.id}
+                        addresses={addressRowsByUser.get(f.userid) ?? []}
+                        itemCount={stop.items.length}
+                      />
+                    )}
                   </div>
 
                   {/* ZONE 3 — ตารางย่อยออเดอร์ FLUSH edge-to-edge เหมือน legacy (cover +
@@ -1189,6 +1212,15 @@ export default async function AdminDriverBatchDetailPage({
                 hasPhoto={deliveryPhotos.length > 0}
                 slipHref={`/admin/drivers/${batch.id}/delivery-slip?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
                 stickersHref={`/admin/drivers/${batch.id}/stickers?fids=${stop.items.map((e) => e.forwarder.id).join(",")}`}
+                addressEdit={isOpsOverride && f.userid ? (
+                  <EditStopDeliveryAddress
+                    userid={f.userid}
+                    fids={stop.items.map((e) => e.forwarder.id)}
+                    batchId={batch.id}
+                    addresses={addressRowsByUser.get(f.userid) ?? []}
+                    itemCount={stop.items.length}
+                  />
+                ) : null}
                 items={stop.items.map((e) => ({
                   id: e.forwarder.id,
                   refCode: e.forwarder.fidorco ?? `#${e.forwarder.id}`,
