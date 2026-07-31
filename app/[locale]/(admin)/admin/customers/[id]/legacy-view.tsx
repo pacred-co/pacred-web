@@ -33,6 +33,9 @@ import { PROFILE_COVER_BUCKET, PROFILE_COVER_KEY } from "@/actions/admin/profile
 import { CoverEditor } from "./cover-editor";
 import { RowLimitSelect } from "./row-limit-select";
 import { parseRowLimit } from "./row-limit-options";
+import { SectionStatusTabs, SectionPagination, buildSectionHref, parsePageNo, type SectionTab } from "./profile-section-nav";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { LEGACY_ORDER_TABS } from "@/lib/legacy-status-map";
 import { Link } from "@/i18n/navigation";
 import { getAdminRoles, isGodRole } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
@@ -265,6 +268,23 @@ export async function renderLegacyCustomerView(
   const yuanN = parseRowLimit(searchParams?.yuanN);
   const payN = parseRowLimit(searchParams?.payN);
 
+  // ── หัวแถวสถานะ + แบ่งหน้า ต่อ section (owner 2026-07-31) ──────────────────
+  // "ตรงแต่ละบริการ อยากให้มีหัวแถวสถานะเหมือนหน้าหลัก แต่เป็นของ PR นั้นๆ ·
+  //  กดดูทั้งหมดต้องยังอยู่ในหน้าโปรไฟล์ · กดแสดง 100 แล้วต้องมีหน้า 1 2 3"
+  // นิยามสถานะ = ชุดเดียวกับหน้ารายการหลักเป๊ะ (ห้ามมี 2 นิยาม):
+  //   forwarder: 1..7 + "6.1" (fstatus 6 + คนขับเปิดรอบ) + "c" (fcredit='1') +
+  //   "p" (fstatus='99') — ตรง /admin/forwarders L1179-1191 · shop: hstatus
+  //   (LEGACY_ORDER_TABS) · yuan: paystatus 1/2/3.
+  const str = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
+  const shopSt = str(searchParams?.shopSt);
+  const fwdSt = str(searchParams?.fwdSt);
+  const yuanSt = str(searchParams?.yuanSt);
+  const shopP = parsePageNo(searchParams?.shopP);
+  const fwdP = parsePageNo(searchParams?.fwdP);
+  const yuanP = parsePageNo(searchParams?.yuanP);
+  const payP = parsePageNo(searchParams?.payP);
+  const sp = searchParams ?? {};
+
   // Wave 18 follow-up (2026-05-25 ค่ำ): the previous version of this query
   // destructured ONLY `data` — so any transient Supabase error (PgBouncer
   // timeout · network blip · 503 from project) collapsed silently to
@@ -342,38 +362,39 @@ export async function renderLegacyCustomerView(
       .select("addressid")
       .eq("userid", u.userID)
       .maybeSingle(),
-    admin
-      .from("tb_forwarder")
-      .select(
-        "id,fdate,fidorco,fstatus,ftransporttype,fcabinetnumber,ftrackingchn," +
-          "ftrackingth,fdetail,reforder,fproductstype,fpallet,fshipby,fweight," +
-          "fvolume,famount,ftotalprice,fcover,faddressname,faddresslastname," +
-          "faddresszipcode,fdateadminstatus,adminidkey",
-      )
-      .eq("userid", u.userID)
-      .order("fdate", { ascending: false })
-      .limit(fwdN),
-    admin
-      .from("tb_header_order")
-      .select("id,hdate,hno,hstatus,htotalpriceuser,htitle,hcover,hdateupdate,adminidupdate")
-      .eq("userid", u.userID)
-      .order("hdate", { ascending: false })
-      .limit(shopN),
-    admin
-      .from("tb_payment")
-      .select("id,paydate,paystatus,paytype,paydetail,payyuan,paythb,adminid")
-      .eq("userid", u.userID)
-      .order("paydate", { ascending: false })
-      .limit(yuanN),
-    // ประวัติการจ่ายเงิน (wallet-hs) recent 10 — legacy profile section 8.
-    // Best-effort: column set mirrors the customer wallet reader; degrades
-    // to an empty list on error (not in the load-bearing throw set).
+    // LIGHT SCAN ทุกแถวของลูกค้า (owner 2026-07-31 — หัวแถวสถานะต้องนับครบทุกงาน
+    // ไม่ใช่แค่ N แถวล่าสุด) — คอลัมน์จิ๋ว · scoped ต่อลูกค้า = bounded ·
+    // fetchAllRows กัน PostgREST ตัดเงียบที่ 1,000 (กติกาบ้าน 2026-07-29).
+    // แถวหนักของ "หน้าปัจจุบัน" ดึงทีหลังด้วย .in("id", pageIds).
+    fetchAllRows<{ id: number; fstatus: string | null; fcredit: string | null; fdate: string | null }>(() =>
+      admin
+        .from("tb_forwarder")
+        .select("id,fstatus,fcredit,fdate")
+        .eq("userid", u.userID)
+        .order("id", { ascending: true }),
+    ),
+    fetchAllRows<{ id: number; hstatus: string | null; hdate: string | null }>(() =>
+      admin
+        .from("tb_header_order")
+        .select("id,hstatus,hdate")
+        .eq("userid", u.userID)
+        .order("id", { ascending: true }),
+    ),
+    fetchAllRows<{ id: number; paystatus: string | null; paydate: string | null }>(() =>
+      admin
+        .from("tb_payment")
+        .select("id,paystatus,paydate")
+        .eq("userid", u.userID)
+        .order("id", { ascending: true }),
+    ),
+    // ประวัติการจ่ายเงิน (wallet-hs) — แบ่งหน้าฝั่ง server ด้วย .range()
+    // (owner: "กดแสดง 100 แล้วหางานไม่เจอ ไม่มีหน้า 1 2 3").
     admin
       .from("tb_wallet_hs")
       .select("id,date,status,amount,type,reforder,imagesslip")
       .eq("userid", u.userID)
       .order("id", { ascending: false })
-      .limit(payN),
+      .range((payP - 1) * payN, payP * payN - 1),
     // Exact activity counts for the super-only hard-delete safety gate
     // (HardDeletePanel) — head:true counts are cheap. The recents above cap at
     // 10; these report the true totals so the gate shows accurate "ลบไม่ได้"
@@ -416,9 +437,100 @@ export async function renderLegacyCustomerView(
   const corp = (corpRes.data as unknown as CRow | null) ?? null;
   const addresses = (addrRes.data ?? []) as unknown as ARow[];
   const mainAddrId = (mainAddrRes.data as AMain | null)?.addressid ?? null;
-  const forwarderRows = forwarderRes.data;
-  const shopRows = shopRes.data;
-  const yuanRows = yuanRes.data;
+  // ── LIGHT SCANS → หัวแถวสถานะ + แบ่งหน้า (owner 2026-07-31) ────────────────
+  // scan พังบางตัว = ส่วนนั้น degrade เป็นลิสต์ว่าง (best-effort เหมือนเดิม · ไม่ล้มหน้า)
+  const fwdScan = forwarderRes.error ? [] : (forwarderRes.data ?? []);
+  const shopScan = shopRes.error ? [] : (shopRes.data ?? []);
+  const yuanScan = yuanRes.error ? [] : (yuanRes.data ?? []);
+  if (forwarderRes.error) console.error("[legacy-view] fwd scan failed", { code: forwarderRes.error.code, message: forwarderRes.error.message });
+  if (shopRes.error) console.error("[legacy-view] shop scan failed", { code: shopRes.error.code, message: shopRes.error.message });
+  if (yuanRes.error) console.error("[legacy-view] yuan scan failed", { code: yuanRes.error.code, message: yuanRes.error.message });
+
+  // "กำลังจัดส่ง" (แท็บ 6.1 ของหน้าหลัก) = fstatus '6' + มีแถวคนขับเปิดอยู่
+  // (tb_forwarder_driver_item.fdistatus='' — นิยามเดียวกับ /admin/forwarders L1186-1188)
+  const sixIds = fwdScan.filter((r) => String(r.fstatus ?? "") === "6").map((r) => r.id);
+  const driverOpenFids = new Set<number>();
+  if (sixIds.length > 0) {
+    const { data: dItems, error: dErr } = await admin
+      .from("tb_forwarder_driver_item")
+      .select("fid")
+      .in("fid", sixIds)
+      .eq("fdistatus", "");
+    if (dErr) console.error("[legacy-view] driver-item scan failed", { code: dErr.code, message: dErr.message });
+    for (const d of (dItems ?? []) as Array<{ fid: number }>) driverOpenFids.add(Number(d.fid));
+  }
+
+  // ลูกค้าเครดิต? — แท็บ "เครดิตสินค้า/สถานะพิเศษ" โชว์เฉพาะลูกค้าที่ตั้งเป็นเครดิต
+  // (owner เคาะ): ธงบนโปรไฟล์ (userCredit='1') หรือมีวงเงินค้าง หรือมีงาน fcredit='1' จริง
+  const hasCreditRows = fwdScan.some((r) => String(r.fcredit ?? "") === "1");
+  const isCreditCustomer =
+    String(u.userCredit ?? "") === "1" ||
+    hasCreditRows ||
+    Number((creditRes.data as { creditvalue?: number | string | null } | null)?.creditvalue ?? 0) > 0;
+
+  // ตัวกรองสถานะของ section forwarder — นิยามเดียวกับหน้าหลักเป๊ะ
+  const fwdMatch = (r: { fstatus: string | null; fcredit: string | null; id: number }): boolean => {
+    const st = String(r.fstatus ?? "");
+    if (fwdSt === "") return true;
+    if (fwdSt === "c") return String(r.fcredit ?? "") === "1";
+    if (fwdSt === "p") return st === "99";
+    if (fwdSt === "6") return st === "6" && !driverOpenFids.has(r.id);
+    if (fwdSt === "6.1") return st === "6" && driverOpenFids.has(r.id);
+    return st === fwdSt;
+  };
+  const byDateDesc = (a: string | null, b: string | null) => (b ?? "").localeCompare(a ?? "");
+
+  const fwdFiltered = fwdScan.filter(fwdMatch).sort((a, b) => byDateDesc(a.fdate, b.fdate));
+  const shopFiltered = shopScan
+    .filter((r) => (shopSt === "" ? true : String(r.hstatus ?? "") === shopSt))
+    .sort((a, b) => byDateDesc(a.hdate, b.hdate));
+  const yuanFiltered = yuanScan
+    .filter((r) => (yuanSt === "" ? true : String(r.paystatus ?? "") === yuanSt))
+    .sort((a, b) => byDateDesc(a.paydate, b.paydate));
+
+  // page-slice → ดึงแถวหนักเฉพาะหน้าปัจจุบัน (id ≤ 100 ตัว)
+  const pageIds = (list: Array<{ id: number }>, page: number, size: number) =>
+    list.slice((page - 1) * size, page * size).map((r) => r.id);
+  const fwdPageIds = pageIds(fwdFiltered, fwdP, fwdN);
+  const shopPageIds = pageIds(shopFiltered, shopP, shopN);
+  const yuanPageIds = pageIds(yuanFiltered, yuanP, yuanN);
+
+  const [fwdHeavyRes, shopHeavyRes, yuanHeavyRes] = await Promise.all([
+    fwdPageIds.length
+      ? admin
+          .from("tb_forwarder")
+          .select(
+            "id,fdate,fidorco,fstatus,ftransporttype,fcabinetnumber,ftrackingchn," +
+              "ftrackingth,fdetail,reforder,fproductstype,fpallet,fshipby,fweight," +
+              "fvolume,famount,ftotalprice,fcover,faddressname,faddresslastname," +
+              "faddresszipcode,fdateadminstatus,adminidkey",
+          )
+          .in("id", fwdPageIds)
+      : Promise.resolve({ data: [], error: null }),
+    shopPageIds.length
+      ? admin
+          .from("tb_header_order")
+          .select("id,hdate,hno,hstatus,htotalpriceuser,htitle,hcover,hdateupdate,adminidupdate")
+          .in("id", shopPageIds)
+      : Promise.resolve({ data: [], error: null }),
+    yuanPageIds.length
+      ? admin
+          .from("tb_payment")
+          .select("id,paydate,paystatus,paytype,paydetail,payyuan,paythb,adminid")
+          .in("id", yuanPageIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  for (const [label, res] of [["fwd page", fwdHeavyRes], ["shop page", shopHeavyRes], ["yuan page", yuanHeavyRes]] as const) {
+    if (res.error) console.error(`[legacy-view] ${label} fetch failed`, { code: res.error.code, message: res.error.message });
+  }
+  // เรียงแถวหนักตามลำดับหน้า (วันที่ล่าสุดก่อน — ลำดับจาก list ที่ sort แล้ว)
+  const orderByIds = <T extends { id: number }>(rows: T[], ids: number[]): T[] => {
+    const at = new Map(ids.map((v, i) => [v, i]));
+    return rows.slice().sort((a, b) => (at.get(Number(a.id)) ?? 0) - (at.get(Number(b.id)) ?? 0));
+  };
+  const forwarderRows = orderByIds(((fwdHeavyRes.data ?? []) as unknown as Array<{ id: number }>), fwdPageIds);
+  const shopRows = orderByIds(((shopHeavyRes.data ?? []) as unknown as Array<{ id: number }>), shopPageIds);
+  const yuanRows = orderByIds(((yuanHeavyRes.data ?? []) as unknown as Array<{ id: number }>), yuanPageIds);
   // Identity for the header — juristic-aware via the shared resolver (2026-07-03).
   // For a company the H2 shows the COMPANY name (was leaking the contact person
   // "PEA PEA" — company only appeared as a static "ลูกค้า นิติบุคคล" tag). The
@@ -442,6 +554,45 @@ export async function renderLegacyCustomerView(
   const hos = (shopRows ?? []) as unknown as HRow[];
   const pys = (yuanRows ?? []) as unknown as PRow[];
   const whs = (walletHsRowsRes.data ?? []) as unknown as WHRow[];
+
+  // ── นิยามแท็บต่อ section (label ตรงหน้ารายการหลัก · filter ตรง semantics เป๊ะ) ──
+  const stCount = (st: string) => fwdScan.filter((r) => String(r.fstatus ?? "") === st).length;
+  const sixWaiting = sixIds.filter((id) => !driverOpenFids.has(id)).length;
+  const sixDelivering = sixIds.filter((id) => driverOpenFids.has(id)).length;
+  const fwdTabs: SectionTab[] = [
+    { code: "", label: "ทั้งหมด", count: fwdScan.length },
+    { code: "1", label: "รอเข้าโกดังจีน", count: stCount("1") },
+    { code: "2", label: "ถึงโกดังจีนแล้ว", count: stCount("2") },
+    { code: "3", label: "กำลังส่งมาไทย", count: stCount("3") },
+    { code: "4", label: "ถึงไทยแล้ว", count: stCount("4") },
+    { code: "5", label: "รอชำระเงิน", count: stCount("5") },
+    { code: "6", label: "เตรียมส่ง", count: sixWaiting },
+    { code: "6.1", label: "กำลังจัดส่ง", count: sixDelivering, hot: true },
+    { code: "7", label: "ส่งแล้ว", count: stCount("7") },
+    // เครดิตสินค้า + สถานะพิเศษ — เฉพาะลูกค้าที่ตั้งเป็นเครดิต (owner 2026-07-31)
+    ...(isCreditCustomer
+      ? ([
+          { code: "c", label: "เครดิตสินค้า", count: fwdScan.filter((r) => String(r.fcredit ?? "") === "1").length },
+          { code: "p", label: "สถานะพิเศษ", count: stCount("99") },
+        ] satisfies SectionTab[])
+      : []),
+  ];
+  const shopTabs: SectionTab[] = [
+    { code: "", label: "ทั้งหมด", count: shopScan.length },
+    ...LEGACY_ORDER_TABS.map((t) => ({
+      code: t.code as string,
+      label: t.thai,
+      count: shopScan.filter((r) => String(r.hstatus ?? "") === t.code).length,
+    })),
+  ];
+  const yuanTabs: SectionTab[] = [
+    { code: "", label: "ทั้งหมด", count: yuanScan.length },
+    ...(["1", "2", "3"] as const).map((c) => ({
+      code: c as string,
+      label: PAYSTATUS_LABEL[c],
+      count: yuanScan.filter((r) => String(r.paystatus ?? "") === c).length,
+    })),
+  ];
 
   // 2026-06-12 — resolve the legacy thumbnails + slip images for the faithful
   // PCS users/profile tables. Bounded to the recent-10 sets (≤30 signed-URL
@@ -801,9 +952,12 @@ export async function renderLegacyCustomerView(
           users/profile columns: วันที่ · รหัสสมาชิก · เลขที่ · ข้อมูลสินค้า+รูป ·
           ราคารวม · สถานะ · อัปเดต · ตัวเลือก) ── */}
       <Section
-        title={`ออเดอร์ฝากสั่งซื้อ (${hos.length}${ordCount > hos.length ? ` / ${ordCount}` : ""})`}
-        viewAllHref={`/admin/service-orders?q=${u.userID}`}
+        id="sec-shop"
+        title={`ออเดอร์ฝากสั่งซื้อ (${shopFiltered.length}${shopSt !== "" ? ` / ${shopScan.length}` : ""})`}
+        viewAllHref={buildSectionHref(sp, { shopSt: null, shopP: null, shopN: "100" }, "sec-shop")}
         headerExtra={<RowLimitSelect param="shopN" value={shopN} />}
+        tabs={<SectionStatusTabs anchor="sec-shop" current={sp} statusParam="shopSt" pageParam="shopP" active={shopSt} tabs={shopTabs} />}
+        footer={<SectionPagination anchor="sec-shop" current={sp} pageParam="shopP" page={shopP} pageSize={shopN} totalRows={shopFiltered.length} />}
       >
         {hos.length === 0 ? (
           <Empty>ยังไม่มีรายการฝากสั่งซื้อ</Empty>
@@ -876,9 +1030,12 @@ export async function renderLegacyCustomerView(
           เลขพัสดุจีน+ตู้/ประเภท/กล่อง · เลขพัสดุไทย+ขนส่ง/ที่อยู่ · สถานะ · อัปเดต ·
           ตัวเลือก). READ-only — money values unchanged. ── */}
       <Section
-        title={`ออเดอร์ฝากนำเข้า (${fws.length}${fwdCount > fws.length ? ` / ${fwdCount}` : ""})`}
-        viewAllHref={`/admin/forwarders?focus=search&q=${u.userID}`}
+        id="sec-fwd"
+        title={`ออเดอร์ฝากนำเข้า (${fwdFiltered.length}${fwdSt !== "" ? ` / ${fwdScan.length}` : ""})`}
+        viewAllHref={buildSectionHref(sp, { fwdSt: null, fwdP: null, fwdN: "100" }, "sec-fwd")}
         headerExtra={<RowLimitSelect param="fwdN" value={fwdN} />}
+        tabs={<SectionStatusTabs anchor="sec-fwd" current={sp} statusParam="fwdSt" pageParam="fwdP" active={fwdSt} tabs={fwdTabs} />}
+        footer={<SectionPagination anchor="sec-fwd" current={sp} pageParam="fwdP" page={fwdP} pageSize={fwdN} totalRows={fwdFiltered.length} />}
       >
         {fws.length === 0 ? (
           <Empty>ยังไม่มีรายการฝากนำเข้า</Empty>
@@ -1009,9 +1166,12 @@ export async function renderLegacyCustomerView(
           PCS columns: วันที่ · เลขที่ · ชื่อ-นามสกุล · รายละเอียด · ยอดรวม · สถานะ ·
           อัปเดต · ตัวเลือก) ── */}
       <Section
-        title={`ออเดอร์ฝากโอน/ชำระ (${pys.length}${payCount > pys.length ? ` / ${payCount}` : ""})`}
-        viewAllHref={`/admin/yuan-payments?q=${u.userID}`}
+        id="sec-yuan"
+        title={`ออเดอร์ฝากโอน/ชำระ (${yuanFiltered.length}${yuanSt !== "" ? ` / ${yuanScan.length}` : ""})`}
+        viewAllHref={buildSectionHref(sp, { yuanSt: null, yuanP: null, yuanN: "100" }, "sec-yuan")}
         headerExtra={<RowLimitSelect param="yuanN" value={yuanN} />}
+        tabs={<SectionStatusTabs anchor="sec-yuan" current={sp} statusParam="yuanSt" pageParam="yuanP" active={yuanSt} tabs={yuanTabs} />}
+        footer={<SectionPagination anchor="sec-yuan" current={sp} pageParam="yuanP" page={yuanP} pageSize={yuanN} totalRows={yuanFiltered.length} />}
       >
         {pys.length === 0 ? (
           <Empty>ยังไม่มีรายการฝากโอน/ชำระ</Empty>
@@ -1070,9 +1230,11 @@ export async function renderLegacyCustomerView(
       {/* ── SECTION 8 · ประวัติการจ่ายเงิน (legacy wallet-hs table · faithful PCS
           columns + the legacy green(เข้า)/pink(ออก) row tint + สลิปรายการ) ── */}
       <Section
-        title={`ประวัติการจ่ายเงิน (${whs.length}${walletHsCount > whs.length ? ` / ${walletHsCount}` : ""})`}
-        viewAllHref={`/admin/wallet?view=tx&q=${u.userID}`}
+        id="sec-pay"
+        title={`ประวัติการจ่ายเงิน (${walletHsCount})`}
+        viewAllHref={buildSectionHref(sp, { payP: null, payN: "100" }, "sec-pay")}
         headerExtra={<RowLimitSelect param="payN" value={payN} />}
+        footer={<SectionPagination anchor="sec-pay" current={sp} pageParam="payP" page={payP} pageSize={payN} totalRows={walletHsCount} />}
       >
         {whs.length === 0 ? (
           <Empty>ยังไม่มีประวัติการจ่ายเงิน</Empty>
@@ -1264,29 +1426,43 @@ export async function renderLegacyCustomerView(
 // ── tiny helpers ─────────────────────────────────────────
 function Section({
   title,
+  id,
   viewAllHref,
   headerExtra,
+  tabs,
+  footer,
   children,
 }: {
   title: string;
+  /** anchor ของ section — ลิงก์แท็บ/หน้า scroll กลับมาที่นี่ (`#<id>`) */
+  id?: string;
   viewAllHref?: string;
   headerExtra?: React.ReactNode;
+  /** หัวแถวสถานะ (owner 2026-07-31) — render ใต้หัว section */
+  tabs?: React.ReactNode;
+  /** แถบแบ่งหน้า — render ใต้ตาราง */
+  footer?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
+    <div id={id} className="scroll-mt-20 rounded-2xl border border-border bg-white dark:bg-surface shadow-sm overflow-hidden">
       <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
         <SectionHeading>{title}</SectionHeading>
         <div className="flex shrink-0 items-center gap-2.5">
           {headerExtra}
           {viewAllHref ? (
-            <Link href={viewAllHref} className="text-xs text-primary-600 hover:underline">
+            // owner 2026-07-31: "กดดูทั้งหมดมันก็ควรยังอยู่ในหน้าโปรไฟล์ลูกค้า ไม่ควรย้ายไป
+            // หน้านำเข้า" — href ตอนนี้เป็น query ในหน้าเดิม (?N=100#anchor) จึงใช้ <a>
+            // (query-only + hash · ไม่ใช่ route ใหม่)
+            <a href={viewAllHref} className="text-xs text-primary-600 hover:underline">
               ดูทั้งหมด →
-            </Link>
+            </a>
           ) : null}
         </div>
       </div>
+      {tabs}
       {children}
+      {footer}
     </div>
   );
 }
