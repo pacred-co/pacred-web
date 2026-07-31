@@ -117,6 +117,18 @@ export function DriverStopCard({
         </span>
         {/* แท็กขนส่ง+สถานะ (2 แท็ก) — กินพื้นที่ที่เหลือ · แท็กแรก (ขนส่ง) ย่อได้ ไม่ตกบรรทัด */}
         <div className="flex min-w-0 flex-1 items-center gap-1">{badges}</div>
+        {/* แผนที่ — ต่อจากสถานะบนหัวการ์ด (owner 2026-07-31) → แถวปุ่มล่างเหลือ 3 ปุ่มแถวเดียว */}
+        <a
+          href={mapHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="เปิดแผนที่นำทาง"
+          className={`inline-flex shrink-0 items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap ${
+            done ? "border-white/40 bg-white/15 text-white" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+          }`}
+        >
+          <MapPin className="h-3 w-3 shrink-0" /> แผนที่
+        </a>
       </div>
 
       {/* ตัวการ์ด — รูป | ข้อมูล + ปุ่ม › */}
@@ -199,13 +211,13 @@ export function DriverStopCard({
         </button>
       </div>
 
-      {/* ท้ายการ์ด — งานคนขับต่อจุดส่ง (ถ่ายส่ง · หมายเหตุ) + แผนที่/โทร
-          (ยุบ flow จาก /admin/drivers/work มารวมหน้าเดียว · ภูม 2026-07-31).
+      {/* ท้ายการ์ด — งานคนขับต่อจุดส่ง แถวเดียว 3 ปุ่ม: ถ่ายส่ง · หมายเหตุ · โทร
+          (owner 2026-07-31 "3 ปุ่มแถวเดียว ไม่หนา") — แผนที่ย้ายขึ้นหัวการ์ดต่อจากสถานะ ·
           ถ่ายขึ้นรถ = ปุ่มเดียว batch-level บนหัวหน้า (รูปโหลดทั้งคัน ไม่ใช่ต่อจุด). */}
       <div className="space-y-2">
         {editableIds.length > 0 ? (
           <>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <DriverPhotoEditDialog itemIds={editableIds} hasPhoto={hasPhoto} gradient />
               {canFail ? (
                 <DriverStopFailButton itemIds={editableIds} gradient />
@@ -216,6 +228,24 @@ export function DriverStopCard({
                   }`}
                 >
                   <Check className="h-3.5 w-3.5" /> ส่งครบ
+                </span>
+              )}
+              {phone ? (
+                <a
+                  href={`tel:${phone}`}
+                  className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap ${
+                    done ? "border-white/40 bg-white/15 text-white" : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                  }`}
+                >
+                  <Phone className="h-3.5 w-3.5" /> โทร
+                </a>
+              ) : (
+                <span
+                  className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap opacity-50 ${
+                    done ? "border-white/40 text-white" : "border-border text-muted"
+                  }`}
+                >
+                  <Phone className="h-3.5 w-3.5" /> โทร
                 </span>
               )}
             </div>
@@ -231,48 +261,28 @@ export function DriverStopCard({
             )}
           </>
         ) : (
-          /* ทุกรายการในจุดนี้ = "ส่งไม่ได้" ('3') → ต้องขึ้นสถานะส่งไม่ได้ + เหตุผล
+          /* ทุกรายการในจุดนี้ = "ส่งไม่ได้" ('3') → ขึ้นสถานะส่งไม่ได้ + เหตุผล + ปุ่มโทร
              (ไม่ใช่ "ส่งครบ" · owner "มันไม่ขึ้นเลยว่าส่งไม่สำเร็จ" 2026-07-31) */
-          <span
-            className={`inline-flex w-full items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-semibold ${
-              done ? "border-white/40 bg-white/15 text-white" : "border-amber-300 bg-amber-50 text-amber-800"
-            }`}
-          >
-            ⚠️ ส่งไม่ได้ทั้งจุด{failNote ? ` — ${failNote}` : " (ไม่ได้ระบุเหตุผล)"}
-          </span>
-        )}
-        <div className="grid grid-cols-2 gap-2">
-          <a
-            href={mapHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap ${
-              done
-                ? "border-white/40 bg-white/15 text-white"
-                : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-            }`}
-          >
-            <MapPin className="h-3.5 w-3.5" /> แผนที่
-          </a>
-          {phone ? (
-            <a
-              href={`tel:${phone}`}
-              className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap ${
-                done ? "border-white/40 bg-white/15 text-white" : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-              }`}
-            >
-              <Phone className="h-3.5 w-3.5" /> โทร
-            </a>
-          ) : (
+          <div className="space-y-2">
             <span
-              className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap opacity-50 ${
-                done ? "border-white/40 text-white" : "border-border text-muted"
+              className={`inline-flex w-full items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-xs font-semibold ${
+                done ? "border-white/40 bg-white/15 text-white" : "border-amber-300 bg-amber-50 text-amber-800"
               }`}
             >
-              <Phone className="h-3.5 w-3.5" /> โทร
+              ⚠️ ส่งไม่ได้ทั้งจุด{failNote ? ` — ${failNote}` : " (ไม่ได้ระบุเหตุผล)"}
             </span>
-          )}
-        </div>
+            {phone && (
+              <a
+                href={`tel:${phone}`}
+                className={`inline-flex w-full items-center justify-center gap-1 rounded-full border px-2 py-1 text-xs font-semibold whitespace-nowrap ${
+                  done ? "border-white/40 bg-white/15 text-white" : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                }`}
+              >
+                <Phone className="h-3.5 w-3.5" /> โทร
+              </a>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ดร็อปดาวน์ — รายละเอียดทั้งหมด (ที่อยู่เต็ม + ตารางออเดอร์ + พิมพ์) */}
