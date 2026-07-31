@@ -454,11 +454,25 @@ export default async function AdminDriverBatchDetailPage({
   type RunPhoto = { url: string; kind: "on" | "off"; tracking: string };
   const loadPhotos: RunPhoto[] = [];
   const deliverPhotos: RunPhoto[] = [];
+  // 🔴 กันรูปซ้ำ (ภูม 2026-07-31): คนขับถ่าย 1 รูป/จุดส่ง แต่ระบบเขียนรูปเดียวกันลง
+  // "ทุกแทรคกิ้ง" ในจุดนั้น (DriverPhotoEditDialog รับหลาย itemIds) → รูปเดียวโผล่ N ครั้ง.
+  // dedupe ด้วย "path จริง" ของไฟล์ (fdipictureon/off) — ห้าม dedupe ด้วย signed URL
+  // เพราะ getSignedBucketUrl ออก token ใหม่ทุกครั้งแม้ไฟล์เดียวกัน → dedupe ไม่ติด.
+  const seenOnPath = new Set<string>();
+  const seenOffPath = new Set<string>();
   for (const stop of stopsWithPhotos) {
     for (const entry of stop.items) {
       const tracking = entry.forwarder.ftrackingchn ?? "";
-      if (entry.photoOnUrl) loadPhotos.push({ url: entry.photoOnUrl, kind: "on", tracking });
-      if (entry.photoOffUrl) deliverPhotos.push({ url: entry.photoOffUrl, kind: "off", tracking });
+      const onPath = (entry.item.fdipictureon ?? "").trim();
+      const offPath = (entry.item.fdipictureoff ?? "").trim();
+      if (entry.photoOnUrl && onPath && !seenOnPath.has(onPath)) {
+        seenOnPath.add(onPath);
+        loadPhotos.push({ url: entry.photoOnUrl, kind: "on", tracking });
+      }
+      if (entry.photoOffUrl && offPath && !seenOffPath.has(offPath)) {
+        seenOffPath.add(offPath);
+        deliverPhotos.push({ url: entry.photoOffUrl, kind: "off", tracking });
+      }
     }
   }
   const runPhotos = loadPhotos.length > 0 ? loadPhotos : deliverPhotos;
@@ -881,9 +895,15 @@ export default async function AdminDriverBatchDetailPage({
             const mapHref = hasPin
               ? `https://www.google.com/maps/search/${f.faddresslatitude},${f.faddresslongitude}`
               : `https://www.google.com/maps/search/${encodeURIComponent(addrText)}`;
-            // delivery photos for this stop (the driver's drop-off shots)
+            // delivery photos for this stop (the driver's drop-off shots) —
+            // dedupe ด้วย path จริง (fdipictureoff) ไม่ใช่ signed URL เพราะรูปเดียวถูก
+            // เขียนลงทุกแทรคกิ้งในจุด → กันรูปซ้ำ (ภูม 2026-07-31 · เหมือนพาเนลหัว).
             const deliveryPhotos = Array.from(
-              new Set(stop.items.map((e) => e.photoOffUrl).filter((u): u is string => Boolean(u))),
+              new Map(
+                stop.items
+                  .filter((e) => e.photoOffUrl && (e.item.fdipictureoff ?? "").trim())
+                  .map((e) => [(e.item.fdipictureoff ?? "").trim(), e.photoOffUrl as string]),
+              ).values(),
             );
             const phones = [f.faddresstel, f.faddresstel2]
               .map((p) => (p ?? "").trim())
@@ -997,17 +1017,8 @@ export default async function AdminDriverBatchDetailPage({
                         </p>
                       </>
                     )}
-                    {phones.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 pt-0.5">
-                        {phones.map((p) => (
-                          <a key={p} href={`tel:${p}`} className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 px-2 py-0.5 text-[11px] hover:bg-blue-100">
-                            <Phone className="h-3 w-3" /> {p}
-                          </a>
-                        ))}
-                      </div>
-                    )}
-                    {/* ✏️ แก้/เพิ่มที่อยู่จัดส่งของจุดนี้ (ภูม 2026-07-31) — reuse สมุดที่อยู่ลูกค้า
-                        (เพิ่มที่อยู่ = โผล่หน้าโปรไฟล์ด้วย) · เขียนแค่ที่อยู่ ทุกแถวในจุด · ไม่แตะเงิน. */}
+                    {/* ✏️ แก้/เพิ่มที่อยู่จัดส่งของจุดนี้ — วางต่อท้ายที่อยู่เลย (ภูม 2026-07-31) ·
+                        reuse สมุดที่อยู่ลูกค้า (เพิ่มที่อยู่ = โผล่หน้าโปรไฟล์ด้วย) · เขียนแค่ที่อยู่ ไม่แตะเงิน. */}
                     {isOpsOverride && f.userid && (
                       <EditStopDeliveryAddress
                         userid={f.userid}
@@ -1016,6 +1027,15 @@ export default async function AdminDriverBatchDetailPage({
                         addresses={addressRowsByUser.get(f.userid) ?? []}
                         itemCount={stop.items.length}
                       />
+                    )}
+                    {phones.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        {phones.map((p) => (
+                          <a key={p} href={`tel:${p}`} className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 px-2 py-0.5 text-[11px] hover:bg-blue-100">
+                            <Phone className="h-3 w-3" /> {p}
+                          </a>
+                        ))}
+                      </div>
                     )}
                   </div>
 
