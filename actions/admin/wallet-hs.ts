@@ -67,6 +67,7 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 import { cashbackRefId, parseCashbackNoteTag } from "@/lib/cashback/note-tag";
 import { classifyWalletHsRow } from "@/lib/wallet/classify-approve-row";
 import { autoIssueReceiptOnPaymentLand } from "@/lib/admin/auto-issue-receipt";
+import { closeFullyCoveredForwarderInvoices } from "@/lib/admin/close-covered-invoices";
 import { mintReceiptDocNo, yyMmTokenForDate } from "@/lib/admin/mint-receipt-doc-no";
 import { issueShopTaxInvoice } from "@/lib/admin/shop-tax-invoice";
 import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
@@ -668,7 +669,7 @@ const approveDepositSchema = z.object({
 export type AdminApproveWalletDepositInput = z.infer<typeof approveDepositSchema>;
 
 type CascadedRow = {
-  table: "tb_header_order" | "tb_forwarder" | "tb_wallet_hs" | "tb_credit" | "tb_cash_back";
+  table: "tb_header_order" | "tb_forwarder" | "tb_wallet_hs" | "tb_credit" | "tb_cash_back" | "tb_forwarder_invoice";
   id: string;
   fromStatus: string | null;
   toStatus: string | null;
@@ -2979,6 +2980,33 @@ async function adminApproveWalletDepositImpl(
           }
         } catch (e) {
           logger.warn("wallet-hs", "deposit-cascade receipt threw (non-fatal)", {
+            wallet_hs_id: id, userid, error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
+      // ── (vii) ปิดใบแจ้งหนี้ FRI ที่การชำระรอบนี้ครอบครบทั้งใบ (owner 2026-08-01 · PR187) ──
+      // เดิม settle ฝั่ง wallet ไม่แตะ tb_forwarder_invoice เลย → ใบที่ออกให้ลูกค้า
+      // (เงินสด/จ่ายแทน) ค้าง 'issued' ทั้งที่เงินเข้าแล้ว = จอบอกค้างชำระ + บล็อกวางบิลใหม่.
+      // BEST-EFFORT — พลาดไม่ล้ม settle (บัญชีกด "รับชำระ" บนใบเองได้เหมือนเดิม).
+      if (settledFwdFids.length > 0) {
+        try {
+          const { closed } = await closeFullyCoveredForwarderInvoices(admin, {
+            settledFids: settledFwdFids,
+            source: "wallet_hs.deposit-cascade",
+          });
+          for (const c of closed) {
+            cascadedRows.push({
+              table: "tb_forwarder_invoice",
+              id: String(c.invoiceId),
+              fromStatus: "issued",
+              toStatus: "paid",
+              note: `ปิดใบแจ้งหนี้ ${c.docNo} (ชำระครบผ่านสลิปรอบนี้)`,
+            });
+            revalidatePath(`/admin/billing-run/${c.invoiceId}`);
+          }
+        } catch (e) {
+          logger.warn("wallet-hs", "close covered invoices threw (non-fatal)", {
             wallet_hs_id: id, userid, error: e instanceof Error ? e.message : String(e),
           });
         }

@@ -8,7 +8,7 @@ import { PageSizeSelect } from "@/components/admin/page-size-select";
 import { parsePageSize } from "@/lib/admin/paginate";
 import { isNextControlFlowError } from "@/lib/observability/next-control-flow";
 import type { AdminActionResult } from "@/actions/admin/common";
-import type { PayUserHistoryRow } from "@/actions/admin/pay-user-view";
+import type { PayUserHistoryEntry } from "@/actions/admin/pay-user-view";
 
 /** จำนวนแถวต่อหน้า (owner 2026-07-16 · ตามภาพ) — เริ่ม 10/25 ที่จำกัด list สั้นๆ ได้จริง. */
 const PAY_USER_SIZES = [10, 25, 50, 100, 200, 400] as const;
@@ -68,7 +68,7 @@ export default async function AdminWalletPayUserPage({
   //
   // Next control-flow sentinels (redirect() from requireAdmin, notFound(), an
   // HTTP-error fallback) MUST be re-thrown untouched or auth would break.
-  let res: AdminActionResult<{ rows: PayUserHistoryRow[]; total: number; page: number; pageSize: number }>;
+  let res: AdminActionResult<{ entries: PayUserHistoryEntry[]; total: number; page: number; pageSize: number }>;
   try {
     res = await listPayUserHistory({ page, q, pageSize: size });
   } catch (e) {
@@ -85,7 +85,7 @@ export default async function AdminWalletPayUserPage({
     };
   }
 
-  const rows = res.ok ? res.data!.rows : [];
+  const entries = res.ok ? res.data!.entries : [];
   const total = res.ok ? res.data!.total : 0;
   const pageSize = res.ok ? res.data!.pageSize : 50;
   const lastPage = Math.max(1, Math.ceil(total / pageSize));
@@ -150,8 +150,8 @@ export default async function AdminWalletPayUserPage({
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{res.error}</div>
       )}
 
-      {/* history table (client-side sortable · owner 2026-07-16) */}
-      <PayUserHistoryTable rows={rows} />
+      {/* history table (client-side sortable · owner 2026-07-16 · จัดกลุ่มรอบชำระ 2026-08-01) */}
+      <PayUserHistoryTable entries={entries} />
 
       {/* pagination */}
       {lastPage > 1 && (

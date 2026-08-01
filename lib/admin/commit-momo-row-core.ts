@@ -47,7 +47,9 @@ import {
   extractCrateFromMomoRaw,
   extractCoverFromMomoRaw,
   extractCgFromMomoRaw,
-  deriveMomoMemberCode,
+  normalizeMomoPrCode,
+  resolvableMomoPrOf,
+  firstResolvableMomoPr,
 } from "@/lib/admin/momo-raw-helpers";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { splitAggregatedMomoBoxRows } from "@/lib/integrations/momo-web/split-box-rows";
@@ -248,13 +250,20 @@ function cleanDate(v: unknown): string | null {
 export async function commitMomoRowCore(
   ctx: CommitMomoRowContext,
   rawInput: CommitMomoRowInput,
-): Promise<AdminActionResult<{ forwarderId: number; fIDorCO: string }>> {
+): Promise<AdminActionResult<{ forwarderId: number; fIDorCO: string; autoResolvedUserID?: string }>> {
   const parsed = commitMomoRowSchema.safeParse(rawInput);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
   const d = parsed.data;
-  const isSpecialNoCode = d.mode === "special-no-code";
+  // `let` (not const): the NO-CODE lane AUTO-RESOLVES into a normal commit when
+  // the parcel actually carries a resolvable PR in MOMO's data (owner 2026-08-02
+  // "มี PR แล้ว ทำไมไม่เติมให้เราเลย") — see step 1b below.
+  let isSpecialNoCode = d.mode === "special-no-code";
+  /** PR ที่ระบบหาเจอเองจากข้อมูล MOMO (แถวนี้ / แถวหลักชิปเม้น / บอร์ด Live) ตอนนำเข้าแบบ NO CODE. */
+  let autoResolvedUserID: string | null = null;
+  let autoResolvedPrSource:
+    | "admin_patch" | "staging_raw" | "staging_columns" | "base_row" | "live_board" | null = null;
 
   const admin         = createAdminClient();
   const legacyAdminId = ctx.legacyAdminId.slice(0, 10);
@@ -272,7 +281,7 @@ export async function commitMomoRowCore(
       // sync.ts aggregateTrackDetailMetrics) — ภูม 2026-07-13: value the row from THESE,
       // not the first-box `raw` (raw carried only box-1 when MOMO's feed dropped the
       // -2..-N siblings → ~5× under-bill · e.g. 800206224068 raw.kg=46.5 vs true 249).
-      "id, momo_tracking_no, tracking_override, admin_patch, momo_container_no, container_batch_no, momo_sack_no, shipment_status, raw, weight_kg, cbm, quantity, momo_updated_at, committed_at, committed_forwarder_id",
+      "id, momo_tracking_no, tracking_override, admin_patch, momo_container_no, container_batch_no, momo_sack_no, shipment_status, raw, weight_kg, cbm, quantity, momo_user_group, momo_user_code, momo_updated_at, committed_at, committed_forwarder_id",
     )
     .eq("id", d.rowId)
     .maybeSingle<{
@@ -288,6 +297,8 @@ export async function commitMomoRowCore(
       weight_kg:              number | string | null;
       cbm:                    number | string | null;
       quantity:               number | null;
+      momo_user_group:        string | null;
+      momo_user_code:         string | null;
       momo_updated_at:        string | null;
       committed_at:           string | null;
       committed_forwarder_id: number | null;
@@ -349,8 +360,132 @@ export async function commitMomoRowCore(
     ? (adminPatch.extra_images as unknown[]).filter((x): x is string => typeof x === "string" && x.trim() !== "")
     : [];
 
+  // ── 1b. เลขแทรคที่จะใช้จริง + NO-CODE identity resolve (owner 2026-08-02) ──
+  // เลขแทรค: ใช้ "เลขที่ถูกต้อง" (tracking_override · mig 0281 · owner เคส 733 —
+  // MOMO คีย์ตกหล่นแต่รูปป้ายมีเลขเต็ม) ก่อนเลขดิบจาก MOMO เสมอ. ทุก dedup/family
+  // guard ข้างล่างวิ่งบนเลขนี้ = เลขที่จะกลายเป็น ftrackingchn จริง.
+  const trackingNo = (srcRow.tracking_override ?? "").trim() || srcRow.momo_tracking_no;
+
+  // owner (verbatim): *"งาน NO CODE ยังเอาเข้าไม่ได้จริง เด้ง มี PR แล้ว ในเมื่อมีแล้ว
+  // ทำไมไม่เติมให้เราเลยหละครับ"* — เดิมด่านนี้ REFUSE ทันทีที่เจอ "อะไรก็ตาม" ในช่องรหัส
+  // (deriveMomoMemberCode คืน prefix เปล่า "PR" เมื่อ user_code ว่าง → โดนนับเป็น
+  // "มีรหัสลูกค้า" ทั้งที่ระบุตัวใครไม่ได้) = ทางตัน: นำเข้าปกติก็ไม่ได้ (ไม่มี PR จริง)
+  // นำเข้า NO CODE ก็เด้ง. ตอนนี้ด่านทำหน้าที่เดิม ("NO CODE must be true on the
+  // server") แต่เปลี่ยนจากเด้งเป็น **ทำให้เลย**:
+  //   1. หา PR ที่ resolvable จริง (^PR\d+$ · normalizeMomoPrCode) จากทุกแหล่งที่ MOMO มี
+  //      — แถวนี้เอง (admin_patch ✎ → raw → คอลัมน์ momo_user_*) → แถวหลักของชิปเม้น
+  //      (เมื่อเลขนี้เป็นกล่องย่อย -i/n และ PR อยู่บนแถว base) → บอร์ด MOMO Live
+  //      (momo_box_detail.member_code).
+  //   2. เจอ → auto-fill: สลับเป็นนำเข้าแบบปกติด้วย PR นั้น ผ่านด่านเดิมของ path ปกติ
+  //      ครบทุกตัว (tb_users ข้อ 2 · ที่อยู่/ขนส่ง ข้อ 3 · dedup family 4a½/4a¾ ·
+  //      cabinet guard · pricing/box-split) — ไม่ fork path ที่สอง.
+  //   3. เจอรหัสแต่ลูกค้าไม่มีจริงใน tb_users → refuse พร้อมบอกว่าเจออะไร (ด่านข้อ 2).
+  //   4. ไม่เจออะไรที่ระบุลูกค้าได้ (รวม "PR" เปล่า / รหัสขยะ) → NO CODE จริง →
+  //      เข้ากองสถานะพิเศษ (99) ตามที่กด — เลิกเด้ง.
+  if (isSpecialNoCode) {
+    const rawObj = srcRow.raw && typeof srcRow.raw === "object"
+      ? srcRow.raw as Record<string, unknown>
+      : {};
+    // แหล่งบนแถวตัวเอง — admin_patch (แอดมินกรอกผ่าน ✎ · sync-proof) ชนะ raw ชนะคอลัมน์ staging.
+    let resolved = firstResolvableMomoPr([
+      [adminPatch.user_group, adminPatch.user_code],
+      [rawObj.user_group, rawObj.user_code],
+      [srcRow.momo_user_group, srcRow.momo_user_code],
+    ]);
+    if (resolved) {
+      autoResolvedPrSource =
+        resolvableMomoPrOf(adminPatch.user_group, adminPatch.user_code) === resolved
+          ? "admin_patch"
+          : resolvableMomoPrOf(rawObj.user_group, rawObj.user_code) === resolved
+            ? "staging_raw"
+            : "staging_columns";
+    }
+
+    // แถวหลักของชิปเม้นเดียวกัน — เคสจอจริง 2026-08-01: SF1575244811141-1/2 · -2/2
+    // ช่องรหัสของกล่องย่อยว่าง แต่แถว base ถือ PR อยู่ → ยืมของครอบครัวตัวเองได้.
+    const familyBase = momoBaseOf(trackingNo);
+    if (!resolved && familyBase && familyBase !== trackingNo) {
+      const { data: baseRow, error: baseErr } = await admin
+        .from("momo_import_tracks")
+        .select("raw, admin_patch, momo_user_group, momo_user_code")
+        .eq("momo_tracking_no", familyBase)
+        .order("last_synced_at", { ascending: false })
+        .limit(1)
+        .maybeSingle<{
+          raw:             unknown;
+          admin_patch:     Record<string, unknown> | null;
+          momo_user_group: string | null;
+          momo_user_code:  string | null;
+        }>();
+      if (baseErr) {
+        console.error("[commit-momo NO CODE base-row lookup] failed", {
+          code: baseErr.code,
+          message: baseErr.message,
+          tracking: trackingNo,
+        });
+        return { ok: false, error: `db_error:${baseErr.code ?? "unknown"}` };
+      }
+      if (baseRow) {
+        const baseAp = baseRow.admin_patch && typeof baseRow.admin_patch === "object" ? baseRow.admin_patch : {};
+        const baseRaw = baseRow.raw && typeof baseRow.raw === "object"
+          ? baseRow.raw as Record<string, unknown>
+          : {};
+        resolved = firstResolvableMomoPr([
+          [baseAp.user_group, baseAp.user_code],
+          [baseRaw.user_group, baseRaw.user_code],
+          [baseRow.momo_user_group, baseRow.momo_user_code],
+        ]);
+        if (resolved) autoResolvedPrSource = "base_row";
+      }
+    }
+
+    // บอร์ด MOMO Live (momo_box_detail = ความจริงจากเว็บ MOMO ที่ cron refresh) —
+    // query เดิมของด่านนี้ ยังใช้เติมเลขตู้ให้ด้วย (ข้างล่าง) จึงยิงเสมอ · fail-CLOSED เดิม.
+    const { data: liveRows, error: liveErr } = await admin
+      .from("momo_box_detail")
+      .select("member_code, container_name")
+      .eq("base_tracking", familyBase)
+      .limit(50);
+    if (liveErr) {
+      console.error("[commit-momo NO CODE live truth] failed", {
+        code: liveErr.code,
+        message: liveErr.message,
+        tracking: trackingNo,
+      });
+      return { ok: false, error: `ตรวจ NO CODE กับ MOMO Live ไม่สำเร็จ: ${liveErr.message}` };
+    }
+    const liveMeta = (liveRows ?? []) as Array<{ member_code: string | null; container_name: string | null }>;
+    if (!resolved) {
+      const livePr = liveMeta
+        .map((row) => normalizeMomoPrCode(row.member_code))
+        .find((v): v is string => v != null) ?? null;
+      if (livePr) {
+        resolved = livePr;
+        autoResolvedPrSource = "live_board";
+      }
+    }
+    // เติมเลขตู้จาก Live เมื่อ staging ยังว่าง (พฤติกรรมเดิมของ lane นี้ — คงไว้ทั้งสอง
+    // ทางออก: แถวที่สลับเป็นปกติได้เลขตู้ที่ Live รู้ตั้งแต่ commit · แถวที่คง NO CODE
+    // ได้ grouping ตู้ถูกบน fstatus=99). tier guard เดิม: กระสอบ/placeholder ไม่ใช่ตู้.
+    if (!(srcRow.container_batch_no ?? "").trim()) {
+      const liveContainer = liveMeta
+        .map((row) => (row.container_name ?? "").trim())
+        .find((value) => value !== "" && !isNonContainerCabinetId(value));
+      if (liveContainer) srcRow.container_batch_no = liveContainer;
+    }
+
+    if (resolved) {
+      console.log(
+        `[commit-momo NO CODE→auto-resolve] ${trackingNo} พบรหัส ${resolved} (${autoResolvedPrSource}) → นำเข้าแบบปกติ`,
+      );
+      autoResolvedUserID = resolved;
+      isSpecialNoCode = false;
+    }
+  }
+
   // ── 2. Verify customer (tb_users) ─────────────────────────
-  const userID = d.userID.toUpperCase();
+  // PR ที่ auto-resolve จากข้อมูล MOMO (ข้อ 1b) ชนะ; ไม่งั้นใช้ userID ที่ caller ส่งมาเหมือนเดิม.
+  const userID = (autoResolvedUserID ?? d.userID).toUpperCase();
   let customer: { userID: string; coID: string | null; userCompany: string | null };
   if (isSpecialNoCode) {
     // Deliberately blank. Never manufacture a PR placeholder: a fake owner can
@@ -367,7 +502,14 @@ export async function commitMomoRowCore(
       return { ok: false, error: `db_error:${customerErr.code ?? "unknown"}` };
     }
     if (!foundCustomer) {
-      return { ok: false, error: "ไม่พบสมาชิก (userID ไม่ตรงกับ tb_users)" };
+      // ทางเดียวที่งาน NO CODE "ที่มีรหัส" ยังถูก refuse: เจอรหัสในข้อมูล MOMO จริง
+      // แต่ลูกค้าไม่มีในระบบ — บอกให้ชัดว่าเจออะไร จะได้แก้ถูกจุด (owner 2026-08-02).
+      return {
+        ok: false,
+        error: autoResolvedUserID
+          ? `พบรหัสลูกค้า ${userID} ในข้อมูล MOMO แต่ไม่พบลูกค้านี้ในระบบ (tb_users) — ตรวจ/แก้รหัสด้วยปุ่ม ✎ แล้วนำเข้าใหม่`
+          : "ไม่พบสมาชิก (userID ไม่ตรงกับ tb_users)",
+      };
     }
     customer = foundCustomer;
   }
@@ -521,53 +663,9 @@ export async function commitMomoRowCore(
   }
 
   // ── 4. Derive cargo fields from MOMO source row ────────────
-  // เลขแทรค: ใช้ "เลขที่ถูกต้อง" (tracking_override · mig 0281 · owner เคส 733 —
-  // MOMO คีย์ตกหล่นแต่รูปป้ายมีเลขเต็ม) ก่อนเลขดิบจาก MOMO เสมอ. ทุก dedup/family
-  // guard ข้างล่างวิ่งบนเลขนี้ = เลขที่จะกลายเป็น ftrackingchn จริง.
-  const trackingNo  = (srcRow.tracking_override ?? "").trim() || srcRow.momo_tracking_no;
-
-  // NO CODE must be true on the server, not merely a stale client label. The
-  // MOMO screen fills staging blanks from momo_box_detail (Live web truth), so
-  // read the same source here. If Live already knows a PR, force the ordinary
-  // owner commit. If Live knows the real container, preserve that grouping on
-  // the fstatus=99 row even though the staging API column is still blank.
-  if (isSpecialNoCode) {
-    const rawObj = srcRow.raw && typeof srcRow.raw === "object"
-      ? srcRow.raw as Record<string, unknown>
-      : {};
-    const rawMemberCode = deriveMomoMemberCode(rawObj.user_group, rawObj.user_code).trim().toUpperCase();
-    const liveBase = momoBaseOf(trackingNo);
-    const { data: liveRows, error: liveErr } = await admin
-      .from("momo_box_detail")
-      .select("member_code, container_name")
-      .eq("base_tracking", liveBase)
-      .limit(50);
-    if (liveErr) {
-      console.error("[commit-momo NO CODE live truth] failed", {
-        code: liveErr.code,
-        message: liveErr.message,
-        tracking: trackingNo,
-      });
-      return { ok: false, error: `ตรวจ NO CODE กับ MOMO Live ไม่สำเร็จ: ${liveErr.message}` };
-    }
-    const liveMeta = (liveRows ?? []) as Array<{ member_code: string | null; container_name: string | null }>;
-    const liveMemberCode = liveMeta
-      .map((row) => (row.member_code ?? "").trim().toUpperCase())
-      .find(Boolean) ?? "";
-    const knownMemberCode = rawMemberCode || liveMemberCode;
-    if (knownMemberCode) {
-      return {
-        ok: false,
-        error: `พัสดุนี้มีรหัสลูกค้า ${knownMemberCode} ในข้อมูล MOMO แล้ว — ใช้นำเข้าแบบปกติ ห้ามส่งเข้ากอง NO CODE`,
-      };
-    }
-    if (!(srcRow.container_batch_no ?? "").trim()) {
-      const liveContainer = liveMeta
-        .map((row) => (row.container_name ?? "").trim())
-        .find((value) => value !== "" && !isNonContainerCabinetId(value));
-      if (liveContainer) srcRow.container_batch_no = liveContainer;
-    }
-  }
+  // (trackingNo + ด่าน NO-CODE identity ย้ายขึ้นไปข้อ 1b — การ resolve ต้องเกิด
+  //  ก่อนข้อ 2/3 เพื่อให้แถวที่ auto-resolve ไหลผ่าน path ปกติครบทั้งเส้น:
+  //  ลูกค้า/ที่อยู่/ขนส่ง ถูก resolve ด้วย PR จริง ไม่ใช่ค่าว่างของ lane พิเศษ.)
 
   // 🔒 กันนำเข้า "เรคคอร์ดซ้ำของ MOMO" (owner 2026-07-25 · เคส 733 · fail-CLOSED)
   // MOMO เปิดได้ 2 เรคคอร์ดต่อพัสดุใบเดียว: ร้านประกาศเลขเต็ม (0kg ค้างตลอด) +
@@ -1285,6 +1383,11 @@ export async function commitMomoRowCore(
         momo_sack_no:       srcRow.momo_sack_no,
         userid:             isSpecialNoCode ? null : customer.userID,
         mode:               d.mode,
+        // NO-CODE → auto-resolve trail (owner 2026-08-02): กดมาแบบ NO CODE (mode ข้างบน
+        // ยังบอกว่า special-no-code) แต่ระบบพบ PR ในข้อมูล MOMO แล้วนำเข้าแบบปกติให้.
+        ...(autoResolvedUserID
+          ? { auto_resolved_pr: autoResolvedUserID, auto_resolved_pr_source: autoResolvedPrSource }
+          : {}),
         ship_by:            dShip.fShipBy,
         fStatusNew,
         fIDorCO,
@@ -1316,7 +1419,16 @@ export async function commitMomoRowCore(
     revalidatePath(`/admin/forwarders/${row.id}`);
   }
 
-  return { ok: true, data: { forwarderId: row.id, fIDorCO } };
+  return {
+    ok: true,
+    data: {
+      forwarderId: row.id,
+      fIDorCO,
+      // นำเข้าแบบ NO CODE แต่ระบบพบ PR ในข้อมูล MOMO แล้วเติมให้ → บอก caller
+      // (จอใช้โชว์ "ใช้ PRxxx จาก MOMO" แทนข้อความ "เข้ากองสถานะพิเศษ" ที่จะโกหก).
+      ...(autoResolvedUserID ? { autoResolvedUserID } : {}),
+    },
+  };
 }
 
 // ════════════════════════════════════════════════════════════

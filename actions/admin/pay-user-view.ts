@@ -19,6 +19,11 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
+import {
+  planPayUserHistoryEntries,
+  walletHeaderIdOf,
+  type PayUserHsRow,
+} from "@/lib/admin/pay-user-history-group";
 import { withAdmin, type AdminActionResult } from "./common";
 import {
   computeForwarderDebitBatch,
@@ -48,6 +53,13 @@ const num = (v: number | string | null | undefined): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
+/** PostgREST `.in()` โตตาม id list → URL ยาวเกินได้ — ซอยเป็นก้อน ≤200 ต่อคำขอ. */
+const chunkIds = <T,>(ids: T[], size = 200): T[][] => {
+  const out: T[][] = [];
+  for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size));
+  return out;
+};
+
 // ════════════════════════════════════════════════════════════
 // F5 — linked-document resolver (owner 2026-07-15 · PR178 · "pay-user
 // ต้องกดดูใบวางบิล/ใบเสร็จได้ตรงๆ"). Reuses the F9 doc-join pattern from
@@ -73,21 +85,31 @@ async function resolveForwarderDocsByFid(
   if (ids.length === 0) return { billsByFid, receiptsByFid };
 
   // ── ใบวางบิล: tb_forwarder_invoice_item.forwarder_id → tb_forwarder_invoice ──
-  const { data: biItems, error: biErr } = await admin
-    .from("tb_forwarder_invoice_item")
-    .select("invoice_id, forwarder_id")
-    .in("forwarder_id", ids);
-  if (biErr) console.error("[resolveForwarderDocsByFid bill items] failed", { code: biErr.code, message: biErr.message });
-  const biRows = (biItems ?? []) as Array<{ invoice_id: number; forwarder_id: number }>;
+  // (chunked `.in()` — page size ไปได้ถึง 400 แถว + sibling fids → กัน URL ยาวเกิน)
+  const biRows: Array<{ invoice_id: number; forwarder_id: number }> = [];
+  for (const part of chunkIds(ids)) {
+    const { data: biItems, error: biErr } = await admin
+      .from("tb_forwarder_invoice_item")
+      .select("invoice_id, forwarder_id")
+      .in("forwarder_id", part);
+    if (biErr) {
+      console.error("[resolveForwarderDocsByFid bill items] failed", { code: biErr.code, message: biErr.message });
+      continue;
+    }
+    biRows.push(...((biItems ?? []) as Array<{ invoice_id: number; forwarder_id: number }>));
+  }
   const invIds = Array.from(new Set(biRows.map((x) => x.invoice_id)));
   const invById = new Map<number, PayUserLinkedBill>();
-  if (invIds.length > 0) {
+  for (const part of chunkIds(invIds)) {
     const { data: invs, error: invErr } = await admin
       .from("tb_forwarder_invoice")
       .select("id, doc_no, status")
-      .in("id", invIds)
+      .in("id", part)
       .order("id", { ascending: false });
-    if (invErr) console.error("[resolveForwarderDocsByFid bill headers] failed", { code: invErr.code, message: invErr.message });
+    if (invErr) {
+      console.error("[resolveForwarderDocsByFid bill headers] failed", { code: invErr.code, message: invErr.message });
+      continue;
+    }
     for (const iv of (invs ?? []) as Array<{ id: number; doc_no: string | null; status: string | null }>)
       invById.set(iv.id, { id: iv.id, docNo: (iv.doc_no ?? "").trim() || `#${iv.id}`, status: (iv.status ?? "").trim() });
   }
@@ -99,22 +121,31 @@ async function resolveForwarderDocsByFid(
     billsByFid.set(row.forwarder_id, list);
   }
 
-  // ── ใบเสร็จ: tb_receipt_item.fid → tb_receipt ──
-  const { data: rItems, error: riErr } = await admin
-    .from("tb_receipt_item")
-    .select("rid, fid")
-    .in("fid", ids);
-  if (riErr) console.error("[resolveForwarderDocsByFid receipt items] failed", { code: riErr.code, message: riErr.message });
-  const riRows = (rItems ?? []) as Array<{ rid: string | null; fid: number }>;
+  // ── ใบเสร็จ: tb_receipt_item.fid → tb_receipt ── (chunked เช่นเดียวกัน)
+  const riRows: Array<{ rid: string | null; fid: number }> = [];
+  for (const part of chunkIds(ids)) {
+    const { data: rItems, error: riErr } = await admin
+      .from("tb_receipt_item")
+      .select("rid, fid")
+      .in("fid", part);
+    if (riErr) {
+      console.error("[resolveForwarderDocsByFid receipt items] failed", { code: riErr.code, message: riErr.message });
+      continue;
+    }
+    riRows.push(...((rItems ?? []) as Array<{ rid: string | null; fid: number }>));
+  }
   const rids = Array.from(new Set(riRows.map((x) => (x.rid ?? "").trim()).filter(Boolean)));
   const recByRid = new Map<string, PayUserLinkedReceipt>();
-  if (rids.length > 0) {
+  for (const part of chunkIds(rids)) {
     const { data: recs, error: recErr } = await admin
       .from("tb_receipt")
       .select("id, rid, rstatus")
-      .in("rid", rids)
+      .in("rid", part)
       .order("id", { ascending: false });
-    if (recErr) console.error("[resolveForwarderDocsByFid receipt headers] failed", { code: recErr.code, message: recErr.message });
+    if (recErr) {
+      console.error("[resolveForwarderDocsByFid receipt headers] failed", { code: recErr.code, message: recErr.message });
+      continue;
+    }
     for (const rc of (recs ?? []) as Array<{ id: number; rid: string | null; rstatus: string | null }>)
       recByRid.set((rc.rid ?? "").trim(), { id: rc.id, rid: (rc.rid ?? "").trim() || `#${rc.id}`, status: (rc.rstatus ?? "").trim() });
   }
@@ -515,7 +546,17 @@ export async function getPayUserShopView(
 // ════════════════════════════════════════════════════════════
 // LIST — pay-on-behalf history (pay-users.php L753)
 // tb_wallet_hs WHERE adminidcrate<>'' AND type IN (2,4) ORDER date DESC
+//
+// จัดกลุ่ม "รอบชำระ" (owner 2026-08-01 · "ยังแยกเป็นแทรกกิ้ง แทนที่จะกรุปเป็นงาน
+// ชิปเม้นๆ หรือ เป็นรอบชำระ"): ลูกที่ reforder2 ชี้แถวหัว type='1' เดียวกัน ยุบเหลือ
+// แถวเดียว — ยอดเงิน = ยอดแถวหัว (ที่ลูกค้าโอนจริง) · สถานะ/เวลา/ผู้ทำรายการ = จากหัว ·
+// รายการอ้างอิง = ทุก fid กดเข้าออเดอร์ได้. แถวเดี่ยว (ไม่มี reforder2 / หัวหาไม่เจอ)
+// render แบบเดิมทุกประการ. READ-ONLY — grouping logic อยู่ที่
+// lib/admin/pay-user-history-group.ts (pure · tested).
 // ════════════════════════════════════════════════════════════
+
+/** เลขที่เอกสาร — ใบแจ้งหนี้/ใบวางบิล (FRI…) ที่ยังไม่ถูกยกเลิก ครอบออเดอร์นั้น. */
+export type PayUserHistoryDoc = { id: number; docNo: string; status: string };
 
 export type PayUserHistoryRow = {
   id: number;
@@ -531,13 +572,46 @@ export type PayUserHistoryRow = {
   bills: PayUserLinkedBill[];
   /** F5 — ใบเสร็จที่ครอบออเดอร์นี้ (เฉพาะ ฝากนำเข้า type='4'). */
   receipts: PayUserLinkedReceipt[];
+  /** เลขที่เอกสาร (bills ที่ status ≠ cancelled) — คอลัมน์แรกของตาราง history. */
+  docs: PayUserHistoryDoc[];
 };
+
+/** รอบชำระ (แถวหัว type='1' + ลูกทุกแถว) — 1 การโอนของลูกค้า = 1 แถวบนจอ. */
+export type PayUserHistoryGroupEntry = {
+  kind: "group";
+  /** id แถวหัว tb_wallet_hs (type='1' · สลิป+ยอดรวม) → /admin/wallet/<id>. */
+  headerId: number;
+  /** ยอดที่ลูกค้าโอนจริง (จากแถวหัว) — ห้าม Σ ลูกเอง. */
+  headerAmount: number;
+  /** Σ ยอดรายแถวลูก (ชุดเต็ม) — โชว์เตือนเมื่อไม่เท่า headerAmount. */
+  childrenSum: number;
+  amountMismatch: boolean;
+  date: string | null;         // จากแถวหัว
+  userid: string | null;
+  name: string;
+  service_label: string;
+  status: string | null;       // จากแถวหัว
+  admin_crate: string | null;  // จากแถวหัว
+  /** ลูกทุกแถวของรอบนี้ (ครบชุดแม้คร่อมหน้า · ใหม่สุดก่อน). */
+  items: PayUserHistoryRow[];
+  /** เลขที่เอกสารรวมทุก fid ของรอบ (dedup · ไม่รวมใบที่ยกเลิก). */
+  docs: PayUserHistoryDoc[];
+  /** ใบเสร็จรวมทุก fid ของรอบ (dedup). */
+  receipts: PayUserLinkedReceipt[];
+};
+
+export type PayUserHistoryEntry =
+  | { kind: "single"; row: PayUserHistoryRow }
+  | PayUserHistoryGroupEntry;
 
 const HISTORY_PAGE_SIZE = 50;
 
+/** คอลัมน์ tb_wallet_hs ที่หน้า history ใช้ (ตรงกับ PayUserHsRow). */
+const HS_LIST_COLS = "id, date, userid, amount, type, status, reforder, reforder2, adminidcrate";
+
 export async function listPayUserHistory(
   opts: { page?: number; q?: string; pageSize?: number } = {},
-): Promise<AdminActionResult<{ rows: PayUserHistoryRow[]; total: number; page: number; pageSize: number }>> {
+): Promise<AdminActionResult<{ entries: PayUserHistoryEntry[]; total: number; page: number; pageSize: number }>> {
   return withAdmin(undefined, async () => {
     const admin = createAdminClient();
     const page = Math.max(1, Math.floor(opts.page ?? 1));
@@ -546,27 +620,29 @@ export async function listPayUserHistory(
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
+    // search on member code OR reference (order/forwarder id) OR admin.
+    // `.or()` takes a RAW PostgREST filter string, so `,` `(` `)` and `"` in
+    // the term break its grammar → PostgREST 400 → the page shows a db_error
+    // banner for what looks like an ordinary search (pasting a comma-joined
+    // reference list is the easy way to hit it). Strip the grammar chars
+    // instead of failing; READ-ONLY, no money/logic change.
+    const safeQ = q ? q.replace(/[,()"\\]/g, " ").trim() : "";
+
     let query = admin
       .from("tb_wallet_hs")
-      .select("id, date, userid, amount, type, status, reforder, adminidcrate", { count: "exact" })
+      .select(HS_LIST_COLS, { count: "exact" })
       .neq("adminidcrate", "")
       .not("adminidcrate", "is", null)
       .in("type", ["2", "4"])
-      .order("date", { ascending: false });
+      .order("date", { ascending: false })
+      // id เป็นตัวชี้ขาดเมื่อ date ชนกัน (ลูกรอบเดียวกันเขียนเวลาเดียวกัน) —
+      // ทำให้ตำแหน่งหน้าเสถียร + กติกา "ลูกใหม่สุดของชุด" ของตัวจัดกลุ่มเทียบได้เป๊ะ.
+      .order("id", { ascending: false });
 
-    if (q) {
-      // search on member code OR reference (order/forwarder id) OR admin.
-      // `.or()` takes a RAW PostgREST filter string, so `,` `(` `)` and `"` in
-      // the term break its grammar → PostgREST 400 → the page shows a db_error
-      // banner for what looks like an ordinary search (pasting a comma-joined
-      // reference list is the easy way to hit it). Strip the grammar chars
-      // instead of failing; READ-ONLY, no money/logic change.
-      const safeQ = q.replace(/[,()"\\]/g, " ").trim();
-      if (safeQ) {
-        query = query.or(
-          `userid.ilike.%${safeQ}%,reforder.ilike.%${safeQ}%,adminidcrate.ilike.%${safeQ}%`,
-        );
-      }
+    if (safeQ) {
+      query = query.or(
+        `userid.ilike.%${safeQ}%,reforder.ilike.%${safeQ}%,adminidcrate.ilike.%${safeQ}%`,
+      );
     }
     query = query.range(from, to);
 
@@ -575,18 +651,65 @@ export async function listPayUserHistory(
       console.error("[listPayUserHistory tb_wallet_hs] failed", { code: error.code, message: error.message });
       return { ok: false, error: `db_error:${error.code ?? "unknown"}` };
     }
-    const raw = (data ?? []) as Array<{
-      id: number; date: string | null; userid: string | null; amount: number | string | null;
-      type: string | null; status: string | null; reforder: string | null; adminidcrate: string | null;
-    }>;
+    const raw = (data ?? []) as PayUserHsRow[];
 
-    // Resolve customer names in one batched query (join done in JS).
-    const userIds = Array.from(new Set(raw.map((r) => (r.userid ?? "").trim()).filter(Boolean)));
+    // ── รอบชำระ: ดึงแถวหัว (type='1') ของลูกที่โผล่ในหน้านี้ ──────────────
+    // soft-fail ทุกก้อน — ดึงหัวไม่ได้ = ลูกชุดนั้น render เดี่ยวแบบเดิม (จอห้ามแตก).
+    const pageHids = Array.from(
+      new Set(raw.map(walletHeaderIdOf).filter((n): n is number => n != null)),
+    );
+    const headers: PayUserHsRow[] = [];
+    for (const part of chunkIds(pageHids)) {
+      const { data: hs, error: hErr } = await admin
+        .from("tb_wallet_hs")
+        .select(HS_LIST_COLS)
+        .in("id", part);
+      if (hErr) {
+        console.error("[listPayUserHistory headers] failed", { code: hErr.code, message: hErr.message });
+        continue;
+      }
+      headers.push(...((hs ?? []) as PayUserHsRow[]));
+    }
+    const validHids = headers
+      .filter((h) => String(h.type ?? "") === "1")
+      .map((h) => Number(h.id));
+
+    // ── ลูกทุกแถวของหัวเหล่านั้น (ชุดต้องครบแม้ลูกคร่อมหน้า — ทั้ง Σ และลิงก์ fid) ──
+    // filter ชุดเดียวกับ query หลัก → สมาชิกกลุ่ม = สิ่งที่ list นี้มีสิทธิ์โชว์เท่านั้น.
+    const siblings: PayUserHsRow[] = [];
+    const brokenHeaderIds: number[] = [];
+    for (const part of chunkIds(validHids)) {
+      const { data: sibs, error: sErr } = await admin
+        .from("tb_wallet_hs")
+        .select(HS_LIST_COLS)
+        .in("reforder2", part)
+        .in("type", ["2", "4"])
+        .neq("adminidcrate", "")
+        .not("adminidcrate", "is", null);
+      if (sErr) {
+        console.error("[listPayUserHistory siblings] failed", { code: sErr.code, message: sErr.message });
+        // ชุดลูกไม่ครบ → ห้ามกรุ๊ปหัวก้อนนี้ (กันคำเตือน Σ ที่คำนวณจากชุดขาด)
+        brokenHeaderIds.push(...part);
+        continue;
+      }
+      siblings.push(...((sibs ?? []) as PayUserHsRow[]));
+    }
+
+    // Resolve customer names in one batched query (join done in JS) —
+    // ครอบทั้งแถวหน้านี้ + หัว + ลูกที่ดึงเสริม.
+    const userIds = Array.from(
+      new Set(
+        [...raw, ...headers, ...siblings].map((r) => (r.userid ?? "").trim()).filter(Boolean),
+      ),
+    );
     const nameByUser = new Map<string, string>();
-    if (userIds.length > 0) {
+    for (const part of chunkIds(userIds)) {
       const { data: users, error: uErr } = await admin
-        .from("tb_users").select("userID, userName, userLastName").in("userID", userIds);
-      if (uErr) console.error("[listPayUserHistory tb_users] failed", { code: uErr.code, message: uErr.message });
+        .from("tb_users").select("userID, userName, userLastName").in("userID", part);
+      if (uErr) {
+        console.error("[listPayUserHistory tb_users] failed", { code: uErr.code, message: uErr.message });
+        continue;
+      }
       for (const u of (users ?? []) as Array<{ userID: string; userName: string | null; userLastName: string | null }>) {
         const full = [u.userName, u.userLastName].filter(Boolean).join(" ").trim();
         // avoid "คุณคุณ..." when the stored name already carries the honorific.
@@ -598,9 +721,10 @@ export async function listPayUserHistory(
     // straight to the covering docs (owner PR178 · "ต้องกดดูเอกสารได้ตรงๆ").
     // Scope = type='4' only (reforder=forwarder id); type='2' shop rows keep the
     // order-detail link (their docs live off the header, not a forwarder fid).
+    // รวม fid ของลูกที่ดึงเสริมด้วย (คอลัมน์ เลขที่เอกสาร ต้องครบทั้งรอบ).
     const fwdFids = Array.from(
       new Set(
-        raw
+        [...raw, ...siblings]
           .filter((r) => String(r.type) === "4")
           .map((r) => Number((r.reforder ?? "").trim()))
           .filter((n) => Number.isInteger(n) && n > 0),
@@ -608,11 +732,12 @@ export async function listPayUserHistory(
     );
     const { billsByFid, receiptsByFid } = await resolveForwarderDocsByFid(admin, fwdFids);
 
-    const rows: PayUserHistoryRow[] = raw.map((r) => {
+    const shapeRow = (r: PayUserHsRow): PayUserHistoryRow => {
       const isFwd = String(r.type) === "4";
       const fid = isFwd ? Number((r.reforder ?? "").trim()) : NaN;
+      const bills = isFwd && Number.isInteger(fid) ? billsByFid.get(fid) ?? [] : [];
       return {
-        id: r.id,
+        id: Number(r.id),
         date: r.date,
         userid: r.userid,
         name: nameByUser.get((r.userid ?? "").trim()) ?? (r.userid ?? "—"),
@@ -621,11 +746,61 @@ export async function listPayUserHistory(
         reforder: (r.reforder ?? "").trim() || null,
         status: r.status,
         admin_crate: (r.adminidcrate ?? "").trim() || null,
-        bills: isFwd && Number.isInteger(fid) ? billsByFid.get(fid) ?? [] : [],
+        bills,
         receipts: isFwd && Number.isInteger(fid) ? receiptsByFid.get(fid) ?? [] : [],
+        // เลขที่เอกสาร = ใบที่ยังไม่ถูกยกเลิกเท่านั้น (owner: "มันควรเป็นเลขที่เอกสาร
+        // ใบแจ้งหนี้ ที่ออกไป แต่ละใบ").
+        docs: bills
+          .filter((b) => b.status !== "cancelled")
+          .map((b) => ({ id: b.id, docNo: b.docNo, status: b.status })),
+      };
+    };
+
+    // ── วางแผนแถวหน้านี้ (pure · tested) แล้ว shape เป็น entry สำหรับตาราง ──
+    const plan = planPayUserHistoryEntries({
+      pageRows: raw,
+      headers,
+      siblings,
+      brokenHeaderIds,
+      hasQuery: Boolean(safeQ),
+    });
+
+    const entries: PayUserHistoryEntry[] = plan.map((p) => {
+      if (p.kind === "single") return { kind: "single" as const, row: shapeRow(p.row) };
+
+      const items = p.children.map(shapeRow);
+      const headerAmount = num(p.header.amount);
+      const childrenSum = items.reduce((s, it) => s + it.amount, 0);
+      // dedup เอกสาร/ใบเสร็จข้ามลูกทุกแถวของรอบ
+      const docs: PayUserHistoryDoc[] = [];
+      const receipts: PayUserLinkedReceipt[] = [];
+      for (const it of items) {
+        for (const d of it.docs) if (!docs.some((x) => x.id === d.id)) docs.push(d);
+        for (const rc of it.receipts) if (!receipts.some((x) => x.id === rc.id)) receipts.push(rc);
+      }
+      const labels = Array.from(new Set(items.map((it) => it.service_label)));
+      const userid = (p.header.userid ?? "").trim() || items[0]?.userid || null;
+      return {
+        kind: "group" as const,
+        headerId: p.headerId,
+        headerAmount,
+        childrenSum,
+        // เทียบระดับสตางค์ — float จาก numeric(14,2) ปัดก่อนเทียบ
+        amountMismatch: Math.round(headerAmount * 100) !== Math.round(childrenSum * 100),
+        date: p.header.date ?? items[0]?.date ?? null,
+        userid,
+        name: nameByUser.get((userid ?? "").trim()) ?? (userid ?? "—"),
+        service_label: labels.join(" + ") || "—",
+        status: p.header.status,
+        admin_crate: (p.header.adminidcrate ?? "").trim() || items[0]?.admin_crate || null,
+        items,
+        docs,
+        receipts,
       };
     });
 
-    return { ok: true, data: { rows, total: count ?? rows.length, page, pageSize } };
+    // total = จำนวนแถวลูกดิบ (ตัวขับ pagination window) — หน้าที่มีการกรุ๊ปจะโชว์
+    // "แถวบนจอ" น้อยกว่า pageSize ได้ (หลายลูกยุบเหลือแถวเดียว) — ตั้งใจ.
+    return { ok: true, data: { entries, total: count ?? raw.length, page, pageSize } };
   });
 }

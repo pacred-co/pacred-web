@@ -56,6 +56,7 @@ import {
   type PayWithTopUpResult,
 } from "@/actions/admin/pay-user";
 import { adminSearchCustomers, type CustomerPickerRow } from "@/actions/admin/search-customers";
+import { adminIssuePayUserInvoice } from "@/actions/admin/pay-user-invoice";
 import { describeActionDispatchError } from "@/lib/observability/action-dispatch-error";
 import { isNextControlFlowError } from "@/lib/observability/next-control-flow";
 import { reportClientIncident } from "@/lib/observability/client-report";
@@ -145,6 +146,10 @@ export function PayUserAddClient() {
   const [slip, setSlip] = useState<File | null>(null);
   const [topUpAmount, setTopUpAmount] = useState<string>("");
   const [paying, startPay] = useTransition();
+  // ── ใบแจ้งหนี้จริง (owner 2026-08-01 · PR187) — mint เลข FRI จากใบพรีวิวบน modal ──
+  const [issued, setIssued] = useState<{ invoiceId: number; docNo: string } | null>(null);
+  const [issuing, setIssuing] = useState(false);
+  const [issueErr, setIssueErr] = useState<string | null>(null);
 
   function resetLoaded() {
     setPanel(null);
@@ -316,6 +321,10 @@ export function PayUserAddClient() {
     setResult(null);
     setSlip(null);
     setTopUpAmount("");
+    // ใบที่ออกไว้ผูกกับ "ชุดรายการตอนกด" — เปิดรอบใหม่ต้องเริ่มจากพรีวิวเสมอ
+    // (กดออกซ้ำบนชุดเดิม = ด่านกันบิลซ้ำคืนเลขใบเดิมมาให้ลิงก์ ไม่ mint ซ้ำ)
+    setIssued(null);
+    setIssueErr(null);
     setModalOpen(true);
   }
   function closeModal() {
@@ -355,6 +364,47 @@ export function PayUserAddClient() {
     if (!fids) return;
     const url = `/admin/wallet/pay-user/summary?fID=${encodeURIComponent(fids)}&rDate=${encodeURIComponent(new Date().toISOString())}`;
     window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  // ── ออกใบแจ้งหนี้จริงจากใบพรีวิวบน modal (forwarder lane เท่านั้น) ──
+  // mint ผ่าน createBillingRunInvoice เครื่องเดิม → ยอดถูกแช่บนใบ + ด่านห้าม re-price
+  // แถวบนใบ live ทำงานทันที (ราก PR187: ใบพรีวิว 11,955.74 แต่ยอดจริงขยับเป็น 12,309.14)
+  async function issueRealInvoice() {
+    if (!panel || keyType !== "2" || selectedFwdRows.length === 0 || issuing) return;
+    const ok = await confirm(
+      `ออกใบแจ้งหนี้จริงให้ ${panel.user.userid}?\nครอบ ${selectedFwdRows.length} รายการ · ${thb(selectedTotal)}\nยอดจะถูกล็อกตามใบ — แก้ราคา/ขนาดของแถวบนใบไม่ได้จนกว่าจะยกเลิกใบ`,
+    );
+    if (!ok) return;
+    setIssueErr(null);
+    setIssuing(true);
+    try {
+      const res = await adminIssuePayUserInvoice({
+        userid: panel.user.userid,
+        fids: selectedFwdRows.map((r) => r.fid),
+      });
+      if (res.ok) {
+        setIssued(res.data);
+        return;
+      }
+      const billed = res.billedInvoices ?? [];
+      if (billed.length > 0) {
+        const uniq = Array.from(new Map(billed.map((b) => [b.invoiceId, b])).values());
+        if (uniq.length === 1 && billed.length === selectedFwdRows.length) {
+          // ทุกแถวอยู่บนใบเดิมใบเดียวอยู่แล้ว → ลิงก์ใบเดิมต่อได้เลย (ไม่ mint ซ้ำ = ถูกต้อง)
+          setIssued({ invoiceId: uniq[0].invoiceId, docNo: uniq[0].docNo });
+        } else {
+          setIssueErr(
+            `บางรายการอยู่บนใบแจ้งหนี้เดิมแล้ว (${uniq.map((b) => b.docNo).join(", ")}) — เปิดดูใบเดิม หรือยกเลิกใบเดิมก่อนแล้วค่อยออกใหม่`,
+          );
+        }
+        return;
+      }
+      setIssueErr(res.error);
+    } catch (e) {
+      setIssueErr(e instanceof Error ? e.message : "ออกใบแจ้งหนี้ไม่สำเร็จ");
+    } finally {
+      setIssuing(false);
+    }
   }
 
   // ── confirm-before-mutate (§0f) → route to the right action ──
@@ -690,6 +740,10 @@ export function PayUserAddClient() {
           paying={paying}
           onSubmit={submitPayment}
           onOpenSummary={openSummaryPdf}
+          issued={issued}
+          issuing={issuing}
+          issueErr={issueErr}
+          onIssueInvoice={issueRealInvoice}
         />
       )}
 
@@ -1309,6 +1363,10 @@ function PayModal({
   paying,
   onSubmit,
   onOpenSummary,
+  issued,
+  issuing,
+  issueErr,
+  onIssueInvoice,
 }: {
   open: boolean;
   onClose: () => void;
@@ -1329,6 +1387,11 @@ function PayModal({
   paying: boolean;
   onSubmit: () => void;
   onOpenSummary: () => void;
+  /** ใบแจ้งหนี้จริงที่เพิ่งออก (null = ยังเป็นพรีวิว) */
+  issued: { invoiceId: number; docNo: string } | null;
+  issuing: boolean;
+  issueErr: string | null;
+  onIssueInvoice: () => void;
 }) {
   const dialogRef = useConfirmDialogRef(open, onClose);
   const title =
@@ -1408,10 +1471,43 @@ function PayModal({
             <p className="text-[12px] text-gray-500">สรุปรายการที่ต้องชำระ (เงินสด)</p>
           </div>
           <div className="min-w-[220px] rounded-lg border border-rose-100 bg-rose-50/60 p-3 text-[12px]">
-            <MetaRow k="เลขที่เอกสาร" v={doc.no} />
+            <MetaRow k="เลขที่เอกสาร" v={issued ? issued.docNo : doc.no} />
             <MetaRow k="วันที่ออก" v={doc.issue} />
             <MetaRow k="ครบกำหนด" v={doc.due} valueClass="font-semibold text-rose-600" />
             <MetaRow k="หน้า" v="1 / 1" />
+            {/* 🔴 owner 2026-08-01 (PR187 · ยอดใบ 11,955.74 แต่ตอนกดชำระได้ 12,309.14):
+                ใบบนจอนี้เป็น "ตัวอย่าง" — ไม่มีเลขจริง ไม่ล็อกยอด. ถ้ามีใครแก้ราคา/ขนาด
+                หลังลูกค้าได้ใบไปแล้ว ยอดจะขยับเงียบๆ. กด "ออกใบแจ้งหนี้จริง" = mint เลข FRI
+                → ยอดถูกแช่ + ด่านห้าม re-price แถวบนใบ live ทำงานทันที. */}
+            {/* ใบ FRI ออกได้เฉพาะสายฝากนำเข้า (tb_forwarder) — lane ฝากสั่งซื้อไม่มีปุ่มนี้ */}
+            {keyType !== "2" ? null : issued ? (
+              <a
+                href={`/admin/billing-run/${issued.invoiceId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 block rounded-md bg-emerald-600 px-2.5 py-1.5 text-center text-[11px] font-bold text-white hover:bg-emerald-700"
+              >
+                🧾 เปิดใบแจ้งหนี้ {issued.docNo}
+              </a>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={onIssueInvoice}
+                  disabled={issuing}
+                  className="mt-2 w-full rounded-md bg-primary-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-primary-700 disabled:opacity-60"
+                >
+                  {issuing ? "กำลังออกใบ…" : "🧾 ออกใบแจ้งหนี้จริง (ล็อกยอด)"}
+                </button>
+                <p className="mt-1 text-[11px] leading-snug text-rose-700">
+                  ใบนี้ยังเป็น <b>ตัวอย่าง</b> — ยอดยังเปลี่ยนได้ถ้ามีคนแก้ราคา/ขนาดทีหลัง
+                  กดออกใบจริงก่อนส่งให้ลูกค้า เพื่อล็อกยอด
+                </p>
+              </>
+            )}
+            {keyType === "2" && issueErr ? (
+              <p className="mt-1 text-[11px] font-semibold leading-snug text-rose-700">{issueErr}</p>
+            ) : null}
           </div>
         </div>
 

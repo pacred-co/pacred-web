@@ -156,6 +156,56 @@ export function deriveMomoMemberCode(userGroup: unknown, userCode: unknown): str
   return code || prefix;
 }
 
+// ────────────────────────────────────────────────────────────
+// Resolvable-PR helpers (owner 2026-08-02 — "งาน NO CODE ยังเอาเข้าไม่ได้จริง
+// เด้ง มี PR แล้ว ในเมื่อมีแล้วทำไมไม่เติมให้เราเลยหละครับ").
+//
+// THE BUG THESE CLOSE: the UI classified a row NO CODE with
+// `userGroup && userCode ? derive(...) : null` (BOTH required), while the
+// commit guard called `deriveMomoMemberCode(...)` UNCONDITIONALLY — and
+// derive falls back to `code || prefix`, so `("PR", "")` returns the BARE
+// GROUP "PR". The guard then treated that useless prefix as "มีรหัสลูกค้า
+// PR แล้ว" and REFUSED the NO-CODE import — a dead end (normal import needs
+// a real PR; NO-CODE import bounces). These helpers are the ONE brain both
+// sides now share: a value only counts as "having a PR" when it actually
+// identifies a customer (PR + digits). A bare prefix / junk = NO CODE.
+// ────────────────────────────────────────────────────────────
+
+/**
+ * Normalise a candidate member-code string → canonical "PR####" | null.
+ * Uppercases + trims; anything that does not match `^PR\d+$` (bare "PR",
+ * "PCS10830", garbage, empty) → null = "does NOT identify a customer".
+ */
+export function normalizeMomoPrCode(value: unknown): string | null {
+  const v = String(value ?? "").trim().toUpperCase();
+  return /^PR\d+$/.test(v) ? v : null;
+}
+
+/**
+ * (user_group, user_code) pair → resolvable "PR####" | null.
+ * `("PR","121")` → "PR121" · `("PR","")` → null (bare group = NO CODE) ·
+ * `("","121")` → null (digits alone don't prove the PR prefix — ห้ามเดา).
+ */
+export function resolvableMomoPrOf(userGroup: unknown, userCode: unknown): string | null {
+  return normalizeMomoPrCode(deriveMomoMemberCode(userGroup, userCode));
+}
+
+/**
+ * First resolvable PR from ordered (user_group, user_code) pairs — the
+ * shared precedence walk for a staging row's OWN identity sources
+ * (admin_patch → raw → momo_user_* columns). Junk pairs are skipped, so a
+ * later good source still wins.
+ */
+export function firstResolvableMomoPr(
+  pairs: ReadonlyArray<readonly [unknown, unknown]>,
+): string | null {
+  for (const [group, code] of pairs) {
+    const v = resolvableMomoPrOf(group, code);
+    if (v) return v;
+  }
+  return null;
+}
+
 /**
  * Build a readable display view-model from a MOMO raw blob. Every field is
  * read defensively (missing / wrong-typed → empty/zero), so a partial or

@@ -14,7 +14,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { momoTypeToProductType } from "@/lib/admin/momo-live-discovery-plan";
-import { deriveMomoMemberCode, baseTrackingOf, aggregateTrackDetailMetrics } from "@/lib/admin/momo-raw-helpers";
+import { firstResolvableMomoPr, normalizeMomoPrCode, baseTrackingOf, aggregateTrackDetailMetrics } from "@/lib/admin/momo-raw-helpers";
 import { deriveMomoBoxConsistency, type BoxConsistencyInput } from "@/lib/admin/momo-box-consistency";
 import { resolveTransportMode } from "@/lib/forwarder/cabinet-transport";
 import { classifyCabinetId } from "@/lib/forwarder/cabinet-class";
@@ -59,7 +59,7 @@ export default async function MomoContainersPage() {
   const { data: rowsRaw, error } = await admin
     .from("momo_import_tracks")
     .select(
-      "id, momo_tracking_no, tracking_override, admin_patch, momo_container_no, container_batch_no, momo_sack_no, shipment_status, phase, admin_status_text, raw, weight_kg, cbm, quantity, committed_at, committed_forwarder_id, commit_userid, last_synced_at",
+      "id, momo_tracking_no, tracking_override, admin_patch, momo_container_no, container_batch_no, momo_sack_no, shipment_status, phase, admin_status_text, raw, weight_kg, cbm, quantity, momo_user_group, momo_user_code, committed_at, committed_forwarder_id, commit_userid, last_synced_at",
     )
     .order("last_synced_at", { ascending: false })
     .limit(2000);
@@ -101,8 +101,16 @@ export default async function MomoContainersPage() {
 
     const userGroupRaw = str("user_group");
     const userCodeRaw = str("user_code");
-    const guessedUserId =
-      userGroupRaw && userCodeRaw ? deriveMomoMemberCode(userGroupRaw, userCodeRaw) : null;
+    // PR ของแถวนี้เอง — ONE brain เดียวกับด่าน commit (firstResolvableMomoPr · owner
+    // 2026-08-02): admin_patch (✎ · sync-proof) → raw → คอลัมน์ momo_user_* (ที่
+    // live-discovery/editor เขียน · sync ทับ raw ได้แต่ทับคอลัมน์ไม่ได้). นับเฉพาะรหัส
+    // ที่ระบุลูกค้าได้จริง (^PR\d+$) — prefix เปล่า "PR"/รหัสขยะ = NO CODE. เดิมจอกับ
+    // ด่าน commit อ่านคนละแบบ → จอว่า NO CODE แต่ด่านเด้ง "มีรหัสลูกค้า PR แล้ว".
+    const guessedUserId = firstResolvableMomoPr([
+      [ap.user_group, ap.user_code],
+      [userGroupRaw, userCodeRaw],
+      [row.momo_user_group, row.momo_user_code],
+    ]);
 
     // column-first, raw-fallback (mirror commitMomoRowCore's valuation).
     const colW = apNum("weight_kg") ?? num(row.weight_kg);
@@ -195,29 +203,20 @@ export default async function MomoContainersPage() {
     };
   });
 
-  // Bulk pre-validate guessed PRs against tb_users (so the grid shows
-  // "ไม่มีในระบบ" before the admin clicks import — bug 2a lesson from review).
-  const candidateIds = Array.from(
-    new Set(
-      intermediate
-        .map((r) => r.guessedUserId)
-        .filter((v): v is string => typeof v === "string" && /^PR\d+$/i.test(v))
-        .map((v) => v.toUpperCase()),
-    ),
-  );
-  let knownUserIds = new Set<string>();
-  if (candidateIds.length > 0) {
-    const { data: existingUsers, error: usersErr } = await admin
-      .from("tb_users")
-      .select("userID")
-      .in("userID", candidateIds);
-    if (usersErr) console.error("[momo-containers tb_users pre-validate] failed", usersErr);
-    else if (existingUsers)
-      knownUserIds = new Set(
-        (existingUsers as Array<{ userID: string | null }>)
-          .map((u) => u.userID)
-          .filter((v): v is string => !!v),
-      );
+  // PR ต่อชิปเม้น (base) จากแถว staging ด้วยกันเอง — แถว base ชนะ · ไม่มีก็ใช้ของ
+  // พี่น้อง suffixed ตัวแรกที่มี (ครอบครัวเดียว = เจ้าของเดียว). ใช้เติมกล่องย่อยที่
+  // ช่องรหัสของตัวเองว่าง (เคสจอจริง 2026-08-01: SF1575244811141-1/2 · -2/2 ขึ้น
+  // NO CODE ทั้งที่แถวหลักถือ PR) — ลำดับ fallback เดียวกับ commit-momo-row-core ข้อ 1b.
+  // (bulk tb_users pre-validate ย้ายไปอยู่หลัง liveMetaByBase ข้างล่าง — ต้องเช็ค PR
+  //  ที่เติมจาก base/Live ด้วย ไม่งั้นป้าย "ไม่มีในระบบ" โกหก)
+  const stagingPrByBase = new Map<string, string>();
+  for (const r of intermediate) {
+    const t = (r.tracking ?? "").trim();
+    if (!t || !r.guessedUserId) continue;
+    const b = baseTrackingOf(t);
+    if (!b) continue;
+    if (t === b) stagingPrByBase.set(b, r.guessedUserId); // แถว base ชนะเสมอ
+    else if (!stagingPrByBase.has(b)) stagingPrByBase.set(b, r.guessedUserId);
   }
 
   // ตู้ทั้งหมดที่โผล่ในลิสต์ — ใช้ร่วมกัน 2 อย่างข้างล่าง (packing match + ETD/ETA)
@@ -404,6 +403,36 @@ export default async function MomoContainersPage() {
         }
       }
     }
+  }
+
+  // Bulk pre-validate PR against tb_users (so the grid shows "ไม่มีในระบบ" before
+  // the admin clicks import — bug 2a lesson from review). ต้องอยู่หลัง liveMetaByBase:
+  // เดิมเช็คเฉพาะ PR ของแถวเองก่อน merge → PR ที่เติมจากบอร์ด Live ขึ้นป้าย
+  // "ไม่มีในระบบ" หลอกทั้งที่ลูกค้ามีจริง (แล้วโดนด่านรอตรวจกักไปด้วย).
+  const candidateIds = Array.from(
+    new Set([
+      ...intermediate
+        .map((r) => r.guessedUserId)
+        .filter((v): v is string => typeof v === "string" && /^PR\d+$/i.test(v))
+        .map((v) => v.toUpperCase()),
+      ...[...liveMetaByBase.values()]
+        .map((lm) => normalizeMomoPrCode(lm.memberCode))
+        .filter((v): v is string => v != null),
+    ]),
+  );
+  let knownUserIds = new Set<string>();
+  if (candidateIds.length > 0) {
+    const { data: existingUsers, error: usersErr } = await admin
+      .from("tb_users")
+      .select("userID")
+      .in("userID", candidateIds);
+    if (usersErr) console.error("[momo-containers tb_users pre-validate] failed", usersErr);
+    else if (existingUsers)
+      knownUserIds = new Set(
+        (existingUsers as Array<{ userID: string | null }>)
+          .map((u) => u.userID)
+          .filter((v): v is string => !!v),
+      );
   }
 
   const tracks: IngestTrack[] = intermediate.map((r) => {

@@ -27,6 +27,9 @@ import {
   buildTrackingCabinetMap,
   aggregateTrackDetailMetrics,
   deriveMomoMemberCode,
+  normalizeMomoPrCode,
+  resolvableMomoPrOf,
+  firstResolvableMomoPr,
   MOMO_FIELD_TH,
 } from "./momo-raw-helpers";
 
@@ -55,6 +58,36 @@ check('null code ("PR","") → "PR"', deriveMomoMemberCode("PR", "") === "PR");
 check("both null → ''", deriveMomoMemberCode(null, null) === "");
 check("undefined → ''", deriveMomoMemberCode(undefined, undefined) === "");
 check('trims ("  PR+PR  ","9903") → "PR9903"', deriveMomoMemberCode("  PR+PR  ", "9903") === "PR9903");
+
+// ── normalizeMomoPrCode — "identifies a customer" gate (owner 2026-08-02) ──
+// The NO-CODE friction root: derive("PR","") = bare "PR" used to count as a
+// known member code at commit while the UI called the same row NO CODE.
+check('normalize "PR121" → "PR121"', normalizeMomoPrCode("PR121") === "PR121");
+check('normalize lowercases+trims " pr121 " → "PR121"', normalizeMomoPrCode(" pr121 ") === "PR121");
+check('normalize bare group "PR" → null (NOT a customer)', normalizeMomoPrCode("PR") === null);
+check('normalize digits-only "9820" → null (ห้ามเดา prefix)', normalizeMomoPrCode("9820") === null);
+check('normalize legacy "PCS10830" → null (not a PR)', normalizeMomoPrCode("PCS10830") === null);
+check("normalize empty → null", normalizeMomoPrCode("") === null);
+check("normalize null → null", normalizeMomoPrCode(null) === null);
+check('normalize junk "PR+PR" → null', normalizeMomoPrCode("PR+PR") === null);
+
+// ── resolvableMomoPrOf — pair → resolvable PR | null ──
+check('resolvable ("PR","121") → "PR121"', resolvableMomoPrOf("PR", "121") === "PR121");
+check('resolvable mangled ("PR+PR","9903") → "PR9903"', resolvableMomoPrOf("PR+PR", "9903") === "PR9903");
+check('resolvable lowercase ("pr","121") → "PR121"', resolvableMomoPrOf("pr", "121") === "PR121");
+check('resolvable bare group ("PR","") → null — the screenshot bug', resolvableMomoPrOf("PR", "") === null);
+check('resolvable code-only ("","121") → null', resolvableMomoPrOf("", "121") === null);
+check("resolvable both empty → null", resolvableMomoPrOf(null, null) === null);
+check('resolvable junk group ("XX","12") → null', resolvableMomoPrOf("XX", "12") === null);
+
+// ── firstResolvableMomoPr — ordered precedence walk, junk skipped ──
+check("first: first good pair wins", firstResolvableMomoPr([["PR", "1"], ["PR", "2"]]) === "PR1");
+check(
+  "first: junk pair skipped → later good pair wins",
+  firstResolvableMomoPr([["PR", ""], ["PR", "545"]]) === "PR545",
+);
+check("first: all junk → null", firstResolvableMomoPr([["PR", ""], ["", "12"], [null, null]]) === null);
+check("first: empty list → null", firstResolvableMomoPr([]) === null);
 
 // ── deriveTransportTypeFromMomoRaw — defaults to "1" ────────────────
 check("null → '1'", deriveTransportTypeFromMomoRaw(null) === "1");

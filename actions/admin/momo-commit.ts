@@ -172,10 +172,15 @@ async function commitOneRow(
  * Commit an ownerless MOMO parcel into the operational system without making
  * it billable. The core writes fstatus=99, blank userid, zero money, preserves
  * the real container/tracking/metrics, and stamps the staging backlink.
+ *
+ * AUTO-RESOLVE (owner 2026-08-02): เมื่อข้อมูล MOMO ของพัสดุนี้มี PR ที่ resolvable
+ * จริง (แถว staging เอง / แถวหลักชิปเม้น / บอร์ด Live) — core จะนำเข้าแบบ **ปกติ**
+ * ด้วยรหัสนั้นแทน (ด่านเดิมของ path ปกติครบ) และคืน `autoResolvedUserID` ให้จอ
+ * บอกผู้ใช้ตามจริง. NO CODE ถูก refuse เหลือกรณีเดียว: พบรหัสแต่ลูกค้าไม่มีใน tb_users.
  */
 export async function commitMomoNoCodeToSpecial(
   input: { rowId: string; fProductsType: "1" | "2" | "3" | "4" },
-): Promise<AdminActionResult<{ forwarderId: number; fIDorCO: string }>> {
+): Promise<AdminActionResult<{ forwarderId: number; fIDorCO: string; autoResolvedUserID?: string }>> {
   const parsed = z.object({
     rowId: z.string().uuid("rowId ต้องเป็น uuid"),
     fProductsType: z.enum(["1", "2", "3", "4"]),
@@ -184,7 +189,7 @@ export async function commitMomoNoCodeToSpecial(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   }
 
-  return withAdmin<{ forwarderId: number; fIDorCO: string }>(
+  return withAdmin<{ forwarderId: number; fIDorCO: string; autoResolvedUserID?: string }>(
     ["super", "ops", "warehouse"],
     async ({ adminId }) => {
       const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
