@@ -72,7 +72,16 @@ function useProtectedLinkPrefetch(): false | undefined {
     : false;
 }
 
-export function NavBar() {
+/**
+ * @param hideTopMenu — drop the marketing chrome from the DESKTOP red bar: the
+ *   mega-menu (บริการด่วน/นำเข้า/…) AND the "ติดตามเราบน" + social-icons cluster.
+ *   The customer back-office (`(protected)/layout.tsx`) passes this: it already has
+ *   the legacy left sidebar (`PcsLeftMenu`) for navigation, so both are redundant
+ *   clutter there (owner 2026-07-31 "หลังบ้านลูกค้าแยก top menu กับ ด้านบน" +
+ *   "เอาก้อนติดตามเราบนออก"). The mobile "บริการ" bottom-sheet is KEPT — on mobile
+ *   the sidebar is behind a toggle, so the quick-menu still earns its place.
+ */
+export function NavBar({ hideTopMenu = false }: { hideTopMenu?: boolean } = {}) {
   const t = useTranslations("nav");
   const tTabs = useTranslations("floatingTabs");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -153,11 +162,14 @@ export function NavBar() {
       <div className="bg-[#B91C1C]">
         <div className="flex h-[56px] w-full items-center justify-between gap-2 px-3 xl:gap-4 xl:pl-3 xl:pr-6">
 
-          {/* Logo — clicks back to home (replaces former social cluster, per ปอน 2026-05-22) */}
+          {/* Logo — clicks back to home (replaces former social cluster, per ปอน 2026-05-22).
+              In the customer back-office (hideTopMenu) it's hidden on md+ — the left
+              sidebar's red brand header covers this corner and shows the Pacred logo
+              there (owner 2026-07-31). It returns < md where the sidebar is hidden. */}
           <Link
             href="/"
             aria-label="Pacred Shipping — กลับหน้าแรก"
-            className="shrink-0 flex items-center hover:opacity-90 transition-opacity"
+            className={`shrink-0 flex items-center hover:opacity-90 transition-opacity ${hideTopMenu ? "md:hidden" : ""}`}
           >
             <Image
               src="/images/iconfloattabs/pacgrey.png"
@@ -175,6 +187,7 @@ export function NavBar() {
               LocaleSwitcher + ThemeToggle clipped off the right edge — the bug ภูม's
               customer hit (2026-06-23). The social links also live in the footer, so
               dropping them below 2xl loses nothing. SOCIAL URLs from seo/site.ts. */}
+          {!hideTopMenu && (
           <div className="hidden 2xl:flex shrink-0 items-center gap-2.5">
             <span className="whitespace-nowrap text-[12px] font-medium text-white/85">
               {t("followUs")}
@@ -197,17 +210,23 @@ export function NavBar() {
               </a>
             </div>
           </div>
+          )}
 
           {/* Desktop nav — TopMenu with dropdowns. min-w-0 lets this flex-1 menu
               actually shrink below its content width so the shrink-0 right cluster
               (cart/bell/user + LocaleSwitcher + ThemeToggle) is never pushed off the
-              right edge on a narrow-xl screen (the 2026-06-23 clip). */}
-          <div className="hidden xl:flex flex-1 justify-center min-w-0">
-            <TopMenu />
-          </div>
+              right edge on a narrow-xl screen (the 2026-06-23 clip).
+              Hidden in the customer back-office (hideTopMenu) — the left sidebar
+              covers navigation there → logo left, controls right, no center menu. */}
+          {!hideTopMenu && (
+            <div className="hidden xl:flex flex-1 justify-center min-w-0">
+              <TopMenu />
+            </div>
+          )}
 
-          {/* Right: auth + lang + theme */}
-          <div className="hidden xl:flex items-center gap-2 shrink-0">
+          {/* Right: auth + lang + theme. ml-auto keeps it right-aligned when the
+              logo is hidden (hideTopMenu) so the cluster doesn't slide left. */}
+          <div className={`hidden xl:flex items-center gap-2 shrink-0 ${hideTopMenu ? "ml-auto" : ""}`}>
             {authReady && user ? (
               <>
                 <CartBadge prefetch={protectedPrefetch} />
@@ -231,7 +250,7 @@ export function NavBar() {
           {/* Mobile: บริการ menu trigger + controls. "บริการ" ย้ายมาจาก bottom-nav
               (ช่องนั้นเป็นปุ่ม booking แทนแล้ว · ปอน) → เปิด bottom-sheet เมนูบริการ
               ผ่าน event เดิมที่ header ฟังอยู่ (toggle-mobile-menu). */}
-          <div className="flex xl:hidden items-center gap-1.5">
+          <div className={`flex xl:hidden items-center gap-1.5 ${hideTopMenu ? "ml-auto" : ""}`}>
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent("toggle-mobile-menu"))}

@@ -5,6 +5,7 @@ import { formatPhoneNumber, type PcsChromeData } from "@/lib/legacy/pcs-chrome";
 import { PcsLeftMenuUserPill } from "./pcs-left-menu-user-pill";
 import { PcsLeftMenuAccordionGroup } from "./pcs-left-menu-accordion";
 import { MenuRow, CardSubLink } from "./pcs-left-menu-cards";
+import { PcsSidebarPin } from "./pcs-sidebar-pin";
 
 /** Central Pacred line is shown pre-formatted (skips formatPhoneNumber which
  *  expects mobile format). Matches the SALES_FALLBACK tel in pcs-chrome.ts. */
@@ -74,6 +75,10 @@ export async function PcsLeftMenu({ data }: { data: PcsChromeData }) {
       id="pcs-left-menu"
       className="notranslate main-menu bg-white text-foreground"
     >
+      {/* 0. Rail pin/collapse toggle — appears on hover / when pinned open
+          (mirror of the admin PR-logo pin · owner 2026-07-31). */}
+      <PcsSidebarPin />
+
       {/* 1. User pill / dropdown — avatar + member code + name */}
       <div className="pcs-rail-hide">
         <PcsLeftMenuUserPill

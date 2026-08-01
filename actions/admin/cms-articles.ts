@@ -20,6 +20,8 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadToBucket } from "@/lib/storage/upload";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { sanitizeArticleHtml } from "@/lib/cms/sanitize-article-html";
+import { isHtmlBody } from "@/lib/cms/legacy-body-to-html";
 import {
   saveCmsArticleSchema,
   cmsArticleIdSchema,
@@ -244,6 +246,14 @@ export async function saveCmsArticle(input: unknown): Promise<AdminActionResult<
     const admin = createAdminClient();
     const nowIso = new Date().toISOString();
 
+    // สาระน่ารู้ / ข่าวสาร เขียนจากตัวเขียน WYSIWYG → body เป็น HTML ที่มาจาก
+    // ฝั่ง client ⇒ ห้ามเชื่อ ต้องกรองก่อนลง DB (กรองซ้ำอีกทีตอนอ่าน)
+    // ผลงานของเรา (our_work) ยังเป็น text ธรรมดา → ไม่แตะ ปล่อยผ่านเหมือนเดิม
+    const cleanBody = (raw: string) =>
+      d.category === "our_work" || !isHtmlBody(raw) ? raw : sanitizeArticleHtml(raw);
+    const bodyTh = cleanBody(d.body);
+    const bodyEn = cleanBody(d.bodyEn);
+
     if (d.id) {
       // ── update ──
       const { data: cur, error: curErr } = await admin
@@ -260,7 +270,7 @@ export async function saveCmsArticle(input: unknown): Promise<AdminActionResult<
         title: d.title,
         excerpt: d.excerpt,
         cover_url: d.coverUrl,
-        body: d.body,
+        body: bodyTh,
         sub_category: d.subCategory,
         meta_title: d.metaTitle,
         meta_description: d.metaDescription,
@@ -273,7 +283,7 @@ export async function saveCmsArticle(input: unknown): Promise<AdminActionResult<
         case_facts: d.category === "our_work" ? d.caseFacts : [],
         title_en: d.titleEn,
         excerpt_en: d.excerptEn,
-        body_en: d.bodyEn,
+        body_en: bodyEn,
         meta_title_en: d.metaTitleEn,
         meta_description_en: d.metaDescriptionEn,
         case_route_en: d.category === "our_work" ? d.caseRouteEn : "",
@@ -315,7 +325,7 @@ export async function saveCmsArticle(input: unknown): Promise<AdminActionResult<
           slug,
           excerpt: d.excerpt,
           cover_url: d.coverUrl,
-          body: d.body,
+          body: bodyTh,
           sub_category: d.subCategory,
           meta_title: d.metaTitle,
           meta_description: d.metaDescription,
@@ -328,7 +338,7 @@ export async function saveCmsArticle(input: unknown): Promise<AdminActionResult<
           case_facts: d.category === "our_work" ? d.caseFacts : [],
           title_en: d.titleEn,
           excerpt_en: d.excerptEn,
-          body_en: d.bodyEn,
+          body_en: bodyEn,
           meta_title_en: d.metaTitleEn,
           meta_description_en: d.metaDescriptionEn,
           case_route_en: d.category === "our_work" ? d.caseRouteEn : "",

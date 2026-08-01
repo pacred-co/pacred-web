@@ -113,35 +113,54 @@ export function ReviewClient({
         <ArrowLeft className="h-4 w-4" /> กลับไปแก้ไขลิงก์
       </Link>
 
-      {/* Tabs — รายการที่ 1/2 … + เพิ่มรายการ (status dot: โหลด/พร้อม/ไม่พบ) */}
-      <div className="flex flex-wrap items-center gap-2">
-        {items.map((it, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => setActive(i)}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[12.5px] font-bold transition ${
-              i === active
-                ? "border-red-500 bg-red-50 text-primary-700 ring-2 ring-red-500/15"
-                : "border-border bg-white text-muted hover:border-red-200"
-            }`}
-          >
-            รายการที่ {i + 1}
-            <span
-              aria-hidden
-              className={`inline-block h-2 w-2 rounded-full ${
-                it.status === "loading"
-                  ? "animate-pulse bg-amber-400"
-                  : it.status === "ok"
-                    ? "bg-emerald-500"
-                    : "bg-red-500"
+      {/* Tabs — รายการที่ 1/2 … (2-line pill: เลข+จุดสถานะ / คำอธิบายสถานะ) + เพิ่มรายการ.
+          สถานะ: กำลังโหลด (เหลือง) · ไม่พบ (แดง) · กำลังกรอก = แท็บที่เปิดอยู่ (แดง) ·
+          ยังไม่ครบ = แท็บอื่นที่โหลดเสร็จแต่ยังไม่ได้เปิดทำ (เทา). */}
+      <div className="flex flex-wrap items-stretch gap-2">
+        {items.map((it, i) => {
+          const isActive = i === active;
+          const sub =
+            it.status === "loading"
+              ? "กำลังโหลด…"
+              : it.status === "fail"
+                ? "ไม่พบสินค้า"
+                : isActive
+                  ? "กำลังกรอก"
+                  : "ยังไม่ครบ";
+          const dotCls =
+            it.status === "loading"
+              ? "animate-pulse bg-amber-400"
+              : it.status === "fail"
+                ? "bg-red-500"
+                : isActive
+                  ? "bg-red-500"
+                  : "bg-slate-300";
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setActive(i)}
+              className={`inline-flex flex-col items-start gap-0.5 rounded-2xl border px-3.5 py-1.5 text-left transition ${
+                isActive
+                  ? "border-red-500 bg-red-50 ring-2 ring-red-500/15"
+                  : "border-border bg-white hover:border-red-200"
               }`}
-            />
-          </button>
-        ))}
+            >
+              <span
+                className={`flex items-center gap-1.5 text-[12.5px] font-bold ${
+                  isActive ? "text-primary-700" : "text-foreground"
+                }`}
+              >
+                รายการที่ {i + 1}
+                <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${dotCls}`} />
+              </span>
+              <span className="text-[11px] font-medium text-muted">{sub}</span>
+            </button>
+          );
+        })}
         <Link
           href="/cart/add"
-          className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3.5 py-1.5 text-[12.5px] font-bold text-muted hover:border-red-300 hover:text-primary-600"
+          className="inline-flex items-center justify-center gap-1 self-stretch rounded-2xl border border-red-400 px-3.5 py-1.5 text-[12.5px] font-bold text-primary-600 transition hover:bg-red-50"
         >
           <Plus className="h-3.5 w-3.5" /> เพิ่มรายการ
         </Link>
@@ -170,13 +189,13 @@ export function ReviewClient({
 function SkeletonCard() {
   return (
     <div className="animate-pulse rounded-2xl border border-border bg-white p-3 md:p-4">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[176px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[300px_minmax(0,1fr)]">
         {/* gallery */}
         <div>
           <div className="aspect-square w-full rounded-xl bg-gray-200" />
-          <div className="mt-2 grid grid-cols-3 gap-1.5">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="aspect-square w-full rounded-lg bg-gray-200" />
+          <div className="mt-2 flex gap-1.5">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-14 w-14 shrink-0 rounded-lg bg-gray-200" />
             ))}
           </div>
         </div>

@@ -8,6 +8,7 @@ import {
   Save, Send, Check, X, Upload, Loader2, Eye, EyeOff, Trash2, ExternalLink, ArrowLeft, ImagePlus, Search, Video, Plus, Star,
 } from "lucide-react";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
+import { RichTextEditor } from "@/components/cms/rich-text-editor";
 import { ArticlePreview } from "./article-preview";
 import {
   saveCmsArticle, submitCmsArticle, approveCmsArticle, rejectCmsArticle,
@@ -107,6 +108,9 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
   const videoFileRef = useRef<HTMLInputElement>(null);
   const galleryFileRef = useRef<HTMLInputElement>(null);
 
+  /** สาระน่ารู้ + ข่าวสาร = เขียนแบบ Google Docs (เก็บ HTML · ปอน 2026-08-01)
+   *  ผลงานของเรา = คงของเดิมทุกอย่าง (textarea + การ์ด) ตามที่ owner สั่ง */
+  const isDocEditor = category !== "our_work";
   const status = initial?.status ?? "draft";
   const isNew = !initial;
   const isPublished = status === "published";
@@ -186,6 +190,18 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
     setBody(next);
     if (el) queueMicrotask(() => { el.focus(); const pos = start + marker.length; el.setSelectionRange(pos, pos); });
     setNotice("แทรกรูปในเนื้อหาแล้ว — กด \"ดูตัวอย่าง\" เพื่อเช็ค");
+  }
+
+  /** WYSIWYG image button — upload and hand the URL back to the editor, which
+   *  inserts a real <img> node (the markdown marker above is textarea-only). */
+  async function uploadBodyImage(file: File): Promise<string | null> {
+    setErr(null); setInsertingImg(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await uploadCmsCover(fd);
+    setInsertingImg(false);
+    if (!res.ok) { setErr(errText(res.error)); return null; }
+    return res.data?.url ?? null;
   }
 
   async function doUpload(file: File) {
@@ -316,7 +332,10 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
           <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[12px] font-semibold ${STATUS_STYLE[status]}`}>
             {CMS_STATUS_LABEL[status]}
           </span>
-          {isPublished && initial?.slug ? (
+          {/* Always offer the link once the row has a slug — an unpublished article
+              now RESOLVES for the content team (preview) instead of 404-ing, so
+              hiding the link only left the author guessing (ปอน 2026-08-01). */}
+          {initial?.slug ? (
             <a
               href={
                 category === "our_work" ? `/our-work/${initial.slug}`
@@ -328,11 +347,22 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-600 hover:underline"
             >
-              <ExternalLink className="h-3.5 w-3.5" /> ดูหน้าเว็บ
+              <ExternalLink className="h-3.5 w-3.5" />
+              {isPublished ? "ดูหน้าเว็บ" : "ดูตัวอย่างหน้าเว็บ"}
             </a>
           ) : null}
         </div>
       </div>
+
+      {/* Say WHY it is not on the site yet — the silent gap that made an author
+          read the (correct) 404 as "the page is broken". */}
+      {initial?.slug && !isPublished ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-900">
+          <b>ยังไม่ขึ้นเว็บ</b> — บทความจะขึ้นหน้าเว็บจริงต่อเมื่อ Ultra Admin Z กดอนุมัติ
+          (สถานะตอนนี้: {CMS_STATUS_LABEL[status]}). กด “ดูตัวอย่างหน้าเว็บ” เพื่อดูหน้าจริงก่อนได้
+          — คนทั่วไปเปิดลิงก์นั้นจะเห็น 404
+        </div>
+      ) : null}
 
       {initial?.status === "rejected" && initial.rejectNote ? (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-800">
@@ -653,17 +683,30 @@ export function ArticleEditor({ initial, canApprove }: { initial: AdminArticle |
                 ) : null}
               </label>
               <div className="flex items-center gap-3">
-                <button type="button" onClick={() => bodyFileRef.current?.click()} disabled={insertingImg} className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-600 hover:underline disabled:opacity-50">
-                  {insertingImg ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />} แทรกรูป
-                </button>
+                {/* การ์ดเดิม (our_work) ยังใช้ textarea + ปุ่มแทรกรูปแบบ markdown
+                    ส่วน WYSIWYG มีปุ่มแทรกรูปอยู่บนแถบเครื่องมือของตัวเองแล้ว */}
+                {isDocEditor ? null : (
+                  <button type="button" onClick={() => bodyFileRef.current?.click()} disabled={insertingImg} className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-600 hover:underline disabled:opacity-50">
+                    {insertingImg ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />} แทรกรูป
+                  </button>
+                )}
                 <button type="button" onClick={() => setPreview((p) => !p)} className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary-600 hover:underline">
                   {preview ? <><EyeOff className="h-3.5 w-3.5" /> ซ่อนตัวอย่าง</> : <><Eye className="h-3.5 w-3.5" /> ดูตัวอย่าง</>}
                 </button>
               </div>
             </div>
             <input ref={bodyFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) insertBodyImage(f); if (e.target) e.target.value = ""; }} />
-            <textarea ref={bodyRef} {...bind("body", body, setBody)} rows={16} placeholder={"พิมพ์เนื้อหาได้เลย — ระบบจัดรูปแบบให้อัตโนมัติ\n\nเคล็ดลับจัดรูปแบบ:\n📦 ขึ้นต้นบรรทัดด้วยอิโมจิ = หัวข้อใหญ่\n1. ตัวเลขนำหน้า = ลิสต์เป็นข้อๆ\n- ขีดนำหน้า = bullet\n\"ครอบด้วยอัญประกาศ\" = คำพูดเน้น\nกด \"แทรกรูป\" เพื่อใส่รูปในเนื้อหา"} className={`${inputCls} resize-y font-mono text-[13px] leading-relaxed`} />
-            <p className="mt-1 text-[11px] text-muted">พิมพ์ข้อความธรรมดา ระบบ render เป็นบทความสวยเอง · กด “แทรกรูป” ใส่ได้หลายรูปในเนื้อหา · กด “ดูตัวอย่าง” เพื่อเช็ค</p>
+            {isDocEditor ? (
+              <>
+                <RichTextEditor value={body} onChange={setBody} onUploadImage={uploadBodyImage} disabled={pending} />
+                <p className="mt-1 text-[11px] text-muted">จัดวางได้อิสระเหมือน Google Docs — พิมพ์แล้วเห็นหน้าตาจริงเลย · หัวข้อ/ตัวหนา/ลิสต์/ตาราง/รูป กดจากแถบด้านบน</p>
+              </>
+            ) : (
+              <>
+                <textarea ref={bodyRef} {...bind("body", body, setBody)} rows={16} placeholder={"พิมพ์เนื้อหาได้เลย — ระบบจัดรูปแบบให้อัตโนมัติ\n\nเคล็ดลับจัดรูปแบบ:\n📦 ขึ้นต้นบรรทัดด้วยอิโมจิ = หัวข้อใหญ่\n1. ตัวเลขนำหน้า = ลิสต์เป็นข้อๆ\n- ขีดนำหน้า = bullet\n\"ครอบด้วยอัญประกาศ\" = คำพูดเน้น\nกด \"แทรกรูป\" เพื่อใส่รูปในเนื้อหา"} className={`${inputCls} resize-y font-mono text-[13px] leading-relaxed`} />
+                <p className="mt-1 text-[11px] text-muted">พิมพ์ข้อความธรรมดา ระบบ render เป็นการ์ดให้เอง · กด “แทรกรูป” ใส่ได้หลายรูปในเนื้อหา · กด “ดูตัวอย่าง” เพื่อเช็ค</p>
+              </>
+            )}
           </div>
 
           {/* SEO (collapsible · optional) */}

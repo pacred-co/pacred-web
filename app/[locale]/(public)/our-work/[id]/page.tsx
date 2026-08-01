@@ -37,6 +37,7 @@ import { getReviewContent } from "@/lib/reviews/content";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { listCaseComments } from "@/actions/case-comments";
 import { getPublishedArticleBySlug, localizeCmsArticle } from "@/lib/cms/articles";
+import { UnpublishedPreviewBanner } from "@/components/cms/unpublished-preview-banner";
 import { ArticleStats } from "@/components/knowledge/article-stats";
 import { CaseGallery } from "./case-gallery";
 import { CaseArticleBody } from "@/components/our-work/case-article-body";
@@ -271,6 +272,7 @@ export default async function ReviewLandingPage({
 
     return (
       <>
+        <UnpublishedPreviewBanner status={cmsArticle.status} articleId={cmsArticle.id} />
         <JsonLd data={[breadcrumbSchema([{ name: cmsUi.home, path: "/" }, { name: cmsUi.reviews, path: ourWorkPath(typedLocale) }, { name: cmsArticle.title, path: `/our-work/${cmsArticle.slug}` }], typedLocale)]} />
         <NavBar />
         <SearchBar />

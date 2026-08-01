@@ -19,19 +19,22 @@ import { useEffect } from "react";
  */
 export function CollapseSidebar({ hasPayBar = false }: { hasPayBar?: boolean }) {
   useEffect(() => {
-    // `pcs-sidebar-rail` (not `-collapsed` / `-peek`): the sidebar shrinks to a
-    // 60px icon rail and slides the full menu back out on hover, tucking away
-    // on mouse-leave (ปอน 2026-06-09 "เห็นไอคอน เอาเมาส์ชี้แล้วกางเต็ม").
-    document.body.classList.add("pcs-sidebar-rail");
+    // NOTE (owner 2026-07-31): the `pcs-sidebar-rail` icon rail is now the
+    // GLOBAL default — <PcsSidebarRailInit> mounts it once in the (protected)
+    // layout for every page. This page must NOT add/remove that class itself:
+    // its unmount-cleanup would strip the layout-owned rail when navigating away
+    // (the class stays removed until a full reload). So this component now only
+    // manages the pay-bar flag.
+    //
     // When the sticky pay-bar is on screen, flag the body so the global
     // FloatingTabs lifts its LINE bubble ABOVE the pay-bar (globals.css
     // `body.has-import-paybar .pacred-line-bubble`) — without this the green
     // LINE bubble (z-51) piled on top of the pay-bar's "ชำระเงิน" button
     // (ปอน 2026-06-08: "โดน line ทับ"). Same flag forwarder-interactivity sets
     // on /service-import.
-    if (hasPayBar) document.body.classList.add("has-import-paybar");
+    if (!hasPayBar) return;
+    document.body.classList.add("has-import-paybar");
     return () => {
-      document.body.classList.remove("pcs-sidebar-rail");
       document.body.classList.remove("has-import-paybar");
     };
   }, [hasPayBar]);

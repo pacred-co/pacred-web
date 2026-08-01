@@ -575,3 +575,125 @@ tr.pcs-row-selected .pcs-status-icon {
     overflow: visible !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   .article-doc — เนื้อบทความ "สาระน่ารู้ / ข่าวสาร" ที่เขียนจากตัวเขียน WYSIWYG
+   (ปอน 2026-08-01 · แทนการ์ดกลมอัตโนมัติของ <ArticleContent> เดิม)
+
+   กติกา: ที่นี่ "จัดวางตามที่คนเขียนสั่ง" — ไม่มีการเดารูปแบบให้เอง
+   สไตล์จึงเป็นแค่ typography ของเอกสาร (ขนาด/ระยะ/น้ำหนัก) ไม่ใช่การ์ด/พื้นไล่สี
+   ⚠️ ผลงานของเรา (our_work) ไม่ใช้บล็อกนี้ — ยังเป็น <ArticleContent> การ์ดเดิม
+   ═══════════════════════════════════════════════════════════════════════════ */
+.article-doc {
+  font-size: 16px;
+  line-height: 1.8;
+  color: #374151;
+}
+.dark .article-doc { color: rgb(255 255 255 / 0.85); }
+
+.article-doc > :first-child { margin-top: 0; }
+.article-doc > :last-child  { margin-bottom: 0; }
+
+.article-doc h2,
+.article-doc h3,
+.article-doc h4 {
+  color: #111827;
+  letter-spacing: -0.02em;
+  scroll-margin-top: 6rem;
+}
+.dark .article-doc h2,
+.dark .article-doc h3,
+.dark .article-doc h4 { color: #fff; }
+
+.article-doc h2 { font-size: 26px; line-height: 1.3;  font-weight: 900; margin: 34px 0 10px; }
+.article-doc h3 { font-size: 20px; line-height: 1.35; font-weight: 800; margin: 28px 0 8px; }
+.article-doc h4 { font-size: 17px; line-height: 1.4;  font-weight: 700; margin: 22px 0 6px; }
+
+.article-doc p  { margin: 14px 0; }
+.article-doc ul,
+.article-doc ol { margin: 14px 0; padding-left: 26px; }
+.article-doc ul { list-style: disc; }
+.article-doc ol { list-style: decimal; }
+.article-doc li { margin: 7px 0; }
+.article-doc li > ul,
+.article-doc li > ol { margin: 6px 0; }
+.article-doc ul ul { list-style: circle; }
+
+.article-doc blockquote {
+  margin: 22px 0;
+  padding: 2px 0 2px 18px;
+  border-left: 3px solid var(--color-primary-500, #d40000);
+  color: #111827;
+  font-weight: 600;
+}
+.dark .article-doc blockquote { color: #fff; }
+.article-doc blockquote p { margin: 6px 0; }
+
+.article-doc strong, .article-doc b { color: #111827; font-weight: 700; }
+.dark .article-doc strong, .dark .article-doc b { color: #fff; }
+
+.article-doc a {
+  color: var(--color-primary-600, #b30000);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.article-doc a:hover { text-decoration-thickness: 2px; }
+
+.article-doc figure { margin: 22px 0; }
+.article-doc img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid var(--color-border, #e5e7eb);
+}
+.article-doc figcaption {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-muted, #6b7280);
+}
+
+/* ตารางกว้างต้องเลื่อนได้ในกรอบตัวเอง ห้ามดันให้ทั้งหน้าเลื่อนแนวนอน (มือถือ) */
+.article-doc table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  width: 100%;
+  margin: 18px 0;
+}
+.article-doc th,
+.article-doc td {
+  border: 1px solid var(--color-border, #e5e7eb);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.article-doc th {
+  background: var(--color-surface-alt, #f9fafb);
+  font-weight: 700;
+  color: #111827;
+}
+.dark .article-doc th { color: #fff; }
+
+.article-doc hr { margin: 28px 0; border: 0; border-top: 1px solid var(--color-border, #e5e7eb); }
+
+.article-doc code {
+  font-size: 0.9em;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--color-surface-alt, #f3f4f6);
+}
+.article-doc pre {
+  margin: 18px 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  overflow-x: auto;
+  background: var(--color-surface-alt, #f3f4f6);
+}
+.article-doc pre code { padding: 0; background: none; }
+
+@media (min-width: 768px) {
+  .article-doc    { font-size: 17px; }
+  .article-doc h2 { font-size: 30px; }
+  .article-doc h3 { font-size: 22px; }
+}

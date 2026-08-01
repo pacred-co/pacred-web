@@ -14,7 +14,7 @@ import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
 import { HomeBottomBanner } from "@/components/sections/home-bottom-banner";
-import { ArticleContent } from "@/components/knowledge/article-content";
+import { ArticleHtml } from "@/components/cms/article-html";
 import { ShareButton } from "@/components/knowledge/share-button";
 import { ArticleStats } from "@/components/knowledge/article-stats";
 import { RelatedServices } from "@/components/knowledge/related-services";
@@ -24,6 +24,7 @@ import {
   getArticleBySlug,
 } from "@/lib/knowledge-articles";
 import { getPublishedArticleBySlug, getPublishedArticles } from "@/lib/cms/articles";
+import { UnpublishedPreviewBanner } from "@/components/cms/unpublished-preview-banner";
 import { JsonLd } from "@/components/seo/json-ld";
 import { articleSchema, breadcrumbSchema } from "@/components/seo/schemas";
 import { SITE_URL } from "@/components/seo/site";
@@ -150,6 +151,7 @@ export default async function ArticlePage({
 
   return (
     <>
+      {cms ? <UnpublishedPreviewBanner status={cms.status} articleId={cms.id} /> : null}
       <JsonLd
         data={[
           articleSchema({
@@ -251,7 +253,7 @@ export default async function ArticlePage({
 
             {/* Article content */}
             <div className="mx-auto w-full max-w-[760px]">
-              <ArticleContent text={content} title={article.title} />
+              <ArticleHtml text={content} title={article.title} />
             </div>
 
                 {/* Related services — MOBILE inline block (desktop uses the sticky aside) */}

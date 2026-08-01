@@ -160,14 +160,16 @@ nav.nav-footer-pcs { display: none !important; }
   #pcs-left-menu.main-menu {
     position: fixed !important;
     left: 0 !important;
-    /* Start just below the NavBar (56px) — sidebar overlaps the SearchBar
-       (which sits at top:56) so it covers SearchBar's left edge but stops
-       short of the NavBar (head). ปอน 2026-05-24
-       "ขยับให้ไปทับ search bar ก็พอ". */
-    top: 56px !important;
+    /* Lifted to the very top (owner 2026-07-31 "ยกขึ้นไป · เนื้อเดียวกัน · มีเงา"):
+       the sidebar reaches top:0 and its RED brand header (h-14, <PcsSidebarPin>)
+       sits flush with the NavBar's red bar, covering the NavBar's left corner
+       (z-51 > NavBar z-50) → one continuous red top, exactly like the admin
+       back-office. The NavBar's own Pacred logo is hidden on md+ (the sidebar
+       brand shows it there); it returns < md where the sidebar is display:none. */
+    top: 0 !important;
     width: 260px !important;
-    height: calc(100vh - 56px) !important;
-    z-index: 45 !important;
+    height: 100vh !important;
+    z-index: 51 !important;
     overflow-y: auto !important;
     /* Reserve clearance at the bottom so the last menu items can scroll up
        ABOVE the fixed pay-bar (z-55, ~69px tall) that overlays the sidebar's
@@ -177,7 +179,9 @@ nav.nav-footer-pcs { display: none !important; }
        with no pay-bar — just empty space below the last item. */
     padding-bottom: 96px !important;
     background: #ffffff !important;
-    border-right: 1px solid rgba(0, 0, 0, 0.06);
+    /* Soft shadow instead of a hairline border → the sidebar reads as a raised,
+       seamless panel continuous with the red top (owner 2026-07-31 "มีเงา"). */
+    box-shadow: 3px 0 18px -2px rgba(15, 23, 42, 0.18) !important;
     /* Hide the scrollbar entirely (ปอน 2026-05-24). The sidebar still
        scrolls via wheel / touch / arrow keys — only the visible bar is
        gone. Firefox uses `scrollbar-width: none`; Chromium/WebKit use the
@@ -188,6 +192,19 @@ nav.nav-footer-pcs { display: none !important; }
     display: none;
     width: 0;
     height: 0;
+  }
+  /* `.pcs-rail-only` — inverse of `.pcs-rail-hide`: hidden by default, shown ONLY
+     while the sidebar is collapsed to the icon rail (so the red brand header can
+     swap its full Pacred wordmark for a compact "P" mark in the rail · owner
+     2026-07-31). On rail-hover the full menu returns, so this hides again. */
+  #pcs-left-menu .pcs-rail-only {
+    display: none;
+  }
+  body.pcs-sidebar-rail #pcs-left-menu .pcs-rail-only {
+    display: flex;
+  }
+  body.pcs-sidebar-rail #pcs-left-menu.main-menu:hover .pcs-rail-only {
+    display: none;
   }
   /* Content padding — opt-in via `.pcs-content-pad` on a page's outer
      wrapper. Adapts to the sidebar-toggle state (เดฟ 2026-05-27 fix —
@@ -220,18 +237,25 @@ nav.nav-footer-pcs { display: none !important; }
   body.pcs-legacy-body.pcs-sidebar-peek:has(#pcs-left-menu.main-menu:hover) .pcs-content-pad {
     padding-left: 280px;
   }
-  /* `pcs-sidebar-rail` (icon-rail on the wide table view — ปอน 2026-06-09 "ไม่
-     หุบสมบูรณ์ ให้เห็นไอคอนซ้าย"): content gets a 68px gutter for the 60px icon
-     rail (+8px gap). On hover the rail slides the FULL menu out as an overlay,
-     so the content does NOT shift. */
+  /* `pcs-sidebar-rail` (icon rail): content gets a 68px gutter for the 60px icon
+     rail (+8px gap). On hover the rail slides the full 260px menu out AND we PUSH
+     the content right (280px) so the expanded menu never COVERS it — the
+     push-on-hover of the admin back-office (owner 2026-07-31 "โดน left sidebar บัง").
+     The sidebar width + this padding both transition, so they glide together. */
   body.pcs-legacy-body.pcs-sidebar-rail .pcs-content-pad {
     padding-left: 68px;
+  }
+  body.pcs-legacy-body.pcs-sidebar-rail:has(#pcs-left-menu.main-menu:hover) .pcs-content-pad {
+    padding-left: 280px;
   }
 
   /* Collapsed state — toggled by <PcsSidebarToggle> (ปอน 2026-05-24).
      Sidebar slides off-screen so content can reclaim the space. */
   #pcs-left-menu.main-menu {
-    transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
+    /* width matches the .pcs-content-pad padding transition (0.3s) so the content
+       edge (68→280) always stays ahead of the sidebar edge (60→260) — the menu
+       never overtakes/covers the content mid-animation. */
+    transition: transform 0.3s ease-out, box-shadow 0.3s ease-out, width 0.3s ease-out;
   }
   body.pcs-sidebar-collapsed.vertical-layout > #pcs-left-menu.main-menu {
     transform: translateX(-100%);
