@@ -1277,8 +1277,12 @@ export function CorporateEditor({ userid, corp }: { userid: string; corp: Profil
     });
   }
 
-  // No corporate row → nothing to edit (legacy is UPDATE-only).
-  const canEdit = !!corp;
+  // 🔴 owner 2026-07-30 (PR005): *"เราจะเพิ่มข้อมูล ชื่อ หรือข้อมูลนิติ และอัพไฟล์ให้ลูกค้า
+  // เลยอะครับ จากหลังบ้าน"* — เดิม `!!corp` ปิดปุ่มทิ้งเมื่อยังไม่มีแถว tb_corporate
+  // (legacy UPDATE-only) ⇒ ลูกค้าที่ติ๊กนิติไว้แต่ยังไม่กรอก แอดมินทำแทนไม่ได้เลย.
+  // ตอนนี้ `adminUpdateCorporate` upsert แล้ว → เปิดปุ่มเสมอ (ป้ายเปลี่ยนเป็น "เพิ่มข้อมูล")
+  const canEdit = true;
+  const isNewCorp = !corp;
 
   return (
     <SectionShell
@@ -1299,21 +1303,28 @@ export function CorporateEditor({ userid, corp }: { userid: string; corp: Profil
             }}
             className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline"
           >
-            <Pencil className="w-3.5 h-3.5" /> แก้ไข
+            <Pencil className="w-3.5 h-3.5" /> {isNewCorp ? "เพิ่มข้อมูลบริษัท" : "แก้ไข"}
           </button>
         ) : null
       }
     >
       <div className="p-4 space-y-3 text-sm">
         {error && <ErrBox msg={error} />}
-        {!corp ? (
+        {/* 🔴 owner 2026-07-30 "กดแก้ไขแล้วไม่เห็นจะใส่ได้เลยครับ" — เงื่อนไข `!corp`
+            เดิมอยู่ **หน้าสุด** จึงชนะเสมอ: ต่อให้เปิดปุ่มแล้ว พอกดเข้าโหมดแก้ไข
+            หน้าจอก็ยังวาดข้อความเดิม ฟอร์มไม่มีวันโผล่. ต้องเช็ค `editing` ก่อน
+            แล้วค่อยตกมาที่ข้อความว่าง-ข้อมูล (บทเรียน: เปิดปุ่มอย่างเดียวไม่พอ
+            ต้องไล่ลำดับเงื่อนไขที่ render ด้วย). */}
+        {!corp && !editing ? (
           <p className="text-muted">
-            ลูกค้าเลือกประเภทนิติบุคคลแต่ยังไม่ได้กรอกข้อมูลบริษัท — แก้ไขได้เมื่อลูกค้ากรอกข้อมูลบริษัทจากฝั่งสมาชิกแล้ว
+            ลูกค้าเลือกประเภทนิติบุคคลแต่ยังไม่ได้กรอกข้อมูลบริษัท —
+            กด <b>&ldquo;เพิ่มข้อมูลบริษัท&rdquo;</b> ด้านบนเพื่อกรอกให้ลูกค้าจากหลังบ้านได้เลย
+            (บันทึกแล้วสถานะจะเป็น &ldquo;รอตรวจสอบ&rdquo; ให้กดอนุมัติอีกที)
           </p>
         ) : !editing ? (
           <div className="grid sm:grid-cols-2 gap-3">
-            <KV label="ชื่อบริษัท" value={corp.corporatename ?? "-"} />
-            <KV label="เลขผู้เสียภาษี" value={corp.corporatenumber ?? "-"} mono />
+            <KV label="ชื่อบริษัท" value={corp?.corporatename ?? "-"} />
+            <KV label="เลขผู้เสียภาษี" value={corp?.corporatenumber ?? "-"} mono />
             {/* Legacy corporatestatus codes (pcs-admin statusComp · function.php:530):
                 '1'=รอตรวจสอบ (pending) · '2'=อนุมัติแล้ว (verified) · '3'=ไม่ผ่าน (rejected).
                 Prior code had this INVERTED ('1'→"อนุมัติแล้ว"), so a pending juristic
@@ -1321,14 +1332,14 @@ export function CorporateEditor({ userid, corp }: { userid: string; corp: Profil
             <KV
               label="สถานะอนุมัติ"
               value={
-                corp.corporatestatus === "2"
+                corp?.corporatestatus === "2"
                   ? "อนุมัติแล้ว"
-                  : corp.corporatestatus === "3"
+                  : corp?.corporatestatus === "3"
                     ? "ไม่ผ่าน"
                     : "รอตรวจสอบ"
               }
             />
-            <KV label="ที่อยู่บริษัท" value={corp.corporateaddress ?? "-"} />
+            <KV label="ที่อยู่บริษัท" value={corp?.corporateaddress ?? "-"} />
           </div>
         ) : (
           <>

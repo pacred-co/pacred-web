@@ -42,9 +42,9 @@ function truthy(name: string, cond: boolean, detail = ""): void {
 // ── (a) full list shape ──────────────────────────────────────────
 console.log("\n(a) registry shape");
 // 47 numeric codes (1..47) + 3 owner-added (48 อ่าวไทย · 49 พัฒนาเอ็กซ์เพลส · 50 ชวาลกิต)
-// + 4 special tokens (PCS, F, PCSF, PCSE) = 54.
+// + 4 special tokens (PCS, F, PCSF, PCSE) = 55.
 // ⚠️ ตัวเลขนี้ต้องอัพทุกครั้งที่ owner สั่งเพิ่มขนส่ง (carrier-extra.ts) — เป็นตัวเตือนว่ามีของใหม่เข้ามา
-eq("54 methods registered", SHIPPING_METHODS.length, 54);
+eq("55 methods registered", SHIPPING_METHODS.length, 55);
 truthy(
   "every method has all required fields",
   SHIPPING_METHODS.every(
@@ -121,28 +121,28 @@ eq("nameShipBy(undefined) = 'ไม่พบข้อมูล'", nameShipBy(und
 // ── (e) filter by cargo type — legacy semantics (pass-through) ───
 console.log("\n(e) getShippingMethods() — cargo-type filter");
 const allMethods = getShippingMethods();
-eq("no filter returns all 54", allMethods.length, 54);
+eq("no filter returns all 55", allMethods.length, 55);
 
 // Legacy nameShipBy() has no cargo-type restriction — filter is a no-op.
 const generalCargo = getShippingMethods({ cargoType: "A" });
-eq("cargoType='A' (general) returns all 54", generalCargo.length, 54);
+eq("cargoType='A' (general) returns all 55", generalCargo.length, 55);
 
 const controlled = getShippingMethods({ cargoType: "Z" });
-eq("cargoType='Z' (controlled) returns all 54 (legacy parity)", controlled.length, 54);
+eq("cargoType='Z' (controlled) returns all 55 (legacy parity)", controlled.length, 55);
 
 const brand = getShippingMethods({ cargoType: "X" });
-eq("cargoType='X' (brand) returns all 54", brand.length, 54);
+eq("cargoType='X' (brand) returns all 55", brand.length, 55);
 
 const foodDrug = getShippingMethods({ cargoType: "O" });
-eq("cargoType='O' (food/drug) returns all 54", foodDrug.length, 54);
+eq("cargoType='O' (food/drug) returns all 55", foodDrug.length, 55);
 
 const electrical = getShippingMethods({ cargoType: "M" });
-eq("cargoType='M' (electrical) returns all 54", electrical.length, 54);
+eq("cargoType='M' (electrical) returns all 55", electrical.length, 55);
 
 // Returns a fresh copy — caller can mutate without poisoning the registry
 const copy = getShippingMethods();
 copy.pop();
-eq("returned array is a copy, not the registry", getShippingMethods().length, 54);
+eq("returned array is a copy, not the registry", getShippingMethods().length, 55);
 
 // ── (f) type assignment spot-check ───────────────────────────────
 console.log("\n(f) transport-type classification");
@@ -153,7 +153,7 @@ eq("exactly 1 'air' method (DHL)", airMethods.length, 1);
 eq("the air method is DHL (code '1')", airMethods[0]?.code, "1");
 
 const truckMethods = SHIPPING_METHODS.filter((m: ShippingMethod) => m.type === "truck");
-eq("53 'truck' methods (everything else)", truckMethods.length, 53);
+eq("54 'truck' methods (everything else)", truckMethods.length, 54);
 
 const seaMethods = SHIPPING_METHODS.filter((m: ShippingMethod) => m.type === "sea");
 eq("0 'sea' methods (no last-mile sea carrier in legacy)", seaMethods.length, 0);

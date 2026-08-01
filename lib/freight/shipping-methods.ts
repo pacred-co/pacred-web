@@ -121,6 +121,7 @@ export const SHIPPING_METHODS: readonly ShippingMethod[] = [
   // owner 2026-07-30 — เจ้าใหม่ 2 ราย (เคสลูกค้าจริง PR017 สตูล · PR102 ฉะเชิงเทรา)
   { code: "49",   name: "Pattana Express",                nameTh: "หจก.พัฒนาเอ็กซ์เพลส",            type: "truck", etaDays: 4, description: "ภาคใต้ · กรุงเทพฯ · ศูนย์กระจายหาดใหญ่" },
   { code: "50",   name: "Chawalakit Transport",           nameTh: "ชวาลกิตขนส่ง จำกัด",             type: "truck", etaDays: 3, description: "ฉะเชิงเทรา · กรุงเทพฯ" },
+  { code: "51",   name: "Mong Seng Buriram",              nameTh: "ม่งเส็งบุรีรัมย์ขนส่ง",           type: "truck", etaDays: 3, description: "บุรีรัมย์ · กรุงเทพฯ (สาขาสาย 2)" },
   { code: "PCS",  name: "Pacred Warehouse Pickup",        nameTh: "รับเองโกดัง Pacred (สมุทรสาคร)", type: "truck", etaDays: 1, description: "รับด้วยตนเองที่โกดัง Pacred สมุทรสาคร" },
   { code: "F",    name: "Auto-assigned by Pacred",        nameTh: "บริษัทจัดหาให้อัตโนมัติ",        type: "truck", etaDays: 4 },
   { code: "PCSF", name: "Pacred Mao Mao (bulk)",          nameTh: "PRF เหมาๆ",                      type: "truck", etaDays: 3, description: "Pacred เหมาส่งทั้งคันรถ (PRF)" },

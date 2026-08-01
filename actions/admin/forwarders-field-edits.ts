@@ -81,6 +81,9 @@ import { ADDRESSES } from "@/components/seo/site";
 import { TAX_DOC_MODES, prefFromMode, type TaxDocMode } from "@/lib/tax/tax-doc-mode";
 import { splitAggregatedMomoBoxRows } from "@/lib/integrations/momo-web/split-box-rows";
 import { baseOf as baseOfTracking } from "@/lib/integrations/momo-web/split-box-rows-plan";
+import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
+import { resolveLastUsedCarrier } from "@/lib/forwarder/last-used-carrier";
+import { extractCrateFromMomoRaw } from "@/lib/admin/momo-raw-helpers";
 import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { derivePayMethodForDelivery, enforceCodDomesticZero, isPayAtOriginCarrier } from "@/lib/forwarder/pay-method";
@@ -544,7 +547,7 @@ export type AdminReassignForwarderOwnerInput = z.infer<typeof reassignSchema>;
 
 export async function adminReassignForwarderOwner(
   rawInput: AdminReassignForwarderOwnerInput,
-): Promise<AdminActionResult> {
+): Promise<AdminActionResult<{ noCodeActivated?: boolean; rateOk?: boolean }>> {
   const parsed = reassignSchema.safeParse(rawInput);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
@@ -557,9 +560,24 @@ export async function adminReassignForwarderOwner(
     // Confirm the forwarder exists + capture the old owner for the audit.
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
-      .select("id, userid")
+      .select("id, userid, fstatus, fcabinetnumber, ftrackingchn, fnote, ftotalprice, ftransportprice, ftransportpricechnthb, priceother, pricecrate, fpriceupdate, fdiscount, fshippingservice")
       .eq("id", d.fId)
-      .maybeSingle<{ id: number; userid: string }>();
+      .maybeSingle<{
+        id: number;
+        userid: string | null;
+        fstatus: string | null;
+        fcabinetnumber: string | null;
+        ftrackingchn: string | null;
+        fnote: string | null;
+        ftotalprice: number | string | null;
+        ftransportprice: number | string | null;
+        ftransportpricechnthb: number | string | null;
+        priceother: number | string | null;
+        pricecrate: number | string | null;
+        fpriceupdate: number | string | null;
+        fdiscount: number | string | null;
+        fshippingservice: number | string | null;
+      }>();
     if (fwdErr) {
       console.error(`[adminReassignForwarderOwner read] failed`, { code: fwdErr.code, message: fwdErr.message, fId: d.fId });
       return { ok: false, error: `อ่านรายการไม่สำเร็จ: ${fwdErr.message}` };
@@ -578,6 +596,137 @@ export async function adminReassignForwarderOwner(
       return { ok: false, error: `ตรวจสอบลูกค้าปลายทางไม่สำเร็จ: ${userErr.message}` };
     }
     if (!newUser) return { ok: false, error: `ไม่พบลูกค้ารหัส ${newUserId} — ตรวจสอบรหัสอีกครั้ง` };
+
+    const isOwnerlessSpecial = String(fwd.fstatus ?? "").trim() === "99" && !(fwd.userid ?? "").trim();
+
+    // NO CODE is not a normal legacy reassignment. It is a guarded transition
+    // from the ownerless fstatus=99 holding lane back into the ordinary MOMO
+    // pipeline. Refuse if any money was posted while the parcel had no owner.
+    if (isOwnerlessSpecial) {
+      const moneyFields = {
+        ftotalprice: fwd.ftotalprice,
+        ftransportprice: fwd.ftransportprice,
+        ftransportpricechnthb: fwd.ftransportpricechnthb,
+        priceother: fwd.priceother,
+        pricecrate: fwd.pricecrate,
+        fpriceupdate: fwd.fpriceupdate,
+        fdiscount: fwd.fdiscount,
+        fshippingservice: fwd.fshippingservice,
+      };
+      const nonZero = Object.entries(moneyFields).filter(([, value]) => Math.abs(Number(value) || 0) > 0.000001);
+      if (nonZero.length > 0) {
+        return {
+          ok: false,
+          error: `NO CODE รายการนี้มียอดเงินก่อนระบุเจ้าของ (${nonZero.map(([key]) => key).join(", ")}) — หยุดและให้บัญชีตรวจสอบก่อน`,
+        };
+      }
+
+      // Recover the crate signal/fee from the untouched MOMO staging source at
+      // the moment a real owner is known. The special row deliberately stored
+      // all money as zero; only now may the real fee enter the normal flow.
+      const { data: staging, error: stagingErr } = await admin
+        .from("momo_import_tracks")
+        .select("raw, admin_patch")
+        .eq("committed_forwarder_id", d.fId)
+        .limit(1)
+        .maybeSingle<{ raw: unknown; admin_patch: Record<string, unknown> | null }>();
+      if (stagingErr) {
+        console.error("[adminReassignForwarderOwner NO CODE staging] failed", {
+          code: stagingErr.code,
+          message: stagingErr.message,
+          fId: d.fId,
+        });
+        return { ok: false, error: `อ่านต้นทาง MOMO ไม่สำเร็จ: ${stagingErr.message}` };
+      }
+      if (!staging) {
+        return { ok: false, error: "รายการพิเศษนี้ไม่มีลิงก์ต้นทาง MOMO — ไม่เปลี่ยนสถานะอัตโนมัติ" };
+      }
+      const raw = staging.raw && typeof staging.raw === "object"
+        ? { ...(staging.raw as Record<string, unknown>) }
+        : {};
+      if (staging.admin_patch?.extra_cost !== undefined) raw.extra_cost = staging.admin_patch.extra_cost;
+      const crate = extractCrateFromMomoRaw(raw);
+      const shipBy = (await resolveLastUsedCarrier(admin, newUserId)) ?? "";
+      const nextStatus = (fwd.fcabinetnumber ?? "").trim() ? "3" : "2";
+      const nextNote = (fwd.fnote ?? "")
+        .replace(/^NO CODE · รอระบุ PR(?: · )?/, "")
+        .trim() || null;
+
+      let updateQuery = admin
+        .from("tb_forwarder")
+        .update({
+          userid: newUserId,
+          fstatus: nextStatus,
+          fshipby: shipBy,
+          crate: crate.crate,
+          pricecrate: crate.pricecrate,
+          fnote: nextNote,
+          adminidupdate: legacyAdminId,
+        })
+        .eq("id", d.fId)
+        .eq("fstatus", "99");
+      updateQuery = fwd.userid == null
+        ? updateQuery.is("userid", null)
+        : updateQuery.eq("userid", fwd.userid);
+      const { data: activated, error: updErr } = await updateQuery
+        .select("id")
+        .maybeSingle<{ id: number }>();
+      if (updErr) {
+        console.error(`[adminReassignForwarderOwner activate NO CODE] failed`, { code: updErr.code, message: updErr.message, fId: d.fId });
+        return { ok: false, error: `ระบุเจ้าของ NO CODE ไม่สำเร็จ: ${updErr.message}` };
+      }
+      if (!activated) {
+        return { ok: false, error: "สถานะหรือเจ้าของถูกเปลี่ยนพร้อมกัน — โหลดหน้าใหม่แล้วตรวจสอบอีกครั้ง" };
+      }
+
+      const { error: stampErr } = await admin
+        .from("momo_import_tracks")
+        .update({ commit_userid: newUserId, updated_at: new Date().toISOString() })
+        .eq("committed_forwarder_id", d.fId);
+      if (stampErr) {
+        console.error("[adminReassignForwarderOwner NO CODE backlink] failed", {
+          code: stampErr.code,
+          message: stampErr.message,
+          fId: d.fId,
+        });
+      }
+
+      // Rejoin the proven valuation/split path only AFTER ownership is real.
+      let rateOk = false;
+      try {
+        const priced = await computeAndFillForwarderImportRate(admin, d.fId);
+        rateOk = priced.ok;
+        if (!priced.ok) {
+          console.error("[adminReassignForwarderOwner NO CODE rate] unresolved", { fId: d.fId, reason: priced.reason });
+        }
+      } catch (error) {
+        console.error("[adminReassignForwarderOwner NO CODE rate] threw after owner activation", { fId: d.fId, error });
+      }
+      if (fwd.ftrackingchn) {
+        try {
+          await splitAggregatedMomoBoxRows(admin, [baseOfTracking(fwd.ftrackingchn)], undefined, { allowPriced: true });
+        } catch (error) {
+          console.error("[adminReassignForwarderOwner NO CODE split] threw after owner activation", { fId: d.fId, error });
+        }
+      }
+
+      await logAdminAction(adminId, "tb_forwarder.assign_no_code_owner", "tb_forwarder", String(d.fId), {
+        from: fwd.userid,
+        to: newUserId,
+        from_status: "99",
+        to_status: nextStatus,
+        cabinet: fwd.fcabinetnumber,
+        ship_by: shipBy,
+        crate_fee: crate.pricecrate,
+        staging_stamp_failed: stampErr != null,
+        rate_ok: rateOk,
+      });
+
+      revalidatePath(`/admin/forwarders/${d.fId}`);
+      revalidatePath("/admin/forwarders");
+      revalidatePath("/admin/momo-containers");
+      return { ok: true, data: { noCodeActivated: true, rateOk } };
+    }
 
     const { error: updErr } = await admin
       .from("tb_forwarder")

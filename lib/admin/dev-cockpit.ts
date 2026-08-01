@@ -141,7 +141,7 @@ export async function loadDevCockpit(admin: SupabaseClient): Promise<DevCockpit>
         },
         {
           key: "f5",
-          label: "รอชำระเงิน",
+          label: "รอชำระ/ใบแจ้งหนี้",
           value: String(c5),
           tone: c5 > 0 ? "warn" : "ok",
           hint: "รอลูกค้าโอน / วางบิล",

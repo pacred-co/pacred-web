@@ -52,7 +52,7 @@ type Row = {
 const STAGES: { codes: string[]; key: string; label: string; dept: string; action: string; href: string; tone: string }[] = [
   { codes: ["1", "2", "3"], key: "transit", label: "ยังไม่ถึงไทย (ระหว่างทาง)", dept: "CS / โกดังจีน", action: "ติดตามตู้ + เช็คของเข้า MOMO", href: "/admin/api-forwarder-momo", tone: "bg-slate-50 border-slate-200 text-slate-700" },
   { codes: ["4"], key: "arrived", label: "ถึงไทยแล้ว — รอวัด / วางบิล", dept: "โกดัง + เซลล์", action: "ยิงเข้าระบบ · วัด กก./คิว · ออกบิล", href: "/admin/report-cnt?page=succeed", tone: "bg-amber-50 border-amber-300 text-amber-800" },
-  { codes: ["5"], key: "billed", label: "รอชำระเงิน (แจ้งหนี้แล้ว)", dept: "CS / บัญชี", action: "เก็บเงินลูกค้า · อัพสลิป", href: "/admin/report-cnt?page=succeed", tone: "bg-red-50 border-red-300 text-red-800" },
+  { codes: ["5"], key: "billed", label: "รอชำระ/ใบแจ้งหนี้", dept: "CS / บัญชี", action: "เก็บเงินลูกค้า · อัพสลิป", href: "/admin/report-cnt?page=succeed", tone: "bg-red-50 border-red-300 text-red-800" },
   { codes: ["6"], key: "ready", label: "เตรียมส่ง (ชำระแล้ว)", dept: "แพลนนิ่ง / คนขับ", action: "แพลนรอบส่ง · นัดลูกค้า · ใบส่งของ", href: "/admin/drivers", tone: "bg-blue-50 border-blue-300 text-blue-800" },
   { codes: ["7"], key: "done", label: "ส่งแล้ว", dept: "บัญชี", action: "วางบิลงานเครดิต · ปิดงาน", href: "/admin/billing-run", tone: "bg-emerald-50 border-emerald-300 text-emerald-800" },
 ];

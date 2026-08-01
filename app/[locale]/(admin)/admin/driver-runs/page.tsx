@@ -661,8 +661,9 @@ export default async function DriverRunsPage({
 
         <p className="text-[11px] text-muted">
           หมายเหตุ: รายงานนี้แสดงปริมาณงานคนขับ (ไม่ใช่ยอดเงิน — legacy report-driver-2023 ไม่มีคอลัมน์เงิน).
-          คนขับเปิดงานของตัวเองที่ <Link href="/admin/drivers/work" className="text-primary-600 underline">/admin/drivers/work</Link> ·
-          มอบหมายงานใหม่ที่ <Link href="/admin/drivers" className="text-primary-600 underline">/admin/drivers</Link>.
+          คนขับเปิดงานของตัวเองที่ <Link href="/admin/drivers?view=todo" className="text-primary-600 underline">/admin/drivers</Link>{" "}
+          (เปิดงาน → หน้ารายละเอียด → ถ่ายรูป/มาร์คสถานะ) · มอบหมายงานใหม่ที่{" "}
+          <Link href="/admin/drivers" className="text-primary-600 underline">/admin/drivers</Link>.
         </p>
       </main>
     </>

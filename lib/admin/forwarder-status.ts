@@ -65,7 +65,9 @@ export const FSTATUS_CFG: Record<
   "2": { label: "ถึงโกดังจีนแล้ว", chip: "bg-cyan-500 text-white border border-cyan-600 font-bold",           rowBg: "bg-cyan-100",    next: "รอส่งมาไทย",          act: false, icon: `${FSTATUS_ICON_BASE}/forwarder-2.png` },
   "3": { label: "กำลังส่งมาไทย",   chip: "bg-pink-500 text-white border border-pink-600 font-bold",           rowBg: "bg-pink-100",    next: "กำลังมา — รอถึงไทย",   act: false, icon: `${FSTATUS_ICON_BASE}/forwarder-3.png` },
   "4": { label: "ถึงไทยแล้ว",       chip: "bg-[#8d6e63] text-white border border-[#5d4037] font-bold",         rowBg: "bg-[#d7ccc8]",   next: "ตรวจ/แจ้งเก็บเงิน",     act: true,  icon: `${FSTATUS_ICON_BASE}/forwarder-4.png` },
-  "5": { label: "รอชำระเงิน",       chip: "bg-red-600 text-white border border-red-700 font-bold",             rowBg: "bg-red-100",     next: "รอลูกค้าชำระ/ตรวจสลิป", act: true,  icon: `${FSTATUS_ICON_BASE}/forwarder-5.png` },
+  // owner 2026-07-31 — เปลี่ยนชื่อทั้งระบบ "รอชำระเงิน" → "รอชำระ/ใบแจ้งหนี้"
+  // (ขั้นนี้ = ออกใบแจ้งหนี้/ใบวางบิลแล้วรอลูกค้าโอน · ยังไม่มีสลิป)
+  "5": { label: "รอชำระ/ใบแจ้งหนี้", chip: "bg-red-600 text-white border border-red-700 font-bold",             rowBg: "bg-red-100",     next: "รอลูกค้าชำระ/แนบสลิป",  act: true,  icon: `${FSTATUS_ICON_BASE}/forwarder-5.png` },
   "6": { label: "เตรียมส่ง",        chip: "bg-blue-600 text-white border border-blue-700 font-bold",           rowBg: "bg-blue-100",    next: "มอบงานคนขับ/จัดรถ",     act: true,  icon: `${FSTATUS_ICON_BASE}/forwarder-6.png` },
   "7": { label: "ส่งแล้ว",          chip: "bg-emerald-600 text-white border border-emerald-700 font-bold",     rowBg: "bg-emerald-100", next: "เสร็จสิ้น",            act: false, icon: `${FSTATUS_ICON_BASE}/forwarder-7.png` },
 };
@@ -83,7 +85,13 @@ export const FSTATUS_VIVID: Record<string, string> = {
   "3": "bg-pink-500 text-white",
   "4": "bg-[#8d6e63] text-white",
   "5": "bg-red-600 text-white",
+  // 5.1 = รอออก/ใบเสร็จรับเงิน (derived · ดู AWAITING_RECEIPT_CODE) — ม่วงจี๊ด
+  // (owner 2026-07-31 "ขอสีจี๊ดจ๊าดเหมือนเพื่อนๆ มาอีกสีนึง") · ไม่ชนสีใครในแถบ
+  "5.1": "bg-violet-600 text-white",
   "6": "bg-blue-600 text-white",
+  // 6.1 = กำลังจัดส่ง (derived · fstatus 6 + คนขับเปิดรอบ) — เดิม hardcode indigo
+  // ที่ forwarders-table L952; ย้ายมาไว้ที่ SOT ให้ทุกจอดึงตัวเดียวกัน
+  "6.1": "bg-indigo-600 text-white",
   "7": "bg-emerald-600 text-white",
 };
 export function fstatusVivid(fstatus: string): string {
@@ -107,6 +115,7 @@ export const FSTATUS_TAB_BADGE: Record<string, string> = {
   "3":   "bg-pink-500 text-white",
   "4":   "bg-[#8d6e63] text-white",
   "5":   "bg-red-600 text-white",
+  "5.1": "bg-violet-600 text-white",
   "6":   "bg-blue-600 text-white",
   "6.1": "bg-teal-500 text-white",
   "7":   "bg-emerald-600 text-white",
@@ -115,6 +124,90 @@ export const FSTATUS_TAB_BADGE: Record<string, string> = {
 };
 export function fstatusTabBadge(v: string | undefined): string {
   return FSTATUS_TAB_BADGE[v ?? "all"] ?? "bg-slate-500 text-white";
+}
+
+/**
+ * แถบแท็บสถานะรายการนำเข้า — SOT เดียวทั้งระบบ (owner 2026-07-31)
+ * ═══════════════════════════════════════════════════════════════════════════
+ * owner: *"สีสถานะทั้งหัวข้อและรายการ...มันควรจะเหมือนกันหรือเปล่าครับ ยังลิงก์
+ * เชื่อมกันคนละจุดอยู่อีกหรอครับ ถ้าอนาคตมีสถานะงานเพิ่ม ไม่ต้องมาไล่แก้ไล่เติม
+ * หากันตายเลยหรอครับ ข้อมูลกระจัดกระจายไม่ได้ถูกดึงถูกใช้จากที่เดียวกัน"*
+ *
+ * ลิสต์นี้คือ **ที่เดียว** ที่นิยามว่าแถบสถานะนำเข้ามีแท็บอะไร เรียงยังไง สีอะไร:
+ *   • /admin/forwarders (หน้ารายการหลัก) — filterOpts สร้างจากลิสต์นี้
+ *   • /admin/customers/[id] (หัวแถวสถานะบนโปรไฟล์ · scoped ต่อ PR) — เช่นกัน
+ * เพิ่ม/แก้สถานะ → แก้ตรงนี้ + FSTATUS_TAB_BADGE/FSTATUS_VIVID ข้างบน = ขึ้นทุกจอเอง.
+ *
+ * `creditOnly` = แท็บที่โชว์เฉพาะลูกค้าเครดิต **เมื่ออยู่ใน scope ลูกค้ารายเดียว**
+ * (โปรไฟล์) — หน้ารายการหลักรวมทุกลูกค้าจึงโชว์เสมอ (owner เคาะ 2026-07-31).
+ * ความหมายของ code ตรง filter หน้าหลักเป๊ะ: "6" = fstatus 6 ที่ยังไม่มีคนขับเปิดรอบ ·
+ * "6.1" = fstatus 6 + tb_forwarder_driver_item.fdistatus='' · "c" = fcredit='1' ·
+ * "p" = fstatus='99'.
+ */
+export type ForwarderStatusTab = { code: string; label: string; creditOnly?: boolean };
+export const FORWARDER_STATUS_TABS: readonly ForwarderStatusTab[] = [
+  { code: "",    label: "ทั้งหมด" },
+  { code: "1",   label: "รอเข้าโกดังจีน" },
+  { code: "2",   label: "ถึงโกดังจีนแล้ว" },
+  { code: "3",   label: "กำลังส่งมาไทย" },
+  { code: "4",   label: "ถึงไทยแล้ว" },
+  { code: "5",   label: "รอชำระ/ใบแจ้งหนี้" },
+  { code: "5.1", label: "รอออก/ใบเสร็จรับเงิน" },
+  { code: "6",   label: "เตรียมส่ง" },
+  { code: "6.1", label: "กำลังจัดส่ง" },
+  { code: "7",   label: "ส่งแล้ว" },
+  { code: "c",   label: "เครดิตสินค้า", creditOnly: true },
+  { code: "p",   label: "สถานะพิเศษ",  creditOnly: true },
+];
+
+/**
+ * "รอออก/ใบเสร็จรับเงิน" — สถานะ DERIVED (owner 2026-07-31)
+ * ═══════════════════════════════════════════════════════════════════════════
+ * owner: *"เพิ่มสถานะ 'รอออก/ใบเสร็จรับเงิน' ... คือสถานะที่ลูกค้าหรือพนักงานแนบสลิป
+ * เข้ามาในระบบ ให้ทางบัญชีตรวจสลิป พร้อมออกใบเสร็จ ไปใน flow จนจบ ก่อนที่จะไป
+ * เตรียมส่ง"*
+ *
+ * เหมือน "6.1 กำลังจัดส่ง" — เป็นสถานะย่อยที่ **คำนวณจากข้อมูลจริง ไม่ใช่คอลัมน์ใหม่**
+ * ⇒ ไม่ต้อง migration · ไม่มีสถานะค้างให้ sync · ย้อนสถานะไม่หลุด (สลิปถูกปฏิเสธ →
+ * ตกกลับ "รอชำระ/ใบแจ้งหนี้" เอง).
+ *
+ *   fstatus = '5' (รอชำระ/ใบแจ้งหนี้)  +  มีสลิปรอบัญชีตรวจ
+ *     สลิปรอตรวจ = tb_wallet_hs.status='1' ที่ reforder ชี้ fid นั้น
+ *              หรือ ใบวางบิลของงานนั้นแนบสลิปแล้วแต่ยัง != paid/cancelled
+ *
+ * flow ที่ owner วางไว้:
+ *   4 ถึงไทยแล้ว → 5 รอชำระ/ใบแจ้งหนี้ → **5.1 รอออก/ใบเสร็จรับเงิน** → 6 เตรียมส่ง → 7 ส่งแล้ว
+ */
+export const AWAITING_RECEIPT_CODE = "5.1" as const;
+
+/** งานนี้อยู่ขั้น "รอออก/ใบเสร็จรับเงิน" ไหม (PURE — ผู้เรียกเป็นคนหาสัญญาณสลิปมาให้) */
+export function isAwaitingReceipt(fstatus: string | null | undefined, hasPendingSlip: boolean): boolean {
+  return String(fstatus ?? "").trim() === "5" && hasPendingSlip;
+}
+
+/**
+ * ป้ายสถานะที่ควรโชว์บนแถว — รวมสถานะย่อยที่ derive ไว้ให้แล้ว (SOT เดียว ·
+ * เลิก hardcode "6.1 = indigo" ในตารางแต่ละจอ). คืน code ที่ใช้กับ
+ * FSTATUS_VIVID / FORWARDER_STATUS_TABS ได้ตรงๆ.
+ */
+export function resolveRowStatusCode(
+  fstatus: string | null | undefined,
+  opts?: { driverOpen?: boolean; pendingSlip?: boolean },
+): string {
+  const st = String(fstatus ?? "").trim();
+  if (st === "6" && opts?.driverOpen) return "6.1";
+  if (st === "5" && opts?.pendingSlip) return "5.1";
+  return st;
+}
+
+/** ป้ายภาษาไทยของ code (รวม 5.1 / 6.1) — ดึงจาก SOT แถบแท็บ */
+export function statusCodeLabel(code: string): string {
+  return FORWARDER_STATUS_TABS.find((t) => t.code === code)?.label ?? code;
+}
+
+/** สีพื้นแท็บตอน active — กติกาเดียวกับหน้ารายการหลัก (1-7 = vivid ของสถานะ · อื่นๆ = แดงหลัก) */
+export function fstatusTabActiveCls(code: string): string {
+  return /^[1-7]$/.test(code) ? fstatusVivid(code) : "bg-primary-600 text-white";
 }
 
 /**

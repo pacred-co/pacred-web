@@ -43,7 +43,7 @@ export const LEGACY_FORWARDER_STATUS: Record<LegacyForwarderCode, LegacyStatusEn
   "2": { key: "at_china_warehouse", thai: "สินค้าถึงโกดังจีน" },
   "3": { key: "in_transit_to_thailand", thai: "กำลังส่งมาไทย" },
   "4": { key: "arrived_thailand", thai: "ถึงไทยแล้ว" },
-  "5": { key: "pending_payment", thai: "รอชำระเงิน" },
+  "5": { key: "pending_payment", thai: "รอชำระ/ใบแจ้งหนี้" },
   "6": { key: "out_for_delivery", thai: "เตรียมส่ง" },
   "7": { key: "delivered", thai: "ส่งแล้ว" },
 };

@@ -36,7 +36,7 @@ const PROVIDER_LABEL: Record<string, string> = {
 // page doesn't pull the admin status module).
 const IMPORT_STATUS_LABEL: Record<string, string> = {
   "1": "รอเข้าโกดังจีน", "2": "ถึงโกดังจีนแล้ว", "3": "กำลังส่งมาไทย",
-  "4": "ถึงไทยแล้ว", "5": "รอชำระเงิน", "6": "เตรียมส่ง", "7": "ส่งแล้ว",
+  "4": "ถึงไทยแล้ว", "5": "รอชำระ/ใบแจ้งหนี้", "6": "เตรียมส่ง", "7": "ส่งแล้ว",
 };
 
 // Legacy `nameShipBy($hShipBy)` — function.php L91-143. Same carrier table the

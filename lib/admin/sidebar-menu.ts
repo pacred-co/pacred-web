@@ -55,7 +55,7 @@
  *  - manager:      super minus HR-only + billing config + admin grants
  *  - accounting:   wallet · yuan · reports · accounting · disbursements
  *  - warehouse:    forwarders (?q=3) · forwarder-action · cnt-hs · driver
- *  - driver:       drivers/work · barcode scanner (mobile-first)
+ *  - driver:       drivers (?view=todo → เปิดงาน → detail) · barcode scanner (mobile-first)
  *  - sales_admin:  customers · forwarders (?q=1) · reports · transfer-rep
  *  - sales:        same as sales_admin minus approval rights
  *  - interpreter:  service-orders · cart · cnt-hs initiate · customers
@@ -1283,7 +1283,8 @@ const wrapClassWarehouse: MenuItem = {
         { labelKey: "forwarder.assignDriver", href: "/admin/drivers", icon: "Truck", badge: "driverItems" },
         // พี่ป๊อป spec 2026-07-06 §3 — จอมอนิเตอร์ "กำลังจัดส่ง" real-time board.
         { labelKey: "forwarder.driverMonitor", href: "/admin/drivers/monitor", icon: "MonitorSpeaker" },
-        { labelKey: "forwarder.driverWork", href: "/admin/drivers/work", icon: "Smartphone" },
+        // ยุบ /admin/drivers/work → พนักงานทำงานที่ /admin/drivers (เปิดงาน → หน้า
+        // detail ถ่ายรูปขึ้นรถ/ส่ง + มาร์คส่งไม่ได้) ครบในหน้าเดียว · ภูม 2026-07-31.
         blockExtThaiTransport,
       ],
     },
@@ -1504,7 +1505,7 @@ const menuManager: MenuSection[] = [
       itemFreightCommission,
       blockApiForwarderUpdate,
       { labelKey: "forwarder.assignDriver", href: "/admin/drivers", icon: "Truck", badge: "driverItems" },
-      { labelKey: "forwarder.driverWork", href: "/admin/drivers/work", icon: "Smartphone" },
+      // ยุบ /admin/drivers/work → งานคนขับทำที่ /admin/drivers (เปิดงาน → detail) · ภูม 2026-07-31.
       // 2026-05-30 (Wave 29 #5 · Agent A) — flat barcode-intake shortcut.
       // Matches the menuSuper / menuWarehouse / menuDriver placement.
       itemBarcodeRecordIntakeFlat,

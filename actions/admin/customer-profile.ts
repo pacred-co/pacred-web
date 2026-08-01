@@ -589,9 +589,37 @@ export async function adminUpdateCorporate(
       console.error(`[adminUpdateCorporate read] failed`, { userid, code: beforeErr.code, message: beforeErr.message });
       return { ok: false, error: beforeErr.message };
     }
-    // UPDATE-only (legacy semantics): the corporate row must already exist.
+    // 🔴 owner 2026-07-30 (PR005): *"อันนี้เราจะเพิ่มข้อมูล ชื่อ หรือข้อมูลนิติ และอัพไฟล์
+    // ให้ลูกค้าเลยอะครับ จากหลังบ้าน"* — เดิมเป็น UPDATE-only ตาม legacy ⇒ ลูกค้าที่
+    // ติ๊ก "นิติบุคคล" ไว้แต่ยังไม่เคยกรอกข้อมูลบริษัท (ไม่มีแถว tb_corporate) แอดมิน
+    // ทำแทนไม่ได้เลย ต้องรอลูกค้ากรอกเอง = งานค้าง. เปลี่ยนเป็น **UPSERT**: ไม่มีแถว
+    // → สร้างให้ (สถานะ '1' รอตรวจสอบ เหมือนลูกค้ากรอกเอง — ไม่ auto-approve).
+    // คอลัมน์ไฟล์เป็น NOT NULL → ต้องใส่ '' ไม่ใช่ null.
     if (!before) {
-      return { ok: false, error: "ลูกค้ายังไม่มีข้อมูลนิติบุคคล — ลูกค้าต้องกรอกข้อมูลบริษัทจากฝั่งสมาชิกก่อน" };
+      const { error: insErr } = await admin.from("tb_corporate").insert({
+        userid,
+        corporatenumber: d.corporatenumber,
+        corporatename: d.corporatename,
+        corporateaddress: d.corporateaddress,
+        corporatefile: "",
+        corporatefile20: "",
+        corporatestatus: "1", // รอตรวจสอบ — แอดมินกดอนุมัติแยกต่างหาก
+        cpdatecreate: new Date().toISOString(),
+      });
+      if (insErr) {
+        console.error(`[adminUpdateCorporate insert] failed`, { userid, code: insErr.code, message: insErr.message });
+        return { ok: false, error: insErr.message };
+      }
+      await logAdminAction(adminId, "tb_corporate.create", "tb_corporate", userid, {
+        by: "admin",
+        after: {
+          corporatenumber: d.corporatenumber,
+          corporatename: d.corporatename,
+          corporateaddress: d.corporateaddress,
+        },
+      });
+      revalidatePath(`/admin/customers/${userid}`);
+      return { ok: true };
     }
 
     const { error } = await admin
@@ -739,9 +767,52 @@ export async function adminUploadCorporateDoc(formData: FormData): Promise<Admin
       console.error(`[adminUploadCorporateDoc read] failed`, { userid, code: cErr.code, message: cErr.message });
       return { ok: false, error: cErr.message };
     }
-    if (!corp) return { ok: false, error: "ลูกค้ายังไม่เป็นนิติบุคคล — กดอัปเกรดเป็นนิติฯ ก่อน" };
+    // 🔴 owner 2026-07-30 (PR005 · "บัคก็มีอยู่นะครับ") — จอโชว์ช่องอัปโหลดให้ทุกลูกค้าที่
+    // ติ๊ก "นิติบุคคล" แต่ action เดิมปฏิเสธถ้ายังไม่มีแถว tb_corporate ⇒ **UI สัญญาสิ่งที่
+    // ทำไม่ได้** (คลาสเดียวกับ [[wrong-error-message-hides-real-block]]) — และข้อความยัง
+    // ชี้ผิดทางด้วย ("กดอัปเกรดเป็นนิติฯ ก่อน" ทั้งที่ลูกค้าเป็นนิติอยู่แล้ว).
+    // แก้: ลูกค้าเป็นนิติจริง (tb_users.userCompany='1') → **สร้างแถวเปล่าให้ก่อน** แล้วอัปต่อ
+    // (สถานะ '1' รอตรวจสอบ · ข้อมูลบริษัทให้แอดมินมากรอกทีหลังได้) — ไม่ใช่นิติ = ปฏิเสธเหมือนเดิม
+    let corpRow = corp;
+    if (!corpRow) {
+      const { data: u, error: userErr } = await admin
+        .from("tb_users").select("userCompany").eq("userID", userid)
+        .maybeSingle<{ userCompany: string | null }>();
+      if (userErr) {
+        console.error("[adminUploadCorporateDoc customer-read] failed", {
+          userid,
+          code: userErr.code,
+          message: userErr.message,
+        });
+        return { ok: false, error: userErr.message };
+      }
+      if (String(u?.userCompany ?? "").trim() !== "1") {
+        return { ok: false, error: "ลูกค้ายังไม่เป็นนิติบุคคล — กดอัปเกรดเป็นนิติฯ ก่อน" };
+      }
+      const { data: created, error: mkErr } = await admin
+        .from("tb_corporate")
+        .insert({
+          userid,
+          corporatenumber: "",
+          corporatename: "",
+          corporateaddress: "",
+          corporatefile: "",
+          corporatefile20: "",
+          corporatestatus: "1",
+          cpdatecreate: new Date().toISOString(),
+        })
+        .select("id, corporate_docs, corporatefile, corporatefile20")
+        .maybeSingle<{ id: number; corporate_docs: unknown; corporatefile: string | null; corporatefile20: string | null }>();
+      if (mkErr || !created) {
+        console.error(`[adminUploadCorporateDoc create-row] failed`, { userid, code: mkErr?.code, message: mkErr?.message });
+        return { ok: false, error: mkErr?.message ?? "สร้างข้อมูลนิติบุคคลไม่สำเร็จ" };
+      }
+      corpRow = created;
+      await logAdminAction(adminId, "tb_corporate.create", "tb_corporate", userid, { by: "admin", reason: "upload_doc" });
+    }
+    const corp2 = corpRow;
 
-    const current = parseCorporateDocs(corp.corporate_docs);
+    const current = parseCorporateDocs(corp2.corporate_docs);
     if (current.length >= CORPORATE_DOCS_CAP) return { ok: false, error: `อัปได้สูงสุด ${CORPORATE_DOCS_CAP} ไฟล์ — ลบบางไฟล์ก่อน` };
 
     const upload = await uploadToBucket(file, "member-docs", `corporate/${userid}/${docType}`);
@@ -752,10 +823,10 @@ export async function adminUploadCorporateDoc(formData: FormData): Promise<Admin
       { type: docType as CorporateDocType, key: upload.filename, name: file.name.slice(0, 200), at: new Date().toISOString() },
     ];
     const update: Record<string, unknown> = { corporate_docs: next };
-    if (docType === "affidavit" && !(corp.corporatefile && corp.corporatefile.trim() !== "")) update.corporatefile = upload.filename;
-    if (docType === "vat" && !(corp.corporatefile20 && corp.corporatefile20.trim() !== "")) update.corporatefile20 = upload.filename;
+    if (docType === "affidavit" && !(corp2.corporatefile && corp2.corporatefile.trim() !== "")) update.corporatefile = upload.filename;
+    if (docType === "vat" && !(corp2.corporatefile20 && corp2.corporatefile20.trim() !== "")) update.corporatefile20 = upload.filename;
 
-    const { error: upErr } = await admin.from("tb_corporate").update(update).eq("id", corp.id);
+    const { error: upErr } = await admin.from("tb_corporate").update(update).eq("id", corp2.id);
     if (upErr) {
       if (isMissingDocsColumn(upErr)) return { ok: false, error: DOCS_NOT_READY };
       console.error(`[adminUploadCorporateDoc update] failed`, { userid, code: upErr.code, message: upErr.message });

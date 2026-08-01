@@ -4707,9 +4707,10 @@
       "2": "Arrived at China warehouse",
       "3": "In transit to Thailand",
       "4": "Arrived in Thailand",
-      "5": "Awaiting payment",
+      "5": "Awaiting payment / Invoice",
       "6": "Preparing to ship",
       "7": "Delivered",
+      "awaitingReceipt": "Awaiting receipt issuance",
       "outForDelivery": "Out for delivery"
     },
     "cancelConfirm": "Confirm cancel import item #{id}?\nCancelled items are permanently deleted",
@@ -5120,7 +5121,7 @@
       "2": "Arrived at China warehouse",
       "3": "In transit to Thailand",
       "4": "Arrived in Thailand",
-      "5": "Awaiting payment",
+      "5": "Awaiting payment / Invoice",
       "6": "Preparing delivery",
       "7": "Delivered"
     },

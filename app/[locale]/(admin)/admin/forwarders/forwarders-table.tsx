@@ -4,7 +4,7 @@ import { Fragment, useMemo, useState, useTransition, type ChangeEvent } from "re
 import { useRouter } from "next/navigation";
 import { isGeneralCoid } from "@/lib/forwarder/coid";
 import { isForwarderPaid } from "@/lib/forwarder/outstanding";
-import { FSTATUS_CFG, listRowTint, fstatusVivid } from "@/lib/admin/forwarder-status";
+import { FSTATUS_CFG, listRowTint, fstatusVivid, resolveRowStatusCode, statusCodeLabel } from "@/lib/admin/forwarder-status";
 // 2026-06-12 — the MOMO หัวบิล (bill-header) box-count rule now lives in a
 // shared, unit-tested helper so the report / completeness / check-queue Σ
 // reuse the EXACT same detection. baseTracking/trackingSuffix moved there too.
@@ -20,6 +20,7 @@ import {
   markForwarderPrinted,
   adminRestoreForwarderFromSpecial,
 } from "@/actions/admin/forwarders";
+import { adminReassignForwarderOwner } from "@/actions/admin/forwarders-field-edits";
 import { confirm } from "@/components/ui/confirm";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
 import { BulkActionsToolbar } from "./bulk-actions-toolbar";
@@ -119,6 +120,14 @@ export type Row = {
   credit_due_date: string | null;     // legacy fcreditdate · วันที่ครบกำหนด
   // 2026-07-07 — fstatus='6' + open driver item → "กำลังจัดส่ง" pill override
   driverOpen: boolean;
+  /** owner 2026-07-31 — สลิปรอบัญชีตรวจ → ป้าย 5.1 รอออก/ใบเสร็จรับเงิน */
+  pendingSlip: boolean;
+  /** ลิงก์ตรงไปงานบัญชีที่เป็นต้นเหตุของ 5.1 (ไม่ให้พนักงานค้นซ้ำ) */
+  pendingSlipReviewTarget: {
+    kind: "wallet" | "billing-run";
+    id: number;
+    href: string;
+  } | null;
   paydeposit: string | null;
   note: string | null;
   /** 2026-07-06 — legacy fproductstype · nameProductsType 1=ทั่วไป 2=มอก. 3=อย. 4=พิเศษ */
@@ -220,7 +229,7 @@ const BULK_STATUS_OPTIONS: ReadonlyArray<{ v: BulkStatusValue; l: string }> = [
   { v: "2",  l: "2 · ถึงโกดังจีนแล้ว" },
   { v: "3",  l: "3 · กำลังส่งมาไทย" },
   { v: "4",  l: "4 · ถึงไทยแล้ว" },
-  { v: "5",  l: "5 · รอชำระเงิน" },
+  { v: "5",  l: "5 · รอชำระ/ใบแจ้งหนี้" },
   { v: "6",  l: "6 · เตรียมส่ง" },
   { v: "7",  l: "7 · ส่งแล้ว" },
   { v: "99", l: "99 · สถานะพิเศษ" },
@@ -814,6 +823,39 @@ export function ForwardersTable({
     });
   };
 
+  const onAssignNoCodeOwner = async (row: Row) => {
+    setError(null);
+    setSuccess(null);
+    const entered = window.prompt(
+      `ใส่รหัสลูกค้าให้ NO CODE #${row.id}\nTracking: ${row.tracking_chn || "—"}`,
+      "PR",
+    );
+    if (entered == null) return;
+    const newUserId = entered.trim().toUpperCase();
+    if (!/^PR\d+$/.test(newUserId)) {
+      setError("รหัสลูกค้าต้องเป็น PR ตามด้วยตัวเลข เช่น PR12345");
+      return;
+    }
+    if (!(await confirm(
+      `ยืนยันว่า ${newUserId} เป็นเจ้าของพัสดุ #${row.id}?\n\nระบบจะตรวจสมาชิกจริง แล้วส่งงานออกจากสถานะพิเศษกลับเข้า flow ปกติ พร้อมคำนวณราคาจากข้อมูลจริงของพัสดุ`,
+    ))) return;
+
+    startTransition(async () => {
+      const result = await adminReassignForwarderOwner({ fId: row.id, newUserId });
+      if (!result.ok) {
+        setError(result.error ?? "ใส่ PR ไม่สำเร็จ");
+        return;
+      }
+      if (result.data?.noCodeActivated && result.data.rateOk === false) {
+        setError(`ใส่ PR ${newUserId} ให้ #${row.id} สำเร็จแล้ว แต่ยังหาราคาไม่ได้ · งานกลับเข้า flow แล้ว กรุณาตรวจเรท/ประเภทสินค้าในหน้ารายละเอียดก่อนวางบิล`);
+        router.refresh();
+        return;
+      }
+      setSuccess(`ใส่ PR ${newUserId} ให้ #${row.id} สำเร็จ · งานกลับเข้า flow ปกติแล้ว`);
+      router.refresh();
+    });
+  };
+
   const allChecked = rows.length > 0 && selected.size === rows.length;
   const someChecked = selected.size > 0 && selected.size < rows.length;
 
@@ -943,23 +985,22 @@ export function ForwardersTable({
                       }
                     : null;
 
-                  const statusKey = r.status;
                   // VIVID end-of-row status pill (owner 2026-06-23: rows white →
                   // เน้นสถานะท้ายรายการเด่นๆ). Solid high-contrast fill, not the soft chip.
                   // S1 (2026-07-07) — legacy statusForwarderAll2(): fStatus='6' WITH an
                   // open driver item → distinct "กำลังจัดส่ง" pill; else "เตรียมส่ง".
                   // Per-row override only — FSTATUS_CFG (6 = เตรียมส่ง) is unchanged.
-                  const isDelivering = r.status === "6" && r.driverOpen;
-                  const badgeCls = isDelivering
-                    ? "bg-indigo-600 text-white"
-                    : fstatusVivid(r.status);
-                  const sLabel = isDelivering
-                    ? r.fcredit === "1"
-                      ? "เครติด · กำลังจัดส่ง"
-                      : "กำลังจัดส่ง"
-                    : r.fcredit === "1"
-                      ? `เครติด · ${statusLabel[r.status] ?? r.status}`
-                      : statusLabel[statusKey] ?? statusKey;
+                  // owner 2026-07-31 — สถานะย่อยทั้งหมด derive จาก SOT ตัวเดียว
+                  // (resolveRowStatusCode: 6+คนขับเปิดรอบ → 6.1 กำลังจัดส่ง ·
+                  //  5+สลิปรอตรวจ → 5.1 รอออก/ใบเสร็จรับเงิน) แล้วเอา code ไปหยิบ
+                  // สี+ป้ายจาก SOT เดียวกับแถบแท็บ = เลิก hardcode สี/ข้อความรายจอ
+                  const rowCode = resolveRowStatusCode(r.status, {
+                    driverOpen: r.driverOpen,
+                    pendingSlip: r.pendingSlip,
+                  });
+                  const badgeCls = fstatusVivid(rowCode);
+                  const baseLabel = statusCodeLabel(rowCode);
+                  const sLabel = r.fcredit === "1" ? `เครดิต · ${baseLabel}` : baseLabel;
                   // next-action hint (self-explaining-row §0g) — what staff does NOW.
                   const fsCfg = FSTATUS_CFG[r.status as keyof typeof FSTATUS_CFG];
                   const fsNext = fsCfg?.next ?? "";
@@ -1094,7 +1135,23 @@ export function ForwardersTable({
                       <td className="px-2 py-2.5">
                         {/* §0h — primary identity (รหัสลูกค้า) sized up to text-sm so
                             the eye lands on "whose row" first; name + phone stay secondary. */}
-                        <div className="text-sm"><CustomerCodeLink code={r.customer?.userid} /></div>
+                        {r.status === "99" && !r.customer?.userid ? (
+                          <div className="space-y-1">
+                            <span className="inline-flex rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-800" title="งานไม่สมบูรณ์ · ยังไม่รู้เจ้าของ · ยอดเงินถูกล็อกไว้ที่ศูนย์">
+                              NO CODE
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => onAssignNoCodeOwner(r)}
+                              disabled={pending}
+                              className="block rounded border border-amber-500 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
+                            >
+                              ใส่ PR → กลับเข้า flow
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-sm"><CustomerCodeLink code={r.customer?.userid} /></div>
+                        )}
                         <div className="truncate max-w-[140px]" title={r.customer?.name ?? ""}>
                           {r.customer?.name || "—"}
                         </div>
@@ -1536,6 +1593,17 @@ export function ForwardersTable({
                       })()}
                       <td className="px-2 py-2.5">
                         <div className="flex flex-col gap-1">
+                          {rowCode === "5.1" && r.pendingSlipReviewTarget && (
+                            <Link
+                              href={r.pendingSlipReviewTarget.href}
+                              className="rounded border border-violet-700 bg-violet-600 text-white text-[11px] font-semibold px-2 py-1 hover:bg-violet-700 text-center whitespace-nowrap"
+                              title={r.pendingSlipReviewTarget.kind === "billing-run"
+                                ? `เปิดใบวางบิล #${r.pendingSlipReviewTarget.id} เพื่อตรวจสลิปและออกใบเสร็จ`
+                                : `เปิดรายการชำระเงิน #${r.pendingSlipReviewTarget.id} เพื่อตรวจสลิปและออกใบเสร็จ`}
+                            >
+                              ตรวจสลิป/ออกใบเสร็จ
+                            </Link>
+                          )}
                           <Link
                             href={`/admin/forwarders/${r.id}`}
                             className="rounded border border-green-500 bg-green-50 text-green-700 text-[11px] px-2 py-1 hover:bg-green-100 text-center whitespace-nowrap"

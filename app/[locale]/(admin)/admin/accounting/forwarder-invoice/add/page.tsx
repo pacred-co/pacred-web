@@ -283,7 +283,7 @@ export default async function AddForwarderInvoicePage({
             )}
           </form>
           <p className="mt-3 text-xs text-slate-500">
-            แสดงเฉพาะรายการที่สถานะ <span className="font-medium text-amber-700">รอชำระเงิน (fstatus=5)</span> และยังไม่ได้ออกใบเสร็จ
+            แสดงเฉพาะรายการที่สถานะ <span className="font-medium text-amber-700">รอชำระ/ใบแจ้งหนี้ (fstatus=5)</span> และยังไม่ได้ออกใบเสร็จ
             · เลือก ≥ 1 รายการจากลูกค้ารายเดียวกันเพื่อสร้างใบเสร็จใหม่
             {candidates.length === 500 && " · แสดง 500 รายการแรกเท่านั้น — กรุณาใช้ตัวกรอง"}
           </p>

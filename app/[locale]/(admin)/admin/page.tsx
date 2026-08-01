@@ -41,6 +41,7 @@ import { RevenueCarouselCard } from "@/components/admin/revenue-carousel-card";
 import { getWalletSystemTotals } from "@/lib/admin/wallet-totals";
 import { pendingTopupFilter, pendingWithdrawFilter } from "@/lib/wallet/wallet-hs";
 import { collapseWalletBillingPairs, computeTopupBadge } from "@/lib/admin/topup-slip-dedup";
+import { resolvePendingSlipFidsAll } from "@/lib/forwarder/pending-slip";
 import { groupDirectWalletSlips } from "@/lib/admin/wallet-slip-group";
 import { computeBillWht } from "@/lib/billing/wht";
 import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
@@ -60,7 +61,7 @@ const THAI_MONTHS = ["มกราคม","กุมภาพันธ์","ม�
 // Tab keys = the 13 bottom queues. Renamed where the legacy concept
 // diverges from the rebuilt-app terminology (e.g. forwarder6 = arrived).
 type TabKey =
-  | "topup"               // tb_wallet_hs status='1' amount>0
+  | "topup"               // คิวรวมสลิปรอตรวจ: wallet + forwarder billing run
   | "withdraw"            // tb_wallet_hs status='1' amount<0
   | "payShop"             // sales_payouts pending (Pacred-original — no legacy equivalent)
   | "shop1"               // tb_header_order hstatus='1' (รอดำเนินการ)
@@ -68,7 +69,7 @@ type TabKey =
   | "shop3"               // tb_header_order hstatus='3' (สั่งสินค้า · ชำระแล้ว · Pacred ต้องสั่งจีน)
   | "shop4"               // tb_header_order hstatus='4' (รอร้านจีนจัดส่ง)
   | "forwarder1"          // tb_forwarder fstatus='1' (รอเข้าโกดังจีน)
-  | "forwarder5"          // tb_forwarder fstatus='5' (รอชำระเงิน)
+  | "forwarder5"          // tb_forwarder fstatus='5' ที่ยังไม่มีสลิปรอตรวจ
   | "forwarderC"          // tb_forwarder fcredit='1'
   | "forwarder6"          // tb_forwarder fstatus='6' NOT in an open driver batch (เตรียมส่ง)
   | "forwarder62"         // tb_forwarder fstatus='6' WITH an open driver-item (กำลังจัดส่ง)
@@ -78,7 +79,7 @@ type TabKey =
 // next-action hint per queue (self-explaining-row §0g) — "ให้พนักงานทำอะไรต่อ" so a
 // glance at the dashboard says what to do, not just "รอดำเนินการ".
 const TAB_NEXT: Record<TabKey, string> = {
-  topup:             "ตรวจสลิป → อนุมัติ/ตัดจ่าย",
+  topup:             "ตรวจสลิป → ออกใบเสร็จ → เตรียมส่ง",
   withdraw:          "ตรวจ → จ่ายเงินคืน",
   payShop:           "ตรวจ → จ่ายค่าคอม/ร้านค้า",
   shop1:             "ตรวจ/เปิดราคา",
@@ -86,7 +87,7 @@ const TAB_NEXT: Record<TabKey, string> = {
   shop3:             "สั่งซื้อจากจีน",
   shop4:             "รอร้านจีนจัดส่งเข้าโกดัง",
   forwarder1:        "รอสินค้าเข้าโกดังจีน",
-  forwarder5:        "รอลูกค้าชำระ/ตรวจสลิป",
+  forwarder5:        "รอลูกค้าชำระ/แนบสลิป",
   forwarderC:        "ติดตามเครดิต/เก็บเงิน",
   forwarder6:        "ตรวจ/แจ้งเก็บเงิน",
   forwarder62:       "มอบงานคนขับ/จัดรถ",
@@ -272,7 +273,9 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     admin.from("tb_header_order").select("id", { count: "exact", head: true }).eq("hstatus", "4"),
     // ฝากนำเข้า tabs — match Wave 3 forwarders rewrite + sidebar-counts.
     admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "1"),
-    admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fstatus", "5"),
+    // Pull ids (not only HEAD count) so status 5 can be partitioned from derived
+    // 5.1 with the exact same pending-slip SOT used by /admin/forwarders.
+    admin.from("tb_forwarder").select("id").eq("fstatus", "5").limit(50_000),
     admin.from("tb_forwarder").select("id", { count: "exact", head: true }).eq("fcredit", "1"),
     // เตรียมส่ง(6) / กำลังจัดส่ง(62) — partition fstatus=6 by open driver-item (legacy
     // forwarder6.php = fStatus6 NOT-with-open-driver · forwarder62.php = fStatus6 WITH
@@ -357,7 +360,15 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   // GOAL 1 (§0f badge ตรง) — the badge must equal the LIST after the เบิ้ล collapse:
   // wallet-topup rows − wallet twins already on a pending FRI + pending FRIs. One SOT
   // (computeTopupBadge) shared with the sidebar so dashboard badge = sidebar badge = list.
-  const topupBadge = await computeTopupBadge(createAdminClient());
+  const forwarder5Ids = ((forwarder5Count.data ?? []) as { id: number }[])
+    .map((row) => Number(row.id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+  const dashboardAdmin = createAdminClient();
+  const [topupBadge, pendingForwarder5Ids] = await Promise.all([
+    computeTopupBadge(dashboardAdmin),
+    resolvePendingSlipFidsAll(dashboardAdmin, forwarder5Ids),
+  ]);
+  const forwarder5Val = forwarder5Ids.filter((id) => !pendingForwarder5Ids.has(id)).length;
 
   // เตรียมส่ง(6) vs กำลังจัดส่ง(62) — partition fstatus=6 by whether the row is in an
   // OPEN driver batch (fdistatus '' / '1' = assigned, not delivered).
@@ -378,7 +389,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     shop3:              shop3Count.count ?? 0,
     shop4:              shop4Count.count ?? 0,
     forwarder1:         forwarder1Count.count ?? 0,
-    forwarder5:         forwarder5Count.count ?? 0,
+    forwarder5:         forwarder5Val,
     forwarderC:         forwarderCreditCount.count ?? 0,
     forwarder6:         forwarder6Val,
     forwarder62:        forwarder62Val,
@@ -393,7 +404,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   // mini-table only had a generic ดู/แก้ไข row.
   const tabDefs: { key: TabKey; label: string; href?: string }[] = [
     { key: "inactiveCustomers", label: "ลูกค้าที่ยังไม่ได้ใช้งาน" },
-    { key: "topup",             label: "ชำระเงิน" },
+    { key: "topup",             label: "รอออก/ใบเสร็จรับเงิน" },
     // Wave 7.2 (ภูม audit): payShop reads rebuilt `sales_payouts` which is
     // empty on prod (Pacred-only feature · no legacy port yet · Phase C).
     // Badge always 0. Label suffixed so staff don't expect data here.
@@ -404,7 +415,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     { key: "shop3",             label: "สั่งสินค้า (ชำระแล้ว)", href: "/admin/service-orders?q=3" },
     { key: "shop4",             label: "รอร้านจีนจัดส่ง" },
     { key: "forwarder1",        label: "รอเข้าโกดังจีน" },
-    { key: "forwarder5",        label: "รอชำระเงินนำเข้า" },
+    { key: "forwarder5",        label: "รอชำระ/ใบแจ้งหนี้ (นำเข้า)" },
     { key: "forwarderC",        label: "เครดิตค้างนำเข้า" },
     { key: "forwarder6",        label: "เตรียมส่ง" },
     { key: "forwarder62",       label: "กำลังจัดส่ง" },
@@ -689,7 +700,7 @@ const FWD_STATUS: Record<string, { label: string; tone: StatusTone }> = {
   "2": { label: "ถึงโกดังจีน",      tone: "info" },
   "3": { label: "กำลังส่งมาไทย",    tone: "primary" },
   "4": { label: "ถึงไทยแล้ว",       tone: "info" },
-  "5": { label: "รอชำระเงินนำเข้า", tone: "danger" },
+  "5": { label: "รอชำระ/ใบแจ้งหนี้ (นำเข้า)", tone: "danger" },
   "6": { label: "เตรียมส่ง",        tone: "primary" },
   "7": { label: "ส่งแล้ว",          tone: "success" },
 };
@@ -1053,17 +1064,23 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       let q = admin
         .from("tb_forwarder")
         .select("id,fdate,fstatus,fidorco,ftotalprice,ftransporttype,fweight,fvolume,userid,fcabinetnumber,fcredit,fcover,ftrackingchn,ftrackingth,fshipby,faddressname,faddresslastname,faddressno,faddresssubdistrict,faddressdistrict,faddressprovince,faddresszipcode,fnote,adminidupdate")
-        .order("fdate", { ascending: false, nullsFirst: false })
-        .limit(50);
+        .order("fdate", { ascending: false, nullsFirst: false });
       if      (tab === "forwarder1")  q = q.eq("fstatus", "1");
       else if (tab === "forwarder5")  q = q.eq("fstatus", "5");
       else if (tab === "forwarderC")  q = q.eq("fcredit", "1");
       else                            q = q.eq("fstatus", "6"); // forwarder6 + forwarder62 = fstatus 6
+      // Status 5 is partitioned from derived 5.1 after the query. Read a wider
+      // window so pending rows do not leave the 50-row dashboard queue sparse.
+      q = q.limit(tab === "forwarder5" ? 500 : 50);
       const { data, error } = await q;
       if (error) {
         console.warn(`[tb_forwarder list] failed (soft-fail · returning empty rows)`, error);
       }
       let rows = (data ?? []) as unknown as RawForwarderRow[];
+      if (tab === "forwarder5") {
+        const pendingIds = await resolvePendingSlipFidsAll(admin, rows.map((row) => Number(row.id)));
+        rows = rows.filter((row) => !pendingIds.has(Number(row.id))).slice(0, 50);
+      }
       // เตรียมส่ง(6) vs กำลังจัดส่ง(62) — partition fstatus=6 by open driver-item (fdistatus ''/'1').
       if (tab === "forwarder6" || tab === "forwarder62") {
         const { data: dItems, error: dErr } = await admin

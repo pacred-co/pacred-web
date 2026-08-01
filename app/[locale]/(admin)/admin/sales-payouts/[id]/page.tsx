@@ -33,7 +33,7 @@ const FSTATUS: Record<string, { label: string; cls: string }> = {
   "2": { label: "สินค้าถึงโกดังจีนแล้ว", cls: "bg-amber-50 text-amber-700 border-amber-200" },
   "3": { label: "กำลังส่งมาประเทศไทย", cls: "bg-amber-50 text-amber-700 border-amber-200" },
   "4": { label: "สินค้าถึงประเทศไทยแล้ว", cls: "bg-blue-50 text-blue-700 border-blue-200" },
-  "5": { label: "รอชำระเงิน", cls: "bg-red-50 text-red-700 border-red-200" },
+  "5": { label: "รอชำระ/ใบแจ้งหนี้", cls: "bg-red-50 text-red-700 border-red-200" },
   "6": { label: "เตรียมส่ง", cls: "bg-blue-50 text-blue-700 border-blue-200" },
   "7": { label: "ส่งแล้ว", cls: "bg-green-50 text-green-700 border-green-200" },
 };
