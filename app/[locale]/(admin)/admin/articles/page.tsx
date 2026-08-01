@@ -135,8 +135,16 @@ export default async function AdminArticlesPage({
                   <td className="px-3 py-2 whitespace-nowrap">
                     <div className="flex items-center gap-1.5">
                       <Link href={`/admin/articles/${a.id}`} className="rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-100">แก้ไข</Link>
-                      {a.status === "published" && a.slug ? (
-                        <a href={publicArticlePath(a.category, a.slug)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] text-foreground hover:bg-surface-alt"><ExternalLink className="h-3 w-3" /> เว็บ</a>
+                      {a.slug ? (
+                        <a
+                          href={publicArticlePath(a.category, a.slug)}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={a.status === "published" ? "เปิดหน้าเว็บจริง" : "ดูตัวอย่าง — ยังไม่ขึ้นเว็บ คนทั่วไปเปิดจะเห็น 404"}
+                          className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] ${a.status === "published" ? "border-border text-foreground hover:bg-surface-alt" : "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"}`}
+                        >
+                          <ExternalLink className="h-3 w-3" /> {a.status === "published" ? "เว็บ" : "ตัวอย่าง"}
+                        </a>
                       ) : null}
                     </div>
                   </td>

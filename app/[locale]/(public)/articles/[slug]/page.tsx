@@ -7,7 +7,8 @@ import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
 import { HomeBottomBanner } from "@/components/sections/home-bottom-banner";
-import { ArticleContent } from "@/components/knowledge/article-content";
+import { ArticleHtml } from "@/components/cms/article-html";
+import { UnpublishedPreviewBanner } from "@/components/cms/unpublished-preview-banner";
 import { getPublishedArticleBySlug } from "@/lib/cms/articles";
 import { CMS_CATEGORY_META } from "@/lib/validators/cms-article";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -82,6 +83,7 @@ export default async function CmsArticlePage({
 
   return (
     <>
+      <UnpublishedPreviewBanner status={a.status} articleId={a.id} />
       <JsonLd
         data={[
           breadcrumbSchema(
@@ -155,7 +157,7 @@ export default async function CmsArticlePage({
 
             {/* Body */}
             <div className="mt-6 md:mt-8">
-              <ArticleContent text={a.body} title={a.title} />
+              <ArticleHtml text={a.body} title={a.title} />
             </div>
 
             {/* Back */}

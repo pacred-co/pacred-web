@@ -44,6 +44,9 @@ export type CmsArticle = {
   casePriceEn: string;
   caseFactsEn: CaseFact[];
   publishedAt: string | null;
+  /** Row status. Anything other than "published" reached the page through the
+   *  admin preview path below — render the preview banner, never treat as live. */
+  status: string;
 };
 
 const COLS =
@@ -51,7 +54,7 @@ const COLS =
   "meta_title, meta_description, tags, video_url, gallery_images, " +
   "case_price, case_rating, case_route, case_facts, " +
   "title_en, excerpt_en, body_en, meta_title_en, meta_description_en, " +
-  "case_route_en, case_price_en, case_facts_en, published_at";
+  "case_route_en, case_price_en, case_facts_en, published_at, status";
 
 type Row = {
   id: number;
@@ -80,6 +83,7 @@ type Row = {
   case_price_en: string | null;
   case_facts_en: CaseFact[] | null;
   published_at: string | null;
+  status: string | null;
 };
 
 function mapRow(r: Row): CmsArticle {
@@ -110,6 +114,7 @@ function mapRow(r: Row): CmsArticle {
     casePriceEn: r.case_price_en ?? "",
     caseFactsEn: Array.isArray(r.case_facts_en) ? r.case_facts_en : [],
     publishedAt: r.published_at,
+    status: r.status ?? "draft",
   };
 }
 
@@ -220,9 +225,82 @@ export async function getPublishedArticleTags(category: CmsCategory): Promise<st
   }
 }
 
-/** A single published article by slug (for /articles/[slug]). Fail-soft → null. */
+/** The content team — the same role set that may open /admin/articles. A member
+ *  of this set may PREVIEW their own unpublished article at its real public URL. */
+const PREVIEW_ROLES = ["super", "ultra", "manager", "sales_admin", "sales", "ops"];
+
+/**
+ * Normalise a slug coming off the URL before matching it against the DB.
+ *
+ * A Thai slug ("ผลงานนำเข้า-…") reaches some routes PERCENT-ENCODED — notably
+ * /our-work/[id], which is served through the Thai vanity path /ผลงานของเรา/…
+ * There the page's `params.id` arrives as "%E0%B8%9C%E0%B8%A5…" while
+ * generateMetadata gets the decoded form, so an `.eq("slug", …)` silently missed
+ * and the page 404-ed.
+ *
+ * It went unnoticed because every our_work article shipped so far ALSO exists in
+ * the static review catalog, and that fallback (`reviewCanonicalSlug`) re-queried
+ * with a clean slug. A CMS-only case — i.e. every "ผลงานของเรา" article the team
+ * writes in /admin/articles — has no catalog twin, so it 404-ed even once
+ * published (ปอน 2026-08-01).
+ *
+ * Decoding is safe for an ASCII slug (no %) and for an already-decoded Thai one;
+ * a malformed sequence throws → keep the raw key.
+ */
+function normalizeSlugKey(raw: string): string {
+  const key = (raw ?? "").trim();
+  if (!key.includes("%")) return key;
+  try {
+    return decodeURIComponent(key);
+  } catch {
+    return key;
+  }
+}
+
+/**
+ * The unpublished fallback: resolve a draft / pending / rejected row, but ONLY
+ * for a signed-in content-team admin. Public visitors never reach this.
+ *
+ * Why it exists (ปอน 2026-08-01): an author wrote an article, clicked "ดูหน้าเว็บ"
+ * and got a bare 404 with no explanation — because the public read filters on
+ * status='published' and an article sits in ร่าง/รออนุมัติ until Ultra Admin Z
+ * approves it. Authors could not see the real rendered page before publishing.
+ * Now they can, at the SAME url the article will live on, with a preview banner.
+ */
+async function getUnpublishedArticleForAdmin(key: string): Promise<CmsArticle | null> {
+  try {
+    // Imported lazily so the published fast path never pays for the auth module.
+    const { getAdminRoles } = await import("@/lib/auth/require-admin");
+    const roles = await getAdminRoles();
+    if (!roles?.some((r) => PREVIEW_ROLES.includes(r))) return null;
+
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("cms_articles")
+      .select(COLS)
+      .eq("slug", key)
+      .maybeSingle<Row>();
+    if (error) {
+      console.error("[cms getBySlug preview] failed", { slug: key, code: error.code, message: error.message });
+      return null;
+    }
+    return data ? mapRow(data) : null;
+  } catch (e) {
+    console.error("[cms getBySlug preview] threw", { slug: key, message: (e as Error)?.message });
+    return null;
+  }
+}
+
+/**
+ * A single article by slug for the public detail routes (/articles · /knowledge ·
+ * /news · /our-work). Fail-soft → null.
+ *
+ * Published-only for the public. A content-team admin ALSO resolves an
+ * unpublished row (see getUnpublishedArticleForAdmin) — the published lookup runs
+ * first, so a public request costs exactly what it did before.
+ */
 export async function getPublishedArticleBySlug(slug: string): Promise<CmsArticle | null> {
-  const key = (slug ?? "").trim();
+  const key = normalizeSlugKey(slug);
   if (!key) return null;
   try {
     const admin = createAdminClient();
@@ -236,7 +314,8 @@ export async function getPublishedArticleBySlug(slug: string): Promise<CmsArticl
       console.error("[cms getBySlug] failed", { slug: key, code: error.code, message: error.message });
       return null;
     }
-    return data ? mapRow(data) : null;
+    if (data) return mapRow(data);
+    return getUnpublishedArticleForAdmin(key);
   } catch (e) {
     console.error("[cms getBySlug] threw", { slug: key, message: (e as Error)?.message });
     return null;

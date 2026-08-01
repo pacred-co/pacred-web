@@ -17,7 +17,7 @@
 import { useCallback, useState } from "react";
 import { createPortal } from "react-dom";
 import { BadgeCheck, Star, Calendar, ArrowRight, Monitor, Smartphone } from "lucide-react";
-import { ArticleContent } from "@/components/knowledge/article-content";
+import { bodyAsHtml } from "@/lib/cms/legacy-body-to-html";
 import type { CmsCategory } from "@/lib/validators/cms-article";
 import { CaseArticleBody } from "@/components/our-work/case-article-body";
 
@@ -230,9 +230,18 @@ function ArticlePagePreview({ category, title, excerpt, coverUrl, body, subCateg
         </div>
       ) : null}
 
-      {/* Body — rendered by the SAME component the public page uses */}
+      {/* Body — the SAME `.article-doc` styling the public page ships, so this
+          preview and /knowledge|/news are one look. The HTML here is what the
+          author just typed in their own browser (Tiptap output, or a legacy body
+          converted client-side); the SERVER sanitises before it is stored and
+          again before it is served to the public — see
+          lib/cms/sanitize-article-html.ts. */}
       <div className="mt-5">
-        {body.trim() ? <ArticleContent text={body} title={title} /> : <p className="text-sm text-muted">— ยังไม่มีเนื้อหา (พิมพ์ในช่อง “เนื้อหา”) —</p>}
+        {body.trim() ? (
+          <div className="article-doc" dangerouslySetInnerHTML={{ __html: bodyAsHtml(body, title) }} />
+        ) : (
+          <p className="text-sm text-muted">— ยังไม่มีเนื้อหา (พิมพ์ในช่อง “เนื้อหา”) —</p>
+        )}
       </div>
     </article>
   );

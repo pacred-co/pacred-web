@@ -14,7 +14,7 @@ import { NavBar } from "@/components/sections/navbar";
 import { SearchBar } from "@/components/sections/search-bar";
 import { Footer } from "@/components/sections/footer";
 import { HomeBottomBanner } from "@/components/sections/home-bottom-banner";
-import { ArticleContent } from "@/components/knowledge/article-content";
+import { ArticleHtml } from "@/components/cms/article-html";
 import { ShareButton } from "@/components/knowledge/share-button";
 import { ArticleStats } from "@/components/knowledge/article-stats";
 import {
@@ -22,6 +22,7 @@ import {
   getNewsBySlug as getPacredNewsBySlug,
 } from "@/lib/news/all";
 import { getPublishedArticleBySlug, getPublishedArticles } from "@/lib/cms/articles";
+import { UnpublishedPreviewBanner } from "@/components/cms/unpublished-preview-banner";
 import { JsonLd } from "@/components/seo/json-ld";
 import { articleSchema, breadcrumbSchema } from "@/components/seo/schemas";
 import { SITE_URL } from "@/components/seo/site";
@@ -150,6 +151,7 @@ export default async function NewsArticlePage({
 
   return (
     <>
+      {cms ? <UnpublishedPreviewBanner status={cms.status} articleId={cms.id} /> : null}
       <JsonLd
         data={[
           articleSchema({
@@ -254,7 +256,7 @@ export default async function NewsArticlePage({
 
             {/* Article content */}
             <div className="mx-auto w-full max-w-[760px]">
-              <ArticleContent text={news.content} title={news.title} />
+              <ArticleHtml text={news.content} title={news.title} />
             </div>
           </div>
         </article>
