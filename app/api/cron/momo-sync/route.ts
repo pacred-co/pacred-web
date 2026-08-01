@@ -32,6 +32,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { instrumentCron } from "@/lib/cron/instrument";
 import { runMomoSync } from "@/lib/integrations/momo-isolated/sync";
 import { autoCommitEligibleMomoRows } from "@/lib/admin/auto-commit-momo";
+import { healNoCodeOwners, type NoCodeHealSummary } from "@/lib/admin/no-code-self-heal";
 import { logger } from "@/lib/logger";
 
 /** Window helper — YYYY-MM-DD for today + yesterday. */
@@ -116,6 +117,22 @@ export async function GET(request: Request) {
         }
       }
 
+      // ── 2.5 NO CODE self-heal (owner 2026-08-02) ──
+      // "เวลา MOMO มีอัพเดทอะไร งานที่เราเอาเข้าระบบไปแล้ว จะอัพเดทตามด้วยไหม" —
+      // แถว fstatus='99' ที่นำเข้าไปแล้ว: พอ MOMO เติม PR ตามหลัง (staging raw/
+      // momo_user_* ที่ sync เพิ่งรีเฟรชข้างบน · หรือบอร์ด Live) → ระบุเจ้าของ +
+      // กลับเข้า flow ปกติเองผ่านด่านเต็มของ activateNoCodeOwner (สมองเดียวกับ
+      // ปุ่ม "ใส่ PR → กลับเข้า flow"). BEST-EFFORT — พังห้ามล้ม cron · ไม่ต้อง
+      // gate MOMO_CRON_AUTOCOMMIT (นี่คืองานที่คนกดนำเข้าไว้แล้ว ไม่ใช่ commit ใหม่).
+      let noCodeHeal: NoCodeHealSummary = { scanned: 0, resolved: 0, activated: 0, failed: 0, perRow: [] };
+      try {
+        noCodeHeal = await healNoCodeOwners(admin, { limit: 200 });
+      } catch (err) {
+        logger.error("momo-cron", "no-code self-heal threw", err, {
+          syncLogId: sync.syncLogId,
+        });
+      }
+
       const cronStatus =
         allFailed                        ? "failure" :
         sync.status === "partial"        ? "partial" :
@@ -140,6 +157,12 @@ export async function GET(request: Request) {
           // staff ping (see lib/admin/auto-commit-momo-safety.ts).
           auto_commit_rejection_rate: commit.rejectionRate,
           auto_commit_alerted:  commit.alerted,
+          // 2026-08-02 — NO CODE self-heal (MOMO เติม PR ตามหลัง → แถว 99 กลับ
+          // เข้า flow เอง · lib/admin/no-code-self-heal.ts).
+          no_code_scanned:      noCodeHeal.scanned,
+          no_code_resolved:     noCodeHeal.resolved,
+          no_code_activated:    noCodeHeal.activated,
+          no_code_failed:       noCodeHeal.failed,
           // Wave 30.6 #230 — match-by-tracking propagation summary so ภูม can
           // see at a glance whether MOMO → tb_forwarder writes are landing.
           propagation_scanned:     sync.propagation?.scanned ?? 0,

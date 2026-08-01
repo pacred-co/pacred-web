@@ -93,6 +93,10 @@ export const FSTATUS_VIVID: Record<string, string> = {
   // ที่ forwarders-table L952; ย้ายมาไว้ที่ SOT ให้ทุกจอดึงตัวเดียวกัน
   "6.1": "bg-indigo-600 text-white",
   "7": "bg-emerald-600 text-white",
+  // 99 = สถานะพิเศษ (NO CODE · fstatus='99') — สีเดียวกับ badge หัวข้อแท็บ "p"
+  // (amber · legacy p=warning) ให้ป้ายบนแถวตรงกับสีหัวข้อ (owner 2026-08-02
+  // "ทำไมขึ้นว่าสถานะ 99 · ต้องเป็นสถานะพิเศษ · ดูสีหัวข้อให้ตรงด้วย").
+  "99": "bg-amber-500 text-white",
 };
 export function fstatusVivid(fstatus: string): string {
   return FSTATUS_VIVID[fstatus] ?? "bg-slate-600 text-white";
@@ -200,13 +204,16 @@ export function resolveRowStatusCode(
   return st;
 }
 
-/** ป้ายภาษาไทยของ code (รวม 5.1 / 6.1) — ดึงจาก SOT แถบแท็บ */
+/** ป้ายภาษาไทยของ code (รวม 5.1 / 6.1 · fstatus '99' = แท็บ "p" สถานะพิเศษ) — ดึงจาก SOT แถบแท็บ */
 export function statusCodeLabel(code: string): string {
-  return FORWARDER_STATUS_TABS.find((t) => t.code === code)?.label ?? code;
+  const c = code === "99" ? "p" : code;
+  return FORWARDER_STATUS_TABS.find((t) => t.code === c)?.label ?? code;
 }
 
-/** สีพื้นแท็บตอน active — กติกาเดียวกับหน้ารายการหลัก (1-7 = vivid ของสถานะ · อื่นๆ = แดงหลัก) */
+/** สีพื้นแท็บตอน active — กติกาเดียวกับหน้ารายการหลัก (1-7 = vivid ของสถานะ ·
+ *  p สถานะพิเศษ = amber ตัวเดียวกับป้ายแถว 99 [หัวข้อ=ป้าย สีตรงกัน] · อื่นๆ = แดงหลัก) */
 export function fstatusTabActiveCls(code: string): string {
+  if (code === "p") return FSTATUS_VIVID["99"];
   return /^[1-7]$/.test(code) ? fstatusVivid(code) : "bg-primary-600 text-white";
 }
 

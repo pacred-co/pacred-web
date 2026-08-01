@@ -67,11 +67,21 @@ export function parseDbInstant(input: Date | string | number | null | undefined)
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** Coerce the input to a valid Date, or null. */
+/**
+ * Coerce the input to a valid Date, or null — **via `parseDbInstant`**.
+ *
+ * 🔴 ห้ามกลับไปใช้ `new Date(string)` ตรงๆ: string จาก DB ที่ไม่มี timezone จะถูก
+ * parse เป็นเวลา "เครื่องที่รัน" — บน Vercel (UTC) บังเอิญถูก แต่บนเบราว์เซอร์/
+ * dev เครื่องไทย (client component!) จะเพี้ยน −7 ชม. = จอโชว์เลข UTC ดิบ
+ * (owner 2026-08-02: กดเข้าระบบ 04:40 ไทย แต่รายการนำเข้าโชว์ "21.40 น. ·
+ * ผ่านมา 7 ชม" — ตาราง forwarders เป็น client component จึง parse ในเบราว์เซอร์).
+ * date-only ("2026-07-15") = วันปฏิทินนั้น (UTC เที่ยงคืน — ตรงพฤติกรรมเดิม).
+ */
 function toDate(input: Date | string | number | null | undefined): Date | null {
-  if (input == null) return null;
-  const d = input instanceof Date ? input : new Date(input);
-  return Number.isNaN(d.getTime()) ? null : d;
+  if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input.trim())) {
+    return parseDbInstant(`${input.trim()}T00:00:00`);
+  }
+  return parseDbInstant(input);
 }
 
 /**

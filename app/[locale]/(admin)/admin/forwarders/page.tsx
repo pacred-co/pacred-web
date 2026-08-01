@@ -43,7 +43,7 @@ import { ForwardersTable } from "./forwarders-table";
 import { ForwardersSearchBar } from "./search-bar";
 import { Suspense } from "react";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
-import { fstatusVivid, fstatusTabBadge, FORWARDER_STATUS_TABS } from "@/lib/admin/forwarder-status";
+import { fstatusTabBadge, fstatusTabActiveCls, FORWARDER_STATUS_TABS } from "@/lib/admin/forwarder-status";
 import { PageHeader } from "@/components/admin/page-header";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -773,7 +773,9 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
           if (sp.all)       params.set("all", sp.all);
           const href = `/admin/forwarders${params.size > 0 ? `?${params}` : ""}`;
           const active = (sp.status ?? "") === (o.v ?? "");
-          const activeCls = o.v && /^[1-7]$/.test(o.v) ? fstatusVivid(o.v) : "bg-primary-600 text-white";
+          // SOT เดียวกับโปรไฟล์ลูกค้า (fstatusTabActiveCls) — ห้ามเขียนกติกา inline ซ้ำ:
+          // แท็บ p สถานะพิเศษ active = amber ตัวเดียวกับป้ายแถว 99 (สีหัวข้อ=ป้าย ตรงกัน)
+          const activeCls = fstatusTabActiveCls(o.v ?? "");
           // Every tab carries a COLOURED count pill (faithful to legacy PCS
           // pcs-badge-{color} · ภูม 2026-07-10). On the active (vivid-filled) tab
           // the pill turns translucent-white so it stays readable on the fill.

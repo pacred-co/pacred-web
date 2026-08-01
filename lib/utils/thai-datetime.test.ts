@@ -113,5 +113,23 @@ console.log("thai-datetime helper");
   assert("round-trip ISO→ดด/ปป→ISO stable", rt.every((iso) => ddmmyyyyToIso(isoToDdmmyyyy(iso)) === iso));
 }
 
+{
+  // ── naive DB string = UTC เสมอ ไม่ว่ารันบนเครื่อง timezone ไหน ──────────────
+  // owner 2026-08-02: กดเข้าระบบ 04:40 ไทย แต่รายการนำเข้าโชว์ "01/08/69 21.40 น.
+  // · ผ่านมา 7 ชม" — formatters เคยใช้ new Date(naive) = parse เป็น local ซึ่ง
+  // "บังเอิญถูก" บน Vercel (UTC) แต่ผิดบนเบราว์เซอร์/dev เครื่องไทย (client
+  // component parse ในเบราว์เซอร์). ตอนนี้ทุก formatter วิ่งผ่าน parseDbInstant →
+  // ผลต้อง deterministic เท่ากันทุก TZ. เคสจริงจาก prod: fdate ของแถว NO CODE.
+  console.log("  naive DB string → UTC instant (TZ-independent · เคสจริง 2026-08-02)");
+  assert("space+ms → Bangkok +7",   formatThaiDateTime("2026-08-01 21:40:04.877") === "02/08/69 04.40 น.");
+  assert("T+ms → Bangkok +7",       formatThaiDateTime("2026-08-01T21:40:04.877") === "02/08/69 04.40 น.");
+  assert("no-ms → Bangkok +7",      formatThaiDateTime("2026-08-01 21:40:04") === "02/08/69 04.40 น.");
+  assert("explicit +00:00 same",    formatThaiDateTime("2026-08-01T21:40:04.877+00:00") === "02/08/69 04.40 น.");
+  assert("explicit +07:00 as-is",   formatThaiDateTime("2026-08-01T21:40:04+07:00") === "01/08/69 21.40 น.");
+  assert("date crosses midnight",   formatThaiDate("2026-08-01 21:40:04.877") === "02/08/69");
+  assert("time converts too",       formatThaiTime("2026-08-01 21:40:04.877") === "04.40 น.");
+  assert("date-only = calendar day", formatThaiDate("2026-07-15") === "15/07/69");
+}
+
 console.log(`\n${pass} pass, ${fail} fail`);
 if (fail > 0) process.exit(1);
