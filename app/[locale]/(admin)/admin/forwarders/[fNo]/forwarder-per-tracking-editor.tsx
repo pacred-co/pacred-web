@@ -32,7 +32,18 @@ import {
 import { resolveLiveForwarderRate, type PricingRowContext } from "@/lib/forwarder/live-rate";
 import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
 import { isMaoCarrier } from "@/lib/forwarder/mao-fee";
+// owner 2026-08-03 "เอา audit log ที่มีคนไปเปลี่ยนขนาดมาขึ้นบอกเลยครับ ใครและเมื่อไร" —
+// READ-ONLY: ประวัติจาก admin_audit_log + คิวที่ MOMO วัด (staging) → verdict (pure).
+import {
+  loadDimensionAuditTrail,
+  loadMomoCbmByForwarderId,
+} from "@/lib/admin/dimension-audit";
+import { summarizeDimensionAudit } from "@/lib/admin/dimension-audit-verdict";
+// famountcount SOT — คิว "รวมของแถว" ที่เอาไปเทียบกับ momo_import_tracks.cbm ได้จริง
+// (ห้ามเทียบ fvolume ดิบของแถว per-box · จะเพี้ยน ×จำนวนกล่อง).
+import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { PerTrackingEditorClient, type PerTrackingRow } from "./per-tracking-editor-client";
+import type { DimensionAuditRowView } from "./dimension-audit-panel";
 
 // The landed row passed from page.tsx (carries userid for the sibling lookup).
 type SeedRow = {
@@ -57,6 +68,13 @@ type Props = {
   customComparisonValueInit: number;
   /** ภูม 2026-06-19 — everyone may set ค่าเทียบ EXCEPT warehouse staff. */
   canEditComparison: boolean;
+  /**
+   * owner 2026-08-03 — โชว์ "ประวัติการแก้ขนาด (ใครแก้ เมื่อไร)" + ป้ายเตือนเมื่อคิวถูก
+   * แก้ให้เล็กกว่าที่ MOMO วัด. gate = `canViewCost` (เปิดเผยคิว/เรทฝั่งต้นทุน MOMO)
+   * — ตัดสินโดย page.tsx แล้วส่งลงมา. false = **ไม่ query เลย** (ซ่อนที่ชั้นข้อมูล
+   * ตาม money-visibility §SECURITY ไม่ใช่ซ่อนด้วย CSS).
+   */
+  showDimensionAudit?: boolean;
 };
 
 // Per-sibling columns we need to seed each editable row.
@@ -120,6 +138,7 @@ export async function ForwarderPerTrackingEditor({
   customComparisonInit,
   customComparisonValueInit,
   canEditComparison,
+  showDimensionAudit = false,
 }: Props) {
   const admin = createAdminClient();
 
@@ -331,6 +350,10 @@ export async function ForwarderPerTrackingEditor({
   // client can show หาค่าเทียบ ALWAYS (not only under a manual ค่าเทียบ override).
   let orderKgPerCbmOut = 0;
   let effectiveComparisonValue = 0;
+  // owner 2026-08-03 — เรทขาย ฿/คิว รายแถว เก็บจาก engine ตัวเดียวกับที่คิดราคาจริง
+  // (ห้ามคิดสูตรเงินขึ้นมาใหม่) ใช้ประเมิน "เก็บลูกค้าขาดเท่าไร" เมื่อคิวถูกแก้ให้ต่ำ
+  // กว่าที่ MOMO วัด. ไม่มีเรท → ป้ายเตือนจะบอกเป็น "คิว" แทน (ไม่กุตัวเลขเงิน).
+  const cbmRateByFid = new Map<number, number>();
   if (r.userid && display.length > 0) {
     // Σweight / Σcbm across display rows — the order-total ค่าเทียบ ratio (same
     // aggregate the client preview box sums). cbmProduct per row = famountcount==1
@@ -421,6 +444,7 @@ export async function ForwarderPerTrackingEditor({
       if (cbmRate != null && cbmRate > 0) {
         cbmAmount += cbmProduct * cbmRate;
         cbmAnyRate = true;
+        cbmRateByFid.set(row.id, cbmRate);
         if (cbmUnitRate == null) cbmUnitRate = cbmRate;
         else if (cbmUnitRate !== cbmRate) cbmRateUniform = false;
       } else {
@@ -502,8 +526,46 @@ export async function ForwarderPerTrackingEditor({
     if (corpRow) isCorporate = true;
   }
 
+  // ── ประวัติการแก้ขนาด/คิว (owner 2026-08-03 · READ-ONLY) ────────────────────
+  // "เอา audit log ที่มีคนไปเปลี่ยนขนาดมาขึ้นบอกเลยครับ ใครและเมื่อไร จะได้ไปสอบถาม
+  // กันถูกคนครับว่าเพราะอะไร แนะ กันทุจริต ได้ด้วยครับ"
+  //
+  // ปิดสนิทเมื่อ showDimensionAudit=false — ไม่ query เลย (ซ่อนที่ชั้นข้อมูล).
+  // กฎการตัดสินอยู่ที่ summarizeDimensionAudit (pure · เทสด้วยเลขจริง prod 52447).
+  // แถวที่ไม่เคยถูกแก้ = ไม่ใส่เข้าลิสต์ → จอไม่โชว์อะไรเลย (ไม่รก).
+  let auditRows: DimensionAuditRowView[] = [];
+  if (showDimensionAudit && display.length > 0) {
+    const fids = display.map((row) => row.id);
+    const [auditMap, momoCbmMap] = await Promise.all([
+      loadDimensionAuditTrail(admin, fids),
+      loadMomoCbmByForwarderId(admin, fids),
+    ]);
+    auditRows = display
+      .map((row) => {
+        const entries = auditMap.get(row.id) ?? [];
+        if (entries.length === 0) return null;
+        return {
+          fid: row.id,
+          tracking: (row.ftrackingchn ?? "").trim(),
+          entries,
+          summary: summarizeDimensionAudit(entries, {
+            // คิว "รวมของแถว" (famountcount SOT) — เทียบกับ staging cbm ที่เป็นยอดรวมเหมือนกัน
+            currentCbm: totalCbmOf({
+              fvolume: row.fvolume,
+              famount: row.famount,
+              famountcount: row.famountcount,
+            }),
+            momoCbm: momoCbmMap.get(row.id) ?? null,
+            cbmSellRate: cbmRateByFid.get(row.id) ?? null,
+          }),
+        } satisfies DimensionAuditRowView;
+      })
+      .filter((v): v is DimensionAuditRowView => v !== null);
+  }
+
   return (
     <PerTrackingEditorClient
+      auditRows={auditRows}
       rows={editorRows}
       readOnly={readOnly}
       isMao={isMao}

@@ -3,6 +3,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
+// owner 2026-08-03 — ประวัติการแก้ขนาด/คิว เปิดเผยคิวที่ MOMO วัด + เรทขาย จึงกัน
+// ด้วย gate เดียวกับ "เห็นต้นทุน" (ห้าม gate ด้วย isGodRole · money-visibility.ts:44).
+import { canViewCost } from "@/lib/admin/money-visibility";
 import {
   fstatusVivid,
   resolveRowStatusCode,
@@ -157,7 +160,9 @@ export default async function AdminForwarderDetail({ params }: { params: Promise
   const admin = createAdminClient();
 
   // 2026-06-02 — Primary path = tb_forwarder (legacy, ~47K rows on prod).
-  const tbResult = await tryRenderTbForwarder(fNo, admin, canStepStatus, viewerIsUltra, canEditComparison);
+  // owner 2026-08-03 — ใครแก้ขนาด/คิว เมื่อไร (audit log) — เห็นเฉพาะ role ที่เห็นต้นทุน
+  const showDimensionAudit = canViewCost(viewerRoles);
+  const tbResult = await tryRenderTbForwarder(fNo, admin, canStepStatus, viewerIsUltra, canEditComparison, showDimensionAudit);
   if (tbResult) return tbResult;
 
   // Fallback — rebuilt `forwarders` table (UUID, empty on prod, back-compat).
@@ -310,6 +315,7 @@ async function tryRenderTbForwarder(
   canStepStatus: boolean,
   isUltra: boolean,
   canEditComparison: boolean,
+  showDimensionAudit: boolean,
 ) {
   const asNumber = Number(fNo);
   const isId = Number.isFinite(asNumber) && Number.isInteger(asNumber) && asNumber > 0;
@@ -1229,6 +1235,7 @@ async function tryRenderTbForwarder(
               customComparisonInit={pricingInit.customComparison}
               customComparisonValueInit={pricingInit.customComparisonValue}
               canEditComparison={canEditComparison}
+              showDimensionAudit={showDimensionAudit}
             />
           }
         >

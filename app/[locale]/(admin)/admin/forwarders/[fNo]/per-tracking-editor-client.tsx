@@ -30,6 +30,9 @@ import { legacyReceiptAmount } from "@/lib/tax/wht";
 import { validateComparisonPricePair } from "@/lib/forwarder/comparison-guard";
 import { evaluateRateModeGuard } from "@/lib/forwarder/rate-mode-guard";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
+// owner 2026-08-03 — ประวัติการแก้ขนาด/คิว (ใครแก้ เมื่อไร) + ป้ายเตือนเมื่อคิวถูกแก้ให้
+// เล็กกว่าที่ MOMO วัด. DISPLAY-ONLY · โหลด+ตัดสินฝั่ง server (ที่นี่แค่ render).
+import { DimensionAuditPanel, type DimensionAuditRowView } from "./dimension-audit-panel";
 
 // PCS number formats — "51,480.00 บาท" + plain N-dp ("1287.00", "3.16171").
 const baht = (n: number) => `${n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
@@ -127,6 +130,11 @@ type Props = {
   profileKgPerCbm?: number;
   /** the ค่าเทียบ threshold in effect (customer's value or system default 250). */
   profileComparisonValue?: number;
+  /**
+   * owner 2026-08-03 — ประวัติการแก้ขนาด/คิว ต่อแทรคกิง (เฉพาะแถวที่เคยถูกแก้).
+   * ว่าง = ไม่โชว์อะไรเลย. gate `canViewCost` ตัดสินฝั่ง server แล้ว (ไม่ส่งมา = ไม่เห็น).
+   */
+  auditRows?: DimensionAuditRowView[];
 };
 
 const WAREHOUSE_CHINA = [
@@ -181,6 +189,7 @@ export function PerTrackingEditorClient({
   modeOtherCbmRate = null,
   profileKgPerCbm = 0,
   profileComparisonValue = 0,
+  auditRows = [],
 }: Props) {
   const router = useRouter();
   const { confirm, dialogs } = useConfirmDialogs();
@@ -675,6 +684,13 @@ export function PerTrackingEditorClient({
     return g.level === "mismatch" ? g.message : null;
   }, [customRate, customRateCbm, customRateKg, derivedMode, modeExpectedCbmRate, modeOtherCbmRate]);
 
+  // owner 2026-08-03 — แถวไหนที่คิวถูกแก้ให้เล็กกว่าที่ MOMO วัด (severity=alert) ติดชิป
+  // แดงในช่อง "รายละเอียด" ของตารางเลย จะได้เห็นตั้งแต่มองผ่าน ไม่ต้องกางประวัติก่อน.
+  const alertFids = useMemo(
+    () => new Set(auditRows.filter((a) => a.summary.severity === "alert").map((a) => a.fid)),
+    [auditRows],
+  );
+
   return (
     <div className="space-y-3">
       {readOnly && (
@@ -817,6 +833,13 @@ export function PerTrackingEditorClient({
                     </div>
                   )}
                   {r.detail && r.detail !== r.tracking && <div className="text-[11px] text-muted break-words">{r.detail}</div>}
+                  {/* owner 2026-08-03 — ชิปเตือน "คิวถูกแก้ให้เล็กกว่า MOMO" (รายละเอียด
+                      ว่าใครแก้เมื่อไร อยู่ที่ดรอปดาว “ประวัติการแก้ขนาด” ใต้ตาราง) */}
+                  {alertFids.has(r.id) && (
+                    <div className="mt-1 inline-flex items-center gap-1 rounded bg-red-600 px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                      🚨 คิวถูกแก้ให้เล็กกว่า MOMO
+                    </div>
+                  )}
                   {results[r.id] && (
                     <div className="mt-1 inline-flex items-center gap-1 rounded bg-green-100 px-1.5 py-0.5 text-[11px] font-medium text-green-700">
                       ✓ ฿{results[r.id].grandTotal.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
@@ -896,6 +919,12 @@ export function PerTrackingEditorClient({
           </tfoot>
         </table>
       </div>
+
+      {/* ── 🕵️ ประวัติการแก้ขนาด/คิว — ใครแก้ เมื่อไร (owner 2026-08-03) ──
+          READ-ONLY: ป้ายเตือนแดงเมื่อคิวถูกแก้ให้เล็กกว่าที่ MOMO วัด (เก็บลูกค้าขาด)
+          + ดรอปดาวประวัติเต็ม (เวลาไทย · ชื่อคน+ล็อกอิน · ก่อน→หลัง · "ไม่เปลี่ยนค่า"
+          สำหรับครั้งที่กดเซฟซ้ำ). ไม่เคยมีใครแก้ = ไม่ render อะไรเลย. ── */}
+      <DimensionAuditPanel rows={auditRows} />
 
       {/* ── 🧮 ราคานำเข้าจีน-ไทย — ONE box, ยอดรวมทุกแทค (faithful PCS copy) ── */}
       <div className="rounded-xl border border-border bg-surface-alt/30 p-3">
