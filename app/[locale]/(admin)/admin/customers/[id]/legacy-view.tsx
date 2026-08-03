@@ -1344,6 +1344,40 @@ export async function renderLegacyCustomerView(
         )}
       </Section>
 
+      {/* ── 3 ชุดที่พนักงานแก้ได้เลย ไม่ต้องใส่ PIN (owner/ภูม 2026-08-03) — ดึงออกจาก
+          "เครื่องมือผู้ดูแล" (PIN) มาไว้ตรงนี้: (1) ข้อมูลส่วนตัวลูกค้า (2) ข้อมูลบริษัท
+          นิติบุคคล (3) เอกสารนิติบุคคล. เครื่องมือเงิน/แท็ก/Danger ยังอยู่ใต้ PIN ด้านล่าง. */}
+      <IdentityEditor
+        userid={u.userID}
+        isSenior={isSeniorAdmin}
+        admins={salesAdmins}
+        initial={{
+          userName:     u.userName ?? "",
+          userLastName: u.userLastName ?? "",
+          userEmail:    u.userEmail ?? "",
+          userTel:      u.userTel ?? "",
+          userSex:      u.userSex ?? "",
+          userBirthday: u.userBirthday ?? "",
+          userLineID:   u.userLineID ?? "",
+          userFacebook: u.userFacebook ?? "",
+          adminIDSale:  u.adminIDSale ?? "",
+          coID:         u.coID ?? "",
+        }}
+      />
+
+      {isJuristic ? (
+        <div className="space-y-5">
+          <CorporateEditor userid={u.userID} corp={corp} />
+          <CorporateDocGallery userid={u.userID} docs={corpDocViews} status={corp?.corporatestatus ?? null} />
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border bg-surface-alt/40 px-4 py-3 text-xs text-muted">
+          ลูกค้ารายนี้เป็น <b>บุคคลธรรมดา</b> — ถ้าต้องการอัปเกรดเป็นนิติบุคคล กดปุ่ม{" "}
+          <b className="text-primary-600">“อัพเกรดเป็นนิติบุคคล”</b> ที่ส่วนหัวโปรไฟล์ด้านบน
+          (กรอกข้อมูลบริษัท + แนบเอกสารในตัว · ไม่ต้องใส่ PIN).
+        </div>
+      )}
+
       {/* ════════ เครื่องมือผู้ดูแล · Pacred — collapsed behind a light-gray "V"
           dropdown that opens a PIN dialog before revealing the tools ════════ */}
       <AdminToolsPinGate>
@@ -1394,44 +1428,9 @@ export async function renderLegacyCustomerView(
         </div>
       </div>
 
-      {/* ข้อมูลส่วนตัวลูกค้า (faithful editUser — email/phone/sex/birthday/line/fb
-          + senior-only rep/coID). owner 2026-06-26: ย้ายมาไว้ใต้ PIN lock (เครื่องมือ
-          ผู้ดูแล) จัดกลุ่มใกล้บล็อกนิติบุคคล/อัปเกรดด้านล่าง · ทุกฟังก์ชันเดิมทำงานครบ. */}
-      <IdentityEditor
-        userid={u.userID}
-        isSenior={isSeniorAdmin}
-        admins={salesAdmins}
-        initial={{
-          userName:     u.userName ?? "",
-          userLastName: u.userLastName ?? "",
-          userEmail:    u.userEmail ?? "",
-          userTel:      u.userTel ?? "",
-          userSex:      u.userSex ?? "",
-          userBirthday: u.userBirthday ?? "",
-          userLineID:   u.userLineID ?? "",
-          userFacebook: u.userFacebook ?? "",
-          adminIDSale:  u.adminIDSale ?? "",
-          coID:         u.coID ?? "",
-        }}
-      />
-
-      {/* Juristic company info + multi-doc (owner 2026-06-26):
-          - นิติบุคคล → แก้ข้อมูลบริษัท + กล่องเอกสารนิติ (ภพ.20/หนังสือรับรอง/บัตรกรรมการ/
-            อื่นๆ · อัปได้หลายไฟล์) + ตรวจ/อนุมัติ.
-          - PERSONAL → การอัปเกรดย้ายไปไว้ที่ปุ่ม "อัพเกรดเป็นนิติบุคคล" บนหัวโปรไฟล์
-            (owner 2026-07-05 · เซล/CS ทำเองได้ ไม่ต้องปลดล็อกรหัส). */}
-      {isJuristic ? (
-        <div className="space-y-5">
-          <CorporateEditor userid={u.userID} corp={corp} />
-          <CorporateDocGallery userid={u.userID} docs={corpDocViews} status={corp?.corporatestatus ?? null} />
-        </div>
-      ) : (
-        <div className="rounded-xl border border-border bg-surface-alt/40 px-4 py-3 text-xs text-muted">
-          ลูกค้ารายนี้เป็น <b>บุคคลธรรมดา</b> — ถ้าต้องการอัปเกรดเป็นนิติบุคคล กดปุ่ม{" "}
-          <b className="text-primary-600">“อัพเกรดเป็นนิติบุคคล”</b> ที่ส่วนหัวโปรไฟล์ด้านบน
-          (กรอกข้อมูลบริษัท + แนบเอกสารในตัว · ไม่ต้องใส่ PIN).
-        </div>
-      )}
+      {/* ข้อมูลส่วนตัวลูกค้า + ข้อมูลบริษัทนิติบุคคล + เอกสารนิติบุคคล ย้ายออกไปไว้
+          "นอก PIN" แล้ว (พนักงานแก้ได้เลย · owner/ภูม 2026-08-03) — อยู่ด้านบนก่อน
+          "เครื่องมือผู้ดูแล". กรอบ PIN นี้เหลือเฉพาะเครื่องมือเงิน/แท็ก/Danger. */}
 
       {/* (เครื่องมือบัญชีลูกค้า — รีเซ็ตรหัสผ่าน + รันเลข PR ลูกค้าใหม่ moved UP into the
           identity header · owner 2026-07-06 · reachable without scrolling §0d.) */}
