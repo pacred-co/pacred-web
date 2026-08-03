@@ -93,6 +93,12 @@ import {
   type ContainerTruthMap,
 } from "@/lib/admin/container-truth-loader";
 import { stampMomoInvoiceUploadApplied } from "@/lib/admin/momo-invoice-upload-stamp";
+import {
+  decideCreateFromInvoiceLine,
+  type InvoiceCreateDecision,
+} from "@/lib/admin/momo-invoice-create-row";
+import { pickMomoLivePrCode } from "@/lib/admin/momo-live-owner";
+import { createMissingMomoForwarderRow } from "./momo-add-missing";
 
 /** base64 inflates ~4/3 → a 20 MB PDF is ~27 MB, well under the 50mb serverActions
  *  bodySizeLimit (next.config.ts). The real byte-length cap is re-asserted after decode
@@ -219,6 +225,9 @@ export type MomoIngestPreviewRow = {
   totalMismatch: boolean;
   /** ใบพิมพ์เรท 0.00 → ตรวจยอดด้วยสูตรไม่ได้ (ยอดยังเป็นบิลจริง). */
   rateMissing: boolean;
+  /** 🔴 MOMO พิมพ์คอลัมน์คิวเกินมา ×จำนวนกล่อง (เงินที่เก็บยังถูก · เคสจริง INV-20260723-0006
+   *  9/23 บรรทัด) — บรรทัดแบบนี้ห้ามเอาคิวที่พิมพ์ไปเป็นฐานของแถวใหม่. */
+  cbmInflatedByQty: boolean;
   matched: boolean;
   /** จับคู่ด้วยวิธีไหน — "bare_base" = MOMO บิล -1/N แต่ระบบเราเก็บเป็นเลขเปล่า ·
    *  "staging_alias" = เลขบนบิลคือเลขเดิม MOMO ที่แอดมินแก้แล้ว (tracking_override เคส 733). */
@@ -271,6 +280,16 @@ export type MomoIngestPreviewRow = {
   blockReason: string | null;
   /** "อยู่ตู้ไหนกันแน่" ตามแพคกิ้งลิส (null = พรีวิวนี้ไม่ได้โหลดคำตอบ/โหลดไม่สำเร็จ). */
   containerTruth: MomoRowContainerTruth | null;
+  /**
+   * 🔴 "MOMO บิลของที่เราไม่เคยรับเข้า — สร้างรายการจากใบนี้ได้ไหม" (owner 2026-08-03:
+   * *"เจอใน MOMO แต่ไม่เจอในระบบเราได้ไงครับ ตกหล่นไปอีกกี่แทรคกิ้งเนี่ยครับ"*).
+   *
+   * มาจาก SOT `lib/admin/momo-invoice-create-row.ts` — ตัวเดียวกับที่ action
+   * `createForwarderRowFromInvoiceLine` ใช้ตัดสินซ้ำฝั่ง server ก่อนเขียนจริง →
+   * จอกับ server ปฏิเสธด้วยกฎชุดเดียวกันเสมอ (จอจะไม่มีวันโชว์ปุ่มที่กดแล้วเด้ง).
+   * `allowed:false` = เหตุผลไทยว่าทำไมสร้างไม่ได้ + ต้องทำอะไรต่อ (§0d: ห้ามตันแล้วเงียบ).
+   */
+  createFromInvoice: InvoiceCreateDecision;
   /**
    * "MOMO เก็บเงินเราแล้ว — เราเก็บเงินลูกค้ามาหรือยัง" (owner 2026-07-30) พร้อมตัวอ้างอิง
    * ใบเสร็จ/สลิป และรายการแทรคกิ้งที่การชำระเดียวกันคลุม. null = พรีวิวนี้ไม่ได้โหลด
@@ -819,12 +838,30 @@ async function buildPreview(
     const duplicateFid = !!f && (fidCount.get(f.id) ?? 0) > 1;
     const costDiffers = !!f && Math.abs((currentCost ?? 0) - l.lineTotal) > 0.005;
 
+    const containerTruth = truthMap
+      ? describeContainerTruth(truthMap.get(truthKeys[i] ?? ""), f?.id ?? null, f?.fcabinetnumber ?? null)
+      : null;
+    // "สร้างรายการจากใบนี้ได้ไหม" — SOT เดียวกับที่ action ใช้ตัดสินซ้ำก่อนเขียนจริง
+    const createFromInvoice = decideCreateFromInvoiceLine({
+      tracking: l.tracking,
+      cabinet: l.cabinet,
+      memberCode: l.memberCode,
+      matched: !!f,
+      packingShouldBe: containerTruth?.shouldBe ?? null,
+    });
+
     // เหตุผลรายแถว — บอกสิ่งที่บล็อกจริง + ต้องทำอะไรต่อ (ห้าม "ผิดพลาด N" ลอยๆ)
     let blockReason: string | null = null;
     if (!f) {
-      blockReason = bareBaseOf(l.tracking)
-        ? `ไม่พบในระบบ — MOMO บิลเป็นกล่องแรกของชุดแยก (${l.tracking}) และหาแถวเลขเปล่า "${bareBaseOf(l.tracking)}" ที่น้ำหนัก/คิวตรงกันไม่ได้ · ตรวจว่ามีรายการนำเข้านี้จริงไหม แล้วแจ้งทีมพัฒนา`
-        : `ไม่พบแทรคกิ้งนี้ในระบบ${invCab ? ` (ใบระบุตู้ ${invCab})` : ""} · MOMO อาจบิลของที่เรายังไม่ได้รับเข้า — ตรวจกับโกดังก่อน`;
+      // owner 2026-08-03: เดิมข้อความจบที่ "ตรวจกับโกดังก่อน / แจ้งทีมพัฒนา" = บอกว่าพัง
+      // แต่ไม่บอกว่าทำอะไรต่อได้ในระบบ. ตอนนี้ต่อท้ายด้วยทางออกจริง (ปุ่มสร้าง) หรือ
+      // เหตุผลจริงว่าทำไมสร้างไม่ได้.
+      const head = bareBaseOf(l.tracking)
+        ? `ไม่พบในระบบ — MOMO บิลเป็นกล่องแรกของชุดแยก (${l.tracking}) และหาแถวเลขเปล่า "${bareBaseOf(l.tracking)}" ที่น้ำหนัก/คิวตรงกันไม่ได้`
+        : `ไม่พบแทรคกิ้งนี้ในระบบ${invCab ? ` (ใบระบุตู้ ${invCab})` : ""} · MOMO เรียกเก็บของที่เรายังไม่ได้รับเข้า`;
+      blockReason = createFromInvoice.allowed
+        ? `${head} · สร้างรายการจากใบนี้ได้เลย (ปุ่มด้านล่าง)`
+        : `${head} · ${createFromInvoice.reason}`;
     } else if (duplicateFid) {
       blockReason = `มีหลายบรรทัดบนใบชี้มาที่รายการเดียวกัน (#${f.id} · ${f.ftrackingchn}) — บันทึกไม่ได้ เพราะต้นทุนจะเขียนทับกัน · แจ้งทีมพัฒนา`;
     } else if (cabinetConflict) {
@@ -850,6 +887,7 @@ async function buildPreview(
       qty: l.qty,
       totalMismatch: l.totalMismatch,
       rateMissing: l.rateMissing,
+      cbmInflatedByQty: l.cbmInflatedByQty,
       matched: !!f,
       matchedVia: hit?.via ?? null,
       matchedTracking: f?.ftrackingchn ?? null,
@@ -876,9 +914,8 @@ async function buildPreview(
       cabinetUnlinked,
       duplicateFid,
       blockReason,
-      containerTruth: truthMap
-        ? describeContainerTruth(truthMap.get(truthKeys[i] ?? ""), f?.id ?? null, f?.fcabinetnumber ?? null)
-        : null,
+      containerTruth,
+      createFromInvoice,
       customerPayment: null, // เติมด้านล่างเมื่อ withCustomerPayment (ดูบล็อกถัดไป)
     };
   });
@@ -969,6 +1006,176 @@ export async function previewMomoInvoiceCost(input: unknown): Promise<AdminActio
       ok: true,
       data: await buildPreview(src.text, { withContainerTruth: true, withCustomerPayment: true }),
     };
+  });
+}
+
+/**
+ * 🔴 สร้างรายการนำเข้าจากบรรทัดบนใบวางบิล — owner 2026-08-03:
+ * *"เจอใน MOMO แต่ไม่เจอในระบบเราได้ไงครับ ตกหล่นไปอีกกี่แทรคกิ้งเนี่ยครับ … สรุปเรามั่วเองนี่นา"*
+ *
+ * ปัญหาเดิม: หน้านี้ถูกออกแบบเป็น "ตัวเทียบ + เขียนทับต้นทุนของแถวที่มีอยู่แล้ว" เท่านั้น —
+ * ทุกทางออก (willApply · apply · provenance · ปุ่มบนจอ) ผูกกับ `fid` ที่ต้องจับคู่ได้ก่อน →
+ * บรรทัดที่ระบบไม่มีแถวรองรับกลายเป็นข้อความแดง "ไม่พบในระบบ" ที่ **ไม่มีปุ่มอะไรให้กดเลย**
+ * และไม่ถูกบันทึกที่ไหนเลย = MOMO เก็บเงินเราไปแล้วแต่ไม่มีร่องรอยในระบบสักที่
+ * (พิสูจน์กับ prod: `300251844018` บน INV-20260728-0002 ฿1,391.67 — ไม่มีทั้ง staging ·
+ * tb_forwarder · แพคกิ้งลิส).
+ *
+ * ─── กติกาที่ยึด ─────────────────────────────────────────────────────────
+ * · **ไม่มีทางเขียนที่สอง** — delegate เข้า `createMissingMomoForwarderRow` ตัวเดิมที่
+ *   mirror 51 คอลัมน์ของ commit-momo-row-core + GUARD 1 dedup (fail-CLOSED กับทั้ง
+ *   `base` และ `base-%`) + GUARD 2 member-validate + cabinetWriteGuard + audit.
+ * · **client ส่งมาแค่เลขแทรคกิ้ง** — ตัวเลข/ตู้/รหัส แกะใหม่จากใบฝั่ง server ทุกครั้ง
+ *   (posture เดียวกับ `applyMomoInvoiceCost`).
+ * · **ด่านระดับไฟล์เดิมยังบังคับ** — ใบที่ยอดไม่ foot Sub-total หรืออ่านสูตรคิวไม่ชัด
+ *   เพาะแถวไม่ได้ (ใบที่เชื่อไม่ได้ ห้ามใช้เป็นต้นทางของข้อมูลใหม่).
+ * · **ไม่แตะ willApply / ด่านตู้ไม่ตรง / provenance** — นี่คือทาง**ใหม่**ที่เพิ่มเข้ามา
+ *   ไม่ใช่การผ่อนด่านเดิม. โดยเฉพาะ `momo_invoice_line` จะยัง **ไม่** ถูกเขียนตอนสร้าง:
+ *   coverage ต้องแปลว่า "ลงต้นทุนแล้วจริง" ไม่ใช่ "เคยเห็นบรรทัดนี้" ไม่งั้นตู้จะขึ้น
+ *   "ครบ" ปลอม (ทิศที่ `lib/admin/cabinet-billing-coverage.ts` เตือนไว้เอง).
+ * · **ไม่ลงต้นทุนให้ในคำสั่งเดียวกัน** — สร้างแล้วให้พรีวิวใหม่ คนดูก่อนว่าแถวที่เกิดมา
+ *   หน้าตาถูกไหม แล้วค่อยกด "บันทึกต้นทุน" ตามปกติ.
+ * · **ไม่ตั้งราคาขายจากตัวเลขบนใบ** (`skipAutoRate`) — คอลัมน์คิวของ MOMO พิสูจน์แล้วว่า
+ *   เชื่อไม่ได้ (INV-20260723-0006 พิมพ์เกิน ×จำนวนกล่อง 9 จาก 23 บรรทัด) · ราคาขายตั้งที่
+ *   ขั้น "วัดขนาด/ตั้งราคา" ตามปกติ.
+ */
+const createFromInvoiceSchema = z
+  .object({
+    text: z.string().min(10).max(200_000).optional(),
+    fileBase64: z.string().min(1).max(MAX_PDF_BASE64).optional(),
+    /** เลขแทรคกิ้ง **ตามที่พิมพ์บนใบ** — ใช้ชี้บรรทัดเท่านั้น ค่าที่เหลือ server แกะเอง. */
+    tracking: z.string().trim().min(1).max(60),
+  })
+  .refine((v) => (v.text != null) !== (v.fileBase64 != null), {
+    message: "ต้องส่งข้อความจากใบ หรือไฟล์ PDF อย่างใดอย่างหนึ่ง (ไม่ใช่ทั้งคู่)",
+  });
+
+export async function createForwarderRowFromInvoiceLine(
+  input: unknown,
+): Promise<AdminActionResult<{ fid: number; mode: "normal" | "special-no-code"; memberCode: string | null; note: string }>> {
+  const parsed = createFromInvoiceSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  return withAdmin([...COST_PROFIT_ROLES], async ({ adminId }) => {
+    const denied = await assertCanEditCost();
+    if (denied) return { ok: false, error: denied };
+
+    const src = await resolveInvoiceText(parsed.data);
+    if (!src.ok) return { ok: false, error: src.error };
+
+    // แกะใหม่ + โหลดคำตอบ "อยู่ตู้ไหน" จากแพคกิ้งลิส (จำเป็น: เป็นด่านหนึ่งของการตัดสิน)
+    const preview = await buildPreview(src.text, { withContainerTruth: true });
+    const refusal = fileRefusal(preview);
+    if (refusal) return { ok: false, error: refusal };
+
+    const wanted = parsed.data.tracking.trim();
+    const hits = preview.rows.filter((r) => r.tracking === wanted);
+    if (hits.length === 0) {
+      return { ok: false, error: `ไม่พบบรรทัด "${wanted}" ในใบนี้ — ลองอัปโหลดใบใหม่อีกครั้ง` };
+    }
+    // ใบเดียวมี 2 บรรทัดเลขเดียวกัน = ไม่รู้ว่าจะเอาน้ำหนัก/คิว/กล่องของบรรทัดไหน → ไม่เดา
+    if (hits.length > 1) {
+      return {
+        ok: false,
+        error: `ใบนี้มี ${hits.length} บรรทัดที่ใช้เลข "${wanted}" เหมือนกัน — สร้างไม่ได้ เพราะไม่รู้ว่าจะยึดบรรทัดไหน · ให้คนตรวจใบก่อน`,
+      };
+    }
+    const line = hits[0]!;
+
+    // ตัดสินซ้ำฝั่ง server ด้วย SOT ตัวเดียวกับที่จอใช้ตัดสินว่าจะโชว์ปุ่มไหม
+    const decision = decideCreateFromInvoiceLine({
+      tracking: line.tracking,
+      cabinet: line.invoiceCabinet,
+      memberCode: line.invoiceMemberCode,
+      matched: line.matched,
+      packingShouldBe: line.containerTruth?.shouldBe ?? null,
+    });
+    if (!decision.allowed) return { ok: false, error: decision.reason };
+
+    const admin = createAdminClient();
+    let mode = decision.mode;
+    let memberCode = decision.memberCode;
+    let ownerNote = "";
+
+    // ── หาเจ้าของอีกชั้นก่อนตีเป็น NO CODE ────────────────────────────────
+    // owner 2026-08-02 ("มี PR แล้ว ทำไมไม่เติมให้เราเลย"): บอร์ด MOMO Live
+    // (`momo_box_detail`) มักถือรหัสลูกค้าอยู่ แม้คอลัมน์บนใบจะว่าง — และ lookup นี้
+    // ใช้ `base_tracking` จึงไม่ต้องพึ่ง staging (ซึ่งพัสดุคลาสนี้ไม่มีอยู่แล้ว).
+    // ตัวตัดสิน = `pickMomoLivePrCode` ตัวเดียวกับเลน NO CODE ของ commit-momo-row-core
+    // → นิยาม "PR ที่ใช้ได้" มีชุดเดียวทั้งระบบ. fail-CLOSED: อ่านบอร์ดไม่ได้ = ไม่สร้าง
+    // (ดีกว่าฝังของเป็นไร้เจ้าของถาวรทั้งที่อาจมีเจ้าของอยู่).
+    if (mode === "special-no-code") {
+      const { data: liveRows, error: liveErr } = await admin
+        .from("momo_box_detail")
+        .select("member_code")
+        .eq("base_tracking", line.tracking)
+        .limit(50);
+      if (liveErr) {
+        console.error("[momo-invoice create] live-board lookup failed", { code: liveErr.code, message: liveErr.message });
+        return { ok: false, error: `ตรวจเจ้าของกับบอร์ด MOMO Live ไม่สำเร็จ: ${liveErr.message} — ยังไม่สร้าง` };
+      }
+      const livePr = pickMomoLivePrCode((liveRows ?? []) as Array<{ member_code: string | null }>);
+      if (livePr) {
+        mode = "normal";
+        memberCode = livePr;
+        ownerNote = ` · ระบบหาเจ้าของให้แล้วจากบอร์ด MOMO Live (${livePr})`;
+      }
+    }
+
+    // ── ตัวเลขที่ seed ให้แถวใหม่ ─────────────────────────────────────────
+    // น้ำหนัก/กล่อง = ตามที่พิมพ์บนใบ verbatim. คิว = ตามที่พิมพ์ **ยกเว้น** บรรทัดที่
+    // parser ยืนยันว่าคอลัมน์คิวถูกพิมพ์เกิน ×จำนวนกล่อง (เคสจริง INV-20260723-0006
+    // 9/23 บรรทัด) → ปล่อยเป็น 0 = "ยังไม่มีคิวที่เชื่อได้" แทนที่จะฝังตัวเลขผิดที่ดูเหมือนถูก.
+    // ห้ามใช้ `billedCbm` (คิวที่ derive มาจากเงิน) มาเป็นฐานของแถวที่จะเอาไปคิดเงินต่อ.
+    const cbmInflated = line.cbmInflatedByQty;
+    // ยึดช่วงเดียวกับ `addMissingMomoParcelSchema` (นน. ≤1,000,000 · คิว ≤100,000 ·
+    // กล่อง ≤100,000) — ทางนี้เรียกตัวเขียนตรงๆ เหมือนที่ฝั่งแพคกิ้งลิสทำ จึงไม่ผ่าน
+    // safeParse ของสคีมา → ย้ำช่วงเองตรงนี้ ไม่ปล่อยค่าที่แกะมาผิดรูปไหลลง DB.
+    const clamp = (v: number, max: number): number =>
+      Number.isFinite(v) && v > 0 ? Math.min(v, max) : 0;
+    const seedCbm = cbmInflated ? 0 : clamp(line.cbm, 100_000);
+    const seedKg = clamp(line.invoiceKg, 1_000_000);
+    const boxCount =
+      Number.isInteger(line.qty) && line.qty > 0 && line.qty <= 100_000 ? line.qty : undefined;
+
+    const res = await createMissingMomoForwarderRow(
+      {
+        tracking: line.tracking,
+        cabinet: decision.cabinet,
+        ...(mode === "normal" && memberCode ? { memberCode } : {}),
+        mode,
+        weightKg: seedKg,
+        cbm: seedCbm,
+        ...(boxCount != null ? { boxCount } : {}),
+        skipAutoRate: true,
+      },
+      adminId,
+    );
+    if (!res.ok) return { ok: false, error: res.error };
+
+    await logAdminAction(adminId, "momo_invoice.create_forwarder_row", "tb_forwarder", String(res.data?.fid ?? ""), {
+      invoiceNo: preview.invoiceNo,
+      source: parsed.data.fileBase64 != null ? "pdf_upload" : "paste",
+      tracking: line.tracking,
+      cabinet: decision.cabinet,
+      invoiceMemberCode: line.invoiceMemberCode,
+      mode,
+      memberCode,
+      invoiceCost: line.invoiceCost,
+      seededKg: seedKg,
+      seededCbm: seedCbm,
+      seededBoxCount: boxCount ?? null,
+      cbmInflatedByQty: cbmInflated,
+      packingShouldBe: line.containerTruth?.shouldBe ?? null,
+    });
+
+    const cbmNote = cbmInflated
+      ? " · ⚠️ คอลัมน์คิวบนใบบรรทัดนี้พิมพ์เกิน ×จำนวนกล่อง — ไม่ได้ใส่คิวให้ ต้องวัดจริงก่อนตั้งราคา"
+      : "";
+    const note =
+      mode === "special-no-code"
+        ? `สร้างเป็นสถานะพิเศษ NO CODE (ยังวางบิลไม่ได้) — ให้ CS ใส่ PR ที่หน้ารายการนำเข้า${cbmNote}`
+        : `สร้างให้ลูกค้า ${memberCode}${ownerNote} · ยังไม่ตั้งราคา (ตั้งที่ขั้นวัดขนาด/ตั้งราคา)${cbmNote}`;
+
+    return { ok: true, data: { fid: res.data?.fid ?? 0, mode, memberCode, note } };
   });
 }
 

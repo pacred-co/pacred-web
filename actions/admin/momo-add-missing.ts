@@ -69,7 +69,23 @@ const addMissingMomoParcelSchema = z.object({
   // "-i/n" split suffix; we strip it to the base before any DB touch.
   tracking:   z.string().trim().min(1, "ต้องมีเลขแทรกกิ้ง").max(60),
   cabinet:    z.string().trim().min(1, "ต้องมีเลขตู้").max(40),
-  memberCode: z.string().trim().regex(/^PR\d+$/i, "รหัสลูกค้าต้องเป็น PR####").max(20),
+  /** ว่าง/ไม่ส่ง = ต้องอยู่โหมด `special-no-code` เท่านั้น (ดู superRefine ท้ายสคีมา). */
+  memberCode: z.string().trim().max(20).optional(),
+  /**
+   * โหมดนำเข้า — mirror `commitMomoRowSchema.mode` (lib/admin/commit-momo-row-core.ts)
+   * ทั้งชื่อและความหมาย ห้ามคิดคำใหม่.
+   *
+   * `special-no-code` = **กองพักตัวตน ไม่ใช่เลนเงิน** (owner เคาะไว้แล้วสำหรับพัสดุที่ MOMO
+   * ไม่ส่งรหัสลูกค้ามา): fstatus '99' · userid ว่าง · ไม่ตั้งราคา · `billing-eligibility.ts`
+   * ปฏิเสธ '99' → วางบิลเก็บเงินไม่ได้เชิงโครงสร้าง จนกว่า CS จะกด "ใส่ PR → กลับเข้า flow".
+   *
+   * ทางเข้าที่ทำให้ต้องมีโหมดนี้ตรงนี้ (owner 2026-08-03): บรรทัดบน **ใบวางบิล MOMO** ที่
+   * เขียนว่า "No Code" — MOMO เก็บเงินเราไปแล้ว แต่ระบบไม่มีของชิ้นนั้นเลย. ปฏิเสธ =
+   * ของหายเงียบต่อไป · เดา PR = เจ้าของปลอมรั่วเข้าเส้นเงิน → สร้างค้างไว้ให้ CS หาเจ้าของ.
+   *
+   * ไม่ส่ง = "normal" → ผู้เรียกเดิม (แพคกิ้งลิส · พัสดุที่ขาด · อี้อู) ไม่เปลี่ยนพฤติกรรมเลย.
+   */
+  mode:       z.enum(["normal", "special-no-code"]).optional().default("normal"),
   // Weights/volumes from the closed-container weigh-in. Bound generously but
   // finitely (a fat-finger 5→5,000,000 can't pass) — same posture as the
   // manual-add range guards.
@@ -81,8 +97,35 @@ const addMissingMomoParcelSchema = z.object({
   // raw MOMO ship_by ("car"/"ship"/"air") — only used as the LAST-resort
   // transport-mode fallback when the cabinet code can't decide. Optional.
   shipBy:     z.enum(SHIP_BY_OPTIONS).optional(),
+  /**
+   * ไม่ต้องตั้งราคาขายอัตโนมัติหลัง INSERT.
+   *
+   * ผู้เรียกเดิม (แพคกิ้งลิส · พัสดุที่ขาด) **ต้องตั้ง** เพราะตัวเลขมาจากการชั่ง/วัดของโกดังเรา
+   * = เชื่อได้. ทางเข้าใหม่จาก **ใบวางบิล MOMO** (owner 2026-08-03) ต้องไม่ตั้ง เพราะคิวบนใบ
+   * พิสูจน์แล้วว่าเชื่อไม่ได้ (INV-20260723-0006 พิมพ์คิวเกิน ×จำนวนกล่อง 9 จาก 23 บรรทัด) —
+   * ตั้งราคาจากคิวที่ผิด = เก็บลูกค้าผิดตั้งแต่แถวแรก. ราคาไปตั้งที่ขั้นวัดขนาด/ตั้งราคาแทน.
+   * ไม่ส่ง = false → พฤติกรรมเดิมทุกประการ.
+   */
+  skipAutoRate: z.boolean().optional(),
+}).superRefine((value, ctx) => {
+  // mirror commitMomoRowSchema.superRefine — โหมดกับรหัสลูกค้าต้องสอดคล้องกันเสมอ
+  const code = (value.memberCode ?? "").trim();
+  if (value.mode === "special-no-code") {
+    if (code !== "") {
+      ctx.addIssue({ code: "custom", path: ["memberCode"], message: "โหมด NO CODE ต้องไม่มีรหัสลูกค้า" });
+    }
+    return;
+  }
+  if (!/^PR\d+$/i.test(code)) {
+    ctx.addIssue({ code: "custom", path: ["memberCode"], message: "รหัสลูกค้าต้องเป็น PR####" });
+  }
 });
 
+/**
+ * ใช้ `z.input` (ไม่ใช่ `z.infer`) — เหตุผลเดียวกับ `CommitMomoRowInput`: ฟิลด์ที่มี
+ * `.default()` (mode) ต้องยัง **ละได้** สำหรับผู้เรียกเดิมที่ส่ง object ตรงๆ
+ * (actions/admin/momo-packing-reconcile.ts) ไม่งั้น typecheck แดงทั้งที่พฤติกรรมเดิม.
+ */
 export type AddMissingMomoParcelInput = z.input<typeof addMissingMomoParcelSchema>;
 
 /** Escape PostgREST `like` wildcards in a literal base so it can't widen the match. */
@@ -136,7 +179,7 @@ function roundTo(value: number, decimals: number): number {
  * write). `adminId` is the withAdmin ctx adminId (for the audit row).
  */
 export async function createMissingMomoForwarderRow(
-  d: z.infer<typeof addMissingMomoParcelSchema>,
+  d: AddMissingMomoParcelInput,
   adminId: string,
 ): Promise<AdminActionResult<{ fid: number; fIDorCO: string }>> {
       const admin         = createAdminClient();
@@ -144,7 +187,18 @@ export async function createMissingMomoForwarderRow(
 
       const base    = baseTrackingOf(d.tracking);
       const cabinet = d.cabinet.trim();
-      const userID  = d.memberCode.toUpperCase();
+      const isNoCode = (d.mode ?? "normal") === "special-no-code";
+      const userID  = (d.memberCode ?? "").trim().toUpperCase();
+
+      // ── GUARD 0 — โหมดกับรหัสลูกค้าต้องสอดคล้องกัน (fail-CLOSED ตรงนี้ด้วย) ──
+      // ผู้เรียกบางทางส่ง object ตรงๆ ไม่ได้ผ่าน safeParse (momo-packing-reconcile) →
+      // ย้ำกฎเดียวกันที่ตัวเขียนเงิน ไม่พึ่งว่าใครจะ parse มาให้.
+      if (isNoCode && userID !== "") {
+        return { ok: false, error: "โหมด NO CODE ต้องไม่มีรหัสลูกค้า" };
+      }
+      if (!isNoCode && !/^PR\d+$/.test(userID)) {
+        return { ok: false, error: "รหัสลูกค้าต้องเป็น PR####" };
+      }
 
       // 🔒 cabinet tier guard (owner 2026-07-20) — เลขตู้ต้องเป็นตู้จริง ไม่ใช่
       // เลขกระสอบ (CBX…)/placeholder ของระบบ (เลขตู้ TTW ใช้ตามที่ส่งมาได้เลย)
@@ -184,24 +238,33 @@ export async function createMissingMomoForwarderRow(
       // ── GUARD 2 — validate member (drives fusercompany too) ─────────────
       // Mirror commit-momo-row-core step 2: .eq("userID", …) selecting
       // userCompany so the fusercompany convention matches exactly.
-      const { data: customer, error: customerErr } = await admin
-        .from("tb_users")
-        .select("userID, coID, userCompany")
-        .eq("userID", userID)
-        .maybeSingle<{ userID: string; coID: string | null; userCompany: string | null }>();
-      if (customerErr) {
-        console.error(`[tb_users lookup] failed`, { code: customerErr.code, message: customerErr.message });
-        return { ok: false, error: `db_error:${customerErr.code ?? "unknown"}` };
-      }
-      if (!customer) {
-        return { ok: false, error: `ไม่พบรหัสลูกค้า ${userID} ในระบบ` };
+      // โหมด NO CODE ข้ามด่านนี้โดยเจตนา (ไม่มีรหัสให้ตรวจ) — และ **ห้ามปั้น PR ปลอม**
+      // (คอมเมนต์เดียวกับ commit-momo-row-core: เจ้าของปลอมจะรั่วเข้าเส้นราคา/กระเป๋าเงิน/บิล).
+      let customer: { userID: string; userCompany: string | null };
+      if (isNoCode) {
+        customer = { userID: "", userCompany: null };
+      } else {
+        const { data: found, error: customerErr } = await admin
+          .from("tb_users")
+          .select("userID, coID, userCompany")
+          .eq("userID", userID)
+          .maybeSingle<{ userID: string; coID: string | null; userCompany: string | null }>();
+        if (customerErr) {
+          console.error(`[tb_users lookup] failed`, { code: customerErr.code, message: customerErr.message });
+          return { ok: false, error: `db_error:${customerErr.code ?? "unknown"}` };
+        }
+        if (!found) {
+          return { ok: false, error: `ไม่พบรหัสลูกค้า ${userID} ในระบบ` };
+        }
+        customer = found;
       }
 
       // ── Derive the cargo fields (mirror commit-momo-row-core) ───────────
       // This parcel is in a CLOSED container → it always has a cabinet → the
       // legacy "feel automatic" status is "3" (ออกจากโกดังจีน / in transit),
       // exactly like commit-momo-row-core when hasContainer === true.
-      const fStatusNew = "3";
+      // NO CODE → '99' (กองสถานะพิเศษ) เหมือน commit-momo-row-core L785 เป๊ะ.
+      const fStatusNew = isNoCode ? "99" : "3";
 
       // Transport mode: prefer the REAL cabinet (GZS=เรือ "2" / GZE=รถ "1" — the
       // physical truth, since per-parcel ship_by can be MOMO-miskeyed). Fall
@@ -215,7 +278,8 @@ export async function createMissingMomoForwarderRow(
       // fusercompany — "" = company customer · "0" = individual. EXACT mirror of
       // commit-momo-row-core L486 (NOT NULL constraint; legacy wrote "" for
       // company customers via PHP string-interpolation of NULL).
-      const fUserCompany = customer.userCompany === "1" ? "" : "0";
+      // (NO CODE ไม่มีลูกค้า → "0" · mirror commit-momo-row-core L849)
+      const fUserCompany = !isNoCode && customer.userCompany === "1" ? "" : "0";
 
       // fwarehousename "8" = MOMO (WAREHOUSE_LABEL in report-cnt).
       // fwarehousechina "1" = กวางโจว default.
@@ -311,7 +375,8 @@ export async function createMissingMomoForwarderRow(
           paydeposit:            "0",
           ftrackingth:           "-",
           ffreeshipping:         "0",
-          fnote:                 null,
+          // ป้ายกองพักตัวตน — ข้อความเดียวกับ commit-momo-row-core L1232 (CS ค้นเจอด้วยคำเดียวกัน)
+          fnote:                 isNoCode ? "NO CODE · รอระบุ PR" : null,
           fnoteuser:             "0",
           fnoteuserread:         "0",
           fcover:                "",
@@ -359,25 +424,33 @@ export async function createMissingMomoForwarderRow(
       // via the SAME money-isolated helper the MOMO commit + manual-add use, so
       // the admin detail page isn't ฿0. A rate miss NEVER fails the create (the
       // helper skips the write on rateMissing — never persists a silent ฿0).
-      try {
-        const rateRes = await computeAndFillForwarderImportRate(admin, row.id);
-        if (!rateRes.ok) {
-          console.error(`[momo-add-missing auto-rate] did not resolve (id=${row.id})`, { reason: rateRes.reason });
+      // 🔴 NO CODE ไม่ตั้งราคา — ไม่มีเจ้าของ = ไม่มีเรทการ์ดของใครให้อ่าน การปล่อยให้
+      // เครื่องคิดราคาเดาเรทให้ของที่ยังไม่รู้ว่าเป็นของใคร = ราคามั่วรออยู่ในระบบ.
+      // (mirror commit-momo-row-core L1310 `if (!isSpecialNoCode) { … computeAndFill… }`)
+      // ราคาจะถูกตั้งตอน CS กด "ใส่ PR → กลับเข้า flow" ตามเส้นทางปกติ.
+      if (!isNoCode && !d.skipAutoRate) {
+        try {
+          const rateRes = await computeAndFillForwarderImportRate(admin, row.id);
+          if (!rateRes.ok) {
+            console.error(`[momo-add-missing auto-rate] did not resolve (id=${row.id})`, { reason: rateRes.reason });
+          }
+        } catch (e) {
+          console.error(`[momo-add-missing auto-rate] threw AFTER tb_forwarder INSERT (id=${row.id})`, e);
         }
-      } catch (e) {
-        console.error(`[momo-add-missing auto-rate] threw AFTER tb_forwarder INSERT (id=${row.id})`, e);
       }
 
       // ── Audit ───────────────────────────────────────────────────────────
       await logAdminAction(
         adminId,
-        "forwarder.momo_add_missing.create",
+        isNoCode ? "forwarder.momo_add_missing.create_no_code" : "forwarder.momo_add_missing.create",
         "tb_forwarder",
         String(row.id),
         {
           momo_tracking:    d.tracking,
           base_tracking:    base,
           cabinet,
+          mode:             isNoCode ? "special-no-code" : "normal",
+          fstatus:          fStatusNew,
           userid:           customer.userID,
           ship_by:          d.shipBy ?? null,
           ftransporttype:   fTransportType,

@@ -5,6 +5,7 @@ import { Link, useRouter } from "@/i18n/navigation";
 import {
   previewMomoInvoiceCost,
   applyMomoInvoiceCost,
+  createForwarderRowFromInvoiceLine,
   type MomoIngestPreview,
   type MomoIngestPreviewRow,
   type MomoInvoiceCabinetRollup,
@@ -455,6 +456,18 @@ function ContainerTruthNote({ r }: { r: MomoIngestPreviewRow }) {
   const invCab = (r.invoiceCabinet ?? "").trim();
 
   if (t.packingCabinets.length === 0) {
+    // 🔴 owner 2026-08-03 — แถวที่ "ไม่พบในระบบ" **และ** ไม่มีในแพคกิ้งลิสด้วย: การบอกให้
+    // "ไปอัพแพคกิ้งลิสก่อน" คือคำแนะนำที่พาไปผิดทาง (ของชิ้นนี้ไม่มีในแพคกิ้งลิสอยู่แล้ว —
+    // เคสจริง 300251844018) → ไปอัพแล้วกลับมาเจอทางตันเดิม. บอกความจริงแทน แล้วให้ปุ่ม
+    // "สร้างรายการนำเข้า" ข้างล่างเป็นทางออก.
+    if (!r.matched) {
+      return (
+        <div className="mt-1 rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+          📦 ไม่พบทั้งในระบบ ในแพคกิ้งลิส และในรายการนำเข้าที่ MOMO ส่งมา — MOMO เรียกเก็บของที่เรา
+          <strong>ยังไม่เคยรับเข้าระบบ</strong> · สร้างรายการจากใบนี้ได้เลย (ปุ่มด้านล่าง)
+        </div>
+      );
+    }
     return (
       <div className="mt-1 rounded bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
         📦 ยังไม่มีแพคกิ้งลิสของชิปเม้นนี้ — ยืนยันตู้ยังไม่ได้ ·{" "}
@@ -699,12 +712,14 @@ function RowActions({
   pending,
   onApply,
   onSettle,
+  onCreate,
 }: {
   r: MomoIngestPreviewRow;
   settled: SettledMap;
   pending: boolean;
   onApply: (fid: number) => void;
   onSettle: (fid: number) => void;
+  onCreate: (r: MomoIngestPreviewRow) => void;
 }) {
   const s = r.fid != null ? settled[r.fid] : undefined;
   if (s) {
@@ -718,7 +733,30 @@ function RowActions({
       </Link>
     );
   }
-  if (r.fid == null) return null;
+
+  // 🔴 บรรทัดที่ระบบไม่มีแถวรองรับ — เดิมตรงนี้ `return null` = ข้อความแดงลอยๆ ไม่มีปุ่ม
+  // อะไรให้กดเลย (owner 2026-08-03: "เจอใน MOMO แต่ไม่เจอในระบบเราได้ไงครับ").
+  // ตอนนี้: สร้างได้ → ปุ่ม · สร้างไม่ได้ → บอกเหตุผลว่าทำไม (§0d ห้ามตันแล้วเงียบ).
+  if (r.fid == null) {
+    const c = r.createFromInvoice;
+    if (!c.allowed) {
+      return <div className="mt-1 rounded bg-surface-alt/60 px-2 py-1 text-[11px] text-muted">ℹ️ {c.reason}</div>;
+    }
+    return (
+      <div className="mt-1">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => onCreate(r)}
+          className="rounded bg-sky-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+          title={c.reason}
+        >
+          {c.mode === "special-no-code" ? "➕ สร้างแบบ NO CODE (รอ CS ใส่ PR)" : `➕ สร้างรายการนำเข้า (${c.memberCode})`}
+        </button>
+        <div className="mt-0.5 text-[11px] text-muted">{c.reason}</div>
+      </div>
+    );
+  }
   const fid = r.fid;
   const canSettle = rowEligibleToSettle(r);
   if (!r.willApply && !canSettle) return null;
@@ -876,7 +914,22 @@ export function MomoInvoiceCostClient() {
       ? preview.rows.filter((r) => r.willApply && r.fid != null && onlyFids.includes(r.fid))
       : preview.rows.filter((r) => r.willApply);
     const n = scope.length;
-    if (n === 0) { setMsg({ kind: "err", text: "ไม่มีรายการที่ต้องบันทึก (ต้นทุนตรงแล้ว หรือถูกบล็อก)" }); return; }
+    if (n === 0) {
+      // §0f อย่ามั่ว — บอกตัวที่บล็อกจริง ไม่ใช่ "ไม่มีรายการ" ลอยๆ. เคสที่ owner เจอ:
+      // ใบ 1 บรรทัดที่ไม่พบในระบบ → กดแล้ว "สำเร็จ 0/0" เหมือนไม่มีอะไรผิด
+      const notFound = preview.summary.unmatched;
+      const blocked = preview.summary.blocked - notFound;
+      const why =
+        notFound > 0 && blocked > 0
+          ? `ไม่พบในระบบ ${notFound} บรรทัด · ถูกบล็อกด้วยเหตุอื่น ${blocked} บรรทัด`
+          : notFound > 0
+            ? `ทั้งใบมี ${notFound} บรรทัดที่ยังไม่มีในระบบ — MOMO เรียกเก็บของที่เรายังไม่ได้รับเข้า · กด “➕ สร้างรายการนำเข้า” ที่แถวนั้นก่อน`
+            : blocked > 0
+              ? `มี ${blocked} บรรทัดถูกบล็อก (ตู้ไม่ตรง / ชี้ซ้ำ / ตู้จ่ายแล้ว) — ดูเหตุผลรายบรรทัดในตาราง`
+              : "ต้นทุนในระบบตรงกับใบอยู่แล้ว ไม่ต้องบันทึกซ้ำ";
+      setMsg({ kind: "err", text: `ไม่มีรายการที่บันทึกได้ — ${why}` });
+      return;
+    }
     const sumThb = scope.reduce((a, r) => a + r.invoiceCost, 0);
     if (!onlyFids) {
       // ยืนยันเฉพาะ "บันทึกทั้งหมด" (§0f) — รายการเดียวถือว่าเจตนาชัดจากปุ่มในแถว
@@ -902,6 +955,50 @@ export function MomoInvoiceCostClient() {
       setMsg({ kind: "ok", text: `✅ บันทึกต้นทุนแล้ว ${d.applied}/${d.requested} แทรคกิ้ง${skippedNote} (ใบ ${d.invoiceNo ?? "-"})` });
       await reloadPreview(source);
       setHistoryNonce((v) => v + 1); // ให้ประวัติเด้งเป็น "✓ บันทึกต้นทุนแล้ว" ทันที
+      router.refresh();
+    });
+  }
+
+  /**
+   * ➕ สร้างรายการนำเข้าจากบรรทัดบนใบ — สำหรับของที่ MOMO บิลมาแต่ระบบเราไม่มี
+   * (owner 2026-08-03). ส่งไปแค่ **แหล่งที่มาของใบ + เลขแทรคกิ้ง** — server แกะใบใหม่
+   * แล้วตัดสิน/สร้างเองทั้งหมด (ไม่มีตัวเลขไหลจากจอไปเป็นข้อมูลของแถวใหม่).
+   */
+  function doCreate(row: MomoIngestPreviewRow) {
+    if (!preview || !source) return;
+    const c = row.createFromInvoice;
+    if (!c.allowed) { setMsg({ kind: "err", text: c.reason }); return; }
+    const who = c.mode === "special-no-code"
+      ? "เจ้าของ: ยังไม่ระบุ (NO CODE — ระบบจะลองหาจากบอร์ด MOMO Live ให้ก่อน)"
+      : `เจ้าของ: ${c.memberCode}`;
+    // §0f — บอกให้ครบว่ากำลังจะสร้างอะไร ก่อนกดเขียนจริง
+    const confirmText =
+      `สร้างรายการนำเข้าจากใบวางบิล MOMO ${preview.invoiceNo ?? ""}\n\n` +
+      `แทรคกิ้ง: ${row.tracking}\n` +
+      // ⚠️ ต้องบอกให้รู้ว่าเลขตู้นี้ "ยืนยันแล้ว" หรือ "ยึดตามใบไปก่อน" — ทั้งระบบตั้งอยู่บน
+      // สมมติฐานว่าเลขตู้ของ MOMO เชื่อไม่ได้ ถ้าไม่บอก คนกดจะนึกว่าตู้ถูกยืนยันแล้ว
+      `ตู้: ${c.cabinet}${
+        row.containerTruth?.shouldBe === c.cabinet
+          ? " (แพคกิ้งลิสยืนยันตรงกัน)"
+          : " (ยึดตามใบ MOMO — ยังไม่มีแพคกิ้งลิสยืนยัน)"
+      }\n` +
+      `${who}\n` +
+      `น้ำหนักบนใบ: ${row.invoiceKg} กก. · กล่อง: ${row.qty}\n` +
+      `คิว: ${row.cbmInflatedByQty ? "ไม่ใส่ (ใบพิมพ์คิวเกิน ×จำนวนกล่อง — ต้องวัดจริง)" : cbm(row.cbm)}\n` +
+      `ต้นทุนที่ MOMO เรียกเก็บ: ฿${baht(row.invoiceCost)}\n\n` +
+      `ระบบจะสร้างแถวเปล่าไว้ก่อน — ยังไม่ตั้งราคาขาย และยังไม่บันทึกต้นทุน ` +
+      `(กด “บันทึกต้นทุน” อีกทีหลังตรวจแถวที่เกิดมาแล้ว)` +
+      (c.mode === "special-no-code"
+        ? `\n⚠️ ถ้าหาเจ้าของไม่เจอ แถวนี้จะอยู่กองสถานะพิเศษ NO CODE — วางบิลเก็บเงินไม่ได้จนกว่า CS จะใส่ PR`
+        : "") +
+      `\n\nยืนยันสร้าง?`;
+    if (!window.confirm(confirmText)) return;
+    setMsg(null);
+    start(async () => {
+      const res = await createForwarderRowFromInvoiceLine({ ...sourcePayload(source), tracking: row.tracking });
+      if (!res.ok || !res.data) { setMsg({ kind: "err", text: res.ok ? "สร้างไม่สำเร็จ" : res.error }); return; }
+      setMsg({ kind: "ok", text: `✅ สร้างรายการนำเข้าแล้ว #${res.data.fid} — ${res.data.note}` });
+      await reloadPreview(source);
       router.refresh();
     });
   }
@@ -1445,6 +1542,7 @@ export function MomoInvoiceCostClient() {
                           pending={pending}
                           onApply={(fid) => doApply([fid])}
                           onSettle={(fid) => doSettle([fid])}
+                          onCreate={doCreate}
                         />
                       </td>
                     </tr>

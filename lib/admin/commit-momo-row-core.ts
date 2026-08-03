@@ -47,10 +47,12 @@ import {
   extractCrateFromMomoRaw,
   extractCoverFromMomoRaw,
   extractCgFromMomoRaw,
-  normalizeMomoPrCode,
   resolvableMomoPrOf,
   firstResolvableMomoPr,
 } from "@/lib/admin/momo-raw-helpers";
+// การตัดสิน "PR / เลขตู้ จากบอร์ด MOMO Live" — ที่เดียวของทั้งระบบ (ทางเข้าที่ 2 คือหน้า
+// อัพใบวางบิล MOMO ที่เพาะแถวที่ MOMO บิลแต่เราไม่มี · owner 2026-08-03).
+import { pickMomoLivePrCode, pickMomoLiveContainer } from "@/lib/admin/momo-live-owner";
 import { computeAndFillForwarderImportRate } from "@/lib/forwarder/live-rate";
 import { splitAggregatedMomoBoxRows } from "@/lib/integrations/momo-web/split-box-rows";
 // Base/suffix parsing for the family-aware dedup (4a½) — pure module, same parser
@@ -456,9 +458,10 @@ export async function commitMomoRowCore(
     }
     const liveMeta = (liveRows ?? []) as Array<{ member_code: string | null; container_name: string | null }>;
     if (!resolved) {
-      const livePr = liveMeta
-        .map((row) => normalizeMomoPrCode(row.member_code))
-        .find((v): v is string => v != null) ?? null;
+      // ตัวตัดสิน "แถวไหนบนบอร์ดถือ PR ที่ใช้ได้" อยู่ที่ lib/admin/momo-live-owner.ts ที่เดียว —
+      // ทางเข้าที่ 2 (สร้างแถวจากใบวางบิล MOMO · owner 2026-08-03) เรียกตัวเดียวกัน จะได้ไม่มี
+      // นิยาม NO CODE 2 ชุดที่ drift กันเงียบๆ.
+      const livePr = pickMomoLivePrCode(liveMeta);
       if (livePr) {
         resolved = livePr;
         autoResolvedPrSource = "live_board";
@@ -468,9 +471,7 @@ export async function commitMomoRowCore(
     // ทางออก: แถวที่สลับเป็นปกติได้เลขตู้ที่ Live รู้ตั้งแต่ commit · แถวที่คง NO CODE
     // ได้ grouping ตู้ถูกบน fstatus=99). tier guard เดิม: กระสอบ/placeholder ไม่ใช่ตู้.
     if (!(srcRow.container_batch_no ?? "").trim()) {
-      const liveContainer = liveMeta
-        .map((row) => (row.container_name ?? "").trim())
-        .find((value) => value !== "" && !isNonContainerCabinetId(value));
+      const liveContainer = pickMomoLiveContainer(liveMeta);
       if (liveContainer) srcRow.container_batch_no = liveContainer;
     }
 
