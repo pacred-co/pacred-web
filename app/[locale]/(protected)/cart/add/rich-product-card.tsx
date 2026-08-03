@@ -194,12 +194,13 @@ export function RichProductCard({
             </a>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-xl bg-primary-50 px-4 py-3">
-            <span className="text-2xl font-extrabold leading-none text-primary-600">
-              ¥{fmt2(priceCny)}
-            </span>
-            <span className="text-[13px] text-muted">≈ ฿{fmt2(priceThb)}</span>
-            <span className="ml-auto text-[11.5px] text-muted">เรท {rsDefault} บาท/¥</span>
+          {/* Solid red / white type (owner 2026-08-03 "ถมแดง text ขาวสวยกว่า") — the
+              price is the one number the customer must not miss, so it gets the
+              strongest block on the card instead of a tinted one. */}
+          <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-xl bg-primary-600 px-4 py-3 text-white">
+            <span className="text-2xl font-extrabold leading-none">¥{fmt2(priceCny)}</span>
+            <span className="text-[13px] text-white/85">≈ ฿{fmt2(priceThb)}</span>
+            <span className="ml-auto text-[11.5px] text-white/75">เรท {rsDefault} บาท/¥</span>
           </div>
 
           {/* ── Interactive: option picker + qty + คำนวณราคา + หยิบใส่รถเข็น ──
