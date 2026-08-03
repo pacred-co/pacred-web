@@ -316,10 +316,10 @@ export default async function DriverStickerSheetPage({
   return (
     <div className="bg-white text-black min-h-screen">
       {/* Print target = Gprinter GP-1924D thermal label printer · 100 × 150 mm
-          (4×6") — ONE sticker per label, NOT an A4 label sheet (owner 2026-08-03:
-          "เครื่องพิมพ์ 100×150มม. · มันออกมาเป็นขนาด A4"). On SCREEN we still show
-          a 2-across preview grid; on PRINT each sticker fills its own 100×150mm
-          page + a page-break after it. §0i — verify on real paper. */}
+          (4×6") label, printed LANDSCAPE (150mm กว้าง × 100mm สูง · owner 2026-08-03:
+          "ทำเป็นแนวนอน ตามแบบก่อนปริ้น") — ONE sticker per label, NOT an A4 sheet.
+          On SCREEN we show a 2-across preview grid; on PRINT each sticker fills its
+          own 150×100mm landscape page + a page-break after it. §0i — verify on real paper. */}
       <style>{`
         .sticker-grid {
           display: grid;
@@ -346,12 +346,14 @@ export default async function DriverStickerSheetPage({
           aside, .no-print { display: none !important; }
           html, body { background: #fff !important; padding: 0 !important; margin: 0 !important; }
           .print-area { box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; max-width: none !important; }
-          /* ONE 100×150mm label per sticker → single-column, each fills a page. */
+          /* ONE 100×150mm label per sticker · LANDSCAPE (150mm กว้าง × 100mm สูง)
+             ให้ตรงกับพรีวิวบนจอ (owner 2026-08-03: "ทำเป็นแนวนอน") → single-column,
+             each fills a page. */
           .sticker-grid { display: block; gap: 0; max-width: none; margin: 0; }
           .sticker {
-            width: 100mm;
-            height: 150mm;
-            min-height: 150mm;
+            width: 150mm;
+            height: 100mm;
+            min-height: 100mm;
             margin: 0;
             border: none;            /* the physical label edge = the border (avoids edge-clip) */
             border-radius: 0;
@@ -361,7 +363,7 @@ export default async function DriverStickerSheetPage({
           }
           .sticker:last-child { break-after: auto; page-break-after: auto; }
         }
-        @page { size: 100mm 150mm; margin: 0; }
+        @page { size: 150mm 100mm; margin: 0; }
       `}</style>
 
       {/* On-screen toolbar */}
