@@ -15,12 +15,16 @@ export const dynamic = "force-dynamic";
 export default function CartAddPage() {
   return (
     <div className="pcs-content-pad w-full px-3 md:px-6 pt-1 pb-24 md:pt-2 md:pb-6">
-      {/* Form (left) + Pacred marketing panel (right, desktop only).
-          Full-bleed (owner 2026-07-30 "ขยายให้เต็มจอ"): the wrapper drops its
-          max-w cap so the grid fills the screen. The image column is LOCKED to a
-          fixed 400px (owner "ล็อกขนาดเป๊ะ · จะทำภาพพอดีๆ") so the banner is a
-          stable, designable box on every screen; the form (minmax(0,1fr))
-          absorbs all the remaining width. */}
+      {/* Centred reading column (owner 2026-08-03 "ปรับให้อยู่กลางๆจอพอดีๆ" —
+          supersedes the earlier 2026-07-30 "ขยายให้เต็มจอ" full-bleed): capped
+          INSIDE `.pcs-content-pad` so that class's sidebar / floating-tab offsets
+          still hold, and the cap centres in whatever space is left. Matches
+          /cart/add/review so the two steps of the flow line up. */}
+      <div className="mx-auto w-full max-w-[1200px] px-2 md:px-6">
+      {/* Form (left) + Pacred marketing panel (right, desktop only). The image
+          column is LOCKED to a fixed 400px (owner "ล็อกขนาดเป๊ะ · จะทำภาพพอดีๆ")
+          so the banner is a stable, designable box on every screen; the form
+          (minmax(0,1fr)) absorbs the remaining width. */}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
         <CartAddMultiLink />
 
@@ -30,6 +34,7 @@ export default function CartAddPage() {
         <aside className="hidden lg:block self-start lg:mt-20">
           <CartAdsBanner />
         </aside>
+      </div>
       </div>
     </div>
   );

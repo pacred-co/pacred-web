@@ -212,6 +212,20 @@ body {
 .scrollbar-clean::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* No scrollbar at all — the strip still scrolls (wheel · drag · the ‹ › arrow
+   buttons beside it), the bar just isn't drawn (owner 2026-08-03: "เอา slidebar
+   ออก มันแปลกๆ" on the product gallery + style carousel). Only use where a
+   VISIBLE affordance to scroll already exists, so nothing becomes unreachable. */
+.scrollbar-none {
+  scrollbar-width: none;                   /* Firefox */
+  -ms-overflow-style: none;                /* legacy Edge */
+}
+.scrollbar-none::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
 .dark .scrollbar-clean {
   scrollbar-color: #475569 transparent;   /* slate-600 thumb on dark */
 }

@@ -37,6 +37,7 @@ import { addCartItem, addCartItemsBulk } from "@/actions/cart";
 import { toYuanEquivalent } from "@/lib/forwarder/currency-convert";
 import { MAX_ORDER_QTY, clampOrderQty } from "@/lib/validators/order-qty";
 import { TranslateProvider, AutoTranslateText } from "@/components/translate/auto-translate";
+import { SkuMultiPicker } from "../cart/add/sku-multi-picker";
 
 // Mirrors PROVIDERS in lib/validators/cart.ts L7 (only these 5 are
 // accepted by the cart Zod schema).
@@ -494,7 +495,23 @@ export function UrlPasteAddToCart({
       {/* 2026-06-08 ภูม flag (รูปที่ 3 in chat) — 1688 wholesale qty grid:
           When product has ≥ 2 SKUs, render a row per SKU with qty stepper
           (mirrors 1688's "数量" column). Submit batches all qty>0 rows. */}
-      {isMultiPickMode && skuMap && (
+      {/* Shopee-shaped picker (owner 2026-08-03 mockup) — rich card only: a style
+          carousel + a "รายการที่เลือก" list with a size dropdown per row. Writes the
+          SAME qtyBySku the submit below batches, so the money path is untouched.
+          Falls back to the flat table when there are no axes to build it from. */}
+      {isMultiPickMode && skuMap && richLayout && skuAxes && skuAxes.length > 0 && (
+        <SkuMultiPicker
+          skuAxes={skuAxes}
+          skuMap={skuMap}
+          qtyBySku={qtyBySku}
+          setQtyBySku={setQtyBySku}
+          rsDefault={rsDefault}
+          pending={pending}
+          onDirty={() => { setError(null); setSuccess(false); }}
+        />
+      )}
+
+      {isMultiPickMode && skuMap && !(richLayout && skuAxes && skuAxes.length > 0) && (
         <div className={richLayout ? "space-y-2" : "rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 space-y-2"}>
           <p className={richLayout ? "text-[13px] font-semibold text-foreground" : "text-sm font-semibold text-emerald-900"}>
             {t("pickOptionsAndQty")}{" "}
@@ -924,12 +941,22 @@ export function UrlPasteAddToCart({
         </button>
       )}
 
-      {/* ── Rich sticky price bar (screenshot 3): ¥ total · เรท · ฿ ประมาณ + CTA.
-          Spans the card padding (-mx) + sticks to the viewport bottom so the
-          หยิบใส่รถเข็น button is always reachable however long the option list. ── */}
+      {/* ── Rich footer (owner mockup 2026-08-03): a full-width CTA, then the
+          ¥ total · เรท · ฿ ประมาณ line under it. Lives inside the product card's
+          right column now, so it uses normal flow — no sticky/negative margins,
+          which would bleed past that column. ── */}
       {richLayout && (
-        <div className="sticky bottom-0 z-10 -mx-3 -mb-3 mt-1 flex flex-wrap items-center justify-between gap-3 rounded-b-2xl border-t border-border bg-white/95 px-3 py-3 backdrop-blur md:-mx-4 md:-mb-4 md:px-4">
-          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 text-[13px]">
+        <div className="mt-1 space-y-3">
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={richCtaDisabled}
+            className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-primary-600 px-6 py-3 text-[15px] font-bold text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <ShoppingCart className="h-5 w-5" />
+            {ctaLabel}
+          </button>
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-0.5 border-t border-border pt-3 text-[13px]">
             <span>
               <span className="text-muted">ราคาสินค้า </span>
               <b className="text-lg text-red-600">
@@ -946,15 +973,6 @@ export function UrlPasteAddToCart({
               <span className="text-muted"> บาท</span>
             </span>
           </div>
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={richCtaDisabled}
-            className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full bg-red-600 px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-          >
-            <ShoppingCart className="h-5 w-5" />
-            {ctaLabel}
-          </button>
         </div>
       )}
     </div>

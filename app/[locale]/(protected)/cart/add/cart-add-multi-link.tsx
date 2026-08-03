@@ -422,7 +422,7 @@ export function CartAddMultiLink() {
           {/* supported — โลโก้จริงของแต่ละแพลตฟอร์ม (owner 2026-07-30/31 "ใช้ไอคอนจริงๆ ·
               เอากรอบออก · ใหญ่ขึ้น · กดแล้วไปเว็บนั้นๆ"). โลโก้ wordmark พื้นขาวบนการ์ดขาว
               = ไร้รอยต่อ ไม่ต้องมีกรอบ · h-8 · กว้าง auto · <a> เปิดเว็บจริงในแท็บใหม่. */}
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-[12px] text-muted">
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-6 text-[13px] text-muted">
             <span>รองรับเว็บไซต์:</span>
             {[
               { src: "/legacy/pcs/assets/images/shops/1688-logo-2.png", alt: "1688", href: "https://www.1688.com" },
@@ -439,28 +439,16 @@ export function CartAddMultiLink() {
                 className="inline-flex items-center hover:opacity-70 transition-opacity"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={s.src} alt={s.alt} className="h-8 w-auto object-contain" loading="lazy" />
+                {/* Eager, not lazy: four ~17KB logos that sit just under the CTA — with
+                    lazy they popped in late and one rendered as broken alt text mid-scroll
+                    (owner screenshot 2026-08-03). Loading them up front costs ~60KB once. */}
+                <img src={s.src} alt={s.alt} className="h-11 w-auto object-contain" />
               </a>
             ))}
           </div>
-
-          {/* no-link hint → manual tab */}
-          <div className="mt-4 flex items-center gap-3 rounded-xl border border-border p-3">
-            <span className="inline-flex w-9 h-9 rounded-lg bg-red-50 text-primary-600 items-center justify-center shrink-0">
-              <Pencil className="h-4 w-4" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[13px] font-bold text-foreground">ไม่มีลิงก์สินค้า?</span>
-              <span className="block text-[12px] text-muted">กรอกชื่อ · ราคา · จำนวนเอง</span>
-            </span>
-            <button
-              type="button"
-              onClick={() => setTab("manual")}
-              className="shrink-0 rounded-full border border-red-200 bg-white px-3 py-2 text-[12.5px] font-bold text-primary-700 hover:bg-red-50"
-            >
-              กรอกข้อมูลสินค้าเอง →
-            </button>
-          </div>
+          {/* The duplicate "ไม่มีลิงก์สินค้า?" prompt that used to sit here was removed
+              (owner 2026-08-03) — the ไม่มีลิงก์สินค้า TAB above is the entry point, so
+              manual entry stays reachable (§0d). */}
         </>
       )}
     </div>

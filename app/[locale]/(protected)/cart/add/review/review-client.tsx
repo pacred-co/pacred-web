@@ -116,7 +116,19 @@ export function ReviewClient({
       {/* Tabs — รายการที่ 1/2 … (2-line pill: เลข+จุดสถานะ / คำอธิบายสถานะ) + เพิ่มรายการ.
           สถานะ: กำลังโหลด (เหลือง) · ไม่พบ (แดง) · กำลังกรอก = แท็บที่เปิดอยู่ (แดง) ·
           ยังไม่ครบ = แท็บอื่นที่โหลดเสร็จแต่ยังไม่ได้เปิดทำ (เทา). */}
-      <div className="flex flex-wrap items-stretch gap-2">
+      {/* mb-0 zeroes the gap the parent space-y-3 would add BELOW this row, so the
+          tab strip sits flush on the card (owner 2026-08-03 "ทำให้มันติดกันหน่อย").
+          NB: Tailwind v4's space-y-* spaces via margin-BOTTOM, so a negative -mb
+          here would double up and overlap the card — override to 0, don't negate. */}
+      <div className="mb-0 flex flex-wrap items-end gap-3">
+        {/* Segmented tabs ATTACHED to the card (owner 2026-08-03 "ทำให้เชื่อมกัน ไม่ใช่
+            ข้างล่างมีขอบ ข้างบนไม่มี"): ONE continuous outline wrapping tabs + card.
+            The strip carries top/left/right border with the card's corner radius and
+            NO bottom border, and sits 1px lower so the active tab's white fill hides
+            the card's top border → that tab opens into the panel. The card's own
+            top-LEFT radius is squared off (see rich-product-card) so only one curve
+            is drawn. Inactive tabs keep a bottom border, so they stay "closed". */}
+        <div className="inline-flex translate-y-px overflow-hidden rounded-t-2xl border border-b-0 border-border">
         {items.map((it, i) => {
           const isActive = i === active;
           const sub =
@@ -140,15 +152,16 @@ export function ReviewClient({
               key={i}
               type="button"
               onClick={() => setActive(i)}
-              className={`inline-flex flex-col items-start gap-0.5 rounded-2xl border px-3.5 py-1.5 text-left transition ${
-                isActive
-                  ? "border-red-500 bg-red-50 ring-2 ring-red-500/15"
-                  : "border-border bg-white hover:border-red-200"
-              }`}
+              className={`relative inline-flex flex-col items-center gap-0.5 px-5 py-2 text-center transition ${
+                i > 0 ? "border-l border-border" : ""
+              } ${isActive ? "bg-white" : "border-b border-border bg-surface-alt hover:bg-white"}`}
             >
+              {isActive && (
+                <span aria-hidden className="absolute inset-x-0 top-0 h-[3px] bg-primary-600" />
+              )}
               <span
                 className={`flex items-center gap-1.5 text-[12.5px] font-bold ${
-                  isActive ? "text-primary-700" : "text-foreground"
+                  isActive ? "text-foreground" : "text-muted"
                 }`}
               >
                 รายการที่ {i + 1}
@@ -158,11 +171,12 @@ export function ReviewClient({
             </button>
           );
         })}
+        </div>
         <Link
           href="/cart/add"
-          className="inline-flex items-center justify-center gap-1 self-stretch rounded-2xl border border-red-400 px-3.5 py-1.5 text-[12.5px] font-bold text-primary-600 transition hover:bg-red-50"
+          className="mb-1.5 inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary-500 px-4 py-2 text-[12.5px] font-bold text-primary-600 transition hover:bg-red-50"
         >
-          <Plus className="h-3.5 w-3.5" /> เพิ่มรายการ
+          <Plus className="h-4 w-4" /> เพิ่มรายการ
         </Link>
       </div>
 
