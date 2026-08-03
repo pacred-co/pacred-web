@@ -23,7 +23,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "@/i18n/navigation";
 import {
   BadgeCheck, ClipboardList, Info, Loader2, PackageSearch, Plus,
-  ShieldCheck, ShoppingCart, Trash2, Users,
+  ShieldCheck, ShoppingCart, Users, X,
 } from "lucide-react";
 import { addCartItemsBulk, type CartItemBulkRow } from "@/actions/cart";
 import { uploadCartProductImage } from "@/actions/cart-manual-image";
@@ -155,22 +155,44 @@ export function ManualEntryClient({
           {items.map((it, i) => {
             const isActive = i === active;
             const done = isManualComplete(it);
+            const closable = items.length > 1;
+            // Same cell shape as /cart/add/review (owner 2026-08-03 "อยากได้
+            // กากบาทลบได้เลย เหมือนกับฟอร์มมีลิงก์") — the cell carries the
+            // borders + fill so the ✕ can live inside it; a <button> may not be
+            // nested in a <button>.
             return (
-              <button
+              <div
                 key={it.id}
-                type="button"
-                onClick={() => setActive(i)}
-                className={`relative inline-flex flex-col items-center gap-0.5 px-5 py-2 text-center transition ${
-                  i > 0 ? "border-l border-border" : ""
-                } ${isActive ? "bg-white" : "border-b border-border bg-surface-alt hover:bg-white"}`}
+                className={`relative inline-flex ${i > 0 ? "border-l border-border" : ""} ${
+                  isActive ? "bg-white" : "border-b border-border bg-surface-alt hover:bg-white"
+                }`}
               >
                 {isActive && <span aria-hidden className="absolute inset-x-0 top-0 h-[3px] bg-primary-600" />}
-                <span className={`flex items-center gap-1.5 text-[12.5px] font-bold ${isActive ? "text-foreground" : "text-muted"}`}>
-                  รายการที่ {i + 1}
-                  <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${done ? "bg-emerald-500" : "bg-red-500"}`} />
-                </span>
-                <span className="text-[11px] font-medium text-muted">{done ? "ครบแล้ว" : "ยังไม่ครบ"}</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setActive(i)}
+                  className={`inline-flex flex-col items-center gap-0.5 py-2 pl-5 text-center transition ${
+                    closable ? "pr-8" : "pr-5"
+                  }`}
+                >
+                  <span className={`flex items-center gap-1.5 text-[12.5px] font-bold ${isActive ? "text-foreground" : "text-muted"}`}>
+                    รายการที่ {i + 1}
+                    <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${done ? "bg-emerald-500" : "bg-red-500"}`} />
+                  </span>
+                  <span className="text-[11px] font-medium text-muted">{done ? "ครบแล้ว" : "ยังไม่ครบ"}</span>
+                </button>
+                {closable && (
+                  <button
+                    type="button"
+                    onClick={() => removeItem(i)}
+                    aria-label={`ลบรายการที่ ${i + 1}`}
+                    title="ลบรายการนี้"
+                    className="absolute right-1 top-1.5 rounded-full p-1 text-gray-300 transition hover:bg-red-50 hover:text-red-500"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>
@@ -182,15 +204,6 @@ export function ManualEntryClient({
         >
           <Plus className="h-4 w-4" /> เพิ่มรายการ
         </button>
-        {items.length > 1 && (
-          <button
-            type="button"
-            onClick={() => removeItem(active)}
-            className="mb-1.5 ml-auto inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12.5px] font-bold text-muted transition hover:bg-red-50 hover:text-red-600"
-          >
-            <Trash2 className="h-4 w-4" /> ลบรายการนี้
-          </button>
-        )}
       </div>
 
       {/* ── The card ── */}
