@@ -115,23 +115,18 @@ export function ManualEntryClient({
     }
   }
 
-  const totalThb = useMemo(
-    () => items.reduce((s, it) => s + manualItemThb(it, fxRates, rsDefault), 0),
-    [items, fxRates, rsDefault],
-  );
-  const readyCount = items.filter((it) => isManualComplete(it) && !addedIds.has(it.id)).length;
-  const addedCount = items.filter((it) => addedIds.has(it.id)).length;
-
-  // ── Submit → cart ─────────────────────────────────────────────────
-  function submit() {
-    // Skip รายการ already carrying a ✓ — pressing the button twice must not
-    // put the same goods in the cart twice.
-    const ready = items.filter((it) => isManualComplete(it) && !addedIds.has(it.id));
-    if (ready.length === 0) {
+  // ── Add ONE รายการ → cart ─────────────────────────────────────────
+  // Per-รายการ, exactly like the review page tab (owner 2026-08-03 "ให้เหลือแค่
+  // ปุ่มแดงอันเดียว แล้วยกไปไว้ในกรอบเดียวกัน"): the button lives INSIDE the card it
+  // belongs to, so what it adds is the รายการ on screen — the old bottom bar
+  // added every complete tab at once, which is not what a button under one form
+  // reads as.
+  function addToCart(it: ManualItem) {
+    if (!isManualComplete(it)) {
       setErr("กรุณาวางลิงก์ร้านค้า หรือกรอกชื่อสินค้าพร้อมราคา อย่างน้อย 1 อย่างครับ");
       return;
     }
-    const rows: CartItemBulkRow[] = ready.flatMap((it) => manualItemToCartRows(it, fxRates));
+    const rows: CartItemBulkRow[] = manualItemToCartRows(it, fxRates);
     startTransition(async () => {
       const res = await addCartItemsBulk(rows);
       if (!res.ok) {
@@ -139,11 +134,7 @@ export function ManualEntryClient({
         return;
       }
       notifyCartChanged();
-      setAddedIds((s) => {
-        const n = new Set(s);
-        ready.forEach((it) => n.add(it.id));
-        return n;
-      });
+      setAddedIds((prev) => new Set(prev).add(it.id));
       setErr(null);
     });
   }
@@ -240,7 +231,7 @@ export function ManualEntryClient({
         </button>
       </div>
 
-      {/* ── The card ── */}
+      {/* ── The card — form + its own หยิบใส่รถเข็น (one red button, inside) ── */}
       <div className="rounded-2xl rounded-tl-none border border-border bg-white p-3 md:p-4">
         <ManualItemForm
           item={cur}
@@ -253,6 +244,32 @@ export function ManualEntryClient({
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" aria-hidden />
           วางลิงก์ร้านค้า หรือกรอกชื่อสินค้า + ราคา อย่างใดอย่างหนึ่งก็เพิ่มลงรถเข็นได้เลย
         </p>
+
+        <div className="mt-4 border-t border-border pt-3">
+          {addedIds.has(cur.id) ? (
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-full bg-emerald-50 px-4 py-3 text-[14px] font-bold text-emerald-800">
+              <Check className="h-5 w-5" strokeWidth={3} />
+              เพิ่มลงรถเข็นแล้ว
+              <Link href="/cart" className="text-primary-600 underline underline-offset-2 hover:text-primary-700">
+                ไปที่รถเข็น
+              </Link>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => addToCart(cur)}
+              disabled={!isManualComplete(cur) || pending}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary-600 py-3 text-[15px] font-extrabold text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShoppingCart className="h-5 w-5" />}
+              {pending ? "กำลังเพิ่ม…" : isManualComplete(cur) ? "หยิบใส่รถเข็น" : "กรอกข้อมูลให้ครบก่อน"}
+            </button>
+          )}
+          <p className="mt-2 text-center text-[12.5px] text-muted">
+            ยอดรวมโดยประมาณ{" "}
+            <b className="text-primary-600">{fmt2(manualItemThb(cur, fxRates, rsDefault))}</b> บาท
+          </p>
+        </div>
       </div>
 
       {err && (
@@ -261,49 +278,6 @@ export function ManualEntryClient({
         </div>
       )}
 
-      {/* ── Bottom summary bar ── */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl border border-border bg-white px-4 py-3.5">
-        <div>
-          <p className="text-[14px] font-bold text-foreground">ทั้งหมด {items.length} รายการ</p>
-          <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-muted">
-            <span className={`inline-block h-2 w-2 rounded-full ${readyCount > 0 || addedCount > 0 ? "bg-emerald-500" : "bg-red-500"}`} />
-            {addedCount > 0 && <b className="text-emerald-700">เพิ่มลงรถเข็นแล้ว {addedCount}</b>}
-            {addedCount > 0 && " · "}
-            พร้อมเพิ่ม {readyCount} / {items.length}
-          </p>
-        </div>
-        <div className="border-l border-border pl-6">
-          <p className="text-[12px] text-muted">ยอดรวมโดยประมาณ</p>
-          <p className="text-2xl font-extrabold leading-tight text-primary-600">
-            {fmt2(totalThb)} <span className="text-[13px] font-bold text-muted">บาท</span>
-          </p>
-        </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {/* Once something is in the cart the customer needs a way OUT — the
-              button alone would leave them on a page with nothing left to press. */}
-          {addedCount > 0 && (
-            <Link
-              href="/cart"
-              className="inline-flex items-center gap-1.5 rounded-full border border-primary-500 px-5 py-3 text-[13.5px] font-bold text-primary-600 transition hover:bg-red-50"
-            >
-              <ShoppingCart className="h-4 w-4" /> ไปที่รถเข็น
-            </Link>
-          )}
-          <button
-            type="button"
-            onClick={submit}
-            disabled={readyCount === 0 || pending}
-            className="inline-flex items-center gap-2 rounded-full bg-primary-600 px-6 py-3 text-[14px] font-extrabold text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
-            {pending
-              ? "กำลังเพิ่ม…"
-              : readyCount === 0
-                ? addedCount > 0 ? "เพิ่มครบแล้ว" : "กรอกข้อมูลให้ครบก่อน"
-                : `เพิ่มลงรถเข็น ${readyCount} รายการ`}
-          </button>
-        </div>
-      </div>
 
       {/* ── Trust strip ── */}
       <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 pt-1 text-[12.5px] text-muted">
