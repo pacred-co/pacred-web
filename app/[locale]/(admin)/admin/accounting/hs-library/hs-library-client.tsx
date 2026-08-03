@@ -38,6 +38,25 @@ const chipDuty =
 const clean = (v: string | null | undefined) => (v ?? "").toString().trim();
 const digitsOf = (v: string | null | undefined) => clean(v).replace(/[^0-9]/g, "");
 
+/**
+ * 🔴 owner 2026-08-03: พิมพ์ "สติ๊ก" แล้ว "ไม่เห็นเจอเลย" ทั้งที่ 3919.10.99 มี
+ * ชื่อ "สติกเกอร์" อยู่ — คนไทยเขียนคำเดียวกันได้หลายแบบ (สติ๊กเกอร์/สติกเกอร์/
+ * สติ้กเกอร์ · โช้คอัพ/โช๊คอัพ) และแชทกับคลังคนละสะกดกันตลอด. ค้นแบบเทียบตรงตัว
+ * จึงพลาดของที่มีอยู่จริง = คนใช้สรุปว่า "ระบบไม่มี" แล้วไปถามในไลน์ซ้ำ.
+ * ⇒ ตัดวรรณยุกต์/ไม้ไต่คู้/การันต์/สระบน-ล่าง + ช่องว่าง + . - ทิ้งทั้ง 2 ฝั่ง
+ * ก่อนเทียบ (ใช้กับ "หาเจอ" เท่านั้น — ไม่แตะข้อความที่แสดงหรือที่บันทึก).
+ */
+const TH_MARKS = /[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]/g;
+const norm = (v: string | null | undefined) =>
+  clean(v)
+    .toLowerCase()
+    // "เเ" (สระเอ 2 ตัว — พิมพ์ผิดที่เจอบ่อยมากในแชท เช่น "ตลับกุญเเจ") = "แ"
+    .replace(/เเ/g, "แ")
+    .replace(TH_MARKS, "")
+    // วงเล็บ/เครื่องหมายคั่น — "กระดาษทราย (กลมหลังสักหลาด)" ต้องเจอด้วยคำ
+    // "กระดาษทรายกลมหลังสักหลาด" ที่คนพิมพ์มาในแชท
+    .replace(/[\s.\-_/,()[\]{}"'·]/g, "");
+
 function pct(v: number | string | null | undefined): string {
   if (v === null || v === undefined || v === "") return "—";
   const n = Number(v);
@@ -57,6 +76,17 @@ function SourceBadge({ source, provenance }: { source: string | null; provenance
       ? "border-slate-300 bg-slate-100 text-slate-600 dark:bg-slate-900/30"
       : "border-border bg-surface-alt/50 text-muted";
   return <span className={`rounded-full border px-2 py-0.5 text-[11px] ${tone}`}>{s}</span>;
+}
+
+/** คืน "ชื่อสินค้า" ตัวแรกของแถวที่ตรงกับคำค้น (normalized) — null = ไม่ตรง */
+function aliasHit(r: HsRow, n: string): string | null {
+  if (!n) return null;
+  for (const a of r.product_aliases ?? []) {
+    const th = clean(a.th), en = clean(a.en);
+    if (th && norm(th).includes(n)) return th;
+    if (en && norm(en).includes(n)) return en;
+  }
+  return null;
 }
 
 type OtherFormDraft = { name: string; pct: string };
@@ -126,13 +156,14 @@ function CodesSection({ initialRows }: { initialRows: HsRow[] }) {
       if (r.code.toLowerCase().includes(t)) return true;
       // Cross-style digit match: "4202.29" must find a row stored as "42022900".
       if (td.length >= 2 && digitsOf(r.code).includes(td)) return true;
-      if (clean(r.description).toLowerCase().includes(t)) return true;
-      if (clean(r.description_en).toLowerCase().includes(t)) return true;
-      if (clean(r.hs_note).toLowerCase().includes(t)) return true;
+      const n = norm(search);
+      if (!n) return true;
+      if (norm(r.description).includes(n)) return true;
+      if (norm(r.description_en).includes(n)) return true;
+      if (norm(r.hs_note).includes(n)) return true;
       if (clean(r.source).toLowerCase().includes(t)) return true;
       // ชื่อสินค้าที่เคยถาม/ตอบ — งานเดิมของแท็บ "สินค้า → พิกัด" มาอยู่ในลิสต์นี้
-      if (r.product_aliases?.some((a) =>
-        clean(a.th).toLowerCase().includes(t) || clean(a.en).toLowerCase().includes(t))) return true;
+      if (aliasHit(r, n) !== null) return true;
       return false;
     });
   }, [rows, search, filter]);
@@ -415,7 +446,8 @@ function CodesSection({ initialRows }: { initialRows: HsRow[] }) {
       ) : (
         <div className="space-y-2">
           {shown.map((r) => (
-            <CodeRow key={r.code} r={r} conflict={isConflict(r)} onEdit={() => openEdit(r)} onAdopt={() => adoptDecl(r)} />
+            <CodeRow key={r.code} r={r} conflict={isConflict(r)} term={search}
+              onEdit={() => openEdit(r)} onAdopt={() => adoptDecl(r)} />
           ))}
         </div>
       )}
@@ -431,9 +463,14 @@ function CodesSection({ initialRows }: { initialRows: HsRow[] }) {
 
 /** §0g — one self-explaining row: what · duty + trust · reality · next action. */
 function CodeRow({
-  r, conflict, onEdit, onAdopt,
-}: { r: HsRow; conflict: boolean; onEdit: () => void; onAdopt: () => void }) {
+  r, conflict, term, onEdit, onAdopt,
+}: { r: HsRow; conflict: boolean; term: string; onEdit: () => void; onAdopt: () => void }) {
   const used = (r.decl_count ?? 0) > 0;
+  // ถ้าคำที่ค้นไปตรงกับ "ชื่อสินค้า" ไม่ใช่ชื่อหลักของแถว → ต้องบอกให้เห็น
+  // (owner: เจอแถวชื่อ "เทปพันสายไฟ" ตอนค้น "สติ๊ก" แล้วนึกว่าระบบหาไม่เจอ)
+  const n = norm(term);
+  const hit = n && !norm(r.description).includes(n) && !norm(r.description_en).includes(n)
+    ? aliasHit(r, n) : null;
   return (
     <div
       className={
@@ -462,9 +499,17 @@ function CodeRow({
               <span className="rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">ปิด</span>
             )}
           </div>
-          <p className="mt-0.5 text-[13px] font-semibold text-foreground break-words">{r.description}</p>
+          {hit && (
+            <p className="mt-0.5 text-[13px] font-bold text-primary-700 break-words">
+              🔎 {hit}
+              <span className="ml-1.5 text-[11px] font-normal text-muted">— ชื่อที่เคยถาม/ตอบสำหรับพิกัดนี้</span>
+            </p>
+          )}
+          <p className={"mt-0.5 break-words " + (hit ? "text-[11px] text-muted" : "text-[13px] font-semibold text-foreground")}>
+            {hit ? "ชื่อหลักในคลัง: " : ""}{r.description}
+          </p>
           {clean(r.description_en) && <p className="text-[11px] text-muted break-words">{r.description_en}</p>}
-          <AliasChips aliases={r.product_aliases} selfTh={r.description} selfEn={r.description_en} />
+          <AliasChips aliases={r.product_aliases} selfTh={r.description} selfEn={r.description_en} term={term} />
           {clean(r.hs_note) && <p className="mt-1 text-[11px] text-muted break-words">📝 {r.hs_note}</p>}
         </div>
 
@@ -578,8 +623,8 @@ function StatCard({
  *  "สินค้า → พิกัด" tab. Shows up to 6 chips + "+N" (expand); the search box
  *  already matches every alias, so typing a product name lands on this row. */
 function AliasChips({
-  aliases, selfTh, selfEn,
-}: { aliases: HsRow["product_aliases"]; selfTh: string | null; selfEn: string | null }) {
+  aliases, selfTh, selfEn, term,
+}: { aliases: HsRow["product_aliases"]; selfTh: string | null; selfEn: string | null; term: string }) {
   const [expanded, setExpanded] = useState(false);
   const items = useMemo(() => {
     const seen = new Set<string>([clean(selfTh).toLowerCase(), clean(selfEn).toLowerCase()]);
@@ -593,9 +638,17 @@ function AliasChips({
       seen.add(k);
       out.push({ label, title: [en && th ? th + " / " + en : label, clean(a.note)].filter(Boolean).join(" · ") });
     }
+    // ⚠️ ชิปตัดที่ 6 ตัว — ถ้าชื่อที่ค้นเจอไปอยู่ชิปที่ 50 (พิกัดหนึ่งมีได้ถึง 118
+    // ชื่อ) ผู้ใช้จะเห็นแถวที่ไม่มีคำที่ตัวเองพิมพ์อยู่เลย = "ผลลัพธ์มั่ว/ไม่เจอ".
+    // ⇒ เวลาค้น ดันชื่อที่ตรงขึ้นหน้าเสมอ.
+    const n = norm(term);
+    if (n) {
+      out.sort((a, b) => Number(norm(b.label).includes(n)) - Number(norm(a.label).includes(n)));
+    }
     return out;
-  }, [aliases, selfTh, selfEn]);
+  }, [aliases, selfTh, selfEn, term]);
   if (items.length === 0) return null;
+  const nTerm = norm(term);
   const CAP = 6;
   const shown = expanded ? items : items.slice(0, CAP);
   return (
@@ -603,7 +656,10 @@ function AliasChips({
       <span className="text-[11px] text-muted">สินค้า:</span>
       {shown.map((a, i) => (
         <span key={i} title={a.title}
-          className="inline-flex max-w-[16rem] truncate rounded-full border border-border bg-surface-alt/60 px-2 py-0.5 text-[11px] text-foreground/80">
+          className={"inline-flex max-w-[16rem] truncate rounded-full border px-2 py-0.5 text-[11px] " +
+            (nTerm && norm(a.label).includes(nTerm)
+              ? "border-primary-400 bg-primary-50 font-semibold text-primary-800 dark:bg-primary-950/20"
+              : "border-border bg-surface-alt/60 text-foreground/80")}>
           {a.label}
         </span>
       ))}

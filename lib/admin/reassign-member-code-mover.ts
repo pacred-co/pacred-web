@@ -193,6 +193,15 @@ export async function moveMemberCode(args: {
     let moved = 0;
     await c.query("BEGIN");
     try {
+      // ปลดด่านที่อยู่ของ mig 0270 เฉพาะในก้อนนี้ (mig 0286) — ด่านคู่นั้นอ่าน
+      // สถานะ "กลางทาง" ของทรานแซกชัน แล้วล็อกกันเอง: ย้าย tb_address ก่อนก็โดน
+      // protect_customer_main_address · ย้าย tb_address_main ก่อนก็โดน
+      // guard_customer_main_address ⇒ ลูกค้าที่มีที่อยู่หลัก (คือแทบทุกคน) รัน
+      // เลข PR ใหม่ไม่ได้เลย (owner 2026-08-03 · PR9640). ที่นี่ปลอดภัยเพราะ
+      // เจ้าของคนเดิม/ที่อยู่เดิม เปลี่ยนแค่รหัส และคู่ tb_address ↔
+      // tb_address_main ย้ายพร้อมกันในก้อนเดียว + verify ทุกตารางด้านล่าง.
+      // SET LOCAL = หายเองตอน COMMIT/ROLLBACK · ฝั่งแอป (PostgREST) ตั้งไม่ได้.
+      await c.query("SET LOCAL app.member_code_move = 'on'");
       for (const t of plan.tables) {
         const r = await c.query(`UPDATE "${t.table}" SET "${t.column}"=$1 WHERE "${t.column}"=$2`, [to, from]);
         if (r.rowCount !== t.rows) throw new Error(`mismatch ${t.table}.${t.column}: ${r.rowCount}≠${t.rows}`);
