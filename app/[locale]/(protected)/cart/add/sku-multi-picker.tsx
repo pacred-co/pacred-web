@@ -251,7 +251,10 @@ export function SkuMultiPicker({
             ยังไม่ได้เลือก — กดเลือกแบบด้านบนได้เลย (เลือกได้หลายแบบ)
           </p>
         ) : (
-          <div className="scrollbar-clean mt-2 overflow-x-auto">
+          // scrollbar-none like the strips above (owner 2026-08-03 "เอาออกให้หมด") —
+          // the columns are sized to fit the card, so the bar was cosmetic; the table
+          // still scrolls by touch/drag if a narrow window ever squeezes it.
+          <div className="scrollbar-none mt-2 overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="text-[11.5px] text-muted">
