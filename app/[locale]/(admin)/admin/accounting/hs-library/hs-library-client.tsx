@@ -106,8 +106,10 @@ function CodesSection({ initialRows }: { initialRows: HsRow[] }) {
     confirmed:   rows.filter((r) => r.duty_confirmed).length,
     used:        rows.filter((r) => (r.decl_count ?? 0) > 0).length,
     conflict:    rows.filter(isConflict).length,
-    // ชื่อสินค้าที่เคยถาม/ตอบ ทั้งคลัง (product_aliases · one-table merge 0285)
-    aliases:     rows.reduce((n, r) => n + (r.product_aliases?.length ?? 0), 0),
+    // ชื่อสินค้าที่ค้นเจอได้ทั้งหมด = ชื่อหลักของแถว + ชื่อ alias ที่เคยถาม/ตอบ
+    // (owner 2026-08-03 งงว่า "5-6 พันหายไปไหน" — 5,335 แถวบอท/ไฟล์คือ "ชื่อ"
+    //  ไม่ใช่พิกัด · ชื่อซ้ำเป๊ะยุบเหลือหนึ่ง → การ์ดนี้ต้องนับ "ชื่อ" ให้ตรงความหมาย)
+    names:       rows.reduce((n, r) => n + 1 + (r.product_aliases?.length ?? 0), 0),
   }), [rows]);
 
   const visible = useMemo(() => {
@@ -247,7 +249,7 @@ function CodesSection({ initialRows }: { initialRows: HsRow[] }) {
       {/* ── stat cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
         <StatCard icon={<Layers className="h-4 w-4" />} label="พิกัดทั้งหมด" value={stats.total} />
-        <StatCard icon={<PackageSearch className="h-4 w-4" />} label="ชื่อสินค้าในคลัง" value={stats.aliases} />
+        <StatCard icon={<PackageSearch className="h-4 w-4" />} label="ชื่อสินค้า/คำค้น" value={stats.names} />
         <StatCard icon={<BadgeCheck className="h-4 w-4 text-emerald-600" />} label="ยืนยันอากรแล้ว" value={stats.confirmed} tone="emerald" />
         <StatCard icon={<FileText className="h-4 w-4 text-sky-600" />} label="เคยใช้จริงในใบขน" value={stats.used} tone="sky" />
         <StatCard icon={<AlertTriangle className="h-4 w-4 text-amber-600" />} label="อากรไม่ตรงกับใบขน" value={stats.conflict} tone="amber" />
