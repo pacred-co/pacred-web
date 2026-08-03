@@ -42,10 +42,13 @@ export function RichProductCard({
   product: p,
   rsDefault,
   fxRates,
+  onAdded,
 }: {
   product: Product;
   rsDefault: number;
   fxRates: Record<string, number>;
+  /** Notify-only — the review page marks its tab "เพิ่มแล้ว" with a ✓. */
+  onAdded?: (count: number) => void;
 }) {
   const priceCny = p.promoPriceCny ?? p.priceCny;
   const priceThb = priceCny * rsDefault;
@@ -228,6 +231,7 @@ export function RichProductCard({
               basePriceCny={p.basePriceCny}
               promoPriceCny={p.promoPriceCny}
               richLayout
+              onAdded={onAdded}
             />
           </div>
         </div>

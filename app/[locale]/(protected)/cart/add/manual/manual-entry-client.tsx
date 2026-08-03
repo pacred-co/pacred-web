@@ -20,10 +20,10 @@
  */
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "@/i18n/navigation";
+import { Link } from "@/i18n/navigation";
 import {
   BadgeCheck, ClipboardList, Info, Loader2, PackageSearch, Plus,
-  ShieldCheck, ShoppingCart, Users, X,
+  Check, ShieldCheck, ShoppingCart, Users, X,
 } from "lucide-react";
 import { addCartItemsBulk, type CartItemBulkRow } from "@/actions/cart";
 import { uploadCartProductImage } from "@/actions/cart-manual-image";
@@ -45,10 +45,15 @@ export function ManualEntryClient({
   rsDefault: number;
   fxRates: Record<string, number>;
 }) {
-  const router = useRouter();
   const [items, setItems] = useState<ManualItem[]>([newManualItem()]);
   const [active, setActive] = useState(0);
   const [err, setErr] = useState<string | null>(null);
+  /**
+   * รายการ already in tb_cart — the ✓ badge (owner 2026-08-03 "ถ้าเพิ่มแล้ว
+   * ให้ขึ้นมุมเป็น checkmark จะได้รู้ว่าเพิ่มแล้ว"). Clears the moment that
+   * รายการ is edited, so the ✓ never claims something the cart does not hold.
+   */
+  const [addedIds, setAddedIds] = useState<Set<number>>(new Set());
   const [pending, startTransition] = useTransition();
 
   const currencyOptions = useMemo(() => {
@@ -70,6 +75,12 @@ export function ManualEntryClient({
   // ── Item editing ──────────────────────────────────────────────────
   const patch = (id: number, p: Partial<ManualItem>) => {
     setItems((xs) => xs.map((it) => (it.id === id ? { ...it, ...p } : it)));
+    setAddedIds((s) => {
+      if (!s.has(id)) return s;
+      const n = new Set(s);
+      n.delete(id);
+      return n;
+    });
     setErr(null);
   };
 
@@ -107,11 +118,14 @@ export function ManualEntryClient({
     () => items.reduce((s, it) => s + manualItemThb(it, fxRates, rsDefault), 0),
     [items, fxRates, rsDefault],
   );
-  const readyCount = items.filter(isManualComplete).length;
+  const readyCount = items.filter((it) => isManualComplete(it) && !addedIds.has(it.id)).length;
+  const addedCount = items.filter((it) => addedIds.has(it.id)).length;
 
   // ── Submit → cart ─────────────────────────────────────────────────
   function submit() {
-    const ready = items.filter(isManualComplete);
+    // Skip รายการ already carrying a ✓ — pressing the button twice must not
+    // put the same goods in the cart twice.
+    const ready = items.filter((it) => isManualComplete(it) && !addedIds.has(it.id));
     if (ready.length === 0) {
       setErr("กรุณากรอกชื่อสินค้า ราคา และตัวเลือกอย่างน้อย 1 รายการก่อนครับ");
       return;
@@ -127,7 +141,12 @@ export function ManualEntryClient({
         setErr(res.error ?? "เพิ่มลงรถเข็นไม่สำเร็จ");
         return;
       }
-      router.push("/cart");
+      setAddedIds((s) => {
+        const n = new Set(s);
+        ready.forEach((it) => n.add(it.id));
+        return n;
+      });
+      setErr(null);
     });
   }
 
@@ -155,6 +174,7 @@ export function ManualEntryClient({
           {items.map((it, i) => {
             const isActive = i === active;
             const done = isManualComplete(it);
+            const added = addedIds.has(it.id);
             const closable = items.length > 1;
             // Same cell shape as /cart/add/review (owner 2026-08-03 "อยากได้
             // กากบาทลบได้เลย เหมือนกับฟอร์มมีลิงก์") — the cell carries the
@@ -168,18 +188,29 @@ export function ManualEntryClient({
                 }`}
               >
                 {isActive && <span aria-hidden className="absolute inset-x-0 top-0 h-[3px] bg-primary-600" />}
+                {added && (
+                  <span
+                    aria-hidden
+                    title="เพิ่มลงรถเข็นแล้ว"
+                    className="absolute left-1 top-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-white"
+                  >
+                    <Check className="h-3 w-3" strokeWidth={3} />
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => setActive(i)}
-                  className={`inline-flex flex-col items-center gap-0.5 py-2 pl-5 text-center transition ${
-                    closable ? "pr-8" : "pr-5"
-                  }`}
+                  className={`inline-flex flex-col items-center gap-0.5 py-2 text-center transition ${
+                    added ? "pl-7" : "pl-5"
+                  } ${closable ? "pr-8" : "pr-5"}`}
                 >
                   <span className={`flex items-center gap-1.5 text-[12.5px] font-bold ${isActive ? "text-foreground" : "text-muted"}`}>
                     รายการที่ {i + 1}
-                    <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${done ? "bg-emerald-500" : "bg-red-500"}`} />
+                    <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${added || done ? "bg-emerald-500" : "bg-red-500"}`} />
                   </span>
-                  <span className="text-[11px] font-medium text-muted">{done ? "ครบแล้ว" : "ยังไม่ครบ"}</span>
+                  <span className="text-[11px] font-medium text-muted">
+                    {added ? "เพิ่มลงรถเข็นแล้ว" : done ? "ครบแล้ว" : "ยังไม่ครบ"}
+                  </span>
                 </button>
                 {closable && (
                   <button
@@ -232,8 +263,10 @@ export function ManualEntryClient({
         <div>
           <p className="text-[14px] font-bold text-foreground">ทั้งหมด {items.length} รายการ</p>
           <p className="mt-0.5 flex items-center gap-1.5 text-[12px] text-muted">
-            <span className={`inline-block h-2 w-2 rounded-full ${readyCount > 0 ? "bg-emerald-500" : "bg-red-500"}`} />
-            กรอกครบแล้ว {readyCount} / {items.length}
+            <span className={`inline-block h-2 w-2 rounded-full ${readyCount > 0 || addedCount > 0 ? "bg-emerald-500" : "bg-red-500"}`} />
+            {addedCount > 0 && <b className="text-emerald-700">เพิ่มลงรถเข็นแล้ว {addedCount}</b>}
+            {addedCount > 0 && " · "}
+            พร้อมเพิ่ม {readyCount} / {items.length}
           </p>
         </div>
         <div className="border-l border-border pl-6">
@@ -243,6 +276,16 @@ export function ManualEntryClient({
           </p>
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {/* Once something is in the cart the customer needs a way OUT — the
+              button alone would leave them on a page with nothing left to press. */}
+          {addedCount > 0 && (
+            <Link
+              href="/cart"
+              className="inline-flex items-center gap-1.5 rounded-full border border-primary-500 px-5 py-3 text-[13.5px] font-bold text-primary-600 transition hover:bg-red-50"
+            >
+              <ShoppingCart className="h-4 w-4" /> ไปที่รถเข็น
+            </Link>
+          )}
           <button
             type="button"
             onClick={submit}
@@ -250,7 +293,11 @@ export function ManualEntryClient({
             className="inline-flex items-center gap-2 rounded-full bg-primary-600 px-6 py-3 text-[14px] font-extrabold text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
-            {pending ? "กำลังเพิ่ม…" : readyCount === 0 ? "กรอกข้อมูลให้ครบก่อน" : `เพิ่มลงรถเข็น ${readyCount} รายการ`}
+            {pending
+              ? "กำลังเพิ่ม…"
+              : readyCount === 0
+                ? addedCount > 0 ? "เพิ่มครบแล้ว" : "กรอกข้อมูลให้ครบก่อน"
+                : `เพิ่มลงรถเข็น ${readyCount} รายการ`}
           </button>
         </div>
       </div>

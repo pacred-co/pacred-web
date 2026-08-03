@@ -81,6 +81,7 @@ export function UrlPasteAddToCart({
   promoPriceCny,
   fxRates,
   richLayout = false,
+  onAdded,
 }: {
   url:        string;
   provider:   Provider;
@@ -116,6 +117,10 @@ export function UrlPasteAddToCart({
    *  layout the /search page uses (no regression). Money logic is identical
    *  in both modes — only the presentation branches. */
   richLayout?: boolean;
+  /** Fired after rows land in tb_cart, with how many. Notify-only — lets a host
+   *  (the review page) mark its tab "เพิ่มแล้ว" (owner 2026-08-03 "ขึ้นมุมเป็น
+   *  checkmark จะได้รู้ว่าเพิ่มแล้ว"). Never affects what is written. */
+  onAdded?: (count: number) => void;
 }) {
   const t = useTranslations("searchPage");
   const minClamp = Math.max(1, minQty);
@@ -379,6 +384,7 @@ export function UrlPasteAddToCart({
         if (res.ok) {
           setSuccess(true);
           setAddedCount((c) => c + rows.length);
+          onAdded?.(rows.length);
           setQtyBySku({}); setDetails("");
           setTimeout(() => setSuccess(false), 4000);
         } else {
@@ -435,6 +441,7 @@ export function UrlPasteAddToCart({
       if (res.ok) {
         setSuccess(true);
         setAddedCount((c) => c + 1);
+        onAdded?.(1);
         // Clear form so customer can paste another URL without stale qty.
         // Keep manualPrice — TAMIT often fails on a whole shop, so the
         // next URL from the same vendor likely shares the price posture.

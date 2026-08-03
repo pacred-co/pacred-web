@@ -20,8 +20,8 @@ import {
   useEffect, useMemo, useRef, useState, useTransition,
   type Dispatch, type SetStateAction,
 } from "react";
-import { Link, useRouter } from "@/i18n/navigation";
-import { AlertTriangle, Info, Loader2, Pencil, Plus, ArrowLeft, ShoppingCart, X } from "lucide-react";
+import { Link } from "@/i18n/navigation";
+import { AlertTriangle, Check, Info, Loader2, Pencil, Plus, ArrowLeft, ShoppingCart, X } from "lucide-react";
 import { searchProductByUrl, type ProductSearchOk } from "@/actions/product-search";
 import { addCartItemsBulk } from "@/actions/cart";
 import { uploadCartProductImage } from "@/actions/cart-manual-image";
@@ -94,9 +94,16 @@ export function ReviewClient({
   const [addOpen, setAddOpen] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [uploading, setUploading] = useState<number | null>(null);
+  /**
+   * Tabs whose contents already landed in tb_cart — the ✓ badge (owner
+   * 2026-08-03 "ถ้าเพิ่มแล้ว ให้ขึ้นมุมเป็น checkmark จะได้รู้ว่าเพิ่มแล้ว").
+   * With several รายการ open it is otherwise impossible to tell which ones are
+   * done, and the customer either double-adds or forgets one.
+   */
+  const [addedKeys, setAddedKeys] = useState<Set<number>>(new Set());
+  const markAdded = (key: number) => setAddedKeys((s) => new Set(s).add(key));
   const [pending, startTransition] = useTransition();
   const started = useRef(false);
-  const router = useRouter();
 
   const currencyOptions = useMemo(() => {
     const keys = ["CNY", "THB", ...Object.keys(fxRates ?? {})];
@@ -137,6 +144,14 @@ export function ReviewClient({
           )
         : prev,
     );
+    // Editing after adding means the cart no longer matches what's on screen —
+    // keeping the ✓ would be a lie, so it clears until they add again.
+    setAddedKeys((s) => {
+      if (!s.has(key)) return s;
+      const n = new Set(s);
+      n.delete(key);
+      return n;
+    });
     setErr(null);
   };
 
@@ -156,8 +171,13 @@ export function ReviewClient({
     }
   }
 
-  /** Same ending as a fetched card: rows → tb_cart → /cart. */
-  function addManualToCart(it: ManualItem) {
+  /**
+   * Same ending as a fetched card: rows → tb_cart, then STAY on the page with a
+   * ✓ on the tab. The with-link island behaves exactly this way (success banner,
+   * no navigation) so the customer can work through several รายการ in one go —
+   * jumping to /cart after the first one would strand the tabs still open.
+   */
+  function addManualToCart(key: number, it: ManualItem) {
     const rows = manualItemToCartRows(it, fxRates);
     if (rows.length === 0) {
       setErr("กรุณากรอกชื่อสินค้า ราคา และตัวเลือกอย่างน้อย 1 รายการก่อนครับ");
@@ -169,7 +189,8 @@ export function ReviewClient({
         setErr(res.error ?? "เพิ่มลงรถเข็นไม่สำเร็จ");
         return;
       }
-      router.push("/cart");
+      markAdded(key);
+      setErr(null);
     });
   }
 
@@ -318,8 +339,10 @@ export function ReviewClient({
         {items.map((it, i) => {
           const isActive = i === active;
           const manualDone = it.status === "manual" && isManualComplete(it.manual);
-          const sub =
-            it.status === "loading"
+          const added = addedKeys.has(it.key);
+          const sub = added
+            ? "เพิ่มลงรถเข็นแล้ว"
+            : it.status === "loading"
               ? "กำลังโหลด…"
               : it.status === "fail"
                 ? "ไม่พบสินค้า"
@@ -328,8 +351,9 @@ export function ReviewClient({
                   : isActive
                     ? "กำลังกรอก"
                     : "ยังไม่ครบ";
-          const dotCls =
-            it.status === "loading"
+          const dotCls = added
+            ? "bg-emerald-500"
+            : it.status === "loading"
               ? "animate-pulse bg-amber-400"
               : it.status === "fail"
                 ? "bg-red-500"
@@ -351,12 +375,21 @@ export function ReviewClient({
               {isActive && (
                 <span aria-hidden className="absolute inset-x-0 top-0 h-[3px] bg-primary-600" />
               )}
+              {added && (
+                <span
+                  aria-hidden
+                  title="เพิ่มลงรถเข็นแล้ว"
+                  className="absolute left-1 top-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-white"
+                >
+                  <Check className="h-3 w-3" strokeWidth={3} />
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => setActive(i)}
-                className={`inline-flex flex-col items-center gap-0.5 py-2 pl-5 text-center transition ${
-                  closable ? "pr-8" : "pr-5"
-                }`}
+                className={`inline-flex flex-col items-center gap-0.5 py-2 text-center transition ${
+                  added ? "pl-7" : "pl-5"
+                } ${closable ? "pr-8" : "pr-5"}`}
               >
                 <span
                   className={`flex items-center gap-1.5 text-[12.5px] font-bold ${
@@ -437,19 +470,29 @@ export function ReviewClient({
             </p>
             {/* Same ending as a fetched card — one full-width หยิบใส่รถเข็น → /cart. */}
             <div className="mt-4 border-t border-border pt-3">
-              <button
-                type="button"
-                onClick={() => addManualToCart(cur.manual)}
-                disabled={!isManualComplete(cur.manual) || pending}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary-600 py-3 text-[15px] font-extrabold text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShoppingCart className="h-5 w-5" />}
-                {pending
-                  ? "กำลังเพิ่ม…"
-                  : isManualComplete(cur.manual)
-                    ? "หยิบใส่รถเข็น"
-                    : "กรอกข้อมูลให้ครบก่อน"}
-              </button>
+              {addedKeys.has(cur.key) ? (
+                <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-full bg-emerald-50 px-4 py-3 text-[14px] font-bold text-emerald-800">
+                  <Check className="h-5 w-5" strokeWidth={3} />
+                  เพิ่มลงรถเข็นแล้ว
+                  <Link href="/cart" className="text-primary-600 underline underline-offset-2 hover:text-primary-700">
+                    ไปที่รถเข็น
+                  </Link>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => addManualToCart(cur.key, cur.manual)}
+                  disabled={!isManualComplete(cur.manual) || pending}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary-600 py-3 text-[15px] font-extrabold text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShoppingCart className="h-5 w-5" />}
+                  {pending
+                    ? "กำลังเพิ่ม…"
+                    : isManualComplete(cur.manual)
+                      ? "หยิบใส่รถเข็น"
+                      : "กรอกข้อมูลให้ครบก่อน"}
+                </button>
+              )}
               <p className="mt-2 text-center text-[12.5px] text-muted">
                 ยอดรวมโดยประมาณ{" "}
                 <b className="text-primary-600">
@@ -468,7 +511,12 @@ export function ReviewClient({
           )}
         </>
       ) : (
-        <RichProductCard product={cur.product} rsDefault={rsDefault} fxRates={fxRates} />
+        <RichProductCard
+          product={cur.product}
+          rsDefault={rsDefault}
+          fxRates={fxRates}
+          onAdded={() => markAdded(cur.key)}
+        />
       )}
 
       <AddLinksDialog
