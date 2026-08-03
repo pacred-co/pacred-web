@@ -20,10 +20,11 @@
  */
 
 import { useRef, useState } from "react";
-import { ImagePlus, Loader2, Package, Plus, Trash2, X } from "lucide-react";
+import { ImagePlus, Loader2, MessageCircle, Package, Plus, Trash2, X } from "lucide-react";
 import { toYuanEquivalent } from "@/lib/forwarder/currency-convert";
 import { MAX_ORDER_QTY } from "@/lib/validators/order-qty";
 import type { CartItemBulkRow } from "@/actions/cart";
+import { LINE_OA } from "@/components/seo/site";
 
 /** tb_cart.cdetails ceiling enforced by productDetailsField() — stay under it. */
 const DETAILS_MAX = 1000;
@@ -204,7 +205,22 @@ export function ManualItemForm({
 
       <div className="min-w-0 space-y-3.5">
         <div>
-          <p className="mb-1.5 text-[13px] font-bold text-foreground">ข้อมูลสินค้า</p>
+          {/* owner 2026-08-03 "ทำ Badge ให้เข้าใจว่าติดต่อได้เด่นๆ กดแล้วไปไลน์" —
+              this is the form people give up on, so the way out sits ON it rather
+              than in a footer they never scroll to. LINE brand green so it reads
+              as "chat with a human", not as another step of the form. */}
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[13px] font-bold text-foreground">ข้อมูลสินค้า</p>
+            <a
+              href={LINE_OA.shortUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-full bg-[#06C755] px-3.5 py-1.5 text-[12px] font-bold text-white shadow-sm transition hover:brightness-95"
+            >
+              <MessageCircle className="h-4 w-4" strokeWidth={2.4} />
+              ใช้งานยาก? ให้เจ้าหน้าที่สั่งซื้อให้
+            </a>
+          </div>
           <input
             value={cur.title}
             onChange={(e) => patch({ title: e.target.value })}
