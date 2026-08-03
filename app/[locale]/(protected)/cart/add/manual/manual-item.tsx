@@ -30,6 +30,8 @@ const DETAILS_MAX = 1000;
 /** Photos per รายการ. tb_cart holds ONE image column, so [0] is the cover and
  *  the rest ride along in cdetails as links the buying team can open. */
 export const MAX_PHOTOS = 5;
+/** varchar(1000) on tb_cart.cimages + tb_order.cimages (probed prod 2026-08-03). */
+const IMAGES_COL_MAX = 1000;
 
 export type OptRow = { id: number; color: string; size: string; qty: string; price: string };
 export type ManualItem = {
@@ -90,27 +92,23 @@ export function manualItemToCartRows(
 ): CartItemBulkRow[] {
   // Fields tb_cart has no column for are folded into cdetails with a label so
   // the buying team still sees them (the legacy model has no variant sidecar).
-  // Extra photos: cimages fits only the cover, so the others go in as links.
-  // Trimmed to what actually fits — and the count is stated either way, so a
-  // dropped link is visible to staff instead of vanishing silently.
-  const head = [
+  const extra = [
     it.details.trim() && `รายละเอียด: ${it.details.trim()}`,
     it.note.trim() && `หมายเหตุถึงร้าน: ${it.note.trim()}`,
     num(it.minQty) > 0 && `ขั้นต่ำ: ${num(it.minQty)} ชิ้น`,
-  ].filter(Boolean).join(" · ");
-  const rest = it.images.slice(1);
-  let extra = head;
-  if (rest.length > 0) {
-    const label = `${head ? " · " : ""}รูปเพิ่มเติม ${rest.length} รูป: `;
-    const fit: string[] = [];
-    for (const u of rest) {
-      const candidate = head.length + label.length + [...fit, u].join(" ").length;
-      if (candidate > DETAILS_MAX) break;
-      fit.push(u);
-    }
-    extra = head + label + fit.join(" ");
+  ].filter(Boolean).join(" · ").slice(0, DETAILS_MAX);
+
+  // ALL photos ride in cimages, comma-separated — the legacy multi-image
+  // convention (shop-order-status-lite already reads "cimages (first)"), so the
+  // cover keeps working everywhere and the extras survive into tb_order instead
+  // of being stuffed into the human-readable details field. Public bucket URLs
+  // are ~88 chars, so five fit the varchar(1000) column with room to spare; the
+  // guard below is belt-and-braces against a future longer host.
+  const images: string[] = [];
+  for (const u of it.images.slice(0, MAX_PHOTOS)) {
+    if ([...images, u].join(",").length > IMAGES_COL_MAX) break;
+    images.push(u);
   }
-  extra = extra.slice(0, DETAILS_MAX);
 
   return manualFilledOpts(it).map((o) => {
     const entered = manualRowPrice(it, o);
@@ -119,7 +117,7 @@ export function manualItemToCartRows(
       shop_name: it.shopName.trim() || "pacred",
       title: it.title.trim(),
       url: it.url.trim() || undefined,
-      image_path: it.images[0] || undefined,
+      image_path: images.join(",") || undefined,
       color: o.color.trim() || undefined,
       size: o.size.trim() || undefined,
       // Preview value; the server re-derives ¥ from (input_currency, input_price).

@@ -20,6 +20,8 @@ import {
   shopImageUrl,
   isAlibabaCdnUrl,
   NO_COVER_IMAGE,
+  splitImageList,
+  firstImageOf,
 } from "./legacy-image";
 
 let pass = 0;
@@ -142,6 +144,38 @@ assertEq("oss params stripped then suffixed for alicdn",
 // restore env
 if (origSupa === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL; else process.env.NEXT_PUBLIC_SUPABASE_URL = origSupa;
 if (origOverride === undefined) delete process.env.NEXT_PUBLIC_LEGACY_MEMBER_BASE; else process.env.NEXT_PUBLIC_LEGACY_MEMBER_BASE = origOverride;
+
+
+// ── Multi-image `cimages` (owner 2026-08-03 · manual entry uploads up to 5) ──
+// The legacy column may hold several comma-separated images; the COVER is the
+// first. shopImageUrl used to resolve the whole joined string as one URL →
+// emptyFallback → a broken thumbnail on every surface (2 such rows exist on prod).
+section("multi-image cimages — comma-separated list");
+{
+  const a = "https://ref.supabase.co/storage/v1/object/public/carts/u/manual/1.png";
+  const b = "https://ref.supabase.co/storage/v1/object/public/carts/u/manual/2.png";
+
+  assertEq("splitImageList — three entries", splitImageList(`${a},${b},${a}`).length, 3);
+  assertEq("splitImageList — single entry", splitImageList(a).length, 1);
+  assertEq("splitImageList — empty", splitImageList("").length, 0);
+  assertEq("splitImageList — trims spaces", splitImageList(` ${a} , ${b} `)[1], b);
+
+  assertEq("firstImageOf — cover is the first", firstImageOf(`${a},${b}`), a);
+  assertEq("firstImageOf — empty stays empty", firstImageOf(null), "");
+
+  assertEq("shopImageUrl resolves the cover, not the joined string", shopImageUrl(`${a},${b}`), a);
+  assertEq("shopImageUrl single value unchanged", shopImageUrl(a), a);
+
+  assertEq("isDirectImageUrl — all entries valid", isDirectImageUrl(`${a},${b}`), true);
+  // One bad entry must fail the whole value, so a bad paste cannot ride along
+  // behind a good first entry.
+  assertEq(
+    "isDirectImageUrl — one bad entry rejects the list",
+    isDirectImageUrl(`${a},https://drive.google.com/drive/folders/abc`),
+    false,
+  );
+}
+
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} shop-image-url: ${pass} pass / ${fail} fail`);
 if (fail > 0) process.exit(1);

@@ -8,14 +8,20 @@
  * bucket (created for exactly this, never wired until now) under a per-user
  * folder, mirroring `uploadDeliveryFeedbackPhoto` in actions/delivery-feedback.ts.
  *
- * WHY a signed URL and not the storage path: `tb_cart.cimages` is copied VERBATIM
- * downstream (tb_order.cimages → tb_header_order.hcover → tb_forwarder.fcover) and
- * every surface renders it through `shopImageUrl`, which cannot sign a private
- * path — storing a bare path would save "fine" and then show a broken image on
- * every downstream screen (the §0e silent-write trap). A long-lived signed URL is
- * an absolute https URL, so it passes `isDirectImageUrl` and renders through the
- * existing resolver with ZERO downstream changes. Measured length 373 chars,
- * well under the 1000-char column/validator ceiling.
+ * WHY a public URL and not a storage path or a signed one: `tb_cart.cimages` is
+ * copied VERBATIM downstream (tb_order.cimages → tb_header_order.hcover →
+ * tb_forwarder.fcover) and every surface renders it through `shopImageUrl`,
+ * which can neither sign a private path nor refresh an expired token — storing
+ * either would save "fine" and then show a broken image on every downstream
+ * screen (the §0e silent-write trap).
+ *
+ * The `carts` bucket was made PUBLIC on 2026-08-03 for exactly this (same posture
+ * as the existing public `avatars` bucket; paths carry a uuid + timestamp + random
+ * suffix so they are not enumerable, and the bucket is capped to images ≤10 MB):
+ *   • permanent — no expiry to rot, unlike a signed URL
+ *   • 88 chars vs 364 — so FIVE photos fit the varchar(1000) `cimages` column
+ *     under the legacy comma-separated convention (owner 2026-08-03 asked for
+ *     several photos: "ไม่ต้องไปจำกัดลิงก์อะไร เอาแบบดีๆ")
  *
  * NO money here — this only returns a URL. The cart write stays
  * `addCartItemsBulk` → tb_cart.
@@ -30,8 +36,6 @@ type Result =
 
 /** 10 MB — the ceiling the upload panel advertises to the customer. */
 const MAX_BYTES = 10 * 1024 * 1024;
-/** ~10 years. Effectively permanent: the stored value must outlive the order. */
-const SIGNED_URL_TTL_SEC = 60 * 60 * 24 * 365 * 10;
 
 export async function uploadCartProductImage(formData: FormData): Promise<Result> {
   // Impersonation is read-only; refuse customer-facing mutations.
@@ -67,15 +71,13 @@ export async function uploadCartProductImage(formData: FormData): Promise<Result
     return { ok: false, error: `อัปโหลดรูปไม่สำเร็จ: ${upErr.message}` };
   }
 
-  const { data: signed, error: signErr } = await supabase.storage
-    .from("carts")
-    .createSignedUrl(path, SIGNED_URL_TTL_SEC);
-  if (signErr || !signed?.signedUrl) {
+  const { data: pub } = supabase.storage.from("carts").getPublicUrl(path);
+  if (!pub?.publicUrl) {
     // The object exists but we cannot hand back something renderable — say so
     // rather than return a path the downstream surfaces would render as broken.
-    console.error("[cart-manual-image sign] failed", { message: signErr?.message });
+    console.error("[cart-manual-image publicUrl] empty", { path });
     return { ok: false, error: "อัปโหลดได้แต่สร้างลิงก์รูปไม่สำเร็จ กรุณาลองใหม่" };
   }
 
-  return { ok: true, url: signed.signedUrl };
+  return { ok: true, url: pub.publicUrl };
 }

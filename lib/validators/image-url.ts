@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isDirectImageUrl, normalizeImageUrl } from "@/lib/legacy-image";
+import { isDirectImageUrl, normalizeImageUrl, splitImageList } from "@/lib/legacy-image";
 
 /**
  * The ONE image-URL field validator for every product-image write path.
@@ -42,7 +42,15 @@ export function imageUrlField(max = 300) {
     // Drive folder link / share page can never be embedded. (Normalising first
     // would collapse a folder link to "" and silently look like "no image".)
     .refine((s) => s === "" || isDirectImageUrl(s), { message: IMAGE_URL_HINT })
-    .transform((s) => (s === "" ? "" : normalizeImageUrl(s)))
+    // Normalise EACH entry: the column may hold several comma-separated images
+    // (the legacy multi-image convention the manual-entry form writes). Running
+    // the normaliser over the joined string would mangle every entry but the
+    // first, so a valid 3-photo value would fail its own validator.
+    .transform((s) =>
+      s === ""
+        ? ""
+        : splitImageList(s).map((one) => normalizeImageUrl(one)).filter(Boolean).join(","),
+    )
     .refine((s) => s.length <= max, {
       message: `ลิงก์รูปภาพยาวเกินไป (สูงสุด ${max} ตัวอักษร)`,
     });
