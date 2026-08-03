@@ -16,52 +16,70 @@
  * island → addCartItem → tb_cart).
  */
 
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { Link } from "@/i18n/navigation";
-import { AlertTriangle, Plus, ArrowLeft } from "lucide-react";
+import {
+  useEffect, useMemo, useRef, useState, useTransition,
+  type Dispatch, type SetStateAction,
+} from "react";
+import { Link, useRouter } from "@/i18n/navigation";
+import { AlertTriangle, Info, Loader2, Pencil, Plus, ArrowLeft, ShoppingCart, X } from "lucide-react";
 import { searchProductByUrl, type ProductSearchOk } from "@/actions/product-search";
+import { addCartItemsBulk } from "@/actions/cart";
+import { uploadCartProductImage } from "@/actions/cart-manual-image";
 import { RichProductCard } from "../rich-product-card";
-import { MAX_LINKS } from "../link-source";
+import { MAX_LINKS, takeManualLinks } from "../link-source";
+import {
+  ManualItemForm, isManualComplete, manualItemThb, manualItemToCartRows,
+  newManualItem, type ManualItem,
+} from "../manual/manual-item";
 import { AddLinksDialog } from "./add-links-dialog";
 
 const STORAGE_KEY = "pacred_cart_add_links";
 
-type Item =
-  | { url: string; status: "loading" }
-  | { url: string; status: "ok"; product: ProductSearchOk["product"] }
-  | { url: string; status: "fail"; message: string };
+type ItemState =
+  | { status: "loading" }
+  | { status: "ok"; product: ProductSearchOk["product"] }
+  | { status: "fail"; message: string }
+  // owner 2026-08-03 "กด ไม่มีลิงก์ แล้วเพิ่มรายการออกมาได้ต่อเลยอะ ไม่ได้ไปไหน" —
+  // a typed รายการ living beside the fetched ones, same tabs, same รถเข็น ending.
+  | { status: "manual"; manual: ManualItem };
+/** `key` is a STABLE per-tab id — see fetchIntoSlot for why an index won't do. */
+type Item = { key: number; url: string } & ItemState;
+
+let KEY_SEQ = 1;
+const newItem = (url: string): Item => ({ key: KEY_SEQ++, url, status: "loading" });
+const newManualTab = (url = ""): Item => ({
+  key: KEY_SEQ++, url, status: "manual", manual: newManualItem(url),
+});
 
 /**
- * Resolve ONE link into its slot. Module-level (not a closure) so the mount
+ * Resolve ONE link into its tab. Module-level (not a closure) so the mount
  * effect and the popup's append path provably run the identical fetch — a
  * second inline copy is how the two paths drift.
+ *
+ * Patches by `key`, never by array index: the customer can delete a tab while a
+ * sibling is still loading, and an index captured before the delete would land
+ * the result on somebody else's tab (showing product A under รายการ B).
  */
 function fetchIntoSlot(
   setItems: Dispatch<SetStateAction<Item[] | null>>,
-  idx: number,
+  key: number,
   url: string,
 ) {
-  const patch = (next: Item) =>
-    setItems((prev) => {
-      if (!prev) return prev;
-      const out = [...prev];
-      out[idx] = next;
-      return out;
-    });
+  const patch = (next: ItemState) =>
+    setItems((prev) => (prev ? prev.map((it) => (it.key === key ? { key, url, ...next } : it)) : prev));
 
   searchProductByUrl(url)
     .then((res) =>
       patch(
         res.ok
-          ? { url, status: "ok", product: res.product }
+          ? { status: "ok", product: res.product }
           : {
-              url,
               status: "fail",
               message: res.message ?? "ไม่พบข้อมูลสินค้าจากลิงก์นี้ กรุณากรอกรายการสินค้าด้วยตนเอง",
             },
       ),
     )
-    .catch(() => patch({ url, status: "fail", message: "ระบบค้นหาไม่พร้อม กรุณาลองใหม่อีกครั้ง" }));
+    .catch(() => patch({ status: "fail", message: "ระบบค้นหาไม่พร้อม กรุณาลองใหม่อีกครั้ง" }));
 }
 
 export function ReviewClient({
@@ -74,7 +92,86 @@ export function ReviewClient({
   const [items, setItems] = useState<Item[] | null>(null); // null = still reading storage
   const [active, setActive] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [uploading, setUploading] = useState<number | null>(null);
+  const [pending, startTransition] = useTransition();
   const started = useRef(false);
+  const router = useRouter();
+
+  const currencyOptions = useMemo(() => {
+    const keys = ["CNY", "THB", ...Object.keys(fxRates ?? {})];
+    return Array.from(new Set(keys.map((k) => k.toUpperCase())));
+  }, [fxRates]);
+
+  /**
+   * Add typed รายการ right here (owner 2026-08-03 "เพิ่มรายการออกมาได้ต่อเลยอะ
+   * ไม่ได้ไปไหน") — a shop we can't fetch becomes the next tab instead of a
+   * bounce to another page. `urls` may be empty = one blank รายการ.
+   */
+  function addManualTabs(urls: string[]) {
+    const base = items ?? [];
+    const room = Math.max(0, MAX_LINKS - base.length);
+    if (room === 0) return;
+    const add = (urls.length > 0 ? urls : [""]).slice(0, room).map(newManualTab);
+    setItems([...base, ...add]);
+    setActive(base.length);
+    setErr(null);
+  }
+
+  /** Turn a tab whose fetch failed into a typed one, keeping its position. */
+  function convertToManual(key: number) {
+    setItems((prev) =>
+      prev
+        ? prev.map((it) =>
+            it.key === key ? { key, url: it.url, status: "manual", manual: newManualItem(it.url) } : it,
+          )
+        : prev,
+    );
+  }
+
+  const patchManual = (key: number, p: Partial<ManualItem>) => {
+    setItems((prev) =>
+      prev
+        ? prev.map((it) =>
+            it.key === key && it.status === "manual" ? { ...it, manual: { ...it.manual, ...p } } : it,
+          )
+        : prev,
+    );
+    setErr(null);
+  };
+
+  async function pickPhoto(key: number, file: File) {
+    setUploading(key);
+    setErr(null);
+    try {
+      const fd = new FormData();
+      fd.append("photo", file);
+      const res = await uploadCartProductImage(fd);
+      if (res.ok) patchManual(key, { imageUrl: res.url });
+      else setErr(res.error);
+    } catch {
+      setErr("อัปโหลดรูปไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      setUploading(null);
+    }
+  }
+
+  /** Same ending as a fetched card: rows → tb_cart → /cart. */
+  function addManualToCart(it: ManualItem) {
+    const rows = manualItemToCartRows(it, fxRates);
+    if (rows.length === 0) {
+      setErr("กรุณากรอกชื่อสินค้า ราคา และตัวเลือกอย่างน้อย 1 รายการก่อนครับ");
+      return;
+    }
+    startTransition(async () => {
+      const res = await addCartItemsBulk(rows);
+      if (!res.ok) {
+        setErr(res.error ?? "เพิ่มลงรถเข็นไม่สำเร็จ");
+        return;
+      }
+      router.push("/cart");
+    });
+  }
 
   useEffect(() => {
     if (started.current) return; // guard React 18 StrictMode double-invoke
@@ -91,12 +188,14 @@ export function ReviewClient({
 
     // Client-only init from sessionStorage AFTER mount — the server + first client
     // render show the null skeleton, so there's no hydration mismatch.
-    setItems(links.length === 0 ? [] : links.map((url) => ({ url, status: "loading" as const })));
+    // /cart/add may have sent along links from shops we have no API for — they
+    // become typed tabs beside the fetched ones, in the same list.
+    const seeded = links.map(newItem);
+    const manual = takeManualLinks().map((u) => newManualTab(u));
+    setItems([...seeded, ...manual].slice(0, MAX_LINKS));
 
-    if (links.length === 0) return;
-
-    // Fetch each in parallel; patch that slot as it resolves (skeleton → card).
-    links.forEach((url, i) => fetchIntoSlot(setItems, i, url));
+    // Fetch each in parallel; patch that tab as it resolves (skeleton → card).
+    seeded.forEach((it) => fetchIntoSlot(setItems, it.key, it.url));
   }, []);
 
   /**
@@ -106,23 +205,42 @@ export function ReviewClient({
    * fetches deliberately run outside the state updater, which React may invoke
    * twice under StrictMode.
    */
-  function appendLinks(urls: string[]) {
+  function appendLinks(urls: string[], leftover: string[] = []) {
     const base = items ?? [];
     const room = Math.max(0, MAX_LINKS - base.length);
-    const add = urls.slice(0, room);
-    if (add.length === 0) return;
+    const add = urls.slice(0, room).map(newItem);
+    // Links from unsupported shops become typed tabs in the SAME list, so
+    // nothing is dropped and the customer never leaves the page.
+    const manual = leftover.slice(0, Math.max(0, room - add.length)).map((u) => newManualTab(u));
+    if (add.length === 0 && manual.length === 0) return;
 
-    const startIdx = base.length;
-    setItems([...base, ...add.map((url) => ({ url, status: "loading" as const }))]);
-    add.forEach((url, k) => fetchIntoSlot(setItems, startIdx + k, url));
-    setActive(startIdx); // jump to the first one just added
+    const next = [...base, ...add, ...manual];
+    setItems(next);
+    add.forEach((it) => fetchIntoSlot(setItems, it.key, it.url));
+    setActive(base.length); // jump to the first one just added
+    syncStorage(next);
+  }
 
-    // Keep storage in sync so a refresh doesn't lose the additions.
+  /**
+   * Delete a tab (owner 2026-08-03 "ให้มันกดลบได้") — a wrong link used to be
+   * stuck on the page for the rest of the session. Safe mid-flight because the
+   * in-flight fetches patch by `key`, not by position.
+   */
+  function removeItem(idx: number) {
+    if (!items || items.length <= 1) return;
+    const next = items.filter((_, i) => i !== idx);
+    setItems(next);
+    setActive((a) => (a > idx ? a - 1 : Math.min(a, next.length - 1)));
+    syncStorage(next);
+  }
+
+  /** Mirror the FETCHABLE tabs into sessionStorage so a refresh shows the same
+   *  set. Typed tabs are deliberately excluded — storing their url would make a
+   *  refresh resurrect them as product tabs that can never resolve. */
+  function syncStorage(list: Item[]) {
     try {
-      sessionStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify([...base.map((it) => it.url), ...add]),
-      );
+      const urls = list.filter((it) => it.status !== "manual").map((it) => it.url);
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(urls));
     } catch {
       /* private mode — the in-memory list is still correct for this visit */
     }
@@ -150,13 +268,21 @@ export function ReviewClient({
             <Plus className="h-4 w-4" /> เพิ่มสินค้าเข้ารถเข็น
           </button>
           <p className="mt-3 text-[12.5px] text-muted">
-            หรือ{" "}
+            ไม่มีลิงก์?{" "}
+            <button
+              type="button"
+              onClick={() => addManualTabs([])}
+              className="font-bold text-primary-600 hover:underline"
+            >
+              กรอกข้อมูลเอง
+            </button>
+            {" · "}
             <Link href="/cart/add" className="font-bold text-primary-600 hover:underline">
               กลับไปหน้าเพิ่มสินค้า
             </Link>
           </p>
         </div>
-        <AddLinksDialog open={addOpen} used={0} onClose={() => setAddOpen(false)} onAdd={appendLinks} />
+        <AddLinksDialog open={addOpen} used={0} onClose={() => setAddOpen(false)} onAdd={appendLinks} onManual={(u) => { setAddOpen(false); addManualTabs(u); }} />
       </>
     );
   }
@@ -171,6 +297,7 @@ export function ReviewClient({
       >
         <ArrowLeft className="h-4 w-4" /> กลับไปแก้ไขลิงก์
       </Link>
+
 
       {/* Tabs — รายการที่ 1/2 … (2-line pill: เลข+จุดสถานะ / คำอธิบายสถานะ) + เพิ่มรายการ.
           สถานะ: กำลังโหลด (เหลือง) · ไม่พบ (แดง) · กำลังกรอก = แท็บที่เปิดอยู่ (แดง) ·
@@ -190,44 +317,69 @@ export function ReviewClient({
         <div className="inline-flex translate-y-px overflow-hidden rounded-t-2xl border border-b-0 border-border">
         {items.map((it, i) => {
           const isActive = i === active;
+          const manualDone = it.status === "manual" && isManualComplete(it.manual);
           const sub =
             it.status === "loading"
               ? "กำลังโหลด…"
               : it.status === "fail"
                 ? "ไม่พบสินค้า"
-                : isActive
-                  ? "กำลังกรอก"
-                  : "ยังไม่ครบ";
+                : it.status === "manual"
+                  ? manualDone ? "กรอกเอง · ครบแล้ว" : "กรอกเอง"
+                  : isActive
+                    ? "กำลังกรอก"
+                    : "ยังไม่ครบ";
           const dotCls =
             it.status === "loading"
               ? "animate-pulse bg-amber-400"
               : it.status === "fail"
                 ? "bg-red-500"
-                : isActive
-                  ? "bg-red-500"
-                  : "bg-slate-300";
+                : it.status === "manual"
+                  ? manualDone ? "bg-emerald-500" : "bg-amber-500"
+                  : isActive
+                    ? "bg-red-500"
+                    : "bg-slate-300";
+          const closable = items.length > 1;
+          // The cell (not the button) carries the segmented borders + fill so the
+          // ✕ can sit inside it — a <button> may not be nested in a <button>.
           return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => setActive(i)}
-              className={`relative inline-flex flex-col items-center gap-0.5 px-5 py-2 text-center transition ${
-                i > 0 ? "border-l border-border" : ""
-              } ${isActive ? "bg-white" : "border-b border-border bg-surface-alt hover:bg-white"}`}
+            <div
+              key={it.key}
+              className={`relative inline-flex ${i > 0 ? "border-l border-border" : ""} ${
+                isActive ? "bg-white" : "border-b border-border bg-surface-alt hover:bg-white"
+              }`}
             >
               {isActive && (
                 <span aria-hidden className="absolute inset-x-0 top-0 h-[3px] bg-primary-600" />
               )}
-              <span
-                className={`flex items-center gap-1.5 text-[12.5px] font-bold ${
-                  isActive ? "text-foreground" : "text-muted"
+              <button
+                type="button"
+                onClick={() => setActive(i)}
+                className={`inline-flex flex-col items-center gap-0.5 py-2 pl-5 text-center transition ${
+                  closable ? "pr-8" : "pr-5"
                 }`}
               >
-                รายการที่ {i + 1}
-                <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${dotCls}`} />
-              </span>
-              <span className="text-[11px] font-medium text-muted">{sub}</span>
-            </button>
+                <span
+                  className={`flex items-center gap-1.5 text-[12.5px] font-bold ${
+                    isActive ? "text-foreground" : "text-muted"
+                  }`}
+                >
+                  รายการที่ {i + 1}
+                  <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${dotCls}`} />
+                </span>
+                <span className="text-[11px] font-medium text-muted">{sub}</span>
+              </button>
+              {closable && (
+                <button
+                  type="button"
+                  onClick={() => removeItem(i)}
+                  aria-label={`ลบรายการที่ ${i + 1}`}
+                  title="ลบรายการนี้"
+                  className="absolute right-1 top-1.5 rounded-full p-1 text-gray-300 transition hover:bg-red-50 hover:text-red-500"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           );
         })}
         </div>
@@ -241,6 +393,13 @@ export function ReviewClient({
         >
           <Plus className="h-4 w-4" /> เพิ่มรายการ
         </button>
+        <button
+          type="button"
+          onClick={() => addManualTabs([])}
+          className="mb-1.5 inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[12.5px] font-bold text-muted transition hover:bg-red-50 hover:text-primary-600"
+        >
+          <Pencil className="h-4 w-4" /> ไม่มีลิงก์? กรอกเอง
+        </button>
       </div>
 
       {/* Active item — skeleton → rich card / error */}
@@ -253,8 +412,61 @@ export function ReviewClient({
             <p className="font-bold">ตรวจไม่พบสินค้า</p>
             <p className="mt-0.5 break-all text-[11.5px] text-red-700/80">{cur.url}</p>
             <p className="text-[12px]">{cur.message}</p>
+            <button
+              type="button"
+              onClick={() => convertToManual(cur.key)}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary-600 px-4 py-2 text-[12.5px] font-bold text-white hover:bg-primary-700"
+            >
+              <Pencil className="h-4 w-4" /> กรอกข้อมูลสินค้าเอง
+            </button>
           </div>
         </div>
+      ) : cur.status === "manual" ? (
+        <>
+          <div className="rounded-2xl rounded-tl-none border border-border bg-white p-3 md:p-4">
+            <ManualItemForm
+              item={cur.manual}
+              patch={(p) => patchManual(cur.key, p)}
+              currencyOptions={currencyOptions}
+              uploading={uploading === cur.key}
+              onPickPhoto={(f) => pickPhoto(cur.key, f)}
+            />
+            <p className="mt-3 flex items-start gap-1.5 text-[12px] text-muted">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" aria-hidden />
+              กรอกชื่อสินค้า ราคา และเพิ่มตัวเลือกอย่างน้อย 1 รายการ
+            </p>
+            {/* Same ending as a fetched card — one full-width หยิบใส่รถเข็น → /cart. */}
+            <div className="mt-4 border-t border-border pt-3">
+              <button
+                type="button"
+                onClick={() => addManualToCart(cur.manual)}
+                disabled={!isManualComplete(cur.manual) || pending}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary-600 py-3 text-[15px] font-extrabold text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShoppingCart className="h-5 w-5" />}
+                {pending
+                  ? "กำลังเพิ่ม…"
+                  : isManualComplete(cur.manual)
+                    ? "หยิบใส่รถเข็น"
+                    : "กรอกข้อมูลให้ครบก่อน"}
+              </button>
+              <p className="mt-2 text-center text-[12.5px] text-muted">
+                ยอดรวมโดยประมาณ{" "}
+                <b className="text-primary-600">
+                  {manualItemThb(cur.manual, fxRates, rsDefault).toLocaleString("en-US", {
+                    minimumFractionDigits: 2, maximumFractionDigits: 2,
+                  })}
+                </b>{" "}
+                บาท
+              </p>
+            </div>
+          </div>
+          {err && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] font-medium text-red-800">
+              {err}
+            </div>
+          )}
+        </>
       ) : (
         <RichProductCard product={cur.product} rsDefault={rsDefault} fxRates={fxRates} />
       )}
@@ -264,6 +476,7 @@ export function ReviewClient({
         used={items.length}
         onClose={() => setAddOpen(false)}
         onAdd={appendLinks}
+        onManual={(u) => { setAddOpen(false); addManualTabs(u); }}
       />
     </div>
   );

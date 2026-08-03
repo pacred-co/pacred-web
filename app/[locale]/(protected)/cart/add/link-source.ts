@@ -14,6 +14,52 @@
  *  review page all enforce the same number so none of them can over-fill. */
 export const MAX_LINKS = 20;
 
+/**
+ * Hand-off for links we CANNOT fetch automatically (owner 2026-08-03: "ถ้าลิงก์ที่
+ * วางไม่ใช่ร้านค้าที่เรามี api จะเด้งไปที่หน้า ไม่มีลิงก์นะ").
+ *
+ * A shop outside 1688/Taobao/Tmall/Alibaba — or a supported link the API can't
+ * resolve — used to dead-end in a red box. The link now travels to
+ * /cart/add/manual and pre-fills a รายการ so the customer never re-copies it.
+ */
+export const MANUAL_LINKS_KEY = "pacred_cart_manual_links";
+
+/** Stash links for the manual form to pick up (no-op when storage is blocked). */
+export function stashManualLinks(urls: string[]): void {
+  try {
+    if (urls.length === 0) sessionStorage.removeItem(MANUAL_LINKS_KEY);
+    else sessionStorage.setItem(MANUAL_LINKS_KEY, JSON.stringify(urls.slice(0, MAX_LINKS)));
+  } catch {
+    /* private mode — the manual form simply opens blank */
+  }
+}
+
+/** Read WITHOUT clearing — the review page only needs to know they exist so it
+ *  can offer the hand-off; the manual form is what actually consumes them. */
+export function peekManualLinks(): string[] {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(MANUAL_LINKS_KEY) ?? "null") as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((u) => (typeof u === "string" ? u.trim() : ""))
+      .filter(Boolean)
+      .slice(0, MAX_LINKS);
+  } catch {
+    return [];
+  }
+}
+
+/** Read + CONSUME the stash (one-shot, so a refresh doesn't re-add the rows). */
+export function takeManualLinks(): string[] {
+  const urls = peekManualLinks();
+  try {
+    sessionStorage.removeItem(MANUAL_LINKS_KEY);
+  } catch {
+    /* nothing to clear */
+  }
+  return urls;
+}
+
 export type Source = "1688" | "taobao" | "tmall" | "alibaba";
 
 export function detectSource(raw: string): Source | null {

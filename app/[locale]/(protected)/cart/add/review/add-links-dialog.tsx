@@ -19,7 +19,6 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "@/i18n/navigation";
 import {
   AlertTriangle, CheckCircle2, ClipboardPaste, Clock, Info, Pencil, Plus, Trash2, X,
 } from "lucide-react";
@@ -34,12 +33,16 @@ export function AddLinksDialog({
   used,
   onClose,
   onAdd,
+  onManual,
 }: {
   open: boolean;
   /** links already in the review session — caps how many more fit under MAX_LINKS */
   used: number;
   onClose: () => void;
-  onAdd: (urls: string[]) => void;
+  /** `leftover` = pasted links from shops we have no API for (never dropped). */
+  onAdd: (urls: string[], leftover: string[]) => void;
+  /** hand links we can't fetch (or none at all) to the manual form */
+  onManual: (urls: string[]) => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [rows, setRows] = useState<Row[]>([newRow()]);
@@ -50,7 +53,12 @@ export function AddLinksDialog({
     () => rows.map((r) => r.url.trim()).filter((u) => detectSource(u) !== null).slice(0, room),
     [rows, room],
   );
-  const filled = useMemo(() => rows.filter((r) => r.url.trim()).length, [rows]);
+  // Links from a shop we have no API for — these are not an error, they are a
+  // manual order (owner 2026-08-03). Kept separate so neither list is dropped.
+  const unsupported = useMemo(
+    () => rows.map((r) => r.url.trim()).filter((u) => u !== "" && detectSource(u) === null),
+    [rows],
+  );
 
   // `<dialog open>` is NOT the same as showModal() — the attribute renders it
   // inline with no backdrop and no top layer. It has to be opened imperatively.
@@ -96,11 +104,18 @@ export function AddLinksDialog({
       setErr(`เพิ่มได้สูงสุด ${MAX_LINKS} ลิงก์ต่อรอบ — ลบรายการที่ไม่ต้องการก่อนครับ`);
       return;
     }
+    // Nothing we can fetch, but something WAS pasted → that's a manual order.
     if (ready.length === 0) {
-      setErr("ยังไม่มีลิงก์ที่พร้อมตรวจสอบ — วางลิงก์ 1688 / Taobao / Tmall ก่อนครับ");
+      if (unsupported.length > 0) {
+        onManual(unsupported);
+        return;
+      }
+      setErr("ยังไม่ได้วางลิงก์สินค้า — วางลิงก์อย่างน้อย 1 รายการก่อนครับ");
       return;
     }
-    onAdd(ready);
+    // Mixed: add what we can fetch, and pass the rest along so the review page
+    // can offer the manual hand-off instead of silently discarding them.
+    onAdd(ready, unsupported);
     onClose();
   }
 
@@ -193,8 +208,9 @@ export function AddLinksDialog({
                       <CheckCircle2 className="h-3.5 w-3.5" /> พร้อมตรวจสอบ
                     </span>
                   ) : hasText ? (
-                    <span className="flex items-center gap-1 text-amber-600">
-                      <AlertTriangle className="h-3.5 w-3.5" /> ลิงก์ไม่รองรับ
+                    // Not a failure — this shop just needs typing instead of fetching.
+                    <span className="flex items-center gap-1 text-amber-600" title="ร้านนี้ระบบดึงข้อมูลอัตโนมัติไม่ได้ — จะพาไปกรอกเอง">
+                      <AlertTriangle className="h-3.5 w-3.5" /> ต้องกรอกเอง
                     </span>
                   ) : (
                     <span className="flex items-center gap-1 text-gray-400">
@@ -238,12 +254,17 @@ export function AddLinksDialog({
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3.5">
-        <Link
-          href="/service-order/add"
+        {/* owner 2026-08-03 "ถ้าเขาเลือกไม่มีลิงก์สินค้าก็แค่ สร้างหน้าไม่มีลิงก์เป็น
+            รายการต่อไปให้เขากรอกข้อมูล" — opens the manual form with a fresh
+            รายการ, carrying any unsupported link already typed here. (It used to
+            point at /service-order/add, which is the ORDER LIST, not a form.) */}
+        <button
+          type="button"
+          onClick={() => onManual(unsupported)}
           className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-muted hover:text-primary-600"
         >
           <Pencil className="h-4 w-4" /> ไม่มีลิงก์? กรอกข้อมูลเอง
-        </Link>
+        </button>
         <div className="ml-auto flex items-center gap-2">
           <button
             type="button"
@@ -255,11 +276,20 @@ export function AddLinksDialog({
           <button
             type="button"
             onClick={submit}
-            disabled={ready.length === 0}
+            disabled={ready.length === 0 && unsupported.length === 0}
             className="inline-flex items-center gap-1.5 rounded-full bg-primary-600 px-5 py-2.5 text-[13.5px] font-extrabold text-white transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <Plus className="h-4 w-4" strokeWidth={2.6} />
-            {ready.length > 0 ? `เพิ่ม ${ready.length} รายการ` : filled > 0 ? "ลิงก์ยังไม่รองรับ" : "เพิ่มรายการ"}
+            {ready.length === 0 && unsupported.length > 0 ? (
+              <>
+                <Pencil className="h-4 w-4" strokeWidth={2.6} />
+                กรอกข้อมูลเอง {unsupported.length} รายการ
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4" strokeWidth={2.6} />
+                {ready.length > 0 ? `เพิ่ม ${ready.length} รายการ` : "เพิ่มรายการ"}
+              </>
+            )}
           </button>
         </div>
       </div>
