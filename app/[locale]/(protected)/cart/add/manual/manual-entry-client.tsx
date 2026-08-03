@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Link } from "@/i18n/navigation";
 import {
-  BadgeCheck, ClipboardList, Info, Loader2, PackageSearch, Plus,
+  ArrowLeft, BadgeCheck, Info, Loader2, PackageSearch, Plus,
   Check, ShieldCheck, ShoppingCart, Users, X,
 } from "lucide-react";
 import { addCartItemsBulk, type CartItemBulkRow } from "@/actions/cart";
@@ -127,14 +127,10 @@ export function ManualEntryClient({
     // put the same goods in the cart twice.
     const ready = items.filter((it) => isManualComplete(it) && !addedIds.has(it.id));
     if (ready.length === 0) {
-      setErr("กรุณากรอกชื่อสินค้า ราคา และตัวเลือกอย่างน้อย 1 รายการก่อนครับ");
+      setErr("กรุณาวางลิงก์ร้านค้า หรือกรอกชื่อสินค้าพร้อมราคา อย่างน้อย 1 อย่างครับ");
       return;
     }
     const rows: CartItemBulkRow[] = ready.flatMap((it) => manualItemToCartRows(it, fxRates));
-    if (rows.length === 0) {
-      setErr("ยังไม่มีตัวเลือกที่ระบุจำนวน กรุณากรอกจำนวนอย่างน้อย 1 แถว");
-      return;
-    }
     startTransition(async () => {
       const res = await addCartItemsBulk(rows);
       if (!res.ok) {
@@ -155,6 +151,16 @@ export function ManualEntryClient({
   // ════════════════════════════════════════════════════════════════
   return (
     <div className="space-y-3">
+      {/* Way back to the paste flow (owner 2026-08-03 "ทำให้มีปุ่มกลับไปหน้า
+          เพิ่มลิงก์หน่อย") — same affordance the review page has, so neither
+          entry point is a one-way door. */}
+      <Link
+        href="/cart/add"
+        className="inline-flex items-center gap-1 text-[12.5px] font-bold text-muted hover:text-primary-600"
+      >
+        <ArrowLeft className="h-4 w-4" /> กลับไปหน้าเพิ่มลิงก์สินค้า
+      </Link>
+
       {/* ── Page head ── */}
       <div>
         <h1 className="text-xl font-bold text-foreground md:text-2xl">เพิ่มสินค้าด้วยตัวเอง</h1>
@@ -243,7 +249,7 @@ export function ManualEntryClient({
         />
         <p className="mt-3 flex items-start gap-1.5 text-[12px] text-muted">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" aria-hidden />
-          กรอกชื่อสินค้า ราคา และเพิ่มตัวเลือกอย่างน้อย 1 รายการ
+          วางลิงก์ร้านค้า หรือกรอกชื่อสินค้า + ราคา อย่างใดอย่างหนึ่งก็เพิ่มลงรถเข็นได้เลย
         </p>
       </div>
 

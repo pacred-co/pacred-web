@@ -183,7 +183,7 @@ export function ReviewClient({
   function addManualToCart(key: number, it: ManualItem) {
     const rows = manualItemToCartRows(it, fxRates);
     if (rows.length === 0) {
-      setErr("กรุณากรอกชื่อสินค้า ราคา และตัวเลือกอย่างน้อย 1 รายการก่อนครับ");
+      setErr("กรุณาวางลิงก์ร้านค้า หรือกรอกชื่อสินค้าพร้อมราคา อย่างน้อย 1 อย่างครับ");
       return;
     }
     startTransition(async () => {
@@ -469,7 +469,7 @@ export function ReviewClient({
             />
             <p className="mt-3 flex items-start gap-1.5 text-[12px] text-muted">
               <Info className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" aria-hidden />
-              กรอกชื่อสินค้า ราคา และเพิ่มตัวเลือกอย่างน้อย 1 รายการ
+              วางลิงก์ร้านค้า หรือกรอกชื่อสินค้า + ราคา อย่างใดอย่างหนึ่งก็เพิ่มลงรถเข็นได้เลย
             </p>
             {/* Same ending as a fetched card — one full-width หยิบใส่รถเข็น → /cart. */}
             <div className="mt-4 border-t border-border pt-3">

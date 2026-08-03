@@ -27,8 +27,7 @@ import type { CartItemBulkRow } from "@/actions/cart";
 
 /** tb_cart.cdetails ceiling enforced by productDetailsField() — stay under it. */
 const DETAILS_MAX = 1000;
-/** Photos per รายการ. tb_cart holds ONE image column, so [0] is the cover and
- *  the rest ride along in cdetails as links the buying team can open. */
+/** Photos per รายการ — all of them ride in `cimages` comma-separated ([0] = cover). */
 export const MAX_PHOTOS = 5;
 /** varchar(1000) on tb_cart.cimages + tb_order.cimages (probed prod 2026-08-03). */
 const IMAGES_COL_MAX = 1000;
@@ -66,9 +65,28 @@ const num = (s: string) => {
 export function manualFilledOpts(it: ManualItem) {
   return it.opts.filter((o) => num(o.qty) > 0);
 }
-/** The mockup's own rule: ชื่อสินค้า + ราคา + ตัวเลือกอย่างน้อย 1 รายการ. */
+
+/**
+ * Can this รายการ go in the cart? (owner 2026-08-03: "ถ้าเขาวางลิงก์ ให้กดได้เลย
+ * ถ้าใส่ข้อมูลสินค้ากับราคา ก็ให้กดใส่ตะกร้าได้เลย")
+ *
+ * EITHER a shop link — staff open it and quote the price, which is the whole
+ * point of the "ทีมงานจะเปิดดูให้" field — OR a name + price the customer already
+ * knows. The แบบ/ไซซ์ table is NOT required: it used to be, so someone who just
+ * wanted "1 ชิ้นตามลิงก์นี้" was stuck on a disabled button with nothing telling
+ * them why.
+ */
 export function isManualComplete(it: ManualItem) {
-  return it.title.trim() !== "" && num(it.price) > 0 && manualFilledOpts(it).length > 0;
+  return it.url.trim() !== "" || (it.title.trim() !== "" && num(it.price) > 0);
+}
+
+/**
+ * Quantity when the customer never opened the แบบ/ไซซ์ table — their stated
+ * minimum if they gave one, otherwise a single piece. tb_cart.camount must be
+ * ≥ 1, so this is what keeps a link-only รายการ a valid cart row.
+ */
+function fallbackQty(it: ManualItem) {
+  return Math.max(1, Math.floor(num(it.minQty) || 1));
 }
 /** Price for one variant row — its own overrides the item's base price. */
 export function manualRowPrice(it: ManualItem, o: OptRow) {
@@ -77,8 +95,14 @@ export function manualRowPrice(it: ManualItem, o: OptRow) {
 
 /** Baht estimate — mirrors the server: each row converts its OWN price to ¥. */
 export function manualItemThb(it: ManualItem, fxRates: Record<string, number>, rsDefault: number) {
+  const filled = manualFilledOpts(it);
+  // No แบบ/ไซซ์ rows → the same single fallback row the cart will receive, so the
+  // estimate on screen is the one that actually gets added.
+  if (filled.length === 0) {
+    return toYuanEquivalent(num(it.price), it.currency, fxRates).yuan * fallbackQty(it) * rsDefault;
+  }
   return (
-    manualFilledOpts(it).reduce(
+    filled.reduce(
       (s, o) => s + toYuanEquivalent(manualRowPrice(it, o), it.currency, fxRates).yuan * num(o.qty),
       0,
     ) * rsDefault
@@ -110,21 +134,43 @@ export function manualItemToCartRows(
     images.push(u);
   }
 
-  return manualFilledOpts(it).map((o) => {
+  const base = {
+    provider: "shop" as const,
+    shop_name: it.shopName.trim() || "pacred",
+    title: it.title.trim() || undefined,
+    url: it.url.trim() || undefined,
+    image_path: images.join(",") || undefined,
+    details: extra || undefined,
+    input_currency: it.currency,
+  };
+
+  const filled = manualFilledOpts(it);
+  // Nothing typed in the แบบ/ไซซ์ table → ONE row for the whole รายการ. Any สี/ไซซ์
+  // typed without a quantity still rides along (they meant it), and a link-only
+  // รายการ lands at ราคา 0 for staff to quote — which is exactly the flow the
+  // "ทีมงานจะเปิดดูให้" link field promises.
+  if (filled.length === 0) {
+    const loose = it.opts.find((o) => o.color.trim() || o.size.trim());
+    const entered = num(it.price);
+    return [{
+      ...base,
+      color: loose?.color.trim() || undefined,
+      size: loose?.size.trim() || undefined,
+      price_cny: toYuanEquivalent(entered, it.currency, fxRates).yuan,
+      amount: Math.min(fallbackQty(it), MAX_ORDER_QTY),
+      input_price: entered,
+    }];
+  }
+
+  return filled.map((o) => {
     const entered = manualRowPrice(it, o);
     return {
-      provider: "shop" as const,
-      shop_name: it.shopName.trim() || "pacred",
-      title: it.title.trim(),
-      url: it.url.trim() || undefined,
-      image_path: images.join(",") || undefined,
+      ...base,
       color: o.color.trim() || undefined,
       size: o.size.trim() || undefined,
       // Preview value; the server re-derives ¥ from (input_currency, input_price).
       price_cny: toYuanEquivalent(entered, it.currency, fxRates).yuan,
       amount: Math.min(Math.floor(num(o.qty)), MAX_ORDER_QTY),
-      details: extra || undefined,
-      input_currency: it.currency,
       input_price: entered,
     };
   });
@@ -210,7 +256,7 @@ export function ManualItemForm({
         <div>
           <p className="mb-1.5 text-[13px] font-bold text-foreground">
             ตัวเลือกสินค้า{" "}
-            <span className="font-medium text-muted">กรอกแยกแต่ละแบบหรือไซซ์ที่ต้องการ</span>
+            <span className="font-medium text-muted">ไม่บังคับ — กรอกเมื่อต้องการแยกแบบหรือไซซ์</span>
           </p>
           <div className="overflow-hidden rounded-xl border border-border">
             <table className="w-full table-fixed border-collapse text-[13px]">
