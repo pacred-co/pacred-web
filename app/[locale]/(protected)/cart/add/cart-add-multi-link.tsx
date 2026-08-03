@@ -13,8 +13,8 @@
  * the review page (searchProductByUrl → <RichProductCard> → <UrlPasteAddToCart>
  * island → addCartItem → tb_cart). Money path 100% REUSED, no new one.
  *
- * The "ไม่มีลิงก์สินค้า" tab points to the existing manual-entry flow
- * (/service-order/add) — no dead end, no new manual form for V1.
+ * The "ไม่มีลิงก์สินค้า" tab goes to /cart/add/manual — the full "เพิ่มสินค้าด้วย
+ * ตัวเอง" form (owner 2026-08-03), which wears this flow's review-page shell.
  *
  * Thai is hardcoded (matches the sibling admin link-paste-search pattern · the
  * customer portal is TH-primary). Mobile-first per AGENTS.md §6: inputs ≥ 44px,
@@ -47,7 +47,7 @@ type Flash =
 
 
 export function CartAddMultiLink() {
-  const [tab, setTab] = useState<"link" | "manual">("link");
+
   const [subTab, setSubTab] = useState<"one" | "multi">("one");
   const [rows, setRows] = useState<Row[]>([newRow(), newRow()]);
   const [multiText, setMultiText] = useState("");
@@ -179,54 +179,28 @@ export function CartAddMultiLink() {
 
       {/* Tabs — มีลิงก์ / ไม่มีลิงก์ */}
       <div className="flex gap-2.5 mb-4">
-        <button
-          type="button"
-          onClick={() => setTab("link")}
-          className={`relative flex-1 inline-flex items-center justify-center gap-2 rounded-full border px-3 py-3 text-sm font-bold transition ${
-            tab === "link"
-              ? "border-red-500 bg-red-50 text-primary-700 ring-2 ring-red-500/15"
-              : "border-border bg-white text-muted hover:border-red-200"
-          }`}
-        >
+        {/* Always the active tab now — its sibling navigates to /cart/add/manual,
+            so this page only ever shows the paste flow. */}
+        <span className="relative flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-red-500 bg-red-50 px-3 py-3 text-sm font-bold text-primary-700 ring-2 ring-red-500/15">
           <LinkIcon className="h-4 w-4" /> มีลิงก์สินค้า
           <span className="absolute -top-2 right-3 rounded-full bg-red-600 px-2 py-0.5 text-[9.5px] font-extrabold text-white">
             แนะนำ
           </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("manual")}
-          className={`flex-1 inline-flex items-center justify-center gap-2 rounded-full border px-3 py-3 text-sm font-bold transition ${
-            tab === "manual"
-              ? "border-red-500 bg-red-50 text-primary-700 ring-2 ring-red-500/15"
-              : "border-border bg-white text-muted hover:border-red-200"
-          }`}
+        </span>
+        {/* owner 2026-08-03 "ถ้ากด ไม่มีลิงก์สินค้าแล้วผมอยากให้เป็นแบบนี้ ใช้หน้าแบบ
+            มีลิงก์แหละ แต่เป็นฟอร์มเปล่า" — goes straight to the full manual-entry
+            page (same shell as the review page) instead of the old teaser card
+            that only linked out to the order list. */}
+        <Link
+          href="/cart/add/manual"
+          className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-border bg-white px-3 py-3 text-sm font-bold text-muted transition hover:border-red-200 hover:text-primary-600"
         >
           <Pencil className="h-4 w-4" /> ไม่มีลิงก์สินค้า
-        </button>
+        </Link>
       </div>
 
-      {/* ── TAB: ไม่มีลิงก์ → manual entry ── */}
-      {tab === "manual" && (
-        <div className="rounded-xl border border-border p-4 text-center">
-          <span className="inline-flex w-11 h-11 rounded-xl bg-red-50 text-primary-600 items-center justify-center mb-2">
-            <Pencil className="h-5 w-5" />
-          </span>
-          <p className="text-[15px] font-bold text-foreground">กรอกข้อมูลสินค้าเอง</p>
-          <p className="text-[12.5px] text-muted mt-1 mb-3">
-            ไม่มีลิงก์ก็สั่งได้ — พิมพ์ชื่อสินค้า · ราคา · จำนวน แล้วแนบรูปประกอบ
-          </p>
-          <Link
-            href="/service-order/add"
-            className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-primary-700 transition"
-          >
-            กรอกข้อมูลสินค้าเอง
-          </Link>
-        </div>
-      )}
-
-      {/* ── TAB: มีลิงก์ ── */}
-      {tab === "link" && (
+      {/* ── มีลิงก์ = the paste flow this page owns ── */}
+      {(
         <>
           {/* กรอบกลุ่มช่องวางลิงก์ (owner 2026-07-30 · "เอากรอบออก · ใช้กรอบแบบในภาพ" +
               "อยู่ในกรอบเดียวกัน") — ถอดกรอบนอกการ์ด แล้วตีกรอบรวม หัวข้อ + steps + แท็บย่อย +
