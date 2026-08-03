@@ -21,6 +21,8 @@
 import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { UrlPasteAddToCart } from "../../search/url-paste-add-to-cart";
+import { TranslateProvider } from "@/components/translate/auto-translate";
+import { ThaiToggleProvider, ThaiText } from "@/components/translate/thai-toggle";
 import type { ProductSearchOk } from "@/actions/product-search";
 import { MAX_ORDER_QTY } from "@/lib/validators/order-qty";
 
@@ -67,10 +69,17 @@ export function RichProductCard({
   };
 
   return (
-    // rounded-tl-none: the รายการที่ N tab strip attaches to this corner, and it
-    // supplies the curve. Leaving the card's own radius here drew a SECOND curve
-    // 1px away, which read as a seam (owner 2026-08-03 "ขอบ … มันแปลกๆ").
-    <div className="rounded-2xl rounded-tl-none border border-border bg-white p-3 md:p-4">
+    // ThaiToggleProvider wraps the WHOLE card so the one "แปลไทย" switch inside the
+    // option block also swaps the title above it (owner 2026-08-03 "ขอแปลชื่อด้วย").
+    // The title sits outside the island's own TranslateProvider, so it needs this
+    // one-string batch of its own — server-side translation_cache makes the overlap
+    // with the island's batch a cache hit rather than a second upstream call.
+    <ThaiToggleProvider>
+    <TranslateProvider texts={[p.title]}>
+      {/* rounded-tl-none: the รายการที่ N tab strip attaches to this corner, and it
+          supplies the curve. Leaving the card's own radius here drew a SECOND curve
+          1px away, which read as a seam (owner 2026-08-03 "ขอบ … มันแปลกๆ"). */}
+      <div className="rounded-2xl rounded-tl-none border border-border bg-white p-3 md:p-4">
       {/* Photo column shrinks on narrower desktops: at ~1180px (sidebar open) a
           fixed 300px left only ~370px for the option table, which squeezed the
           name cell to 91px and broke every label onto its own line. 220 → 300px
@@ -146,7 +155,7 @@ export function RichProductCard({
             red banner. ── */}
         <div className="min-w-0">
           <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-foreground">
-            {p.title}
+            <ThaiText text={p.title} />
           </h3>
 
           {/* Shop · option count · stock · source link all on ONE line (owner
@@ -222,6 +231,8 @@ export function RichProductCard({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </TranslateProvider>
+    </ThaiToggleProvider>
   );
 }

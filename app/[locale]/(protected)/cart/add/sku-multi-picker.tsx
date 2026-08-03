@@ -20,9 +20,9 @@
  * successful add — which clears `qtyBySku` upstream — clears this list for free.
  */
 
-import { useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Check, Trash2, Languages } from "lucide-react";
-import { AutoTranslateText } from "@/components/translate/auto-translate";
+import { useMemo, useRef } from "react";
+import { ChevronLeft, ChevronRight, Check, Trash2 } from "lucide-react";
+import { ThaiText, ThaiToggleButton } from "@/components/translate/thai-toggle";
 import { MAX_ORDER_QTY, clampOrderQty } from "@/lib/validators/order-qty";
 
 type SkuAxis = { name: string; values: Array<{ label: string; image?: string; data?: string; is_image?: boolean }> };
@@ -51,14 +51,6 @@ export function SkuMultiPicker({
   onDirty: () => void;
 }) {
   const stripRef = useRef<HTMLDivElement>(null);
-  // Owner 2026-08-03: "default เป็นจีนนะ แต่กดแปลแล้วเป็นไทย" — the seller's own wording
-  // is what the customer will quote back to the shop, so it stays on screen until they
-  // ask otherwise. One switch flips every option label on the card at once (the labels
-  // are pre-fetched in the parent's TranslateProvider batch, so this is instant).
-  const [thai, setThai] = useState(false);
-  /** Option label — Chinese by default, Thai once the switch is on. */
-  const Label = ({ text }: { text: string }) =>
-    thai ? <AutoTranslateText text={text} showNote={false} /> : <>{text}</>;
 
   // The axis that carries pictures is the "แบบ / สี" carousel; whatever else
   // remains (usually 尺码) becomes the per-row size dropdown. A single-axis
@@ -169,20 +161,7 @@ export function SkuMultiPicker({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[14px] font-bold text-foreground">เลือกแบบ ไซซ์ และจำนวน</p>
-        <button
-          type="button"
-          onClick={() => setThai((v) => !v)}
-          aria-pressed={thai}
-          title={thai ? "กลับไปดูชื่อภาษาจีนจากร้าน" : "แปลชื่อตัวเลือกเป็นภาษาไทย"}
-          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-bold transition ${
-            thai
-              ? "border-primary-500 bg-primary-50 text-primary-700"
-              : "border-border bg-white text-muted hover:border-red-300 hover:text-primary-600"
-          }`}
-        >
-          <Languages className="h-3.5 w-3.5" />
-          {thai ? "ดูต้นฉบับภาษาจีน" : "แปลไทย"}
-        </button>
+        <ThaiToggleButton />
       </div>
 
       {/* ── Style carousel (multi-select) ── */}
@@ -233,7 +212,7 @@ export function SkuMultiPicker({
                     on ? "text-primary-700" : "text-foreground"
                   }`}
                 >
-                  <Label text={st.label} />
+                  <ThaiText text={st.label} />
                 </span>
                 {on && (
                   // Sits INSIDE the card (the strip scrolls, so anything hung
@@ -315,7 +294,7 @@ export function SkuMultiPicker({
                           )}
                           <span className="min-w-[100px]">
                             <span className="line-clamp-2 block text-[12.5px] font-semibold text-foreground">
-                              <Label text={styleLabel} />
+                              <ThaiText text={styleLabel} />
                             </span>
                             <span className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[11px]">
                               {sku.stock > 0 ? (
