@@ -1,34 +1,25 @@
 "use client";
 
 /**
- * <HsLibraryClient> — the ONE คลัง HS CODE LIBRARY surface (owner 2026-07-16:
- * "ยุบทิ้ง ให้มารวมกันอยู่ทีเดียว และหน้าเดียวกัน").
+ * <HsLibraryClient> — the ONE คลัง HS CODE LIBRARY surface.
  *
- * TWO sections on ONE page, because the data has two real grains:
- *   §1 พิกัด       — code-grain library (hs_codes) · search/filter/inline-edit
- *   §2 สินค้า→พิกัด — product-grain aliases (doc_bot_hs_codes) · absorbs ALL of
- *                    the retired /hs-library/bot page: source badges, product
- *                    grouping, พิกัดหลัก/พิกัดรอง (same completeness scorer),
- *                    ⚠️ พิกัดขัดกัน, ยังไม่มี code, the 4 stat cards, and the
- *                    VERBATIM duty chip. Plus the previously-orphaned overrides.
- *
- * §2 lazy-loads on first open (5,335 alias rows) so the initial paint isn't
- * paying for a tab nobody opened.
+ * 2026-08-03 — owner ย้ำรอบสอง: "ทำไมยังมี 2 แทป · รวมกันทั้งหน้าตาการใช้งาน
+ * และ DB · table เดียวกัน ใช้ที่เดียวกัน" ⇒ NO tabs. ONE list over ONE table
+ * (hs_codes). The former แท็บ 2's product-grain now lives ON each row as
+ * `product_aliases` (mig 0285 + merge script): ทุกชื่อสินค้าที่เคยถาม/ตอบ
+ * โชว์เป็นชิปใต้แถวพิกัด และช่องค้นหาแมตช์ชื่อพวกนั้นด้วย — พิมพ์ชื่อสินค้า
+ * ก็เจอแถวพิกัดในลิสต์เดียวกันเลย.
  *
  * §0g self-explaining rows · §0h ≥11px + real hierarchy · §0f confirm-before-mutate.
  * ⚠️ Reference data (§0e) — nothing here touches a selling price / order / money.
  */
 
-import { useMemo, useState, useTransition, useEffect } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
-  Search, Plus, Pencil, X, AlertTriangle, Layers, PackageSearch, Ban,
-  BadgeCheck, HelpCircle, FileText, Bot, Loader2, Wand2,
+  Search, Plus, Pencil, X, AlertTriangle, Layers, PackageSearch,
+  BadgeCheck, HelpCircle, FileText, Loader2, Wand2,
 } from "lucide-react";
 import { listHsCodes, upsertHsCode, type HsCodeListRow } from "@/actions/admin/hs-codes";
-import {
-  listDocBotHsLibrary, listDocBotHsOverrides,
-  type DocBotHsRow, type DocBotHsOverrideRow,
-} from "@/actions/admin/doc-bot-hs";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 
 export type HsRow = HsCodeListRow;
@@ -75,44 +66,8 @@ function otherFormsToDrafts(m: Record<string, number> | null): OtherFormDraft[] 
 
 // ════════════════════════════════════════════════════════════════════
 export function HsLibraryClient({ initialRows }: { initialRows: HsRow[] }) {
-  const [tab, setTab] = useState<"codes" | "products">("codes");
-
-  return (
-    <div className="space-y-4">
-      {/* ── section tabs (ONE page · two grains) ── */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-border">
-        <TabBtn active={tab === "codes"} onClick={() => setTab("codes")} icon={<Layers className="h-4 w-4" />}>
-          พิกัด (คลังหลัก)
-          <span className="ml-1 tabular-nums opacity-70">{initialRows.length.toLocaleString("th-TH")}</span>
-        </TabBtn>
-        <TabBtn active={tab === "products"} onClick={() => setTab("products")} icon={<Bot className="h-4 w-4" />}>
-          สินค้า → พิกัด (บอท + ไฟล์)
-        </TabBtn>
-      </div>
-
-      {tab === "codes" ? <CodesSection initialRows={initialRows} /> : <ProductsSection />}
-    </div>
-  );
-}
-
-function TabBtn({
-  active, onClick, icon, children,
-}: { active: boolean; onClick: () => void; icon: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        "inline-flex items-center gap-1.5 rounded-t-lg border-b-2 px-3 py-2 text-sm font-semibold transition-colors " +
-        (active
-          ? "border-primary-600 text-primary-700"
-          : "border-transparent text-muted hover:text-foreground hover:bg-surface-alt/50")
-      }
-    >
-      {icon}
-      {children}
-    </button>
-  );
+  // owner 2026-08-03 — ตารางเดียว ลิสต์เดียว ไม่มีแท็บ
+  return <CodesSection initialRows={initialRows} />;
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -151,6 +106,8 @@ function CodesSection({ initialRows }: { initialRows: HsRow[] }) {
     confirmed:   rows.filter((r) => r.duty_confirmed).length,
     used:        rows.filter((r) => (r.decl_count ?? 0) > 0).length,
     conflict:    rows.filter(isConflict).length,
+    // ชื่อสินค้าที่เคยถาม/ตอบ ทั้งคลัง (product_aliases · one-table merge 0285)
+    aliases:     rows.reduce((n, r) => n + (r.product_aliases?.length ?? 0), 0),
   }), [rows]);
 
   const visible = useMemo(() => {
@@ -171,6 +128,9 @@ function CodesSection({ initialRows }: { initialRows: HsRow[] }) {
       if (clean(r.description_en).toLowerCase().includes(t)) return true;
       if (clean(r.hs_note).toLowerCase().includes(t)) return true;
       if (clean(r.source).toLowerCase().includes(t)) return true;
+      // ชื่อสินค้าที่เคยถาม/ตอบ — งานเดิมของแท็บ "สินค้า → พิกัด" มาอยู่ในลิสต์นี้
+      if (r.product_aliases?.some((a) =>
+        clean(a.th).toLowerCase().includes(t) || clean(a.en).toLowerCase().includes(t))) return true;
       return false;
     });
   }, [rows, search, filter]);
@@ -285,8 +245,9 @@ function CodesSection({ initialRows }: { initialRows: HsRow[] }) {
       {dialogs}
 
       {/* ── stat cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
         <StatCard icon={<Layers className="h-4 w-4" />} label="พิกัดทั้งหมด" value={stats.total} />
+        <StatCard icon={<PackageSearch className="h-4 w-4" />} label="ชื่อสินค้าในคลัง" value={stats.aliases} />
         <StatCard icon={<BadgeCheck className="h-4 w-4 text-emerald-600" />} label="ยืนยันอากรแล้ว" value={stats.confirmed} tone="emerald" />
         <StatCard icon={<FileText className="h-4 w-4 text-sky-600" />} label="เคยใช้จริงในใบขน" value={stats.used} tone="sky" />
         <StatCard icon={<AlertTriangle className="h-4 w-4 text-amber-600" />} label="อากรไม่ตรงกับใบขน" value={stats.conflict} tone="amber" />
@@ -300,7 +261,7 @@ function CodesSection({ initialRows }: { initialRows: HsRow[] }) {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="ค้นหา พิกัด (4202.29 หรือ 42022900) · ชื่อไทย/อังกฤษ · หมายเหตุ…"
+            placeholder="ค้นหา พิกัด (4202.29 หรือ 42022900) · ชื่อสินค้า ไทย/อังกฤษ · หมายเหตุ…"
             className={inputCls + " pl-8 w-80"}
           />
         </div>
@@ -501,6 +462,7 @@ function CodeRow({
           </div>
           <p className="mt-0.5 text-[13px] font-semibold text-foreground break-words">{r.description}</p>
           {clean(r.description_en) && <p className="text-[11px] text-muted break-words">{r.description_en}</p>}
+          <AliasChips aliases={r.product_aliases} selfTh={r.description} selfEn={r.description_en} />
           {clean(r.hs_note) && <p className="mt-1 text-[11px] text-muted break-words">📝 {r.hs_note}</p>}
         </div>
 
@@ -593,252 +555,6 @@ function CodeRow({
   );
 }
 
-// ════════════════════════════════════════════════════════════════════
-// §2 — สินค้า → พิกัด (product-grain aliases · absorbed from /hs-library/bot)
-// ════════════════════════════════════════════════════════════════════
-function completeness(r: DocBotHsRow): number {
-  let s = 0;
-  if (clean(r.hs_code)) s += 8;
-  if (clean(r.no))      s += 4;
-  if (clean(r.fe))      s += 2;
-  if (clean(r.stat))    s += 1;
-  return s;
-}
-function betterRow(a: DocBotHsRow, b: DocBotHsRow): DocBotHsRow {
-  const ca = completeness(a), cb = completeness(b);
-  if (ca !== cb) return ca > cb ? a : b;
-  return (a.imported_at ?? "") >= (b.imported_at ?? "") ? a : b;
-}
-function groupKeyOf(r: DocBotHsRow): string {
-  const th = clean(r.th).toLowerCase();
-  if (th) return "th:" + th;
-  const en = clean(r.en).toLowerCase();
-  if (en) return "en:" + en;
-  const code = clean(r.hs_code);
-  if (code) return "code:" + code;
-  return "id:" + r.id;
-}
-
-type ProductGroup = {
-  key: string; productTh: string; productEn: string; rowCount: number;
-  primary: DocBotHsRow | null; alternates: DocBotHsRow[];
-  distinctCodes: string[]; hasConflict: boolean; isEmpty: boolean; newest: string;
-};
-
-function buildGroups(rows: DocBotHsRow[]): ProductGroup[] {
-  const byKey = new Map<string, DocBotHsRow[]>();
-  for (const r of rows) {
-    const k = groupKeyOf(r);
-    const arr = byKey.get(k);
-    if (arr) arr.push(r); else byKey.set(k, [r]);
-  }
-  const groups: ProductGroup[] = [];
-  for (const [key, arr] of byKey) {
-    const repByCode = new Map<string, DocBotHsRow>();
-    for (const r of arr) {
-      const c = clean(r.hs_code);
-      if (!c) continue;
-      const cur = repByCode.get(c);
-      repByCode.set(c, cur ? betterRow(cur, r) : r);
-    }
-    const distinctCodes = [...repByCode.keys()];
-    let primary: DocBotHsRow | null = null;
-    for (const r of arr) primary = primary ? betterRow(primary, r) : r;
-    const primaryCode = clean(primary?.hs_code ?? "");
-    const alternates = distinctCodes
-      .filter((c) => c !== primaryCode)
-      .map((c) => repByCode.get(c)!)
-      .sort((a, b) => completeness(b) - completeness(a) || clean(a.hs_code).localeCompare(clean(b.hs_code)));
-    const productTh = clean(primary?.th) || clean(arr.find((r) => clean(r.th))?.th) || "";
-    const productEn = clean(primary?.en) || clean(arr.find((r) => clean(r.en))?.en) || "";
-    let newest = "";
-    for (const r of arr) if ((r.imported_at ?? "") > newest) newest = r.imported_at ?? "";
-    groups.push({
-      key, productTh, productEn, rowCount: arr.length, primary, alternates, distinctCodes,
-      hasConflict: distinctCodes.length > 1, isEmpty: distinctCodes.length === 0, newest,
-    });
-  }
-  groups.sort((a, b) => (b.newest > a.newest ? 1 : b.newest < a.newest ? -1 : 0));
-  return groups;
-}
-
-/** Duty chip — renders the doc-bot value VERBATIM ('10%' / 'ยกเว้น' / '-' / '0.1').
- *  Deliberately uncoerced: the source has a real ×100 fraction bug ('0.1' meaning
- *  10%), and silently "fixing" it in a display would hide the data problem the
- *  Doc team needs to see. The library (§1) does the coercion, flags it, and
- *  never marks a bot-derived duty as confirmed. */
-function DutyChip({ label, value }: { label: string; value: string | null | undefined }) {
-  const v = clean(value);
-  if (!v) return null;
-  return (
-    <span className={chipDuty}>
-      <span className="text-muted">{label}</span>
-      <span className="font-mono font-semibold">{v}</span>
-    </span>
-  );
-}
-function DutyRow({ r }: { r: DocBotHsRow }) {
-  const hasAny = clean(r.no) || clean(r.fe) || clean(r.stat);
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <DutyChip label="อากรปกติ" value={r.no} />
-      <DutyChip label="Form-E" value={r.fe} />
-      <DutyChip label="สถิติ" value={r.stat} />
-      {!hasAny && <span className="text-[11px] text-muted">— ไม่มีข้อมูลอากร —</span>}
-    </div>
-  );
-}
-
-function ProductsSection() {
-  const [rows, setRows] = useState<DocBotHsRow[] | null>(null);
-  const [overrides, setOverrides] = useState<DocBotHsOverrideRow[]>([]);
-  const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  // Lazy-load on first open — 5,335 alias rows should not be in the initial paint.
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      const [lib, ov] = await Promise.all([listDocBotHsLibrary(), listDocBotHsOverrides()]);
-      if (!alive) return;
-      if (lib.ok && lib.data) setRows(lib.data);
-      else setErr(lib.ok ? "ไม่พบข้อมูล" : lib.error ?? "โหลดไม่สำเร็จ");
-      if (ov.ok && ov.data) setOverrides(ov.data);
-      setLoading(false);
-    })();
-    return () => { alive = false; };
-  }, []);
-
-  const allGroups = useMemo(() => buildGroups(rows ?? []), [rows]);
-  const stats = useMemo(() => ({
-    totalRows:      rows?.length ?? 0,
-    productCount:   allGroups.length,
-    conflictGroups: allGroups.filter((g) => g.hasConflict).length,
-    emptyRows:      (rows ?? []).filter((r) => !clean(r.hs_code)).length,
-    emptyGroups:    allGroups.filter((g) => g.isEmpty).length,
-  }), [rows, allGroups]);
-
-  const [search, setSearch] = useState("");
-  const [onlyConflict, setOnlyConflict] = useState(false);
-  const [onlyEmpty, setOnlyEmpty] = useState(false);
-
-  const visible = useMemo(() => {
-    const t = search.trim().toLowerCase();
-    return allGroups.filter((g) => {
-      if (onlyConflict && !g.hasConflict) return false;
-      if (onlyEmpty && !g.isEmpty) return false;
-      if (!t) return true;
-      if (g.productTh.toLowerCase().includes(t)) return true;
-      if (g.productEn.toLowerCase().includes(t)) return true;
-      if (clean(g.primary?.hs_code).toLowerCase().includes(t)) return true;
-      if (g.alternates.some((a) => clean(a.hs_code).toLowerCase().includes(t))) return true;
-      return false;
-    });
-  }, [allGroups, search, onlyConflict, onlyEmpty]);
-
-  const RENDER_CAP = 400;
-  const shown = visible.slice(0, RENDER_CAP);
-
-  const filterBtn = (active: boolean) =>
-    "inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs transition-colors " +
-    (active ? "border-primary-400 bg-primary-50 text-primary-700 dark:bg-primary-950/20" : "border-border hover:bg-surface-alt");
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 rounded-2xl border border-border bg-white dark:bg-surface p-8 text-sm text-muted">
-        <Loader2 className="h-4 w-4 animate-spin" /> กำลังโหลดคลังสินค้า → พิกัด (บอท + ไฟล์)…
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      <p className="text-xs text-muted leading-relaxed">
-        คลังจาก <b>DOC BOT</b> + <b>ไฟล์พิกัดอัพเดท</b> จัดกลุ่ม <b>ตามชื่อสินค้า</b> — แต่ละสินค้ามี{" "}
-        <b>พิกัดหลัก</b> (ระบบเลือกจากรายการที่ข้อมูลครบสุด) + <b>พิกัดรอง</b> (พิกัดอื่นที่เคยตอบกับสินค้าเดียวกัน)
-        ให้ฝ่ายเอกสาร <b>เลือกเองตามเคส</b> (พิกัด “ติด” ด่าน → เลี่ยงไปพิกัดรอง). ตัวเลขอากรที่นี่{" "}
-        <b>แสดงตามต้นฉบับ ไม่แปลงค่า</b> — ตัวเลขที่ใช้งานจริงอยู่ในแท็บ <b>พิกัด (คลังหลัก)</b>.
-      </p>
-
-      {err && (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">โหลดคลังบอทไม่สำเร็จ: {err}</p>
-      )}
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <StatCard icon={<Layers className="h-4 w-4" />} label="แถวทั้งหมด" value={stats.totalRows} />
-        <StatCard icon={<PackageSearch className="h-4 w-4" />} label="สินค้า (จัดกลุ่ม)" value={stats.productCount} />
-        <StatCard icon={<AlertTriangle className="h-4 w-4 text-amber-600" />} label="สินค้าพิกัดขัดกัน" value={stats.conflictGroups} tone="amber" />
-        <StatCard icon={<Ban className="h-4 w-4 text-slate-500" />} label="แถวยังไม่มีพิกัด" value={stats.emptyRows} tone="slate" />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="ค้นหา ชื่อสินค้า (ไทย/อังกฤษ) หรือ เลขพิกัด HS…" className={inputCls + " pl-8 w-72"} />
-        </div>
-        <button type="button" className={filterBtn(onlyConflict)} onClick={() => setOnlyConflict((v) => !v)}>
-          <AlertTriangle className="h-3.5 w-3.5" /> เฉพาะที่มีพิกัดขัดกัน
-          {stats.conflictGroups > 0 && <span className="tabular-nums opacity-70">({stats.conflictGroups})</span>}
-        </button>
-        <button type="button" className={filterBtn(onlyEmpty)} onClick={() => setOnlyEmpty((v) => !v)}>
-          <Ban className="h-3.5 w-3.5" /> เฉพาะที่ยังไม่มี code
-          {stats.emptyGroups > 0 && <span className="tabular-nums opacity-70">({stats.emptyGroups})</span>}
-        </button>
-        {(search || onlyConflict || onlyEmpty) && (
-          <button type="button" className={btnGhost}
-            onClick={() => { setSearch(""); setOnlyConflict(false); setOnlyEmpty(false); }}>
-            ล้าง
-          </button>
-        )}
-        <span className="ml-auto text-[11px] text-muted">
-          แสดง {shown.length.toLocaleString("th-TH")} / {visible.length.toLocaleString("th-TH")} สินค้า
-          {visible.length > RENDER_CAP && ` (จำกัด ${RENDER_CAP} แรก — ใช้ค้นหาเพื่อกรอง)`}
-        </span>
-      </div>
-
-      {shown.length === 0 ? (
-        <p className="rounded-2xl border border-border bg-white dark:bg-surface p-8 text-center text-xs text-muted">
-          ไม่พบสินค้าที่ตรงกับเงื่อนไข
-        </p>
-      ) : (
-        <div className="space-y-2.5">{shown.map((g) => <ProductCard key={g.key} g={g} />)}</div>
-      )}
-
-      {/* ── คำที่ต้องแก้พิกัด (the previously-orphaned overrides) ── */}
-      {overrides.length > 0 && (
-        <section className="rounded-2xl border border-border bg-white dark:bg-surface p-3.5 space-y-2">
-          <h3 className="text-sm font-semibold">คำที่ต้องแก้พิกัด (บอทเคยตอบผิด)</h3>
-          <p className="text-[11px] text-muted">
-            รายการที่ฝ่ายเอกสารเคยแก้ไว้ว่า “ถ้าเจอคำนี้ พิกัดที่ถูกคือ…” — เก็บไว้ในระบบตั้งแต่ตอนย้าย DOC BOT
-            แต่ยังไม่เคยถูกนำมาแสดงที่ไหน จึงยกมาไว้ตรงนี้ให้เห็น.
-          </p>
-          <div className="overflow-x-auto scrollbar-x-visible">
-            <table className="w-full text-sm border-collapse [&>thead>tr>th]:border [&>thead>tr>th]:border-border/60 [&>tbody>tr>td]:border [&>tbody>tr>td]:border-border/60">
-              <thead className="bg-surface-alt/50 text-left text-xs text-muted">
-                <tr>
-                  <th className="px-3 py-2">คำ / keyword</th>
-                  <th className="px-3 py-2">พิกัดที่ถูกต้อง</th>
-                  <th className="px-3 py-2">หมายเหตุ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {overrides.map((o) => (
-                  <tr key={o.id} className="hover:bg-surface-alt/30">
-                    <td className="px-3 py-2 text-[13px]">{clean(o.keyword) || "—"}</td>
-                    <td className="px-3 py-2 font-mono text-xs font-semibold">{clean(o.correct_hs) || "—"}</td>
-                    <td className="px-3 py-2 text-[11px] text-muted">{clean(o.note) || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-    </div>
-  );
-}
-
 function StatCard({
   icon, label, value, tone,
 }: { icon: React.ReactNode; label: string; value: number; tone?: "amber" | "slate" | "emerald" | "sky" }) {
@@ -856,67 +572,44 @@ function StatCard({
   );
 }
 
-function ProductCard({ g }: { g: ProductGroup }) {
-  const p = g.primary;
+/** ชื่อสินค้าที่เคยถาม/ตอบสำหรับพิกัดนี้ — the one-table replacement for the old
+ *  "สินค้า → พิกัด" tab. Shows up to 6 chips + "+N" (expand); the search box
+ *  already matches every alias, so typing a product name lands on this row. */
+function AliasChips({
+  aliases, selfTh, selfEn,
+}: { aliases: HsRow["product_aliases"]; selfTh: string | null; selfEn: string | null }) {
+  const [expanded, setExpanded] = useState(false);
+  const items = useMemo(() => {
+    const seen = new Set<string>([clean(selfTh).toLowerCase(), clean(selfEn).toLowerCase()]);
+    const out: { label: string; title: string }[] = [];
+    for (const a of aliases ?? []) {
+      const th = clean(a.th), en = clean(a.en);
+      const label = th || en;
+      if (!label) continue;
+      const k = label.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ label, title: [en && th ? th + " / " + en : label, clean(a.note)].filter(Boolean).join(" · ") });
+    }
+    return out;
+  }, [aliases, selfTh, selfEn]);
+  if (items.length === 0) return null;
+  const CAP = 6;
+  const shown = expanded ? items : items.slice(0, CAP);
   return (
-    <div className="rounded-2xl border border-border bg-white dark:bg-surface p-3.5 space-y-2.5">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-foreground break-words">
-            {g.productTh || <span className="text-muted italic">(ไม่ระบุชื่อไทย)</span>}
-          </h3>
-          {g.productEn && <p className="text-[11px] text-muted break-words">{g.productEn}</p>}
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-          {g.hasConflict && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-              <AlertTriangle className="h-3 w-3" /> พิกัดขัดกัน {g.distinctCodes.length} เลข
-            </span>
-          )}
-          {g.isEmpty && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
-              <Ban className="h-3 w-3" /> ยังไม่มีพิกัด
-            </span>
-          )}
-          {clean(p?.source) && <SourceBadge source={p!.source} provenance={null} />}
-          <span className="rounded-full border border-border bg-surface-alt/50 px-2 py-0.5 text-[11px] text-muted tabular-nums">
-            ถูกถาม {g.rowCount.toLocaleString("th-TH")} ครั้ง
-          </span>
-        </div>
-      </div>
-
-      {p && clean(p.hs_code) ? (
-        <div className="rounded-xl border border-primary-200 bg-primary-50/40 dark:bg-primary-950/10 px-3 py-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded bg-primary-600 px-1.5 py-0.5 text-[11px] font-semibold text-white">พิกัดหลัก</span>
-            <span className="font-mono text-sm font-bold text-foreground">{clean(p.hs_code)}</span>
-          </div>
-          <div className="mt-1.5"><DutyRow r={p} /></div>
-          {clean(p.note) && <p className="mt-1.5 text-[11px] text-muted break-words">📝 {clean(p.note)}</p>}
-        </div>
-      ) : (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/50 dark:bg-slate-900/20 px-3 py-2 text-[11px] text-muted">
-          — ยังไม่มีเลขพิกัดสำหรับสินค้านี้ (มีแต่คำถาม รอฝ่ายเอกสารกำหนดพิกัด) —
-        </div>
-      )}
-
-      {g.alternates.length > 0 && (
-        <div className="space-y-1.5">
-          <p className="text-[11px] font-semibold text-muted">
-            พิกัดรอง (ตัวเลือกอื่น · เลือกใช้ตามเคส / เลี่ยงพิกัด) — {g.alternates.length} เลข
-          </p>
-          <div className="space-y-1.5">
-            {g.alternates.map((a) => (
-              <div key={a.id} className="rounded-lg border border-border bg-surface-alt/30 px-2.5 py-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-[13px] font-semibold text-foreground">{clean(a.hs_code)}</span>
-                  <DutyRow r={a} />
-                </div>
-                {clean(a.note) && <p className="mt-1 text-[11px] text-muted break-words">📝 {clean(a.note)}</p>}
-              </div>
-            ))}
-          </div>
-        </div>
+    <div className="mt-1 flex flex-wrap items-center gap-1">
+      <span className="text-[11px] text-muted">สินค้า:</span>
+      {shown.map((a, i) => (
+        <span key={i} title={a.title}
+          className="inline-flex max-w-[16rem] truncate rounded-full border border-border bg-surface-alt/60 px-2 py-0.5 text-[11px] text-foreground/80">
+          {a.label}
+        </span>
+      ))}
+      {items.length > CAP && (
+        <button type="button" onClick={() => setExpanded((v) => !v)}
+          className="rounded-full border border-border px-2 py-0.5 text-[11px] text-primary-600 hover:bg-surface-alt">
+          {expanded ? "ย่อ" : "+" + (items.length - CAP).toLocaleString("th-TH") + " ชื่อ"}
+        </button>
       )}
     </div>
   );

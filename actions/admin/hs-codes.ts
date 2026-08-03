@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import type { AdminRole } from "@/lib/auth/require-admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
@@ -312,6 +313,16 @@ export type HsCodeListRow = {
   decl_duty_stable: boolean | null;  // false = >1 duty seen within priv=000
   decl_last_used:   string | null;   // ref_no ของใบขนล่าสุดที่ใช้พิกัดนี้
   hs8_is_padded:    boolean;         // key came from zero-padding a <8-digit heading
+  // ── 0285 · one-table merge — ชื่อสินค้าที่เคยถาม/ตอบสำหรับพิกัดนี้ ──
+  // (merged from doc_bot_hs_codes + overrides + LINE chats · reference intel)
+  product_aliases:  HsProductAlias[];
+};
+
+export type HsProductAlias = {
+  th?: string | null;
+  en?: string | null;
+  note?: string | null;
+  src?: string | null; // bot | file | override | line
 };
 
 // The FULL field set. Kept as one constant because a lighter projection is a
@@ -322,7 +333,7 @@ const HS_FULL_SELECT =
   "code, description, description_en, default_duty_pct, form_e_duty_pct, other_forms, " +
   "unit, hs_note, note, default_stat_code, is_active, source, provenance, is_canonical, " +
   "duty_confirmed, decl_count, decl_duty_pct, decl_form_e_pct, decl_duty_stable, " +
-  "decl_last_used, hs8_is_padded";
+  "decl_last_used, hs8_is_padded, product_aliases";
 
 const listSchema = z.object({ search: z.string().trim().max(100).optional() });
 
@@ -344,19 +355,22 @@ export async function listHsCodes(
 
   return withAdmin([...HS_LIBRARY_ROLES], async () => {
     const admin = createAdminClient();
-    let query = admin
-      .from("hs_codes")
-      .select(HS_FULL_SELECT)
-      .order("code", { ascending: true })
-      .limit(3000);
-
-    if (term) {
-      // Escape ILIKE wildcards/commas in the user term so they're literal.
-      const safe = term.replace(/[%_,]/g, (m) => `\\${m}`);
-      query = query.or(`code.ilike.%${safe}%,description.ilike.%${safe}%`);
-    }
-
-    const { data, error } = await query;
+    // ⚠️ fetchAllRows, NOT .limit(3000) — PostgREST caps a single response at
+    // 1,000 rows regardless of the requested limit → the old read silently
+    // truncated the 1,757-row library to 1,000 (caught 2026-08-03 from the
+    // owner's screenshot · same class as the report-cnt 60/66-container bug).
+    const { data, error } = await fetchAllRows<HsCodeListRow>(() => {
+      let query = admin
+        .from("hs_codes")
+        .select(HS_FULL_SELECT)
+        .order("code", { ascending: true });
+      if (term) {
+        // Escape ILIKE wildcards/commas in the user term so they're literal.
+        const safe = term.replace(/[%_,]/g, (m) => `\\${m}`);
+        query = query.or(`code.ilike.%${safe}%,description.ilike.%${safe}%`);
+      }
+      return query;
+    });
     if (error) {
       console.error("[hs_codes list]", { code: error.code, message: error.message });
       return { ok: false, error: `db_error:${error.code ?? "unknown"}` };
@@ -375,6 +389,7 @@ function normalizeHsRow(r: HsCodeListRow): HsCodeListRow {
     decl_count:       Number(r.decl_count ?? 0),
     decl_duty_pct:    r.decl_duty_pct == null ? null : Number(r.decl_duty_pct),
     decl_form_e_pct:  r.decl_form_e_pct == null ? null : Number(r.decl_form_e_pct),
+    product_aliases:  Array.isArray(r.product_aliases) ? r.product_aliases : [],
   };
 }
 

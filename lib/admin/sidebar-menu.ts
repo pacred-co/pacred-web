@@ -1347,6 +1347,9 @@ const wrapServiceCustoms: MenuItem = {
   labelKey: "serviceNav.customs",
   icon: "ClipboardCheck",
   children: [
+    // owner 2026-08-03 — "เอาเมนู คลัง HS CODE มาไว้หัวข้อแรก ข้างบนใบขนรวม"
+    // คลังพิกัด = เครื่องมือหลักที่ทุกงานเอกสารเปิดก่อน → นำกลุ่ม
+    itemHsLibrary,
     itemCargoDeclarations,
     itemTaxdocWorkspace,
     // G1 — pre-order HS consult sits ABOVE the order-bound triage (natural
@@ -1354,7 +1357,6 @@ const wrapServiceCustoms: MenuItem = {
     itemHsConsult,
     itemHsTriage,
     itemWhtCerts,
-    itemHsLibrary,
     itemCustomsDocKit,
     // 2026-06-10 (ปอน) — "ใบขนพ่วง" (combined/attached customs declaration ·
     // ตั๋วพ่วง). No page yet → coming-soon stub (no dead link · §0d).

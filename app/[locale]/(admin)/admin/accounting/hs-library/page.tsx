@@ -1,7 +1,6 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { AccountingMenubar } from "@/components/admin/accounting-menubar";
-
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { HsLibraryClient } from "./hs-library-client";
 import type { HsCodeListRow } from "@/actions/admin/hs-codes";
 
@@ -12,16 +11,14 @@ import type { HsCodeListRow } from "@/actions/admin/hs-codes";
  * ยุบทิ้ง ให้มารวมกันอยู่ทีเดียว และหน้าเดียวกัน · ใช้ docbot เป็นพื้นฐาน แล้วต่อยอด
  * แก้เป็น คลัง HS CODE LIBRARY ตัวเต็มจริงๆ"
  *
- * This page absorbed the former /hs-library/bot sub-page (now a redirect) — the
- * two HS surfaces are one. It shows the library on TWO axes, because the data
- * genuinely has two grains and flattening them would lose information:
- *   §1 พิกัด        — code-grain (hs_codes · ~1,718) = the duty library
- *   §2 สินค้า→พิกัด  — product-grain (doc_bot_hs_codes · 5,335) = the aliases,
- *                     พิกัดหลัก/รอง, conflict groups, เลี่ยงพิกัด intel
- *
- * PERF (owner: "ห้ามทำงานบัค งานหาย" + the platform is slow): only §1 is loaded
- * server-side (~1,718 rows). §2's 5,335 alias rows + the overrides lazy-load on
- * first open, so the initial paint is not paying for a tab nobody opened.
+ * 2026-08-03 — owner ย้ำรอบสอง: "ทำไมยังมี 2 แทป · รวมกันทั้งหน้าตาการใช้งาน
+ * และ DB · table เดียวกัน ใช้ที่เดียวกัน" ⇒ ONE table, ONE view now:
+ * doc_bot's product-grain moved ONTO the hs_codes row as `product_aliases`
+ * (mig 0285 + merge script) — each พิกัด row carries every product name ever
+ * asked for it; the search matches those names, so the old แท็บ 2's job
+ * (พิมพ์ชื่อสินค้า → เจอพิกัด) happens in the SAME list. No tabs. No second
+ * table read. AccountingMenubar removed (owner: "ทำไมมีเมนูบัญชีติดมา") —
+ * the page enters from the sidebar (พิธีการศุลกากร & เอกสาร · first item).
  *
  * ⚠️ REFERENCE / DICTIONARY DATA (AGENTS.md §0e) — editing here never touches a
  * selling price or an order. It DOES feed the duty HINT that the cost editor /
@@ -50,19 +47,24 @@ const HS_FULL_SELECT =
   "code, description, description_en, default_duty_pct, form_e_duty_pct, other_forms, " +
   "unit, hs_note, note, default_stat_code, is_active, source, provenance, is_canonical, " +
   "duty_confirmed, decl_count, decl_duty_pct, decl_form_e_pct, decl_duty_stable, " +
-  "decl_last_used, hs8_is_padded";
+  "decl_last_used, hs8_is_padded, product_aliases";
 
 export default async function HsLibraryPage() {
   await requireAdmin([...VIEW_ROLES]);
 
   const admin = createAdminClient();
-  // The whole library (~1,718 rows · text-only) so §1 filters instantly client-side.
-  // 3000 = headroom; the client render-caps for responsiveness.
-  const { data, error } = await admin
-    .from("hs_codes")
-    .select(HS_FULL_SELECT)
-    .order("code", { ascending: true })
-    .limit(3000);
+  // The whole library so the list filters instantly client-side.
+  // ⚠️ fetchAllRows, NOT .limit(3000) — PostgREST hard-caps a response at
+  // 1,000 rows regardless of the requested limit, so the old read silently
+  // showed 1,000/1,757 พิกัด (caught 2026-08-03 from the owner's own
+  // screenshot: a suspiciously-round "1,000"). Same class as the report-cnt
+  // 60/66-container bug — query ที่อาจเกิน 1,000 แถว ต้อง fetchAllRows เสมอ.
+  const { data, error } = await fetchAllRows<HsCodeListRow>(() =>
+    admin
+      .from("hs_codes")
+      .select(HS_FULL_SELECT)
+      .order("code", { ascending: true }),
+  );
   if (error) {
     console.error("[hs-library initial load]", { code: error.code, message: error.message });
   }
@@ -73,19 +75,19 @@ export default async function HsLibraryPage() {
     decl_count:       Number(r.decl_count ?? 0),
     decl_duty_pct:    r.decl_duty_pct == null ? null : Number(r.decl_duty_pct),
     decl_form_e_pct:  r.decl_form_e_pct == null ? null : Number(r.decl_form_e_pct),
+    product_aliases:  Array.isArray(r.product_aliases) ? r.product_aliases : [],
   }));
 
   return (
     <>
-      <AccountingMenubar activeHref="/admin/accounting/hs-library" />
       <main className="p-6 lg:p-8 space-y-5 max-w-7xl">
         <header className="space-y-1">
-          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · บัญชี · คลัง HS</p>
+          <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · คลัง HS</p>
           <h1 className="text-2xl font-bold">คลัง HS CODE LIBRARY</h1>
           <p className="text-xs text-muted leading-relaxed">
-            คลังพิกัดศุลกากรของ Pacred <b>ที่เดียว จบในหน้าเดียว</b> — รวม <b>พิกัด + อากรปกติ + Form-E + ฟอร์มอื่นๆ +
-            รหัสสถิติ</b> เข้ากับ <b>คลังบอท/ไฟล์</b> (ชื่อสินค้า → พิกัดหลัก-รอง) และ <b>อากรที่ใช้จริงบนใบขน</b>{" "}
-            เพื่อเทียบว่าเลขที่เราเก็บ ตรงกับที่ยิงจริงหรือไม่.
+            คลังพิกัดศุลกากรของ Pacred <b>ตารางเดียว จบในหน้าเดียว</b> — แต่ละพิกัดรวม <b>อากรปกติ + Form-E +
+            ฟอร์มอื่นๆ + รหัสสถิติ</b> · <b>ชื่อสินค้าทุกชื่อที่เคยถาม/ตอบ</b> (จากบอท ไฟล์ และแชท) อยู่บนแถวพิกัดนั้นเลย
+            — พิมพ์ชื่อสินค้าในช่องค้นหาก็เจอพิกัด · พร้อม <b>อากรที่ใช้จริงบนใบขน</b> เทียบว่าเลขที่เก็บตรงกับที่ยิงจริงหรือไม่.
           </p>
           {error && (
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
