@@ -315,8 +315,11 @@ export default async function DriverStickerSheetPage({
 
   return (
     <div className="bg-white text-black min-h-screen">
-      {/* Print-only styles — A4 portrait, 2-across sticker grid. Each sticker
-          is a fixed ~90mm × 55mm card (≈ a common 2-column A4 label sheet). */}
+      {/* Print target = Gprinter GP-1924D thermal label printer · 100 × 150 mm
+          (4×6") — ONE sticker per label, NOT an A4 label sheet (owner 2026-08-03:
+          "เครื่องพิมพ์ 100×150มม. · มันออกมาเป็นขนาด A4"). On SCREEN we still show
+          a 2-across preview grid; on PRINT each sticker fills its own 100×150mm
+          page + a page-break after it. §0i — verify on real paper. */}
       <style>{`
         .sticker-grid {
           display: grid;
@@ -342,10 +345,23 @@ export default async function DriverStickerSheetPage({
         @media print {
           aside, .no-print { display: none !important; }
           html, body { background: #fff !important; padding: 0 !important; margin: 0 !important; }
-          .print-area { box-shadow: none !important; border: none !important; padding: 0 !important; }
-          .sticker-grid { gap: 3mm; }
+          .print-area { box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; max-width: none !important; }
+          /* ONE 100×150mm label per sticker → single-column, each fills a page. */
+          .sticker-grid { display: block; gap: 0; max-width: none; margin: 0; }
+          .sticker {
+            width: 100mm;
+            height: 150mm;
+            min-height: 150mm;
+            margin: 0;
+            border: none;            /* the physical label edge = the border (avoids edge-clip) */
+            border-radius: 0;
+            padding: 4mm;
+            break-after: page;
+            page-break-after: always;
+          }
+          .sticker:last-child { break-after: auto; page-break-after: auto; }
         }
-        @page { size: A4 portrait; margin: 8mm; }
+        @page { size: 100mm 150mm; margin: 0; }
       `}</style>
 
       {/* On-screen toolbar */}
