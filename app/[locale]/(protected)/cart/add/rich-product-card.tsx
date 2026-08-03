@@ -71,9 +71,11 @@ export function RichProductCard({
     // supplies the curve. Leaving the card's own radius here drew a SECOND curve
     // 1px away, which read as a seam (owner 2026-08-03 "ขอบ … มันแปลกๆ").
     <div className="rounded-2xl rounded-tl-none border border-border bg-white p-3 md:p-4">
-      {/* 300px photo — the option table needs ~540px and the card is capped at
-          1200px, so a wider photo column clipped the row's delete button. */}
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-[300px_minmax(0,1fr)]">
+      {/* Photo column shrinks on narrower desktops: at ~1180px (sidebar open) a
+          fixed 300px left only ~370px for the option table, which squeezed the
+          name cell to 91px and broke every label onto its own line. 220 → 300px
+          by breakpoint keeps the table readable without scrolling. */}
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)]">
         {/* ── Gallery ── */}
         {
           <div>

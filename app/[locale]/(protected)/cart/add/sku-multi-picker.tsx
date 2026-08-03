@@ -20,23 +20,13 @@
  * successful add — which clears `qtyBySku` upstream — clears this list for free.
  */
 
-import { useMemo, useRef } from "react";
-import { ChevronLeft, ChevronRight, Check, Trash2 } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Check, Trash2, Languages } from "lucide-react";
 import { AutoTranslateText } from "@/components/translate/auto-translate";
 import { MAX_ORDER_QTY, clampOrderQty } from "@/lib/validators/order-qty";
 
 type SkuAxis = { name: string; values: Array<{ label: string; image?: string; data?: string; is_image?: boolean }> };
 type SkuRow = { sku_id: string; prop_path: Record<string, string>; price_cny: number; stock: number; image?: string };
-
-/** A-Z then AA, AB… so a 70-SKU listing still labels every style. */
-function styleCode(i: number): string {
-  let n = i, out = "";
-  do {
-    out = String.fromCharCode(65 + (n % 26)) + out;
-    n = Math.floor(n / 26) - 1;
-  } while (n >= 0);
-  return out;
-}
 
 function fmt2(n: number): string {
   return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -61,6 +51,14 @@ export function SkuMultiPicker({
   onDirty: () => void;
 }) {
   const stripRef = useRef<HTMLDivElement>(null);
+  // Owner 2026-08-03: "default เป็นจีนนะ แต่กดแปลแล้วเป็นไทย" — the seller's own wording
+  // is what the customer will quote back to the shop, so it stays on screen until they
+  // ask otherwise. One switch flips every option label on the card at once (the labels
+  // are pre-fetched in the parent's TranslateProvider batch, so this is instant).
+  const [thai, setThai] = useState(false);
+  /** Option label — Chinese by default, Thai once the switch is on. */
+  const Label = ({ text }: { text: string }) =>
+    thai ? <AutoTranslateText text={text} showNote={false} /> : <>{text}</>;
 
   // The axis that carries pictures is the "แบบ / สี" carousel; whatever else
   // remains (usually 尺码) becomes the per-row size dropdown. A single-axis
@@ -80,7 +78,7 @@ export function SkuMultiPicker({
     if (!styleAxis) return [];
     return styleAxis.values
       .filter((v) => skuMap.some((s) => s.prop_path[styleAxis.name] === v.label))
-      .map((v, i) => ({ label: v.label, image: v.image, code: styleCode(i) }));
+      .map((v) => ({ label: v.label, image: v.image }));
   }, [styleAxis, skuMap]);
 
   const sizesFor = (styleLabel: string): string[] => {
@@ -169,7 +167,23 @@ export function SkuMultiPicker({
 
   return (
     <div className="space-y-3">
-      <p className="text-[14px] font-bold text-foreground">เลือกแบบ ไซซ์ และจำนวน</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[14px] font-bold text-foreground">เลือกแบบ ไซซ์ และจำนวน</p>
+        <button
+          type="button"
+          onClick={() => setThai((v) => !v)}
+          aria-pressed={thai}
+          title={thai ? "กลับไปดูชื่อภาษาจีนจากร้าน" : "แปลชื่อตัวเลือกเป็นภาษาไทย"}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-bold transition ${
+            thai
+              ? "border-primary-500 bg-primary-50 text-primary-700"
+              : "border-border bg-white text-muted hover:border-red-300 hover:text-primary-600"
+          }`}
+        >
+          <Languages className="h-3.5 w-3.5" />
+          {thai ? "ดูต้นฉบับภาษาจีน" : "แปลไทย"}
+        </button>
+      </div>
 
       {/* ── Style carousel (multi-select) ── */}
       <div className="flex items-center gap-2 rounded-xl border border-border bg-white p-2">
@@ -211,13 +225,15 @@ export function SkuMultiPicker({
                     📦
                   </span>
                 )}
-                <span className="min-w-0">
-                  <span className={`block text-[13px] font-bold ${on ? "text-primary-700" : "text-foreground"}`}>
-                    แบบ {st.code}
-                  </span>
-                  <span className="block truncate text-[11px] text-muted">
-                    <AutoTranslateText text={st.label} />
-                  </span>
+                {/* The option's own name IS the identifier — no "แบบ A/B/C" code on top
+                    of it (owner 2026-08-03 "มันมีบอกอยู่แล้วว่าอะไร"). Two lines so a long
+                    Chinese/translated name stays readable instead of being cut at one. */}
+                <span
+                  className={`line-clamp-2 min-w-0 text-[12.5px] font-semibold leading-snug ${
+                    on ? "text-primary-700" : "text-foreground"
+                  }`}
+                >
+                  <Label text={st.label} />
                 </span>
                 {on && (
                   // Sits INSIDE the card (the strip scrolls, so anything hung
@@ -261,7 +277,10 @@ export function SkuMultiPicker({
                   <th className="px-1 py-1.5 text-left font-medium">แบบ / สี</th>
                   {sizeAxis && <th className="px-1 py-1.5 text-left font-medium">ไซซ์</th>}
                   <th className="px-1 py-1.5 text-center font-medium">จำนวน</th>
-                  <th className="px-1 py-1.5 text-right font-medium whitespace-nowrap">ราคา/ชิ้น</th>
+                  {/* Unit price hides below xl — with the sidebar open at ~1180px the
+                      6 columns overflowed and squeezed the name cell. The row total is
+                      still shown, and unit price = total ÷ จำนวน. */}
+                  <th className="hidden px-1 py-1.5 text-right font-medium whitespace-nowrap xl:table-cell">ราคา/ชิ้น</th>
                   <th className="px-1 py-1.5 text-right font-medium">รวม</th>
                   <th className="w-8" />
                 </tr>
@@ -287,21 +306,18 @@ export function SkuMultiPicker({
                               src={img}
                               alt=""
                               loading="lazy"
-                              className="h-10 w-10 flex-shrink-0 rounded-xl border border-border/60 bg-white object-cover"
+                              className="h-9 w-9 flex-shrink-0 rounded-xl border border-border/60 bg-white object-cover"
                             />
                           ) : (
-                            <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-surface-alt">
+                            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-surface-alt">
                               📦
                             </span>
                           )}
-                          <span className="min-w-0">
-                            <span className="block text-[13px] font-bold text-foreground">
-                              แบบ {st?.code ?? "—"}
+                          <span className="min-w-[100px]">
+                            <span className="line-clamp-2 block text-[12.5px] font-semibold text-foreground">
+                              <Label text={styleLabel} />
                             </span>
-                            <span className="block truncate text-[11.5px] text-muted">
-                              <AutoTranslateText text={styleLabel} />
-                            </span>
-                            <span className="mt-0.5 flex items-center gap-1 text-[11px]">
+                            <span className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[11px]">
                               {sku.stock > 0 ? (
                                 <>
                                   <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -328,7 +344,7 @@ export function SkuMultiPicker({
                             onChange={(e) => changeSize(idx, e.target.value)}
                             disabled={pending}
                             aria-label="ไซซ์"
-                            className="h-9 min-w-[84px] rounded-md border border-border bg-white px-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                            className="h-9 min-w-[64px] rounded-md border border-border bg-white px-1 text-[13px] focus:outline-none focus:ring-2 focus:ring-primary-500/40"
                           >
                             {sizesFor(styleLabel).map((sz) => (
                               <option key={sz} value={sz}>
@@ -347,7 +363,7 @@ export function SkuMultiPicker({
                             onClick={() => setQty(idx, Math.max(1, qty - 1))}
                             disabled={pending || qty <= 1}
                             aria-label="ลดจำนวน"
-                            className="h-9 w-9 rounded-md border border-border bg-white text-base leading-none hover:bg-surface-alt disabled:opacity-40"
+                            className="h-9 w-8 rounded-md border border-border bg-white text-base leading-none hover:bg-surface-alt disabled:opacity-40"
                           >
                             −
                           </button>
@@ -359,21 +375,21 @@ export function SkuMultiPicker({
                             onChange={(e) => setQty(idx, clampOrderQty(Number(e.target.value) || 0, 1))}
                             disabled={pending}
                             aria-label="จำนวน"
-                            className="h-9 w-16 rounded-md border border-border bg-white text-center font-mono text-[13px] focus:outline-none focus:ring-2 focus:ring-primary-500/40"
+                            className="h-9 w-12 rounded-md border border-border bg-white text-center font-mono text-[13px] focus:outline-none focus:ring-2 focus:ring-primary-500/40"
                           />
                           <button
                             type="button"
                             onClick={() => setQty(idx, qty + 1)}
                             disabled={pending}
                             aria-label="เพิ่มจำนวน"
-                            className="h-9 w-9 rounded-md border border-border bg-white text-base leading-none hover:bg-surface-alt disabled:opacity-40"
+                            className="h-9 w-8 rounded-md border border-border bg-white text-base leading-none hover:bg-surface-alt disabled:opacity-40"
                           >
                             +
                           </button>
                         </div>
                       </td>
 
-                      <td className="px-1 py-2 text-right font-mono text-[12.5px] text-muted whitespace-nowrap">
+                      <td className="hidden px-1 py-2 text-right font-mono text-[12.5px] text-muted whitespace-nowrap xl:table-cell">
                         ¥{fmt2(sku.price_cny)}
                       </td>
                       <td className="px-1 py-2 text-right font-mono text-[14px] font-bold text-red-600 whitespace-nowrap">

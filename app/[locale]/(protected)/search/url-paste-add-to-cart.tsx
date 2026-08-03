@@ -480,7 +480,16 @@ export function UrlPasteAddToCart({
   // ONE batch ZH→TH round-trip for everything Chinese on this card (the title + every
   // option label). Cached server-side (translation_cache · mig 0246), so a second view of
   // the listing — by anyone — is instant.
-  const zhTexts = [title, ...(skuMap ?? []).map((sk) => Object.values(sk.prop_path).join(" · "))];
+  // ORDER MATTERS: translateTextsAction caps the batch at 60 strings. A 70-SKU listing's
+  // joined "size · colour" rows alone blow past that, so anything appended after them is
+  // silently dropped — which is exactly why the option cards stayed Chinese. The strings
+  // actually RENDERED (title + one entry per axis value, ~18 here) go first; the joined
+  // per-SKU rows follow and fill whatever quota is left. (owner 2026-08-03)
+  const zhTexts = [
+    title,
+    ...(skuAxes ?? []).flatMap((ax) => ax.values.map((v) => v.label)),
+    ...(skuMap ?? []).map((sk) => Object.values(sk.prop_path).join(" · ")),
+  ];
 
   return (
     <TranslateProvider texts={zhTexts}>
