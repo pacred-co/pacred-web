@@ -1,15 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ShoppingCart } from "lucide-react";
-import { Link } from "@/i18n/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { Link, usePathname } from "@/i18n/navigation";
+import { getCartCount } from "@/actions/cart-count";
+import { CART_CHANGED_EVENT } from "@/lib/cart-changed-event";
 
 /**
- * NavBar cart badge — fetches current user's cart_items count on mount
- * and listens for realtime INSERT/DELETE to keep the badge in sync.
- * Click → /cart (the faithful cart · D1 cart unification — the second
- * UI at /service-order/cart now redirect()s here).
+ * NavBar cart badge — the live count of the customer's cart. Click → /cart.
+ *
+ * 🔴 Counts `tb_cart` (owner 2026-08-03 "เอาตัวเลขในตระกร้าขึ้นมาด้วยดิ"). It used
+ * to count the REBUILT `cart_items` table, which the D1 cart unification left
+ * behind: prod holds 0 rows there vs 334 in tb_cart, so the badge was silently
+ * 0 for every customer since the unification — a §0e dead-read. The count runs
+ * SERVER-side (actions/cart-count) because tb_cart is service-role-only: a
+ * browser query returns 0 however full the cart is.
+ *
+ * Refresh triggers, in place of realtime — `tb_cart` is a migrated legacy table
+ * and is not guaranteed to be in the realtime publication, so a subscription
+ * would look wired and never fire:
+ *   • mount
+ *   • route change  — add-then-navigate (…/cart)
+ *   • CART_CHANGED  — add-and-stay (the review page's หยิบใส่รถเข็น)
+ *   • window focus  — a tab that added items elsewhere
  *
  * `prefetch` opt-out: when this badge is rendered on a non-protected page
  * (e.g. an authed user landing on /register / / / etc.), Next.js's default
@@ -23,62 +36,34 @@ import { createClient } from "@/lib/supabase/client";
  */
 export function CartBadge({ prefetch }: { prefetch?: false }) {
   const [count, setCount] = useState(0);
+  const pathname = usePathname();
+
+  const refresh = useCallback(async () => {
+    try {
+      return await getCartCount();
+    } catch {
+      return 0; // never let a transient failure blank a real count into an error
+    }
+  }, []);
 
   useEffect(() => {
-    const supabase = createClient();
     let mounted = true;
+    const run = () => {
+      refresh().then((n) => {
+        if (mounted) setCount(n);
+      });
+    };
 
-    // Local-session read helper — uses getSession() (no refresh attempt) so
-    // a stale cookie jar doesn't fire the SDK's "Invalid Refresh Token"
-    // AuthApiError into the dev console. Authoritative auth still happens
-    // server-side; this client lookup is only for the visible badge count.
-    async function currentUserId(): Promise<string | null> {
-      try {
-        const { data } = await supabase.auth.getSession();
-        return data.session?.user?.id ?? null;
-      } catch {
-        return null;
-      }
-    }
-
-    async function refresh() {
-      const userId = await currentUserId();
-      if (!userId) {
-        if (mounted) setCount(0);
-        return;
-      }
-      const { count: n } = await supabase
-        .from("cart_items")
-        .select("id", { count: "exact", head: true })
-        .eq("profile_id", userId);
-      if (mounted) setCount(n ?? 0);
-    }
-
-    refresh();
-
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    currentUserId().then((userId) => {
-      if (!userId || !mounted) return;
-      channel = supabase
-        .channel(`cart-badge-${userId}`)
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "cart_items", filter: `profile_id=eq.${userId}` },
-          () => refresh(),
-        )
-        .on(
-          "postgres_changes",
-          { event: "DELETE", schema: "public", table: "cart_items", filter: `profile_id=eq.${userId}` },
-          () => refresh(),
-        )
-        .subscribe();
-    });
-
+    run();
+    window.addEventListener(CART_CHANGED_EVENT, run);
+    window.addEventListener("focus", run);
     return () => {
       mounted = false;
-      if (channel) supabase.removeChannel(channel);
+      window.removeEventListener(CART_CHANGED_EVENT, run);
+      window.removeEventListener("focus", run);
     };
-  }, []);
+    // pathname: re-count after an add-then-navigate (…→ /cart).
+  }, [refresh, pathname]);
 
   return (
     <Link

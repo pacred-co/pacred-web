@@ -34,6 +34,7 @@ import { useTranslations } from "next-intl";
 import { ShoppingCart, Plus, Minus, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { addCartItem, addCartItemsBulk } from "@/actions/cart";
+import { notifyCartChanged } from "@/lib/cart-changed-event";
 import { toYuanEquivalent } from "@/lib/forwarder/currency-convert";
 import { MAX_ORDER_QTY, clampOrderQty } from "@/lib/validators/order-qty";
 import { TranslateProvider, AutoTranslateText } from "@/components/translate/auto-translate";
@@ -385,6 +386,7 @@ export function UrlPasteAddToCart({
           setSuccess(true);
           setAddedCount((c) => c + rows.length);
           onAdded?.(rows.length);
+          notifyCartChanged();
           setQtyBySku({}); setDetails("");
           setTimeout(() => setSuccess(false), 4000);
         } else {
@@ -442,6 +444,7 @@ export function UrlPasteAddToCart({
         setSuccess(true);
         setAddedCount((c) => c + 1);
         onAdded?.(1);
+        notifyCartChanged();
         // Clear form so customer can paste another URL without stale qty.
         // Keep manualPrice — TAMIT often fails on a whole shop, so the
         // next URL from the same vendor likely shares the price posture.

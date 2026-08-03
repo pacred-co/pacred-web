@@ -25,6 +25,7 @@ import {
   ArrowLeft, BadgeCheck, Info, Loader2, PackageSearch, Plus,
   Check, ShieldCheck, ShoppingCart, Users, X,
 } from "lucide-react";
+import { notifyCartChanged } from "@/lib/cart-changed-event";
 import { addCartItemsBulk, type CartItemBulkRow } from "@/actions/cart";
 import { uploadCartProductImage } from "@/actions/cart-manual-image";
 import { takeManualLinks } from "../link-source";
@@ -137,6 +138,7 @@ export function ManualEntryClient({
         setErr(res.error ?? "เพิ่มลงรถเข็นไม่สำเร็จ");
         return;
       }
+      notifyCartChanged();
       setAddedIds((s) => {
         const n = new Set(s);
         ready.forEach((it) => n.add(it.id));

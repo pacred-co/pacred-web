@@ -23,6 +23,7 @@ import {
 import { Link } from "@/i18n/navigation";
 import { AlertTriangle, Check, Info, Loader2, Pencil, Plus, ArrowLeft, ShoppingCart, X } from "lucide-react";
 import { searchProductByUrl, type ProductSearchOk } from "@/actions/product-search";
+import { notifyCartChanged } from "@/lib/cart-changed-event";
 import { addCartItemsBulk } from "@/actions/cart";
 import { uploadCartProductImage } from "@/actions/cart-manual-image";
 import { RichProductCard } from "../rich-product-card";
@@ -193,6 +194,7 @@ export function ReviewClient({
         return;
       }
       markAdded(key);
+      notifyCartChanged();
       setErr(null);
     });
   }
