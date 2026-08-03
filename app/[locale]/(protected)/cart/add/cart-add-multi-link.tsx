@@ -28,26 +28,11 @@ import {
   CheckCircle2, Clock, AlertTriangle, PartyPopper,
   ClipboardList, ClipboardPaste, ExternalLink, Globe, Info, ChevronRight,
 } from "lucide-react";
+import { MAX_LINKS, SOURCE_BADGE, detectSource, splitLinks } from "./link-source";
 
-const MAX_ROWS = 20;
-
-// ── Source detection — hostname → marketplace badge. ─────────────────
-type Source = "1688" | "taobao" | "tmall" | "alibaba";
-function detectSource(raw: string): Source | null {
-  const u = raw.trim().toLowerCase();
-  if (!u) return null;
-  if (u.includes("1688.com")) return "1688";
-  if (u.includes("tmall.com")) return "tmall";
-  if (u.includes("taobao.com")) return "taobao";
-  if (u.includes("alibaba.com")) return "alibaba";
-  return null;
-}
-const SOURCE_BADGE: Record<Source, { label: string; icon: string }> = {
-  "1688":   { label: "1688",     icon: "/legacy/pcs/assets/images/shops/1688-logo-2.png" },
-  taobao:   { label: "Taobao",   icon: "/images/partners/taobaopartner.png" },
-  tmall:    { label: "Tmall",    icon: "/images/partners/tmallpartner.png" },
-  alibaba:  { label: "Alibaba",  icon: "/images/partners/alibabapartner.png" },
-};
+// Link detection lives in ./link-source so the review page's "เพิ่มรายการ" popup
+// judges links exactly the same way this page does.
+const MAX_ROWS = MAX_LINKS;
 
 type Row = { id: number; url: string };
 let ROW_SEQ = 1;
@@ -83,7 +68,7 @@ export function CartAddMultiLink() {
   }
   // แยกข้อความที่วาง (หลายลิงก์ · เว้นวรรค/ขึ้นบรรทัด) ลงเป็นหลายช่องอัตโนมัติ เริ่มจากช่อง id นี้.
   function spreadLinks(id: number, text: string) {
-    const links = text.split(/[\s\n]+/).map((s) => s.trim()).filter(Boolean).slice(0, MAX_ROWS);
+    const links = splitLinks(text, MAX_ROWS);
     if (!links.length) return;
     setRows((rs) => {
       const idx = rs.findIndex((r) => r.id === id);
@@ -116,11 +101,7 @@ export function CartAddMultiLink() {
 
   // Split pasted text into individual links (newline / whitespace separated).
   function textToRows(text: string): Row[] {
-    const links = text
-      .split(/[\s\n]+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .slice(0, MAX_ROWS);
+    const links = splitLinks(text, MAX_ROWS);
     return links.length ? links.map((u) => newRow(u)) : [newRow()];
   }
   function applyMultiText() {

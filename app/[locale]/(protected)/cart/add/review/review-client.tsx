@@ -10,15 +10,19 @@
  * (<RichProductCard> = gallery + SKU/variant grid + qty + price + หยิบใส่รถเข็น).
  *
  * Multiple links → tabs ("รายการที่ 1/2 …") with a live status dot; "+ เพิ่มรายการ"
- * goes back to /cart/add to paste more. Money path is 100% REUSED (the card's
- * <UrlPasteAddToCart> island → addCartItem → tb_cart).
+ * opens the paste POPUP and appends new tabs in place (owner 2026-08-03 "กดเพิ่ม
+ * ให้เป็น pop up") — it used to navigate back to /cart/add, which discarded the
+ * review session. Money path is 100% REUSED (the card's <UrlPasteAddToCart>
+ * island → addCartItem → tb_cart).
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Link } from "@/i18n/navigation";
 import { AlertTriangle, Plus, ArrowLeft } from "lucide-react";
 import { searchProductByUrl, type ProductSearchOk } from "@/actions/product-search";
 import { RichProductCard } from "../rich-product-card";
+import { MAX_LINKS } from "../link-source";
+import { AddLinksDialog } from "./add-links-dialog";
 
 const STORAGE_KEY = "pacred_cart_add_links";
 
@@ -26,6 +30,39 @@ type Item =
   | { url: string; status: "loading" }
   | { url: string; status: "ok"; product: ProductSearchOk["product"] }
   | { url: string; status: "fail"; message: string };
+
+/**
+ * Resolve ONE link into its slot. Module-level (not a closure) so the mount
+ * effect and the popup's append path provably run the identical fetch — a
+ * second inline copy is how the two paths drift.
+ */
+function fetchIntoSlot(
+  setItems: Dispatch<SetStateAction<Item[] | null>>,
+  idx: number,
+  url: string,
+) {
+  const patch = (next: Item) =>
+    setItems((prev) => {
+      if (!prev) return prev;
+      const out = [...prev];
+      out[idx] = next;
+      return out;
+    });
+
+  searchProductByUrl(url)
+    .then((res) =>
+      patch(
+        res.ok
+          ? { url, status: "ok", product: res.product }
+          : {
+              url,
+              status: "fail",
+              message: res.message ?? "ไม่พบข้อมูลสินค้าจากลิงก์นี้ กรุณากรอกรายการสินค้าด้วยตนเอง",
+            },
+      ),
+    )
+    .catch(() => patch({ url, status: "fail", message: "ระบบค้นหาไม่พร้อม กรุณาลองใหม่อีกครั้ง" }));
+}
 
 export function ReviewClient({
   rsDefault,
@@ -36,6 +73,7 @@ export function ReviewClient({
 }) {
   const [items, setItems] = useState<Item[] | null>(null); // null = still reading storage
   const [active, setActive] = useState(0);
+  const [addOpen, setAddOpen] = useState(false);
   const started = useRef(false);
 
   useEffect(() => {
@@ -49,7 +87,7 @@ export function ReviewClient({
     } catch {
       links = [];
     }
-    links = links.map((l) => (typeof l === "string" ? l.trim() : "")).filter(Boolean).slice(0, 20);
+    links = links.map((l) => (typeof l === "string" ? l.trim() : "")).filter(Boolean).slice(0, MAX_LINKS);
 
     // Client-only init from sessionStorage AFTER mount — the server + first client
     // render show the null skeleton, so there's no hydration mismatch.
@@ -58,47 +96,68 @@ export function ReviewClient({
     if (links.length === 0) return;
 
     // Fetch each in parallel; patch that slot as it resolves (skeleton → card).
-    links.forEach((url, i) => {
-      searchProductByUrl(url)
-        .then((res) => {
-          setItems((prev) => {
-            if (!prev) return prev;
-            const next = [...prev];
-            next[i] = res.ok
-              ? { url, status: "ok", product: res.product }
-              : { url, status: "fail", message: res.message ?? "ไม่พบข้อมูลสินค้าจากลิงก์นี้ กรุณากรอกรายการสินค้าด้วยตนเอง" };
-            return next;
-          });
-        })
-        .catch(() => {
-          setItems((prev) => {
-            if (!prev) return prev;
-            const next = [...prev];
-            next[i] = { url, status: "fail", message: "ระบบค้นหาไม่พร้อม กรุณาลองใหม่อีกครั้ง" };
-            return next;
-          });
-        });
-    });
+    links.forEach((url, i) => fetchIntoSlot(setItems, i, url));
   }, []);
+
+  /**
+   * Popup handed us new links → append them as loading tabs and resolve each,
+   * WITHOUT reloading the tabs already open. `items` here is the render-current
+   * value (we're inside an event handler), so the start index is exact; the
+   * fetches deliberately run outside the state updater, which React may invoke
+   * twice under StrictMode.
+   */
+  function appendLinks(urls: string[]) {
+    const base = items ?? [];
+    const room = Math.max(0, MAX_LINKS - base.length);
+    const add = urls.slice(0, room);
+    if (add.length === 0) return;
+
+    const startIdx = base.length;
+    setItems([...base, ...add.map((url) => ({ url, status: "loading" as const }))]);
+    add.forEach((url, k) => fetchIntoSlot(setItems, startIdx + k, url));
+    setActive(startIdx); // jump to the first one just added
+
+    // Keep storage in sync so a refresh doesn't lose the additions.
+    try {
+      sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify([...base.map((it) => it.url), ...add]),
+      );
+    } catch {
+      /* private mode — the in-memory list is still correct for this visit */
+    }
+  }
 
   // Reading storage → show a single skeleton.
   if (items === null) {
     return <SkeletonCard />;
   }
 
-  // No links (direct visit / expired).
+  // No links (direct visit / expired) — offer the popup right here instead of
+  // bouncing back to /cart/add just to paste one link (/cart/add stays linked
+  // below so the full paste page keeps its entry point · §0d).
   if (items.length === 0) {
     return (
-      <div className="rounded-2xl border border-border bg-white p-8 text-center">
-        <p className="text-[15px] font-bold text-foreground">ยังไม่มีลิงก์สินค้า</p>
-        <p className="mt-1 text-[13px] text-muted">กลับไปวางลิงก์ที่หน้าเพิ่มสินค้าก่อนครับ</p>
-        <Link
-          href="/cart/add"
-          className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary-600 px-5 py-2.5 text-[13px] font-bold text-white hover:bg-primary-700"
-        >
-          <ArrowLeft className="h-4 w-4" /> กลับไปเพิ่มลิงก์
-        </Link>
-      </div>
+      <>
+        <div className="rounded-2xl border border-border bg-white p-8 text-center">
+          <p className="text-[15px] font-bold text-foreground">ยังไม่มีลิงก์สินค้า</p>
+          <p className="mt-1 text-[13px] text-muted">วางลิงก์สินค้าที่ต้องการสั่งซื้อได้เลยครับ</p>
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary-600 px-5 py-2.5 text-[13px] font-bold text-white hover:bg-primary-700"
+          >
+            <Plus className="h-4 w-4" /> เพิ่มสินค้าเข้ารถเข็น
+          </button>
+          <p className="mt-3 text-[12.5px] text-muted">
+            หรือ{" "}
+            <Link href="/cart/add" className="font-bold text-primary-600 hover:underline">
+              กลับไปหน้าเพิ่มสินค้า
+            </Link>
+          </p>
+        </div>
+        <AddLinksDialog open={addOpen} used={0} onClose={() => setAddOpen(false)} onAdd={appendLinks} />
+      </>
     );
   }
 
@@ -172,12 +231,16 @@ export function ReviewClient({
           );
         })}
         </div>
-        <Link
-          href="/cart/add"
+        {/* Opens the paste popup instead of navigating to /cart/add — leaving the
+            page would drop every tab back to a fresh fetch and lose the variants
+            and quantities already picked (owner 2026-08-03). */}
+        <button
+          type="button"
+          onClick={() => setAddOpen(true)}
           className="mb-1.5 inline-flex items-center justify-center gap-1.5 rounded-xl border border-primary-500 px-4 py-2 text-[12.5px] font-bold text-primary-600 transition hover:bg-red-50"
         >
           <Plus className="h-4 w-4" /> เพิ่มรายการ
-        </Link>
+        </button>
       </div>
 
       {/* Active item — skeleton → rich card / error */}
@@ -195,6 +258,13 @@ export function ReviewClient({
       ) : (
         <RichProductCard product={cur.product} rsDefault={rsDefault} fxRates={fxRates} />
       )}
+
+      <AddLinksDialog
+        open={addOpen}
+        used={items.length}
+        onClose={() => setAddOpen(false)}
+        onAdd={appendLinks}
+      />
     </div>
   );
 }
