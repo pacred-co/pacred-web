@@ -316,10 +316,11 @@ export default async function DriverStickerSheetPage({
   return (
     <div className="bg-white text-black min-h-screen">
       {/* Print target = Gprinter GP-1924D thermal label printer · 100 × 150 mm
-          (4×6") label, printed LANDSCAPE (150mm กว้าง × 100mm สูง · owner 2026-08-03:
-          "ทำเป็นแนวนอน ตามแบบก่อนปริ้น") — ONE sticker per label, NOT an A4 sheet.
-          On SCREEN we show a 2-across preview grid; on PRINT each sticker fills its
-          own 150×100mm landscape page + a page-break after it. §0i — verify on real paper. */}
+          (4×6"). The printer FEEDS the media PORTRAIT (100mm wide × 150mm long) — that
+          size is fixed, so @page MUST stay 100×150 or the content overflows to a 2nd
+          label. To make the sticker READ landscape (owner 2026-08-03: "ทำเป็นแนวนอน ·
+          อย่าไปฝืนเครื่องพิมพ์") we keep the page PORTRAIT and ROTATE the content 90°
+          instead. On SCREEN we show a 2-across preview grid. §0i — verify on real paper. */}
       <style>{`
         .sticker-grid {
           display: grid;
@@ -333,11 +334,16 @@ export default async function DriverStickerSheetPage({
           padding: 3mm;
           min-height: 70mm;
           display: flex;
-          flex-direction: column;
           break-inside: avoid;
           page-break-inside: avoid;
           background: #fff;
           color: #000;
+        }
+        .sticker-content {
+          box-sizing: border-box;
+          flex: 1;
+          display: flex;
+          flex-direction: column;
         }
         @media screen {
           .sticker-grid { max-width: 210mm; margin: 0 auto; }
@@ -346,24 +352,37 @@ export default async function DriverStickerSheetPage({
           aside, .no-print { display: none !important; }
           html, body { background: #fff !important; padding: 0 !important; margin: 0 !important; }
           .print-area { box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; max-width: none !important; }
-          /* ONE 100×150mm label per sticker · LANDSCAPE (150mm กว้าง × 100mm สูง)
-             ให้ตรงกับพรีวิวบนจอ (owner 2026-08-03: "ทำเป็นแนวนอน") → single-column,
-             each fills a page. */
+          /* Page stays PORTRAIT 100×150mm (= the physical label the printer feeds).
+             The CONTENT box is 150×100mm (landscape) rotated 90° + centred, so it reads
+             landscape on the portrait label WITHOUT overflowing to a 2nd label. */
           .sticker-grid { display: block; gap: 0; max-width: none; margin: 0; }
           .sticker {
-            width: 150mm;
-            height: 100mm;
-            min-height: 100mm;
+            width: 100mm;
+            height: 150mm;
+            min-height: 150mm;
             margin: 0;
-            border: none;            /* the physical label edge = the border (avoids edge-clip) */
+            padding: 0;
+            border: none;
             border-radius: 0;
-            padding: 4mm;
+            position: relative;
+            overflow: hidden;
+            display: block;
             break-after: page;
             page-break-after: always;
           }
+          .sticker-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 150mm;
+            height: 100mm;
+            padding: 4mm;
+            transform: translate(-50%, -50%) rotate(90deg);
+            transform-origin: center center;
+          }
           .sticker:last-child { break-after: auto; page-break-after: auto; }
         }
-        @page { size: 150mm 100mm; margin: 0; }
+        @page { size: 100mm 150mm; margin: 0; }
       `}</style>
 
       {/* On-screen toolbar */}
@@ -453,6 +472,7 @@ export default async function DriverStickerSheetPage({
               const typeLabel = modeCode ? MODE_LABEL[modeCode] : null;
               return (
                 <div key={s.key} className="sticker">
+                  <div className="sticker-content">
                   {/* ── หัว: โลโก้ Pacred + ผู้ส่ง | เลขที่ + แทรคกิ้งตัวใหญ่ (ปอน 2026-07-24 · ตามภาพ) ── */}
                   <div className="flex items-start justify-between gap-2 border-b border-black pb-1.5">
                     <div className="flex min-w-0 items-start gap-1.5">
@@ -508,6 +528,7 @@ export default async function DriverStickerSheetPage({
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={s.qr} alt="qr" className="h-[18mm] w-[18mm] shrink-0 object-contain" />
                     )}
+                  </div>
                   </div>
                 </div>
               );
