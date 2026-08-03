@@ -13,8 +13,8 @@
  * the review page (searchProductByUrl → <RichProductCard> → <UrlPasteAddToCart>
  * island → addCartItem → tb_cart). Money path 100% REUSED, no new one.
  *
- * The "ไม่มีลิงก์สินค้า" tab points to the existing manual-entry flow
- * (/service-order/add) — no dead end, no new manual form for V1.
+ * The "ไม่มีลิงก์สินค้า" tab goes to /cart/add/manual — the full "เพิ่มสินค้าด้วย
+ * ตัวเอง" form (owner 2026-08-03), which wears this flow's review-page shell.
  *
  * Thai is hardcoded (matches the sibling admin link-paste-search pattern · the
  * customer portal is TH-primary). Mobile-first per AGENTS.md §6: inputs ≥ 44px,
@@ -28,26 +28,11 @@ import {
   CheckCircle2, Clock, AlertTriangle, PartyPopper,
   ClipboardList, ClipboardPaste, ExternalLink, Globe, Info, ChevronRight,
 } from "lucide-react";
+import { MAX_LINKS, SOURCE_BADGE, detectSource, splitLinks, stashManualLinks } from "./link-source";
 
-const MAX_ROWS = 20;
-
-// ── Source detection — hostname → marketplace badge. ─────────────────
-type Source = "1688" | "taobao" | "tmall" | "alibaba";
-function detectSource(raw: string): Source | null {
-  const u = raw.trim().toLowerCase();
-  if (!u) return null;
-  if (u.includes("1688.com")) return "1688";
-  if (u.includes("tmall.com")) return "tmall";
-  if (u.includes("taobao.com")) return "taobao";
-  if (u.includes("alibaba.com")) return "alibaba";
-  return null;
-}
-const SOURCE_BADGE: Record<Source, { label: string; icon: string }> = {
-  "1688":   { label: "1688",     icon: "/legacy/pcs/assets/images/shops/1688-logo-2.png" },
-  taobao:   { label: "Taobao",   icon: "/images/partners/taobaopartner.png" },
-  tmall:    { label: "Tmall",    icon: "/images/partners/tmallpartner.png" },
-  alibaba:  { label: "Alibaba",  icon: "/images/partners/alibabapartner.png" },
-};
+// Link detection lives in ./link-source so the review page's "เพิ่มรายการ" popup
+// judges links exactly the same way this page does.
+const MAX_ROWS = MAX_LINKS;
 
 type Row = { id: number; url: string };
 let ROW_SEQ = 1;
@@ -62,7 +47,7 @@ type Flash =
 
 
 export function CartAddMultiLink() {
-  const [tab, setTab] = useState<"link" | "manual">("link");
+
   const [subTab, setSubTab] = useState<"one" | "multi">("one");
   const [rows, setRows] = useState<Row[]>([newRow(), newRow()]);
   const [multiText, setMultiText] = useState("");
@@ -83,7 +68,7 @@ export function CartAddMultiLink() {
   }
   // แยกข้อความที่วาง (หลายลิงก์ · เว้นวรรค/ขึ้นบรรทัด) ลงเป็นหลายช่องอัตโนมัติ เริ่มจากช่อง id นี้.
   function spreadLinks(id: number, text: string) {
-    const links = text.split(/[\s\n]+/).map((s) => s.trim()).filter(Boolean).slice(0, MAX_ROWS);
+    const links = splitLinks(text, MAX_ROWS);
     if (!links.length) return;
     setRows((rs) => {
       const idx = rs.findIndex((r) => r.id === id);
@@ -116,11 +101,7 @@ export function CartAddMultiLink() {
 
   // Split pasted text into individual links (newline / whitespace separated).
   function textToRows(text: string): Row[] {
-    const links = text
-      .split(/[\s\n]+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .slice(0, MAX_ROWS);
+    const links = splitLinks(text, MAX_ROWS);
     return links.length ? links.map((u) => newRow(u)) : [newRow()];
   }
   function applyMultiText() {
@@ -133,14 +114,28 @@ export function CartAddMultiLink() {
   // page (owner 2026-07-31 "ไปหน้าใหม่ + skeleton แบบ shopee"). The fetch + skeleton
   // happen on /cart/add/review — this page just collects the links + hands off.
   function onVerify() {
-    const ready = rows.filter((r) => detectSource(r.url) !== null);
-    if (ready.length === 0) {
-      setFlash({ kind: "error", message: "ยังไม่มีลิงก์ที่พร้อมตรวจสอบ — วางลิงก์ 1688 / Taobao / Tmall ก่อนครับ" });
+    const filled = rows.map((r) => r.url.trim()).filter(Boolean);
+    if (filled.length === 0) {
+      setFlash({ kind: "error", message: "ยังไม่ได้วางลิงก์สินค้า — วางลิงก์อย่างน้อย 1 รายการก่อนครับ" });
       return;
     }
+    const ready = filled.filter((u) => detectSource(u) !== null);
+    const unsupported = filled.filter((u) => detectSource(u) === null);
     setFlash(null);
+
+    // owner 2026-08-03 "ถ้าลิงก์ที่วางไม่ใช่ร้านค้าที่เรามี api จะเด้งไปที่หน้า ไม่มีลิงก์นะ"
+    // — a shop we can't fetch is NOT an error the customer should be stuck on; it
+    // is simply an order they type in. The links travel along so nothing is
+    // re-copied, and none is dropped silently: the unsupported ones ALWAYS reach
+    // the manual form, whether or not there are supported ones alongside.
+    stashManualLinks(unsupported);
+
+    if (ready.length === 0) {
+      router.push("/cart/add/manual");
+      return;
+    }
     try {
-      sessionStorage.setItem("pacred_cart_add_links", JSON.stringify(ready.map((r) => r.url.trim())));
+      sessionStorage.setItem("pacred_cart_add_links", JSON.stringify(ready));
     } catch {
       /* private mode / storage disabled — the review page shows an empty state */
     }
@@ -198,54 +193,28 @@ export function CartAddMultiLink() {
 
       {/* Tabs — มีลิงก์ / ไม่มีลิงก์ */}
       <div className="flex gap-2.5 mb-4">
-        <button
-          type="button"
-          onClick={() => setTab("link")}
-          className={`relative flex-1 inline-flex items-center justify-center gap-2 rounded-full border px-3 py-3 text-sm font-bold transition ${
-            tab === "link"
-              ? "border-red-500 bg-red-50 text-primary-700 ring-2 ring-red-500/15"
-              : "border-border bg-white text-muted hover:border-red-200"
-          }`}
-        >
+        {/* Always the active tab now — its sibling navigates to /cart/add/manual,
+            so this page only ever shows the paste flow. */}
+        <span className="relative flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-red-500 bg-red-50 px-3 py-3 text-sm font-bold text-primary-700 ring-2 ring-red-500/15">
           <LinkIcon className="h-4 w-4" /> มีลิงก์สินค้า
           <span className="absolute -top-2 right-3 rounded-full bg-red-600 px-2 py-0.5 text-[9.5px] font-extrabold text-white">
             แนะนำ
           </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("manual")}
-          className={`flex-1 inline-flex items-center justify-center gap-2 rounded-full border px-3 py-3 text-sm font-bold transition ${
-            tab === "manual"
-              ? "border-red-500 bg-red-50 text-primary-700 ring-2 ring-red-500/15"
-              : "border-border bg-white text-muted hover:border-red-200"
-          }`}
+        </span>
+        {/* owner 2026-08-03 "ถ้ากด ไม่มีลิงก์สินค้าแล้วผมอยากให้เป็นแบบนี้ ใช้หน้าแบบ
+            มีลิงก์แหละ แต่เป็นฟอร์มเปล่า" — goes straight to the full manual-entry
+            page (same shell as the review page) instead of the old teaser card
+            that only linked out to the order list. */}
+        <Link
+          href="/cart/add/manual"
+          className="flex-1 inline-flex items-center justify-center gap-2 rounded-full border border-border bg-white px-3 py-3 text-sm font-bold text-muted transition hover:border-red-200 hover:text-primary-600"
         >
           <Pencil className="h-4 w-4" /> ไม่มีลิงก์สินค้า
-        </button>
+        </Link>
       </div>
 
-      {/* ── TAB: ไม่มีลิงก์ → manual entry ── */}
-      {tab === "manual" && (
-        <div className="rounded-xl border border-border p-4 text-center">
-          <span className="inline-flex w-11 h-11 rounded-xl bg-red-50 text-primary-600 items-center justify-center mb-2">
-            <Pencil className="h-5 w-5" />
-          </span>
-          <p className="text-[15px] font-bold text-foreground">กรอกข้อมูลสินค้าเอง</p>
-          <p className="text-[12.5px] text-muted mt-1 mb-3">
-            ไม่มีลิงก์ก็สั่งได้ — พิมพ์ชื่อสินค้า · ราคา · จำนวน แล้วแนบรูปประกอบ
-          </p>
-          <Link
-            href="/service-order/add"
-            className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-primary-700 transition"
-          >
-            กรอกข้อมูลสินค้าเอง
-          </Link>
-        </div>
-      )}
-
-      {/* ── TAB: มีลิงก์ ── */}
-      {tab === "link" && (
+      {/* ── มีลิงก์ = the paste flow this page owns ── */}
+      {(
         <>
           {/* กรอบกลุ่มช่องวางลิงก์ (owner 2026-07-30 · "เอากรอบออก · ใช้กรอบแบบในภาพ" +
               "อยู่ในกรอบเดียวกัน") — ถอดกรอบนอกการ์ด แล้วตีกรอบรวม หัวข้อ + steps + แท็บย่อย +
@@ -361,7 +330,8 @@ export function CartAddMultiLink() {
                         {src ? (
                           <span className="flex items-center gap-1 text-emerald-700"><CheckCircle2 className="h-3.5 w-3.5" /> พร้อมตรวจสอบ</span>
                         ) : filled ? (
-                          <span className="flex items-center gap-1 text-amber-600"><AlertTriangle className="h-3.5 w-3.5" /> ลิงก์ไม่รองรับ</span>
+                          // Not a rejection — this shop just gets typed in instead of fetched.
+                          <span className="flex items-center gap-1 text-amber-600" title="ร้านนี้ระบบดึงข้อมูลอัตโนมัติไม่ได้ — จะพาไปกรอกเอง"><AlertTriangle className="h-3.5 w-3.5" /> ต้องกรอกเอง</span>
                         ) : (
                           <span className="flex items-center gap-1 text-gray-400"><Clock className="h-3.5 w-3.5" /> รอวางลิงก์</span>
                         )}
@@ -397,7 +367,9 @@ export function CartAddMultiLink() {
               <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[14px] text-muted">
                 <span>ทั้งหมด <b className="text-foreground">{rows.length}</b> ช่อง</span>
                 <span className="text-emerald-700">· พร้อมตรวจสอบ <b>{readyCount}</b></span>
-                {filledCount - readyCount > 0 && <span>· ไม่รองรับ {filledCount - readyCount}</span>}
+                {filledCount - readyCount > 0 && (
+                  <span className="text-amber-700">· ต้องกรอกเอง {filledCount - readyCount}</span>
+                )}
                 <button type="button" onClick={clearAll} className="ml-auto inline-flex items-center gap-1 font-bold text-red-600 hover:text-red-700">
                   <Trash2 className="h-4 w-4" /> ล้างทั้งหมด
                 </button>
@@ -409,20 +381,38 @@ export function CartAddMultiLink() {
 
           {flash && <FlashBanner flash={flash} />}
 
+          {/* Enabled as soon as ANY link is pasted — not just a supported one.
+              A link from a shop we have no API for is a manual order, so the
+              button carries it to /cart/add/manual instead of sitting disabled
+              with nothing the customer can do (owner 2026-08-03). */}
           <button
             type="button"
             onClick={onVerify}
-            disabled={readyCount === 0}
+            disabled={filledCount === 0}
             className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-full bg-primary-600 py-3.5 text-[15px] font-extrabold text-white shadow-sm hover:bg-primary-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <Search className="h-5 w-5" strokeWidth={2.4} />
-            ค้นหาและตรวจสอบสินค้า {readyCount} รายการ
+            {readyCount > 0 ? (
+              <>
+                <Search className="h-5 w-5" strokeWidth={2.4} />
+                ค้นหาและตรวจสอบสินค้า {readyCount} รายการ
+              </>
+            ) : (
+              <>
+                <Pencil className="h-5 w-5" strokeWidth={2.4} />
+                กรอกข้อมูลเอง {filledCount} รายการ
+              </>
+            )}
           </button>
+          {readyCount === 0 && filledCount > 0 && (
+            <p className="mt-2 text-center text-[12px] text-amber-700">
+              ร้านที่วางมาระบบยังดึงข้อมูลอัตโนมัติไม่ได้ — กดปุ่มด้านบนเพื่อไปกรอกข้อมูลเอง (ลิงก์จะติดไปให้)
+            </p>
+          )}
 
           {/* supported — โลโก้จริงของแต่ละแพลตฟอร์ม (owner 2026-07-30/31 "ใช้ไอคอนจริงๆ ·
               เอากรอบออก · ใหญ่ขึ้น · กดแล้วไปเว็บนั้นๆ"). โลโก้ wordmark พื้นขาวบนการ์ดขาว
               = ไร้รอยต่อ ไม่ต้องมีกรอบ · h-8 · กว้าง auto · <a> เปิดเว็บจริงในแท็บใหม่. */}
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-4 text-[12px] text-muted">
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-6 text-[13px] text-muted">
             <span>รองรับเว็บไซต์:</span>
             {[
               { src: "/legacy/pcs/assets/images/shops/1688-logo-2.png", alt: "1688", href: "https://www.1688.com" },
@@ -439,28 +429,16 @@ export function CartAddMultiLink() {
                 className="inline-flex items-center hover:opacity-70 transition-opacity"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={s.src} alt={s.alt} className="h-8 w-auto object-contain" loading="lazy" />
+                {/* Eager, not lazy: four ~17KB logos that sit just under the CTA — with
+                    lazy they popped in late and one rendered as broken alt text mid-scroll
+                    (owner screenshot 2026-08-03). Loading them up front costs ~60KB once. */}
+                <img src={s.src} alt={s.alt} className="h-11 w-auto object-contain" />
               </a>
             ))}
           </div>
-
-          {/* no-link hint → manual tab */}
-          <div className="mt-4 flex items-center gap-3 rounded-xl border border-border p-3">
-            <span className="inline-flex w-9 h-9 rounded-lg bg-red-50 text-primary-600 items-center justify-center shrink-0">
-              <Pencil className="h-4 w-4" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[13px] font-bold text-foreground">ไม่มีลิงก์สินค้า?</span>
-              <span className="block text-[12px] text-muted">กรอกชื่อ · ราคา · จำนวนเอง</span>
-            </span>
-            <button
-              type="button"
-              onClick={() => setTab("manual")}
-              className="shrink-0 rounded-full border border-red-200 bg-white px-3 py-2 text-[12.5px] font-bold text-primary-700 hover:bg-red-50"
-            >
-              กรอกข้อมูลสินค้าเอง →
-            </button>
-          </div>
+          {/* The duplicate "ไม่มีลิงก์สินค้า?" prompt that used to sit here was removed
+              (owner 2026-08-03) — the ไม่มีลิงก์สินค้า TAB above is the entry point, so
+              manual entry stays reachable (§0d). */}
         </>
       )}
     </div>

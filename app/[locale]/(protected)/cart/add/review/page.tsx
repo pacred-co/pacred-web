@@ -28,7 +28,14 @@ export default async function CartAddReviewPage() {
 
   return (
     <div className="pcs-content-pad w-full px-3 md:px-6 pt-2 pb-24 md:pb-6">
-      <ReviewClient rsDefault={rsDefault} fxRates={fxRates} />
+      {/* Centred reading column (owner 2026-08-03 "จัดให้พอดีกลางจอ") — the card
+          used to stretch edge-to-edge, which let the option column grow far
+          wider than the photo and threw the page off balance. Capped INSIDE
+          `.pcs-content-pad` so the sidebar/floating-tab offsets that class
+          applies still hold, and the cap centres in whatever space is left. */}
+      <div className="mx-auto w-full max-w-[1200px] px-2 md:px-6">
+        <ReviewClient rsDefault={rsDefault} fxRates={fxRates} />
+      </div>
     </div>
   );
 }

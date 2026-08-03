@@ -19,8 +19,10 @@
  */
 
 import { useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { UrlPasteAddToCart } from "../../search/url-paste-add-to-cart";
+import { TranslateProvider } from "@/components/translate/auto-translate";
+import { ThaiToggleProvider, ThaiText } from "@/components/translate/thai-toggle";
 import type { ProductSearchOk } from "@/actions/product-search";
 import { MAX_ORDER_QTY } from "@/lib/validators/order-qty";
 
@@ -40,14 +42,19 @@ export function RichProductCard({
   product: p,
   rsDefault,
   fxRates,
+  onAdded,
 }: {
   product: Product;
   rsDefault: number;
   fxRates: Record<string, number>;
+  /** Notify-only — the review page marks its tab "เพิ่มแล้ว" with a ✓. */
+  onAdded?: (count: number) => void;
 }) {
   const priceCny = p.promoPriceCny ?? p.priceCny;
   const priceThb = priceCny * rsDefault;
   const mainImage = toHttps(p.mainImage ?? p.imageUrl) ?? null;
+  const optionCount = p.skuMap?.length ?? 0;
+  const stockTotal = p.stockTotal ?? 0;
 
   // Full gallery = main image + every extra image, https-upgraded + deduped.
   const gallery = useMemo(() => {
@@ -56,7 +63,6 @@ export function RichProductCard({
   }, [mainImage, p.images]);
 
   const [activeIdx, setActiveIdx] = useState(0);
-  const [galleryOpen, setGalleryOpen] = useState(true);
   const stripRef = useRef<HTMLDivElement>(null);
 
   const active = gallery[Math.min(activeIdx, Math.max(0, gallery.length - 1))] ?? mainImage;
@@ -66,36 +72,38 @@ export function RichProductCard({
   };
 
   return (
-    <div className="rounded-2xl border border-border bg-white p-3 md:p-4">
-      <div className={galleryOpen ? "grid grid-cols-1 gap-4 md:grid-cols-[300px_minmax(0,1fr)]" : "grid grid-cols-1 gap-4"}>
+    // ThaiToggleProvider wraps the WHOLE card so the one "แปลไทย" switch inside the
+    // option block also swaps the title above it (owner 2026-08-03 "ขอแปลชื่อด้วย").
+    // The title sits outside the island's own TranslateProvider, so it needs this
+    // one-string batch of its own — server-side translation_cache makes the overlap
+    // with the island's batch a cache hit rather than a second upstream call.
+    <ThaiToggleProvider>
+    <TranslateProvider texts={[p.title]}>
+      {/* rounded-tl-none: the รายการที่ N tab strip attaches to this corner, and it
+          supplies the curve. Leaving the card's own radius here drew a SECOND curve
+          1px away, which read as a seam (owner 2026-08-03 "ขอบ … มันแปลกๆ"). */}
+      <div className="rounded-2xl rounded-tl-none border border-border bg-white p-3 md:p-4">
+      {/* Photo column shrinks on narrower desktops: at ~1180px (sidebar open) a
+          fixed 300px left only ~370px for the option table, which squeezed the
+          name cell to 91px and broke every label onto its own line. 220 → 300px
+          by breakpoint keeps the table readable without scrolling. */}
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)]">
         {/* ── Gallery ── */}
-        {galleryOpen ? (
+        {
           <div>
-            <div className="relative">
-              {/* collapse toggle (screenshot 1 "|◁") */}
-              <button
-                type="button"
-                onClick={() => setGalleryOpen(false)}
-                title="ย่อรูปสินค้า"
-                aria-label="ย่อรูปสินค้า"
-                className="absolute left-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-white/90 text-muted shadow-sm backdrop-blur hover:text-primary-600"
-              >
-                <PanelLeftClose className="h-4 w-4" />
-              </button>
-              {active ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={active}
-                  alt={p.title}
-                  className="aspect-square w-full rounded-xl border border-border bg-white object-cover"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="flex aspect-square w-full items-center justify-center rounded-xl bg-surface-alt text-3xl">
-                  📦
-                </div>
-              )}
-            </div>
+            {active ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={active}
+                alt={p.title}
+                className="aspect-square w-full rounded-xl border border-border bg-white object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <div className="flex aspect-square w-full items-center justify-center rounded-xl bg-surface-alt text-3xl">
+                📦
+              </div>
+            )}
 
             {/* thumbnail carousel with ‹ › arrows */}
             {gallery.length > 1 && (
@@ -111,7 +119,7 @@ export function RichProductCard({
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
-                <div ref={stripRef} className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto scroll-smooth">
+                <div ref={stripRef} className="scrollbar-none flex min-w-0 flex-1 gap-1.5 overflow-x-auto scroll-smooth">
                   {gallery.map((u, i) => (
                     <button
                       key={u + i}
@@ -141,66 +149,95 @@ export function RichProductCard({
               </div>
             )}
           </div>
-        ) : (
-          // Collapsed: a thin expand button so the variant panel gets full width.
-          <button
-            type="button"
-            onClick={() => setGalleryOpen(true)}
-            className="mb-1 inline-flex w-fit items-center gap-1.5 rounded-full border border-border bg-white px-3 py-1.5 text-[12px] font-medium text-muted hover:text-primary-600"
-          >
-            <PanelLeftOpen className="h-4 w-4" /> แสดงรูปสินค้า
-          </button>
-        )}
+        }
 
-        {/* ── Header info: source · title · price · shop ── */}
+        {/* ── Header info: source · title · meta strip · price block ──
+            Shapes owner's 2026-08-03 mockup: the shop / option-count / stock
+            facts sit on ONE divider-separated line (marketplace "rating row"
+            position), and the price gets a tinted block instead of a solid
+            red banner. ── */}
         <div className="min-w-0">
-          <a
-            href={p.sourceUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 text-[11.5px] font-bold text-primary-700 hover:underline"
-          >
-            {p.provider.toUpperCase()} · เปิดลิงก์ต้นทาง ↗
-          </a>
-          <h3 className="mt-1 line-clamp-2 text-[15px] font-bold text-foreground">{p.title}</h3>
+          <h3 className="line-clamp-2 text-[16px] font-bold leading-snug text-foreground">
+            <ThaiText text={p.title} />
+          </h3>
 
-          <div className="mt-2 inline-flex flex-wrap items-baseline gap-x-2 rounded-lg bg-red-600 px-3 py-1.5 text-white">
-            <span className="text-[12px]">ราคาสินค้า</span>
-            <span className="text-lg font-extrabold">¥{fmt2(priceCny)}</span>
-            <span className="text-[12px] opacity-85">≈ ฿{fmt2(priceThb)}</span>
+          {/* Shop · option count · stock · source link all on ONE line (owner
+              2026-08-03 "ย้าย เปิดลิงก์ต้นทาง ไปไว้แถวเดียวกัน") — the link had its
+              own line above the title and cost a row for one short label. */}
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted">
+            {p.shopName && (
+              <span>
+                ร้านค้า <b className="font-semibold text-foreground">{p.shopName}</b>
+              </span>
+            )}
+            {optionCount > 0 && (
+              <>
+                {p.shopName && <span aria-hidden className="h-3 w-px bg-border" />}
+                <span>
+                  <b className="font-semibold text-foreground">{optionCount}</b> ตัวเลือก
+                </span>
+              </>
+            )}
+            {stockTotal > 0 && (
+              <>
+                <span aria-hidden className="h-3 w-px bg-border" />
+                <span>
+                  คงเหลือ <b className="font-semibold text-foreground">{stockTotal.toLocaleString()}</b> ชิ้น
+                </span>
+              </>
+            )}
+            <span aria-hidden className="h-3 w-px bg-border" />
+            <a
+              href={p.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-bold text-primary-700 hover:underline"
+            >
+              {p.provider.toUpperCase()} · เปิดลิงก์ต้นทาง ↗
+            </a>
           </div>
 
-          {p.shopName && (
-            <p className="mt-1.5 text-[12px] text-muted">
-              ร้านค้า: <span className="font-semibold text-foreground">{p.shopName}</span>
-            </p>
-          )}
+          {/* Solid red / white type (owner 2026-08-03 "ถมแดง text ขาวสวยกว่า") — the
+              price is the one number the customer must not miss, so it gets the
+              strongest block on the card instead of a tinted one. */}
+          <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-xl bg-primary-600 px-4 py-3 text-white">
+            <span className="text-2xl font-extrabold leading-none">¥{fmt2(priceCny)}</span>
+            <span className="text-[13px] text-white/85">≈ ฿{fmt2(priceThb)}</span>
+            <span className="ml-auto text-[11.5px] text-white/75">เรท {rsDefault} บาท/¥</span>
+          </div>
+
+          {/* ── Interactive: option picker + qty + คำนวณราคา + หยิบใส่รถเข็น ──
+              Sits INSIDE the right column, directly under the price — the
+              marketplace shape owner asked for 2026-08-03 ("ยกขึ้นมาหน่อย"),
+              so the whole buying decision reads top-to-bottom beside the photo
+              instead of starting below the fold. Money path is the reused
+              island; only its position changed. ── */}
+          <div className="mt-4">
+            <UrlPasteAddToCart
+              url={p.sourceUrl}
+              provider={p.provider}
+              title={p.title}
+              shopName={p.shopName ?? ""}
+              mainImage={mainImage}
+              priceCny={priceCny}
+              priceThb={priceThb}
+              rsDefault={rsDefault}
+              fxRates={fxRates}
+              minQty={1}
+              maxQty={MAX_ORDER_QTY}
+              detailAvailable
+              skuAxes={p.skuAxes}
+              skuMap={p.skuMap}
+              basePriceCny={p.basePriceCny}
+              promoPriceCny={p.promoPriceCny}
+              richLayout
+              onAdded={onAdded}
+            />
+          </div>
         </div>
       </div>
-
-      {/* ── Interactive: variant swatches + qty + คำนวณราคา + sticky หยิบใส่รถเข็น
-          (reused island · full card width so the sticky bar spans the card) ── */}
-      <div className="mt-3 border-t border-border pt-3">
-        <UrlPasteAddToCart
-          url={p.sourceUrl}
-          provider={p.provider}
-          title={p.title}
-          shopName={p.shopName ?? ""}
-          mainImage={mainImage}
-          priceCny={priceCny}
-          priceThb={priceThb}
-          rsDefault={rsDefault}
-          fxRates={fxRates}
-          minQty={1}
-          maxQty={MAX_ORDER_QTY}
-          detailAvailable
-          skuAxes={p.skuAxes}
-          skuMap={p.skuMap}
-          basePriceCny={p.basePriceCny}
-          promoPriceCny={p.promoPriceCny}
-          richLayout
-        />
       </div>
-    </div>
+    </TranslateProvider>
+    </ThaiToggleProvider>
   );
 }

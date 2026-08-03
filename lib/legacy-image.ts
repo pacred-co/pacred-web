@@ -203,9 +203,33 @@ export function normalizeImageUrl(raw: string | null | undefined): string {
  * Fail-OPEN for unknown hosts (an image CDN need not have a file extension); only
  * the known page/folder shapes are rejected.
  */
+/**
+ * Split a legacy image column that may hold SEVERAL comma-separated images and
+ * return them in order. One entry (the common case) → a one-item list.
+ *
+ * The convention is the legacy one `shop-order-status-rule.ts` already reads;
+ * the manual-entry form (owner 2026-08-03) writes up to 5 this way so all of a
+ * customer's reference photos survive into `tb_order.cimages`.
+ */
+export function splitImageList(raw: string | null | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** The COVER of an image column — the first entry of a comma-separated list. */
+export function firstImageOf(raw: string | null | undefined): string {
+  return splitImageList(raw)[0] ?? "";
+}
+
 export function isDirectImageUrl(raw: string | null | undefined): boolean {
   const v = (raw ?? "").trim();
   if (!v) return true;                          // no image supplied — allowed
+  // A comma-separated list is valid iff EVERY entry is (so one bad paste in the
+  // middle can't slip into the column behind a good first entry).
+  const parts = splitImageList(v);
+  if (parts.length > 1) return parts.every((p) => isDirectImageUrl(p));
   // Accept protocol-relative marketplace URLs (`//img.alicdn.com/…`) — they are
   // real TAMIT/1688 data. `normalizeImageUrl` upgrades them to https, so the
   // stored value is always absolute.
@@ -255,7 +279,12 @@ export function shopImageUrl(
 ): string {
   const emptyFallback = opts.emptyFallback ?? NO_COVER_IMAGE;
   const size = opts.size ?? "";
-  const raw = (value ?? "").trim();
+  // A legacy `cimages` may hold SEVERAL images comma-separated — the convention
+  // `shop-order-status-rule.ts` already reads ("cimages (first)") and that prod
+  // rows already use. This resolver did not, so such a row resolved the whole
+  // joined string as one URL → emptyFallback → a broken thumbnail everywhere.
+  // The cover is the first entry (owner 2026-08-03 multi-photo manual entry).
+  const raw = firstImageOf(value);
   if (!raw || raw === "-" || raw === "0") return emptyFallback;
 
   if (raw.includes("/")) {
