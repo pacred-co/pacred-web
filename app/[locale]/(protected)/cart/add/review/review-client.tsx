@@ -29,7 +29,7 @@ import { RichProductCard } from "../rich-product-card";
 import { MAX_LINKS, takeManualLinks } from "../link-source";
 import {
   ManualItemForm, isManualComplete, manualItemThb, manualItemToCartRows,
-  newManualItem, type ManualItem,
+  MAX_PHOTOS, newManualItem, type ManualItem,
 } from "../manual/manual-item";
 import { AddLinksDialog } from "./add-links-dialog";
 
@@ -162,7 +162,10 @@ export function ReviewClient({
       const fd = new FormData();
       fd.append("photo", file);
       const res = await uploadCartProductImage(fd);
-      if (res.ok) patchManual(key, { imageUrl: res.url });
+      if (res.ok) {
+        setItems((prev) => prev ? prev.map((it) => (it.key === key && it.status === "manual"
+          ? { ...it, manual: { ...it.manual, images: [...it.manual.images, res.url].slice(0, MAX_PHOTOS) } } : it)) : prev);
+      }
       else setErr(res.error);
     } catch {
       setErr("อัปโหลดรูปไม่สำเร็จ กรุณาลองใหม่");

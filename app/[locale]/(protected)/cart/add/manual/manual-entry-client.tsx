@@ -30,7 +30,7 @@ import { uploadCartProductImage } from "@/actions/cart-manual-image";
 import { takeManualLinks } from "../link-source";
 import {
   ManualItemForm, isManualComplete, manualItemThb, manualItemToCartRows,
-  newManualItem, type ManualItem,
+  MAX_PHOTOS, newManualItem, type ManualItem,
 } from "./manual-item";
 
 const MAX_ITEMS = 20;
@@ -105,7 +105,7 @@ export function ManualEntryClient({
       const fd = new FormData();
       fd.append("photo", file);
       const res = await uploadCartProductImage(fd);
-      if (res.ok) patch(itemId, { imageUrl: res.url });
+      if (res.ok) setItems((xs) => xs.map((it) => (it.id === itemId ? { ...it, images: [...it.images, res.url].slice(0, MAX_PHOTOS) } : it)));
       else setErr(res.error);
     } catch {
       setErr("อัปโหลดรูปไม่สำเร็จ กรุณาลองใหม่");
@@ -156,16 +156,11 @@ export function ManualEntryClient({
   return (
     <div className="space-y-3">
       {/* ── Page head ── */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-foreground md:text-2xl">เพิ่มสินค้าด้วยตัวเอง</h1>
-          <p className="mt-0.5 text-[12.5px] text-muted">
-            สำหรับสินค้าที่ไม่มีลิงก์ กรุณากรอกข้อมูลสินค้าให้ครบถ้วน
-          </p>
-        </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-3.5 py-2 text-[12.5px] font-bold text-primary-700">
-          <ClipboardList className="h-4 w-4" /> สินค้า {items.length} รายการ
-        </span>
+      <div>
+        <h1 className="text-xl font-bold text-foreground md:text-2xl">เพิ่มสินค้าด้วยตัวเอง</h1>
+        <p className="mt-0.5 text-[12.5px] text-muted">
+          สำหรับสินค้าที่ไม่มีลิงก์ กรุณากรอกข้อมูลสินค้าให้ครบถ้วน
+        </p>
       </div>
 
       {/* ── Tabs welded to the card (same idiom as /cart/add/review) ── */}
