@@ -27,7 +27,9 @@ import { notifyCartChanged } from "@/lib/cart-changed-event";
 import { addCartItemsBulk } from "@/actions/cart";
 import { uploadCartProductImage } from "@/actions/cart-manual-image";
 import { RichProductCard } from "../rich-product-card";
-import { MAX_LINKS, takeManualLinks } from "../link-source";
+import {
+  MAX_LINKS, takeManualLinks, useStoredOriginCountry, originCountry, DEFAULT_ORIGIN,
+} from "../link-source";
 import {
   ManualItemForm, isManualComplete, manualItemThb, manualItemToCartRows,
   MAX_PHOTOS, newManualItem, type ManualItem,
@@ -95,6 +97,10 @@ export function ReviewClient({
   const [addOpen, setAddOpen] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [uploading, setUploading] = useState<number | null>(null);
+  /** ประเทศต้นทางที่เลือกไว้บน /cart/add — จีน (ค่าเริ่มต้น) ไม่ต้องแปะลง cdetails. */
+  const reviewOrigin = useStoredOriginCountry();
+  const originForRows =
+    reviewOrigin === DEFAULT_ORIGIN ? undefined : originCountry(reviewOrigin).label;
   /**
    * Tabs whose contents already landed in tb_cart — the ✓ badge (owner
    * 2026-08-03 "ถ้าเพิ่มแล้ว ให้ขึ้นมุมเป็น checkmark จะได้รู้ว่าเพิ่มแล้ว").
@@ -182,7 +188,10 @@ export function ReviewClient({
    * jumping to /cart after the first one would strand the tabs still open.
    */
   function addManualToCart(key: number, it: ManualItem) {
-    const rows = manualItemToCartRows(it, fxRates);
+    // Today only จีน can reach this page (a non-จีน pick routes straight to
+    // /cart/add/manual), but the country is stamped here too so the "กรอกเอง" tab
+    // can never become the one path that silently drops it.
+    const rows = manualItemToCartRows(it, fxRates, originForRows);
     if (rows.length === 0) {
       setErr("กรุณาวางลิงก์ร้านค้า หรือกรอกชื่อสินค้าพร้อมราคา อย่างน้อย 1 อย่างครับ");
       return;

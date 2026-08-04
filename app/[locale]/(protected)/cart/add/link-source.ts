@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from "react";
+
 /**
  * Marketplace-link detection shared by the "เพิ่มสินค้าเข้ารถเข็น" surfaces.
  *
@@ -86,4 +88,76 @@ export function splitLinks(text: string, cap = MAX_LINKS): string[] {
     .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, cap);
+}
+
+// ── ประเทศต้นทาง ───────────────────────────────────────────────────
+/**
+ * The origin-country chips on /cart/add (owner 2026-08-04 "ปลดประเทศออกให้กดได้").
+ *
+ * `hasApi` is the honest bit: only จีน has marketplace lookups (1688 / Taobao /
+ * Tmall / Alibaba — see `detectSource`). Picking any other country therefore
+ * routes the order to the manual form instead of pretending we can fetch it,
+ * and the label travels along so the buying team sees WHICH country it is
+ * (folded into tb_cart.cdetails by `manualItemToCartRows`).
+ *
+ * Add a country's marketplaces to `detectSource` first, then flip `hasApi`.
+ */
+export const ORIGIN_COUNTRIES = [
+  { code: "cn", label: "จีน", hasApi: true },
+  { code: "jp", label: "ญี่ปุ่น", hasApi: false },
+  { code: "kr", label: "เกาหลีใต้", hasApi: false },
+  { code: "vn", label: "เวียดนาม", hasApi: false },
+  { code: "in", label: "อินเดีย", hasApi: false },
+  { code: "id", label: "อินโดนีเซีย", hasApi: false },
+  { code: "my", label: "มาเลเซีย", hasApi: false },
+  { code: "us", label: "อเมริกา", hasApi: false },
+] as const;
+
+export type OriginCode = (typeof ORIGIN_COUNTRIES)[number]["code"];
+
+/** จีน — what every existing order is, so it stays the default everywhere. */
+export const DEFAULT_ORIGIN: OriginCode = "cn";
+
+const ORIGIN_KEY = "pacred_cart_origin_country";
+
+export function originCountry(code: string) {
+  return ORIGIN_COUNTRIES.find((c) => c.code === code) ?? ORIGIN_COUNTRIES[0];
+}
+
+/** Remember the pick so the manual form (a separate page) knows it. จีน clears
+ *  the key — the default must never leave a stale non-จีน value behind. */
+export function stashOriginCountry(code: string): void {
+  try {
+    if (code === DEFAULT_ORIGIN) sessionStorage.removeItem(ORIGIN_KEY);
+    else sessionStorage.setItem(ORIGIN_KEY, code);
+  } catch {
+    /* private mode — the manual form just falls back to จีน */
+  }
+}
+
+/** Read WITHOUT consuming: the pick has to survive a refresh of the manual form
+ *  and a walk back to /cart/add (unlike the one-shot link stash). */
+export function readOriginCountry(): OriginCode {
+  try {
+    const raw = sessionStorage.getItem(ORIGIN_KEY);
+    const hit = ORIGIN_COUNTRIES.find((c) => c.code === raw);
+    return hit ? hit.code : DEFAULT_ORIGIN;
+  } catch {
+    return DEFAULT_ORIGIN;
+  }
+}
+
+/**
+ * The remembered pick, SSR-safe — server renders จีน, the client swaps in the
+ * stored value on hydration. `useSyncExternalStore` (not an effect + setState)
+ * because sessionStorage IS an external store: the effect form both trips
+ * react-hooks/set-state-in-effect and flashes จีน for one extra render.
+ *
+ * No subscription: sessionStorage cannot change under a mounted page here — the
+ * only writer is `stashOriginCountry`, and the surface that calls it holds the
+ * live value in its own state.
+ */
+const NO_SUBSCRIBE = () => () => {};
+export function useStoredOriginCountry(): OriginCode {
+  return useSyncExternalStore(NO_SUBSCRIBE, readOriginCountry, () => DEFAULT_ORIGIN);
 }
