@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
-import { ChevronRight, Home, Building2, Table2 } from "lucide-react";
+import { ChevronRight, Home, Building2, Table2, Users } from "lucide-react";
 import { loadOrgTree } from "@/lib/admin/hr-org";
 import { OrgChartView } from "./org-chart-view";
 
@@ -49,9 +49,14 @@ export default async function OrgChartPage() {
             หัวหน้าเลื่อนแบบ PCS (ย้ายคนขึ้นกล่องหัวหน้า)
           </p>
         </div>
-        <Link href="/admin/hr/org-table" className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
-          <Table2 className="h-4 w-4" /> ดูแบบตาราง
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/admin/hr/staff" className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-700">
+            <Users className="h-4 w-4" /> จัดคนเข้าตำแหน่ง
+          </Link>
+          <Link href="/admin/hr/org-table" className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
+            <Table2 className="h-4 w-4" /> ดูแบบตาราง
+          </Link>
+        </div>
       </header>
 
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[11.5px] text-amber-800 leading-relaxed">

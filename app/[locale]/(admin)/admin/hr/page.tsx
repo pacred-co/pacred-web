@@ -113,7 +113,7 @@ export default async function AdminHRPage() {
         }
       />
 
-      {/* HR sub-modules quick links — Phase 1 ships org chart, others coming */}
+      {/* HR sub-modules quick links */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Link
           href="/admin/hr/org-chart"
@@ -122,7 +122,17 @@ export default async function AdminHRPage() {
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500 text-white text-lg shrink-0">🌳</div>
           <div className="min-w-0">
             <p className="font-bold text-foreground">ผังองค์กรแบบภาพ</p>
-            <p className="text-xs text-muted mt-0.5">Tree view · CEO → Directors → Sections → Positions</p>
+            <p className="text-xs text-muted mt-0.5">CEO → Manager·AUDIT/QC → แผนก → ตำแหน่ง</p>
+          </div>
+        </Link>
+        <Link
+          href="/admin/hr/staff"
+          className="group flex items-start gap-3 rounded-2xl border-2 border-primary-200 bg-gradient-to-br from-primary-50 to-white p-4 hover:shadow-md transition-shadow"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-600 text-white text-lg shrink-0">👥</div>
+          <div className="min-w-0">
+            <p className="font-bold text-foreground">ทะเบียนพนักงาน · จัดตำแหน่ง</p>
+            <p className="text-xs text-muted mt-0.5">พนักงานจริง (tb_admin) → จัดเข้าตำแหน่งในผัง</p>
           </div>
         </Link>
         <Link
