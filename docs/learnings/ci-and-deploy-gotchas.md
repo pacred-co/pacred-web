@@ -1032,3 +1032,42 @@ Also: a "nothing to commit, working tree clean" right after you edited a file is
 **Why this matters next time:** a green gate is only meaningful if it ran against the tree you edited. On a multi-worktree machine, verify cwd == worktree before reading any exit code. This is the classic §11 "green build ≠ verified" trap wearing a wrong-directory costume — and it's a direct "ห้ามงานบัค งานหาย" risk (a type error would have shipped had I not re-run in the worktree).
 
 **Cross-links:** AGENTS.md §11 (gate discipline) + §13 (worktree base stale) · CLAUDE.md save-point note "cwd reset บ่อย · cd ก่อนทุก git/node".
+
+## [2026-08-04] เกตยูนิตเทส **ตายเงียบบน Windows** มานาน — สคริปต์ยาวเกิน 8,191 ตัวอักษร
+
+**Context:** เติมเทสใหม่ 1 บรรทัดเข้า `package.json` → `pnpm test:unit` ตอบ
+`The command line is too long.` แล้ว exit 1 ทันที ไม่รันเทสสักไฟล์.
+
+**Symptom / วัดจริง:** สคริปต์ `test:unit` เป็นคำสั่งเดียวต่อ `&&` **237 ไฟล์ ยาว
+10,557 ตัวอักษร ตั้งแต่ก่อนที่ผมจะเติม** — เกินเพดานบรรทัดคำสั่งของ Windows (8,191)
+⇒ **เกตยูนิตเทสรันไม่ได้เลยบนเครื่อง Windows มาก่อนหน้านี้แล้ว** เหลือแค่ tsc/lint.
+บน Mac ผ่านปกติ (เพดานสูงกว่ามาก) จึงไม่มีใครเห็น. อาการหลอกตรงที่มันดู "เหมือน
+เทสตก" ทั้งที่ยังไม่ได้เริ่มรัน.
+
+**Root cause:** เก็บ "รายการงาน" ไว้ในสตริงคำสั่งเดียว — ยิ่งเพิ่มเทส ยิ่งใกล้เพดาน
+ของ OS. ไม่มีใครสังเกตเพราะมันโตทีละบรรทัด.
+
+**Fix:** ย้ายรายชื่อออกมาเป็น **ข้อมูล** `scripts/unit-tests.mjs`
+(`UNIT_TESTS` + `INTEGRATION_TESTS`) แล้วให้ `scripts/run-unit-tests.mjs`
+spawn ทีละไฟล์ · `test:unit` เหลือ 31 ตัวอักษร · ลำดับเดิม · fail-fast เดิม ·
+exit code เดิม. เรียก tsx ตรงผ่าน `process.execPath` (ไม่ผ่าน `npx` + `shell:true`)
+→ ไม่มี DeprecationWarning DEP0190 และ **เร็วขึ้นจาก 171.7s → 64.4s**.
+
+**🔴 ของแถมที่โผล่ทันทีที่เกตกลับมารัน:** `lib/forwarder/cbm-sot-guard.test.ts`
+(ยามเรื่องเงิน — กันคนคิดคิวเอง) **แดงค้างบน Windows** เพราะลิสต์ไฟล์ยกเว้น
+`OWNERS` เขียนด้วย `/` แต่ `path.join()` บน Windows คืน `\` ⇒ `OWNERS.includes(p)`
+ไม่เคย match ⇒ ยามฟ้องไฟล์เจ้าของกฎตัวเอง (`live-rate.ts`) ทั้งที่โค้ดถูก.
+บน Mac เขียว บน Windows แดง = เกตเชื่อไม่ได้ทั้งทีม. แก้ด้วย
+`.replaceAll("\\", "/")` ตอน slice path.
+
+**กติกาที่ได้:**
+1. ลิสต์ยาวๆ (เทส · ไฟล์ · route) เก็บเป็น **ข้อมูลในไฟล์** อย่าเก็บเป็นสตริงคำสั่ง —
+   สคริปต์ npm ที่ยาวเกิน ~7,000 ตัวอักษรถือว่าเป็นระเบิดเวลาบน Windows.
+2. เทสที่เทียบ **path** ต้อง normalise `\` → `/` เสมอ ไม่งั้นข้ามแพลตฟอร์มไม่ได้ —
+   และอาการคือ "ผ่านบนเครื่องนึง แดงบนอีกเครื่อง" ซึ่งคนมักโทษว่าเทสงอแง แล้วปล่อยผ่าน.
+3. เกตที่รันไม่ได้ = เกตที่ไม่มี. ถ้าเปลี่ยนเครื่องแล้วไม่เคยเห็นเกตตัวไหนผ่านเลย
+   ให้สงสัยว่ามัน **ไม่ได้รัน** ก่อนจะสรุปว่า "คงผ่าน".
+
+**Cross-links:** AGENTS.md §11 (gate discipline · ห้ามอ่าน exit code ผ่าน pipe) ·
+CLAUDE.md 2026-07-23 "gate ที่รันคือ eslint เฉพาะไฟล์ ไม่ใช่ทั้ง repo" (คลาสเดียวกัน:
+เกตที่ครอบไม่ครบ/ไม่ได้รัน แล้วเข้าใจว่าเขียว).
