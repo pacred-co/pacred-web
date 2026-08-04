@@ -114,10 +114,19 @@ export function manualItemThb(it: ManualItem, fxRates: Record<string, number>, r
 export function manualItemToCartRows(
   it: ManualItem,
   fxRates: Record<string, number>,
+  /**
+   * ประเทศต้นทางที่ลูกค้าเลือกไว้บน /cart/add — ส่งมาเฉพาะตอนที่ "ไม่ใช่จีน"
+   * (owner 2026-08-04 ปลดประเทศให้กดได้): tb_cart ไม่มีคอลัมน์ประเทศ ถ้าไม่พ่วง
+   * ไปกับ cdetails ทีมจัดซื้อจะไม่มีทางรู้ว่าออเดอร์นี้สั่งจากญี่ปุ่น/เกาหลี
+   * = ปุ่มที่ลูกค้ากดจะกลายเป็นการเลือกลอยๆ. จีน (ค่าเริ่มต้น) ไม่ส่ง → cdetails
+   * ของออเดอร์เดิมเหมือนเดิมทุกตัวอักษร.
+   */
+  originLabel?: string,
 ): CartItemBulkRow[] {
   // Fields tb_cart has no column for are folded into cdetails with a label so
   // the buying team still sees them (the legacy model has no variant sidecar).
   const extra = [
+    originLabel?.trim() && `ประเทศต้นทาง: ${originLabel.trim()}`,
     it.details.trim() && `รายละเอียด: ${it.details.trim()}`,
     it.note.trim() && `หมายเหตุถึงร้าน: ${it.note.trim()}`,
     num(it.minQty) > 0 && `ขั้นต่ำ: ${num(it.minQty)} ชิ้น`,

@@ -52,6 +52,19 @@ html, body {
   max-width: 100vw;
 }
 
+/* Reserve the vertical scrollbar's width even when the page happens to fit —
+   otherwise a page that sits exactly at the fold RESIZES ITSELF the moment any
+   content grows past it: the scrollbar appears, every container loses ~15px, and
+   anything sized off the container width visibly shrinks.
+   Caught 2026-08-04 on /cart/add: opening the country dropdown made the page
+   910px → 918px, the scrollbar appeared, and the country chips shrank 84 → 79px
+   in front of the customer (owner: "กดดร็อปดาวน์แล้วประเทศเล็กลง ไม่น่าได้").
+   Fixing it at the root kills the whole class of scrollbar-induced layout shift
+   instead of hand-tuning each component around it. */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

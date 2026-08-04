@@ -28,7 +28,9 @@ import {
 import { notifyCartChanged } from "@/lib/cart-changed-event";
 import { addCartItemsBulk, type CartItemBulkRow } from "@/actions/cart";
 import { uploadCartProductImage } from "@/actions/cart-manual-image";
-import { takeManualLinks } from "../link-source";
+import {
+  takeManualLinks, useStoredOriginCountry, originCountry, DEFAULT_ORIGIN,
+} from "../link-source";
 import {
   ManualItemForm, isManualComplete, manualItemThb, manualItemToCartRows,
   MAX_PHOTOS, newManualItem, type ManualItem,
@@ -72,6 +74,12 @@ export function ManualEntryClient({
     const carried = takeManualLinks();
     setItems((prev) => (carried.length > 0 ? carried.map((u) => newManualItem(u)) : prev));
   }, []);
+
+  // ประเทศต้นทางที่เลือกไว้บน /cart/add (owner 2026-08-04) — read-not-consume, so a
+  // refresh of this form keeps it. Rides into tb_cart.cdetails when it is not จีน.
+  const origin = useStoredOriginCountry();
+  const country = originCountry(origin);
+  const originForRows = origin === DEFAULT_ORIGIN ? undefined : country.label;
 
   // ── Item editing ──────────────────────────────────────────────────
   const patch = (id: number, p: Partial<ManualItem>) => {
@@ -126,7 +134,7 @@ export function ManualEntryClient({
       setErr("กรุณาวางลิงก์ร้านค้า หรือกรอกชื่อสินค้าพร้อมราคา อย่างน้อย 1 อย่างครับ");
       return;
     }
-    const rows: CartItemBulkRow[] = manualItemToCartRows(it, fxRates);
+    const rows: CartItemBulkRow[] = manualItemToCartRows(it, fxRates, originForRows);
     startTransition(async () => {
       const res = await addCartItemsBulk(rows);
       if (!res.ok) {
@@ -156,7 +164,18 @@ export function ManualEntryClient({
 
       {/* ── Page head ── */}
       <div>
-        <h1 className="text-xl font-bold text-foreground md:text-2xl">เพิ่มสินค้าด้วยตัวเอง</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-xl font-bold text-foreground md:text-2xl">เพิ่มสินค้าด้วยตัวเอง</h1>
+          {/* ประเทศที่เลือกไว้หน้าก่อน — โชว์ให้ลูกค้าเห็นว่าติดมาด้วยจริง (ไม่ใช่กดแล้วหาย)
+              และค่านี้จะไปอยู่ในรายละเอียดสินค้าให้ทีมจัดซื้อเห็นด้วย. */}
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-2.5 py-1 text-[12px] font-bold text-foreground">
+            <span className="h-[18px] w-[18px] shrink-0 overflow-hidden rounded-full ring-1 ring-black/5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/legacy/pcs/assets/fonts/flag-icon-css/flags/1x1/${country.code}.svg`} alt="" className="h-full w-full object-cover" />
+            </span>
+            สั่งจาก{country.label}
+          </span>
+        </div>
         <p className="mt-0.5 text-[12.5px] text-muted">
           สำหรับสินค้าที่ไม่มีลิงก์ กรุณากรอกข้อมูลสินค้าให้ครบถ้วน
         </p>
