@@ -86,17 +86,22 @@ function DeptCol({ dept }: { dept: OrgUnit }) {
   );
 }
 
-/** กล่องหัวเดี่ยว (Manager·AUDIT/QC) — สีตามสถานะจริง (owner: กรอบแดง 0/1 ตอนยังไม่มีคน) */
+/** กล่องหัวเดี่ยว (Manager·AUDIT/QC) — สีตาม 5 สถานะเดียวกับตำแหน่งอื่น
+ *  (owner 2026-08-03: 0/1 = ไม่มีคน = แดงทึบ · กรอบแดง = มีบางส่วน 1/2).
+ *  Manager เป็นตำแหน่งที่ต้องหาคนมานั่ง → ใช้สถานะ vacant/short/filled ปกติ
+ *  ไม่ใช้กฎ head→รอเลื่อน แบบ Supervisor. */
 function HeadBox({ head }: { head: OrgUnit }) {
-  const filled = head.haveEmployee >= head.quotaEmployee && head.quotaEmployee > 0;
-  const cls = filled
-    ? "bg-[#f2fbf4] border-2 border-emerald-500 [&_.nm]:text-emerald-900"
-    : "bg-white border-2 border-red-600 [&_.nm]:text-red-700"; // กรอบแดง = ยังไม่มีคน
+  const have = head.haveEmployee, quota = head.quotaEmployee;
+  const st: OrgState =
+    have === 0 && quota > 0 ? "vacant"   // ไม่มีคน = แดงทึบ
+    : have > quota ? "over"
+    : have === quota ? "filled"
+    : "short";                           // มีบางส่วน = กรอบแดง
   return (
-    <div className={`rounded-xl px-4 py-3 text-center shadow-md ${cls}`}>
+    <div className={`rounded-xl px-4 py-3 text-center shadow-md ${STATE_BOX[st]}`}>
       <div className="nm text-sm font-semibold leading-tight">{head.nameTh}</div>
-      <div className="mt-0.5 text-[11.5px] font-semibold">พนักงาน {head.haveEmployee}/{head.quotaEmployee}</div>
-      {head.note && <div className="mt-0.5 text-[11px] leading-snug text-muted">{head.note}</div>}
+      <div className="mt-0.5 text-[11.5px] font-semibold">พนักงาน {have}/{quota}</div>
+      {head.note && <div className="mt-0.5 text-[11px] leading-snug opacity-90">{head.note}</div>}
     </div>
   );
 }
