@@ -86,12 +86,17 @@ function DeptCol({ dept }: { dept: OrgUnit }) {
   );
 }
 
-/** กล่องหัวเดี่ยว (Manager·AUDIT/QC) — ดำ พร้อมโน้ต */
+/** กล่องหัวเดี่ยว (Manager·AUDIT/QC) — สีตามสถานะจริง (owner: กรอบแดง 0/1 ตอนยังไม่มีคน) */
 function HeadBox({ head }: { head: OrgUnit }) {
+  const filled = head.haveEmployee >= head.quotaEmployee && head.quotaEmployee > 0;
+  const cls = filled
+    ? "bg-[#f2fbf4] border-2 border-emerald-500 [&_.nm]:text-emerald-900"
+    : "bg-white border-2 border-red-600 [&_.nm]:text-red-700"; // กรอบแดง = ยังไม่มีคน
   return (
-    <div className="rounded-xl bg-[#161616] px-4 py-3 text-center text-white shadow-md">
-      <div className="text-sm font-semibold leading-tight">{head.nameTh}</div>
-      {head.note && <div className="mt-1 text-[11px] leading-snug text-gray-300">{head.note}</div>}
+    <div className={`rounded-xl px-4 py-3 text-center shadow-md ${cls}`}>
+      <div className="nm text-sm font-semibold leading-tight">{head.nameTh}</div>
+      <div className="mt-0.5 text-[11.5px] font-semibold">พนักงาน {head.haveEmployee}/{head.quotaEmployee}</div>
+      {head.note && <div className="mt-0.5 text-[11px] leading-snug text-muted">{head.note}</div>}
     </div>
   );
 }
@@ -117,11 +122,12 @@ export function OrgChartView({ root }: { root: OrgUnit }) {
         <p className="mb-1 text-center text-[11px] text-gray-500">
           ทุกแผนกอยู่ใต้ <b>{head?.nameTh}</b> (คนเดียวกัน · คุมทุกแผนก + เป็นด่านตรวจก่อนถึง CEO)
         </p>
-        <div className="flex w-max justify-center">
+        {/* w-full (ไม่ใช่ w-max) → justify-center จัดกลางจริง ให้ตรงใต้ trunk (owner: เส้นเบี้ยว) */}
+        <div className="flex w-full justify-center">
           {band1.map((d) => <DeptCol key={d.id} dept={d} />)}
         </div>
         {trunk(30)}
-        <div className="flex w-max justify-center">
+        <div className="flex w-full justify-center">
           {band2.map((d) => <DeptCol key={d.id} dept={d} />)}
         </div>
       </div>
