@@ -57,6 +57,45 @@ const getSidebarCountsCached = unstable_cache(
   { revalidate: 60, tags: [ADMIN_SIDEBAR_COUNTS_TAG] },
 );
 
+/**
+ * นับ "ชิปเม้น" (ไม่ใช่แทรคกิ้ง) ที่สถานะ fstatus นั้น — owner/พี่ป๊อป 2026-07-22 สั่งให้
+ * ตัวเลขฝากนำเข้านับเป็น shipment (baseTracking+userid) เหมือนหน้า /admin/forwarders
+ * ไม่งั้น sidebar (นับแทรค) กับ strip/list (นับชิปเม้น) จะเป็นคนละเลขบนสถานะเดียวกัน
+ * (ภูม 2026-08-04 "ตัวเลขเตรียมส่งมั่วไหม"). แถวเบา 3 คอลัมน์ · paginate กัน cap 1000.
+ */
+async function countForwarderShipmentsAtStatus(
+  admin: ReturnType<typeof createAdminClient>,
+  fstatus: string,
+): Promise<{ count: number }> {
+  const base = (t: string | null): string | null => {
+    if (!t) return null;
+    const s = t.trim();
+    if (!s || s === "-") return null;
+    return s.replace(/-\d+(?:\/\d+)?$/, "");
+  };
+  const seen = new Set<string>();
+  let from = 0;
+  for (;;) {
+    const { data, error } = await admin
+      .from("tb_forwarder")
+      .select("id, ftrackingchn, userid")
+      .eq("fstatus", fstatus)
+      .order("id", { ascending: true })
+      .range(from, from + 999);
+    if (error) {
+      logger.error("admin", "sidebar countForwarderShipmentsAtStatus failed", error, { fstatus });
+      break;
+    }
+    const rows = (data ?? []) as { id: number; ftrackingchn: string | null; userid: string | null }[];
+    for (const r of rows) {
+      seen.add(`${base(r.ftrackingchn) ?? `_${r.id}`}|${(r.userid ?? "").trim()}`);
+    }
+    if (rows.length < 1000) break;
+    from += 1000;
+  }
+  return { count: seen.size };
+}
+
 async function computeSidebarCounts(): Promise<BadgeCounts> {
   const admin = createAdminClient();
   const n = (v: { count: number | null } | { count?: number | null }) =>
@@ -121,8 +160,10 @@ async function computeSidebarCounts(): Promise<BadgeCounts> {
       // fstatus 4=ถึงไทยแล้ว · 5=รอชำระเงิน · 6=เตรียมส่ง.
       admin.from("tb_forwarder").select("id", { count: "exact", head: true })
         .eq("fstatus", "4"),
-      admin.from("tb_forwarder").select("id", { count: "exact", head: true })
-        .eq("fstatus", "6"),
+      // forwarderDelivery — ชิปเม้นสถานะ 6 ทั้งหมด (เตรียมส่ง + กำลังจัดส่ง รวม) นับเป็น
+      // "ชิปเม้น" ไม่ใช่แทรคกิ้ง (owner 2026-07-22) → sidebar = strip "เตรียมส่ง"(6) +
+      // "กำลังจัดส่ง"(6.1) พอดี (reconcile). เดิม head-count นับแทรค = คนละเลขกับหน้า forwarders.
+      countForwarderShipmentsAtStatus(admin, "6"),
       // forwarderCredit — fstatus=5 (รอชำระเงิน); credit-flag = paydeposit='1'.
       admin.from("tb_forwarder").select("id", { count: "exact", head: true })
         .eq("fstatus", "5").eq("paydeposit", "1"),

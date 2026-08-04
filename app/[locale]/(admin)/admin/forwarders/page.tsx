@@ -1682,7 +1682,13 @@ async function loadStatusCounts(
   }
   const cnt = (v: string) => perStatus.get(v)?.size ?? 0;
 
-  // "กำลังจัดส่ง" (6.1) = ชิปเม้นสถานะ 6 ที่มีงานคนขับเปิด (fdistatus='') — distinct ชิปเม้น.
+  // "เตรียมส่ง" (6) vs "กำลังจัดส่ง" (6.1) — แยกสะอาดแบบเดียวกับ 5/5.1 (owner/ภูม 2026-08-04
+  // "ตัวเลขเตรียมส่งมั่วไหม · 77 ทำไมไม่ตรงหน้าคนขับ"): badge 6 เดิม = cnt("6") นับ fstatus=6
+  // ทั้งหมด รวมที่มอบคนขับไปแล้ว → ซ้อนกับ 6.1 + ไม่ตรงกับลิสต์ ?status=6 (ที่กรอง assigned ออก
+  // ที่ระดับแถว L~1307). แก้ให้ badge 6 = distinct ชิปเม้นของแถว fstatus=6 ที่ "ยังไม่มอบคนขับ"
+  // = ตรงกับจำนวนที่ลิสต์แสดงเป๊ะ · 6.1 = ที่มอบแล้ว (นับตามแถวเหมือนลิสต์ → ชิปเม้นที่มอบครึ่ง
+  // ขึ้นทั้งสองอันได้ ตรงพฤติกรรมลิสต์). openFids ว่าง → ไม่มีใครมอบ → prep = cnt("6") เดิม.
+  let s6prep = cnt("6");
   let s6driver = 0;
   {
     const { data: di, error: diErr } = await admin
@@ -1700,11 +1706,14 @@ async function loadStatusCounts(
         .filter((n) => Number.isFinite(n)),
     );
     if (openFids.size > 0) {
-      const set6 = new Set<string>();
+      const setPrep = new Set<string>();
+      const setDriver = new Set<string>();
       for (const r of shipRows) {
-        if (String(r.fstatus ?? "").trim() === "6" && openFids.has(r.id)) set6.add(shipKey(r));
+        if (String(r.fstatus ?? "").trim() !== "6") continue;
+        (openFids.has(r.id) ? setDriver : setPrep).add(shipKey(r));
       }
-      s6driver = set6.size;
+      s6prep = setPrep.size;
+      s6driver = setDriver.size;
     }
   }
 
@@ -1730,7 +1739,7 @@ async function loadStatusCounts(
   return {
     total: allSet.size,
     s1: cnt("1"), s2: cnt("2"), s3: cnt("3"), s4: cnt("4"),
-    s5: s5waiting, s5receipt, s6: cnt("6"), s6driver, s7: cnt("7"),
+    s5: s5waiting, s5receipt, s6: s6prep, s6driver, s7: cnt("7"),
     credit: creditSet.size, special: cnt("99"),
   };
 }
