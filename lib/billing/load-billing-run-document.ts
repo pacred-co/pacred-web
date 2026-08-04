@@ -147,7 +147,8 @@ function isoToday(): string {
 }
 
 /** ใบวางบิลค้างชำระ = status 'issued' และเลยกำหนดชำระแล้ว. */
-export function isBillOverdue(dateDue: string, status: string): boolean {
+export function isBillOverdue(dateDue: string, status: string, isCredit = true): boolean {
+  if (!isCredit) return false;
   if (status !== "issued") return false;
   return dateDue < isoToday();
 }
@@ -447,6 +448,8 @@ export async function loadBillingRunDocument(
     .filter((f): f is FwdHydRow => !!f);
   const named = sumNamedFees(lineFwdFees);
 
+  const isCredit = [...fwdByID.values()].some((f) => isCreditRow(f.fcredit));
+
   return {
     header: {
       id:                 hdrRaw.id,
@@ -465,7 +468,7 @@ export async function loadBillingRunDocument(
       // legacy เก็บ '0'/''/null ปนกัน). ไม่มีแถว hydrate มา → ถือว่า **เงินสด** (fail-safe:
       // เงินสดคือค่าปกติ · prod 2026-07-17 มีลูกค้าเครดิต 0 ราย · เดาว่าเครดิตแล้วโชว์วันครบกำหนด
       // = บอกลูกค้าว่า "ค่อยจ่ายก็ได้" = ชะลอเก็บเงินเอง อันตรายกว่า)
-      is_credit:          [...fwdByID.values()].some((f) => isCreditRow(f.fcredit)),
+      is_credit:          isCredit,
       subtotal_thb:       Number(hdrRaw.subtotal_thb),
       delivery_chn_thb:   Number(hdrRaw.delivery_chn_thb),
       delivery_th_thb:    Number(hdrRaw.delivery_th_thb),
@@ -494,7 +497,7 @@ export async function loadBillingRunDocument(
                             ? hdrRaw.slip_paths.filter((p): p is string => typeof p === "string")
                             : [],
       slip_reviewed_at:   hdrRaw.slip_reviewed_at,
-      is_overdue:         isBillOverdue(hdrRaw.date_due, hdrRaw.status),
+      is_overdue:         isBillOverdue(hdrRaw.date_due, hdrRaw.status, isCredit),
       sum_thai_shipping:  named.thaiShipping,
       sum_chn_plus:       named.chnPlus,
       sum_crate:          named.crate,

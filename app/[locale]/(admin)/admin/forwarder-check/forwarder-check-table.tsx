@@ -58,6 +58,7 @@ export type ForwarderCheckRow = {
   customer_name: string;
   customer_company: number;            // 1 = juristic (gets 1% allowance)
   user_credit: string;                 // '1' = credit · '0'/null = normal
+  user_credit_limit: number;           // must be >0 for the auto-credit lane
   // packaging
   amount: number;
   amount_fi: number;                   // fi2Amount (forwarder_import2 partial)
@@ -355,13 +356,17 @@ export function ForwarderCheckTable({
   // VISIBLE selection so the bar never counts a search-hidden row.
   const summary = useMemo(() => {
     let total = 0;
+    let cashCount = 0;
+    let creditCount = 0;
     const userSet = new Set<string>();
     for (const r of filteredRows) {
       if (!visibleSelectedIds.has(r.id)) continue;
       total += r.outstanding_thb;
       userSet.add(r.userid);
+      if (r.user_credit === "1" && r.user_credit_limit > 0) creditCount++;
+      else cashCount++;
     }
-    return { total, customerCount: userSet.size, rowCount: visibleSelectedIds.size };
+    return { total, cashCount, creditCount, customerCount: userSet.size, rowCount: visibleSelectedIds.size };
   }, [filteredRows, visibleSelectedIds]);
 
   // G3 reachability (§0d · 2026-07-08) — when the current selection is a SINGLE
@@ -374,7 +379,9 @@ export function ForwarderCheckTable({
     const uids = new Set(picked.map((r) => r.userid));
     if (uids.size !== 1) return null;
     const uid = [...uids][0];
-    const eligible = picked.some((r) => r.customer_company === 1 || r.user_credit === "1");
+    const eligible = picked.some((r) =>
+      r.customer_company === 1 || (r.user_credit === "1" && r.user_credit_limit > 0),
+    );
     return eligible ? uid : null;
   }, [filteredRows, visibleSelectedIds]);
 
@@ -394,9 +401,9 @@ export function ForwarderCheckTable({
       if (res.ok && res.data) {
         const d = res.data;
         setFailures(d.failures ?? []);
-        const parts: string[] = [
-          `✅ แจ้งชำระเงินสำเร็จ ${d.processed} รายการ`,
-        ];
+        const parts: string[] = [`✅ ดำเนินการหลังตรวจตู้สำเร็จ ${d.processed} รายการ`];
+        if (d.cash_waiting_payment > 0) parts.push(`· เงินสดรอชำระ ${d.cash_waiting_payment}`);
+        if (d.credit_ready_to_ship > 0) parts.push(`· เครดิตวางบิล + เตรียมส่ง ${d.credit_ready_to_ship}`);
         // The count alone is meaningless — the reasons render in the panel below.
         if (d.failed > 0) parts.push(`· แจ้งไม่ได้ ${d.failed} รายการ (ดูเหตุผลด้านล่าง)`);
 
@@ -792,7 +799,7 @@ export function ForwarderCheckTable({
                           {r.customer_name || "—"}
                         </div>
                         <div className="mt-1 flex flex-wrap gap-1">
-                          {r.user_credit === "1" && (
+                          {r.user_credit === "1" && r.user_credit_limit > 0 && (
                             <span className="rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[11px]">
                               เครดิต
                             </span>
@@ -1055,7 +1062,7 @@ export function ForwarderCheckTable({
                 disabled={pending}
                 className="rounded-md bg-primary-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
-                💰 แจ้งชำระเงินลูกค้า ({summary.rowCount})
+                💰 ดำเนินการหลังตรวจตู้ ({summary.rowCount})
               </button>
             </div>
           </div>
@@ -1071,8 +1078,10 @@ export function ForwarderCheckTable({
         title={`รายการที่เลือก ${summary.rowCount}/${filteredRows.length} รายการ`}
         note={
           <>
-            การกระทำนี้จะเปลี่ยนสถานะเป็น <b>5 · รอชำระเงิน</b> · ส่ง SMS / LINE OA / Email
-            แจ้งลูกค้าทันที ({summary.customerCount} ลูกค้า) · เมื่อแจ้งแล้วจะลบออกจากคิวตรวจสอบอัตโนมัติ
+            เงินสด {summary.cashCount} รายการ → <b>5 · รอชำระเงิน</b><br />
+            เครดิต {summary.creditCount} รายการ → <b>เครดิตวางบิล + 6 · เตรียมส่ง</b> พร้อมตัดวงเงินจริง<br />
+            ระบบส่ง SMS / LINE OA / Email ตามประเภทลูกค้า ({summary.customerCount} ลูกค้า)
+            และลบรายการที่สำเร็จออกจากคิวตรวจสอบอัตโนมัติ
           </>
         }
         rows={filteredRows
@@ -1086,7 +1095,7 @@ export function ForwarderCheckTable({
           }))}
         showAmount
         total={summary.total}
-        confirmLabel={`เรียกเก็บเงินลูกค้ารายการนำเข้า จำนวนเงิน ฿${thb(summary.total)} บาท`}
+        confirmLabel={`ยืนยันผลตรวจตู้ · ยอดรวม ฿${thb(summary.total)} บาท`}
         busy={pending}
         onCancel={() => setConfirmingBill(false)}
         onConfirm={runBill}

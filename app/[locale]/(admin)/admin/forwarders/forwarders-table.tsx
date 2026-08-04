@@ -127,6 +127,7 @@ export type Row = {
     kind: "wallet" | "billing-run";
     id: number;
     href: string;
+    isCreditPayment: boolean;
   } | null;
   paydeposit: string | null;
   note: string | null;
@@ -997,6 +998,8 @@ export function ForwardersTable({
                   const rowCode = resolveRowStatusCode(r.status, {
                     driverOpen: r.driverOpen,
                     pendingSlip: r.pendingSlip,
+                    pendingSlipIsCredit:
+                      Boolean(r.pendingSlipReviewTarget?.isCreditPayment) || r.fcredit === "1",
                   });
                   const badgeCls = fstatusVivid(rowCode);
                   const baseLabel = statusCodeLabel(rowCode);
@@ -1593,7 +1596,7 @@ export function ForwardersTable({
                       })()}
                       <td className="px-2 py-2.5">
                         <div className="flex flex-col gap-1">
-                          {rowCode === "5.1" && r.pendingSlipReviewTarget && (
+                          {r.pendingSlipReviewTarget && (
                             <Link
                               href={r.pendingSlipReviewTarget.href}
                               className="rounded border border-violet-700 bg-violet-600 text-white text-[11px] font-semibold px-2 py-1 hover:bg-violet-700 text-center whitespace-nowrap"
@@ -1601,7 +1604,9 @@ export function ForwardersTable({
                                 ? `เปิดใบวางบิล #${r.pendingSlipReviewTarget.id} เพื่อตรวจสลิปและออกใบเสร็จ`
                                 : `เปิดรายการชำระเงิน #${r.pendingSlipReviewTarget.id} เพื่อตรวจสลิปและออกใบเสร็จ`}
                             >
-                              ตรวจสลิป/ออกใบเสร็จ
+                              {r.pendingSlipReviewTarget.isCreditPayment || r.fcredit === "1"
+                                ? "ตรวจสลิปเครดิต/ออกใบเสร็จ"
+                                : "ตรวจสลิป/ออกใบเสร็จ"}
                             </Link>
                           )}
                           <Link

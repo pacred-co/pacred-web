@@ -1179,11 +1179,12 @@ export async function fetchForwarderList(
   }
 
   // ── สลิปรอบัญชีตรวจ → สถานะย่อย 5.1 "รอออก/ใบเสร็จรับเงิน" (owner 2026-07-31) ──
-  // แผนเดียวกับ 6.1: derive จากข้อมูลจริง ไม่เพิ่มคอลัมน์. คำนวณเฉพาะ view ที่อาจมีแถว
-  // fstatus='5' (ข้ามแท็บสถานะเดี่ยวที่เป็นไปไม่ได้ + lane พิเศษ) — ดู isAwaitingReceipt.
+  // แผนเดียวกับ 6.1: derive จากข้อมูลจริง ไม่เพิ่มคอลัมน์. เงินสดที่พนักงานแนบ
+  // สลิปใช้ legacy provisional fstatus='6'+paydeposit='1' จึงต้องโหลดสัญญาณนี้
+  // ทั้งแท็บ 5 และ 6; เครดิตยังคงอยู่ lane เตรียมส่งและมี AR lane แยก.
   let pendingSlipIds: Set<number> | null = null;
   let pendingSlipReviewTargets: Map<number, PendingSlipReviewTarget> | null = null;
-  const needsSlipSet = sp.status !== "p" && !/^(?:[1-4]|6(?:\.1)?|7)$/.test(sp.status ?? "");
+  const needsSlipSet = sp.status !== "p" && !/^(?:[1-4]|6\.1|7)$/.test(sp.status ?? "");
   if (needsSlipSet) {
     pendingSlipReviewTargets = await resolvePendingSlipReviewTargetsAll(admin);
     pendingSlipIds = new Set(pendingSlipReviewTargets.keys());
@@ -1194,8 +1195,9 @@ export async function fetchForwarderList(
   } else if (sp.status === "p") {
     q = q.eq("fstatus", "99");
   } else if (sp.status === "5.1") {
-    q = q.eq("fstatus", "5");
-    // รอออก/ใบเสร็จรับเงิน = fstatus 5 ที่มีสลิปรอตรวจ (กรอง post-fetch ด้านล่าง)
+    q = q.in("fstatus", ["5", "6"]);
+    // รอออก/ใบเสร็จรับเงิน = เงินสดที่มีสลิปรอตรวจ. ลูกค้าส่งเองอยู่ 5;
+    // พนักงานแนบแทนใช้ provisional 6+paydeposit=1 (กรอง post-fetchด้านล่าง).
   } else if (sp.status === "6") {
     q = q.eq("fstatus", "6");
     // เตรียมส่ง = NOT in driver_item with fdistatus='' (filtered post-fetch · see L~248)
@@ -1304,8 +1306,16 @@ export async function fetchForwarderList(
   let raw = (forwarderRows ?? []) as unknown as RawForwarderRow[];
 
   // 6 vs 6.1 post-fetch split (driver-in-progress set was loaded above).
+  const isPendingCashReview = (r: RawForwarderRow): boolean => {
+    const target = pendingSlipReviewTargets?.get(Number(r.id));
+    if (!target) return false;
+    return !(target.isCreditPayment || String(r.fcredit ?? "").trim() === "1");
+  };
+
   if (sp.status === "6" && driverInProgressIds) {
-    raw = raw.filter((r) => !driverInProgressIds!.has(Number(r.id)));
+    raw = raw.filter((r) =>
+      !driverInProgressIds!.has(Number(r.id)) && !isPendingCashReview(r),
+    );
   } else if (sp.status === "6.1" && driverInProgressIds) {
     raw = raw.filter((r) => driverInProgressIds!.has(Number(r.id)));
   } else if (sp.status === "5" && pendingSlipIds) {
@@ -1313,7 +1323,7 @@ export async function fetchForwarderList(
     // (พอแนบสลิปแล้วย้ายไปแท็บ 5.1 รอออก/ใบเสร็จรับเงิน)
     raw = raw.filter((r) => !pendingSlipIds!.has(Number(r.id)));
   } else if (sp.status === "5.1" && pendingSlipIds) {
-    raw = raw.filter((r) => pendingSlipIds!.has(Number(r.id)));
+    raw = raw.filter((r) => pendingSlipIds!.has(Number(r.id)) && isPendingCashReview(r));
   }
 
   // ─── 2nd query: tb_users for customer name/phone (+ VIP/Sale chips) ───

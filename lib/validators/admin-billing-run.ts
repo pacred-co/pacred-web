@@ -50,12 +50,14 @@ export const createBillingRunInvoiceSchema = z.object({
     .transform((ids) => Array.from(new Set(ids))),
   /** วันที่ออกเอกสาร — default today on the page. Stored as DATE. */
   dateIssued: isoDate,
-  /** วันที่ครบกำหนดจ่าย — the add-form defaults to today + 7 days. (Legacy has
-   *  NO per-customer credit-DAYS column; tb_users.userCreditValue is the credit
-   *  LIMIT in baht, the term lives per-order on tb_forwarder.fcreditdate — ADR-0023.
-   *  So the 7-day default is intentional; staff edits it for other terms.)
+  /** วันที่ครบกำหนดจ่าย — defaults from tb_users.userCreditDate for a credit
+   *  customer; once granted, tb_forwarder.fcreditdate is the binding per-order
+   *  date. Staff may override it explicitly on the reviewed form.
    *  MUST be ≥ dateIssued. */
   dateDue: isoDate,
+  /** Explicit consent from the billing confirmation to attach selected ready
+   *  shipments to the customer's credit facility before issuing this bill. */
+  grantCreditOnIssue: z.boolean().optional().default(false),
   /** Money-summary fields. subtotal_thb auto-computed by the action from the
    *  selected forwarder rows; the other 4 are admin-editable (legacy add.php
    *  L207-246: CHN charge / TH charge / Other / Discount). */

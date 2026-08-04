@@ -23,7 +23,15 @@ type Result =
   | { kind: "ok"; docNo: string; invoiceId?: number }
   | { kind: "err"; text: string; billed?: Array<{ forwarderId: number; docNo: string; invoiceId: number }> };
 
-export function CreateOrderBillButton({ fId, fstatus, advanceConfirmed = false }: { fId: number; fstatus: string; advanceConfirmed?: boolean }) {
+export function CreateOrderBillButton({
+  fId, fstatus, advanceConfirmed = false, isCreditCustomer = false, creditTermsDays = 0,
+}: {
+  fId: number;
+  fstatus: string;
+  advanceConfirmed?: boolean;
+  isCreditCustomer?: boolean;
+  creditTermsDays?: number;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<Result | null>(null);
@@ -37,14 +45,17 @@ export function CreateOrderBillButton({ fId, fstatus, advanceConfirmed = false }
 
   async function onClick() {
     setResult(null);
+    const creditWarning = isCreditCustomer
+      ? `\n\nลูกค้านี้เปิดเครดิต ${creditTermsDays} วัน — รายการที่ยังไม่ติดเครดิตจะใช้วงเงินและเลื่อนไปเตรียมส่งพร้อมกัน`
+      : "";
     const ok = await confirm(
       `สร้างใบวางบิลสำหรับออเดอร์ #${fId} เพื่อส่งเก็บเงินลูกค้า?\n\n` +
-        `(ระบบจะออกเลขใบวางบิล + รวมยอดทุกแทรคกิงของออเดอร์นี้)`,
+        `(ระบบจะออกเลขใบวางบิล + รวมยอดทุกแทรคกิงของออเดอร์นี้)${creditWarning}`,
       { title: "สร้างใบวางบิล", confirmLabel: "สร้างบิล", cancelLabel: "ยกเลิก" },
     );
     if (!ok) return;
     startTransition(async () => {
-      const res = await createForwarderOrderBill(fId);
+      const res = await createForwarderOrderBill(fId, { grantCreditOnIssue: isCreditCustomer });
       if (res.ok) {
         setResult({ kind: "ok", docNo: res.data?.docNo ?? "", invoiceId: res.data?.invoiceId });
         router.refresh();

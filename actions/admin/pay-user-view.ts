@@ -199,6 +199,14 @@ export type PayUserPanel = {
   coid: string | null;
   /** tb_users.adminIDSale — assigned sales rep (per-customer, NOT on tb_forwarder). */
   adminid_sale: string | null;
+  /** Account-level facility; per-shipment `fcredit` remains the binding AR flag. */
+  credit: {
+    enabled: boolean;
+    limit: number;
+    terms_days: number;
+    outstanding: number;
+    available: number;
+  };
 };
 
 async function loadPanel(
@@ -207,12 +215,14 @@ async function loadPanel(
 ): Promise<{ panel: PayUserPanel } | { error: string }> {
   const { data: u, error: uErr } = await admin
     .from("tb_users")
-    .select("userID, userName, userLastName, userTel, userCompany, coID, adminIDSale")
+    .select("userID, userName, userLastName, userTel, userCompany, coID, adminIDSale, userCredit, userCreditValue, userCreditDate")
     .eq("userID", code)
     .maybeSingle<{
       userID: string; userName: string | null; userLastName: string | null;
       userTel: string | null; userCompany: string | number | null;
       coID: string | null; adminIDSale: string | null;
+      userCredit: string | null; userCreditValue: number | string | null;
+      userCreditDate: number | string | null;
     }>();
   if (uErr) {
     console.error("[pay-user-view loadPanel tb_users] failed", { code: uErr.code, message: uErr.message, userid: code });
@@ -229,6 +239,19 @@ async function loadPanel(
     .from("tb_cash_back").select("cbtotal").eq("userid", code)
     .maybeSingle<{ cbtotal: number | string | null }>();
   if (cbErr && cbErr.code !== "PGRST116") console.error("[pay-user-view loadPanel tb_cash_back] failed", { code: cbErr.code, message: cbErr.message, userid: code });
+
+  const { data: creditRow, error: creditErr } = await admin
+    .from("tb_credit")
+    .select("creditvalue")
+    .eq("userid", code)
+    .maybeSingle<{ creditvalue: number | string | null }>();
+  if (creditErr && creditErr.code !== "PGRST116") {
+    console.error("[pay-user-view loadPanel tb_credit] failed", {
+      code: creditErr.code, message: creditErr.message, userid: code,
+    });
+  }
+  const creditLimit = num(u.userCreditValue);
+  const creditOutstanding = num(creditRow?.creditvalue);
 
   // Party (ชื่อ · เลขที่ภาษี · ที่อยู่ · อีเมล · corp-row existence) via the shared
   // resolver — the same one the printable ใบแจ้งหนี้ runs, so the modal header and
@@ -256,6 +279,13 @@ async function loadPanel(
       is_juristic: String(u.userCompany ?? "") === "1",
       coid: (u.coID ?? "").trim() || null,
       adminid_sale: (u.adminIDSale ?? "").trim() || null,
+      credit: {
+        enabled: String(u.userCredit ?? "").trim() === "1" && creditLimit > 0,
+        limit: creditLimit,
+        terms_days: Math.max(0, Math.trunc(num(u.userCreditDate))),
+        outstanding: creditOutstanding,
+        available: Math.max(0, Math.round((creditLimit - creditOutstanding) * 100) / 100),
+      },
     },
   };
 }
@@ -364,6 +394,7 @@ export async function getPayUserForwarderView(
       .select(FWD_VIEW_COLS)
       .eq("userid", code)
       .or("fstatus.eq.5,fcredit.eq.1")
+      .or("paydeposit.is.null,paydeposit.neq.1")
       .order("id", { ascending: true })
       .limit(500);
     if (fErr) {

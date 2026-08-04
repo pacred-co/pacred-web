@@ -90,7 +90,7 @@ const Q = {
   fwdWhError:   { key: "fwdWhError",   label: "สแกนเข้าโกดังไทย ยังไม่จับคู่",  badge: "forwarderWhError"  as BadgeKey, href: "/admin/forwarders/warehouse-history", nextAction: "จับคู่พัสดุที่สแกนค้าง", icon: "ScanLine" },
   // Accounting owns 4→5 (วางบิล) + 5→6 (รับชำระ).
   fwdAwaitPay:  { key: "fwdAwaitPay",  label: "ฝากนำเข้า รอชำระ / รอวางบิล",    badge: "forwarderArrived"  as BadgeKey, href: "/admin/forwarders?status=5", nextAction: "วางบิล / รับชำระ → ตัดจ่าย", icon: "Banknote" },
-  fwdCredit:    { key: "fwdCredit",    label: "เครดิตค้างนำเข้า",              badge: "forwarderCredit"   as BadgeKey, href: "/admin/forwarders?status=c", nextAction: "ติดตามเครดิต / เก็บเงิน",   icon: "AlertCircle" },
+  fwdCredit:    { key: "fwdCredit",    label: "เครดิตวางบิล / รอรับชำระ",      badge: "forwarderCredit"   as BadgeKey, href: "/admin/forwarders?status=c", nextAction: "ออกใบวางบิล → รับสลิป → ออกใบเสร็จ", icon: "AlertCircle" },
   fwdNote:      { key: "fwdNote",      label: "หมายเหตุนำเข้า",                badge: "forwarderNote"     as BadgeKey, href: "/admin/forwarders",          nextAction: "ตอบ / เคลียร์หมายเหตุ",     icon: "MessageSquare" },
   // Driver / warehouse own 6→7 (ส่งของ).
   fwdDelivery:  { key: "fwdDelivery",  label: "เตรียมส่ง / กำลังจัดส่ง",        badge: "forwarderDelivery" as BadgeKey, href: "/admin/forwarders?status=6", nextAction: "มอบงานคนขับ / จัดรถ",       icon: "Truck" },

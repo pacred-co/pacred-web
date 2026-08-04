@@ -34,6 +34,12 @@ export type PendingSlipReviewTarget = {
   kind: "wallet" | "billing-run";
   id: number;
   href: string;
+  /**
+   * The payment is settling an existing credit draw.  Credit shipments stay
+   * physically ready to dispatch while accounting reviews the slip; cash
+   * shipments must remain in the virtual 5.1 gate until approval.
+   */
+  isCreditPayment: boolean;
 };
 
 function preferReviewTarget(
@@ -85,7 +91,7 @@ async function queryPendingSlipReviewTargets(
   // ── (A) สลิปที่ลูกค้าส่งเอง — tb_wallet_hs pending ────────────────────────
   let wq = admin
     .from("tb_wallet_hs")
-    .select("id, reforder")
+    .select("id, reforder, wusercredit")
     .eq("typeservice", IMPORT_TYPESERVICE)
     .eq("status", PENDING_STATUS)
     .in("typenew", [...PAY_TYPENEW]);
@@ -107,7 +113,11 @@ async function queryPendingSlipReviewTargets(
       code: wRes.error.code, message: wRes.error.message, userid: userId ?? "(all)",
     });
   }
-  for (const r of (wRes.data ?? []) as { id: number | string; reforder: string | null }[]) {
+  for (const r of (wRes.data ?? []) as Array<{
+    id: number | string;
+    reforder: string | null;
+    wusercredit: string | null;
+  }>) {
     const n = Number((r.reforder ?? "").trim());
     const reviewId = Number(r.id);
     if (Number.isInteger(n) && n > 0 && Number.isInteger(reviewId) && reviewId > 0) {
@@ -115,6 +125,7 @@ async function queryPendingSlipReviewTargets(
         kind: "wallet",
         id: reviewId,
         href: `/admin/wallet/${reviewId}`,
+        isCreditPayment: String(r.wusercredit ?? "").trim() === "1",
       };
       out.set(n, preferReviewTarget(out.get(n), candidate));
     }
@@ -129,6 +140,10 @@ async function queryPendingSlipReviewTargets(
           kind: "billing-run",
           id: invoiceId,
           href: `/admin/billing-run/${invoiceId}`,
+          // The caller still has the forwarder's live fcredit flag and combines
+          // it with this target.  The invoice queue does not currently expose a
+          // frozen credit/cash discriminator in loadPendingFriForwarderSets.
+          isCreditPayment: false,
         };
         out.set(n, preferReviewTarget(out.get(n), candidate));
       }

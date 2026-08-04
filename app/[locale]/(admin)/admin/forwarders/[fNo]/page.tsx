@@ -400,7 +400,7 @@ async function tryRenderTbForwarder(
 
   const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
-    .select("userID, userName, userLastName, userTel, userEmail, userPicture, adminIDSale, userCompany")
+    .select("userID, userName, userLastName, userTel, userEmail, userPicture, adminIDSale, userCompany, userCredit, userCreditValue, userCreditDate")
     .eq("userID", r.userid)
     .maybeSingle();
   if (userRowErr) {
@@ -410,7 +410,8 @@ async function tryRenderTbForwarder(
     userID: string; userName: string | null; userLastName: string | null;
     userTel: string | null; userEmail: string | null;
     userPicture: string | null; adminIDSale: string | null;
-    userCompany: string | null;
+    userCompany: string | null; userCredit: string | null;
+    userCreditValue: number | string | null; userCreditDate: number | string | null;
   } | null;
 
   // ── ภูม 2026-06-18: ที่อยู่จัดส่งสินค้า ─────────────────────────────────
@@ -620,12 +621,14 @@ async function tryRenderTbForwarder(
   };
 
   const currentStatusInt = parseInt(r.fstatus, 10);
-  const pendingSlipReviewTarget = r.fstatus === "5"
+  const pendingSlipReviewTarget = ["5", "6"].includes(r.fstatus)
     ? (await resolvePendingSlipReviewTargetsAll(admin, [r.id])).get(r.id) ?? null
     : null;
   const displayStatusCode = resolveRowStatusCode(r.fstatus, {
     driverOpen: isDriverDispatched,
     pendingSlip: Boolean(pendingSlipReviewTarget),
+    pendingSlipIsCredit:
+      Boolean(pendingSlipReviewTarget?.isCreditPayment) || (r.fcredit ?? "").trim() === "1",
   });
   // 2026-06-05 (ภูม flag): 8-step timeline with fstatus=6 split into
   // "เตรียมส่ง" (no driver yet) vs "กำลังจัดส่ง" (driver assigned · fdistatus='')
@@ -1221,6 +1224,7 @@ async function tryRenderTbForwarder(
           currentNote={r.fnote ?? ""}
           currentCabinetLocked={r.fcabinet_locked === true}
           isCredit={(r.fcredit ?? "").trim() === "1"}
+          creditTermsDays={Math.max(0, Math.trunc(Number(u?.userCreditDate ?? 0) || 0))}
           amountEstimate={creditEstimate}
           pricing={pricingInit}
           reforder={r.reforder}
@@ -1299,7 +1303,13 @@ async function tryRenderTbForwarder(
 
         {/* ── สร้างใบวางบิล (owner 2026-06-22) — at รอชำระเงิน/เตรียมส่ง (5/6). ── */}
         <div id="bill-section" className="mt-3 scroll-mt-24 space-y-2">
-          <CreateOrderBillButton fId={r.id} fstatus={r.fstatus} advanceConfirmed={advanceConfirmed} />
+          <CreateOrderBillButton
+            fId={r.id}
+            fstatus={r.fstatus}
+            advanceConfirmed={advanceConfirmed}
+            isCreditCustomer={(u?.userCredit ?? "").trim() === "1" && Number(u?.userCreditValue ?? 0) > 0}
+            creditTermsDays={Math.max(0, Math.trunc(Number(u?.userCreditDate ?? 0) || 0))}
+          />
         </div>
 
         {/* ── เอกสารของออเดอร์นี้ (owner 2026-07-15 · "เข้าไปดูได้หมด") — one-click jump to

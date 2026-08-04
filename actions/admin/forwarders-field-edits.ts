@@ -95,6 +95,7 @@ import { canonicalProvince } from "@/lib/forwarder/carrier-province-coverage";
 import { cabinetWriteGuard } from "@/lib/forwarder/cabinet-class";
 import { isGodRole } from "@/lib/admin/god-role";
 import { customerAddressSchema, parseCustomerAddressRow, saveCustomerAddress } from "@/lib/admin/customer-address-book";
+import { creditDueDate, isIsoCalendarDate } from "@/lib/credit/terms";
 
 /** ปัดสตางค์ 2 ตำแหน่ง — ค่าส่งด่วน = คิว × 120 และคิวเก็บ 6 ทศนิยม (mig 0192). */
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -1535,7 +1536,10 @@ export async function adminUpdateForwarderPayMethod(
 // userCompany). tb_credit cols: userid, creditvalue.
 const creditOutSchema = z.object({
   fId:         z.number().int().positive(),
-  creditDueDate: z.string().trim().min(1).max(40), // admin-entered due date (legacy $_POST['userCreditDate'])
+  // Optional for server callers: when omitted, derive from the customer's
+  // canonical tb_users.userCreditDate.  Explicit staff overrides remain
+  // possible (legacy date picker), but only as a real ISO calendar date.
+  creditDueDate: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 export type AdminMarkForwarderCreditInput = z.infer<typeof creditOutSchema>;
 
@@ -1547,12 +1551,12 @@ function numCol(v: number | string | null | undefined): number {
 
 export async function adminMarkForwarderCredit(
   rawInput: AdminMarkForwarderCreditInput,
-): Promise<AdminActionResult<{ priceCredited: number; outstanding: number }>> {
+): Promise<AdminActionResult<{ priceCredited: number; outstanding: number; dueDate: string }>> {
   const parsed = creditOutSchema.safeParse(rawInput);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
   const d = parsed.data;
 
-  return withAdmin<{ priceCredited: number; outstanding: number }>(["accounting", "super"], async ({ adminId }) => {
+  return withAdmin<{ priceCredited: number; outstanding: number; dueDate: string }>(["accounting", "super"], async ({ adminId }) => {
     const admin = createAdminClient();
     const legacyAdminId = (await resolveLegacyAdminId()).slice(0, 10);
     const nowIso = new Date().toISOString();
@@ -1561,13 +1565,17 @@ export async function adminMarkForwarderCredit(
     const { data: fwd, error: fwdErr } = await admin
       .from("tb_forwarder")
       .select(
-        "id, userid, fstatus, fcredit, ftotalprice, ftransportprice, paymethod, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, " +
+        "id, userid, fstatus, fcredit, fcreditdate, paydeposit, fdatestatus5, fdateadminstatus, adminid, adminidupdate, " +
+        "ftotalprice, ftransportprice, paymethod, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, " +
         // ด่านที่อยู่จัดส่ง (owner 2026-07-23) — read-only
         "fidorco, ftrackingchn, fshipby, faddressprovince, faddresszipcode, faddressno",
       )
       .eq("id", d.fId)
       .maybeSingle<{
         id: number; userid: string; fstatus: string | null; fcredit: string | null;
+        fcreditdate: string | null; paydeposit: string | null;
+        fdatestatus5: string | null; fdateadminstatus: string | null;
+        adminid: string | null; adminidupdate: string | null;
         ftotalprice: number | string | null; ftransportprice: number | string | null;
         paymethod: string | null;
         fidorco: string | null; ftrackingchn: string | null; fshipby: string | null;
@@ -1612,16 +1620,30 @@ export async function adminMarkForwarderCredit(
     // 2. Read the customer's credit LIMIT + corporate flag (tb_users · camelCase).
     const { data: u, error: uErr } = await admin
       .from("tb_users")
-      .select("userID, userCreditValue, userCompany")
+      .select("userID, userCredit, userCreditValue, userCreditDate, userCompany")
       .eq("userID", fwd.userid)
-      .maybeSingle<{ userID: string; userCreditValue: number | string | null; userCompany: string | null }>();
+      .maybeSingle<{
+        userID: string;
+        userCredit: string | null;
+        userCreditValue: number | string | null;
+        userCreditDate: number | string | null;
+        userCompany: string | null;
+      }>();
     if (uErr) {
       console.error(`[adminMarkForwarderCredit tb_users] failed`, { code: uErr.code, message: uErr.message, userid: fwd.userid });
       return { ok: false, error: `อ่านข้อมูลลูกค้าไม่สำเร็จ: ${uErr.message}` };
     }
+    if ((u?.userCredit ?? "").trim() !== "1") {
+      return { ok: false, error: "ลูกค้ารายนี้ยังไม่ได้เปิดสิทธิ์เครดิต — เปิดเครดิตที่หน้าข้อมูลลูกค้าก่อน" };
+    }
     const creditLimit = numCol(u?.userCreditValue);
     if (!(creditLimit > 0)) {
       return { ok: false, error: "ลูกค้ารายนี้ไม่มีวงเงินเครดิต (userCreditValue = 0) — เปิดวงเงินก่อน" };
+    }
+    const issuedOn = nowIso.slice(0, 10);
+    const dueDate = d.creditDueDate || creditDueDate(issuedOn, u?.userCreditDate);
+    if (!isIsoCalendarDate(dueDate) || dueDate < issuedOn) {
+      return { ok: false, error: "วันครบกำหนดเครดิตไม่ถูกต้อง — ต้องเป็นวันนี้หรือวันในอนาคต" };
     }
 
     // 3. Read current outstanding (tb_credit · may be missing → treat as 0).
@@ -1652,8 +1674,14 @@ export async function adminMarkForwarderCredit(
     if (!(pricePay > 0)) return { ok: false, error: "ยอดรายการไม่ถูกต้อง" };
 
     // 5. GATE — remaining headroom must cover this order (legacy L1429).
-    const headroom = creditLimit - outstanding;
-    if (headroom < pricePay) {
+    // Compare integer satang.  Binary floating-point must never decide whether
+    // a customer is one satang inside/outside their approved facility.
+    const limitSatang = Math.round(creditLimit * 100);
+    const outstandingSatang = Math.round(outstanding * 100);
+    const pricePaySatang = Math.round(pricePay * 100);
+    const headroomSatang = limitSatang - outstandingSatang;
+    const headroom = headroomSatang / 100;
+    if (headroomSatang < pricePaySatang) {
       return {
         ok: false,
         error: `วงเงินเครดิตไม่พอ — เหลือ ฿${headroom.toLocaleString()} (วงเงิน ฿${creditLimit.toLocaleString()} − ค้าง ฿${outstanding.toLocaleString()}) ต้อง ฿${pricePay.toLocaleString()}`,
@@ -1673,7 +1701,7 @@ export async function adminMarkForwarderCredit(
     const { data: flipped, error: updErr } = await admin
       .from("tb_forwarder")
       .update({
-        paydeposit: "2", fcredit: "1", fcreditdate: d.creditDueDate, fstatus: "6",
+        paydeposit: "2", fcredit: "1", fcreditdate: dueDate, fstatus: "6",
         fdateadminstatus: nowIso, fdatestatus5: nowIso, adminid: legacyAdminId, adminidupdate: legacyAdminId,
       })
       .eq("id", d.fId)
@@ -1691,27 +1719,64 @@ export async function adminMarkForwarderCredit(
     // 7. UPSERT tb_credit (legacy UPDATE-only silently dropped the debt for the
     //    ~98% of customers with no row — we INSERT if missing). Rollback the
     //    forwarder flip if the debt write fails (keep books consistent).
-    const newOutstanding = Math.round((outstanding + pricePay) * 100) / 100;
-    const { error: creditUpErr } = creditRow
-      ? await admin.from("tb_credit").update({ creditvalue: newOutstanding }).eq("userid", fwd.userid)
-      : await admin.from("tb_credit").insert({ userid: fwd.userid, creditvalue: newOutstanding });
-    if (creditUpErr) {
+    const newOutstanding = (outstandingSatang + pricePaySatang) / 100;
+    // CAS the per-customer ledger. The forwarder UPDATE is row-atomic, but two
+    // different fids for the same customer can still race on tb_credit.  Match
+    // the previously-read value so only one writer wins; the loser rolls its
+    // forwarder flip back and asks staff to retry against fresh headroom.
+    let creditUpErr: { code?: string; message: string } | null = null;
+    let creditWritten = false;
+    if (creditRow) {
+      const write = await admin
+        .from("tb_credit")
+        .update({ creditvalue: newOutstanding })
+        .eq("userid", fwd.userid)
+        .eq("creditvalue", creditRow.creditvalue ?? 0)
+        .select("userid")
+        .maybeSingle<{ userid: string }>();
+      creditUpErr = write.error;
+      creditWritten = !!write.data;
+    } else {
+      const write = await admin
+        .from("tb_credit")
+        .insert({ userid: fwd.userid, creditvalue: newOutstanding })
+        .select("userid")
+        .single<{ userid: string }>();
+      creditUpErr = write.error;
+      creditWritten = !!write.data;
+    }
+    if (creditUpErr || !creditWritten) {
       // rollback the forwarder flip
       await admin.from("tb_forwarder").update({
-        paydeposit: "", fcredit: "", fcreditdate: null, fstatus: fwd.fstatus,
-      }).eq("id", d.fId);
+        paydeposit: fwd.paydeposit,
+        fcredit: fwd.fcredit,
+        fcreditdate: fwd.fcreditdate,
+        fstatus: fwd.fstatus,
+        fdatestatus5: fwd.fdatestatus5,
+        fdateadminstatus: fwd.fdateadminstatus,
+        adminid: fwd.adminid,
+        adminidupdate: fwd.adminidupdate,
+      })
+        .eq("id", d.fId)
+        .eq("fstatus", "6")
+        .eq("fcredit", "1")
+        .eq("paydeposit", "2")
+        .eq("fcreditdate", dueDate);
+      if (!creditUpErr) {
+        return { ok: false, error: "ยอดเครดิตถูกเปลี่ยนพร้อมกันโดยรายการอื่น — ยกเลิกรายการนี้แล้ว กรุณารีเฟรชและกดใหม่" };
+      }
       console.error(`[adminMarkForwarderCredit tb_credit upsert] failed — rolled back flip`, { code: creditUpErr.code, message: creditUpErr.message, userid: fwd.userid });
       return { ok: false, error: `บันทึกยอดเครดิตไม่สำเร็จ (ยกเลิกรายการแล้ว): ${creditUpErr.message}` };
     }
 
     await logAdminAction(adminId, "tb_forwarder.mark_credit", "tb_forwarder", String(d.fId), {
       userid: fwd.userid, priceCredited: pricePay, outstanding_before: outstanding, outstanding_after: newOutstanding,
-      credit_limit: creditLimit, due_date: d.creditDueDate,
+      credit_limit: creditLimit, credit_terms_days: Number(u?.userCreditDate ?? 0), due_date: dueDate,
     });
 
     revalidatePath(`/admin/forwarders/${d.fId}`);
     revalidatePath("/admin/forwarders");
-    return { ok: true, data: { priceCredited: pricePay, outstanding: newOutstanding } };
+    return { ok: true, data: { priceCredited: pricePay, outstanding: newOutstanding, dueDate } };
   });
 }
 

@@ -179,6 +179,10 @@ assertEq("juristic: non-billable (fstatus 1) → not eligible",
 // CASH (non-juristic) customer → the plain fstatus='5' cohort is DROPPED.
 assertEq("cash: plain fstatus 5 → NOT eligible (dropped · collect on portal)",
   isBillingRunEligible(gate({ fstatus: "5" }), false), false);
+assertEq("personal credit facility: ready fstatus 5 before per-row draw → eligible",
+  isBillingRunEligible(gate({ fstatus: "5", fcredit: "0" }), false, true), true);
+assertEq("personal credit facility: non-billable fstatus 1 stays excluded",
+  isBillingRunEligible(gate({ fstatus: "1", fcredit: "0" }), false, true), false);
 // CASH but on credit → still eligible (credit cohort survives).
 assertEq("cash-but-credit: fstatus 5 fcredit=1 → eligible",
   isBillingRunEligible(gate({ fstatus: "5", fcredit: "1" }), false), true);

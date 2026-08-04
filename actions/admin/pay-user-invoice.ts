@@ -18,6 +18,7 @@
 import { z } from "zod";
 import { createBillingRunInvoice } from "@/actions/admin/billing-run";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { earliestCreditDueDate } from "@/lib/credit/terms";
 
 const inputSchema = z.object({
   userid: z.string().min(1),
@@ -53,15 +54,23 @@ export async function adminIssuePayUserInvoice(
   }
   const { userid, fids } = parsed.data;
 
-  const today = new Date();
-  const plus7 = new Date(today.getTime() + 7 * 86_400_000);
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const dateIssued = new Date().toISOString().slice(0, 10);
+  const admin = createAdminClient();
+  const { data: dueRows, error: dueErr } = await admin
+    .from("tb_forwarder")
+    .select("id, fcreditdate")
+    .in("id", fids);
+  if (dueErr) return { ok: false, error: `อ่านวันครบกำหนดไม่สำเร็จ: ${dueErr.message}` };
+  const dateDue = earliestCreditDueDate(
+    (dueRows ?? []).map((row) => row.fcreditdate as string | null),
+  ) ?? dateIssued;
 
   const res = await createBillingRunInvoice({
     userid,
     forwarderIds: fids,
-    dateIssued: iso(today),
-    dateDue: iso(plus7),
+    dateIssued,
+    dateDue,
+    grantCreditOnIssue: false,
     deliveryChnThb: 0,
     deliveryThThb: 0,
     otherThb: 0,
@@ -81,7 +90,6 @@ export async function adminIssuePayUserInvoice(
   }
 
   // แถวถูกวางบิลแล้ว → หาเลขใบเดิมมาให้จอลิงก์ (self-explaining §0g — ไม่จบที่ error ลอยๆ)
-  const admin = createAdminClient();
   const { data: existing, error: exErr } = await admin
     .from("tb_forwarder_invoice_item")
     .select("forwarder_id, invoice_id")

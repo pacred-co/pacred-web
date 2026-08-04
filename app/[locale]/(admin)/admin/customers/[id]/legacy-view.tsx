@@ -35,7 +35,7 @@ import { RowLimitSelect } from "./row-limit-select";
 import { parseRowLimit } from "./row-limit-options";
 import { SectionStatusTabs, SectionPagination, buildSectionHref, parsePageNo, type SectionTab } from "./profile-section-nav";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
-import { resolvePendingSlipFidsAll } from "@/lib/forwarder/pending-slip";
+import { resolvePendingSlipReviewTargetsAll } from "@/lib/forwarder/pending-slip";
 import { LEGACY_ORDER_TABS } from "@/lib/legacy-status-map";
 import { Link } from "@/i18n/navigation";
 import { getAdminRoles, isGodRole } from "@/lib/auth/require-admin";
@@ -136,6 +136,7 @@ type FRow = {
   fdate: string | null;
   fidorco: string | null;          // ← legacy uses fidorco as the customer-facing F-no
   fstatus: string | null;
+  fcredit: string | null;
   ftransporttype: string | null;
   fcabinetnumber: string | null;
   ftrackingchn: string | null;
@@ -460,12 +461,18 @@ export async function renderLegacyCustomerView(
   // (tb_forwarder_driver_item.fdistatus='' — นิยามเดียวกับ /admin/forwarders L1186-1188)
   const sixIds = fwdScan.filter((r) => String(r.fstatus ?? "") === "6").map((r) => r.id);
   // สลิปรอบัญชีตรวจ → สถานะย่อย 5.1 "รอออก/ใบเสร็จรับเงิน" (owner 2026-07-31 ·
-  // นิยาม/สัญญาณเดียวกับหน้ารายการหลัก · scoped เฉพาะงานสถานะ 5 ของลูกค้ารายนี้)
+  // นิยาม/สัญญาณเดียวกับหน้ารายการหลัก. เงินสดที่เจ้าหน้าที่แนบสลิปแทน
+  // ใช้ provisional fstatus=6 จึงต้องรวมทั้ง fiveIds และ sixIds.
   const fiveIds = fwdScan.filter((r) => String(r.fstatus ?? "") === "5").map((r) => r.id);
   // ⚠️ ที่มาของสัญญาณ = SOT ตัวเดียวกับหน้ารายการหลัก + จอลูกค้า
   // (lib/forwarder/pending-slip.ts) — ห้ามเขียน query เองซ้ำที่นี่ ไม่งั้นวันที่
   // นิยาม "แนบสลิปแล้ว" เปลี่ยน จะได้คนละคำตอบคนละจอ (owner 2026-07-31).
-  const pendingSlipFids = await resolvePendingSlipFidsAll(admin, fiveIds);
+  const pendingSlipTargets = await resolvePendingSlipReviewTargetsAll(admin, [...fiveIds, ...sixIds]);
+  const pendingSlipFids = new Set(pendingSlipTargets.keys());
+  const isPendingCashReview = (r: { id: number; fcredit: string | null }): boolean => {
+    const target = pendingSlipTargets.get(r.id);
+    return Boolean(target) && !(target!.isCreditPayment || String(r.fcredit ?? "").trim() === "1");
+  };
   const driverOpenFids = new Set<number>();
   if (sixIds.length > 0) {
     const { data: dItems, error: dErr } = await admin
@@ -491,10 +498,10 @@ export async function renderLegacyCustomerView(
     if (fwdSt === "") return true;
     if (fwdSt === "c") return String(r.fcredit ?? "") === "1";
     if (fwdSt === "p") return st === "99";
-    if (fwdSt === "6") return st === "6" && !driverOpenFids.has(r.id);
+    if (fwdSt === "6") return st === "6" && !driverOpenFids.has(r.id) && !isPendingCashReview(r);
     if (fwdSt === "6.1") return st === "6" && driverOpenFids.has(r.id);
     if (fwdSt === "5") return st === "5" && !pendingSlipFids.has(r.id);
-    if (fwdSt === "5.1") return st === "5" && pendingSlipFids.has(r.id);
+    if (fwdSt === "5.1") return ["5", "6"].includes(st) && isPendingCashReview(r);
     return st === fwdSt;
   };
   const byDateDesc = (a: string | null, b: string | null) => (b ?? "").localeCompare(a ?? "");
@@ -521,7 +528,7 @@ export async function renderLegacyCustomerView(
           .select(
             "id,fdate,fidorco,fstatus,ftransporttype,fcabinetnumber,ftrackingchn," +
               "ftrackingth,fdetail,reforder,fproductstype,fpallet,fshipby,fweight," +
-              "fvolume,famount,ftotalprice,fcover,faddressname,faddresslastname," +
+              "fvolume,famount,ftotalprice,fcredit,fcover,faddressname,faddresslastname," +
               "faddresszipcode,fdateadminstatus,adminidkey",
           )
           .in("id", fwdPageIds)
@@ -584,10 +591,14 @@ export async function renderLegacyCustomerView(
     if (code === "") return fwdScan.length;
     if (code === "c") return fwdScan.filter((r) => String(r.fcredit ?? "") === "1").length;
     if (code === "p") return stCount("99");
-    if (code === "6") return sixIds.filter((id) => !driverOpenFids.has(id)).length;
+    if (code === "6") return fwdScan.filter((r) =>
+      String(r.fstatus ?? "") === "6" && !driverOpenFids.has(r.id) && !isPendingCashReview(r),
+    ).length;
     if (code === "6.1") return sixIds.filter((id) => driverOpenFids.has(id)).length;
     if (code === "5") return fiveIds.filter((id) => !pendingSlipFids.has(id)).length;
-    if (code === "5.1") return fiveIds.filter((id) => pendingSlipFids.has(id)).length;
+    if (code === "5.1") return fwdScan.filter((r) =>
+      ["5", "6"].includes(String(r.fstatus ?? "")) && isPendingCashReview(r),
+    ).length;
     return stCount(code);
   };
   const fwdTabs: SectionTab[] = FORWARDER_STATUS_TABS
@@ -1162,6 +1173,8 @@ export async function renderLegacyCustomerView(
                         const b = fstatusBadge(r.fstatus ?? "");
                         const code = resolveRowStatusCode(r.fstatus, {
                           pendingSlip: pendingSlipFids.has(r.id),
+                          pendingSlipIsCredit:
+                            Boolean(pendingSlipTargets.get(r.id)?.isCreditPayment) || String(r.fcredit ?? "").trim() === "1",
                         });
                         return (
                           <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] ${code === "5.1" ? fstatusVivid(code) : b.chip}`}>

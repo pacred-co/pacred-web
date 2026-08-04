@@ -26,6 +26,7 @@ import { Link } from "@/i18n/navigation";
 import { adminPayForwardersOnBehalf } from "@/actions/admin/pay-user";
 import { adminMarkForwarderCredit } from "@/actions/admin/forwarders-field-edits";
 import { confirm } from "@/components/ui/confirm";
+import { creditDueDate } from "@/lib/credit/terms";
 
 type Props = {
   fId: number;            // tb_forwarder.id
@@ -34,6 +35,7 @@ type Props = {
   amountEstimate: number; // tb_forwarder.ftotalprice (action recomputes authoritatively)
   walletBalance: number;  // tb_wallet.wallettotal (display only)
   isCredit: boolean;      // fCredit==='1'
+  creditTermsDays: number;
 };
 
 export function TbForwarderPaymentPanel(p: Props) {
@@ -41,7 +43,9 @@ export function TbForwarderPaymentPanel(p: Props) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [creditDate, setCreditDate] = useState<string>("");
+  const [creditDate, setCreditDate] = useState<string>(() =>
+    creditDueDate(new Date().toISOString().slice(0, 10), p.creditTermsDays),
+  );
 
   const shortfall = !p.isCredit && p.walletBalance < p.amountEstimate;
 
@@ -187,7 +191,7 @@ export function TbForwarderPaymentPanel(p: Props) {
           </div>
           <p className="text-[11px] text-muted">
             ตามวงเงิน <code className="rounded bg-surface-alt px-1 font-mono">tb_users.userCreditValue</code> ·
-            บันทึกหนี้ <code className="rounded bg-surface-alt px-1 font-mono">tb_credit</code> · ไม่ตัดเงินกระเป๋า
+            เทอมเริ่มต้น {p.creditTermsDays} วัน · บันทึกหนี้ <code className="rounded bg-surface-alt px-1 font-mono">tb_credit</code> · ไม่ตัดเงินกระเป๋า
           </p>
         </div>
       )}

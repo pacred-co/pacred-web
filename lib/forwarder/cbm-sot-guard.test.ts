@@ -54,7 +54,10 @@ function walk(dir: string, out: string[] = []): string[] {
 const ROOT = process.cwd();
 const FILES = ["app", "lib", "actions", "components"]
   .flatMap((d) => { try { return walk(join(ROOT, d)); } catch { return []; } })
-  .map((p) => p.slice(ROOT.length + 1))
+  // Normalise Windows separators before comparing with OWNERS and before
+  // reporting. Without this, `lib\forwarder\live-rate.ts` failed to match the
+  // intentional `lib/forwarder/live-rate.ts` owner exemption on Windows.
+  .map((p) => p.slice(ROOT.length + 1).replaceAll("\\", "/"))
   .filter((p) => !OWNERS.includes(p) && !p.endsWith(".test.ts") && !p.endsWith(".test.tsx"));
 
 /** ตัดคอมเมนต์ออกก่อนตรวจ — เอกสารพูดถึงสูตรได้ แต่โค้ดห้ามเขียน */

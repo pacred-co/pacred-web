@@ -93,10 +93,27 @@ export async function adminSetCustomerCreditLimit(
     const prevLimit = Number(before.userCreditValue ?? 0);
     const prevDays = Number(before.userCreditDate ?? 0);
 
-    // Write the canonical legacy limit (+ default days when supplied).
-    // userCreditValue>0 IS the enabled signal (no separate boolean) — setting
-    // 0 turns the credit line off. userCreditDate = the default term in days.
-    const patch: Record<string, number> = { userCreditValue: d.credit_limit_thb };
+    const { data: creditRow, error: creditErr } = await admin
+      .from("tb_credit")
+      .select("creditvalue")
+      .eq("userid", memberCode)
+      .maybeSingle<{ creditvalue: number | string | null }>();
+    if (creditErr) return { ok: false, error: `อ่านยอดเครดิตค้างไม่สำเร็จ: ${creditErr.message}` };
+    const outstanding = Math.round(Number(creditRow?.creditvalue ?? 0) * 100) / 100;
+    if (Math.round(d.credit_limit_thb * 100) < Math.round(outstanding * 100)) {
+      return {
+        ok: false,
+        error: `ลดวงเงินต่ำกว่ายอดค้างไม่ได้ — ค้าง ฿${outstanding.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
+      };
+    }
+
+    // Write the canonical legacy enabled flag + limit (+ default days when
+    // supplied). Keep userCredit and userCreditValue in lock-step because
+    // legacy lists filter on the flag while money gates enforce the limit.
+    const patch: Record<string, number | string> = {
+      userCreditValue: d.credit_limit_thb,
+      userCredit: d.credit_limit_thb > 0 ? "1" : "0",
+    };
     if (d.credit_terms_days != null) patch.userCreditDate = d.credit_terms_days;
     const { error: updErr } = await admin
       .from("tb_users")
@@ -111,7 +128,7 @@ export async function adminSetCustomerCreditLimit(
       profile_id:        d.profile_id,
       member_code:       memberCode,
       before:            { userCreditValue: prevLimit, userCreditDate: prevDays },
-      after:             { userCreditValue: d.credit_limit_thb, userCreditDate: d.credit_terms_days ?? prevDays },
+      after:             { userCreditValue: d.credit_limit_thb, userCreditDate: d.credit_terms_days ?? prevDays, outstanding },
     });
 
     revalidatePath("/admin/customers");

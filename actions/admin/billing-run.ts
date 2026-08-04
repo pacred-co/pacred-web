@@ -64,6 +64,8 @@ import {
 import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
 import { appendStatusLog as appendForwarderStatusLog } from "@/lib/notifications/status-flip-helper";
+import { adminMarkForwarderCredit } from "./forwarders-field-edits";
+import { creditDueDate, earliestCreditDueDate } from "@/lib/credit/terms";
 import { sendNotification } from "@/lib/notifications";
 import { notifyStaffGroup } from "@/lib/notifications/staff-group";
 import { logger } from "@/lib/logger";
@@ -91,6 +93,11 @@ export type EligibleCustomerRow = {
   tax_id: string;
   eligible_count: number;
   eligible_total_thb: number;
+  is_credit_customer: boolean;
+  credit_limit_thb: number;
+  credit_terms_days: number;
+  credit_outstanding_thb: number;
+  credit_available_thb: number;
 };
 
 export type EligibleForwarderRow = {
@@ -118,6 +125,9 @@ export type EligibleForwarderRow = {
   mao_fee_thb: number;
   fstatus: string | null;
   fcredit: string | null;
+  credit_due_date: string | null;
+  /** true when account credit is enabled but this ready row has not drawn it yet. */
+  needs_credit_grant: boolean;
   already_billed: boolean;
   /** ค่าส่งไทย "ห้ามลืม" gate (pop-spec #3) — a domestic delivery leg applies to
    *  this row (fshipby ≠ self-pickup) but the in-Thailand cost (ftransportprice)
@@ -154,6 +164,7 @@ export type BillingRunInvoiceRow = {
   status: "issued" | "paid" | "cancelled";
   paid_at: string | null;
   item_count: number;
+  is_credit: boolean;
   /** Computed: status='issued' AND date_due < today. */
   is_overdue: boolean;
   /** WHT 1% (หัก ณ ที่จ่าย) + ยอดชำระสุทธิ — juristic (owner 2026-07-22: no ฿1,000 minimum). */
@@ -180,7 +191,7 @@ export type BillingRunInvoiceRow = {
 // the BUG B credit-eligibility predicate (lib/forwarder/billing-eligibility.ts).
 const FWD_BILLING_SELECT =
   "id, fshipby, paymethod, ftrackingchn, fdate, famount, fweight, fvolume, fstatus, " +
-  "fcredit, paydeposit, fusercompany, advance_bill_confirmed, fcabinetnumber, " +
+  "fcredit, fcreditdate, paydeposit, fusercompany, advance_bill_confirmed, fcabinetnumber, " +
   "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, " +
   "ftransportpricechnthb, priceother, fdiscount, " +
   // ด่านที่อยู่จัดส่งก่อน 4→5 (owner 2026-07-23 · delivery-address-gate) — read-only
@@ -198,6 +209,7 @@ type FwdBillingRaw = ForwarderPriceFields &
     fweight: number | string | null;
     fvolume: number | string | null;
     fcabinetnumber: string | null; // G1 combo-flow — the container, for the packing-reconcile gate
+    fcreditdate: string | null;
     // ด่านที่อยู่จัดส่งก่อน 4→5 (owner 2026-07-23) — read-only, never written here
     fidorco: string | null;
     faddressprovince: string | null;
@@ -239,7 +251,8 @@ function isoToday(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function isOverdue(dateDue: string, status: string): boolean {
+function isOverdue(dateDue: string, status: string, isCredit: boolean): boolean {
+  if (!isCredit) return false;
   if (status !== "issued") return false;
   return dateDue < isoToday();
 }
@@ -353,10 +366,13 @@ export async function listEligibleCustomers(): Promise<
         userName: string | null;
         userLastName: string | null;
         userCompany: string | null;
+        userCredit: string | null;
+        userCreditValue: number | string | null;
+        userCreditDate: number | string | null;
       };
       const { data: userRows, error: userErr } = await admin
         .from("tb_users")
-        .select("userID, userName, userLastName, userCompany")
+        .select("userID, userName, userLastName, userCompany, userCredit, userCreditValue, userCreditDate")
         .in("userID", userids);
       if (userErr) {
         console.error("[listEligibleCustomers tb_users] failed", {
@@ -367,6 +383,21 @@ export async function listEligibleCustomers(): Promise<
       const userByID = new Map<string, UserRow>();
       for (const u of ((userRows ?? []) as UserRow[])) {
         userByID.set(u.userID, u);
+      }
+
+      const { data: creditRows, error: creditErr } = await admin
+        .from("tb_credit")
+        .select("userid, creditvalue")
+        .in("userid", userids);
+      if (creditErr) {
+        console.error("[listEligibleCustomers tb_credit] failed", {
+          code: creditErr.code, message: creditErr.message,
+        });
+        return { ok: false, error: creditErr.message };
+      }
+      const outstandingByUser = new Map<string, number>();
+      for (const row of (creditRows ?? []) as Array<{ userid: string; creditvalue: number | string | null }>) {
+        outstandingByUser.set(row.userid, Number(row.creditvalue ?? 0) || 0);
       }
 
       // (c) tb_corporate join — provides corporatename + corporatenumber (tax-ID)
@@ -404,13 +435,16 @@ export async function listEligibleCustomers(): Promise<
           // tb_corporate.corporatenumber for safety (some legacy rows lost
           // userCompany during migration).
           const isJuristic = u?.userCompany === "1" || !!corp?.number;
+          const creditLimit = Number(u?.userCreditValue ?? 0) || 0;
+          const isCreditCustomer = (u?.userCredit ?? "").trim() === "1" && creditLimit > 0;
+          const creditOutstanding = outstandingByUser.get(uid) ?? 0;
           // BILLING-RUN narrowing (owner 2026-07-07) — a ใบวางบิล is issued ONLY
           // for CREDIT or นิติบุคคล. For a cash (personal, non-credit) customer
           // this drops their fstatus='5' rows → they collect by paying on the
           // portal (ตรวจสลิปที่ /admin/wallet), not via a billing-run. count/total
           // stay EXACT vs the narrowed picker (§0f) since both use this predicate.
           const eligibleRows = (rowsByUser.get(uid) ?? []).filter((r) =>
-            isBillingRunEligible(r, isJuristic),
+            isBillingRunEligible(r, isJuristic, isCreditCustomer),
           );
           if (eligibleRows.length === 0) return null; // no billing-run rows → drop customer
           const display = isJuristic
@@ -427,6 +461,11 @@ export async function listEligibleCustomers(): Promise<
             tax_id:             corp?.number ?? "",
             eligible_count:     eligibleRows.length,
             eligible_total_thb: Math.round(total * 100) / 100,
+            is_credit_customer: isCreditCustomer,
+            credit_limit_thb: Math.round(creditLimit * 100) / 100,
+            credit_terms_days: Math.max(0, Math.trunc(Number(u?.userCreditDate ?? 0) || 0)),
+            credit_outstanding_thb: Math.round(creditOutstanding * 100) / 100,
+            credit_available_thb: Math.round((creditLimit - creditOutstanding) * 100) / 100,
           };
         })
         .filter((r): r is EligibleCustomerRow => r !== null)
@@ -524,9 +563,14 @@ export async function listEligibleForwarders(
       // tb_corporate.corporatenumber. Needed for the credit/นิติ narrowing below.
       const { data: uRow, error: uErr } = await admin
         .from("tb_users")
-        .select("userCompany")
+        .select("userCompany, userCredit, userCreditValue, userCreditDate")
         .eq("userID", userid)
-        .maybeSingle<{ userCompany: string | null }>();
+        .maybeSingle<{
+          userCompany: string | null;
+          userCredit: string | null;
+          userCreditValue: number | string | null;
+          userCreditDate: number | string | null;
+        }>();
       if (uErr) {
         console.error("[listEligibleForwarders tb_users] failed", {
           code: uErr.code, message: uErr.message,
@@ -544,6 +588,8 @@ export async function listEligibleForwarders(
       }
       const customerIsJuristic =
         uRow?.userCompany === "1" || (cRow?.corporatenumber ?? "").trim() !== "";
+      const customerHasCreditFacility =
+        (uRow?.userCredit ?? "").trim() === "1" && Number(uRow?.userCreditValue ?? 0) > 0;
 
       // Union by id (a row can be in both sets) — keep the deterministic
       // newest-first order from Set A.
@@ -581,8 +627,8 @@ export async function listEligibleForwarders(
       const fwd = Array.from(fwdById.values())
         .filter(
           (r) =>
-            isBillingRunEligible(r, customerIsJuristic) ||
-            (isCheckedArrivedForwarder(r) && customerIsJuristic && checkQueuedIds.has(r.id)),
+            isBillingRunEligible(r, customerIsJuristic, customerHasCreditFacility) ||
+            (isCheckedArrivedForwarder(r) && (customerIsJuristic || customerHasCreditFacility) && checkQueuedIds.has(r.id)),
         )
         .sort((a, b) => b.id - a.id);
       if (fwd.length === 0) {
@@ -692,6 +738,8 @@ export async function listEligibleForwarders(
         mao_fee_thb:     maoFeeById.get(f.id) ?? 0,
         fstatus:         f.fstatus,
         fcredit:         f.fcredit,
+        credit_due_date: f.fcreditdate ? String(f.fcreditdate).slice(0, 10) : null,
+        needs_credit_grant: customerHasCreditFacility && (f.fcredit ?? "").trim() !== "1",
         already_billed:  alreadyBilledIds.has(f.id),
         // ค่าส่งไทย "ห้ามลืม" gate (pop-spec #3) — a domestic leg applies but the
         // TH cost is still ฿0. Self-pickup rows (fshipby='PCS') are exempt.
@@ -855,11 +903,12 @@ export async function getInvoiceList(
       // Item-count rollup — second query against tb_forwarder_invoice_item.
       const invoiceIds = raw.map((r) => r.id);
       const countsByInvoice = new Map<number, number>();
+      const forwarderIdsByInvoice = new Map<number, number[]>();
       if (invoiceIds.length > 0) {
-        type ItemRow = { invoice_id: number };
+        type ItemRow = { invoice_id: number; forwarder_id: number };
         const { data: itemRows, error: itemErr } = await admin
           .from("tb_forwarder_invoice_item")
-          .select("invoice_id")
+          .select("invoice_id, forwarder_id")
           .in("invoice_id", invoiceIds);
         if (itemErr) {
           console.error("[getInvoiceList tb_forwarder_invoice_item] failed", {
@@ -868,11 +917,35 @@ export async function getInvoiceList(
         }
         for (const r of ((itemRows ?? []) as ItemRow[])) {
           countsByInvoice.set(r.invoice_id, (countsByInvoice.get(r.invoice_id) ?? 0) + 1);
+          const ids = forwarderIdsByInvoice.get(r.invoice_id) ?? [];
+          ids.push(r.forwarder_id);
+          forwarderIdsByInvoice.set(r.invoice_id, ids);
         }
       }
 
-      const rows: BillingRunInvoiceRow[] = raw.map((r) => {
+      const allForwarderIds = Array.from(new Set(Array.from(forwarderIdsByInvoice.values()).flat()));
+      const creditForwarderIds = new Set<number>();
+      if (allForwarderIds.length > 0) {
+        const { data: creditRows, error: creditErr } = await admin
+          .from("tb_forwarder")
+          .select("id, fcredit")
+          .in("id", allForwarderIds);
+        if (creditErr) {
+          console.error("[getInvoiceList credit hydration] failed", {
+            code: creditErr.code, message: creditErr.message,
+          });
+        } else {
+          for (const row of (creditRows ?? []) as Array<{ id: number; fcredit: string | null }>) {
+            if (String(row.fcredit ?? "").trim() !== "" && String(row.fcredit ?? "").trim() !== "0") {
+              creditForwarderIds.add(row.id);
+            }
+          }
+        }
+      }
+
+      const mapped: BillingRunInvoiceRow[] = raw.map((r) => {
         const total = Number(r.total_thb);
+        const isCredit = (forwarderIdsByInvoice.get(r.id) ?? []).some((id) => creditForwarderIds.has(id));
         // Forward-only: a bill paid BEFORE the 2026-07-22 rule change keeps its old
         // ≥ ฿1,000 gate (paidAt) so its displayed net = what was collected.
         const wht = computeBillWht(r.is_juristic, total, { paidAt: r.paid_at });
@@ -888,13 +961,15 @@ export async function getInvoiceList(
           status:       r.status,
           paid_at:      r.paid_at,
           item_count:   countsByInvoice.get(r.id) ?? 0,
-          is_overdue:   isOverdue(r.date_due, r.status),
+          is_credit:    isCredit,
+          is_overdue:   isOverdue(r.date_due, r.status, isCredit),
           wht_amount:   wht.wht_amount,
           net_payable:  wht.net_payable,
         };
       });
+      const rows = filters.status === "overdue" ? mapped.filter((row) => row.is_overdue) : mapped;
 
-      return { ok: true, data: { rows, totalCount: count ?? rows.length } };
+      return { ok: true, data: { rows, totalCount: filters.status === "overdue" ? rows.length : (count ?? rows.length) } };
     },
   );
 }
@@ -1576,10 +1651,13 @@ async function createBillingRunInvoiceImpl(
         userAddressID: string | null;
         userTel: string | null;
         userCompany: string | null;
+        userCredit: string | null;
+        userCreditValue: number | string | null;
+        userCreditDate: number | string | null;
       };
       const { data: userRow, error: userErr } = await admin
         .from("tb_users")
-        .select("userID, userName, userLastName, userAddressID, userTel, userCompany")
+        .select("userID, userName, userLastName, userAddressID, userTel, userCompany, userCredit, userCreditValue, userCreditDate")
         .eq("userID", v.userid)
         .maybeSingle<UserBuyer>();
       if (userErr) {
@@ -1657,6 +1735,41 @@ async function createBillingRunInvoiceImpl(
             addr.addressno, addr.addresssubdistrict, addr.addressdistrict,
             addr.addressprovince, addr.addresszipcode,
           ].filter(Boolean).join(" ").trim();
+        }
+      }
+
+      // Account credit → per-shipment credit draw. A newly-approved customer
+      // (PR168 is the real-shape case) has userCredit=1 but ready rows still at
+      // fstatus=5/fcredit=0. The reviewed add form may explicitly consent to
+      // attach all selected rows to that facility before the invoice is minted.
+      // Each grant reuses the canonical action: address/no-rebill/headroom,
+      // integer-satang amount, CAS ledger update and audit log all stay in one
+      // path. If a later invoice write fails, the credit draws remain a valid,
+      // visible intermediate state and staff can retry issuance; no debt is lost.
+      const hasCreditFacility =
+        (userRow.userCredit ?? "").trim() === "1" && Number(userRow.userCreditValue ?? 0) > 0;
+      const creditNeeded = fwd.filter((row) => (row.fcredit ?? "").trim() !== "1");
+      if (v.grantCreditOnIssue && !hasCreditFacility) {
+        return { ok: false, error: "ลูกค้ารายนี้ไม่ได้เปิดวงเงินเครดิต — ไม่สามารถติดเครดิตพร้อมออกใบวางบิลได้" };
+      }
+      if (v.grantCreditOnIssue && creditNeeded.length > 0) {
+        const granted: number[] = [];
+        for (const row of creditNeeded) {
+          const grant = await adminMarkForwarderCredit({
+            fId: row.id,
+            creditDueDate: v.dateDue,
+          });
+          if (!grant.ok) {
+            const staged = granted.length > 0
+              ? ` ติดเครดิตสำเร็จแล้ว ${granted.length} รายการ (${granted.map((id) => `#${id}`).join(", ")}); รายการเหล่านี้ยังถูกต้องและกดออกใบใหม่ซ้ำได้`
+              : "";
+            return { ok: false, error: `ติดเครดิต #${row.id} ไม่สำเร็จ: ${grant.error}.${staged}` };
+          }
+          granted.push(row.id);
+          row.fcredit = "1";
+          row.fcreditdate = grant.data?.dueDate ?? v.dateDue;
+          row.paydeposit = "2";
+          row.fstatus = "6";
         }
       }
 
@@ -2020,7 +2133,7 @@ async function markBillingRunPaidImpl(
       }
 
       const offlineReason = (v.offlineReason ?? "").trim();
-      const { error: updErr } = await admin
+      const { data: paidFlip, error: updErr } = await admin
         .from("tb_forwarder_invoice")
         .update({
           status:            "paid",
@@ -2043,12 +2156,20 @@ async function markBillingRunPaidImpl(
             : {}),
         })
         .eq("id", v.invoiceId)
-        .eq("status", "issued"); // race guard: re-check we're flipping from issued
+        .eq("status", "issued") // race guard: re-check we're flipping from issued
+        .select("id")
+        .maybeSingle<{ id: number }>();
       if (updErr) {
         console.error("[markBillingRunPaid update] failed", {
           code: updErr.code, message: updErr.message,
         });
         return { ok: false, error: updErr.message };
+      }
+      if (!paidFlip) {
+        return {
+          ok: false,
+          error: `ใบวางบิล ${cur.doc_no} ถูกตัดจ่ายโดยผู้ใช้อื่นแล้ว — รีเฟรชหน้าก่อนทำต่อ`,
+        };
       }
 
       // total_thb is the GROSS invoice face (WHT-fix 2026-06-25). The actual cash
@@ -2080,6 +2201,7 @@ async function markBillingRunPaidImpl(
       // FRI2607-00015 symptom). Track the result so the UI can warn + prompt a manual issue.
       let receiptRid: string | null = null;
       let receiptWarning: string | null = null;
+      let creditSettlementWarning: string | null = null;
       // Path A (below) may flip an EXISTING pending receipt '3'→'1' for a fully-covered rid.
       // Track it so the already_issued branch can tell "a valid receipt now exists" (findable)
       // apart from "an old receipt covers these fids but was NOT synced" (stuck '3'/'0' · invisible).
@@ -2153,6 +2275,8 @@ async function markBillingRunPaidImpl(
               .eq("fcredit", "1");
             if (creditRowsErr) {
               console.error("[markBillingRunPaid credit-settle read]", { code: creditRowsErr.code, message: creditRowsErr.message, invoiceId: v.invoiceId });
+              creditSettlementWarning =
+                `รับชำระแล้ว แต่อ่านลูกหนี้เครดิตของบิล ${cur.doc_no} ไม่สำเร็จ — ระบบยังไม่คืนวงเงิน ให้บัญชีกระทบยอดก่อน`;
             } else if ((creditRows ?? []).length > 0) {
               let settledSum = 0;
               const settledIds: number[] = [];
@@ -2171,6 +2295,8 @@ async function markBillingRunPaidImpl(
                   .select("id");
                 if (flipErr) {
                   console.error("[markBillingRunPaid credit-settle flip]", { code: flipErr.code, message: flipErr.message, fid: row.id });
+                  creditSettlementWarning =
+                    `รับชำระแล้ว แต่ปิดลูกหนี้เครดิตบางรายการของบิล ${cur.doc_no} ไม่สำเร็จ — ให้บัญชีกระทบยอดก่อน`;
                   continue;
                 }
                 if ((flipped ?? []).length === 0) continue; // already settled → don't double-decrement
@@ -2193,25 +2319,74 @@ async function markBillingRunPaidImpl(
                   .select("creditvalue")
                   .eq("userid", cur.userid)
                   .maybeSingle<{ creditvalue: number | string | null }>();
-                if (creditReadErr) {
-                  console.error("[markBillingRunPaid credit-decrement read]", { code: creditReadErr.code, message: creditReadErr.message, userid: cur.userid });
-                } else if (creditRow) {
-                  const current = Number(creditRow.creditvalue ?? 0) || 0;
-                  const next = Math.max(0, Math.round((current - settledSum) * 100) / 100);
-                  creditRemoved = Math.round((current - next) * 100) / 100;
-                  const { error: creditUpdErr } = await admin
+                const currentSatang = Math.round((Number(creditRow?.creditvalue ?? 0) || 0) * 100);
+                const settledSatang = Math.round(settledSum * 100);
+                let creditWriteOk = false;
+                if (!creditReadErr && creditRow && currentSatang >= settledSatang) {
+                  const next = (currentSatang - settledSatang) / 100;
+                  const creditWrite = await admin
                     .from("tb_credit")
                     .update({ creditvalue: next })
-                    .eq("userid", cur.userid);
-                  if (creditUpdErr) console.error("[markBillingRunPaid credit-decrement]", { code: creditUpdErr.code, message: creditUpdErr.message, userid: cur.userid });
+                    .eq("userid", cur.userid)
+                    .eq("creditvalue", creditRow.creditvalue ?? 0)
+                    .select("userid")
+                    .maybeSingle<{ userid: string }>();
+                  creditWriteOk = !creditWrite.error && !!creditWrite.data;
+                  if (creditWrite.error) {
+                    console.error("[markBillingRunPaid credit-decrement]", {
+                      code: creditWrite.error.code,
+                      message: creditWrite.error.message,
+                      userid: cur.userid,
+                    });
+                  }
+                  if (creditWriteOk) creditRemoved = settledSatang / 100;
+                } else if (creditReadErr) {
+                  console.error("[markBillingRunPaid credit-decrement read]", {
+                    code: creditReadErr.code,
+                    message: creditReadErr.message,
+                    userid: cur.userid,
+                  });
+                }
+
+                if (!creditWriteOk) {
+                  // Do not leave the paid invoice with fcredit cleared but the
+                  // facility balance untouched. Restore only rows still in our
+                  // post-settle shape; accounting can then reconcile safely.
+                  for (const fid of settledIds) {
+                    await admin
+                      .from("tb_forwarder")
+                      .update({ fcredit: "1", fdateadminstatus: paidAtIso })
+                      .eq("id", fid)
+                      .eq("fcredit", "");
+                  }
+                  creditSettlementWarning =
+                    currentSatang < settledSatang
+                      ? `รับชำระแล้ว แต่ยอด tb_credit ต่ำกว่ายอดในบิล ${cur.doc_no} — ระบบคงลูกหนี้ไว้เพื่อให้บัญชีกระทบยอด ห้ามตัดซ้ำ`
+                      : `รับชำระแล้ว แต่คืนวงเงินเครดิตของบิล ${cur.doc_no} ไม่สำเร็จเพราะข้อมูลเปลี่ยนพร้อมกัน — ระบบคงลูกหนี้ไว้ ให้รีเฟรชและกระทบยอด`;
                 }
                 await logAdminAction(adminId, "billing_run.credit_settled", "forwarder_invoice", String(v.invoiceId), {
-                  doc_no: cur.doc_no, userid: cur.userid, settled_fids: settledIds, settled_amount: creditRemoved,
+                  doc_no: cur.doc_no,
+                  userid: cur.userid,
+                  settled_fids: settledIds,
+                  settled_amount: creditRemoved,
+                  warning: creditSettlementWarning,
                 });
+              } else if (settledSum > 0) {
+                for (const fid of settledIds) {
+                  await admin
+                    .from("tb_forwarder")
+                    .update({ fcredit: "1", fdateadminstatus: paidAtIso })
+                    .eq("id", fid)
+                    .eq("fcredit", "");
+                }
+                creditSettlementWarning =
+                  `รับชำระแล้ว แต่ใบวางบิล ${cur.doc_no} ไม่มีรหัสลูกค้า — ระบบคงลูกหนี้เครดิตไว้ ให้บัญชีกระทบยอดก่อน`;
               }
             }
           } catch (e) {
             console.error("[markBillingRunPaid credit-settle] unexpected", { message: String(e), invoiceId: v.invoiceId });
+            creditSettlementWarning =
+              `รับชำระแล้ว แต่คืนวงเงินเครดิตของบิล ${cur.doc_no} เกิดข้อผิดพลาด — ระบบคงหลักฐานไว้ ให้บัญชีกระทบยอดก่อน`;
           }
 
           const { data: touch, error: touchErr } = await admin
@@ -2340,7 +2515,9 @@ async function markBillingRunPaidImpl(
         data: {
           invoiceId: v.invoiceId,
           ...(receiptRid ? { receiptRid } : {}),
-          ...(receiptWarning ? { receiptWarning } : {}),
+          ...((creditSettlementWarning || receiptWarning)
+            ? { receiptWarning: [creditSettlementWarning, receiptWarning].filter(Boolean).join(" · ") }
+            : {}),
         },
       };
     },
@@ -3152,7 +3329,7 @@ export async function sendBillingRunNotification(
 // ─────────────────────────────────────────────────────────────────────────────
 export async function createForwarderOrderBill(
   fId: number,
-  opts?: { noteForCustomer?: string },
+  opts?: { noteForCustomer?: string; grantCreditOnIssue?: boolean },
 ): Promise<
   | { ok: true; data?: { invoiceId: number; docNo: string } }
   | { ok: false; error: string; billedInvoices?: Array<{ forwarderId: number; docNo: string; invoiceId: number }> }
@@ -3203,15 +3380,37 @@ export async function createForwarderOrderBill(
     }
   }
 
-  const today = new Date();
-  const due = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  const dateIssued = isoToday();
+  const [{ data: userTerms, error: userTermsErr }, { data: dueRows, error: dueRowsErr }] = await Promise.all([
+    admin
+      .from("tb_users")
+      .select("userCredit, userCreditValue, userCreditDate")
+      .eq("userID", userid)
+      .maybeSingle<{
+        userCredit: string | null;
+        userCreditValue: number | string | null;
+        userCreditDate: number | string | null;
+      }>(),
+    admin
+      .from("tb_forwarder")
+      .select("id, fcreditdate")
+      .in("id", ids),
+  ]);
+  if (userTermsErr || dueRowsErr) {
+    return { ok: false, error: `อ่านเทอมเครดิตไม่สำเร็จ: ${userTermsErr?.message ?? dueRowsErr?.message}` };
+  }
+  const dateDue =
+    earliestCreditDueDate((dueRows ?? []).map((r) => r.fcreditdate as string | null)) ??
+    creditDueDate(dateIssued, userTerms?.userCreditDate ?? 0);
+  const hasCreditFacility =
+    (userTerms?.userCredit ?? "").trim() === "1" && Number(userTerms?.userCreditValue ?? 0) > 0;
 
   const res = await createBillingRunInvoice({
     userid,
     forwarderIds: ids,
-    dateIssued: iso(today),
-    dateDue: iso(due),
+    dateIssued,
+    dateDue,
+    grantCreditOnIssue: opts?.grantCreditOnIssue === true && hasCreditFacility,
     deliveryChnThb: 0,
     deliveryThThb: 0,
     otherThb: 0,
@@ -3518,6 +3717,8 @@ export type ConsolidationCandidateRow = {
   display_name: string;
   is_juristic: boolean;
   tax_id: string;
+  is_credit_customer: boolean;
+  credit_terms_days: number;
   /** # of billable (unbilled) ready forwarder rows for this customer. */
   ready_count: number;
   /** Σ (calcForwarderGross + เหมาๆ) of the billable rows — the bill's face total
@@ -3662,6 +3863,8 @@ export async function listConsolidationCandidates(): Promise<
           display_name:          c.display_name,
           is_juristic:           c.is_juristic,
           tax_id:                c.tax_id,
+          is_credit_customer:    c.is_credit_customer,
+          credit_terms_days:     c.credit_terms_days,
           ready_count:           billable.length,
           ready_total_thb:       Math.round(faceTotal * 100) / 100,
           complete_containers:   completeContainers,
@@ -3732,11 +3935,17 @@ export async function createBatchBillingRunInvoices(
       }
 
       const dateIssued = isoToday();
-      const dateDue = (() => {
-        const d = new Date();
-        d.setDate(d.getDate() + 7);
-        return d.toISOString().slice(0, 10);
-      })();
+      const { data: termRows, error: termErr } = await createAdminClient()
+        .from("tb_users")
+        .select("userID, userCreditDate")
+        .in("userID", userids);
+      if (termErr) {
+        return { ok: false, error: `อ่านจำนวนวันเครดิตไม่สำเร็จ: ${termErr.message}` };
+      }
+      const termsByUser = new Map<string, number>();
+      for (const row of (termRows ?? []) as Array<{ userID: string; userCreditDate: number | string | null }>) {
+        termsByUser.set(row.userID, Math.max(0, Math.trunc(Number(row.userCreditDate ?? 0) || 0)));
+      }
 
       const results: BatchBillingResult[] = [];
       // Sequential — createBillingRunInvoice mints a doc-no (serial); running the
@@ -3754,6 +3963,9 @@ export async function createBatchBillingRunInvoices(
           continue;
         }
         const forwarderIds = billable.map((r) => r.id);
+        const dateDue =
+          earliestCreditDueDate(billable.map((r) => r.credit_due_date)) ??
+          creditDueDate(dateIssued, termsByUser.get(userid) ?? 0);
         // Auto เหมาๆ Σ (once per shipment) — the SAME per-row anchor fee the form
         // previews; createBillingRunInvoice recomputes the same when maoFeeThb is
         // absent, but we pass it explicitly so the batch confirm total reconciles.
@@ -3770,6 +3982,7 @@ export async function createBatchBillingRunInvoices(
           forwarderIds,
           dateIssued,
           dateDue,
+          grantCreditOnIssue: billable.some((r) => r.needs_credit_grant),
           deliveryChnThb: 0,
           deliveryThThb: 0,
           otherThb: 0,

@@ -185,8 +185,18 @@ export const FORWARDER_STATUS_TABS: readonly ForwarderStatusTab[] = [
 export const AWAITING_RECEIPT_CODE = "5.1" as const;
 
 /** งานนี้อยู่ขั้น "รอออก/ใบเสร็จรับเงิน" ไหม (PURE — ผู้เรียกเป็นคนหาสัญญาณสลิปมาให้) */
-export function isAwaitingReceipt(fstatus: string | null | undefined, hasPendingSlip: boolean): boolean {
-  return String(fstatus ?? "").trim() === "5" && hasPendingSlip;
+export function isAwaitingReceipt(
+  fstatus: string | null | undefined,
+  hasPendingSlip: boolean,
+  isCreditPayment = false,
+): boolean {
+  const st = String(fstatus ?? "").trim();
+  // Customer-submitted cash slips stay at 5. Staff-submitted cash slips use
+  // the legacy provisional 6+paydeposit=1 shape. Both are the same operational
+  // gate: accounting must approve and issue the receipt before dispatch.
+  // Credit is deliberately different: its physical lane remains 6 (ready to
+  // dispatch) while the independent AR/document lane waits for review.
+  return hasPendingSlip && !isCreditPayment && (st === "5" || st === "6");
 }
 
 /**
@@ -196,11 +206,11 @@ export function isAwaitingReceipt(fstatus: string | null | undefined, hasPending
  */
 export function resolveRowStatusCode(
   fstatus: string | null | undefined,
-  opts?: { driverOpen?: boolean; pendingSlip?: boolean },
+  opts?: { driverOpen?: boolean; pendingSlip?: boolean; pendingSlipIsCredit?: boolean },
 ): string {
   const st = String(fstatus ?? "").trim();
   if (st === "6" && opts?.driverOpen) return "6.1";
-  if (st === "5" && opts?.pendingSlip) return "5.1";
+  if (isAwaitingReceipt(st, Boolean(opts?.pendingSlip), Boolean(opts?.pendingSlipIsCredit))) return "5.1";
   return st;
 }
 

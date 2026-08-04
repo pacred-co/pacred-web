@@ -41,6 +41,7 @@ import { Package, CreditCard, ClipboardCheck, ChevronDown, ExternalLink } from "
 import { Link } from "@/i18n/navigation";
 import { adminBulkUpdateForwarderTbStatus } from "@/actions/admin/forwarders";
 import { adminMarkForwarderCredit } from "@/actions/admin/forwarders-field-edits";
+import { creditDueDate } from "@/lib/credit/terms";
 // 2026-07-17 (owner "ทำให้สามารถถอยสถานะได้ตั้งแต่ตรงนี้เลย · เฉพาะ ultra · พอถอย
 // สถานะเอกสาร สถานะงานก็ต้องถอยตามกลับมาหมด") — a BACKWARD pick routes to the
 // ultra-only rollback, which unwinds คนขับ/การชำระ/ใบวางบิล/ใบเสร็จ/เครดิต first.
@@ -101,6 +102,7 @@ type Props = {
   currentNote: string;
   currentCabinetLocked: boolean;
   isCredit: boolean;
+  creditTermsDays: number;
   amountEstimate: number;
   pricing: ForwarderPricingInit;
   // รายการสินค้า (product list) — render ระหว่างฟอร์มสถานะ กับ ฟอร์มเงื่อนไข (pricing@4/…)
@@ -456,6 +458,7 @@ export function ForwarderStatusWorkflow(p: Props) {
           fId={p.fId}
           fNo={p.fNo}
           amountEstimate={p.amountEstimate}
+          creditTermsDays={p.creditTermsDays}
           onDone={() => router.refresh()}
         />
       )}
@@ -537,9 +540,11 @@ function TrackingShippedForm({
  * accounting·super · credit-limit gated server-side).
  */
 function CreditForm({
-  fId, fNo, amountEstimate, onDone,
-}: { fId: number; fNo: string; amountEstimate: number; onDone: () => void }) {
-  const [dueDate, setDueDate] = useState<string>("");
+  fId, fNo, amountEstimate, creditTermsDays, onDone,
+}: { fId: number; fNo: string; amountEstimate: number; creditTermsDays: number; onDone: () => void }) {
+  const [dueDate, setDueDate] = useState<string>(() =>
+    creditDueDate(new Date().toISOString().slice(0, 10), creditTermsDays),
+  );
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -571,7 +576,7 @@ function CreditForm({
       {success && <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700">✓ {success}</div>}
       <p className="text-xs text-muted">
         ยอดประมาณ <b className="text-foreground font-mono">฿{amountEstimate.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</b>{" "}
-        · ระบบจะตรวจวงเงินเครดิตของลูกค้าอีกครั้งตอนบันทึก
+        · ค่าเริ่มต้นตามเทอมเครดิตลูกค้า {creditTermsDays} วัน · ระบบจะตรวจวงเงินอีกครั้งตอนบันทึก
       </p>
       <div>
         <label htmlFor="fsw_credit_date" className="block text-xs font-medium text-muted mb-1">วันครบกำหนดชำระ</label>

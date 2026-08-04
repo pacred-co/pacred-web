@@ -132,6 +132,7 @@ type UserRawRow = {
   userLastName: string | null;
   userCompany: string | null;
   userCredit: string | null;
+  userCreditValue: number | string | null;
   /** legacy CPS badge — comparison-pricing enabled (tb_users.userComparison='1'). */
   userComparison: string | null;
 };
@@ -271,7 +272,7 @@ export default async function AdminForwarderCheckPage({
   const uniqueUserIds = Array.from(new Set(forwarders.map((r) => r.userid).filter(Boolean)));
   const userRes = await admin
     .from("tb_users")
-    .select("userID, userName, userLastName, userCompany, userCredit, userComparison")
+    .select("userID, userName, userLastName, userCompany, userCredit, userCreditValue, userComparison")
     .in("userID", uniqueUserIds);
   const usersById = new Map<string, UserRawRow>(
     ((userRes.data ?? []) as unknown as UserRawRow[]).map((u) => [u.userID, u]),
@@ -309,7 +310,7 @@ export default async function AdminForwarderCheckPage({
   let normalCount = 0;
   for (const f of forwarders) {
     const u = usersById.get(f.userid);
-    if (u?.userCredit === "1") creditCount++;
+    if (u?.userCredit === "1" && Number(u.userCreditValue ?? 0) > 0) creditCount++;
     else normalCount++;
   }
   // 2026-07-17 (§0f "badge ต้องเป๊ะ") — "ทั้งหมด" = จำนวนแถวที่ **แจ้งชำระได้จริง**
@@ -434,6 +435,7 @@ export default async function AdminForwarderCheckPage({
       customer_name: customerName,
       customer_company: customerCompany,
       user_credit: user?.userCredit ?? "0",
+      user_credit_limit: Number(user?.userCreditValue ?? 0),
       amount: Number(r.famount ?? 0),
       amount_fi: fiAmount,
       amount_count: r.famountcount,

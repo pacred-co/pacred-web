@@ -151,9 +151,15 @@ export function isBillableForwarder(
 export function isBillingRunEligible(
   row: ForwarderBillingEligibilityFields,
   customerIsJuristic: boolean,
+  customerHasCreditFacility = false,
 ): boolean {
   if (!isBillableForwarder(row)) return false;
   if (customerIsJuristic) return true; // นิติ → all billable stages
+  // Account-level credit is the facility; fcredit is the per-shipment draw.
+  // A ready fstatus=5 row must be visible so the explicit bill confirmation can
+  // attach that draw. Otherwise a newly-approved credit customer has no route
+  // into the billing picker until staff discovers a separate per-row screen.
+  if (customerHasCreditFacility && isAwaitingPaymentEligible(row)) return true;
   return isCreditUnsettledEligible(row) || isAdvanceBillEligible(row); // else credit/advance only
 }
 

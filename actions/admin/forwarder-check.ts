@@ -79,6 +79,7 @@ import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canAnyRoleFlipFstatus } from "@/lib/auth/check-fstatus-transition";
 import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shipping";
 import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
+import { adminMarkForwarderCredit } from "@/actions/admin/forwarders-field-edits";
 
 // ────────────────────────────────────────────────────────────
 // Schemas
@@ -168,6 +169,7 @@ export type BillFailure = {
     | "th_shipping_missing" // C2 ยังไม่มีค่าส่งไทย (+ ระบบเติมอัตโนมัติไม่ได้)
     | "not_status_4"        // แถวไม่ได้อยู่สถานะ 4 → action อ่านไม่เจอ (เดิม = หายเงียบ)
     | "already_paid"        // 🔴 มีบันทึกการชำระเงินแล้ว = ห้ามแจ้งชำระซ้ำ (PR189 2026-07-28)
+    | "credit_grant_failed" // ลูกค้าเครดิต แต่ตัดวงเงิน/สร้าง AR ไม่สำเร็จ
     | "update_failed";      // UPDATE ไม่ผ่าน (race / DB error)
   /** เหตุผลไทย อ่านรู้เรื่องในตาแรก. */
   reason: string;
@@ -183,10 +185,15 @@ type UserRow = {
   userEmail: string | null;
   userLineNotify: string | null;
   userCompany: number | string | null; // '1' = นิติบุคคล — the collect 1% lever (BUG-2b source)
+  userCredit: string | null;
+  userCreditValue: number | string | null;
+  userCreditDate: number | string | null;
 };
 
 type BillResult = {
   processed: number;        // rows successfully flipped to status '5'
+  cash_waiting_payment: number;
+  credit_ready_to_ship: number;
   failed: number;           // rows that didn't transition
   sms_sent: number;         // SMS dispatches the gateway accepted
   sms_failed: number;
@@ -332,6 +339,20 @@ function composeBillSms(opts: {
   );
 }
 
+function composeCreditGrantedSms(opts: {
+  count: number;
+  amountThb: number;
+  termsDays: number;
+}): string {
+  const amount = opts.amountThb.toLocaleString("th-TH", { minimumFractionDigits: 2 });
+  return (
+    `Pacred · อนุมัติเครดิต ${opts.count} รายการ\n` +
+    `ยอดวางบิล: ฿${amount} · เทอม ${opts.termsDays} วัน\n` +
+    `สินค้าเข้าสู่ขั้นเตรียมส่งแล้ว\n` +
+    `ดูใบวางบิล: pacred.co.th/billing-run`
+  );
+}
+
 /** Compose the LINE/email notification body. Longer than SMS — we can afford
  *  a multi-line message + a deep link. Sender prepends `[title]\n` itself
  *  (see lib/notifications/index.ts:sendLinePush).
@@ -348,6 +369,21 @@ function composeBillBody(opts: {
     `บริการนำเข้า ${opts.count} รายการ\n` +
     `ยอดที่ต้องชำระ: ฿${amount}\n` +
     `กรุณาเข้าระบบเพื่อชำระเงิน`
+  );
+}
+
+function composeCreditGrantedBody(opts: {
+  userId: string;
+  count: number;
+  amountThb: number;
+  termsDays: number;
+}): string {
+  const amount = opts.amountThb.toLocaleString("th-TH", { minimumFractionDigits: 2 });
+  return (
+    `เรียนคุณ ${opts.userId} ค่ะ\n` +
+    `Pacred อนุมัติใช้วงเงินเครดิตสำหรับงานนำเข้า ${opts.count} รายการ\n` +
+    `ยอดวางบิล: ฿${amount} · เทอม ${opts.termsDays} วัน\n` +
+    `งานขนส่งเข้าสู่ขั้นเตรียมส่งแล้ว โดยยอดนี้ยังแสดงในใบวางบิลจนกว่าจะชำระครบ`
   );
 }
 
@@ -428,7 +464,8 @@ export async function adminCallPriceUser(
         return {
           ok: true,
           data: {
-            processed: 0, failed: droppedFailures.length,
+            processed: 0, cash_waiting_payment: 0, credit_ready_to_ship: 0,
+            failed: droppedFailures.length,
             sms_sent: 0, sms_failed: 0, line_sent: 0, line_failed: 0,
             email_sent: 0, email_failed: 0, no_profile: 0,
             errors: droppedFailures.map(failureLine),
@@ -441,7 +478,7 @@ export async function adminCallPriceUser(
       const uniqueUserIds = Array.from(new Set(candidates.map((r) => r.userid).filter(Boolean)));
       const { data: userRows, error: userRowsErr } = await admin
         .from("tb_users")
-        .select("userID, userName, userLastName, userTel, userEmail, userLineNotify, userCompany")
+        .select("userID, userName, userLastName, userTel, userEmail, userLineNotify, userCompany, userCredit, userCreditValue, userCreditDate")
         .in("userID", uniqueUserIds);
       if (userRowsErr) {
         console.error(`[tb_users list] failed`, { code: userRowsErr.code, message: userRowsErr.message });
@@ -464,6 +501,8 @@ export async function adminCallPriceUser(
       const nowIso = new Date().toISOString();
       const result: BillResult = {
         processed:    0,
+        cash_waiting_payment: 0,
+        credit_ready_to_ship: 0,
         // seeded with the ticked rows that weren't at fstatus='4' — they used to
         // vanish from the tally entirely (owner 2026-07-17).
         failed:       droppedFailures.length,
@@ -494,6 +533,7 @@ export async function adminCallPriceUser(
       // than the portal collects. We collect the fids here + re-price via the
       // portal engine below so SMS == portal == receipt.
       const billedFidsByUser = new Map<string, number[]>();
+      const creditBilledUsers = new Set<string>();
 
       // C2 (2026-07-13) — SHIPMENT-level COD set (any candidate whose base-tracking is
       // COD). Used to exempt box-split siblings that kept paymethod='1' from the ค่าส่งไทย
@@ -618,39 +658,92 @@ export async function adminCallPriceUser(
           continue;
         }
 
-        // 3a. UPDATE the forwarder row · re-guarded fstatus='4' to dodge a race
-        //     where another operator billed it between our read + write.
-        const updatePayload: Record<string, unknown> = {
-          fstatus:          "5",
-          fdatestatus5:     nowIso,
-          adminidupdate:    safeLegacyAdminId(adminId, 10),
-          fdateadminstatus: nowIso,
-        };
-        if (discount !== undefined) {
-          updatePayload.fdiscount = discount;
-        }
+        // 3a. Split the workflow here — this is the accounting "checked the
+        // container" boundary requested by the owner.
+        //   cash   4→5 : wait for payment/receipt before dispatch
+        //   credit 4→6 + fcredit=1 : create AR and release to prep-ship now
+        // The credit/document lane remains open independently until settlement.
+        const user = usersById.get(row.userid);
+        const isAccountCredit =
+          String(user?.userCredit ?? "").trim() === "1" &&
+          Number(user?.userCreditValue ?? 0) > 0;
+        let enteredStatus: "5" | "6" = "5";
 
-        const { error: updErr } = await admin
-          .from("tb_forwarder")
-          .update(updatePayload)
-          .eq("id", row.id)
-          .eq("fstatus", "4");
-        if (updErr) {
-          const f: BillFailure = {
-            fid: row.id,
-            code: "update_failed",
-            reason: `บันทึกสถานะไม่สำเร็จ (${updErr.message})`,
-            nextAction: "รีเฟรชหน้าแล้วลองใหม่ — ถ้ายังไม่ได้ แจ้งทีมเทคนิคพร้อมเลขรายการนี้",
+        if (isAccountCredit) {
+          // An operator-supplied discount must be persisted before the canonical
+          // grant re-reads and computes the binding AR amount.
+          if (discount !== undefined) {
+            const discountWrite = await admin
+              .from("tb_forwarder")
+              .update({ fdiscount: discount })
+              .eq("id", row.id)
+              .eq("fstatus", "4")
+              .select("id")
+              .maybeSingle<{ id: number }>();
+            if (discountWrite.error || !discountWrite.data) {
+              const f: BillFailure = {
+                fid: row.id,
+                code: "update_failed",
+                reason: `บันทึกส่วนลดก่อนตัดเครดิตไม่สำเร็จ (${discountWrite.error?.message ?? "สถานะเปลี่ยนไปแล้ว"})`,
+                nextAction: "รีเฟรชหน้า ตรวจยอด/สถานะ แล้วลองใหม่",
+              };
+              result.failed++;
+              result.failures.push(f);
+              result.errors.push(failureLine(f));
+              continue;
+            }
+          }
+
+          const creditGrant = await adminMarkForwarderCredit({ fId: row.id });
+          if (!creditGrant.ok) {
+            const f: BillFailure = {
+              fid: row.id,
+              code: "credit_grant_failed",
+              reason: creditGrant.error,
+              nextAction: "ตรวจสิทธิ์เครดิต วงเงินคงเหลือ เทอม และที่อยู่จัดส่ง แล้วลองตัดเครดิตอีกครั้ง",
+            };
+            result.failed++;
+            result.failures.push(f);
+            result.errors.push(failureLine(f));
+            continue;
+          }
+          enteredStatus = "6";
+          result.credit_ready_to_ship++;
+          creditBilledUsers.add(row.userid);
+        } else {
+          const updatePayload: Record<string, unknown> = {
+            fstatus:          "5",
+            fdatestatus5:     nowIso,
+            adminidupdate:    safeLegacyAdminId(adminId, 10),
+            fdateadminstatus: nowIso,
           };
-          result.failed++;
-          result.failures.push(f);
-          result.errors.push(failureLine(f));
-          continue;
+          if (discount !== undefined) updatePayload.fdiscount = discount;
+
+          const cashWrite = await admin
+            .from("tb_forwarder")
+            .update(updatePayload)
+            .eq("id", row.id)
+            .eq("fstatus", "4")
+            .select("id")
+            .maybeSingle<{ id: number }>();
+          if (cashWrite.error || !cashWrite.data) {
+            const f: BillFailure = {
+              fid: row.id,
+              code: "update_failed",
+              reason: `บันทึกสถานะไม่สำเร็จ (${cashWrite.error?.message ?? "สถานะเปลี่ยนไปแล้ว"})`,
+              nextAction: "รีเฟรชหน้าแล้วลองใหม่ — ถ้ายังไม่ได้ แจ้งทีมเทคนิคพร้อมเลขรายการนี้",
+            };
+            result.failed++;
+            result.failures.push(f);
+            result.errors.push(failureLine(f));
+            continue;
+          }
+          result.cash_waiting_payment++;
         }
 
         result.processed++;
         successfulFids.push(row.id);
-        await appendStatusLog(admin, row.id, row.fstatus, "5", adminId);
+        await appendStatusLog(admin, row.id, row.fstatus, enteredStatus, adminId);
 
         // 3b. Stage the effective collect row for this customer (post-autofill,
         //     post-discount-override). Amount is computed once per customer below.
@@ -681,6 +774,8 @@ export async function adminCallPriceUser(
       for (const [userid, collectRows] of billedRowsByUser) {
         const user = usersById.get(userid);
         const count = collectRows.length;
+        const isCreditBatch = creditBilledUsers.has(userid);
+        const termsDays = Math.max(0, Math.trunc(Number(user?.userCreditDate ?? 0) || 0));
         // ยอดที่จะแจ้ง = ยอดที่พอร์ทัลเก็บจริง (portal/approve engine เดียวกัน · mao
         // per-shipment). fail-soft: ถ้า re-price พลาด ใช้ collect-total เดิม (SMS ยัง
         // ไปได้ · billing ที่ทำไปแล้วไม่กระทบ). ไม่มี COD/1% drift เพราะ engine เดียวกัน.
@@ -703,7 +798,9 @@ export async function adminCallPriceUser(
         if (user?.userTel) {
           const sms = await sendSms(
             user.userTel,
-            composeBillSms({ userId: userid, count, amountThb: collectTotal }),
+            isCreditBatch
+              ? composeCreditGrantedSms({ count, amountThb: collectTotal, termsDays })
+              : composeBillSms({ userId: userid, count, amountThb: collectTotal }),
           );
           if (sms.ok) {
             result.sms_sent++;
@@ -731,9 +828,13 @@ export async function adminCallPriceUser(
             const notif = await sendNotification(profileId, {
               category:       "forwarder",
               severity:       "info",
-              title:          `แจ้งชำระเงิน · บริการนำเข้า ${count} รายการ`,
-              body:           composeBillBody({ userId: userid, count, amountThb: collectTotal }),
-              link_href:      `/service-import`,
+              title:          isCreditBatch
+                ? `อนุมัติเครดิต · เตรียมส่ง ${count} รายการ`
+                : `แจ้งชำระเงิน · บริการนำเข้า ${count} รายการ`,
+              body:           isCreditBatch
+                ? composeCreditGrantedBody({ userId: userid, count, amountThb: collectTotal, termsDays })
+                : composeBillBody({ userId: userid, count, amountThb: collectTotal }),
+              link_href:      isCreditBatch ? `/billing-run` : `/service-import`,
               reference_type: "forwarder",
               reference_id:   userid,
             });
@@ -791,6 +892,8 @@ export async function adminCallPriceUser(
           requested_fids: fids,
           billed_fids:    successfulFids,
           processed:      result.processed,
+          cash_waiting_payment: result.cash_waiting_payment,
+          credit_ready_to_ship: result.credit_ready_to_ship,
           th_shipping_autofilled: autoFilledThCount,
           failed:         result.failed,
           sms_sent:       result.sms_sent,

@@ -61,6 +61,7 @@ import { describeActionDispatchError } from "@/lib/observability/action-dispatch
 import { isNextControlFlowError } from "@/lib/observability/next-control-flow";
 import { reportClientIncident } from "@/lib/observability/client-report";
 import { WalletBalanceCard } from "@/components/admin/wallet-balance-card";
+import { creditDueDate } from "@/lib/credit/terms";
 
 // ── formatting ───────────────────────────────────────────────
 function thb(n: number): string {
@@ -76,6 +77,7 @@ function dimsLabel(w: number, l: number, h: number): string {
 }
 
 type KeyType = "1" | "2"; // 1 = ฝากสั่งซื้อ · 2 = ฝากนำเข้า (default)
+type ForwarderPaymentLane = "cash" | "credit";
 
 type PayResultBanner =
   | { kind: "shop-wallet"; data: PayOnBehalfResult }
@@ -87,6 +89,7 @@ export function PayUserAddClient() {
 
   // ── controls ──
   const [keyType, setKeyType] = useState<KeyType>("2");
+  const [forwarderLane, setForwarderLane] = useState<ForwarderPaymentLane>("cash");
   const [code, setCode] = useState("");
   const [searching, startSearch] = useTransition();
   const [err, setErr] = useState<string | null>(null);
@@ -266,6 +269,14 @@ export function PayUserAddClient() {
     resetLoaded();
   }
 
+  function changeForwarderLane(next: ForwarderPaymentLane) {
+    setForwarderLane(next);
+    setSelFwds(new Set());
+    setErr(null);
+    setResult(null);
+    closeModal();
+  }
+
   // ── selection helpers ──
   // SHIPMENT-ATOMIC toggle (owner 2026-07-22 "จ่ายแทนลูกค้า ต่อบิล = ทั้งชิปเม้น"):
   // a MOMO box-split shipment is N tb_forwarder rows sharing one base tracking —
@@ -275,10 +286,10 @@ export function PayUserAddClient() {
   function toggleFwd(fid: string) {
     setSelFwds((prev) => {
       const next = new Set(prev);
-      const row = fwdRows.find((r) => r.fid === fid);
+      const row = visibleFwdRows.find((r) => r.fid === fid);
       const base = row ? baseTracking(row.ftrackingchn) : null;
       const groupFids = base
-        ? fwdRows.filter((r) => baseTracking(r.ftrackingchn) === base).map((r) => r.fid)
+        ? visibleFwdRows.filter((r) => baseTracking(r.ftrackingchn) === base).map((r) => r.fid)
         : [fid];
       const adding = !next.has(fid);
       for (const f of groupFids) {
@@ -297,7 +308,12 @@ export function PayUserAddClient() {
     });
   }
 
-  const selectedFwdRows = fwdRows.filter((r) => selFwds.has(r.fid));
+  const cashFwdCount = fwdRows.filter((r) => !r.is_credit).length;
+  const creditFwdCount = fwdRows.filter((r) => r.is_credit).length;
+  const visibleFwdRows = fwdRows.filter((r) =>
+    forwarderLane === "credit" ? r.is_credit : !r.is_credit,
+  );
+  const selectedFwdRows = visibleFwdRows.filter((r) => selFwds.has(r.fid));
   const selectedShopRows = shopRows.filter((r) => selShops.has(r.hno));
   const selectedCount = keyType === "2" ? selectedFwdRows.length : selectedShopRows.length;
   const selectedTotal =
@@ -371,8 +387,12 @@ export function PayUserAddClient() {
   // แถวบนใบ live ทำงานทันที (ราก PR187: ใบพรีวิว 11,955.74 แต่ยอดจริงขยับเป็น 12,309.14)
   async function issueRealInvoice() {
     if (!panel || keyType !== "2" || selectedFwdRows.length === 0 || issuing) return;
+    const creditMode = forwarderLane === "credit";
     const ok = await confirm(
-      `ออกใบแจ้งหนี้จริงให้ ${panel.user.userid}?\nครอบ ${selectedFwdRows.length} รายการ · ${thb(selectedTotal)}\nยอดจะถูกล็อกตามใบ — แก้ราคา/ขนาดของแถวบนใบไม่ได้จนกว่าจะยกเลิกใบ`,
+      `${creditMode ? "ออกใบวางบิลเครดิต" : "ออกใบแจ้งหนี้เงินจริง"}ให้ ${panel.user.userid}?\n` +
+      `ครอบ ${selectedFwdRows.length} รายการ · ${thb(selectedTotal)}` +
+      `${creditMode ? ` · เทอม ${panel.credit.terms_days} วัน` : ""}\n` +
+      `ยอดจะถูกล็อกตามใบ — แก้ราคา/ขนาดของแถวบนใบไม่ได้จนกว่าจะยกเลิกใบ`,
     );
     if (!ok) return;
     setIssueErr(null);
@@ -410,8 +430,13 @@ export function PayUserAddClient() {
   // ── confirm-before-mutate (§0f) → route to the right action ──
   async function submitPayment() {
     if (!panel || selectedCount === 0) return;
+    const isCreditCollection = keyType === "2" && forwarderLane === "credit";
     const ok = await confirm(
-      `ยืนยันการชำระเงินแทนลูกค้า ${panel.user.userid}?\nรวม ${selectedCount} รายการ · ${thb(selectedTotal)}`,
+      `${isCreditCollection ? "ยืนยันรับชำระลูกหนี้เครดิต" : "ยืนยันการชำระเงินแทนลูกค้า"} ${panel.user.userid}?\n` +
+      `รวม ${selectedCount} รายการ · ${thb(selectedTotal)}\n` +
+      (isCreditCollection
+        ? "งานขนส่งยังอยู่ในสถานะเตรียมส่ง; การตรวจสลิปครั้งนี้ปิดเฉพาะลูกหนี้และเอกสารเครดิต"
+        : "งานเงินสดจะเข้าคิวรอออกใบเสร็จ และยังส่งไม่ได้จนกว่าบัญชีตรวจสลิปผ่าน"),
     );
     if (!ok) return;
 
@@ -523,7 +548,7 @@ export function PayUserAddClient() {
     void reportClientIncident(e as Error); // เงินไม่รู้ผล = ต้องมีใบให้ตามเสมอ
   }
 
-  const hasRows = keyType === "2" ? fwdRows.length > 0 : shopRows.length > 0;
+  const hasRows = keyType === "2" ? visibleFwdRows.length > 0 : shopRows.length > 0;
 
   return (
     <div className="space-y-5 pb-28">
@@ -627,11 +652,37 @@ export function PayUserAddClient() {
       )}
 
       {/* ── C. item table ── */}
+      {panel && keyType === "2" && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-1.5">
+          <button
+            type="button"
+            onClick={() => changeForwarderLane("cash")}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold ${forwarderLane === "cash" ? "bg-white text-primary-700 shadow-sm" : "text-gray-600 hover:bg-white/70"}`}
+          >
+            เงินสด <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px]">{cashFwdCount}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => changeForwarderLane("credit")}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold ${forwarderLane === "credit" ? "bg-amber-100 text-amber-900 shadow-sm" : "text-gray-600 hover:bg-white/70"}`}
+          >
+            เครดิต / วางบิล <span className="ml-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px]">{creditFwdCount}</span>
+          </button>
+          {forwarderLane === "credit" && (
+            <span className="ml-auto px-2 text-[11px] text-amber-800">
+              เทอม {panel.credit.terms_days} วัน · ค้าง ฿{panel.credit.outstanding.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+              · วงเงินคงเหลือ ฿{panel.credit.available.toLocaleString("th-TH", { minimumFractionDigits: 2 })}
+            </span>
+          )}
+        </div>
+      )}
       {panel && !hasRows && (
         <div className="text-sm text-gray-600">
           <p className="text-center font-medium text-gray-700">
             {keyType === "2"
-              ? "ไม่มีรายการฝากนำเข้าที่รอชำระเงิน (สถานะ 5) ของลูกค้ารายนี้"
+              ? forwarderLane === "credit"
+                ? "ไม่มีรายการเครดิตที่รอวางบิล/รับชำระของลูกค้ารายนี้"
+                : "ไม่มีรายการเงินสดที่รอชำระเงินของลูกค้ารายนี้"
               : "ไม่มีรายการฝากสั่งที่รอชำระเงินของลูกค้ารายนี้"}
           </p>
           {/* §0g — explain WHY nothing is payable (owner 2026-07-16 PR139): the orders
@@ -660,11 +711,11 @@ export function PayUserAddClient() {
 
       {panel && hasRows && keyType === "2" && (
         <ForwarderTable
-          rows={fwdRows}
+          rows={visibleFwdRows}
           panel={panel}
           selected={selFwds}
           onToggle={toggleFwd}
-          onSelectAll={() => setSelFwds(new Set(fwdRows.map((r) => r.fid)))}
+          onSelectAll={() => setSelFwds(new Set(visibleFwdRows.map((r) => r.fid)))}
           onClearAll={() => setSelFwds(new Set())}
         />
       )}
@@ -707,7 +758,7 @@ export function PayUserAddClient() {
             title={selectedCount === 0 ? "เลือกรายการที่จะชำระก่อน (ติ๊กช่องหน้าแถว)" : undefined}
           >
             <Banknote className="h-4 w-4" aria-hidden />
-            ชำระเงินแทนลูกค้า
+            {keyType === "2" && forwarderLane === "credit" ? "รับชำระเครดิตแทนลูกค้า" : "ชำระเงินแทนลูกค้า"}
             <span
               className={`inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white px-1.5 text-[11px] font-bold ${selectedCount === 0 ? "text-gray-500" : "text-red-600"}`}
             >
@@ -724,6 +775,7 @@ export function PayUserAddClient() {
           open={modalOpen}
           onClose={closeModal}
           keyType={keyType}
+          forwarderLane={forwarderLane}
           panel={panel}
           fwdRows={selectedFwdRows}
           shopRows={selectedShopRows}
@@ -1347,6 +1399,7 @@ function PayModal({
   open,
   onClose,
   keyType,
+  forwarderLane,
   panel,
   fwdRows,
   shopRows,
@@ -1371,6 +1424,7 @@ function PayModal({
   open: boolean;
   onClose: () => void;
   keyType: KeyType;
+  forwarderLane: ForwarderPaymentLane;
   panel: PayUserPanel;
   fwdRows: PayUserFwdRow[];
   shopRows: PayUserShopRow[];
@@ -1396,7 +1450,9 @@ function PayModal({
   const dialogRef = useConfirmDialogRef(open, onClose);
   const title =
     keyType === "2"
-      ? "ใบแจ้งหนี้ / ชำระเงิน · ฝากนำเข้าสินค้า"
+      ? forwarderLane === "credit"
+        ? "ใบวางบิล / รับชำระเครดิต · ฝากนำเข้าสินค้า"
+        : "ใบแจ้งหนี้ / ชำระเงินสด · ฝากนำเข้าสินค้า"
       : "ใบแจ้งหนี้ / ชำระเงิน · ฝากสั่งซื้อ";
   // shortfall the staff still has to top up when the shop wallet is short.
   const shopShortfall = Math.max(0, total - walletBalance);
@@ -1433,8 +1489,11 @@ function PayModal({
   // PayModal's hook count never changes; the date-based values are stable per day.
   const dnow = new Date();
   const p2 = (x: number) => String(x).padStart(2, "0");
-  const dueDate = new Date(dnow);
-  dueDate.setDate(dueDate.getDate() + 7);
+  const issueIso = `${dnow.getFullYear()}-${p2(dnow.getMonth() + 1)}-${p2(dnow.getDate())}`;
+  const dueIso = keyType === "2" && forwarderLane === "credit"
+    ? creditDueDate(issueIso, panel.credit.terms_days)
+    : issueIso;
+  const dueDate = new Date(`${dueIso}T00:00:00`);
   const fmtD = (d: Date) => `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear() + 543}`;
   const doc = {
     no: `IV-${dnow.getFullYear()}${p2(dnow.getMonth() + 1)}${p2(dnow.getDate())} (ตัวอย่าง)`,
@@ -1467,8 +1526,14 @@ function PayModal({
           {/* mobile: title จั่วหัวเต็มบรรทัดบนสุด (order-first) แล้วโลโก้+meta อยู่แถวถัดไป
               (owner 2026-07-17 "ในมือถือ ตามในภาพ") · desktop: กลับมากลางเหมือนเดิม */}
           <div className="order-first w-full text-center sm:order-none sm:w-auto">
-            <h3 className="text-2xl font-extrabold tracking-wide text-primary-600 sm:text-3xl">ใบแจ้งหนี้</h3>
-            <p className="text-[12px] text-gray-500">สรุปรายการที่ต้องชำระ (เงินสด)</p>
+            <h3 className="text-2xl font-extrabold tracking-wide text-primary-600 sm:text-3xl">
+              {keyType === "2" && forwarderLane === "credit" ? "ใบวางบิล" : "ใบแจ้งหนี้"}
+            </h3>
+            <p className="text-[12px] text-gray-500">
+              {keyType === "2" && forwarderLane === "credit"
+                ? `สรุปลูกหนี้เครดิต · เทอม ${panel.credit.terms_days} วัน (สินค้าเตรียมส่งได้ตามวงเงิน)`
+                : "สรุปรายการที่ต้องชำระ (เงินสด)"}
+            </p>
           </div>
           <div className="min-w-[220px] rounded-lg border border-rose-100 bg-rose-50/60 p-3 text-[12px]">
             <MetaRow k="เลขที่เอกสาร" v={issued ? issued.docNo : doc.no} />
@@ -1497,7 +1562,11 @@ function PayModal({
                   disabled={issuing}
                   className="mt-2 w-full rounded-md bg-primary-600 px-2.5 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-primary-700 disabled:opacity-60"
                 >
-                  {issuing ? "กำลังออกใบ…" : "🧾 ออกใบแจ้งหนี้จริง (ล็อกยอด)"}
+                  {issuing
+                    ? "กำลังออกใบ…"
+                    : forwarderLane === "credit"
+                      ? "🧾 ออกใบวางบิลจริง (ล็อกยอด)"
+                      : "🧾 ออกใบแจ้งหนี้จริง (ล็อกยอด)"}
                 </button>
                 <p className="mt-1 text-[11px] leading-snug text-rose-700">
                   ใบนี้ยังเป็น <b>ตัวอย่าง</b> — ยอดยังเปลี่ยนได้ถ้ามีคนแก้ราคา/ขนาดทีหลัง

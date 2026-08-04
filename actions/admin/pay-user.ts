@@ -232,6 +232,7 @@ export async function getPayUserContext(
       .select(`${FORWARDER_PRICE_COLS}, ftrackingchn, fstatus, fcredit`)
       .eq("userid", code)
       .or("fstatus.eq.5,fcredit.eq.1")
+      .or("paydeposit.is.null,paydeposit.neq.1")
       .order("id", { ascending: true })
       .limit(300);
     if (fErr) {
@@ -496,7 +497,7 @@ export type PayForwardersOnBehalfResult = {
 export async function adminPayForwardersOnBehalf(
   input: unknown,
 ): Promise<AdminActionResult<PayForwardersOnBehalfResult>> {
-  return withAdmin(undefined, async () => {
+  return withAdmin(undefined, async ({ adminId }) => {
     const parsed = payForwarderSchema.safeParse(input);
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
@@ -544,6 +545,7 @@ export async function adminPayForwardersOnBehalf(
       .eq("userid", userId)
       .in("id", fIds.map(Number))
       .or("fstatus.eq.5,fcredit.eq.1")
+      .or("paydeposit.is.null,paydeposit.neq.1")
       .order("id", { ascending: true });
     if (eligErr) {
       console.error(`[adminPayForwardersOnBehalf eligibility] failed`, { code: eligErr.code, message: eligErr.message, userId });
@@ -580,6 +582,28 @@ export async function adminPayForwardersOnBehalf(
       if (price === undefined) { skipped.push({ fid, reason: "ไม่อยู่สถานะพร้อมชำระ (ต้อง fStatus=5 หรือ fCredit=1)" }); continue; }
       if (!Number.isFinite(price) || price <= 0) { skipped.push({ fid, reason: "ราคารายการไม่ถูกต้อง" }); continue; }
 
+      // Pure-wallet credit settlement is final immediately (there is no
+      // pending slip), so it must release the same amount from tb_credit in
+      // this loop. The old path only cleared fcredit and stranded the facility
+      // balance. Read now and CAS the exact value after the order flip.
+      let creditBefore: number | string | null = null;
+      if (isCredit) {
+        const { data: creditRow, error: creditErr } = await admin
+          .from("tb_credit")
+          .select("creditvalue")
+          .eq("userid", userId)
+          .maybeSingle<{ creditvalue: number | string | null }>();
+        if (creditErr || !creditRow) {
+          skipped.push({ fid, reason: `อ่านยอดเครดิตไม่สำเร็จ: ${creditErr?.message ?? "ไม่พบ tb_credit"}` });
+          continue;
+        }
+        creditBefore = creditRow.creditvalue;
+        if (Math.round((Number(creditBefore ?? 0) || 0) * 100) < Math.round(price * 100)) {
+          skipped.push({ fid, reason: "ยอด tb_credit ต่ำกว่ายอดรายการ — หยุดเพื่อให้บัญชีกระทบยอดก่อน" });
+          continue;
+        }
+      }
+
       // 1. idempotency probe — legacy L212 dup-guard:
       //    tb_wallet_hs WHERE userID AND (typeNew='5' OR typeNew='6')
       //    AND status=2 AND refOrder IN (ids). We probe per-row by reforder.
@@ -607,12 +631,61 @@ export async function adminPayForwardersOnBehalf(
         if (!heal.unwound) {
           // The probe matched a row the stricter helper didn't resolve
           // (typeservice≠'2' = genuine paid, fStatus stalled) → keep the legacy
-          // nudge-to-6 (pure-wallet flip · legacy L467/L469 · no paydeposit).
-          const fwdPatch: Record<string, unknown> = isCredit
-            ? { fcredit: "", fdateadminstatus: nowIso }
-            : { fstatus: "6", fdateadminstatus: nowIso, fdatestatus6: nowIso };
-          await admin.from("tb_forwarder").update(fwdPatch).eq("id", Number(fid)).eq("userid", userId);
-          skipped.push({ fid, reason: "ชำระไปแล้วก่อนหน้า (idempotent)" });
+          // nudge-to-6. Credit recovery must also release tb_credit; clearing
+          // only fcredit recreated the historical ledger drift.
+          if (isCredit) {
+            const beforeSatang = Math.round((Number(creditBefore ?? 0) || 0) * 100);
+            const settledSatang = Math.round(price * 100);
+            if (beforeSatang < settledSatang) {
+              skipped.push({ fid, reason: "พบรายการชำระเดิม แต่ tb_credit ต่ำกว่ายอดรายการ — ให้บัญชีกระทบยอดก่อน" });
+              continue;
+            }
+            const flip = await admin
+              .from("tb_forwarder")
+              .update({ fcredit: "", fdateadminstatus: nowIso })
+              .eq("id", Number(fid))
+              .eq("userid", userId)
+              .eq("fcredit", "1")
+              .select("id")
+              .maybeSingle<{ id: number }>();
+            if (flip.error || !flip.data) {
+              skipped.push({ fid, reason: `กู้สถานะรายการชำระเดิมไม่สำเร็จ: ${flip.error?.message ?? "สถานะเปลี่ยนพร้อมกัน"}` });
+              continue;
+            }
+            const creditAfter = (beforeSatang - settledSatang) / 100;
+            const creditWrite = await admin
+              .from("tb_credit")
+              .update({ creditvalue: creditAfter })
+              .eq("userid", userId)
+              .eq("creditvalue", creditBefore ?? 0)
+              .select("userid")
+              .maybeSingle<{ userid: string }>();
+            if (creditWrite.error || !creditWrite.data) {
+              await admin
+                .from("tb_forwarder")
+                .update({ fcredit: "1", fdateadminstatus: nowIso })
+                .eq("id", Number(fid))
+                .eq("userid", userId)
+                .eq("fcredit", "");
+              skipped.push({ fid, reason: "กู้รายการชำระเดิมไม่สำเร็จ เพราะยอดเครดิตถูกเปลี่ยนพร้อมกัน — กรุณารีเฟรช" });
+              continue;
+            }
+            await logAdminAction(adminId, "pay-user.credit-wallet-reconcile", "tb_forwarder", fid, {
+              userid: userId,
+              amount: price,
+              credit_before: beforeSatang / 100,
+              credit_after: creditAfter,
+              wallet_hs_id: existHs.id,
+            });
+          } else {
+            await admin
+              .from("tb_forwarder")
+              .update({ fstatus: "6", fdateadminstatus: nowIso, fdatestatus6: nowIso })
+              .eq("id", Number(fid))
+              .eq("userid", userId)
+              .eq("fstatus", "5");
+          }
+          skipped.push({ fid, reason: "ชำระไปแล้วก่อนหน้า — ปรับสถานะ/วงเงินให้ตรงแล้ว (idempotent)" });
           continue;
         }
         // heal.unwound → the stale orphan was un-settled; DO NOT continue —
@@ -689,15 +762,43 @@ export async function adminPayForwardersOnBehalf(
 
       // 5. debit tb_wallet (rollback the hs row on failure — keep books balanced)
       const newBalance = Math.round((balance - price) * 100) / 100;
-      const { error: wuErr } = await admin
+      const { data: walletDebited, error: wuErr } = await admin
         .from("tb_wallet")
         .update({ wallettotal: newBalance })
-        .eq("userid", userId);
-      if (wuErr) {
+        .eq("userid", userId)
+        .eq("wallettotal", wallet?.wallettotal ?? 0)
+        .select("userid")
+        .maybeSingle<{ userid: string }>();
+      if (wuErr || !walletDebited) {
         await admin.from("tb_wallet_hs").delete().eq("id", hsRow.id);
-        skipped.push({ fid, reason: `หักยอดกระเป๋าล้มเหลว · ยกเลิกรายการ: ${wuErr.message}` });
+        skipped.push({ fid, reason: `หักยอดกระเป๋าล้มเหลว · ยกเลิกรายการ: ${wuErr?.message ?? "ยอดถูกเปลี่ยนพร้อมกัน กรุณารีเฟรช"}` });
         continue;
       }
+
+      const rollbackWalletAndHs = async (): Promise<boolean> => {
+        const walletRollback = await admin
+          .from("tb_wallet")
+          .update({ wallettotal: balance })
+          .eq("userid", userId)
+          .eq("wallettotal", newBalance)
+          .select("userid")
+          .maybeSingle<{ userid: string }>();
+        if (walletRollback.error || !walletRollback.data) {
+          logger.error("pay-user", "wallet rollback failed; keeping history evidence", {
+            fid, userId, tb_wallet_hs_id: hsRow.id, expectedBalance: newBalance,
+            error: walletRollback.error?.message,
+          });
+          return false;
+        }
+        const hsDelete = await admin.from("tb_wallet_hs").delete().eq("id", hsRow.id);
+        if (hsDelete.error) {
+          logger.error("pay-user", "wallet restored but history cleanup failed", {
+            fid, userId, tb_wallet_hs_id: hsRow.id, error: hsDelete.error.message,
+          });
+          return false;
+        }
+        return true;
+      };
 
       // 6. flip tb_forwarder 5 → 6 (or credit variant) — the pure-wallet
       //    sufficient-balance branch. Legacy L467/L469 (path #2):
@@ -710,16 +811,63 @@ export async function adminPayForwardersOnBehalf(
       const fwdPatch: Record<string, unknown> = isCredit
         ? { fcredit: "", fdateadminstatus: nowIso, fusercompany: fUserCompanyValue }
         : { fstatus: "6", fdateadminstatus: nowIso, fdatestatus6: nowIso, fusercompany: fUserCompanyValue };
-      const { error: fErr2 } = await admin
+      let fwdWrite = admin
         .from("tb_forwarder")
         .update(fwdPatch)
-        .eq("id", Number(fid));
-      if (fErr2) {
+        .eq("id", Number(fid))
+        .eq("userid", userId);
+      fwdWrite = isCredit ? fwdWrite.eq("fcredit", "1") : fwdWrite.eq("fstatus", "5");
+      const { data: forwarderSettled, error: fErr2 } = await fwdWrite
+        .select("id")
+        .maybeSingle<{ id: number }>();
+      if (fErr2 || !forwarderSettled) {
+        const rolledBack = await rollbackWalletAndHs();
         console.error(`[adminPayForwardersOnBehalf status flip FAILED post-debit]`, {
-          code: fErr2.code, message: fErr2.message, fid, userId, tb_wallet_hs_id: hsRow.id, amount: price,
+          code: fErr2?.code, message: fErr2?.message, fid, userId, tb_wallet_hs_id: hsRow.id, amount: price,
         });
-        skipped.push({ fid, reason: `หักเงินสำเร็จแต่อัพเดทสถานะล้มเหลว (กระเป๋าถูกหัก ฿${price} · tb_wallet_hs=${hsRow.id}) — ติดต่อทีมงาน` });
+        skipped.push({
+          fid,
+          reason: rolledBack
+            ? `อัพเดทสถานะไม่สำเร็จ — คืน wallet และยกเลิกรายการแล้ว (${fErr2?.message ?? "สถานะเปลี่ยนพร้อมกัน"})`
+            : `อัพเดทสถานะไม่สำเร็จและคืน wallet ไม่สำเร็จ — ห้ามกดซ้ำ ติดต่อบัญชีพร้อม tb_wallet_hs=${hsRow.id}`,
+        });
         continue;
+      }
+
+      if (isCredit) {
+        const beforeSatang = Math.round((Number(creditBefore ?? 0) || 0) * 100);
+        const settledSatang = Math.round(price * 100);
+        const creditAfter = (beforeSatang - settledSatang) / 100;
+        const creditWrite = await admin
+          .from("tb_credit")
+          .update({ creditvalue: creditAfter })
+          .eq("userid", userId)
+          .eq("creditvalue", creditBefore ?? 0)
+          .select("userid")
+          .maybeSingle<{ userid: string }>();
+        if (creditWrite.error || !creditWrite.data) {
+          await admin
+            .from("tb_forwarder")
+            .update({ fcredit: "1", fdateadminstatus: nowIso })
+            .eq("id", Number(fid))
+            .eq("userid", userId)
+            .eq("fcredit", "");
+          const rolledBack = await rollbackWalletAndHs();
+          skipped.push({
+            fid,
+            reason: rolledBack
+              ? "ยอดเครดิตถูกเปลี่ยนพร้อมกัน — คืน wallet และยกเลิกรายการแล้ว กรุณารีเฟรช"
+              : `ลด tb_credit ไม่สำเร็จและคืน wallet ไม่สำเร็จ — ห้ามกดซ้ำ ติดต่อบัญชีพร้อม tb_wallet_hs=${hsRow.id}`,
+          });
+          continue;
+        }
+        await logAdminAction(adminId, "pay-user.credit-wallet-settle", "tb_forwarder", fid, {
+          userid: userId,
+          amount: price,
+          credit_before: beforeSatang / 100,
+          credit_after: creditAfter,
+          wallet_hs_id: hsRow.id,
+        });
       }
 
       paid.push(fid);
@@ -1338,6 +1486,7 @@ export async function adminPayForwardersWithTopUp(
       .eq("userid", userId)
       .in("id", fIds.map(Number))
       .or("fstatus.eq.5,fcredit.eq.1")
+      .or("paydeposit.is.null,paydeposit.neq.1")
       .order("id", { ascending: true });
     if (eligErr) {
       console.error(`[adminPayForwardersWithTopUp eligibility] failed`, { code: eligErr.code, message: eligErr.message, userId });
@@ -1472,7 +1621,11 @@ export async function adminPayForwardersWithTopUp(
       // flip forwarder 5→6 (or credit variant) — legacy L408/L410. Path #1
       // (slip top-up) DOES set paydeposit='1' (it created a bridge row).
       const fwdPatch: Record<string, unknown> = isCredit
-        ? { fcredit: "", paydeposit: "1", fdateadminstatus: nowIso, fusercompany: fUserCompanyValue }
+        // Keep the AR flag until accounting APPROVES the slip. Clearing it at
+        // attachment time made the row disappear from the credit-billing queue
+        // even though no money had been verified yet. The approve cascade owns
+        // the final fcredit=''; reject naturally leaves/restores fcredit='1'.
+        ? { fcredit: "1", paydeposit: "1", fdateadminstatus: nowIso, fusercompany: fUserCompanyValue }
         : { fstatus: "6", paydeposit: "1", fdateadminstatus: nowIso, fdatestatus6: nowIso, fusercompany: fUserCompanyValue };
       const { error: fUpdErr } = await admin
         .from("tb_forwarder")

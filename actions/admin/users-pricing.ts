@@ -163,6 +163,20 @@ export async function adminSetUserCredit(
     }
     if (!before) return { ok: false, error: "ไม่พบลูกค้า (userid ไม่ตรงกับ tb_users)" };
 
+    const { data: creditRow, error: creditErr } = await admin
+      .from("tb_credit")
+      .select("creditvalue")
+      .eq("userid", userid)
+      .maybeSingle<{ creditvalue: number | string | null }>();
+    if (creditErr) return { ok: false, error: `อ่านยอดเครดิตค้างไม่สำเร็จ: ${creditErr.message}` };
+    const outstanding = Math.round(Number(creditRow?.creditvalue ?? 0) * 100) / 100;
+    if (Math.round(limit * 100) < Math.round(outstanding * 100)) {
+      return {
+        ok: false,
+        error: `ลดวงเงินต่ำกว่ายอดค้างไม่ได้ — ค้าง ฿${outstanding.toLocaleString("th-TH", { minimumFractionDigits: 2 })} แต่วงเงินใหม่ ฿${limit.toLocaleString("th-TH", { minimumFractionDigits: 2 })}`,
+      };
+    }
+
     // userCredit='1' the enabled flag (legacy list filters this) + the limit +
     // the default term days. The tb_credit outstanding row is created lazily on
     // the first real credit grant (adminMarkForwarderCredit) — not here.
@@ -178,7 +192,7 @@ export async function adminSetUserCredit(
     await logAdminAction(adminId, "tb_users.set_credit", "tb_users", userid, {
       userid,
       before: { userCreditValue: Number(before.userCreditValue ?? 0), userCreditDate: Number(before.userCreditDate ?? 0) },
-      after: { userCreditValue: limit, userCreditDate: days },
+      after: { userCreditValue: limit, userCreditDate: days, outstanding },
     });
     revalidatePath("/admin/customers");
     revalidatePath(`/admin/customers/${userid}`);

@@ -34,6 +34,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
+import { calcForwarderOutstanding, type ForwarderPriceFields } from "@/lib/forwarder/outstanding";
 
 // ────────────────────────────────────────────────────────────────────────
 // Types
@@ -119,18 +120,27 @@ export async function getForwarderAgingReport(): Promise<AgingReport> {
   // Pull JUST the columns we need for ageing + per-row aggregation.
   // No row limit — at the brief's snapshot this is ~457 rows; we keep
   // a high safety cap in case the cohort grows.
-  type ForwardRow = {
+  type ForwardRow = ForwarderPriceFields & {
     id:            number;
     userid:        string | null;
     fdate:         string | null;
     fdatestatus5:  string | null;
-    ftotalprice:   number | string | null;
-    fdiscount:     number | string | null;
+    fstatus:       string | null;
+    fcredit:       string | null;
+    paydeposit:    string | null;
   };
   const { data: rowsRaw, error: rowsErr } = await admin
     .from("tb_forwarder")
-    .select("id, userid, fdate, fdatestatus5, ftotalprice, fdiscount")
-    .eq("fstatus", "5")
+    .select(
+      "id, userid, fdate, fdatestatus5, fstatus, fcredit, paydeposit, paymethod, " +
+      "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, " +
+      "ftransportpricechnthb, priceother, fdiscount, fusercompany",
+    )
+    // Cash waiting to pay (5), all unsettled credit draws (fcredit=1), and
+    // staff-attached cash slips in the provisional 6+paydeposit=1 review gate.
+    // Once accounting approves cash, paydeposit clears while status stays 6;
+    // once credit settles, fcredit clears — both naturally leave AR.
+    .or("fstatus.eq.5,fcredit.eq.1,and(fstatus.eq.6,paydeposit.eq.1)")
     .limit(5000);
   if (rowsErr) {
     console.error("[ar-aging tb_forwarder] failed", { code: rowsErr.code, message: rowsErr.message });
@@ -149,9 +159,7 @@ export async function getForwarderAgingReport(): Promise<AgingReport> {
     // Prefer fdatestatus5 (when status entered '5'). Fall back to fdate.
     const since = r.fdatestatus5 ?? r.fdate;
     const sinceDays = daysBetween(asOfMs, since);
-    const total = Number(r.ftotalprice ?? 0);
-    const disc  = Number(r.fdiscount   ?? 0);
-    const outstanding = Math.max(0, total - disc);
+    const outstanding = calcForwarderOutstanding(r);
     return {
       id:          r.id,
       userid:      r.userid ?? "",

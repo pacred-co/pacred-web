@@ -25,6 +25,7 @@ import {
 import { confirm } from "@/components/ui/confirm";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
 import { GuideNote } from "@/components/ui/guide-note";
+import { creditDueDate, earliestCreditDueDate } from "@/lib/credit/terms";
 
 type Props = {
   customers: EligibleCustomerRow[];
@@ -37,12 +38,6 @@ type Props = {
 
 function isoToday(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-function isoDaysFromToday(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
 }
 
 function thbFmt(n: number): string {
@@ -96,7 +91,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
   const [fwdErr, setFwdErr] = useState<string | null>(null);
 
   const [dateIssued, setDateIssued] = useState(isoToday());
-  const [dateDue, setDateDue] = useState(isoDaysFromToday(7));
+  const [dateDue, setDateDue] = useState(isoToday());
   const [deliveryChn, setDeliveryChn] = useState("0");
   const [deliveryTh, setDeliveryTh]   = useState("0");
   const [other, setOther]             = useState("0");
@@ -188,13 +183,18 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
             ? unbilled.filter((r) => r.check_queued)
             : unbilled;
         setSelectedIds(new Set(tick.map((r) => r.id)));
+        const customer = customers.find((c) => c.userid === selectedUserid);
+        const frozenDue = earliestCreditDueDate(tick.map((r) => r.credit_due_date));
+        setDateDue(
+          frozenDue ?? creditDueDate(dateIssued, customer?.credit_terms_days ?? 0),
+        );
       } else {
         setEligible([]);
         setFwdErr(res.error);
       }
     });
     return () => { cancelled = true; };
-  }, [selectedUserid, preselectUserid, preselectForwarderIds]);
+  }, [selectedUserid, preselectUserid, preselectForwarderIds, customers, dateIssued]);
 
   function onCustomerChange(uid: string) {
     setSelectedUserid(uid);
@@ -204,6 +204,8 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
     setMaoFeeEdit(null);
     setFwdErr(null);
     setLoadingFwd(uid !== "");
+    const customer = customers.find((c) => c.userid === uid);
+    setDateDue(creditDueDate(dateIssued, customer?.credit_terms_days ?? 0));
   }
 
   // D2 — the bill amount of a row: the admin-typed override (when a valid number)
@@ -267,6 +269,9 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
   const showWht = !!selectedCustomer?.is_juristic && totalAmount > 0;
   const whtAmount = showWht ? Math.round(totalAmount * 0.01 * 100) / 100 : 0;
   const netPayable = Math.round((totalAmount - whtAmount) * 100) / 100;
+  const creditGrantIds = (eligible ?? [])
+    .filter((f) => selectedIds.has(f.id) && f.needs_credit_grant)
+    .map((f) => f.id);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -333,6 +338,9 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
         : "") +
       (zeroIds.length > 0
         ? `⚠️ มี ${zeroIds.length} รายการค่าขนส่ง ฿0 (ยังไม่ได้วัด/ยังไม่ตั้งราคา · อาจเก็บเงินขาด): ${zeroIds.map((id) => `#${id}`).join(", ")}\nควรตรวจสอบ/วัดที่โกดังก่อน — ถ้าจะออกบิลทั้งที่ค่าขนส่งเป็น ฿0 กดตกลง\n\n`
+        : "") +
+      (creditGrantIds.length > 0
+        ? `💳 รายการที่เลือก ${creditGrantIds.length} รายการยังไม่ได้ติดเครดิต (${creditGrantIds.map((id) => `#${id}`).join(", ")})\nเมื่อยืนยัน ระบบจะใช้วงเงินและวันครบกำหนด ${dateDue} พร้อมออกใบวางบิล\n\n`
         : "");
     const ok = await confirm(
       `${warn}ยืนยันออกใบวางบิล?\n` +
@@ -348,6 +356,7 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
         forwarderIds:     Array.from(selectedIds),
         dateIssued,
         dateDue,
+        grantCreditOnIssue: creditGrantIds.length > 0,
         deliveryChnThb:   numChn,
         deliveryThThb:    numTh,
         otherThb:         numOther,
@@ -419,7 +428,14 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
             <input
               type="date"
               value={dateIssued}
-              onChange={(e) => setDateIssued(e.target.value)}
+              onChange={(e) => {
+                const nextIssued = e.target.value;
+                setDateIssued(nextIssued);
+                const frozenDue = earliestCreditDueDate(
+                  (eligible ?? []).filter((f) => selectedIds.has(f.id)).map((f) => f.credit_due_date),
+                );
+                setDateDue(frozenDue ?? creditDueDate(nextIssued, selectedCustomer?.credit_terms_days ?? 0));
+              }}
               required
               className={inputCls}
             />
@@ -433,7 +449,11 @@ export function BillingRunAddClient({ customers, preselectUserid = "", preselect
               required
               className={inputCls}
             />
-            <p className="text-[11px] text-muted mt-0.5">ค่าเริ่มต้น = วันนี้ + 7 วัน</p>
+            <p className="text-[11px] text-muted mt-0.5">
+              {selectedCustomer?.is_credit_customer
+                ? `ตามเทอมเครดิต ${selectedCustomer.credit_terms_days} วัน · วงเงินคงเหลือ ฿${thbFmt(selectedCustomer.credit_available_thb)}`
+                : "เงินสด/ไม่ได้เปิดวงเงิน: วันเดียวกับวันที่ออกเอกสาร"}
+            </p>
           </label>
         </div>
 

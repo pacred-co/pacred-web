@@ -93,7 +93,10 @@ export function ConsolidateClient({ rows }: { rows: ConsolidationCandidateRow[] 
     const ok = await confirm(
       `ยืนยันวางบิลให้ลูกค้าที่เลือกทั้งหมด?\n` +
         `จำนวน: ${selected.size} ราย (1 ใบต่อ 1 ลูกค้า)\n` +
-        `ยอดรวมทั้งหมด: ฿${thbFmt(selectedTotal)}\n\n` +
+        `ยอดรวมทั้งหมด: ฿${thbFmt(selectedTotal)}\n` +
+        (selectedRows.some((r) => r.is_credit_customer)
+          ? `ลูกค้าเครดิตจะติดวงเงินตามรายการที่พร้อม และใช้เทอมรายลูกค้าก่อนออกใบ\n\n`
+          : "\n") +
         `รายชื่อ:\n${selectedRows.map((r) => `• ${r.userid} · ${r.ready_count} รายการ · ฿${thbFmt(r.ready_total_thb)}`).join("\n")}`,
     );
     if (!ok) return;

@@ -282,7 +282,7 @@ export default async function AdminForwarderEditPage({
       // 2026-06-16 (FLAG 2) — the customer's stored ค่าเทียบ, so the edit form's
       // "คิดค่าเทียบแบบกำหนดเอง" toggle can SEED from the real threshold the
       // pricing waterfall uses (adminUpdateForwarderDimensions reads these too).
-      "userComparison, userComparisonValue",
+      "userComparison, userComparisonValue, userCreditDate",
     )
     .eq("userID", r.userid)
     .maybeSingle();
@@ -300,6 +300,7 @@ export default async function AdminForwarderEditPage({
     userCompany: string | null;
     userComparison: string | number | null;
     userComparisonValue: number | string | null;
+    userCreditDate: number | string | null;
   } | null;
 
   // 2026-07-04 — resolve the account-holder DISPLAY identity (นิติบุคคล → company
@@ -946,6 +947,7 @@ export default async function AdminForwarderEditPage({
               amountEstimate={Number(r.ftotalprice ?? 0)}
               walletBalance={walletBalance}
               isCredit={(r.fcredit ?? "").trim() === "1"}
+              creditTermsDays={Math.max(0, Math.trunc(Number(u?.userCreditDate ?? 0) || 0))}
             />
           </div>
         </section>
