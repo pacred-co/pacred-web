@@ -109,9 +109,9 @@ function HeadBox({ head }: { head: OrgUnit }) {
 export function OrgChartView({ root }: { root: OrgUnit }) {
   const ceo = root.children.find((c) => c.code === "ceo");
   const head = ceo?.children.find((c) => c.kind === "position"); // Manager·AUDIT/QC
+  // owner 2026-08-03: "แผนกล่างควรลงตรงมา Manager ไม่ใช่เว้นจากการตลาด" →
+  // รวมทุกแผนกเป็นแถวเดียว ห้อยจาก bus เส้นเดียวใต้ Manager (ไม่มีเส้นข้ามชั้น).
   const depts = (head?.children ?? []).filter((c) => c.kind === "department");
-  const band1 = depts.filter((d) => d.band === 1);
-  const band2 = depts.filter((d) => d.band !== 1);
 
   const trunk = (h: number) => <div className="mx-auto w-0.5 bg-[#c9c5c2]" style={{ height: h }} />;
 
@@ -119,7 +119,12 @@ export function OrgChartView({ root }: { root: OrgUnit }) {
     <div className="overflow-x-auto pb-2 scrollbar-x-visible">
       <div className="mx-auto w-max">
         <div className="flex justify-center">
-          <div className="rounded-xl bg-primary-600 px-12 py-3.5 text-[17px] font-bold text-white shadow-lg">CEO</div>
+          <div className="rounded-xl bg-primary-600 px-12 py-3 text-center text-white shadow-lg">
+            <div className="text-[17px] font-bold leading-tight">CEO</div>
+            {ceo && ceo.quotaEmployee > 0 && (
+              <div className="mt-0.5 text-[11.5px] font-semibold opacity-95">พนักงาน {ceo.haveEmployee}/{ceo.quotaEmployee}</div>
+            )}
+          </div>
         </div>
         {trunk(26)}
         <div className="flex justify-center">{head && <HeadBox head={head} />}</div>
@@ -127,13 +132,9 @@ export function OrgChartView({ root }: { root: OrgUnit }) {
         <p className="mb-1 text-center text-[11px] text-gray-500">
           ทุกแผนกอยู่ใต้ <b>{head?.nameTh}</b> (คนเดียวกัน · คุมทุกแผนก + เป็นด่านตรวจก่อนถึง CEO)
         </p>
-        {/* w-full (ไม่ใช่ w-max) → justify-center จัดกลางจริง ให้ตรงใต้ trunk (owner: เส้นเบี้ยว) */}
+        {/* แถวเดียว — ทุกแผนกห้อยจาก bus เดียวใต้ Manager (เส้นตรงลงมาไม่ข้ามชั้น) */}
         <div className="flex w-full justify-center">
-          {band1.map((d) => <DeptCol key={d.id} dept={d} />)}
-        </div>
-        {trunk(30)}
-        <div className="flex w-full justify-center">
-          {band2.map((d) => <DeptCol key={d.id} dept={d} />)}
+          {depts.map((d) => <DeptCol key={d.id} dept={d} />)}
         </div>
       </div>
     </div>

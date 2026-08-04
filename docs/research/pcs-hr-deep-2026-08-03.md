@@ -122,3 +122,31 @@ PCS ไม่มี "ธงหัวหน้า" — **section เอง = ต�
 2. **Row พนักงาน** = ฟอร์ม 4 บล็อก (§1) + adminType 7 แบบ + ตารางลูก (address/education/org-ships) → ทะเบียน filter (§6) → ย้ายคนจริง ~27 คนเข้า row
 3. **section → สิทธิ์/เมนู** (ต่อยอด admin_positions mig 0221 · หัวหน้า section = เมนูมากกว่าลูกทีม)
 4. โปรไฟล์ 12 section (§7) · time-attendance (§8) — เฟสถัดไป · KPI/เงินเดือน ท้ายสุด
+
+---
+
+## 12. เฟส 2 — owner-decisions (2026-08-03 · จอ prod)
+
+**ล็อกคนออก (12 คน · applied prod · ย้อนได้):** admin_admin_man · admin_admin_put ·
+admin_alongkor · admin_beer · admin_jane · admin_pod · admin_pupu · admin_saiu_4 ·
+admin_tam · admin_toey · admin_vam · admin_wave — ล็อก 4 ชั้น: ban auth.users +
+admins.is_active=false + profiles.is_active=false + tb_admin.adminStatusA='0'.
+`scripts/hr-lock-and-assign-2026-08-03.mjs` (backup /tmp) · **ปลดล็อก = un-ban +
+set is_active กลับ** (owner กดเปิดทีหลัง · "ค่อยว่ากัน"). active 32→20.
+
+**จัดตำแหน่ง (applied):** admin_pop + admin_nat → **CEO** (โควตา CEO=2 · 2/2 เขียว) ·
+admin_ben → **Driver** · admin_keetar → **Warehouse**.
+
+**🔴 ค้าง — owner เคาะ:**
+- **admin_moo (=Driver) · admin_sunta (=Graphic/Editing) ไม่มีใน tb_admin เลย**
+  ("คนที่หายไป") → ต้องสร้าง row ใหม่ หรือรหัสต่างจากนี้? (ไม่เดา ไม่สร้างผี)
+- **admin_ben = ซ้ำซ้อน+ข้อมูลหาย** (owner แจ้ง) → จัดเป็น Driver ไปก่อน · ต้องเคลียร์
+  ข้อมูลซ้ำทีหลัง
+
+**งาน/สิทธิ์ที่ row มองเห็น (เฟส 4 · owner):** Driver = เอาของ **admin_ben** ·
+Warehouse = เอาตาม **admin_keetar** (ปอน+ภูมิเก็บ 2 หน้านี้ไว้เยอะแล้ว) → ตอนผูก
+ตำแหน่ง→role/menu ใช้ 2 คนนี้เป็น template.
+
+**ค่าตำแหน่ง/เงินเดือน (mig 0289 · single-source ยืนยัน):** พนักงาน 1 คน →
+`tb_admin.org_unit_id` link เดียว → เงินเดือน/ประเภทจ้าง (tb_admin) + ค่าตำแหน่ง
+(hr_org_units.position_allowance) + แผนก (derive จาก parent_id) — ไม่เก็บซ้ำที่ไหน.
