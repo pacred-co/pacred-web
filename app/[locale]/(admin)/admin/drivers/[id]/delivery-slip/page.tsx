@@ -397,10 +397,20 @@ export default async function DeliverySlipPage({
       <style>{`
         @media print {
           @page { size: A4 portrait; margin: 0; }
-          /* คืนขอบกระดาษให้เนื้อหาเอง + สูงเต็มหน้าเพื่อให้บล็อกล่างยังไปติดก้นหน้า */
+          /* กระดาษไหลเกินหน้า พ่นแผ่นเปล่า 3-4 แผ่นบน LQ-310 (owner/ภูม 2026-08-04) —
+             ต้นเหตุ 2 ชั้นซ้อน: (1) .print-area มี my-6 (margin แนวตั้งของจอ ~12.7mm) ที่
+             ไม่โดน override + min-height 297mm (เต็มหน้าพอดี) → margin ดันทะลุขอบ → หน้า
+             ถัดไปเปล่า · (2) .doc-desk มี min-h-screen (100vh) ครอบอีกชั้น (§0i "min-h-
+             screen = หน้าขาวเบิ้ล"). แก้: ปลด margin + min-h-screen + min-height ตอนพิมพ์
+             (สูงตามเนื้อหาเท่านั้น → delivery สั้น=หน้าสั้น·ไม่บังคับเต็ม · ยาว=ไหลตามจริง·ไม่มี
+             เปล่าบังคับ) · border-box (padding 12mm อยู่ในกล่อง). */
+          .doc-desk { min-height: 0 !important; background: #fff !important; }
           .print-area {
             padding: 12mm 12mm !important;
-            min-height: 297mm !important;
+            margin: 0 !important;
+            box-sizing: border-box !important;
+            max-width: none !important;
+            box-shadow: none !important;
           }
 
           /* ── Epson LQ-310 (ดอทเมทริกซ์ 24 เข็ม) legibility · owner/ภูม 2026-08-04 ──
@@ -417,8 +427,6 @@ export default async function DeliverySlipPage({
           .print-area table { border: 1px solid #000 !important; border-collapse: collapse !important; }
           .print-area th, .print-area td { border: 1px solid #000 !important; }
           .print-area thead th { font-weight: 700 !important; }
-          /* ตัวหนังสือใหญ่ขึ้นนิด ให้จุดหัวเข็มรวมเป็นตัวอักษรอ่านออก */
-          .print-area { font-size: 12.5px !important; }
         }
       `}</style>
 
