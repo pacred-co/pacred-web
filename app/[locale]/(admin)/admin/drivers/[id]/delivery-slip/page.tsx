@@ -402,6 +402,23 @@ export default async function DeliverySlipPage({
             padding: 12mm 12mm !important;
             min-height: 297mm !important;
           }
+
+          /* ── Epson LQ-310 (ดอทเมทริกซ์ 24 เข็ม) legibility · owner/ภูม 2026-08-04 ──
+             ใบนี้ดีไซน์ตามใบแจ้งหนี้ = ตัวหนังสือสีเทา + พื้นแถบสีอ่อน + เส้นผมเทา ·
+             บนหัวเข็มกระแทกกลายเป็น halftone จุดจางอ่านไม่ออก (เลเซอร์/อิงก์เจ็ทชัด
+             แต่ดอทเมทริกซ์ไม่ไหว). บังคับตอนพิมพ์ให้ "ดำล้วน + ตารางเส้นดำทึบ + ตัด
+             พื้นแถบสีออก" → กระแทกออกมาเป็นตัวอักษรทึบชัด. QR/โลโก้ (รูป) ไม่กระทบ. */
+          .print-area, .print-area * { color: #000 !important; }
+          /* ตัดพื้นแถบสี (tint แดง/cream) — บนดอทเมทริกซ์เป็นเทาจางบังตัวหนังสือ */
+          .print-area [style*="background"] { background: transparent !important; }
+          /* เส้นผมเทาทั้งหมด (เลขที่/วันที่ · เส้นคั่น · ยอดรวม) → ดำ ไม่งั้นหายเกลี้ยง */
+          .print-area [style*="border"] { border-color: #000 !important; }
+          /* ตารางรายการ = กรอบดำทึบทุกช่อง (เดิมเส้นผมเทา 0.5px = หายไปเลย) */
+          .print-area table { border: 1px solid #000 !important; border-collapse: collapse !important; }
+          .print-area th, .print-area td { border: 1px solid #000 !important; }
+          .print-area thead th { font-weight: 700 !important; }
+          /* ตัวหนังสือใหญ่ขึ้นนิด ให้จุดหัวเข็มรวมเป็นตัวอักษรอ่านออก */
+          .print-area { font-size: 12.5px !important; }
         }
       `}</style>
 
