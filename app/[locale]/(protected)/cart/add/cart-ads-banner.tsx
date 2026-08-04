@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { LINE_OA } from "@/components/seo/site";
 
 /**
  * CartAdsBanner — the right-side rotating promo banner on /cart/add (desktop).
@@ -20,13 +21,46 @@ const ADS = [
 
 const ROTATE_MS = 4500;
 
-export function CartAdsBanner() {
+/**
+ * `single` = โชว์ภาพเดียวนิ่งๆ ไม่หมุน ไม่มีจุดสไลด์ (owner 2026-08-04 "ใช้ภาพนี้แทน
+ * เอาขึ้นมาเป็นภาพเดียวเลย") — ใช้ที่หน้า /cart/add/manual. ไม่ส่ง = ชุดหมุนเดิม
+ * ของ /cart/add เหมือนเดิมทุกอย่าง.
+ * ภาพต้องเป็นสัดส่วน 9:16 เท่ากรอบ ไม่งั้น object-cover จะครอป.
+ */
+export function CartAdsBanner({ single }: { single?: { src: string; alt: string } } = {}) {
   const [active, setActive] = useState(0);
 
   useEffect(() => {
+    if (single) return; // ภาพเดียว = ไม่ต้องตั้งตัวจับเวลา
     const timer = setInterval(() => setActive((i) => (i + 1) % ADS.length), ROTATE_MS);
     return () => clearInterval(timer);
-  }, []);
+  }, [single]);
+
+  if (single) {
+    // ภาพนี้ชวนให้ "ส่งลิงก์ให้ทีมงาน" อยู่แล้ว → กดแล้วไป LINE OA เลย
+    // (owner 2026-08-04 "ทำให้กดแล้วไป line เวลาเอาเมาส์ชี้แล้วให้ซูมด้วยเล็กน้อย").
+    // ซูม "ตัวรูปข้างใน" ไม่ใช่ทั้งกล่อง — กล่อง overflow-hidden ครอบไว้ ภาพเลยขยาย
+    // อยู่ในกรอบเดิม ไม่ดันของข้างๆ และไม่ทำให้หน้าขยับ.
+    return (
+      <a
+        href={LINE_OA.shortUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="ส่งลิงก์สินค้าให้ทีมงานทางไลน์"
+        aria-label="ส่งลิงก์สินค้าให้ทีมงานทางไลน์ (เปิดแท็บใหม่)"
+        className="group relative block aspect-[9/16] w-full overflow-hidden rounded-2xl bg-primary-700 shadow-md transition-shadow duration-300 hover:shadow-lg"
+      >
+        <Image
+          src={single.src}
+          alt={single.alt}
+          fill
+          sizes="400px"
+          priority
+          className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+        />
+      </a>
+    );
+  }
 
   return (
     <div className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl bg-primary-700 shadow-md">

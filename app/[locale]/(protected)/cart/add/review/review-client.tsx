@@ -118,9 +118,12 @@ export function ReviewClient({
   }, [fxRates]);
 
   /**
-   * Add typed รายการ right here (owner 2026-08-03 "เพิ่มรายการออกมาได้ต่อเลยอะ
-   * ไม่ได้ไปไหน") — a shop we can't fetch becomes the next tab instead of a
-   * bounce to another page. `urls` may be empty = one blank รายการ.
+   * เพิ่ม "รายการกรอกเอง" ต่อในหน้านี้เลย ไม่เด้งไปหน้าอื่น (owner 2026-08-03
+   * "กดไม่มีลิงก์ แล้วเพิ่มรายการออกมาได้ต่อเลย ไม่ได้ไปไหน" · ย้ำอีกครั้ง
+   * 2026-08-04 "ให้มันเป็นรายการต่อเลย ไม่ใช่ไปโผล่หน้าอื่น อยู่หน้าเดิม").
+   * ฟอร์มที่โผล่มาเป็นตัวเดียวกับหน้า /cart/add/manual (ManualItemForm + คลาส
+   * pcs-item-*) จึงหน้าตาเหมือนกันทุกจุดตามที่ owner ต้องการ.
+   * `urls` ว่าง = รายการเปล่า 1 อัน.
    */
   function addManualTabs(urls: string[]) {
     const base = items ?? [];
@@ -226,6 +229,8 @@ export function ReviewClient({
     // /cart/add may have sent along links from shops we have no API for — they
     // become typed tabs beside the fetched ones, in the same list.
     const seeded = links.map(newItem);
+    // /cart/add may have sent along links from shops we have no API for — they
+    // become typed tabs beside the fetched ones, in the same list.
     const manual = takeManualLinks().map((u) => newManualTab(u));
     setItems([...seeded, ...manual].slice(0, MAX_LINKS));
 
@@ -449,6 +454,7 @@ export function ReviewClient({
         </button>
       </div>
 
+
       {/* Active item — skeleton → rich card / error */}
       {cur.status === "loading" ? (
         <SkeletonCard />
@@ -470,7 +476,9 @@ export function ReviewClient({
         </div>
       ) : cur.status === "manual" ? (
         <>
-          <div className="rounded-2xl rounded-tl-none border border-border bg-white p-3 md:p-4">
+          {/* `@container` = ต้องมีคู่กับ @-variant ใน <ManualItemForm> ไม่งั้นฟอร์ม
+              จะกลายเป็นคอลัมน์เดียวถาวรบนหน้านี้ (ดู manual-item.tsx). */}
+          <div className="pcs-item-form rounded-2xl rounded-tl-none border border-border bg-white p-3 md:p-4">
             <ManualItemForm
               item={cur.manual}
               patch={(p) => patchManual(cur.key, p)}
