@@ -56,7 +56,15 @@ type SalesPerson = {
 // adminStatusSale) shows them here automatically — owner 2026-06-15.
 const CURATED_SALES: SalesPerson[] = [
   { id: "may",  name: "เมย์", roleKey: "roleSales",     taglineKey: "taglineMay",  phone: "066-125-3006", image: "/images/Character_Icon/may.png",   altKey: "altMay"  },
-  { id: "nat",  name: "แนท",  roleKey: "roleSales",     taglineKey: "taglineNat",  phone: "066-131-0253", image: "/images/pacred-logo-red.png", useContain: true, altKey: "altNat" },
+  // ลูกนัท + แบม — รูปจริง + เบอร์จริงที่ owner ส่งมา 2026-08-04.
+  // id ต้องตรงกับ adminID ที่ตัด "admin_" ออก (admin_looknut / admin_bam) ไม่งั้น
+  // การ์ดจะไม่ถูกจับคู่ แล้วตกไปใช้การ์ดเริ่มต้นที่อ่านเบอร์จาก DB ซึ่งยังเป็นค่าชั่วคราว.
+  { id: "looknut", name: "ลูกนัท", roleKey: "roleSales", taglineKey: "taglineGeneric", phone: "099-234-5196", image: "/images/SalesIcon/looknut.png", altKey: "altGeneric" },
+  { id: "bam",     name: "แบม",   roleKey: "roleSales", taglineKey: "taglineGeneric", phone: "066-131-0253", image: "/images/SalesIcon/baam.png",   altKey: "altGeneric" },
+  // ⚠️ แนต (วันดี · admin_nat) เป็นคนละคนกับ ลูกนัท — เบอร์ 066-131-0253 ที่การ์ดนี้เคยโชว์
+  // เป็นของ "แบม" ตามที่ owner ยืนยัน 2026-08-04 → เปลี่ยนมาใช้เบอร์จริงของแนตใน tb_admin
+  // (0941178515) ไม่งั้นเว็บจะโชว์เบอร์เดียวกันให้ลูกค้า 2 คน.
+  { id: "nat",  name: "แนต",  roleKey: "roleSales",     taglineKey: "taglineNat",  phone: "094-117-8515", image: "/images/pacred-logo-red.png", useContain: true, altKey: "altNat" },
   { id: "pee",  name: "พี",   roleKey: "roleSales",     taglineKey: "taglinePee",  phone: "061-779-9299", image: "/images/Character_Icon/pee01.png", altKey: "altPee" },
   // เตย removed from the sales team (ปอน 2026-06-25 · owner-confirmed "ไม่มีเตย เอาออก").
   // Real removal = the DB flag (tb_admin.admin_toey.adminStatusSale='0' via
