@@ -427,6 +427,16 @@ export default async function DeliverySlipPage({
           .print-area table { border: 1px solid #000 !important; border-collapse: collapse !important; }
           .print-area th, .print-area td { border: 1px solid #000 !important; }
           .print-area thead th { font-weight: 700 !important; }
+
+          /* อัดความสูงตอนพิมพ์ให้ลง 1 แผ่นง่ายขึ้น (owner/ภูม 2026-08-04 · LQ-310 กระดาษ
+             ต่อเนื่อง 11" — สลิปยาว 19 รายการเดิมกิน ~1.5 แผ่น). ลด padding แถวตาราง +
+             line-height + ระยะห่าง section · ตัวหนังสือขนาดเดิม (อ่านออกเท่าเดิม) แค่ชิดขึ้น. */
+          .print-area td, .print-area th { padding-top: 1.5px !important; padding-bottom: 1.5px !important; line-height: 1.2 !important; }
+          .print-area .mt-6 { margin-top: 9px !important; }
+          .print-area .mt-5 { margin-top: 7px !important; }
+          .print-area .mt-4 { margin-top: 5px !important; }
+          .print-area .gap-4 { gap: 6px !important; }
+          .print-area .gap-6 { gap: 8px !important; }
         }
       `}</style>
 
