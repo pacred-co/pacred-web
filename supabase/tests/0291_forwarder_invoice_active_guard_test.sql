@@ -22,7 +22,7 @@ create table public.tb_forwarder_invoice_item (
   unique (invoice_id, forwarder_id)
 );
 
-\ir ../migrations/0287_forwarder_invoice_active_guard.sql
+\ir ../migrations/0291_forwarder_invoice_active_guard.sql
 
 begin;
 

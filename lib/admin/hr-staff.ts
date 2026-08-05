@@ -78,11 +78,17 @@ export async function loadStaffRegister(): Promise<{ rows: StaffRow[]; error: st
   const unitIds = [...new Set(rows0.map((r) => r.org_unit_id).filter(Boolean) as string[])];
   const nameById = new Map<string, { name: string; parentId: string | null }>();
   if (unitIds.length) {
-    const { data: units } = await admin.from("hr_org_units").select("id,name_th,parent_id").in("id", unitIds);
+    // §0c — ต้อง destructure `error` เสมอ · ชื่อตำแหน่งเป็นข้อมูลประกอบ (ไม่ใช่เงิน)
+    // → fail-soft: อ่านไม่ได้ = log แล้วปล่อยชื่อว่าง ดีกว่าทั้งหน้าล้ม
+    const { data: units, error: unitsErr } = await admin
+      .from("hr_org_units").select("id,name_th,parent_id").in("id", unitIds);
+    if (unitsErr) console.error("[hr-staff] อ่านชื่อตำแหน่งไม่ได้", { code: unitsErr.code, message: unitsErr.message });
     for (const u of (units ?? []) as { id: string; name_th: string; parent_id: string | null }[]) nameById.set(u.id, { name: u.name_th, parentId: u.parent_id });
     const parentIds = [...new Set([...nameById.values()].map((v) => v.parentId).filter(Boolean) as string[])];
     if (parentIds.length) {
-      const { data: parents } = await admin.from("hr_org_units").select("id,name_th").in("id", parentIds);
+      const { data: parents, error: parentsErr } = await admin
+        .from("hr_org_units").select("id,name_th").in("id", parentIds);
+      if (parentsErr) console.error("[hr-staff] อ่านชื่อแผนกแม่ไม่ได้", { code: parentsErr.code, message: parentsErr.message });
       for (const p of (parents ?? []) as { id: string; name_th: string }[]) nameById.set(p.id, { name: p.name_th, parentId: null });
     }
   }

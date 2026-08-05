@@ -1,4 +1,10 @@
--- 0287_forwarder_invoice_active_guard.sql
+-- 0291_forwarder_invoice_active_guard.sql
+--
+-- ⚠️ RENUMBERED 2026-08-04 (เดฟ · integrate): เขียนมาเป็น 0287 บน branch `codex`
+-- แต่ชนกับ 0287_hr_org_units.sql ที่ทำพร้อมกันบน dave-pacred2 (2 เครื่องเขียนพร้อมกัน
+-- — เช็ค `ls supabase/migrations | tail` ก่อนตั้งเลขเสมอ). ตัวนี้ย้ายเพราะไม่มีลำดับ
+-- พึ่งพาใคร ส่วนโซ่ HR 0287→0290 ต้องเรียงกันอยู่. **APPLIED PROD แล้ว 2026-08-04**
+-- (ตอนนั้นชื่อไฟล์ยังเป็น 0287) · verified live: trigger 1 · function 1 · dup 0.
 --
 -- Money invariant: one tb_forwarder row may belong to at most one ACTIVE
 -- (issued/paid) billing-run invoice. Migration 0138 only prevented the same
@@ -28,7 +34,7 @@ begin
     raise exception using
       errcode = '23505',
       message = format(
-        '0287 blocked: %s forwarder(s) already belong to multiple active billing invoices',
+        '0291 blocked: %s forwarder(s) already belong to multiple active billing invoices',
         duplicate_count
       ),
       hint = 'Reconcile the duplicate money documents explicitly; do not auto-delete invoice history.';
