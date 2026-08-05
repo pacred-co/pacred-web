@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Search, Users, CheckCircle2, CircleSlash, Loader2 } from "lucide-react";
+import { Search, Users, CheckCircle2, CircleSlash, Loader2, Pencil } from "lucide-react";
+import { Link } from "@/i18n/navigation";
 import { assignStaffToPosition } from "@/actions/admin/hr-staff";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import type { StaffRow } from "@/lib/admin/hr-staff";
@@ -94,6 +95,7 @@ export function StaffAssignClient({ rows, positions }: { rows: StaffRow[]; posit
               <th className="px-3 py-2">ประเภท</th>
               <th className="px-3 py-2">ตำแหน่งในผัง</th>
               <th className="px-3 py-2 w-72">จัดเข้าตำแหน่ง</th>
+              <th className="px-3 py-2">แก้ไข</th>
             </tr>
           </thead>
           <tbody>
@@ -136,10 +138,16 @@ export function StaffAssignClient({ rows, positions }: { rows: StaffRow[]; posit
                     {saving && busyId === r.adminId && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted" />}
                   </div>
                 </td>
+                <td className="px-3 py-2">
+                  <Link href={`/admin/hr/staff/${r.adminId}/edit`}
+                    className="inline-flex items-center gap-1 rounded-lg border border-border px-2 py-1 text-[11px] hover:bg-surface-alt hover:border-primary-300">
+                    <Pencil className="h-3 w-3" /> {r.hasHrRecord ? "แก้ไข" : "เติม HR"}
+                  </Link>
+                </td>
               </tr>
             ))}
             {visible.length === 0 && (
-              <tr><td colSpan={4} className="px-3 py-8 text-center text-xs text-muted">ไม่พบพนักงานตามเงื่อนไข</td></tr>
+              <tr><td colSpan={5} className="px-3 py-8 text-center text-xs text-muted">ไม่พบพนักงานตามเงื่อนไข</td></tr>
             )}
           </tbody>
         </table>

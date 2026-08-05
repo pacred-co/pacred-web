@@ -118,6 +118,63 @@ export async function loadStaffRegister(): Promise<{ rows: StaffRow[]; error: st
   return { rows, error: null };
 }
 
+export type StaffDetail = {
+  adminId: string;
+  memberCode: string | null;
+  hasHrRecord: boolean;
+  // identity (single-source · profiles + tb_admin เขียนตรงกัน)
+  firstName: string; lastName: string; nickname: string;
+  phone: string; photoUrl: string;
+  sex: string; birthday: string; // yyyy-mm-dd
+  // HR detail (tb_admin)
+  type: string; salaryType: string; salary: string; nationalId: string;
+  isSale: boolean;
+  roles: string[];
+  positionName: string | null;
+};
+
+/** โหลดข้อมูลพนักงานคนเดียว (profiles + tb_admin) สำหรับฟอร์มแก้ไข */
+export async function loadStaffDetail(adminLoginId: string): Promise<StaffDetail | null> {
+  const admin = createAdminClient();
+  const { data: p, error } = await admin
+    .from("profiles")
+    .select("id,admin_login_id,member_code,first_name,last_name,phone,avatar_url,sex,birthday,org_unit_id")
+    .eq("admin_login_id", adminLoginId)
+    .maybeSingle();
+  if (error) { console.error("[hr-staff] detail load failed", { code: error.code, message: error.message }); return null; }
+  if (!p) return null;
+
+  const [{ data: tba }, { data: adm }, unitName] = await Promise.all([
+    admin.from("tb_admin").select("adminNickname,adminTel,adminPicture,adminSex,adminBirthday,adminType,salaryType,salary,nationalIDCard,adminStatusSale").eq("adminID", adminLoginId).maybeSingle(),
+    admin.from("admins").select("role").eq("profile_id", (p as { id: string }).id).eq("is_active", true),
+    p.org_unit_id
+      ? admin.from("hr_org_units").select("name_th").eq("id", p.org_unit_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const t = tba as null | { adminNickname: string | null; adminTel: string | null; adminPicture: string | null; adminSex: string | null; adminBirthday: string | null; adminType: string | null; salaryType: string | null; salary: number | null; nationalIDCard: string | null; adminStatusSale: string | null };
+  const dOnly = (v: string | null | undefined) => (v ?? "").slice(0, 10); // yyyy-mm-dd
+
+  return {
+    adminId: adminLoginId,
+    memberCode: p.member_code,
+    hasHrRecord: !!t,
+    firstName: p.first_name ?? "",
+    lastName: p.last_name ?? "",
+    nickname: t?.adminNickname ?? "",
+    phone: p.phone ?? t?.adminTel ?? "",
+    photoUrl: p.avatar_url ?? t?.adminPicture ?? "",
+    sex: p.sex ?? t?.adminSex ?? "",
+    birthday: dOnly(p.birthday ?? t?.adminBirthday),
+    type: (t?.adminType ?? "1").trim() || "1",
+    salaryType: (t?.salaryType ?? "2").trim() || "2",
+    salary: t?.salary != null ? String(t.salary) : "",
+    nationalId: t?.nationalIDCard ?? "",
+    isSale: t?.adminStatusSale === "1",
+    roles: ((adm ?? []) as { role: string }[]).map((r) => r.role),
+    positionName: (unitName.data as { name_th: string } | null)?.name_th ?? null,
+  };
+}
+
 /** นับคนสด per org_unit (จาก profiles spine · join tb_admin adminType เพื่อ bucket) */
 export async function loadLivePositionCounts(): Promise<Map<string, { employee: number; internship: number; partner: number }>> {
   const admin = createAdminClient();
