@@ -57,10 +57,13 @@ const TRANSPORT_OPTIONS: ReadonlyArray<{ v: TransportType; l: string }> = [
 // PCS-family ship-by options (the in-store/owned-courier set the legacy
 // update_fShipBy re-prices). An external carrier name goes in the free-text box.
 const SHIP_BY_PCS_OPTIONS: ReadonlyArray<{ v: string; l: string }> = [
-  { v: "PCS",  l: "รับเองที่โกดัง Pacred (ไม่มีค่าส่ง)" },
-  { v: "PCSF", l: "Pacred เหมาๆ · ส่งในเขต ฿100" },
-  { v: "PCSE", l: "Pacred Express · ส่งด่วน (ปริมาตร×120 · ไม่มีขั้นต่ำ)" },
+  { v: "PCS",  l: "PR · รับเองที่โกดัง Pacred (ไม่มีค่าส่ง)" },
+  { v: "PCSF", l: "PRF · Pacred เหมาๆ · ส่งในเขต ฿100" },
+  { v: "PCSE", l: "PRE · Pacred Express · ส่งด่วน (ปริมาตร×120 · ไม่มีขั้นต่ำ)" },
 ];
+
+const displayOwnFleetCode = (code: string): string =>
+  code === "PCS" ? "PR" : code === "PCSF" ? "PRF" : code === "PCSE" ? "PRE" : code;
 
 const AMOUNT_COUNT_OPTIONS: ReadonlyArray<{ v: AmountCount; l: string }> = [
   { v: "2", l: "รวม (คิดราคารวมทั้งบิล)" },
@@ -171,15 +174,16 @@ export function TbForwarderEditPanel(p: Props) {
 
   async function onSaveShipBy() {
     const code = effectiveShipBy;
+    const displayCode = displayOwnFleetCode(code);
     if (!code) { setMsg({ kind: "err", text: "เลือกผู้ขนส่งจากรายชื่อ (ขนส่งเอกชน เลือกที่หน้ารายละเอียด · ขึ้นตามจังหวัดปลายทาง)" }); return; }
     if (code === p.currentShipBy) { setMsg({ kind: "err", text: "ไม่มีการเปลี่ยนแปลง" }); return; }
     const extra = code === "PCS"
-      ? "\n\nผู้ขนส่ง PCS = รับเองที่โกดัง — ที่อยู่จัดส่งจะถูกแทนที่ด้วยที่อยู่โกดัง Pacred (สมุทรสาคร)"
+      ? "\n\nPR = รับเองที่โกดัง — ที่อยู่จัดส่งจะถูกแทนที่ด้วยที่อยู่โกดัง Pacred (สมุทรสาคร)"
       : (code === "PCSF" || code === "PCSE")
-        ? "\n\nค่าขนส่งจะถูกคำนวณใหม่ตามเงื่อนไข PCS (เฉพาะรายการที่ยังไม่ชำระเงิน)"
+        ? "\n\nค่าขนส่งจะถูกคำนวณใหม่ตามเงื่อนไข PRF/PRE (เฉพาะรายการที่ยังไม่ชำระเงิน)"
         : "";
-    if (!(await confirm(`เปลี่ยนผู้ขนส่ง (Ship-by) เป็น "${code}" ?${extra}`))) return;
-    run(() => adminUpdateForwarderShipBy({ fId: p.fId, fShipBy: code }), `เปลี่ยนผู้ขนส่งเป็น ${code} สำเร็จ`);
+    if (!(await confirm(`เปลี่ยนผู้ขนส่ง (Ship-by) เป็น "${displayCode}" ?${extra}`))) return;
+    run(() => adminUpdateForwarderShipBy({ fId: p.fId, fShipBy: code }), `เปลี่ยนผู้ขนส่งเป็น ${displayCode} สำเร็จ`);
   }
 
   async function onSaveAmountCount() {
@@ -239,7 +243,7 @@ export function TbForwarderEditPanel(p: Props) {
         </label>
         {p.isPcs ? (
           <p className="rounded-md border border-border bg-surface-alt/40 px-3 py-2 text-[11px] text-muted">
-            รายการนี้เป็นแบบ <b>รับเองที่โกดัง (PCS)</b> — ไม่มีที่อยู่จัดส่งให้แก้ไข
+            รายการนี้เป็นแบบ <b>รับเองที่โกดัง (PR)</b> — ไม่มีที่อยู่จัดส่งให้แก้ไข
           </p>
         ) : p.addresses.length === 0 ? (
           <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
@@ -332,7 +336,7 @@ export function TbForwarderEditPanel(p: Props) {
           🏷️ บันทึกผู้ขนส่ง
         </button>
         <p className="text-[11px] text-muted">
-          ปัจจุบัน: <b>{p.currentShipBy || "—"}</b> · PCS/PCSF/PCSE คิดค่าขนส่งใหม่อัตโนมัติ (เฉพาะที่ยังไม่ชำระ) · PCS แทนที่ที่อยู่ด้วยโกดัง Pacred (สมุทรสาคร)
+          ปัจจุบัน: <b>{p.currentShipBy ? displayOwnFleetCode(p.currentShipBy) : "—"}</b> · PR/PRF/PRE คิดค่าขนส่งใหม่อัตโนมัติ (เฉพาะที่ยังไม่ชำระ) · PR แทนที่ที่อยู่ด้วยโกดัง Pacred (สมุทรสาคร)
         </p>
       </div>
 

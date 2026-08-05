@@ -492,9 +492,9 @@ export function ForwarderInlineEdits(p: Props) {
               value={shipByMode}
               onChange={(e) => setShipByMode(e.target.value)}
             >
-              <option value="PCS">รับเองที่โกดัง Pacred (ไม่มีค่าส่ง)</option>
-              <option value="PCSF">Pacred เหมาๆ · ส่งในเขต ฿100</option>
-              <option value="PCSE">Pacred Express · ส่งด่วน (ปริมาตร×120 · ไม่มีขั้นต่ำ)</option>
+              <option value="PCS">PR · รับเองที่โกดัง Pacred (ไม่มีค่าส่ง)</option>
+              <option value="PCSF">PRF · Pacred เหมาๆ · ส่งในเขต ฿100</option>
+              <option value="PCSE">PRE · Pacred Express · ส่งด่วน (ปริมาตร×120 · ไม่มีขั้นต่ำ)</option>
               {/* 🔴 owner 2026-07-14 — the free-text "ผู้ขนส่งภายนอก (กรอกชื่อเอง)" option is
                   GONE: a ขนส่งเอกชน may only come from the owner's workbook, filtered by the
                   delivery province. Pick it on the detail page (<EditShipByField>), which
@@ -506,7 +506,7 @@ export function ForwarderInlineEdits(p: Props) {
               )}
             </select>
             <p className="text-[11px] text-muted">
-              PCS = ที่อยู่จะถูกแทนด้วยโกดัง Pacred (สมุทรสาคร) · PCS/PCSF/PCSE คิดค่าขนส่งใหม่อัตโนมัติ ·
+              PR = รับเองและแทนที่อยู่ด้วยโกดัง Pacred (สมุทรสาคร) · PR/PRF/PRE คิดค่าขนส่งใหม่อัตโนมัติ ·
               “ขนส่งเอกชน” เลือกได้ที่หน้ารายละเอียด (ขึ้นตามจังหวัดปลายทาง · เฉพาะที่มีในไฟล์พื้นที่ขนส่ง)
             </p>
             <div className="flex gap-2">
@@ -1250,9 +1250,9 @@ export function EditShipByField({
               <label className="block text-[11px] text-muted mb-0.5">บริษัทขนส่ง</label>
               <select className={selectCls} value={shipByMode} onChange={(e) => setShipByMode(e.target.value)}>
                 <optgroup label="Pacred (ส่งเอง)">
-                  <option value="PCS">รับเองที่โกดัง Pacred (ไม่มีค่าส่ง)</option>
-                  <option value="PCSF">Pacred เหมาๆ · ส่งในเขต ฿100</option>
-                  <option value="PCSE">Pacred Express · ส่งด่วน (ปริมาตร×120 · ไม่มีขั้นต่ำ)</option>
+                  <option value="PCS">PR · รับเองที่โกดัง Pacred (ไม่มีค่าส่ง)</option>
+                  <option value="PCSF">PRF · Pacred เหมาๆ · ส่งในเขต ฿100</option>
+                  <option value="PCSE">PRE · Pacred Express · ส่งด่วน (ปริมาตร×120 · ไม่มีขั้นต่ำ)</option>
                 </optgroup>
                 {liveCarriers.length > 0 && (
                   <optgroup label={`ขนส่งเอกชน ที่วิ่ง${selectedProvince ? ` จ.${selectedProvince}` : "จังหวัดปลายทาง"} (${liveCarriers.length})`}>

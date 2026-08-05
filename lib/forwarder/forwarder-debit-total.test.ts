@@ -441,27 +441,27 @@ console.log("computeForwarderDebitBatch — B1 N-box เหมาๆ (PRF-zero) 
   assertClose("legacy: second row no fee", b.lines[1].price_thb, 100);
 }
 
-// Production-shaped regressions audited 2026-08-05. PR622 had a mixed PRE/PRF
-// selection: PRE rows must never create the flat fee, but four remaining PRF
-// rows intentionally create exactly one ฿100 fee for the collection event.
-// PR200 was all PCS self-pickup and must stay fee-free.
-console.log("customer audits — mixed PRE/PRF and PCS pickup");
+// Production-shaped regressions audited 2026-08-05. PR622's PDF-scoped
+// shipment is PRE throughout: the customer calls and pays
+// Lalamove at the destination, so it must never elect a PRF flat-fee anchor.
+// PR200 was all warehouse pickup and must stay fee-free too.
+console.log("customer audits — PR622 PRE and PR200 warehouse pickup");
 {
   const pr622 = computeForwarderDebitBatch(
     [
       row({ id: 53001, fshipby: "PRE", ftrackingchn: "100001", ftotalprice: 100 }),
-      row({ id: 53085, fshipby: "PRF", ftrackingchn: "100085", ftotalprice: 92.61 }),
-      row({ id: 53180, fshipby: "PRF", ftrackingchn: "100180", ftotalprice: 192.5 }),
-      row({ id: 53187, fshipby: "PRF", ftrackingchn: "100187", ftotalprice: 178.5 }),
-      row({ id: 53188, fshipby: "PRF", ftrackingchn: "100188", ftotalprice: 205.2 }),
+      row({ id: 53085, fshipby: "PRE", ftrackingchn: "100085", ftotalprice: 92.61 }),
+      row({ id: 53180, fshipby: "PRE", ftrackingchn: "100180", ftotalprice: 192.5 }),
+      row({ id: 53187, fshipby: "PRE", ftrackingchn: "100187", ftotalprice: 178.5 }),
+      row({ id: 53188, fshipby: "PRE", ftrackingchn: "100188", ftotalprice: 205.2 }),
       row({ id: 53200, fshipby: "PRE", ftrackingchn: "100200", ftotalprice: 200 }),
     ],
     { userId: "PR622", isCorporate: false },
   );
   const freight = 100 + 92.61 + 192.5 + 178.5 + 205.2 + 200;
-  assertClose("PR622 mixed PRE/PRF → freight + one ฿100", pr622.total_thb, freight + 100);
-  assertEq("PR622 mixed PRE/PRF → exactly one fee anchor", pr622.lines.filter((l) => l.breakdown.maoFee > 0).length, 1);
-  assertEq("PR622 mixed PRE/PRF → PRE rows never carry เหมาๆ", pr622.lines.filter((l) => ["53001", "53200"].includes(l.id)).every((l) => l.breakdown.maoFee === 0), true);
+  assertClose("PR622 PRE-only → freight without ฿100 flat fee", pr622.total_thb, freight);
+  assertEq("PR622 PRE-only → zero fee anchors", pr622.lines.filter((l) => l.breakdown.maoFee > 0).length, 0);
+  assertEq("PR622 PRE-only → every row is fee-free", pr622.lines.every((l) => l.breakdown.maoFee === 0), true);
 
   const pr200 = computeForwarderDebitBatch(
     [
@@ -471,8 +471,8 @@ console.log("customer audits — mixed PRE/PRF and PCS pickup");
     ],
     { userId: "PR200", isCorporate: false },
   );
-  assertClose("PR200 PCS pickup → no flat fee", pr200.total_thb, 1603.96);
-  assertEq("PR200 PCS pickup → zero fee anchors", pr200.lines.filter((l) => l.breakdown.maoFee > 0).length, 0);
+  assertClose("PR200 warehouse pickup → no flat fee", pr200.total_thb, 1603.96);
+  assertEq("PR200 warehouse pickup → zero fee anchors", pr200.lines.filter((l) => l.breakdown.maoFee > 0).length, 0);
 }
 
 // ── COD (ปลายทาง · paymethod='2') excludes the domestic leg — F1/F2 (2026-07-15) ──
