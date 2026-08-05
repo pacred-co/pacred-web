@@ -1116,7 +1116,7 @@ const wrapClassHr: MenuItem = {
     // 2026-06-10 (ปอน) — KPI dashboard moved here from Accounting & Finance.
     blockExtKpi,
     // 2026-06-10 (ปอน) — admin-staff + org-info management moved here from Developer/tools.
-    { labelKey: "settingsCargo.adminUsers", href: "/admin/admins", icon: "UserCog" },
+    { labelKey: "settingsCargo.adminUsers", href: "/admin/hr/staff", icon: "UserCog" },
     { labelKey: "settingsCargo.positions", href: "/admin/positions", icon: "Network" },
     { labelKey: "settingsCargo.orgEmail", href: "/admin/organization-email", icon: "MessageCircle" },
     { labelKey: "settingsCargo.orgChannels", href: "/admin/organization-channels", icon: "Smartphone" },

@@ -20,13 +20,16 @@ export const EMPLOYEE_TYPE_LABEL: Record<string, string> = {
 
 export type StaffRow = {
   adminId: string;               // admin_login_id (spine key)
+  profileId: string;             // profiles.id (สำหรับจัดการสิทธิ์ RBAC)
   memberCode: string | null;     // AD###
   name: string;
   nickname: string | null;
   type: string;                  // adminType (from tb_admin · "" ถ้าไม่มี)
   typeLabel: string;
   isSale: boolean;
-  roles: string[];               // จาก admins (แสดงเฉยๆ)
+  isActive: boolean;             // ทำงานอยู่ (profiles.is_active) · false = ลาออก/ล็อก
+  roles: string[];               // จาก admins (active grants)
+  primaryRole: string | null;    // role หลัก (สำหรับ control เปลี่ยนสิทธิ์)
   hasHrRecord: boolean;          // มี tb_admin ไหม (ไม่มี = ต้องเติม HR detail)
   orgUnitId: string | null;
   positionName: string | null;
@@ -49,11 +52,12 @@ export function typeBucket(type: string | null): "employee" | "internship" | "pa
 /** โหลด profiles staff (active) → resolve tb_admin(HR) + admins(role) + ตำแหน่ง */
 export async function loadStaffRegister(): Promise<{ rows: StaffRow[]; error: string | null }> {
   const admin = createAdminClient();
+  // โหลดพนักงานทั้งหมด (active + ลาออก/ล็อก) — client แยก tab ตาม isActive
+  // (owner 2026-08-05: ยุบ /admin/admins มารวมที่นี่ · ต้องเห็นคนออกเพื่อปลดล็อก)
   const { data: profs, error } = await admin
     .from("profiles")
     .select("id,admin_login_id,member_code,first_name,last_name,is_active,org_unit_id")
     .not("admin_login_id", "is", null)
-    .eq("is_active", true)
     .order("admin_login_id");
   if (error) {
     console.error("[hr-staff] register load failed", { code: error.code, message: error.message });
@@ -101,15 +105,19 @@ export async function loadStaffRegister(): Promise<{ rows: StaffRow[]; error: st
     const t = (tba?.adminType ?? "").trim();
     // แหล่งเดียว = tb_admin → ชื่อจาก tb_admin ก่อน (profiles = mirror · fallback)
     const nameParts = [tba?.adminName ?? p.first_name, tba?.adminLastName ?? p.last_name].filter(Boolean).join(" ").trim();
+    const roles = rolesByProfile.get(p.id) ?? [];
     return {
       adminId: login,
+      profileId: p.id,
       memberCode: p.member_code,
       name: nameParts || login,
       nickname: tba?.adminNickname ?? null,
       type: t,
       typeLabel: t ? (EMPLOYEE_TYPE_LABEL[t] ?? "—") : "— (ยังไม่มีข้อมูล HR)",
       isSale: tba?.adminStatusSale === "1",
-      roles: rolesByProfile.get(p.id) ?? [],
+      isActive: p.is_active,
+      roles,
+      primaryRole: roles[0] ?? null,
       hasHrRecord: !!tba,
       orgUnitId: p.org_unit_id,
       positionName: unit?.name ?? null,

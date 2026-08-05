@@ -13,6 +13,7 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
  */
 
 const HR_ROLES = ["super", "accounting"] as const;
+const EMPLOYMENT_ROLES = ["super"] as const; // ล็อก/ปลดล็อกพนักงาน = super เท่านั้น
 
 const assignSchema = z.object({
   adminId: z.string().trim().min(1).max(60), // = profiles.admin_login_id
@@ -66,6 +67,56 @@ export async function assignStaffToPosition(input: AssignStaffInput): Promise<Ad
     revalidatePath("/admin/hr/staff");
     revalidatePath("/admin/hr/org-chart");
     revalidatePath("/admin/hr/org-table");
+    return { ok: true };
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ล็อก/ปลดล็อกพนักงาน (ทำงาน ↔ ลาออก) — 4 ชั้น ย้อนได้ (owner 2026-08-05 ·
+// ยุบ /admin/admins มารวมหน้า HR staff → ต้องปลดล็อกคนออกได้จากหน้านี้)
+// ════════════════════════════════════════════════════════════════════
+const employmentSchema = z.object({
+  adminId: z.string().trim().min(1).max(60),
+  active: z.boolean(), // true = เปิดกลับ (ทำงาน) · false = ล็อก (ลาออก)
+});
+export type SetEmploymentInput = z.infer<typeof employmentSchema>;
+
+/**
+ * ตั้งสถานะการจ้าง 4 ชั้น (mirror scripts/hr-lock 2026-08-03):
+ * auth (ban/unban) + admins.is_active + profiles.is_active + tb_admin.adminStatusA.
+ * ปลดล็อก = เปิดทุกชั้นกลับ · ล็อก = ปิดทุกชั้น. RBAC: super เท่านั้น.
+ */
+export async function setStaffEmployment(input: SetEmploymentInput): Promise<AdminActionResult> {
+  const parsed = employmentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "invalid_input" };
+  const { adminId, active } = parsed.data;
+
+  return withAdmin([...EMPLOYMENT_ROLES], async ({ adminId: actor }) => {
+    const admin = createAdminClient();
+
+    const { data: prof, error: pErr } = await admin
+      .from("profiles").select("id").eq("admin_login_id", adminId).maybeSingle();
+    if (pErr) return { ok: false, error: `db_error:${pErr.code ?? "unknown"}` };
+    if (!prof) return { ok: false, error: "staff_not_found" };
+    const profileId = (prof as { id: string }).id;
+
+    // ชั้น 1 — auth ban/unban (876000h ≈ 100 ปี = ล็อกถาวรจนกว่าปลด)
+    const { error: authErr } = await admin.auth.admin.updateUserById(profileId, {
+      ban_duration: active ? "none" : "876000h",
+    });
+    if (authErr) return { ok: false, error: `auth:${authErr.message}` };
+
+    // ชั้น 2-4 — admins / profiles / tb_admin (best-effort · log ถ้าพลาด)
+    const { error: aErr } = await admin.from("admins").update({ is_active: active }).eq("profile_id", profileId);
+    if (aErr) console.error("[hr] admins toggle failed", { adminId, code: aErr.code });
+    const { error: puErr } = await admin.from("profiles").update({ is_active: active }).eq("id", profileId);
+    if (puErr) return { ok: false, error: `profiles:${puErr.code ?? "unknown"}` };
+    const { error: tErr } = await admin.from("tb_admin").update({ adminStatusA: active ? "1" : "0" }).eq("adminID", adminId);
+    if (tErr) console.error("[hr] tb_admin toggle failed", { adminId, code: tErr.code });
+
+    await logAdminAction(actor, active ? "hr.staff_unlock" : "hr.staff_lock", "profiles", adminId, { active });
+    revalidatePath("/admin/hr/staff");
+    revalidatePath("/admin/hr/org-chart");
     return { ok: true };
   });
 }
