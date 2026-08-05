@@ -75,3 +75,25 @@ section เดียว). PCS model: หัวหน้า = คนที่เ�
 - **admin_center** (tb_admin only · ไม่มี profile · = เซลส่วนกลาง บัญชีร่วม) → กันออกจาก
   roster ถูกแล้ว (ไม่ใช่คนจริง) · ถ้าเป็นคนจริงต้องสร้าง profile
 - **admin_win = หัวหน้า Customs + Cs check** — ยังเป็น 1คน1ตำแหน่ง · เคาะ many-to-many ไหม
+
+---
+
+## ✅✅ FINAL AUDIT (2026-08-03 ค่ำ · owner "ดูทุก table ให้ครบ")
+
+**audit ทุกตารางที่เก็บคน (verify prod):**
+- `profiles` 9,479 (ลูกค้า+staff) · **staff = 28** (admin_login_id != null) · **active 21**
+- `tb_admin` 32 (HR record · active 20) · `admins` 44 grants (**21 profile มี role active**)
+- **admins active-role (21) == profiles staff active (21) เป๊ะ · role ลอย (ไม่มี profile) = 0**
+  ⇒ ทุกคนที่มีสิทธิ์ = staff profile · ไม่มีคนตกหล่น · **profiles = roster สมบูรณ์**
+
+**owner-decision รอบนี้:**
+1. **admin_tiger ออกแล้ว → ล็อก** (profiles.is_active=false + admins + ban auth + tb_admin) → active 21→**20**
+2. **admin_win = ตาม PCS** (1คน1ตำแหน่ง) — อยู่ **Customs Supervisor (cus-sup)** อยู่แล้ว (owner จัดตอน local) · หัวหน้าทำ Cs check ในตัว = ถูกต้อง ไม่แก้โมเดล
+3. **ดูทุก table = ครบแล้ว** (ข้างบน)
+
+**🎯 roster สุดท้าย: staff active 20 · จัดตำแหน่งครบ 20/20 (0 ยังไม่จัด)** — ผังนับสดจาก
+profiles ที่เดียว · หน้าบ้าน-หลังบ้านดึงตำแหน่ง/สิทธิ์จาก link เดียว (profiles.org_unit_id +
+admins.role) เห็นครบทุกคน = ตอบโจทย์ owner "ดึงจากที่เดียวกัน · เห็นรวม".
+
+**🟡 เหลือ (งานต่อ · ไม่บล็อก):** moo/sunta ไม่มี tb_admin HR detail → เติมตอนทำฟอร์ม
+พนักงานเต็ม (เขียน profiles+tb_admin พร้อมกัน · กัน split) · admin_center = บัญชีร่วม (กันออกถูก).
