@@ -21,12 +21,13 @@ import {
   type Dispatch, type SetStateAction,
 } from "react";
 import { Link } from "@/i18n/navigation";
-import { AlertTriangle, Check, Info, Loader2, Pencil, Plus, ArrowLeft, ShoppingCart, X } from "lucide-react";
+import { AlertTriangle, Check, Info, Loader2, Pencil, Plus, ArrowLeft, RotateCw, ShoppingCart, X } from "lucide-react";
 import { searchProductByUrl, type ProductSearchOk } from "@/actions/product-search";
 import { notifyCartChanged } from "@/lib/cart-changed-event";
 import { addCartItemsBulk } from "@/actions/cart";
 import { uploadCartProductImage } from "@/actions/cart-manual-image";
 import { RichProductCard } from "../rich-product-card";
+import { CartAdsBanner } from "../cart-ads-banner";
 import {
   MAX_LINKS, takeManualLinks, useStoredOriginCountry, originCountry, DEFAULT_ORIGIN,
 } from "../link-source";
@@ -41,7 +42,8 @@ const STORAGE_KEY = "pacred_cart_add_links";
 type ItemState =
   | { status: "loading" }
   | { status: "ok"; product: ProductSearchOk["product"] }
-  | { status: "fail"; message: string }
+  /** `retryable` = ลองใหม่แล้วมีโอกาสได้ (TAMIT ช้า/ล่ม) ไม่ใช่ "ไม่มีสินค้านี้จริง" */
+  | { status: "fail"; message: string; retryable?: boolean }
   // owner 2026-08-03 "กด ไม่มีลิงก์ แล้วเพิ่มรายการออกมาได้ต่อเลยอะ ไม่ได้ไปไหน" —
   // a typed รายการ living beside the fetched ones, same tabs, same รถเข็น ending.
   | { status: "manual"; manual: ManualItem };
@@ -71,6 +73,8 @@ function fetchIntoSlot(
   const patch = (next: ItemState) =>
     setItems((prev) => (prev ? prev.map((it) => (it.key === key ? { key, url, ...next } : it)) : prev));
 
+  patch({ status: "loading" }); // กดลองอีกครั้ง = กลับไปโหลดใหม่ ไม่ค้างการ์ดแดง
+
   searchProductByUrl(url)
     .then((res) =>
       patch(
@@ -79,10 +83,12 @@ function fetchIntoSlot(
           : {
               status: "fail",
               message: res.message ?? "ไม่พบข้อมูลสินค้าจากลิงก์นี้ กรุณากรอกรายการสินค้าด้วยตนเอง",
+              retryable: res.retryable,
             },
       ),
     )
-    .catch(() => patch({ status: "fail", message: "ระบบค้นหาไม่พร้อม กรุณาลองใหม่อีกครั้ง" }));
+    // action ยิงไม่ถึงเซิร์ฟเวอร์ = ยังไม่รู้ว่าสินค้ามีไหม → ลองใหม่ได้เสมอ
+    .catch(() => patch({ status: "fail", message: "ระบบค้นหาไม่พร้อม กรุณาลองใหม่อีกครั้ง", retryable: true }));
 }
 
 export function ReviewClient({
@@ -118,9 +124,12 @@ export function ReviewClient({
   }, [fxRates]);
 
   /**
-   * Add typed รายการ right here (owner 2026-08-03 "เพิ่มรายการออกมาได้ต่อเลยอะ
-   * ไม่ได้ไปไหน") — a shop we can't fetch becomes the next tab instead of a
-   * bounce to another page. `urls` may be empty = one blank รายการ.
+   * เพิ่ม "รายการกรอกเอง" ต่อในหน้านี้เลย ไม่เด้งไปหน้าอื่น (owner 2026-08-03
+   * "กดไม่มีลิงก์ แล้วเพิ่มรายการออกมาได้ต่อเลย ไม่ได้ไปไหน" · ย้ำอีกครั้ง
+   * 2026-08-04 "ให้มันเป็นรายการต่อเลย ไม่ใช่ไปโผล่หน้าอื่น อยู่หน้าเดิม").
+   * ฟอร์มที่โผล่มาเป็นตัวเดียวกับหน้า /cart/add/manual (ManualItemForm + คลาส
+   * pcs-item-*) จึงหน้าตาเหมือนกันทุกจุดตามที่ owner ต้องการ.
+   * `urls` ว่าง = รายการเปล่า 1 อัน.
    */
   function addManualTabs(urls: string[]) {
     const base = items ?? [];
@@ -226,6 +235,8 @@ export function ReviewClient({
     // /cart/add may have sent along links from shops we have no API for — they
     // become typed tabs beside the fetched ones, in the same list.
     const seeded = links.map(newItem);
+    // /cart/add may have sent along links from shops we have no API for — they
+    // become typed tabs beside the fetched ones, in the same list.
     const manual = takeManualLinks().map((u) => newManualTab(u));
     setItems([...seeded, ...manual].slice(0, MAX_LINKS));
 
@@ -324,7 +335,17 @@ export function ReviewClient({
 
   const cur = items[active] ?? items[0];
 
+  /**
+   * แท็บ "กรอกเอง" = ฟอร์มคู่แบนเนอร์ เหมือนหน้า /cart/add/manual เป๊ะ
+   * (owner 2026-08-04 "เวลากดเพิ่มไม่มีลิงก์ มันเป็นแบบมีแบนเนอร์อะ ... อันนี้เหมือน
+   * เองทำใหม่แยกหน้ากันอะ" — ฟอร์มไม่มีลิงก์ต้องหน้าตาเดียวกันทุกที่ที่มันโผล่).
+   * แบนเนอร์ขึ้นเฉพาะแท็บกรอกเอง — การ์ดสินค้าที่ดึงมาได้กว้างและมีรูปแกลเลอรี
+   * บีบให้แคบลงจะอ่านยากกว่าเดิม.
+   */
+  const showBanner = cur.status === "manual";
+
   return (
+    <div className={showBanner ? "grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]" : undefined}>
     <div className="space-y-3">
       <Link
         href="/cart/add"
@@ -449,6 +470,7 @@ export function ReviewClient({
         </button>
       </div>
 
+
       {/* Active item — skeleton → rich card / error */}
       {cur.status === "loading" ? (
         <SkeletonCard />
@@ -456,21 +478,41 @@ export function ReviewClient({
         <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-[13px] text-red-800">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="font-bold">ตรวจไม่พบสินค้า</p>
+            <p className="font-bold">{cur.retryable ? "ดึงข้อมูลสินค้าไม่ทัน" : "ตรวจไม่พบสินค้า"}</p>
             <p className="mt-0.5 break-all text-[11.5px] text-red-700/80">{cur.url}</p>
             <p className="text-[12px]">{cur.message}</p>
-            <button
-              type="button"
-              onClick={() => convertToManual(cur.key)}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary-600 px-4 py-2 text-[12.5px] font-bold text-white hover:bg-primary-700"
-            >
-              <Pencil className="h-4 w-4" /> กรอกข้อมูลสินค้าเอง
-            </button>
+            {/* owner 2026-08-04: เดิมมีทางออกทางเดียวคือกรอกเอง ลูกค้าเลยไป "เพิ่มรายการ"
+                แล้ววางลิงก์เดิมซ้ำ — ซึ่งคือการลองใหม่ที่ได้ผลจริง. ยกขึ้นมาเป็นปุ่มตรงนี้
+                เลย (ปลอดภัย: fetchIntoSlot แพตช์ด้วย key ไม่ใช่ตำแหน่ง). */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {cur.retryable && (
+                <button
+                  type="button"
+                  onClick={() => fetchIntoSlot(setItems, cur.key, cur.url)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-primary-600 px-4 py-2 text-[12.5px] font-bold text-white hover:bg-primary-700"
+                >
+                  <RotateCw className="h-4 w-4" /> ลองอีกครั้ง
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => convertToManual(cur.key)}
+                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[12.5px] font-bold ${
+                  cur.retryable
+                    ? "border border-primary-600 bg-white text-primary-700 hover:bg-primary-50"
+                    : "bg-primary-600 text-white hover:bg-primary-700"
+                }`}
+              >
+                <Pencil className="h-4 w-4" /> กรอกข้อมูลสินค้าเอง
+              </button>
+            </div>
           </div>
         </div>
       ) : cur.status === "manual" ? (
         <>
-          <div className="rounded-2xl rounded-tl-none border border-border bg-white p-3 md:p-4">
+          {/* `@container` = ต้องมีคู่กับ @-variant ใน <ManualItemForm> ไม่งั้นฟอร์ม
+              จะกลายเป็นคอลัมน์เดียวถาวรบนหน้านี้ (ดู manual-item.tsx). */}
+          <div className="pcs-item-form rounded-2xl rounded-tl-none border border-border bg-white p-3 md:p-4">
             <ManualItemForm
               item={cur.manual}
               patch={(p) => patchManual(cur.key, p)}
@@ -540,6 +582,21 @@ export function ReviewClient({
         onAdd={appendLinks}
         onManual={(u) => { setAddOpen(false); addManualTabs(u); }}
       />
+    </div>
+
+    {/* mt = ความสูงของหัวคอลัมน์ซ้าย (ลิงก์ย้อนกลับ + แถบแท็บ) — ให้ขอบบนแบนเนอร์
+        ตรงกับขอบบนการ์ดพอดี เหมือนหน้า /cart/add/manual.
+        ⚠️ แก้หัวคอลัมน์ซ้ายเมื่อไร ต้องวัดใหม่แล้วอัปเลขนี้ด้วย */}
+    {showBanner && (
+      <aside className="hidden self-start xl:mt-[86px] xl:block">
+        <CartAdsBanner
+          single={{
+            src: "/images/linkpurchaser.png",
+            alt: "ฝากสั่งซื้อสินค้าจากจีน — Pacred",
+          }}
+        />
+      </aside>
+    )}
     </div>
   );
 }

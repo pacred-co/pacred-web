@@ -54,9 +54,10 @@ function walk(dir: string, out: string[] = []): string[] {
 const ROOT = process.cwd();
 const FILES = ["app", "lib", "actions", "components"]
   .flatMap((d) => { try { return walk(join(ROOT, d)); } catch { return []; } })
-  // Normalise Windows separators before comparing with OWNERS and before
-  // reporting. Without this, `lib\forwarder\live-rate.ts` failed to match the
-  // intentional `lib/forwarder/live-rate.ts` owner exemption on Windows.
+  // 🔴 ต้อง normalise `\` → `/` (2026-08-04): `join()` บน Windows คืน
+  // `lib\forwarder\live-rate.ts` แต่ OWNERS เขียนด้วย `/` ⇒ ลิสต์ยกเว้น
+  // **ไม่ทำงานเลยบน Windows** → ยามแดงค้างที่ไฟล์เจ้าของกฎเอง (live-rate.ts)
+  // ทั้งที่โค้ดถูก. บน Mac ผ่าน บน Windows แดง = เกตเชื่อถือไม่ได้ทั้งทีม.
   .map((p) => p.slice(ROOT.length + 1).replaceAll("\\", "/"))
   .filter((p) => !OWNERS.includes(p) && !p.endsWith(".test.ts") && !p.endsWith(".test.tsx"));
 

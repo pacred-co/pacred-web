@@ -23,11 +23,12 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Link } from "@/i18n/navigation";
 import {
   ArrowLeft, BadgeCheck, Info, Loader2, PackageSearch, Plus,
-  Check, ShieldCheck, ShoppingCart, Users, X,
+  Check, MessageCircle, ShieldCheck, ShoppingCart, Users, X,
 } from "lucide-react";
 import { notifyCartChanged } from "@/lib/cart-changed-event";
 import { addCartItemsBulk, type CartItemBulkRow } from "@/actions/cart";
 import { uploadCartProductImage } from "@/actions/cart-manual-image";
+import { LINE_OA } from "@/components/seo/site";
 import {
   takeManualLinks, useStoredOriginCountry, originCountry, DEFAULT_ORIGIN,
 } from "../link-source";
@@ -152,19 +153,14 @@ export function ManualEntryClient({
   // ════════════════════════════════════════════════════════════════
   return (
     <div className="space-y-3">
-      {/* Way back to the paste flow (owner 2026-08-03 "ทำให้มีปุ่มกลับไปหน้า
-          เพิ่มลิงก์หน่อย") — same affordance the review page has, so neither
-          entry point is a one-way door. */}
-      <Link
-        href="/cart/add"
-        className="inline-flex items-center gap-1 text-[12.5px] font-bold text-muted hover:text-primary-600"
-      >
-        <ArrowLeft className="h-4 w-4" /> กลับไปหน้าเพิ่มลิงก์สินค้า
-      </Link>
-
-      {/* ── Page head ── */}
+      {/* ── Page head ──
+          ลิงก์ย้อนกลับอยู่ "แถวเดียวกัน" กับหัวข้อ (owner 2026-08-04 "เอามาอยู่แถว
+          เดียวกันกับหัว เพิ่มสินค้าด้วยตนเอง แล้วขยับทั้งหน้าขึ้นไป") — เดิมกินบรรทัด
+          ของตัวเองแล้วดันทั้งหน้าลงมา ~28px. ยังเป็นทางกลับไปหน้าวางลิงก์เหมือนเดิม
+          (owner 2026-08-03 "ทำให้มีปุ่มกลับไปหน้าเพิ่มลิงก์หน่อย") ไม่ได้หายไปไหน. */}
       <div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-xl font-bold text-foreground md:text-2xl">เพิ่มสินค้าด้วยตัวเอง</h1>
           {/* ประเทศที่เลือกไว้หน้าก่อน — โชว์ให้ลูกค้าเห็นว่าติดมาด้วยจริง (ไม่ใช่กดแล้วหาย)
               และค่านี้จะไปอยู่ในรายละเอียดสินค้าให้ทีมจัดซื้อเห็นด้วย. */}
@@ -175,6 +171,15 @@ export function ManualEntryClient({
             </span>
             สั่งจาก{country.label}
           </span>
+          </div>
+          {/* ทางกลับไปหน้าวางลิงก์ — ชิดขวาสุดของแถวหัวข้อ (owner 2026-08-04
+              "เอาไปไว้ด้านขวา เอาเพิ่มสินค้าด้วยตัวเองไปอยู่ซ้ายเหมือนเดิม") */}
+          <Link
+            href="/cart/add"
+            className="inline-flex shrink-0 items-center gap-1 text-[12.5px] font-bold text-muted hover:text-primary-600"
+          >
+            <ArrowLeft className="h-4 w-4" /> กลับไปหน้าเพิ่มลิงก์สินค้า
+          </Link>
         </div>
         <p className="mt-0.5 text-[12.5px] text-muted">
           สำหรับสินค้าที่ไม่มีลิงก์ กรุณากรอกข้อมูลสินค้าให้ครบถ้วน
@@ -248,10 +253,26 @@ export function ManualEntryClient({
         >
           <Plus className="h-4 w-4" /> เพิ่มรายการ
         </button>
+
+        {/* ป้ายไลน์กลับมาแล้ว แต่ย้ายมาปักมุมขวาบนของการ์ด (owner 2026-08-04
+            "เอา badge เขียว ... กลับมา แปะไว้มุมขวาบนเลย จะได้สวยพอดีๆ") — เดิมอยู่
+            เหนือช่อง "ข้อมูลสินค้า" ในฟอร์ม ทำให้แถวหัวข้อสูงกว่าช่องข้างๆ สองคอลัมน์
+            เลยไม่เท่ากัน. ml-auto = ดันไปสุดขวาของแถวแท็บ. */}
+        <a
+          href={LINE_OA.shortUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mb-1.5 ml-auto inline-flex items-center gap-1.5 rounded-full bg-[#06C755] px-3.5 py-2 text-[12px] font-bold text-white shadow-sm transition hover:brightness-95"
+        >
+          <MessageCircle className="h-4 w-4" strokeWidth={2.4} />
+          ใช้งานยาก? ให้เจ้าหน้าที่สั่งซื้อให้
+        </a>
       </div>
 
-      {/* ── The card — form + its own หยิบใส่รถเข็น (one red button, inside) ── */}
-      <div className="rounded-2xl rounded-tl-none border border-border bg-white p-3 md:p-4">
+      {/* ── The card — form + its own หยิบใส่รถเข็น (one red button, inside) ──
+          `@container` = ให้ <ManualItemForm> จัดคอลัมน์ตามความกว้าง "การ์ดใบนี้"
+          ไม่ใช่ความกว้างจอ (หน้านี้มีแบนเนอร์ 400px กินที่ทางขวา). */}
+      <div className="pcs-item-form rounded-2xl rounded-tl-none border border-border bg-white p-3 md:p-4">
         <ManualItemForm
           item={cur}
           patch={(p) => patch(cur.id, p)}

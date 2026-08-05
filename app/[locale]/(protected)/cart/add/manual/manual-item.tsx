@@ -20,11 +20,10 @@
  */
 
 import { useRef, useState } from "react";
-import { ImagePlus, Loader2, MessageCircle, Package, Plus, Trash2, X } from "lucide-react";
+import { ImagePlus, Loader2, Package, Plus, Trash2, X } from "lucide-react";
 import { toYuanEquivalent } from "@/lib/forwarder/currency-convert";
 import { MAX_ORDER_QTY } from "@/lib/validators/order-qty";
 import type { CartItemBulkRow } from "@/actions/cart";
-import { LINE_OA } from "@/components/seo/site";
 
 /** tb_cart.cdetails ceiling enforced by productDetailsField() — stay under it. */
 const DETAILS_MAX = 1000;
@@ -204,32 +203,44 @@ export function ManualItemForm({
   onPickPhoto: (f: File) => void;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-5 md:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)]">
-      <PhotoPanel
-        images={cur.images}
-        uploading={uploading}
-        onPick={onPickPhoto}
-        onChange={(images) => patch({ images })}
-      />
+    /**
+     * container query (@…) ไม่ใช่ breakpoint จอ (md/xl) — owner 2026-08-04 เอาแบนเนอร์
+     * 400px มาวางข้างฟอร์ม ทำให้ "การ์ดแคบลง ทั้งที่จอยังกว้างเท่าเดิม": xl: ยังยิงอยู่
+     * เลยล็อกช่องรูปไว้ 320px จนช่องฟอร์มเหลือ 167px และล้น 7 จุด.
+     * วัดจาก "ความกว้างการ์ด" แทน → การ์ดแคบ = วางรูปไว้บน · การ์ดกว้าง = 2 คอลัมน์
+     * ถูกต้องทั้งหน้ากรอกเอง (มีแบนเนอร์) และหน้ารีวิว (ไม่มี) โดยไม่ต้องแยกโค้ด.
+     * ⚠️ การ์ดที่ห่อฟอร์มนี้ต้องมี class `@container` ไม่งั้น @-variant ไม่ทำงาน
+     * แล้วจะกลายเป็นคอลัมน์เดียวถาวร.
+     */
+    <div className="space-y-3">
+    {/* แถวบน = รูป (ซ้าย) + ช่องกรอกหลัก (ขวา) · ช่องสั้นๆ ย้ายลงไปใต้รูป
+        (owner 2026-08-04 "ย้ายไปใต้รูปภาพบ้าง แล้วทำเป็นช่องซ้ายขวา จะได้สั้นลง
+        อยากให้ default ไม่เกิน banner") — เดิมเรียงลงล่างคอลัมน์เดียวยาว 1,552px
+        เทียบแบนเนอร์ 711px. */}
+    <div className="pcs-item-grid">
+      <div className="space-y-2.5">
+        <PhotoPanel
+          images={cur.images}
+          uploading={uploading}
+          onPick={onPickPhoto}
+          onChange={(images) => patch({ images })}
+        />
+        {/* owner 2026-08-04 "เอาออก" — ช่อง "จำนวนขั้นต่ำ" ถูกถอดออกจากฟอร์ม.
+            ตัวข้อมูล `minQty` ยังอยู่ในโมเดล (ค่าว่างเสมอ) เพราะเป็นตัวตั้ง
+            จำนวนสำรองตอนลูกค้าไม่ได้กรอกตาราง แบบ/ไซซ์ → ว่าง = 1 ชิ้น ซึ่งเป็น
+            พฤติกรรมเดิมอยู่แล้วตอนลูกค้าไม่กรอกช่องนี้ · ไม่กระทบการคิดเงิน. */}
+      </div>
 
-      <div className="min-w-0 space-y-3.5">
+      <div className="min-w-0 space-y-2.5">
+        {/* แถวบนสุดของคอลัมน์ขวา = ข้อมูลสินค้า | ชื่อร้านค้า */}
+        <div className="pcs-item-pair">
         <div>
-          {/* owner 2026-08-03 "ทำ Badge ให้เข้าใจว่าติดต่อได้เด่นๆ กดแล้วไปไลน์" —
-              this is the form people give up on, so the way out sits ON it rather
-              than in a footer they never scroll to. LINE brand green so it reads
-              as "chat with a human", not as another step of the form. */}
-          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[13px] font-bold text-foreground">ข้อมูลสินค้า</p>
-            <a
-              href={LINE_OA.shortUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-full bg-[#06C755] px-3.5 py-1.5 text-[12px] font-bold text-white shadow-sm transition hover:brightness-95"
-            >
-              <MessageCircle className="h-4 w-4" strokeWidth={2.4} />
-              ใช้งานยาก? ให้เจ้าหน้าที่สั่งซื้อให้
-            </a>
-          </div>
+          {/* ป้ายไลน์ "ใช้งานยาก? ให้เจ้าหน้าที่สั่งซื้อให้" ถูกถอดออก (owner 2026-08-04
+              "เอาออกเถอะ มันจะได้เท่ากัน") — มันทำให้แถวป้ายหัวข้อสูงกว่าช่องข้างๆ
+              (ตกบรรทัดที่ 2 ตอนคอลัมน์แคบ) สองคอลัมน์เลยไม่เท่ากัน.
+              ทางออกไปคุยคนยังอยู่ครบและเด่นกว่าเดิม: แบนเนอร์ทั้งใบข้างฟอร์มกดแล้ว
+              ไป LINE OA (ดู cart-ads-banner.tsx) + ปุ่มไลน์ลอยประจำทุกหน้า. */}
+          <p className="mb-1.5 text-[13px] font-bold text-foreground">ข้อมูลสินค้า</p>
           <input
             value={cur.title}
             onChange={(e) => patch({ title: e.target.value })}
@@ -238,8 +249,23 @@ export function ManualItemForm({
           />
         </div>
 
+        {/* ชื่อร้านค้า ขึ้นมาอยู่คู่กับ ข้อมูลสินค้า แถวเดียวกัน (owner 2026-08-04
+            "เอาไปวางคู่กัน บรรทัดเดียวกัน 1 บรรทัดข้างบน") — เดิมอยู่แถวล่างสุดเดี่ยวๆ */}
+        <div>
+          <label className="mb-1.5 block text-[13px] font-bold text-foreground">ชื่อร้านค้า (ถ้ามี)</label>
+          <input
+            value={cur.shopName}
+            onChange={(e) => patch({ shopName: e.target.value })}
+            placeholder="กรอกชื่อร้านค้าหรือผู้ขาย"
+            className="h-11 w-full rounded-xl border border-border px-3 text-[14px] outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
+          />
+        </div>
+        </div>
+
         {/* Kept so a link we couldn't fetch still reaches the buying team —
             cartItemSchema.url carries it verbatim into tb_cart. */}
+        {/* ลิงก์ + ราคา เรียงคู่ซ้าย-ขวา — ประหยัดความสูงไป 1 แถวเต็ม */}
+        <div className="pcs-item-pair">
         <div>
           <label className="mb-1.5 block text-[13px] font-bold text-foreground">ลิงก์สินค้า (ถ้ามี)</label>
           <input
@@ -247,7 +273,7 @@ export function ManualItemForm({
             inputMode="url"
             value={cur.url}
             onChange={(e) => patch({ url: e.target.value })}
-            placeholder="วางลิงก์ร้านค้า ถ้ามี — ทีมงานจะเปิดดูให้"
+            placeholder="วางลิงก์ร้านค้า ถ้ามี"
             className="h-11 w-full rounded-xl border border-border px-3 text-[14px] outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
           />
         </div>
@@ -256,6 +282,10 @@ export function ManualItemForm({
           <label className="mb-1.5 block text-[13px] font-bold text-foreground">
             ราคาต่อชิ้น <span className="text-red-600">*</span>
           </label>
+          {/* ราคา + สกุลเงิน อยู่แถวเดียวกัน (owner 2026-08-04 "ทำให้อันนี้เป็นแถวเดียวกันเลย").
+              ป้าย CNY ย่อเหลือ "หยวน" — ช่องราคาถูกจับคู่กับลิงก์แล้วเหลือกว้างครึ่งเดียว
+              (จอ 1392 = ~139px) ป้ายเต็ม "หยวน (CNY/RMB)" กินถึง 119px จะดันจนตัวเลือก
+              โดนตัด · ตัวเลือกอื่นเป็นรหัส 3 ตัวอยู่แล้ว (THB/EUR/…) จึงยาวพอกัน */}
           <div className="flex gap-2">
             <input
               type="number" min="0" step="0.01" inputMode="decimal"
@@ -268,16 +298,21 @@ export function ManualItemForm({
               value={cur.currency}
               onChange={(e) => patch({ currency: e.target.value })}
               aria-label="สกุลเงิน"
-              className="h-11 shrink-0 rounded-xl border border-border bg-white px-3 text-[13.5px] font-semibold outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
+              title="สกุลเงินที่กรอกราคา"
+              className="h-11 w-auto shrink-0 rounded-xl border border-border bg-white px-2 text-[13px] font-semibold outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
             >
               {currencyOptions.map((c) => (
-                <option key={c} value={c}>{c === "CNY" ? "หยวน (CNY/RMB)" : c}</option>
+                <option key={c} value={c}>{c === "CNY" ? "หยวน" : c}</option>
               ))}
             </select>
           </div>
         </div>
+        </div>
+      </div>
+    </div>
 
-        {/* ── ตัวเลือกสินค้า — one row = one cart line ── */}
+        {/* ── ตัวเลือกสินค้า — one row = one cart line ── เต็มความกว้างการ์ด
+            เพราะตารางมี 4 ช่อง ถ้าอยู่ในคอลัมน์ขวาที่แคบ ช่องจะเหลือช่องละ ~70px */}
         <div>
           <p className="mb-1.5 text-[13px] font-bold text-foreground">
             ตัวเลือกสินค้า{" "}
@@ -361,49 +396,29 @@ export function ManualItemForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_180px]">
+        {/* 2 ช่องบรรยายวางคู่ซ้าย-ขวา — เดิมเรียงลงล่างกินความสูงไปเปล่าๆ 2 แถว */}
+        <div className="pcs-item-pair">
           <div>
-            <label className="mb-1.5 block text-[13px] font-bold text-foreground">ชื่อร้านค้า (ถ้ามี)</label>
-            <input
-              value={cur.shopName}
-              onChange={(e) => patch({ shopName: e.target.value })}
-              placeholder="กรอกชื่อร้านค้าหรือผู้ขาย"
-              className="h-11 w-full rounded-xl border border-border px-3 text-[14px] outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
+            <label className="mb-1.5 block text-[13px] font-bold text-foreground">รายละเอียดสินค้า</label>
+            <textarea
+              value={cur.details}
+              onChange={(e) => patch({ details: e.target.value })}
+              rows={2}
+              placeholder="ระบุขนาด วัสดุ รุ่น หรือรายละเอียดที่ต้องการ"
+              className="w-full rounded-xl border border-border p-3 text-[14px] outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-[13px] font-bold text-foreground">จำนวนขั้นต่ำ (ถ้ามี)</label>
-            <input
-              type="number" min="0" step="1" inputMode="numeric"
-              value={cur.minQty}
-              onChange={(e) => patch({ minQty: e.target.value })}
-              placeholder="0"
-              className="h-11 w-full rounded-xl border border-border px-3 text-[14px] outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
+            <label className="mb-1.5 block text-[13px] font-bold text-foreground">หมายเหตุถึงร้านค้า</label>
+            <textarea
+              value={cur.note}
+              onChange={(e) => patch({ note: e.target.value })}
+              rows={2}
+              placeholder="เช่น ต้องการคละสี ติดโลโก้ หรือแพ็กแยก"
+              className="w-full rounded-xl border border-border p-3 text-[14px] outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
             />
           </div>
         </div>
-
-        <div>
-          <label className="mb-1.5 block text-[13px] font-bold text-foreground">รายละเอียดสินค้า</label>
-          <textarea
-            value={cur.details}
-            onChange={(e) => patch({ details: e.target.value })}
-            rows={2}
-            placeholder="ระบุขนาด วัสดุ รุ่น หรือรายละเอียดที่ต้องการ"
-            className="w-full rounded-xl border border-border p-3 text-[14px] outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
-          />
-        </div>
-        <div>
-          <label className="mb-1.5 block text-[13px] font-bold text-foreground">หมายเหตุถึงร้านค้า</label>
-          <textarea
-            value={cur.note}
-            onChange={(e) => patch({ note: e.target.value })}
-            rows={2}
-            placeholder="เช่น ต้องการคละสี ติดโลโก้ หรือแพ็กแยก"
-            className="w-full rounded-xl border border-border p-3 text-[14px] outline-none focus:border-red-500 focus:ring-2 focus:ring-red-100"
-          />
-        </div>
-      </div>
     </div>
   );
 }
@@ -445,10 +460,10 @@ function PhotoPanel({
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
         onDrop={(e) => { e.preventDefault(); setDrag(false); pickFiles(e.dataTransfer.files); }}
-        className={`relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-2xl text-center transition ${
+        className={`pcs-drop relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-2xl text-center transition ${
           images[0]
             ? "border border-border bg-white"
-            : `border-2 border-dashed p-4 ${drag ? "border-red-500 bg-red-50/60" : "border-red-200 bg-white"}`
+            : `border-2 border-dashed p-2 ${drag ? "border-red-500 bg-red-50/60" : "border-red-200 bg-white"}`
         }`}
       >
         {images[0] ? (
@@ -468,21 +483,27 @@ function PhotoPanel({
             </button>
           </>
         ) : (
-          <div>
-            <span className="mx-auto mb-2 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-primary-500">
-              {uploading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Package className="h-6 w-6" />}
+          /* ขนาดของกล่องนี้ = ความกว้างคอลัมน์รูป (aspect-square) ซึ่งแคบลงเหลือ 150px
+             ตอนมีแบนเนอร์ → เนื้อหาเดิม (ไอคอน 56 + 2 บรรทัด + ปุ่ม px-5) ล้นออกนอกกรอบ
+             (owner 2026-08-04 "เกินขอบ ปรับให้หน่อย"). ย่อทุกชิ้น + ตัดบรรทัดอธิบาย
+             ทิ้งเมื่อกรอบแคบ (@container) แทนการขยายกรอบ ซึ่งจะดันการ์ดสูงเกินแบนเนอร์ */
+          <div className="w-full px-1">
+            <span className="mx-auto mb-1.5 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-primary-500">
+              {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Package className="h-5 w-5" />}
             </span>
-            <p className="text-[14px] font-bold text-foreground">
+            <p className="text-[13px] font-bold leading-tight text-foreground">
               {uploading ? "กำลังอัปโหลด…" : "อัปโหลดรูปสินค้า"}
             </p>
-            <p className="mt-0.5 text-[12px] text-muted">ลากรูปมาวาง หรือเลือกจากอุปกรณ์</p>
+            <p className="pcs-drop-hint mt-0.5 text-[11px] leading-tight text-muted">
+              ลากรูปมาวาง หรือเลือกจากอุปกรณ์
+            </p>
             <button
               type="button"
               disabled={uploading}
               onClick={() => inputRef.current?.click()}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-primary-500 px-5 py-2.5 text-[13px] font-bold text-primary-600 transition hover:bg-red-50 disabled:opacity-40"
+              className="mt-2 inline-flex max-w-full items-center justify-center gap-1 rounded-xl border border-primary-500 px-2.5 py-1.5 text-[12px] font-bold text-primary-600 transition hover:bg-red-50 disabled:opacity-40"
             >
-              <ImagePlus className="h-4 w-4" /> เลือกรูปสินค้า
+              <ImagePlus className="h-3.5 w-3.5 shrink-0" /> เลือกรูป
             </button>
           </div>
         )}
@@ -536,7 +557,10 @@ function PhotoPanel({
         })}
       </div>
 
-      <p className="mt-2 text-center text-[11.5px] text-muted">
+      {/* บรรทัดเดียวเสมอ (owner 2026-08-04 "ทำให้เป็นแถวเดียว") — คอลัมน์รูปกว้าง 150px
+          ข้อความเต็มจะตัดเป็น 2 บรรทัดแล้วดันความสูงคอลัมน์ซ้ายไม่เท่าขวา · ย่อ
+          ตัวอักษรลงนิดเดียวแทนการตัดคำทิ้ง ข้อมูลยังครบ */}
+      <p className="mt-2 whitespace-nowrap text-center text-[10.5px] leading-tight text-muted">
         {images.length > 0 ? `${images.length}/${MAX_PHOTOS} รูป · ` : ""}JPG, PNG ไม่เกิน 10 MB
       </p>
       {images.length > 1 && (

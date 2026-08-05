@@ -30,6 +30,8 @@ import { extractProductId } from "./extract-product-id";
 import { resolveShortUrl, detectShortUrl } from "./short-url-cache";
 import { akucargoSearch } from "./akucargo";
 import { laonetImageSearch } from "./laonet";
+import { fetchTamitDetail } from "./tamit-detail-fetch";
+import { logger } from "@/lib/logger";
 import type {
   ChinaSearchHit,
   ChinaProductDetail,
@@ -142,34 +144,35 @@ export async function convertProductUrlDetail(url: string): Promise<ConvertProdu
   // / cache miss + scrape failure) — serve the demo so the customer can
   // still proceed.  The legacy PHP took the same posture on cache outages.
   if (!productId) {
-    return { available: true, detail: buildDemoDetail(url, platform) };
+    return {
+      available: true,
+      detail: { ...buildDemoDetail(url, platform), fallback_reason: "no_product_id" },
+    };
   }
 
   const base = process.env.PACRED_TAMIT_DETAIL_URL || DEFAULT_TAMIT_DETAIL_URL;
   const endpoint = `${base.replace(/\/+$/, "")}/get/${tamitPlatform}/?id=${encodeURIComponent(productId)}`;
 
-  try {
-    const res = await fetch(endpoint, {
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-      signal: AbortSignal.timeout(8000),
+  const hit = await fetchTamitDetail(endpoint);
+  if ("failure" in hit) {
+    // เดิมเป็น `catch {}` เปล่าๆ — พังแล้วเงียบสนิท ไล่ไม่ได้ว่าเพราะ timeout หรือ
+    // เน็ต หรือของไม่มีจริง. ต้องเห็นใน log ไม่งั้นรอบหน้าก็เดาอีก.
+    logger.warn("china-search", "TAMIT detail unavailable", {
+      productId, platform, reason: hit.failure, attempts: hit.attempts,
     });
-    if (!res.ok) {
-      return { available: true, detail: buildDemoDetail(url, platform, productId) };
-    }
-    const json = await res.json();
-    const status = (json as { status?: number | string } | null)?.status;
-    if (String(status) !== "200") {
-      return { available: true, detail: buildDemoDetail(url, platform, productId) };
-    }
     return {
       available: true,
-      detail: normaliseTamitDetail(json, platform, url, productId),
+      detail: { ...buildDemoDetail(url, platform, productId), fallback_reason: hit.failure },
     };
-  } catch {
-    return { available: true, detail: buildDemoDetail(url, platform, productId) };
   }
+  return {
+    available: true,
+    detail: normaliseTamitDetail(hit.json, platform, url, productId),
+  };
 }
+
+// `fetchTamitDetail` (ลองซ้ำ + แยก 204 ออกจาก timeout) อยู่ที่ ./tamit-detail-fetch
+// เพราะไฟล์นี้เป็น server-only → ยูนิตเทสรันไม่ได้ ดูเหตุผลเต็มในไฟล์นั้น.
 
 /** Tmall and Taobao share the same TAMIT backend (`/get/taobao/`). */
 function tamitPathSegment(platform: ChinaProductDetail["provider"]): "1688" | "taobao" {

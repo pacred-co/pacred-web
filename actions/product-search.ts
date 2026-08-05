@@ -109,6 +109,12 @@ export type ProductSearchErr = {
   message?: string;
   /** Always "manual" for V1 — the UI falls back to manual entry. */
   fallback: "manual";
+  /**
+   * `true` = ยังไม่รู้ว่าสินค้ามีหรือไม่มี (TAMIT ช้า/ล่ม) → จอควรเสนอปุ่ม "ลองอีกครั้ง".
+   * `false`/undefined = รู้แน่แล้วว่าดึงไม่ได้ (ไม่มีสินค้านี้ · ลิงก์ไม่รองรับ) → กรอกเอง.
+   * มีเพื่อไม่ให้จอบอกลูกค้าว่า "ไม่พบสินค้า" ทั้งที่สินค้ามีอยู่ เราแค่รอไม่ทัน.
+   */
+  retryable?: boolean;
 };
 
 export type ProductSearchResult = ProductSearchOk | ProductSearchErr;
@@ -220,12 +226,19 @@ export async function searchProductByUrl(
     // The adapter returned a placeholder card — surface as a soft error
     // so the UI shows the manual notice. We still got back a productId
     // sometimes; not useful for the customer without price + image.
+    //
+    // owner 2026-08-04: เดิมทุกกรณีพูดประโยคเดียวว่า "ไม่พบข้อมูลสินค้า" ซึ่ง
+    // โกหกเวลา TAMIT แค่ตอบช้า — สินค้ามีอยู่จริง. แยกข้อความตามเหตุผลจริง
+    // แล้วให้จอเสนอ "ลองอีกครั้ง" เฉพาะกรณีที่ลองแล้วมีโอกาสได้.
+    const unreachable = d.fallback_reason === "unreachable";
     return {
       ok: false,
       error: "network_error",
-      message:
-        "ไม่พบข้อมูลสินค้าจากลิงก์นี้ กรุณากรอกรายการสินค้าด้วยตนเอง",
+      message: unreachable
+        ? "ระบบดึงข้อมูลสินค้าช้ากว่าปกติ กรุณากดลองอีกครั้ง หรือกรอกรายการสินค้าเอง"
+        : "ไม่พบข้อมูลสินค้าจากลิงก์นี้ กรุณากรอกรายการสินค้าด้วยตนเอง",
       fallback: "manual",
+      retryable: unreachable,
     };
   }
 

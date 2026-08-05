@@ -52,6 +52,37 @@ html, body {
   max-width: 100vw;
 }
 
+/* ── ฟอร์ม "เพิ่มสินค้าด้วยตัวเอง" — จัดคอลัมน์ตามความกว้าง "การ์ด" ไม่ใช่ความกว้างจอ
+   (owner 2026-08-04 เอาแบนเนอร์ 400px มาวางข้างฟอร์ม → การ์ดแคบลงทั้งที่จอเท่าเดิม
+   จน xl: ยังยิงอยู่ ล็อกช่องรูป 320px แล้วช่องฟอร์มเหลือ 167px + ล้น 7 จุด).
+
+   เขียน @container เองแทน utility `@lg:` ของ Tailwind — เวอร์ชันในโปรเจกต์นี้
+   สร้าง `.@container` (container-type) ให้ แต่ไม่ออกกฎ `@container (width >= …)`
+   ของ variant เลยสักข้อ (ยืนยันจากจอ: containerMediaRules = 0) ทำให้ฟอร์มค้างเป็น
+   คอลัมน์เดียวถาวร. เขียนเป็น CSS ตรงๆ = ควบคุมได้ + ตรวจได้จาก computed style. */
+.pcs-item-form { container-type: inline-size; }
+.pcs-item-grid { display: grid; grid-template-columns: 1fr; gap: 0.875rem; }
+.pcs-item-pair { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+@container (min-width: 500px) {
+  /* การ์ดกว้างพอ → รูปซ้าย ช่องกรอกขวา + จับช่องเรียงคู่
+     ⚠️ ความสูงของแถวนี้ถูกกำหนดโดย "คอลัมน์รูป" (รูป + แถบรูปย่อ + ช่องใต้รูป)
+     ลดตัวเลขนี้ = การ์ดเตี้ยลงตรงๆ · owner ขอให้ default ไม่สูงเกินแบนเนอร์ 711px */
+  .pcs-item-grid { grid-template-columns: 150px minmax(0, 1fr); }
+  .pcs-item-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (min-width: 860px) {
+  .pcs-item-grid { grid-template-columns: 240px minmax(0, 1fr); }
+}
+/* บรรทัดอธิบายในกรอบอัปโหลด — วัดจาก "กรอบรูป" เอง ไม่ใช่การ์ด: บนมือถือการ์ดแคบ
+   (350px) แต่กรอบรูปกว้างเต็ม 324px ข้อความขึ้นได้สบาย ส่วนบนเดสก์ท็อปการ์ดกว้าง
+   แต่กรอบรูปเหลือ 150px ข้อความจะล้นออกนอกเส้นประ (owner "เกินขอบ ปรับให้หน่อย").
+   ใช้เกณฑ์เดียวคือความกว้างกรอบ → ถูกทั้งสองฝั่งโดยไม่ต้องแยกเคส. */
+.pcs-drop { container-type: inline-size; }
+.pcs-drop-hint { display: none; }
+@container (min-width: 200px) {
+  .pcs-drop-hint { display: block; }
+}
+
 /* Reserve the vertical scrollbar's width even when the page happens to fit —
    otherwise a page that sits exactly at the fold RESIZES ITSELF the moment any
    content grows past it: the scrollbar appears, every container loses ~15px, and
