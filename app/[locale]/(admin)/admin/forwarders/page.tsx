@@ -28,7 +28,6 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
-  resolvePendingSlipFidsAll,
   resolvePendingSlipReviewTargetsAll,
   type PendingSlipReviewTarget,
 } from "@/lib/forwarder/pending-slip";
@@ -43,7 +42,12 @@ import { ForwardersTable } from "./forwarders-table";
 import { ForwardersSearchBar } from "./search-bar";
 import { Suspense } from "react";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
-import { fstatusTabBadge, fstatusTabActiveCls, FORWARDER_STATUS_TABS } from "@/lib/admin/forwarder-status";
+import {
+  fstatusTabBadge,
+  fstatusTabActiveCls,
+  FORWARDER_STATUS_TABS,
+  matchesForwarderOperationalQueue,
+} from "@/lib/admin/forwarder-status";
 import { PageHeader } from "@/components/admin/page-header";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { parsePage, pageRange, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
@@ -1306,24 +1310,29 @@ export async function fetchForwarderList(
   let raw = (forwarderRows ?? []) as unknown as RawForwarderRow[];
 
   // 6 vs 6.1 post-fetch split (driver-in-progress set was loaded above).
-  const isPendingCashReview = (r: RawForwarderRow): boolean => {
+  const matchesOperationalQueue = (
+    r: RawForwarderRow,
+    queueCode: "5" | "5.1" | "6" | "6.1",
+  ): boolean => {
     const target = pendingSlipReviewTargets?.get(Number(r.id));
-    if (!target) return false;
-    return !(target.isCreditPayment || String(r.fcredit ?? "").trim() === "1");
+    return matchesForwarderOperationalQueue(r.fstatus, queueCode, {
+      driverOpen: driverInProgressIds?.has(Number(r.id)) ?? false,
+      pendingSlip: Boolean(target),
+      pendingSlipIsCredit:
+        Boolean(target?.isCreditPayment) || String(r.fcredit ?? "").trim() === "1",
+    });
   };
 
   if (sp.status === "6" && driverInProgressIds) {
-    raw = raw.filter((r) =>
-      !driverInProgressIds!.has(Number(r.id)) && !isPendingCashReview(r),
-    );
+    raw = raw.filter((r) => matchesOperationalQueue(r, "6"));
   } else if (sp.status === "6.1" && driverInProgressIds) {
-    raw = raw.filter((r) => driverInProgressIds!.has(Number(r.id)));
+    raw = raw.filter((r) => matchesOperationalQueue(r, "6.1"));
   } else if (sp.status === "5" && pendingSlipIds) {
     // owner 2026-07-31 — "รอชำระ/ใบแจ้งหนี้" = ยังไม่มีสลิปรอตรวจ
     // (พอแนบสลิปแล้วย้ายไปแท็บ 5.1 รอออก/ใบเสร็จรับเงิน)
-    raw = raw.filter((r) => !pendingSlipIds!.has(Number(r.id)));
+    raw = raw.filter((r) => matchesOperationalQueue(r, "5"));
   } else if (sp.status === "5.1" && pendingSlipIds) {
-    raw = raw.filter((r) => pendingSlipIds!.has(Number(r.id)) && isPendingCashReview(r));
+    raw = raw.filter((r) => matchesOperationalQueue(r, "5.1"));
   }
 
   // ─── 2nd query: tb_users for customer name/phone (+ VIP/Sale chips) ───
@@ -1698,53 +1707,56 @@ async function loadStatusCounts(
   // ที่ระดับแถว L~1307). แก้ให้ badge 6 = distinct ชิปเม้นของแถว fstatus=6 ที่ "ยังไม่มอบคนขับ"
   // = ตรงกับจำนวนที่ลิสต์แสดงเป๊ะ · 6.1 = ที่มอบแล้ว (นับตามแถวเหมือนลิสต์ → ชิปเม้นที่มอบครึ่ง
   // ขึ้นทั้งสองอันได้ ตรงพฤติกรรมลิสต์). openFids ว่าง → ไม่มีใครมอบ → prep = cnt("6") เดิม.
-  let s6prep = cnt("6");
-  let s6driver = 0;
-  {
-    const { data: di, error: diErr } = await admin
+  const [{ data: di, error: diErr }, pendingTargets] = await Promise.all([
+    admin
       .from("tb_forwarder_driver_item")
       .select("fid")
-      .eq("fdistatus", "");
-    if (diErr) {
-      console.error("[forwarders] countDriverInProgress6 driver-item read failed", {
-        code: diErr.code, message: diErr.message,
-      });
-    }
-    const openFids = new Set(
-      (di ?? [])
-        .map((r) => Number((r as { fid: number | string }).fid))
-        .filter((n) => Number.isFinite(n)),
-    );
-    if (openFids.size > 0) {
-      const setPrep = new Set<string>();
-      const setDriver = new Set<string>();
-      for (const r of shipRows) {
-        if (String(r.fstatus ?? "").trim() !== "6") continue;
-        (openFids.has(r.id) ? setDriver : setPrep).add(shipKey(r));
-      }
-      s6prep = setPrep.size;
-      s6driver = setDriver.size;
-    }
+      .eq("fdistatus", ""),
+    resolvePendingSlipReviewTargetsAll(admin),
+  ]);
+  if (diErr) {
+    console.error("[forwarders] countDriverInProgress6 driver-item read failed", {
+      code: diErr.code, message: diErr.message,
+    });
   }
+  const openFids = new Set(
+    (di ?? [])
+      .map((r) => Number((r as { fid: number | string }).fid))
+      .filter((n) => Number.isFinite(n)),
+  );
 
-  // "รอออก/ใบเสร็จรับเงิน" (5.1) = ชิปเม้นสถานะ 5 ที่มีสลิปรอบัญชีตรวจ (owner 2026-07-31).
-  // แท็บ 5 จึงเหลือเฉพาะที่ยังไม่มีสลิป — สองแท็บรวมกัน = ยอดสถานะ 5 ทั้งหมด (ไม่นับซ้ำ).
-  let s5receipt = 0;
-  let s5waiting = cnt("5");
-  {
-    const slipFids = await resolvePendingSlipFidsAll(admin);
-    if (slipFids.size > 0) {
-      const withSlip = new Set<string>();
-      const noSlip = new Set<string>();
-      for (const r of shipRows) {
-        if (String(r.fstatus ?? "").trim() !== "5") continue;
-        (slipFids.has(r.id) ? withSlip : noSlip).add(shipKey(r));
+  // Use the SAME operational predicate as the rendered list and row pill.
+  // Production shape 2026-08-05 proved why: staff-uploaded cash slips sit at
+  // provisional fstatus=6, so counting 5.1 from fstatus=5 alone produced a
+  // visible review job on /admin but a zero badge on this page.
+  const queueSets = {
+    "5": new Set<string>(),
+    "5.1": new Set<string>(),
+    "6": new Set<string>(),
+    "6.1": new Set<string>(),
+  };
+  for (const r of shipRows) {
+    const target = pendingTargets.get(r.id);
+    const signals = {
+      driverOpen: openFids.has(r.id),
+      pendingSlip: Boolean(target),
+      pendingSlipIsCredit:
+        Boolean(target?.isCreditPayment) || String(r.fcredit ?? "").trim() === "1",
+    };
+    for (const code of ["5", "5.1", "6", "6.1"] as const) {
+      if (matchesForwarderOperationalQueue(r.fstatus, code, signals)) {
+        queueSets[code].add(shipKey(r));
       }
-      s5receipt = withSlip.size;
-      // ชิปเม้นที่มีทั้งแถวมีสลิป/ไม่มีสลิป → นับเป็น "รอออกใบเสร็จ" (สลิปเข้าแล้ว)
-      s5waiting = [...noSlip].filter((k) => !withSlip.has(k)).length;
     }
   }
+  // A shipment with any submitted slip has left the plain waiting-payment
+  // lane, even when another split row of the same shipment has no child ledger.
+  for (const key of queueSets["5.1"]) queueSets["5"].delete(key);
+
+  const s5waiting = queueSets["5"].size;
+  const s5receipt = queueSets["5.1"].size;
+  const s6prep = queueSets["6"].size;
+  const s6driver = queueSets["6.1"].size;
 
   return {
     total: allSet.size,

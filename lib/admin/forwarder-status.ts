@@ -214,6 +214,25 @@ export function resolveRowStatusCode(
   return st;
 }
 
+/**
+ * One predicate for the operational 5 / 5.1 / 6 / 6.1 queues.
+ *
+ * `5` is the only special case that cannot be expressed by the display code:
+ * any submitted payment evidence has already left the plain "waiting for
+ * payment" queue. Credit collection remains visible in its independent AR
+ * lane; the other three operational queues follow the derived row code,
+ * including driver-state priority over a stale pending-slip flag.
+ */
+export function matchesForwarderOperationalQueue(
+  fstatus: string | null | undefined,
+  queueCode: "5" | "5.1" | "6" | "6.1",
+  opts?: { driverOpen?: boolean; pendingSlip?: boolean; pendingSlipIsCredit?: boolean },
+): boolean {
+  const st = String(fstatus ?? "").trim();
+  if (queueCode === "5") return st === "5" && !opts?.pendingSlip;
+  return resolveRowStatusCode(st, opts) === queueCode;
+}
+
 /** ป้ายภาษาไทยของ code (รวม 5.1 / 6.1 · fstatus '99' = แท็บ "p" สถานะพิเศษ) — ดึงจาก SOT แถบแท็บ */
 export function statusCodeLabel(code: string): string {
   const c = code === "99" ? "p" : code;

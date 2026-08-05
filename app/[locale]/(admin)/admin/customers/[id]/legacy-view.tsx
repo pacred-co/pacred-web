@@ -56,6 +56,7 @@ import {
   FORWARDER_STATUS_TABS,
   fstatusTabActiveCls,
   fstatusTabBadge,
+  matchesForwarderOperationalQueue,
   resolveRowStatusCode,
   statusCodeLabel,
 } from "@/lib/admin/forwarder-status";
@@ -469,10 +470,6 @@ export async function renderLegacyCustomerView(
   // นิยาม "แนบสลิปแล้ว" เปลี่ยน จะได้คนละคำตอบคนละจอ (owner 2026-07-31).
   const pendingSlipTargets = await resolvePendingSlipReviewTargetsAll(admin, [...fiveIds, ...sixIds]);
   const pendingSlipFids = new Set(pendingSlipTargets.keys());
-  const isPendingCashReview = (r: { id: number; fcredit: string | null }): boolean => {
-    const target = pendingSlipTargets.get(r.id);
-    return Boolean(target) && !(target!.isCreditPayment || String(r.fcredit ?? "").trim() === "1");
-  };
   const driverOpenFids = new Set<number>();
   if (sixIds.length > 0) {
     const { data: dItems, error: dErr } = await admin
@@ -483,6 +480,18 @@ export async function renderLegacyCustomerView(
     if (dErr) console.error("[legacy-view] driver-item scan failed", { code: dErr.code, message: dErr.message });
     for (const d of (dItems ?? []) as Array<{ fid: number }>) driverOpenFids.add(Number(d.fid));
   }
+  const matchesCustomerOperationalQueue = (
+    r: { id: number; fstatus: string | null; fcredit: string | null },
+    queueCode: "5" | "5.1" | "6" | "6.1",
+  ): boolean => {
+    const target = pendingSlipTargets.get(r.id);
+    return matchesForwarderOperationalQueue(r.fstatus, queueCode, {
+      driverOpen: driverOpenFids.has(r.id),
+      pendingSlip: Boolean(target),
+      pendingSlipIsCredit:
+        Boolean(target?.isCreditPayment) || String(r.fcredit ?? "").trim() === "1",
+    });
+  };
 
   // ลูกค้าเครดิต? — แท็บ "เครดิตสินค้า/สถานะพิเศษ" โชว์เฉพาะลูกค้าที่ตั้งเป็นเครดิต
   // (owner เคาะ): ธงบนโปรไฟล์ (userCredit='1') หรือมีวงเงินค้าง หรือมีงาน fcredit='1' จริง
@@ -498,10 +507,9 @@ export async function renderLegacyCustomerView(
     if (fwdSt === "") return true;
     if (fwdSt === "c") return String(r.fcredit ?? "") === "1";
     if (fwdSt === "p") return st === "99";
-    if (fwdSt === "6") return st === "6" && !driverOpenFids.has(r.id) && !isPendingCashReview(r);
-    if (fwdSt === "6.1") return st === "6" && driverOpenFids.has(r.id);
-    if (fwdSt === "5") return st === "5" && !pendingSlipFids.has(r.id);
-    if (fwdSt === "5.1") return ["5", "6"].includes(st) && isPendingCashReview(r);
+    if (["5", "5.1", "6", "6.1"].includes(fwdSt)) {
+      return matchesCustomerOperationalQueue(r, fwdSt as "5" | "5.1" | "6" | "6.1");
+    }
     return st === fwdSt;
   };
   const byDateDesc = (a: string | null, b: string | null) => (b ?? "").localeCompare(a ?? "");
@@ -591,14 +599,11 @@ export async function renderLegacyCustomerView(
     if (code === "") return fwdScan.length;
     if (code === "c") return fwdScan.filter((r) => String(r.fcredit ?? "") === "1").length;
     if (code === "p") return stCount("99");
-    if (code === "6") return fwdScan.filter((r) =>
-      String(r.fstatus ?? "") === "6" && !driverOpenFids.has(r.id) && !isPendingCashReview(r),
-    ).length;
-    if (code === "6.1") return sixIds.filter((id) => driverOpenFids.has(id)).length;
-    if (code === "5") return fiveIds.filter((id) => !pendingSlipFids.has(id)).length;
-    if (code === "5.1") return fwdScan.filter((r) =>
-      ["5", "6"].includes(String(r.fstatus ?? "")) && isPendingCashReview(r),
-    ).length;
+    if (["5", "5.1", "6", "6.1"].includes(code)) {
+      return fwdScan.filter((r) =>
+        matchesCustomerOperationalQueue(r, code as "5" | "5.1" | "6" | "6.1"),
+      ).length;
+    }
     return stCount(code);
   };
   const fwdTabs: SectionTab[] = FORWARDER_STATUS_TABS
