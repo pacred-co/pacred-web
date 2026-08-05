@@ -40,7 +40,7 @@ export default async function StaffPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/admin/admins/new" className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700">
+          <Link href="/admin/hr/staff/new" className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700">
             + เพิ่มพนักงาน
           </Link>
           <Link href="/admin/hr/org-chart" className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">

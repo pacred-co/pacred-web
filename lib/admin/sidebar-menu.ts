@@ -1117,6 +1117,9 @@ const wrapClassHr: MenuItem = {
     blockExtKpi,
     // 2026-06-10 (ปอน) — admin-staff + org-info management moved here from Developer/tools.
     { labelKey: "settingsCargo.adminUsers", href: "/admin/hr/staff", icon: "UserCog" },
+    // item 4b (owner) — การลา 2 ชั้น (HR อนุมัติ → CEO อนุมัติ). ใช้ labelKey เดิม
+    // hr.attendanceLeaves ("บันทึกการลางาน") · icon CalendarCheck (มีใน ICONS map แล้ว).
+    { labelKey: "hr.attendanceLeaves", href: "/admin/hr/leave", icon: "CalendarCheck" },
     { labelKey: "settingsCargo.positions", href: "/admin/positions", icon: "Network" },
     { labelKey: "settingsCargo.orgEmail", href: "/admin/organization-email", icon: "MessageCircle" },
     { labelKey: "settingsCargo.orgChannels", href: "/admin/organization-channels", icon: "Smartphone" },

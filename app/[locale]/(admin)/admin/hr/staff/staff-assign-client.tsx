@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Search, Users, CheckCircle2, CircleSlash, Loader2, Pencil, Shield, Lock, LockOpen } from "lucide-react";
+import { Search, Users, CheckCircle2, CircleSlash, Loader2, Pencil, Shield, Lock, LockOpen, AlertTriangle } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 import { assignStaffToPosition, setStaffEmployment } from "@/actions/admin/hr-staff";
 import { adminChangeRole } from "@/actions/admin/admins";
@@ -30,6 +30,7 @@ export function StaffAssignClient({
   const [tab, setTab] = useState<"active" | "resigned">("active");
   const [search, setSearch] = useState("");
   const [onlyUnassigned, setOnlyUnassigned] = useState(false);
+  const [onlyIncomplete, setOnlyIncomplete] = useState(false);
   const [saving, startSave] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -41,6 +42,7 @@ export function StaffAssignClient({
     total: activeRows.length,
     assigned: activeRows.filter((r) => r.orgUnitId).length,
     unassigned: activeRows.filter((r) => !r.orgUnitId).length,
+    incomplete: activeRows.filter((r) => !r.isDataComplete).length,
     resigned: resignedRows.length,
   }), [activeRows, resignedRows]);
 
@@ -48,12 +50,13 @@ export function StaffAssignClient({
     const t = search.trim().toLowerCase();
     return pool.filter((r) => {
       if (tab === "active" && onlyUnassigned && r.orgUnitId) return false;
+      if (tab === "active" && onlyIncomplete && r.isDataComplete) return false;
       if (!t) return true;
       return r.name.toLowerCase().includes(t) || (r.nickname ?? "").toLowerCase().includes(t) ||
         r.adminId.toLowerCase().includes(t) || (r.positionName ?? "").toLowerCase().includes(t) ||
         r.roles.some((role) => roleLabel(role).toLowerCase().includes(t));
     });
-  }, [pool, tab, search, onlyUnassigned]);
+  }, [pool, tab, search, onlyUnassigned, onlyIncomplete]);
 
   const grouped = useMemo(() => {
     const m = new Map<string, PositionOption[]>();
@@ -117,10 +120,11 @@ export function StaffAssignClient({
     <div className="space-y-4">
       {dialogs}
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <Stat icon={<Users className="h-4 w-4" />} label="พนักงาน active" value={stats.total} />
         <Stat icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />} label="จัดตำแหน่งแล้ว" value={stats.assigned} tone="emerald" />
         <Stat icon={<CircleSlash className="h-4 w-4 text-red-600" />} label="ยังไม่จัดตำแหน่ง" value={stats.unassigned} tone="red" />
+        <Stat icon={<AlertTriangle className="h-4 w-4 text-amber-600" />} label="ข้อมูลไม่ครบ" value={stats.incomplete} tone="amber" />
         <Stat icon={<Lock className="h-4 w-4 text-slate-500" />} label="ลาออก / ล็อก" value={stats.resigned} />
       </div>
 
@@ -141,6 +145,12 @@ export function StaffAssignClient({
           <button type="button" onClick={() => setOnlyUnassigned((v) => !v)}
             className={`inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs ${onlyUnassigned ? "border-red-400 bg-red-50 text-red-700" : "border-border hover:bg-surface-alt"}`}>
             <CircleSlash className="h-3.5 w-3.5" /> เฉพาะที่ยังไม่จัด ({stats.unassigned})
+          </button>
+        )}
+        {tab === "active" && (
+          <button type="button" onClick={() => setOnlyIncomplete((v) => !v)}
+            className={`inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs ${onlyIncomplete ? "border-amber-400 bg-amber-50 text-amber-700" : "border-border hover:bg-surface-alt"}`}>
+            <AlertTriangle className="h-3.5 w-3.5" /> ข้อมูลไม่ครบ ({stats.incomplete})
           </button>
         )}
         <span className="ml-auto text-[11px] text-muted">{visible.length.toLocaleString("th-TH")} คน</span>
@@ -170,6 +180,7 @@ export function StaffAssignClient({
                     <span className="font-mono">{r.memberCode ?? r.adminId}</span>
                     {r.isSale && <span className="rounded bg-primary-100 px-1 text-primary-700">เซล</span>}
                     {!r.hasHrRecord && <span className="rounded bg-amber-100 px-1 text-amber-700" title="มีในระบบ login แต่ยังไม่มีข้อมูล HR (tb_admin) — เติมทีหลัง">⚠ ไม่มี HR</span>}
+                    {r.hasHrRecord && !r.isDataComplete && <span className="rounded bg-amber-100 px-1 text-amber-700" title={`ยังไม่ครบ: ${r.missingFields.join(", ")}`}>⚠ ข้อมูลไม่ครบ</span>}
                   </div>
                 </td>
                 <td className="px-3 py-2">
@@ -281,8 +292,8 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
   );
 }
 
-function Stat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: number; tone?: "emerald" | "red" }) {
-  const ring = tone === "emerald" ? "border-emerald-200 bg-emerald-50/40" : tone === "red" ? "border-red-200 bg-red-50/40" : "border-border bg-white dark:bg-surface";
+function Stat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: number; tone?: "emerald" | "red" | "amber" }) {
+  const ring = tone === "emerald" ? "border-emerald-200 bg-emerald-50/40" : tone === "red" ? "border-red-200 bg-red-50/40" : tone === "amber" ? "border-amber-200 bg-amber-50/40" : "border-border bg-white dark:bg-surface";
   return (
     <div className={`rounded-xl border ${ring} px-3 py-2.5`}>
       <div className="flex items-center gap-1.5 text-[11px] text-muted">{icon}{label}</div>

@@ -6,6 +6,8 @@ import { Save, Loader2, User, Phone, Image as ImageIcon } from "lucide-react";
 import { saveEmployee } from "@/actions/admin/hr-staff";
 import { useConfirmDialogs } from "@/components/ui/pacred-dialog";
 import type { StaffDetail } from "@/lib/admin/hr-staff";
+import type { StaffAddressRow, StaffEducationRow } from "@/lib/admin/hr-staff-extra";
+import { StaffExtraBlocks } from "./staff-extra-blocks";
 
 const TYPE_OPTS = [
   ["1", "พนักงานประจำ"], ["2", "ทดลองงาน"], ["3", "เด็กฝึกงาน"], ["4", "สหกิจศึกษา"],
@@ -17,7 +19,13 @@ const SALARY_OPTS = [["1", "รายวัน"], ["2", "รายเดือ�
 const field = "w-full rounded-lg border border-border bg-white dark:bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50";
 const lbl = "block text-[11px] font-semibold text-muted mb-0.5";
 
-export function EditEmployeeClient({ detail }: { detail: StaffDetail }) {
+export function EditEmployeeClient({
+  detail, addresses, education,
+}: {
+  detail: StaffDetail;
+  addresses: StaffAddressRow[];
+  education: StaffEducationRow[];
+}) {
   const router = useRouter();
   const { alert, dialogs } = useConfirmDialogs();
   const [saving, start] = useTransition();
@@ -89,6 +97,9 @@ export function EditEmployeeClient({ detail }: { detail: StaffDetail }) {
           </label>
         </div>
       </section>
+
+      {/* ── บล็อก 3-4 · ที่อยู่ + การศึกษา (child records · owner 4a · faithful PCS HR) ── */}
+      <StaffExtraBlocks adminId={detail.adminId} addresses={addresses} education={education} />
 
       {err && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">⚠ {err}</div>}
 

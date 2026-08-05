@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ensureLegacyAdminRow } from "@/lib/admin/ensure-legacy-admin";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { adminCreateNew } from "./admins";
 
 /**
  * เฟส 2 (owner 2026-08-03) — จัดพนักงานเข้าตำแหน่งในผัง.
@@ -14,6 +15,26 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 
 const HR_ROLES = ["super", "accounting"] as const;
 const EMPLOYMENT_ROLES = ["super"] as const; // ล็อก/ปลดล็อกพนักงาน = super เท่านั้น
+
+/**
+ * ตำแหน่งในผัง (code) → สิทธิ์ระบบ (role) เริ่มต้น (owner 2026-08-05 "ตำแหน่ง→สิทธิ์
+ * อัตโนมัติ · Driver=admin_ben · Warehouse=admin_keetar"). จัดคนเข้าตำแหน่งเหล่านี้
+ * → ได้ role ตรงเลย (เมนู/สิทธิ์ตาม role นั้น). map เฉพาะตำแหน่งที่ role ชัดเจน ·
+ * ตำแหน่งอื่น (IT/HR/Freight/Customs/CEO) role กำหนดมือ (ไม่ auto). role พวกนี้
+ * อยู่ใน admins_role_check ครบ.
+ */
+const POSITION_DEFAULT_ROLE: Record<string, string> = {
+  "log-drv": "driver",      // Driver (owner: template admin_ben)
+  "log-wh": "warehouse",    // Warehouse (owner: template admin_keetar)
+  "log-sup": "warehouse",   // Warehouse Supervisor
+  "acc-admin": "accounting",
+  "acc-sup": "accounting",
+  "ops-sales": "sales",
+  "ops-price": "pricing",
+  "ops-cs": "ops",
+};
+// role ที่ห้าม auto-เขียนทับ/แตะ (god/manager tier — เปลี่ยนเองมือเท่านั้น)
+const PROTECTED_ROLES = new Set(["super", "ultra", "accounting"]);
 
 const assignSchema = z.object({
   adminId: z.string().trim().min(1).max(60), // = profiles.admin_login_id
@@ -33,19 +54,21 @@ export async function assignStaffToPosition(input: AssignStaffInput): Promise<Ad
   if (!parsed.success) return { ok: false, error: "invalid_input" };
   const { adminId, orgUnitId } = parsed.data;
 
-  return withAdmin([...HR_ROLES], async ({ adminId: actor }) => {
+  return withAdmin([...HR_ROLES], async ({ adminId: actor, roles: actorRoles }) => {
     const admin = createAdminClient();
 
-    // ถ้าผูกตำแหน่ง — ตำแหน่งต้องมีจริง + เป็น kind=position
+    // ถ้าผูกตำแหน่ง — ตำแหน่งต้องมีจริง + เป็น kind=position · เก็บ code ไว้ map สิทธิ์
+    let unitCode: string | null = null;
     if (orgUnitId) {
       const { data: unit, error: uErr } = await admin
         .from("hr_org_units")
-        .select("id,kind")
+        .select("id,kind,code")
         .eq("id", orgUnitId)
         .maybeSingle();
       if (uErr) return { ok: false, error: `db_error:${uErr.code ?? "unknown"}` };
       if (!unit) return { ok: false, error: "position_not_found" };
       if ((unit as { kind: string }).kind !== "position") return { ok: false, error: "not_a_position" };
+      unitCode = (unit as { code: string | null }).code ?? null;
     }
 
     // ต้องเป็นพนักงานที่ login ได้ (มี profiles active) — กัน center/คนออก
@@ -53,6 +76,7 @@ export async function assignStaffToPosition(input: AssignStaffInput): Promise<Ad
       .from("profiles").select("id").eq("admin_login_id", adminId).eq("is_active", true).maybeSingle();
     if (pErr) return { ok: false, error: `db_error:${pErr.code ?? "unknown"}` };
     if (!prof) return { ok: false, error: "staff_not_found_or_inactive" };
+    const profileId = (prof as { id: string }).id;
 
     // เขียน tb_admin (แกน) → trigger มิเรอร์ profiles.org_unit_id เอง
     const { data: updated, error } = await admin
@@ -63,11 +87,92 @@ export async function assignStaffToPosition(input: AssignStaffInput): Promise<Ad
     if (error) return { ok: false, error: `db_error:${error.code ?? "unknown"}` };
     if (!updated || updated.length === 0) return { ok: false, error: "hr_record_missing" };
 
-    await logAdminAction(actor, "hr.assign_position", "tb_admin", adminId, { orgUnitId });
+    // ── ตำแหน่ง → สิทธิ์อัตโนมัติ (owner 2026-08-05) ──
+    // เพิ่ม role ตามตำแหน่ง (additive · ไม่ลบ/ไม่ downgrade role เดิม = ปลอดภัย) ·
+    // เฉพาะ actor ที่คุมสิทธิ์ได้ (super/ultra) · best-effort (พลาดไม่ล้มการจัดตำแหน่ง).
+    let grantedRole: string | null = null;
+    const mappedRole = unitCode ? POSITION_DEFAULT_ROLE[unitCode] : undefined;
+    const actorCanGrant = actorRoles.some((r) => r === "super" || r === "ultra");
+    if (mappedRole && actorCanGrant) {
+      // มี active grant ของ role นี้อยู่แล้วไหม · หรือมี role ที่สูงกว่า (protected) อยู่
+      const { data: grants } = await admin
+        .from("admins").select("role,is_active").eq("profile_id", profileId).eq("is_active", true);
+      const activeRoles = new Set(((grants ?? []) as { role: string }[]).map((g) => g.role));
+      const hasProtected = [...activeRoles].some((r) => PROTECTED_ROLES.has(r));
+      if (!activeRoles.has(mappedRole) && !hasProtected) {
+        const { error: gErr } = await admin.from("admins").upsert(
+          { profile_id: profileId, role: mappedRole, is_active: true, granted_by: actor, granted_at: new Date().toISOString() },
+          { onConflict: "profile_id,role" },
+        );
+        if (gErr) console.error("[hr] auto-grant role failed", { adminId, mappedRole, code: gErr.code });
+        else grantedRole = mappedRole;
+      }
+    }
+
+    await logAdminAction(actor, "hr.assign_position", "tb_admin", adminId, { orgUnitId, grantedRole });
     revalidatePath("/admin/hr/staff");
     revalidatePath("/admin/hr/org-chart");
     revalidatePath("/admin/hr/org-table");
     return { ok: true };
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════
+// เพิ่มพนักงานใหม่ — สร้าง + เติม tb_admin + จัดตำแหน่ง ในไหลเดียว (owner 2026-08-05
+// "ฟอร์มเพิ่มพนักงานตรงแกนเดียว · กัน account กลวง"). ต่อยอด adminCreateNew (สร้าง
+// auth+profiles+admins+extras+tb_admin ครบ) → saveEmployee เติม tb_admin ให้ตรง
+// (adminCreateNew ตั้งเบอร์เป็น placeholder) → assignStaffToPosition (org+สิทธิ์อัตโนมัติ).
+// ════════════════════════════════════════════════════════════════════
+const createStaffSchema = z.object({
+  loginId: z.string().trim().min(1).max(60),
+  password: z.string().min(6, "รหัสผ่านอย่างน้อย 6 ตัว").max(200),
+  firstName: z.string().trim().min(1, "กรอกชื่อ").max(200),
+  lastName: z.string().trim().max(200),
+  nickname: z.string().trim().max(60),
+  phone: z.string().trim().max(30),
+  email: z.string().trim().max(200),
+  type: z.enum(["1", "2", "3", "4", "5", "6", "7"]),
+  isSale: z.boolean(),
+  allowExistingPhone: z.boolean().optional(),
+  orgUnitId: z.string().uuid().nullable(),
+});
+export type CreateStaffInput = z.infer<typeof createStaffSchema>;
+
+export async function createStaffComplete(input: CreateStaffInput): Promise<AdminActionResult<{ adminId: string }>> {
+  const parsed = createStaffSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+  const d = parsed.data;
+  const loginId = d.loginId.toLowerCase().startsWith("admin_") ? d.loginId.toLowerCase() : `admin_${d.loginId.toLowerCase()}`;
+
+  return withAdmin<{ adminId: string }>([...EMPLOYMENT_ROLES], async ({ adminId: actor }) => {
+    // 1) สร้างพนักงานครบชุด (auth+profiles+admins+extras+tb_admin · ensureLegacyAdminRow)
+    const created = await adminCreateNew({
+      login_id: d.loginId, password: d.password,
+      first_name: d.firstName, last_name: d.lastName || undefined,
+      phone: d.phone || undefined, email: d.email || undefined,
+      role: d.isSale ? "sales" : "ops",
+      allow_existing_phone: d.allowExistingPhone,
+    } as Parameters<typeof adminCreateNew>[0]);
+    if (!created.ok) return { ok: false, error: created.error };
+
+    // 2) เติม tb_admin ให้ตรงแกนเดียว (ชื่อ/เบอร์จริง/ชื่อเล่น/ประเภท/เซล) → trigger มิเรอร์ profiles
+    const saved = await saveEmployee({
+      adminId: loginId, firstName: d.firstName, lastName: d.lastName, nickname: d.nickname,
+      phone: d.phone, photoUrl: "", sex: "", birthday: "",
+      type: d.type, salaryType: "2", salary: "", nationalId: "", isSale: d.isSale,
+    });
+    if (!saved.ok) return { ok: false, error: `สร้างแล้วแต่เติมข้อมูลไม่ครบ: ${saved.error}` };
+
+    // 3) จัดเข้าตำแหน่ง (ถ้าเลือก) → org_unit_id + สิทธิ์อัตโนมัติ
+    if (d.orgUnitId) {
+      const assigned = await assignStaffToPosition({ adminId: loginId, orgUnitId: d.orgUnitId });
+      if (!assigned.ok) return { ok: false, error: `สร้างแล้วแต่จัดตำแหน่งไม่สำเร็จ: ${assigned.error}` };
+    }
+
+    await logAdminAction(actor, "hr.create_staff", "profiles+tb_admin", loginId, { isSale: d.isSale, orgUnitId: d.orgUnitId });
+    revalidatePath("/admin/hr/staff");
+    revalidatePath("/admin/hr/org-chart");
+    return { ok: true, data: { adminId: loginId } };
   });
 }
 

@@ -18,6 +18,29 @@ export const EMPLOYEE_TYPE_LABEL: Record<string, string> = {
   "5": "พาร์ทเนอร์", "6": "ฟรีแลนซ์", "7": "คนในบ้าน",
 };
 
+/**
+ * ฟิลด์ข้อมูลส่วนตัวสำคัญที่ต้องกรอกให้ครบ (owner 2026-08-05: "ขึ้นธงข้อมูลส่วนตัวไม่สมบูรณ์")
+ * — คนละเรื่องกับ hasHrRecord (ที่เช็กว่ามี tb_admin row ไหม): อันนี้ row มีแล้ว แต่ฟิลด์ยังว่าง.
+ */
+export const REQUIRED_HR_FIELD_LABELS = [
+  "เบอร์โทร", "รูป", "เลขบัตรปชช.", "วันเกิด", "เพศ", "ประเภทการจ้าง",
+] as const;
+
+/** คำนวณรายการฟิลด์ที่ยังว่าง (null/empty · adminTel ขึ้นต้น na- = placeholder เบอร์ว่าง) */
+function computeMissingHrFields(tba: AdminRaw | undefined): string[] {
+  if (!tba) return [...REQUIRED_HR_FIELD_LABELS]; // ไม่มี tb_admin = ขาดครบทุกฟิลด์
+  const has = (v: string | null | undefined) => !!(v && String(v).trim());
+  const telFilled = !!(tba.adminTel && tba.adminTel.trim() && !tba.adminTel.startsWith("na-"));
+  const missing: string[] = [];
+  if (!telFilled) missing.push("เบอร์โทร");
+  if (!has(tba.adminPicture)) missing.push("รูป");
+  if (!has(tba.nationalIDCard)) missing.push("เลขบัตรปชช.");
+  if (!has(tba.adminBirthday)) missing.push("วันเกิด");
+  if (!has(tba.adminSex)) missing.push("เพศ");
+  if (!has(tba.adminType)) missing.push("ประเภทการจ้าง");
+  return missing;
+}
+
 export type StaffRow = {
   adminId: string;               // admin_login_id (spine key)
   profileId: string;             // profiles.id (สำหรับจัดการสิทธิ์ RBAC)
@@ -31,6 +54,8 @@ export type StaffRow = {
   roles: string[];               // จาก admins (active grants)
   primaryRole: string | null;    // role หลัก (สำหรับ control เปลี่ยนสิทธิ์)
   hasHrRecord: boolean;          // มี tb_admin ไหม (ไม่มี = ต้องเติม HR detail)
+  missingFields: string[];       // ฟิลด์ข้อมูลส่วนตัวที่ยังว่าง (label ไทย) · [] = ครบ
+  isDataComplete: boolean;       // ข้อมูลส่วนตัวครบ (missingFields.length === 0)
   orgUnitId: string | null;
   positionName: string | null;
   departmentName: string | null;
@@ -40,7 +65,7 @@ type ProfileRaw = {
   id: string; admin_login_id: string | null; member_code: string | null;
   first_name: string | null; last_name: string | null; is_active: boolean; org_unit_id: string | null;
 };
-type AdminRaw = { adminID: string; adminName: string | null; adminLastName: string | null; adminNickname: string | null; adminType: string | null; adminStatusSale: string | null };
+type AdminRaw = { adminID: string; adminName: string | null; adminLastName: string | null; adminNickname: string | null; adminType: string | null; adminStatusSale: string | null; adminTel: string | null; adminPicture: string | null; nationalIDCard: string | null; adminBirthday: string | null; adminSex: string | null };
 
 export function typeBucket(type: string | null): "employee" | "internship" | "partner" | null {
   if (type === "3" || type === "4") return "internship";
@@ -69,7 +94,7 @@ export async function loadStaffRegister(): Promise<{ rows: StaffRow[]; error: st
 
   // tb_admin (HR detail) · admins (role) · ชื่อตำแหน่ง — batch
   const [tbaRes, admRes] = await Promise.all([
-    loginIds.length ? admin.from("tb_admin").select("adminID,adminName,adminLastName,adminNickname,adminType,adminStatusSale").in("adminID", loginIds) : Promise.resolve({ data: [] }),
+    loginIds.length ? admin.from("tb_admin").select("adminID,adminName,adminLastName,adminNickname,adminType,adminStatusSale,adminTel,adminPicture,nationalIDCard,adminBirthday,adminSex").in("adminID", loginIds) : Promise.resolve({ data: [] }),
     profileIds.length ? admin.from("admins").select("profile_id,role").eq("is_active", true).in("profile_id", profileIds) : Promise.resolve({ data: [] }),
   ]);
   const tbaByLogin = new Map(((tbaRes.data ?? []) as AdminRaw[]).map((a) => [a.adminID, a]));
@@ -106,6 +131,7 @@ export async function loadStaffRegister(): Promise<{ rows: StaffRow[]; error: st
     // แหล่งเดียว = tb_admin → ชื่อจาก tb_admin ก่อน (profiles = mirror · fallback)
     const nameParts = [tba?.adminName ?? p.first_name, tba?.adminLastName ?? p.last_name].filter(Boolean).join(" ").trim();
     const roles = rolesByProfile.get(p.id) ?? [];
+    const missingFields = computeMissingHrFields(tba);
     return {
       adminId: login,
       profileId: p.id,
@@ -119,6 +145,8 @@ export async function loadStaffRegister(): Promise<{ rows: StaffRow[]; error: st
       roles,
       primaryRole: roles[0] ?? null,
       hasHrRecord: !!tba,
+      missingFields,
+      isDataComplete: missingFields.length === 0,
       orgUnitId: p.org_unit_id,
       positionName: unit?.name ?? null,
       departmentName: dept?.name ?? null,

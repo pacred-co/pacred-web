@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { ChevronRight, Home, UserCog } from "lucide-react";
 import { loadStaffDetail } from "@/lib/admin/hr-staff";
+import { loadStaffAddresses, loadStaffEducation } from "@/lib/admin/hr-staff-extra";
 import { EditEmployeeClient } from "./edit-employee-client";
 
 /**
@@ -15,7 +16,12 @@ export const dynamic = "force-dynamic";
 export default async function EditEmployeePage({ params }: { params: Promise<{ adminId: string }> }) {
   await requireAdmin(["super", "accounting"]);
   const { adminId } = await params;
-  const detail = await loadStaffDetail(adminId);
+  // โหลด detail + child records (ที่อยู่/การศึกษา) ขนาน · child fail-soft → []
+  const [detail, addresses, education] = await Promise.all([
+    loadStaffDetail(adminId),
+    loadStaffAddresses(adminId),
+    loadStaffEducation(adminId),
+  ]);
 
   return (
     <main className="p-6 lg:p-8 space-y-5">
@@ -45,7 +51,7 @@ export default async function EditEmployeePage({ params }: { params: Promise<{ a
               {!detail.hasHrRecord && <span className="ml-1 rounded bg-amber-100 px-1 text-amber-700">⚠ ยังไม่มีข้อมูล HR — กรอกแล้วบันทึกเพื่อเติม</span>}
             </p>
           </header>
-          <EditEmployeeClient detail={detail} />
+          <EditEmployeeClient detail={detail} addresses={addresses} education={education} />
         </>
       )}
     </main>
