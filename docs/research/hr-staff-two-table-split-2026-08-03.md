@@ -97,3 +97,24 @@ admins.role) เห็นครบทุกคน = ตอบโจทย์ own
 
 **🟡 เหลือ (งานต่อ · ไม่บล็อก):** moo/sunta ไม่มี tb_admin HR detail → เติมตอนทำฟอร์ม
 พนักงานเต็ม (เขียน profiles+tb_admin พร้อมกัน · กัน split) · admin_center = บัญชีร่วม (กันออกถูก).
+
+---
+
+## 🔴 REQUIREMENT ฟอร์มเพิ่มพนักงาน (owner 2026-08-03 ค่ำ · probe แล้ว)
+
+owner: "ดูตอนเพิ่มพนักงาน row พนักงาน ดึงไปใช้ตรงกันมั้ย — เซล/CS ที่ต้องขึ้น เบอร์
+ชื่อ รูป เชื่อมไปยัน หน้าเว็บ + หน้าลูกค้า + หลังบ้านลูกค้า + แอดมิน".
+
+**เจอ (probe · ยังไม่ตรงกัน):** เซลที่ **ลูกค้าเห็น** ดึงจาก **tb_admin** —
+`tb_users.adminIDSale → tb_admin.adminID → adminName/adminTel/adminPicture`
+(`lib/admin/sales-rep-contact.ts` · fallback profiles). แต่ **HR/ผัง/ทะเบียน = profiles**.
+⇒ 2 แหล่ง: ถ้าฟอร์มเขียนคนละที่ ลูกค้าเห็นชื่อ/เบอร์/รูป **ไม่ตรงกับแอดมิน**.
+
+**⇒ ฟอร์มเพิ่ม/แก้พนักงาน ต้อง single-source ชื่อ/เบอร์/รูป:** เขียน **profiles +
+tb_admin พร้อมกัน** (ชื่อ=first/last · เบอร์=adminTel/phone · รูป=adminPicture/avatar_url)
+ให้ค่าตรงกันทุกครั้ง · หรือทำตัวใดตัวหนึ่งเป็น SOT แล้วอีกตัว derive. surfaces ที่ต้องตรง:
+หน้าเว็บ (เซลติดต่อ) · portal ลูกค้า (เซลผู้ดูแล) · หลังบ้านลูกค้า · แอดมิน (ทะเบียน/ผัง).
+= งานหลักตอน build ฟอร์มพนักงานเต็ม (session หน้า).
+
+**admin_center** = ค่ากลาง/fallback (owner: "ปกติไม่ควร · ลูกค้าควรมีเซลดูแล · แต่มีเคส
+เกิดขึ้น") → คงไว้เป็น default sales account.
