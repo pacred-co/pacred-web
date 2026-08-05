@@ -441,6 +441,40 @@ console.log("computeForwarderDebitBatch — B1 N-box เหมาๆ (PRF-zero) 
   assertClose("legacy: second row no fee", b.lines[1].price_thb, 100);
 }
 
+// Production-shaped regressions audited 2026-08-05. PR622 had a mixed PRE/PRF
+// selection: PRE rows must never create the flat fee, but four remaining PRF
+// rows intentionally create exactly one ฿100 fee for the collection event.
+// PR200 was all PCS self-pickup and must stay fee-free.
+console.log("customer audits — mixed PRE/PRF and PCS pickup");
+{
+  const pr622 = computeForwarderDebitBatch(
+    [
+      row({ id: 53001, fshipby: "PRE", ftrackingchn: "100001", ftotalprice: 100 }),
+      row({ id: 53085, fshipby: "PRF", ftrackingchn: "100085", ftotalprice: 92.61 }),
+      row({ id: 53180, fshipby: "PRF", ftrackingchn: "100180", ftotalprice: 192.5 }),
+      row({ id: 53187, fshipby: "PRF", ftrackingchn: "100187", ftotalprice: 178.5 }),
+      row({ id: 53188, fshipby: "PRF", ftrackingchn: "100188", ftotalprice: 205.2 }),
+      row({ id: 53200, fshipby: "PRE", ftrackingchn: "100200", ftotalprice: 200 }),
+    ],
+    { userId: "PR622", isCorporate: false },
+  );
+  const freight = 100 + 92.61 + 192.5 + 178.5 + 205.2 + 200;
+  assertClose("PR622 mixed PRE/PRF → freight + one ฿100", pr622.total_thb, freight + 100);
+  assertEq("PR622 mixed PRE/PRF → exactly one fee anchor", pr622.lines.filter((l) => l.breakdown.maoFee > 0).length, 1);
+  assertEq("PR622 mixed PRE/PRF → PRE rows never carry เหมาๆ", pr622.lines.filter((l) => ["53001", "53200"].includes(l.id)).every((l) => l.breakdown.maoFee === 0), true);
+
+  const pr200 = computeForwarderDebitBatch(
+    [
+      row({ id: 52630, fshipby: "PCS", ftotalprice: 630.79 }),
+      row({ id: 52646, fshipby: "PCS", ftotalprice: 630.79 }),
+      row({ id: 52668, fshipby: "PCS", ftotalprice: 342.38 }),
+    ],
+    { userId: "PR200", isCorporate: false },
+  );
+  assertClose("PR200 PCS pickup → no flat fee", pr200.total_thb, 1603.96);
+  assertEq("PR200 PCS pickup → zero fee anchors", pr200.lines.filter((l) => l.breakdown.maoFee > 0).length, 0);
+}
+
 // ── COD (ปลายทาง · paymethod='2') excludes the domestic leg — F1/F2 (2026-07-15) ──
 // A COD row's ftransportprice is collected at the door by the courier, so it must NOT
 // be folded into the Pacred upfront collect/debit total (else it is charged twice).

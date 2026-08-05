@@ -102,6 +102,8 @@ export type PaymentSummaryDocProps = {
   sumDeliveryTh: number;
   /** ค่าส่งเหมาๆ (PCSF/PRF ฿100) — บรรทัดแยกในสรุป (ตรงกับ PayModal · owner 2026-07-22). */
   sumMaoFee: number;
+  /** ออเดอร์ PRF/PCSF ทุกตัวในชุด — ทำให้บัญชีย้อนตรวจต้นเหตุค่าขนส่งเหมาๆ ได้จากเอกสาร. */
+  maoOrderNos: string[];
   sumOther: number;
   sumDiscount: number;
   whtAmount: number;
@@ -142,6 +144,9 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
   const feeChn = r2(p.sumDeliveryChn);
   const feeThaiShip = r2(p.sumDeliveryTh);
   const feeMao = r2(p.sumMaoFee); // ค่าส่งเหมาๆ (PCSF/PRF ฿100) — บรรทัดของตัวเอง (ตรงกับ PayModal)
+  const maoRefs = p.maoOrderNos.length <= 4
+    ? p.maoOrderNos.map((id) => `#${id}`).join(", ")
+    : `${p.maoOrderNos.slice(0, 4).map((id) => `#${id}`).join(", ")} +${p.maoOrderNos.length - 4}`;
   const feeOther = r2(p.sumOther);
   const feeDiscount = r2(p.sumDiscount);
   const feeFreight = r2(
@@ -333,7 +338,12 @@ export function PaymentSummaryDoc(p: PaymentSummaryDocProps) {
                   <div style={{ flex: 1 }}>
                     <SumLine k="ค่าขนส่งสินค้า" v={`${fmt2(feeFreight)} บาท`} />
                     {feeThaiShip > 0 && <SumLine k="+ ค่าขนส่งไทย" v={`${fmt2(feeThaiShip)} บาท`} />}
-                    {feeMao > 0 && <SumLine k="+ ค่าส่งเหมาๆ" v={`${fmt2(feeMao)} บาท`} />}
+                    {feeMao > 0 && (
+                      <SumLine
+                        k={`+ ค่าส่งเหมาๆ${maoRefs ? ` (${maoRefs})` : ""}`}
+                        v={`${fmt2(feeMao)} บาท`}
+                      />
+                    )}
                     {feeChn > 0 && <SumLine k="+ ค่าขนส่ง" v={`${fmt2(feeChn)} บาท`} />}
                     {feeOther > 0 && <SumLine k="+ ค่าอื่นๆ" v={`${fmt2(feeOther)} บาท`} />}
                     {feeDiscount > 0 && <SumLine k="− ส่วนลด" v={`${fmt2(feeDiscount)} บาท`} red />}

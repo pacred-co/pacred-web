@@ -22,6 +22,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { computeForwarderDebitBatch, type ForwarderDebitRow } from "@/lib/forwarder/forwarder-debit-total";
 import { resolveMaoAnchorIds } from "@/lib/forwarder/mao-anchor";
+import { isMaoCarrier } from "@/lib/forwarder/mao-fee";
 import { resolveDimsDisplay, type BoxDimInput } from "@/lib/forwarder/resolve-box-dims";
 import { computeBillWht } from "@/lib/billing/wht";
 import { loadCustomerBillingParty } from "@/lib/admin/customer-billing-party";
@@ -142,6 +143,7 @@ export default async function PaymentSummaryPage({
           sumDeliveryChn={0}
           sumDeliveryTh={0}
           sumMaoFee={0}
+          maoOrderNos={[]}
           sumOther={0}
           sumDiscount={0}
           whtAmount={0}
@@ -193,6 +195,7 @@ export default async function PaymentSummaryPage({
           sumDeliveryChn={0}
           sumDeliveryTh={0}
           sumMaoFee={0}
+          maoOrderNos={[]}
           sumOther={0}
           sumDiscount={0}
           whtAmount={0}
@@ -320,6 +323,12 @@ export default async function PaymentSummaryPage({
   //   • COD (F1)       → a ปลายทาง row's domestic leg is excluded from the gross (the batch
   //                       is COD-aware via paymethod) so the PDF == the actual charge.
   const maoFeeTotal = round2(batch.lines.reduce((s, l) => s + l.breakdown.maoFee, 0));
+  // Keep every PRF/PCSF order visible on the document, even though the fee is
+  // charged only once per collection event. This is the audit trail staff need
+  // when a mixed PRE+PRF selection unexpectedly contains the flat ฿100.
+  const maoOrderNos = rowsFw
+    .filter((r) => isMaoCarrier(r.fshipby))
+    .map((r) => String(r.id));
   // GROSS (pre-WHT) from the SOT breakdown — freight + otherCharges (COD-aware · F1) + เหมาๆ − ส่วนลด.
   const totalPriceAll = round2(
     batch.lines.reduce(
@@ -380,6 +389,7 @@ export default async function PaymentSummaryPage({
         sumDeliveryChn={sumDeliveryChn}
         sumDeliveryTh={sumDeliveryTh}
         sumMaoFee={maoFeeTotal}
+        maoOrderNos={maoOrderNos}
         sumOther={sumOther}
         sumDiscount={sumDiscount}
         whtAmount={whtAmount}

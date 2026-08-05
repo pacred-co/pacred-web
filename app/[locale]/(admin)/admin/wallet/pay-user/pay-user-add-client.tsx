@@ -1474,6 +1474,14 @@ function PayModal({
     keyType === "2"
       ? fwdRows.reduce((s, r) => s + n0(r.breakdown.maoFee), 0)
       : 0;
+  // Show EVERY selected PRF/PCSF row, not only the single fee anchor. The batch
+  // deliberately charges ฿100 once, so hiding the other PRF rows makes staff
+  // "fix" the anchor only and then wonder why the next PRF row becomes the new
+  // anchor. The display label is already the read-model SOT for legacy+rebrand.
+  const maoCarrierRows =
+    keyType === "2"
+      ? fwdRows.filter((r) => /เหมาๆ|\bPRF\b/i.test(r.ship_by_label))
+      : [];
   const discountSum = keyType === "2" ? fwdRows.reduce((s, r) => s + n0(r.breakdown.discount), 0) : 0;
   const whtSum = keyType === "2" ? fwdRows.reduce((s, r) => s + n0(r.breakdown.wht1pct), 0) : 0;
   // 🔴 ห้ามใส่บรรทัด VAT 7% กลับมาที่จอนี้ (owner 2026-07-21 "เอา VAT 7 ออก มันไม่ถูกต้อง
@@ -1623,6 +1631,18 @@ function PayModal({
             </div>
           </div>
         </div>
+
+        {maoSum > 0 && maoCarrierRows.length > 0 && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-[12px] text-amber-950">
+            <p className="font-bold">
+              ⚠ ชุดนี้มีขนส่ง PRF เหมาๆ {maoCarrierRows.length} รายการ จึงคิดค่าขนส่งเหมาๆ ครั้งเดียว {thb(maoSum)}
+            </p>
+            <p className="mt-1">
+              ต้นเหตุ: {maoCarrierRows.map((r) => `#${r.fid}`).join(", ")}
+              {" · "}หากลูกค้าเรียกรถและชำระ Lalamove หน้างานเอง ให้ย้อนแก้ “บริษัทขนส่ง” ของรายการที่ไม่ใช่ PRF ให้ถูกต้องก่อนออกเอกสาร/ยืนยันชำระ
+            </p>
+          </div>
+        )}
 
         {/* ── รายการ ── หัวข้อ + ตาราง(จอคอม) + การ์ด(มือถือ · owner 2026-07-17
             "ในมือถือ ตามในภาพ") ── */}
