@@ -31,6 +31,8 @@ export type ComparisonRow = {
   registered: string | null;
   comparisonValue: number;
   adminIDSale: string;
+  /** ชื่อเซลที่ resolve แล้ว (owner 2026-08-05 · เลิกโชว์ uid ดิบ) — "" ถ้าไม่มีเซล. */
+  saleRepName: string;
   deleted: boolean;
 };
 
@@ -154,7 +156,11 @@ export function ComparisonTable({ rows, picks }: { rows: ComparisonRow[]; picks:
                       <span className={`rounded-full border px-1.5 py-0.5 text-[11px] ${r.isJuristic ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-gray-50 text-gray-700 border-gray-200"}`}>
                         {r.isJuristic ? "นิติบุคคล" : "บุคคล"}
                       </span>
-                      {r.adminIDSale && <span className="text-[11px] text-muted">เซลล์ {r.adminIDSale}</span>}
+                      {r.adminIDSale === "admin_center" ? (
+                        <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700" title="ยังไม่มีเซลจริง — ถือเซลส่วนกลางไว้ก่อน">🎯 ส่วนกลาง</span>
+                      ) : r.adminIDSale ? (
+                        <span className="text-[11px] text-muted">เซลล์ {r.saleRepName}</span>
+                      ) : null}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs max-w-[260px]"><div className="break-words">{r.address}</div></td>

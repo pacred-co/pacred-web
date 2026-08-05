@@ -91,6 +91,7 @@ import {
 import { parseCorporateDocs } from "@/lib/admin/corporate-docs";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { resolveActiveSalesRep, CENTRAL_SALES_LABEL } from "@/lib/admin/resolve-active-rep";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 import { CustomerTypeTag } from "@/components/admin/customer-type-tag";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
@@ -723,6 +724,10 @@ export async function renderLegacyCustomerView(
   // false "central") so a transient error can't mislabel every rep as central.
   const salesAdminsLoaded = salesAdminsRes.ok;
   const activeSalesIds = new Set(salesAdmins.map((a) => a.adminID));
+  // เซล code → ชื่อคน (owner 2026-08-05 · "หน้าอื่นๆ ยังขึ้นรหัส uid เซล หยาบจัด") —
+  // resolve ผ่าน SOT เดียว (sale-rep-names.ts · tb_admin) ส่งชื่อให้ <SaleBadge>.
+  const saleRepNameMap = await resolveSaleRepNameMap([u.adminIDSale]);
+  const saleRepName = saleRepLabel(u.adminIDSale, saleRepNameMap);
   const csAdmins = csAdminsRes.ok ? csAdminsRes.data?.rows ?? [] : [];
   const activeAdmins = activeAdminsRes.ok ? activeAdminsRes.data?.rows ?? [] : [];
   const customerTags = tagsRes.ok ? (tagsRes.data ?? []).map((t) => t.tag) : [];
@@ -1032,7 +1037,7 @@ export async function renderLegacyCustomerView(
                   <Td>{r.hdate ? formatThaiDateTime(r.hdate) : "-"}</Td>
                   <Td>
                     <span className="font-mono">{u.userID}</span>
-                    <SaleBadge adminId={u.adminIDSale} activeIds={activeSalesIds} activeLoaded={salesAdminsLoaded} />
+                    <SaleBadge adminId={u.adminIDSale} saleName={saleRepName} activeIds={activeSalesIds} activeLoaded={salesAdminsLoaded} />
                   </Td>
                   <Td mono>{r.hno ?? "-"}</Td>
                   <Td>
@@ -1118,7 +1123,7 @@ export async function renderLegacyCustomerView(
                     <Td>{r.fdate ? formatThaiDateTime(r.fdate) : "-"}</Td>
                     <Td>
                       <span className="font-mono">{u.userID}</span>
-                      <SaleBadge adminId={u.adminIDSale} activeIds={activeSalesIds} activeLoaded={salesAdminsLoaded} />
+                      <SaleBadge adminId={u.adminIDSale} saleName={saleRepName} activeIds={activeSalesIds} activeLoaded={salesAdminsLoaded} />
                     </Td>
                     <Td>
                       <div className="flex gap-2 items-start">
@@ -1563,21 +1568,37 @@ const TRANSPORT_LABEL_FW: Record<string, string> = {
 };
 function SaleBadge({
   adminId,
+  saleName,
   activeIds,
   activeLoaded,
 }: {
   adminId: string | null;
+  /** ชื่อคนของ adminId (resolve จาก tb_admin · fallback = รหัส) — owner 2026-08-05. */
+  saleName: string;
   activeIds: ReadonlySet<string>;
   activeLoaded: boolean;
 }) {
+  // owner 2026-08-05: โชว์ "ชื่อคน" ไม่ใช่รหัส uid เซลดิบ. admin_center = ยังไม่มี
+  // เซลจริง (ถือส่วนกลางไว้ก่อน) → ป้ายเหลือง 🎯 ส่วนกลาง (มาตรฐานเดียวกับ customers-table).
+  if ((adminId ?? "").trim() === "admin_center") {
+    return (
+      <span
+        className="ml-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700"
+        title="ยังไม่มีเซลจริง — ถือเซลส่วนกลางไว้ก่อน"
+      >
+        🎯 ส่วนกลาง
+      </span>
+    );
+  }
   // DISPLAY-only: a RETIRED assigned rep renders as the central line (owner
-  // 2026-07-09). When the active list failed to load, fall back to the raw id
-  // (never a false "central"). The stored adminIDSale is never rewritten.
+  // 2026-07-09). When the active list failed to load, fall back to the resolved
+  // ชื่อ (never a false "central"). The stored adminIDSale is never rewritten.
   const resolved = resolveActiveSalesRep(adminId, { activeIds });
   const showCentral = activeLoaded && resolved.isCentral;
+  const name = saleName && saleName !== "—" ? saleName : "";
   const text = showCentral
     ? CENTRAL_SALES_LABEL
-    : adminId?.trim() || "ไม่ระบุ";
+    : name || adminId?.trim() || "ไม่ระบุ";
   return (
     <span className="ml-1 inline-block rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">
       Sale : {text}

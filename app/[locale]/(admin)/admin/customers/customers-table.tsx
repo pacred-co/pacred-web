@@ -81,6 +81,7 @@ export type CustomerTableRow = {
   facebook: string;
   isFbUrl: boolean;
   adminIDSale: string;
+  saleRepName: string; // ชื่อเซลที่ resolve แล้ว (owner 2026-08-05 · เลิกโชว์ uid ดิบ)
   wallet: number;
   registered: string | null; // ISO
   /** Present only for juristic customers with a pending-review corporate row. */
@@ -106,7 +107,7 @@ function sortValue(r: CustomerTableRow, k: SortKey): string | number {
     case "address":    return r.address.toLowerCase();
     case "age":        return r.birthdayAge ?? -1;
     case "vip":        return r.vip ? 1 : 0;
-    case "sale":       return (r.adminIDSale || "").toLowerCase();
+    case "sale":       return (r.saleRepName || "").toLowerCase();
     case "status":     return STATUS_CFG[r.status].rank;
     case "wallet":     return r.wallet;
     case "registered": return r.registered ? Date.parse(r.registered) : 0;
@@ -133,6 +134,7 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
         r.fullName.toLowerCase().includes(term) ||
         r.tel.toLowerCase().includes(term) ||
         r.email.toLowerCase().includes(term) ||
+        r.saleRepName.toLowerCase().includes(term) ||
         r.adminIDSale.toLowerCase().includes(term),
       );
     }
@@ -251,13 +253,19 @@ export function CustomersTable({ rows }: { rows: CustomerTableRow[] }) {
                             : <span className="truncate inline-block max-w-full" title={r.facebook}>{r.facebook}</span>
                         ) : <span className="text-muted">—</span>}
                       </td>
-                      <td className="px-4 py-3 text-xs font-mono">{r.adminIDSale || "—"}</td>
+                      <td className="px-4 py-3 text-xs">
+                        {r.adminIDSale === "admin_center" ? (
+                          <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700" title="ยังไม่มีเซลจริง — ถือเซลส่วนกลางไว้ก่อน (รอไล่ใส่ชื่อ)">🎯 ส่วนกลาง</span>
+                        ) : (
+                          <span className="font-medium text-foreground">{r.saleRepName || "—"}</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3"><span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${cfg.className}`}>{cfg.label}</span></td>
                       <td className="px-4 py-3 text-right font-mono text-sm font-semibold text-foreground">฿{r.wallet.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</td>
                       <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">{r.registered ? new Date(r.registered).toLocaleDateString("th-TH") : "—"}</td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <CustomerRowActions id={r.userID} status={r.status} currentSalesRep={r.adminIDSale} />
+                          <CustomerRowActions id={r.userID} status={r.status} currentSalesRep={r.adminIDSale} currentSalesRepName={r.saleRepName} />
                           <ResetPwdButton userid={r.userID} />
                         </div>
                       </td>
@@ -383,7 +391,11 @@ function CustomerExpandPanel({ row: r }: { row: CustomerTableRow }) {
                 : <span className="break-all">{r.facebook}</span>
             ) : "—"}
           </Field>
-          <Field label="เซลล์ผู้ดูแล"><span className="font-mono">{r.adminIDSale || "—"}</span></Field>
+          <Field label="เซลล์ผู้ดูแล">
+            {r.adminIDSale === "admin_center"
+              ? <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">🎯 ส่วนกลาง (รอใส่ชื่อ)</span>
+              : <span className="font-medium">{r.saleRepName || "—"}</span>}
+          </Field>
           <Field label="ยอดกระเป๋า"><span className="font-mono">฿{r.wallet.toLocaleString("th-TH", { minimumFractionDigits: 2 })}</span></Field>
           <Field label="สมัครเมื่อ">{r.registered ? new Date(r.registered).toLocaleDateString("th-TH") : "—"}</Field>
           <div className="col-span-2 min-w-0 sm:col-span-3 lg:col-span-4">
@@ -394,7 +406,7 @@ function CustomerExpandPanel({ row: r }: { row: CustomerTableRow }) {
 
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
           <span className="text-[11px] font-medium text-muted">การจัดการ:</span>
-          <CustomerRowActions id={r.userID} status={r.status} currentSalesRep={r.adminIDSale} />
+          <CustomerRowActions id={r.userID} status={r.status} currentSalesRep={r.adminIDSale} currentSalesRepName={r.saleRepName} />
           <ResetPwdButton userid={r.userID} />
         </div>
       </div>

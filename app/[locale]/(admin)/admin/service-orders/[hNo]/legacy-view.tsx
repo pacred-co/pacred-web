@@ -34,6 +34,7 @@
 import type React from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
@@ -318,6 +319,8 @@ export async function renderLegacyServiceOrderView(hno: string) {
     headerIdentity.isJuristic && headerIdentity.personName && headerIdentity.personName !== headerIdentity.name
       ? headerIdentity.personName
       : "";
+  // เซล code → ชื่อคน (owner 2026-08-05 · เลิกโชว์ uid ดิบบนหน้ารายละเอียด)
+  const saleRepNames = await resolveSaleRepNameMap([u?.adminIDSale]);
   const userAvatar = await resolveLegacyUrl(u?.userPicture, "profile").catch(() => null);
   const addr = [r.haddressno, r.haddresssubdistrict ? `ต.${r.haddresssubdistrict}` : "", r.haddressdistrict ? `อ.${r.haddressdistrict}` : "", r.haddressprovince ? `จ.${r.haddressprovince}` : "", r.haddresszipcode]
     .filter(Boolean).join(" ");
@@ -379,7 +382,11 @@ export async function renderLegacyServiceOrderView(hno: string) {
               ) : null;
             })()}
             {u?.adminIDSale && (
-              <span className="rounded-full border border-border bg-surface-alt px-2.5 py-1 text-[11px]">เซล: {u.adminIDSale}</span>
+              u.adminIDSale === "admin_center" ? (
+                <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-700" title="ยังไม่มีเซลจริง — ถือเซลส่วนกลางไว้ก่อน">🎯 ส่วนกลาง</span>
+              ) : (
+                <span className="rounded-full border border-border bg-surface-alt px-2.5 py-1 text-[11px]">เซล: {saleRepLabel(u.adminIDSale, saleRepNames)}</span>
+              )
             )}
             {/* 2026-06-12 (GAP 2) — the customer's tax-document choice + juristic
                 WHT signal, so back-office sees "ทำเอกสารมั้ย · VAT/ไม่ VAT" at a

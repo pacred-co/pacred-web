@@ -48,6 +48,7 @@ import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
 import { resolveViewAsRole } from "@/lib/admin/view-as-role";
 import { isGodRole } from "@/lib/admin/god-role";
 import { canViewCost } from "@/lib/admin/money-visibility";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 import { Link, redirect } from "@/i18n/navigation";
 import { getLocale } from "next-intl/server";
 import { ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon, Users, UserX, XCircle, Eye, LayoutGrid, ArrowRight } from "lucide-react";
@@ -917,6 +918,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       // no amount/date heuristic is involved.
       const slipGroups = groupDirectWalletSlips(rows);
       const users = await loadUsersByUserId(admin, slipGroups.map((g) => g.anchor.userid));
+      const saleRepNames = await resolveSaleRepNameMap([...users.values()].map((u) => u.adminIDSale));
       const walletRows = await Promise.all(slipGroups.map(async (group) => {
         const r = group.anchor;
         const u = users.get(r.userid);
@@ -952,7 +954,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           statusLabel: "รอดำเนินการ",
           statusTone: "warning" as const,
           vip: vipTierBadge(u?.coID),
-          saleRep: (u?.adminIDSale ?? "").trim() || null,
+          saleRep: (u?.adminIDSale ?? "").trim() ? saleRepLabel(u!.adminIDSale, saleRepNames) : null,
         };
       }));
       // ภูม 2026-06-30 — รวมสลิป "ใบวางบิล" (เซลแนบ · รอบัญชีตรวจ) เข้าคิว "ชำระเงิน"
@@ -1007,6 +1009,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       }
       const rows = (data ?? []) as unknown as RawHeaderOrderRow[];
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
+      const saleRepNames = await resolveSaleRepNameMap([...users.values()].map((u) => u.adminIDSale));
       // Product cover thumbnail (self-explaining-row §0g — "ดึงรูปสินค้ามาโชว์").
       const coverMap = await resolveLegacyUrlMap(rows.map((r) => ({ id: r.id, filename: r.hcover })), "cover");
       return rows.map((r) => {
@@ -1037,7 +1040,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           statusLabel: st.label,
           statusTone: st.tone,
           vip: vipTierBadge(u?.coID),
-          saleRep: (u?.adminIDSale ?? "").trim() || null,
+          saleRep: (u?.adminIDSale ?? "").trim() ? saleRepLabel(u!.adminIDSale, saleRepNames) : null,
           ipc: (r.adminidcreate ?? "").trim() || null,
           promo: null,
           note: noteTxt || null,
@@ -1095,6 +1098,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           : rows.filter((r) => !driverSet.has(Number(r.id)));
       }
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
+      const saleRepNames = await resolveSaleRepNameMap([...users.values()].map((u) => u.adminIDSale));
       const fcoverMap = await resolveLegacyUrlMap(rows.map((r) => ({ id: r.id, filename: r.fcover })), "cover");
       return rows.map((r) => {
         const u = users.get(r.userid);
@@ -1131,7 +1135,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           noteVisibility: (r.fnote ?? "").trim() ? "both" as const : null,
           updateAdmin: (r.adminidupdate ?? "").trim() || null,
           vip: vipTierBadge(u?.coID),
-          saleRep: (u?.adminIDSale ?? "").trim() || null,
+          saleRep: (u?.adminIDSale ?? "").trim() ? saleRepLabel(u!.adminIDSale, saleRepNames) : null,
         };
       });
     }
@@ -1150,6 +1154,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       }
       const rows = (data ?? []) as unknown as RawPaymentRow[];
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
+      const saleRepNames = await resolveSaleRepNameMap([...users.values()].map((u) => u.adminIDSale));
       const paySlipMap = await resolveLegacyUrlMap(rows.map((r) => ({ id: r.id, filename: r.imagesslip })), "slip");
       return rows.map((r) => {
         const u = users.get(r.userid);
@@ -1179,7 +1184,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           statusLabel: "รอดำเนินการ",
           statusTone: "warning",
           vip: vipTierBadge(u?.coID),
-          saleRep: (u?.adminIDSale ?? "").trim() || null,
+          saleRep: (u?.adminIDSale ?? "").trim() ? saleRepLabel(u!.adminIDSale, saleRepNames) : null,
         };
       });
     }
@@ -1257,6 +1262,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           if (c.userid && nm) corpNameByUser.set(c.userid, nm);
         }
       }
+      const saleRepNames = await resolveSaleRepNameMap([...extraMap.values()].map((e) => e.adminIDSale));
       return rows.map((u) => {
         const ex = extraMap.get(u.userID);
         const identity = resolveBillingIdentity({
@@ -1280,7 +1286,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           channelLabel: ex?.channel ? (CHANNEL_LABEL[ex.channel] ?? "—") : "—",
           note: (ex?.userNote ?? "").trim() || null,
           vip: vipTierBadge(ex?.coID),
-          saleRep: (ex?.adminIDSale ?? "").trim() || null,
+          saleRep: (ex?.adminIDSale ?? "").trim() ? saleRepLabel(ex!.adminIDSale, saleRepNames) : null,
         };
       });
     }

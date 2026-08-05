@@ -38,6 +38,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 import { isGeneralCoid } from "@/lib/forwarder/coid";
 import { HSTATUS_CFG } from "@/lib/admin/service-order-status";
 import { Link } from "@/i18n/navigation";
@@ -527,6 +528,12 @@ export default async function AdminServiceOrdersPage({
     "cover",
   );
 
+  // ── เซล code → ชื่อคน (owner 2026-08-05 · "หน้าอื่นๆ ขึ้นรหัส uid เซล หยาบจัด") ──
+  // batch resolve ทุกรหัส adminIDSale ที่ปรากฏในหน้านี้ทีเดียว (tb_admin).
+  const saleRepNames = await resolveSaleRepNameMap(
+    Array.from(usersByUserId.values()).map((u) => u.adminIDSale),
+  );
+
   // ── Shape into ServiceOrderRow for the table ─────────────────────
   const rows: ServiceOrderRow[] = raw.map((r) => {
     const user = usersByUserId.get(r.userid);
@@ -588,6 +595,8 @@ export default async function AdminServiceOrdersPage({
       vipTier: isVip ? coid : null,
       isCorporate: corporateUserIds.has(r.userid),
       salesRep: user?.adminIDSale && user.adminIDSale !== "" ? user.adminIDSale : null,
+      // เซลชื่อคนที่ resolve แล้ว (owner 2026-08-05 · เลิกโชว์ uid ดิบ) — client ใช้ตัวนี้แสดง.
+      salesRepName: saleRepLabel(user?.adminIDSale, saleRepNames),
       // Legacy badgeVIP2 — SVIP (has custom-rate row) · CPS (userComparison=1).
       isSvip: svipUserIds.has(r.userid),
       isCps: String(user?.userComparison ?? "") === "1",
@@ -903,7 +912,8 @@ export default async function AdminServiceOrdersPage({
                     customerName: r.customerName ?? "",
                     vipTier: r.vipTier ?? "",
                     isCorporate: r.isCorporate ? "นิติบุคคล" : "",
-                    salesRep: r.salesRep ?? "",
+                    // เซล = ชื่อคน (owner 2026-08-05) — ว่างเมื่อไม่มีเซลจริง.
+                    salesRep: r.salesRep ? r.salesRepName : "",
                     htitle: r.htitle ?? "",
                     hcount: r.hcount,
                     yuanGoods: r.htotalpricechn.toFixed(2),

@@ -31,9 +31,10 @@ type Props = {
   status: string;
   /** Current sales rep (tb_users.adminIDSale) — pre-selects the picker. */
   currentSalesRep?: string;
+  currentSalesRepName?: string; // ชื่อเซลที่ resolve แล้ว (owner 2026-08-05 · เลิกโชว์ uid)
 };
 
-export function CustomerRowActions({ id, status, currentSalesRep }: Props) {
+export function CustomerRowActions({ id, status, currentSalesRep, currentSalesRepName }: Props) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const { confirm, alert, dialogs } = useConfirmDialogs();
@@ -160,7 +161,7 @@ export function CustomerRowActions({ id, status, currentSalesRep }: Props) {
               </select>
             )}
             {currentSalesRep ? (
-              <p className="mt-1 text-[11px] text-muted">เซลล์ปัจจุบัน: <span className="font-mono">{currentSalesRep}</span></p>
+              <p className="mt-1 text-[11px] text-muted">เซลล์ปัจจุบัน: <span className="font-medium text-foreground">{currentSalesRep === "admin_center" ? "🎯 เซลส่วนกลาง (ยังไม่มีเซลจริง)" : (currentSalesRepName || currentSalesRep)}</span></p>
             ) : null}
           </div>
 

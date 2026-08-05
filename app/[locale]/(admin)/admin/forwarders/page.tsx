@@ -32,6 +32,7 @@ import {
   type PendingSlipReviewTarget,
 } from "@/lib/forwarder/pending-slip";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 import { Link } from "@/i18n/navigation";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -380,7 +381,8 @@ export type Row = {
     is_juristic: boolean;      // tb_users.usercompany='1'
     credit_limit: number;      // CUSTTAG — tb_users.userCreditValue (วงเงิน · >0 = ลูกค้าเครดิต)
     credit_days: number;       // CUSTTAG — tb_users.userCreditDate (เทอม วัน)
-    sale_admin: string | null; // tb_users.adminidsale
+    sale_admin: string | null; // tb_users.adminidsale (raw code · ใช้ทำ action/link)
+    sale_admin_name: string | null; // resolved ชื่อเซล (owner 2026-08-05 · เลิกโชว์ uid ดิบ) · null = ไม่มีเซล
   } | null;
 };
 
@@ -1406,6 +1408,13 @@ export async function fetchForwarderList(
     }
   }
 
+  // owner 2026-08-05 — resolve sale-rep CODE (tb_users.adminIDSale เช่น "admin_center")
+  // → ชื่อคน สำหรับ display (เดิมหน้านี้โชว์ uid ดิบ · "แสดงผลหยาบจัด"). batch จาก
+  // tb_admin ทีเดียว · raw code (sale_admin) ยังเก็บไว้ทำ action/link/lookup ตามเดิม.
+  const saleRepNameMap = await resolveSaleRepNameMap(
+    Array.from(usersByUserId.values()).map((u) => u.adminIDSale),
+  );
+
   // Shape into our Row type for the table.
   let rows: Row[] = raw.map((r) => {
     const user = usersByUserId.get(r.userid);
@@ -1513,6 +1522,10 @@ export async function fetchForwarderList(
             sale_admin:
               user.adminIDSale && user.adminIDSale.trim() !== ""
                 ? user.adminIDSale.trim()
+                : null,
+            sale_admin_name:
+              user.adminIDSale && user.adminIDSale.trim() !== ""
+                ? saleRepLabel(user.adminIDSale.trim(), saleRepNameMap)
                 : null,
           }
         : null,

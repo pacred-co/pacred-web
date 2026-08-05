@@ -1096,7 +1096,11 @@ function ForwarderTable({
                         <span className="rounded-full bg-slate-500 px-2 py-0.5 text-[11px] font-medium text-white">นิติบุคคล</span>
                       )}
                       {r.adminid_sale && (
-                        <span className="rounded-full bg-violet-500 px-2 py-0.5 text-[11px] font-medium text-white">Sale : {r.adminid_sale}</span>
+                        r.adminid_sale === "admin_center" ? (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700" title="ยังไม่มีเซลจริง — ถือเซลส่วนกลางไว้ก่อน">🎯 ส่วนกลาง</span>
+                        ) : (
+                          <span className="rounded-full bg-violet-500 px-2 py-0.5 text-[11px] font-medium text-white">Sale : {r.adminid_sale_name}</span>
+                        )
                       )}
                     </div>
                     {/* fdatetothai is the START of an arrival WINDOW, not an exact day

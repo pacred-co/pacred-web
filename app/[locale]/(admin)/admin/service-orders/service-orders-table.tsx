@@ -74,7 +74,8 @@ export type ServiceOrderRow = {
   isVip: boolean;
   vipTier: string | null;
   isCorporate: boolean;
-  salesRep: string | null;
+  salesRep: string | null;        // raw รหัส adminIDSale (ใช้เช็ค admin_center / lookup)
+  salesRepName: string;           // ชื่อเซลที่ resolve แล้ว (owner 2026-08-05 · แสดงผล)
   isSvip: boolean;
   isCps: boolean;
   trackingNumbers: string[];
@@ -467,9 +468,13 @@ export function ServiceOrdersTable({
                             </span>
                           )}
                           {r.salesRep && (
-                            <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[11px]">
-                              sale: {r.salesRep}
-                            </span>
+                            r.salesRep === "admin_center" ? (
+                              <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700" title="ยังไม่มีเซลจริง — ถือเซลส่วนกลางไว้ก่อน">🎯 ส่วนกลาง</span>
+                            ) : (
+                              <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 text-[11px]">
+                                sale: {r.salesRepName}
+                              </span>
+                            )
                           )}
                         </div>
                         {/* owner ④ — assigned ผู้สั่งซื้อ + reassign control */}

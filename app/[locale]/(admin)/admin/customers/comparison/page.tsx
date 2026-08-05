@@ -9,6 +9,7 @@ import {
   resolveBillingIdentity,
   corpRowFromName,
 } from "@/lib/admin/customer-identity";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 import { ComparisonTable, type ComparisonRow, type CustomerPick } from "./comparison-table";
 
 // ────────────────────────────────────────────────────────────────────
@@ -89,6 +90,9 @@ export default async function AdminCustomerComparisonPage() {
   // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
   const corpNames = await fetchCorporateNameMap(admin, userIds);
 
+  // เซล code → ชื่อคน (owner 2026-08-05 · เลิกโชว์ uid ดิบ). SOT: sale-rep-names.ts (tb_admin).
+  const saleRepNames = await resolveSaleRepNameMap(userRows.map((r) => r.adminIDSale));
+
   // ── Main address per visible customer (lowest active addressid) ───────
   type AddressRow = {
     addressid: number;
@@ -133,6 +137,11 @@ export default async function AdminCustomerComparisonPage() {
     registered: r.userRegistered,
     comparisonValue: Number(r.userComparisonValue ?? 0),
     adminIDSale: r.adminIDSale ?? "",
+    // ชื่อเซลที่ resolve แล้ว (owner 2026-08-05) — "" ถ้าไม่มีเซล · "เซลส่วนกลาง" ถ้า admin_center.
+    saleRepName: (() => {
+      const c = (r.adminIDSale ?? "").trim();
+      return !c ? "" : c === "admin_center" ? "เซลส่วนกลาง" : saleRepLabel(c, saleRepNames);
+    })(),
     deleted: r.userStatus === "0",
   }));
 
@@ -201,7 +210,7 @@ export default async function AdminCustomerComparisonPage() {
                 address: r.address,
                 registered: r.registered ? r.registered.slice(0, 10) : "",
                 comparisonValue: r.comparisonValue,
-                adminIDSale: r.adminIDSale,
+                adminIDSale: r.saleRepName,
                 deleted: r.deleted ? "ลบบัญชี" : "ใช้งาน",
               }))}
               cols={[
