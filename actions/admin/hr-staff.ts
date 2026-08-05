@@ -22,9 +22,10 @@ const assignSchema = z.object({
 export type AssignStaffInput = z.infer<typeof assignSchema>;
 
 /**
- * จัดพนักงานเข้าตำแหน่ง — เขียน `profiles.org_unit_id` (SPINE · unify 2026-08-03).
- * profiles คือรายชื่อพนักงานที่ครบ (login+role) → เขียนที่นี่ที่เดียว.
- * tb_admin.org_unit_id (0288) เลิกใช้ (คงคอลัมน์ไว้กัน rollback).
+ * จัดพนักงานเข้าตำแหน่ง — เขียน `tb_admin.org_unit_id` (แกนเดียว · owner 2026-08-05).
+ * tb_admin = แหล่งเดียวข้อมูลพนักงาน → DB trigger (mig 0292) มิเรอร์ org_unit_id
+ * ไป profiles ให้เอง. เขียนที่เดียว = ไม่มี drift.
+ * ต้องมี profiles active (loginable) จึงจัดได้ (กัน center/คนออก).
  */
 export async function assignStaffToPosition(input: AssignStaffInput): Promise<AdminActionResult> {
   const parsed = assignSchema.safeParse(input);
@@ -46,16 +47,22 @@ export async function assignStaffToPosition(input: AssignStaffInput): Promise<Ad
       if ((unit as { kind: string }).kind !== "position") return { ok: false, error: "not_a_position" };
     }
 
-    const { data: updated, error } = await admin
-      .from("profiles")
-      .update({ org_unit_id: orgUnitId })
-      .eq("admin_login_id", adminId)
-      .eq("is_active", true)
-      .select("id");
-    if (error) return { ok: false, error: `db_error:${error.code ?? "unknown"}` };
-    if (!updated || updated.length === 0) return { ok: false, error: "staff_not_found_or_inactive" };
+    // ต้องเป็นพนักงานที่ login ได้ (มี profiles active) — กัน center/คนออก
+    const { data: prof, error: pErr } = await admin
+      .from("profiles").select("id").eq("admin_login_id", adminId).eq("is_active", true).maybeSingle();
+    if (pErr) return { ok: false, error: `db_error:${pErr.code ?? "unknown"}` };
+    if (!prof) return { ok: false, error: "staff_not_found_or_inactive" };
 
-    await logAdminAction(actor, "hr.assign_position", "profiles", adminId, { orgUnitId });
+    // เขียน tb_admin (แกน) → trigger มิเรอร์ profiles.org_unit_id เอง
+    const { data: updated, error } = await admin
+      .from("tb_admin")
+      .update({ org_unit_id: orgUnitId })
+      .eq("adminID", adminId)
+      .select("adminID");
+    if (error) return { ok: false, error: `db_error:${error.code ?? "unknown"}` };
+    if (!updated || updated.length === 0) return { ok: false, error: "hr_record_missing" };
+
+    await logAdminAction(actor, "hr.assign_position", "tb_admin", adminId, { orgUnitId });
     revalidatePath("/admin/hr/staff");
     revalidatePath("/admin/hr/org-chart");
     revalidatePath("/admin/hr/org-table");
@@ -64,8 +71,10 @@ export async function assignStaffToPosition(input: AssignStaffInput): Promise<Ad
 }
 
 // ════════════════════════════════════════════════════════════════════
-// แก้ข้อมูลพนักงาน — SINGLE-SOURCE (owner 2026-08-03 · เซล/CS ชื่อ/เบอร์/รูป
-// ต้องตรงกันทุก surface: เว็บ · portal ลูกค้า · หลังบ้าน · แอดมิน)
+// แก้ข้อมูลพนักงาน — แหล่งเดียว tb_admin (owner 2026-08-05 · "ใช้ที่เดียวจบๆ")
+// เขียน tb_admin ที่เดียว → DB trigger (mig 0292) มิเรอร์ ชื่อ/เบอร์/รูป/เพศ/
+// วันเกิด/ตำแหน่ง ไป profiles ให้เอง → ตรงกันทุก surface (เว็บ · portal ลูกค้า ·
+// หลังบ้าน · แอดมิน) โดยไม่มี dual-write ที่ drift ได้.
 // ════════════════════════════════════════════════════════════════════
 const saveSchema = z.object({
   adminId: z.string().trim().min(1).max(60),
@@ -85,9 +94,10 @@ const saveSchema = z.object({
 export type SaveEmployeeInput = z.infer<typeof saveSchema>;
 
 /**
- * บันทึกข้อมูลพนักงาน — เขียน **profiles (แกน) + tb_admin (HR + ที่ลูกค้าเห็น)
- * พร้อมกัน** ด้วยค่าเดียวกัน. ชื่อ/เบอร์/รูป = single-source ทุก surface.
- * ถ้ายังไม่มี tb_admin (moo/sunta) → สร้างให้ (ensureLegacyAdminRow).
+ * บันทึกข้อมูลพนักงาน — เขียน **tb_admin ที่เดียว** (owner 2026-08-05 · "ใช้ที่
+ * เดียวจบๆ"). DB trigger (mig 0292) มิเรอร์ ชื่อ/นามสกุล/เบอร์/รูป/เพศ/วันเกิด
+ * ไป profiles ให้เอง → ชื่อ/เบอร์/รูป ที่ลูกค้าเห็น = ที่ HR = ที่ login ตรงกัน
+ * ทุก surface โดยไม่มี dual-write. ถ้ายังไม่มี tb_admin → สร้างให้ (ensureLegacyAdminRow).
  */
 export async function saveEmployee(input: SaveEmployeeInput): Promise<AdminActionResult> {
   const parsed = saveSchema.safeParse(input);
@@ -97,32 +107,27 @@ export async function saveEmployee(input: SaveEmployeeInput): Promise<AdminActio
   return withAdmin([...HR_ROLES], async ({ adminId: actor }) => {
     const admin = createAdminClient();
 
-    // พนักงานต้องมีจริง (active)
+    // พนักงานต้องมีจริง (มี profiles active = login ได้) — กัน center/คนออก
     const { data: prof, error: pErr } = await admin
       .from("profiles").select("id").eq("admin_login_id", d.adminId).eq("is_active", true).maybeSingle();
     if (pErr) return { ok: false, error: `db_error:${pErr.code ?? "unknown"}` };
     if (!prof) return { ok: false, error: "staff_not_found_or_inactive" };
 
-    // มี tb_admin ไหม — ไม่มีก็สร้าง (moo/sunta) แล้วค่อยเขียน HR ทับ
+    // มี tb_admin ไหม — ไม่มีก็สร้าง (พนักงานใหม่ที่ยังไม่มี legacy row)
     const ens = await ensureLegacyAdminRow(admin, {
       adminID: d.adminId, adminName: d.firstName || d.adminId, adminLastName: d.lastName,
       adminNickname: d.nickname, isSales: d.isSale, createdBy: actor,
     });
     if (!ens.ok) return { ok: false, error: `hr_record:${ens.error ?? "unknown"}` };
 
-    // ── profiles (แกน · identity ที่ HR + ลูกค้าใช้ร่วม) ──
-    const { error: upP } = await admin.from("profiles").update({
-      first_name: d.firstName, last_name: d.lastName,
-      phone: d.phone, avatar_url: d.photoUrl || null,
-      sex: d.sex || null, birthday: d.birthday || null,
-    }).eq("id", prof.id);
-    if (upP) return { ok: false, error: `profiles:${upP.code ?? "unknown"}` };
-
-    // ── tb_admin (HR detail + ที่ลูกค้าเห็นผ่าน adminIDSale) — ค่าเดียวกับ profiles ──
+    // เขียน tb_admin (แหล่งเดียว) → trigger มิเรอร์ identity ไป profiles ให้เอง.
+    // ⚠️ tb_admin.adminTel = UNIQUE → เบอร์ว่าง "" ชนกันได้แถวเดียว → placeholder
+    // ต่อคน `na-<adminID>` (trigger แปลง na-* กลับเป็นว่างใน profiles).
     const salaryNum = d.salary.trim() === "" ? 0 : Number(d.salary);
+    const telValue = d.phone.trim() !== "" ? d.phone.trim() : `na-${d.adminId}`;
     const { error: upT } = await admin.from("tb_admin").update({
       adminName: d.firstName, adminLastName: d.lastName, adminNickname: d.nickname,
-      adminTel: d.phone,                       // ← เบอร์ที่ลูกค้าเห็น (sales-rep-contact)
+      adminTel: telValue,                      // ← เบอร์ที่ลูกค้าเห็น (sales-rep-contact)
       adminPicture: d.photoUrl,                // ← รูปที่ลูกค้าเห็น
       adminSex: d.sex || null, adminBirthday: d.birthday || null,
       adminType: d.type, salaryType: d.salaryType,
@@ -130,12 +135,11 @@ export async function saveEmployee(input: SaveEmployeeInput): Promise<AdminActio
       nationalIDCard: d.nationalId, adminStatusSale: d.isSale ? "1" : "0",
     }).eq("adminID", d.adminId);
     if (upT) {
-      // เบอร์ชนกัน (UNIQUE adminTel) = เคสที่เจอบ่อย → บอกภาษาคน
       if (upT.code === "23505") return { ok: false, error: "เบอร์โทรนี้มีพนักงานคนอื่นใช้แล้ว" };
       return { ok: false, error: `tb_admin:${upT.code ?? "unknown"}` };
     }
 
-    await logAdminAction(actor, "hr.save_employee", "profiles+tb_admin", d.adminId, {
+    await logAdminAction(actor, "hr.save_employee", "tb_admin", d.adminId, {
       firstName: d.firstName, phone: d.phone, isSale: d.isSale, createdHr: ens.created,
     });
     revalidatePath("/admin/hr/staff");

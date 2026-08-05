@@ -37,7 +37,7 @@ type ProfileRaw = {
   id: string; admin_login_id: string | null; member_code: string | null;
   first_name: string | null; last_name: string | null; is_active: boolean; org_unit_id: string | null;
 };
-type AdminRaw = { adminID: string; adminNickname: string | null; adminType: string | null; adminStatusSale: string | null };
+type AdminRaw = { adminID: string; adminName: string | null; adminLastName: string | null; adminNickname: string | null; adminType: string | null; adminStatusSale: string | null };
 
 export function typeBucket(type: string | null): "employee" | "internship" | "partner" | null {
   if (type === "3" || type === "4") return "internship";
@@ -65,7 +65,7 @@ export async function loadStaffRegister(): Promise<{ rows: StaffRow[]; error: st
 
   // tb_admin (HR detail) · admins (role) · ชื่อตำแหน่ง — batch
   const [tbaRes, admRes] = await Promise.all([
-    loginIds.length ? admin.from("tb_admin").select("adminID,adminNickname,adminType,adminStatusSale").in("adminID", loginIds) : Promise.resolve({ data: [] }),
+    loginIds.length ? admin.from("tb_admin").select("adminID,adminName,adminLastName,adminNickname,adminType,adminStatusSale").in("adminID", loginIds) : Promise.resolve({ data: [] }),
     profileIds.length ? admin.from("admins").select("profile_id,role").eq("is_active", true).in("profile_id", profileIds) : Promise.resolve({ data: [] }),
   ]);
   const tbaByLogin = new Map(((tbaRes.data ?? []) as AdminRaw[]).map((a) => [a.adminID, a]));
@@ -99,7 +99,8 @@ export async function loadStaffRegister(): Promise<{ rows: StaffRow[]; error: st
     const unit = p.org_unit_id ? nameById.get(p.org_unit_id) : null;
     const dept = unit?.parentId ? nameById.get(unit.parentId) : null;
     const t = (tba?.adminType ?? "").trim();
-    const nameParts = [p.first_name, p.last_name].filter(Boolean).join(" ").trim();
+    // แหล่งเดียว = tb_admin → ชื่อจาก tb_admin ก่อน (profiles = mirror · fallback)
+    const nameParts = [tba?.adminName ?? p.first_name, tba?.adminLastName ?? p.last_name].filter(Boolean).join(" ").trim();
     return {
       adminId: login,
       memberCode: p.member_code,
@@ -145,26 +146,30 @@ export async function loadStaffDetail(adminLoginId: string): Promise<StaffDetail
   if (!p) return null;
 
   const [{ data: tba }, { data: adm }, unitName] = await Promise.all([
-    admin.from("tb_admin").select("adminNickname,adminTel,adminPicture,adminSex,adminBirthday,adminType,salaryType,salary,nationalIDCard,adminStatusSale").eq("adminID", adminLoginId).maybeSingle(),
+    admin.from("tb_admin").select("adminName,adminLastName,adminNickname,adminTel,adminPicture,adminSex,adminBirthday,adminType,salaryType,salary,nationalIDCard,adminStatusSale").eq("adminID", adminLoginId).maybeSingle(),
     admin.from("admins").select("role").eq("profile_id", (p as { id: string }).id).eq("is_active", true),
     p.org_unit_id
       ? admin.from("hr_org_units").select("name_th").eq("id", p.org_unit_id).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
-  const t = tba as null | { adminNickname: string | null; adminTel: string | null; adminPicture: string | null; adminSex: string | null; adminBirthday: string | null; adminType: string | null; salaryType: string | null; salary: number | null; nationalIDCard: string | null; adminStatusSale: string | null };
+  const t = tba as null | { adminName: string | null; adminLastName: string | null; adminNickname: string | null; adminTel: string | null; adminPicture: string | null; adminSex: string | null; adminBirthday: string | null; adminType: string | null; salaryType: string | null; salary: number | null; nationalIDCard: string | null; adminStatusSale: string | null };
   const dOnly = (v: string | null | undefined) => (v ?? "").slice(0, 10); // yyyy-mm-dd
+  // เบอร์ว่าง placeholder na-* → แสดงเป็นว่าง
+  const telClean = (v: string | null | undefined) => (v && !v.startsWith("na-") ? v : "");
 
+  // แหล่งเดียว = tb_admin (owner 2026-08-05) → อ่าน identity จาก tb_admin ก่อน,
+  // profiles (mirror) เป็น fallback กันกรณียังไม่มี tb_admin
   return {
     adminId: adminLoginId,
     memberCode: p.member_code,
     hasHrRecord: !!t,
-    firstName: p.first_name ?? "",
-    lastName: p.last_name ?? "",
+    firstName: t?.adminName ?? p.first_name ?? "",
+    lastName: t?.adminLastName ?? p.last_name ?? "",
     nickname: t?.adminNickname ?? "",
-    phone: p.phone ?? t?.adminTel ?? "",
-    photoUrl: p.avatar_url ?? t?.adminPicture ?? "",
-    sex: p.sex ?? t?.adminSex ?? "",
-    birthday: dOnly(p.birthday ?? t?.adminBirthday),
+    phone: telClean(t?.adminTel) || p.phone || "",
+    photoUrl: t?.adminPicture || p.avatar_url || "",
+    sex: t?.adminSex ?? p.sex ?? "",
+    birthday: dOnly(t?.adminBirthday ?? p.birthday),
     type: (t?.adminType ?? "1").trim() || "1",
     salaryType: (t?.salaryType ?? "2").trim() || "2",
     salary: t?.salary != null ? String(t.salary) : "",
