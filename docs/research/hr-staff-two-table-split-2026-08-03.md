@@ -52,3 +52,26 @@ section เดียว). PCS model: หัวหน้า = คนที่เ�
   ล็อกคนออก 12 · จัด 4 คน (pop/nat→CEO · ben→Driver · keetar→Warehouse) · เส้นลงตรง Manager
 - ❌ **ยังไม่ unify profiles↔tb_admin** — หน้า staff อ่าน tb_admin เลย moo/sunta/tiger หาย
   = งานหลักของ session หน้า (ข้อ 1-5 ข้างบน)
+
+---
+
+## ✅ UNIFY เสร็จ (2026-08-03 ค่ำ · mig 0290)
+
+**profiles = SPINE แล้ว** — `mig 0290` เพิ่ม `profiles.org_unit_id` + migrate ค่าที่จัดไว้
+บน tb_admin (19 คน owner กดจัดตอน local) → profiles. loaders (hr-staff.ts) rewrite อ่าน
+**profiles active staff LEFT JOIN tb_admin(HR) + admins(role)** · assign เขียน profiles.org_unit_id.
+
+**ผลลัพธ์ (verify จอจริง + prod):**
+- roster 20→**21 คน** (moo/sunta/tiger เข้ามาครบ · เคยหายเพราะอ่าน tb_admin)
+- คนไม่มี HR record (moo/sunta/tiger) ขึ้นธง ⚠ "ไม่มี HR" — จัดตำแหน่งได้ปกติ
+- จัด moo→Driver, sunta→Graphic/Editing → **ผังนับสด Driver 2/2 เขียว · Graphic 1/4**
+  (พิสูจน์ moo/sunta นับเข้าผังจริง)
+- แสดง role badge (ultra/driver/warehouse/เซล) จาก admins → เห็นสิทธิ์ในตัว
+
+**🟡 เหลือ (owner เคาะ):**
+- **tiger (AD024·ปริญญา)** ยังไม่จัดตำแหน่ง (owner ไม่ได้ระบุ)
+- **moo/sunta/tiger ไม่มี tb_admin HR detail** → เติมตอนทำฟอร์มพนักงานเต็ม (เขียน 2 ตาราง)
+  หรือสร้าง tb_admin row
+- **admin_center** (tb_admin only · ไม่มี profile · = เซลส่วนกลาง บัญชีร่วม) → กันออกจาก
+  roster ถูกแล้ว (ไม่ใช่คนจริง) · ถ้าเป็นคนจริงต้องสร้าง profile
+- **admin_win = หัวหน้า Customs + Cs check** — ยังเป็น 1คน1ตำแหน่ง · เคาะ many-to-many ไหม

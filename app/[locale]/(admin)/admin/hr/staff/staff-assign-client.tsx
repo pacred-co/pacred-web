@@ -101,7 +101,12 @@ export function StaffAssignClient({ rows, positions }: { rows: StaffRow[]; posit
               <tr key={r.adminId} className={`border-t border-border/50 hover:bg-surface-alt/30 ${!r.orgUnitId ? "bg-red-50/40" : ""}`}>
                 <td className="px-3 py-2">
                   <div className="font-semibold text-foreground">{r.name}{r.nickname && <span className="ml-1 text-muted font-normal">({r.nickname})</span>}</div>
-                  <div className="text-[11px] text-muted font-mono">{r.adminId}{r.isSale && <span className="ml-1 rounded bg-primary-100 px-1 text-primary-700">เซล</span>}</div>
+                  <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted">
+                    <span className="font-mono">{r.memberCode ?? r.adminId}</span>
+                    {r.isSale && <span className="rounded bg-primary-100 px-1 text-primary-700">เซล</span>}
+                    {r.roles.map((role) => <span key={role} className="rounded bg-slate-100 px-1 text-slate-600">{role}</span>)}
+                    {!r.hasHrRecord && <span className="rounded bg-amber-100 px-1 text-amber-700" title="มีในระบบ login แต่ยังไม่มีข้อมูล HR (tb_admin) — เติมทีหลัง">⚠ ไม่มี HR</span>}
+                  </div>
                 </td>
                 <td className="px-3 py-2">
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${TYPE_TONE[r.type] ?? "bg-slate-100 text-slate-600"}`}>{r.typeLabel}</span>

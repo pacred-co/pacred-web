@@ -8,9 +8,9 @@ import { StaffAssignClient } from "./staff-assign-client";
 /**
  * /admin/hr/staff — ทะเบียนพนักงาน + จัดคนเข้าตำแหน่ง (เฟส 2 · owner 2026-08-03).
  *
- * รวมข้อมูลพนักงานจาก tb_admin (SOT · โครง PCS) ที่เดียว → owner จัดแต่ละคนเข้า
- * ตำแหน่งในผัง (hr_org_units). พอจัดแล้ว ผัง /admin/hr/org-chart นับคนสดจากตรงนี้
- * (front/back ดึงตำแหน่งจาก link เดียวกัน).
+ * SPINE = profiles (login+role+identity · ครบกว่า tb_admin) · join tb_admin เอา
+ * HR detail · join admins เอา role. roster ทุกคนมาจาก profiles ที่เดียว (รวม
+ * คนที่ยังไม่มี HR record). จัดตำแหน่ง → profiles.org_unit_id · ผังนับสดจากตรงนี้.
  * RBAC: super | accounting · §0c error surfaced.
  */
 
@@ -35,7 +35,7 @@ export default async function StaffPage() {
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · HUMAN RESOURCES</p>
           <h1 className="flex items-center gap-2 text-2xl font-bold"><Users className="h-6 w-6 text-primary-600" /> ทะเบียนพนักงาน · จัดคนเข้าตำแหน่ง</h1>
           <p className="mt-0.5 text-xs text-muted leading-relaxed">
-            พนักงานจริงจาก tb_admin (ที่เดียว) — จัดแต่ละคนเข้าตำแหน่งในผัง แล้วผังจะนับคนสดเอง
+            รายชื่อพนักงานทั้งหมดจาก profiles (ที่เดียว · รวม login+สิทธิ์+HR) — จัดแต่ละคนเข้าตำแหน่งในผัง แล้วผังจะนับคนสดเอง
           </p>
         </div>
         <Link href="/admin/hr/org-chart" className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">

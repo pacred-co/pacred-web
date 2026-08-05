@@ -14,12 +14,17 @@ import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
 const HR_ROLES = ["super", "accounting"] as const;
 
 const assignSchema = z.object({
-  adminId: z.string().trim().min(1).max(60),
-  orgUnitId: z.string().uuid().nullable(), // null = ปลดออกจากตำแหน่ง
+  adminId: z.string().trim().min(1).max(60), // = profiles.admin_login_id
+  orgUnitId: z.string().uuid().nullable(),   // null = ปลดออกจากตำแหน่ง
 });
 
 export type AssignStaffInput = z.infer<typeof assignSchema>;
 
+/**
+ * จัดพนักงานเข้าตำแหน่ง — เขียน `profiles.org_unit_id` (SPINE · unify 2026-08-03).
+ * profiles คือรายชื่อพนักงานที่ครบ (login+role) → เขียนที่นี่ที่เดียว.
+ * tb_admin.org_unit_id (0288) เลิกใช้ (คงคอลัมน์ไว้กัน rollback).
+ */
 export async function assignStaffToPosition(input: AssignStaffInput): Promise<AdminActionResult> {
   const parsed = assignSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "invalid_input" };
@@ -32,7 +37,7 @@ export async function assignStaffToPosition(input: AssignStaffInput): Promise<Ad
     if (orgUnitId) {
       const { data: unit, error: uErr } = await admin
         .from("hr_org_units")
-        .select("id,kind,name_th")
+        .select("id,kind")
         .eq("id", orgUnitId)
         .maybeSingle();
       if (uErr) return { ok: false, error: `db_error:${uErr.code ?? "unknown"}` };
@@ -41,15 +46,15 @@ export async function assignStaffToPosition(input: AssignStaffInput): Promise<Ad
     }
 
     const { data: updated, error } = await admin
-      .from("tb_admin")
+      .from("profiles")
       .update({ org_unit_id: orgUnitId })
-      .eq("adminID", adminId)
-      .eq("adminStatusA", "1")
-      .select("adminID");
+      .eq("admin_login_id", adminId)
+      .eq("is_active", true)
+      .select("id");
     if (error) return { ok: false, error: `db_error:${error.code ?? "unknown"}` };
     if (!updated || updated.length === 0) return { ok: false, error: "staff_not_found_or_inactive" };
 
-    await logAdminAction(actor, "hr.assign_position", "tb_admin", adminId, { orgUnitId });
+    await logAdminAction(actor, "hr.assign_position", "profiles", adminId, { orgUnitId });
     revalidatePath("/admin/hr/staff");
     revalidatePath("/admin/hr/org-chart");
     revalidatePath("/admin/hr/org-table");
