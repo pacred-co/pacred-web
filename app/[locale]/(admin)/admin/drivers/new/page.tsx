@@ -28,6 +28,7 @@
 import { Link } from "@/i18n/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { loadAssignedFids } from "@/lib/admin/pending-dispatch";
+import { baseTracking } from "@/lib/admin/momo-bill-header";
 import { totalCbmOf } from "@/lib/forwarder/quantities";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ArrowLeft, Truck, Home, Send, CheckCircle2, Zap, Package } from "lucide-react";
@@ -467,6 +468,14 @@ export default async function CreateDriverBatchPage({
     activeTab === "express" ? expressEligible :
     driverEligible;
 
+  // จำนวน "ออเดอร์/ชิปเม้น" ของแท็บนี้ = distinct (baseTracking+userid) — ตัวเชื่อมให้เลข
+  // ตรงกับหน้า /admin/forwarders "เตรียมส่ง" (นับชิปเม้น) · owner/ภูม 2026-08-04
+  // "60 แทรก + 32 แทรก ทำไมรวมเป็น 62 ไม่ได้" = เพราะ 1 ออเดอร์มีหลายแทรกกิ้ง →
+  // โชว์ทั้งแทรกกิ้ง + ออเดอร์ คู่กัน จะได้ไม่งงว่าทำไมบวกกันไม่ตรง.
+  const eligibleShipments = new Set(
+    eligible.map((r) => `${baseTracking(r.ftrackingchn) ?? `_${r.id}`}|${(r.userid ?? "").trim()}`),
+  ).size;
+
   // 3a. Look up each customer's name + phone from tb_users (camelCase cols ·
   //     CLAUDE.md exception) so EVERY tab's card leads with ชื่อลูกค้า + รหัสลูกค้า.
   //     The driver/express cards need it too: a MOMO/commit row carries the
@@ -618,12 +627,14 @@ export default async function CreateDriverBatchPage({
         {!isHandoffTab ? (
           <>
             แทรคกิ้งรอมอบหมาย <b className="text-foreground">{eligible.length.toLocaleString("th-TH")}</b> ·
+            {" "}<b className="text-foreground">{eligibleShipments.toLocaleString("th-TH")}</b> ออเดอร์ ·
             {" "}จุดส่งจัดกลุ่มแล้ว <b className="text-foreground">{groups.length.toLocaleString("th-TH")}</b> ·
             {" "}คนขับพร้อมรับงาน <b className="text-foreground">{drivers.length.toLocaleString("th-TH")}</b>
           </>
         ) : (
           <>
             แทรคกิ้งรอปิดงาน <b className="text-foreground">{eligible.length.toLocaleString("th-TH")}</b> ·
+            {" "}<b className="text-foreground">{eligibleShipments.toLocaleString("th-TH")}</b> ออเดอร์ ·
             {" "}ลูกค้า (จัดกลุ่มแล้ว) <b className="text-foreground">{pickupGroups.length.toLocaleString("th-TH")}</b>
           </>
         )}
