@@ -12,6 +12,7 @@ import { MAO_CARRIER_CODE } from "@/lib/forwarder/mao-fee";
 import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
 import { ADDRESSES } from "@/components/seo/site";
 import { modeFromPref, prefFromMode, modeRequiresBillingSnapshot } from "@/lib/tax/tax-doc-mode";
+import { fillEmptyAddressAcrossCustomer } from "@/lib/admin/forwarder-siblings";
 
 /**
  * Legacy `tb_forwarder` writers — D1 / ADR-0017 faithful 1:1 ports of
@@ -561,6 +562,16 @@ export async function updateLegacyForwarderAddress(
     .eq("id", ID)
     .eq("userid", userID);
   if (updErr) return { ok: false, error: updErr.message };
+
+  // owner 2026-08-06 — ใส่ที่อยู่ครั้งเดียว → เติมให้แทรคกิ้งอื่นของลูกค้าที่ยังว่างสนิท
+  // (address-only · fstatus 1-4 · best-effort · CS/ลูกค้าไม่ต้องไล่ใส่ซ้ำทีละแทรคกิ้ง)
+  await fillEmptyAddressAcrossCustomer(admin, userID, {
+    faddressname: addr.addressname ?? "", faddresslastname: addr.addresslastname ?? "",
+    faddressno: addr.addressno ?? "", faddresssubdistrict: addr.addresssubdistrict ?? "",
+    faddressdistrict: addr.addressdistrict ?? "", faddressprovince: addr.addressprovince ?? "",
+    faddresszipcode: addr.addresszipcode ?? "", faddressnote: addr.addressnote ?? "",
+    faddresstel: addr.addresstel ?? "", faddresstel2: addr.addresstel2 ?? "",
+  }, { exceptFids: [Number(ID)] });
 
   revalidatePath(`/service-import/${ID}`);
   revalidatePath("/service-import");

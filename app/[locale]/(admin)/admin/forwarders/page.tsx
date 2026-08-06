@@ -230,6 +230,7 @@ type RawForwarderRow = {
   faddressname: string | null;
   faddresslastname: string | null;
   faddresszipcode: string | null;
+  faddressprovince: string | null;
   fcredit: string | null;
   fdetail: string | null;
   // Wave 11 fidelity port — extra fields the legacy `forwarder.php` list shows
@@ -326,6 +327,8 @@ export type Row = {
   products_type: string | null;
   /** 2026-07-06 — legacy fshipby · TH-delivery carrier code · nameShipBy label */
   ship_by: string | null;
+  /** owner 2026-08-06 — ไม่มีที่อยู่จัดส่ง (จว.+zip ว่าง · ไม่ใช่ PCS) = ติดด่านคิวตรวจ → จอบอกเอง */
+  noDeliveryAddress: boolean;
   detail: string | null;
   cover: string | null;        // product thumbnail filename (fcover) — bare
   coverUrl: string | null;     // Wave 13 — server-resolved signed Supabase URL
@@ -1082,7 +1085,7 @@ export async function fetchForwarderList(
       "fweight,fvolume,famount,famountcount,ftotalprice,fcosttotalprice," +
       // 2026-06-12 (พี่ป๊อป) — physical dimensions for the group breakdown (ก×ย×ส)
       "fwidth,flength,fheight," +
-      "faddressname,faddresslastname,faddresszipcode,fcredit,fdetail," +
+      "faddressname,faddresslastname,faddresszipcode,faddressprovince,fcredit,fdetail," +
       // Wave 11 fidelity port — extra cols for the legacy 12-column layout
       "adminidcreator,reforder,fdatestatus2,fdatestatus3,fdatestatus4," +
       "fdateadminstatus,adminid,paydeposit," +
@@ -1474,6 +1477,12 @@ export async function fetchForwarderList(
       note: r.fnote,
       products_type: r.fproductstype,
       ship_by: r.fshipby,
+      // owner 2026-08-06 — เกณฑ์เดียวกับ address gate ของคิวตรวจ (report-cnt-detail):
+      // ไม่มีทั้งจังหวัดและ zip + ไม่ใช่ PCS รับเอง = เข้าคิวตรวจ/แจ้งชำระไม่ได้ → จอบอกเอง
+      noDeliveryAddress:
+        (r.fshipby ?? "").trim() !== "PCS" &&
+        (r.faddressprovince ?? "").trim() === "" &&
+        (r.faddresszipcode ?? "").trim() === "",
       detail: r.fdetail,
       cover: r.fcover,
       coverUrl: null,            // filled in after the URL-resolve step below
