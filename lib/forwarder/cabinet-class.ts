@@ -5,16 +5,18 @@
  *
  *   ตู้ (container)  ⊃  กระสอบ (sack)  ⊃  ชิปเม้น (base tracking)  ⊃  แทรคกิ้ง (-N/M)  ⊃  กล่อง (CG)
  *
- * 🔄 owner 2026-07-20 (SUPERSEDES the same-day first reading that treated TTW
- * "Packing ID" labels as batch-not-container): **TTW/อี้อู container ids follow
- * TTW's OWN pattern and are used AS-SENT.**
+ * 🔄🔄 owner 2026-08-07 (SUPERSEDES the 2026-07-20 "use TTW ids verbatim" rule):
+ * **ตู้อี้อูใช้แพทเทิร์นของเราเสมอ — `YW` + `S`(เรือ)/`E`(รถ EK) + `YYMMDD` + `-N`
+ * (N = ลำดับตู้ที่ปิดในวันนั้น) แบบเดียวกับกวางโจว.** SOT = `yiwu-cabinet-name.ts`.
+ * เหตุผลที่กลับคำ: verbatim ทำให้เลขปน 3 รูปแบบ (GZS…T · YWS…T · SEA0625-8211YW/
+ * YWYY13164) → ตามของ/เก็บเงิน/หาสถานะกันไม่เจอ + เรทต้นทุน TTW ใน tb_cost_container
+ * ค้างใต้ชื่อเก่าแล้วจับคู่ไม่เจอเงียบๆ. ของเดิมถูก rekey หมดแล้ว
+ * (`scripts/rekey-yiwu-cabinets-2026-08-07.mjs` · applied prod).
+ * รูปแบบ verbatim ด้านล่างยังถูก "ยอมรับว่าเป็นตู้" (ข้อมูลประวัติ/ไฟล์เก่า) แต่
+ * **ห้ามใช้ตั้งชื่อตู้ใหม่** อีก:
  *
- *   - "Packing ID: SEA0625-8211YW"  = เลขตู้จริง ("ถูกแล้วครับ ให้ยึดใช้เลขตู้ตามนี้
- *     แบบเขาได้เลยครับ")
- *   - ใบปิดตู้ header "เลขที่ตู้ 0717-7072 YW SEA อี้อู" = เลขตู้จริง
- *
- * NEVER relabel a TTW container to a GZS-style name we invent — "ไม่เอาตามที่คิดเอง
- * แล้วครับ เอาตามแพทเทิน อี้อู ที่ทาง TTW ส่งมาเลย จะได้ไม่งงกับคนทำงานและหน้างาน".
+ *   - "Packing ID: SEA0625-8211YW" · ใบปิดตู้ "เลขที่ตู้ 0717-7072 YW SEA อี้อู"
+ *     = เลขฝั่ง TTW (map เป็นตู้ YWS ของเราตอน ingest)
  *
  * What is still NOT a ตู้ (refused by the write guard):
  *

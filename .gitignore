@@ -67,3 +67,6 @@ reassign-*-backup-*.json
 
 # probe ชั่วคราวของ agent (ตั้งชื่อขึ้นต้น _ + probe) — ห้าม commit
 scripts/_*probe*
+
+# prod data-fix backups (มีข้อมูลลูกค้า/PII — local เท่านั้น ห้ามเข้า git)
+scripts/_backup-*.json

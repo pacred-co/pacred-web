@@ -23,14 +23,31 @@ import { readFileSync, writeFileSync } from "node:fs";
 import pg from "pg";
 import { parseYiwuPackingXlsx } from "../lib/admin/yiwu-packing-xlsx-parser";
 import { transportModeFromCabinetName } from "../lib/forwarder/cabinet-transport";
+import { isYiwuCabinetName, normalizeLegacyYiwuName } from "../lib/forwarder/yiwu-cabinet-name";
 
 const APPLY = process.argv.includes("--apply");
 const DIR = "/Users/dev/Downloads";
 const PW = process.env.SUPABASE_DB_PASSWORD;
 if (!PW) { console.error("SUPABASE_DB_PASSWORD required"); process.exit(1); }
 
-// 4 ตู้ใหม่ที่ owner ส่ง (ชื่อไฟล์ = เลขตู้ = fcabinetnumber ในอนาคต · YWS = อี้อู เรือ)
+// ตู้ที่จะ ingest (ชื่อไฟล์ = เลขตู้ → fcabinetnumber ในอนาคต)
 const FILES = ["YWS260720-9T", "YWS260722-10T", "YWS260723-1T", "YWS260724-2T"];
+
+// ── กติกาใหม่ owner 2026-08-07 (บังคับก่อนแตะ DB · fail-loud) ──────────────────
+// 1. เลขตู้อี้อูต้องเป็นแพทเทิร์น YW[S|E]YYMMDD-N เท่านั้น (SOT yiwu-cabinet-name.ts ·
+//    ชื่อยุค T-suffix แปลงให้อัตโนมัติ · verbatim ที่ derive ไม่ได้ = หยุด บอกให้ตั้งชื่อเอง)
+// 2. แถวที่ไม่ใช่ลูกค้า PR ของเรา = ลูกค้าเจ้าอื่นของ TTW → **ไม่เอาเข้า staging เลย**
+//    (owner: "เอาที่เป็น PR เข้าระบบ นอกนั้นเคลียร์ออก เกะกะ" · ดู SKIP_NON_PR ในลูป)
+const CABINET_OF = new Map<string, string>();
+for (const f of FILES) {
+  const norm = normalizeLegacyYiwuName(f);
+  if (!norm || !isYiwuCabinetName(norm)) {
+    console.error(`❌ "${f}" ไม่ใช่แพทเทิร์นตู้อี้อู (YWS/YWE + YYMMDD + -N) และแปลงอัตโนมัติไม่ได้ —`);
+    console.error(`   เปลี่ยนชื่อไฟล์เป็นเลขตู้จริงตามแพทเทิร์นก่อน เช่น YWS260729-1 (ห้ามใช้เลข verbatim ของ TTW)`);
+    process.exit(1);
+  }
+  CABINET_OF.set(f, norm);
+}
 
 const round = (n: number, dp: number) => { const f = 10 ** dp; return Math.round(n * f) / f; };
 
@@ -106,7 +123,7 @@ async function main() {
   const plan: PlanRow[] = [];
   const perContainer: Array<{
     ตู้: string; แทรค: number; กล่อง: number; kg: number; คิว: number;
-    "PR-มาร์ค": number; "PR-เดิมCS": number; "PRไม่พบในระบบ": number; "มีในระบบแล้ว": number;
+    "PR-มาร์ค": number; "PR-เดิมCS": number; "PRไม่พบในระบบ": number; "มีในระบบแล้ว": number; "ข้ามเจ้าอื่น": number;
   }> = [];
   const unverified: Array<{ ตู้: string; แทรค: string; มาร์ค: string | null; PRบนมาร์ค: string }> = [];
   const prMismatch: Array<{ ตู้: string; แทรค: string; มาร์คว่า: string; แถวจริงว่า: string }> = [];
@@ -114,8 +131,10 @@ async function main() {
   for (const name of FILES) {
     const buf = readFileSync(`${DIR}/${name}.xlsx`);
     const parsed = parseYiwuPackingXlsx(buf);
-    const transport = transportModeFromCabinetName(name) ?? "2"; // YWS = เรือ
-    let boxes = 0, wt = 0, cbm = 0, prMark = 0, prReuse = 0, prMiss = 0, inSys = 0;
+    // เลขตู้ที่เขียนลง staging = แพทเทิร์นใหม่เสมอ (owner 2026-08-07 · ตรวจแล้วตอน boot)
+    const cab = CABINET_OF.get(name)!;
+    const transport = transportModeFromCabinetName(cab) ?? "2"; // YWS = เรือ
+    let boxes = 0, wt = 0, cbm = 0, prMark = 0, prReuse = 0, prMiss = 0, inSys = 0, skippedOthers = 0;
 
     for (const a of parsed.aggregated) {
       const track = (a.baseTracking ?? "").trim();
@@ -155,12 +174,16 @@ async function main() {
         }
       }
 
+      // ── SKIP_NON_PR (owner 2026-08-07): ไม่มี PR ในมาร์ค + ไม่มีในระบบ + reuse ไม่ได้
+      // = ลูกค้าเจ้าอื่นของ TTW (แพคกิ้งเขาส่งรวมทุกเจ้า) → ไม่เอาเข้า staging เลย
+      if (!member && !rawPr && !exists) { skippedOthers++; continue; }
+
       const b = a.parcelCount == null ? null : Math.round(a.parcelCount);
       const w = a.totalWeight == null ? null : round(a.totalWeight, 3);
       const cb = a.totalCbm == null ? null : round(a.totalCbm, 6);
       boxes += b ?? 0; wt += w ?? 0; cbm += cb ?? 0;
       plan.push({
-        container_no: name, base_tracking: track, shipping_mark: mark,
+        container_no: cab, base_tracking: track, shipping_mark: mark,
         member_code: member, pr_source: source, warehouse: "TTW", origin: "อี้อู",
         transport_mode: transport, boxes: b, weight_kg: w, cbm: cb,
         product_name: (a.product ?? "").trim() || null, item_type: (a.productType ?? "").trim() || null,
@@ -168,8 +191,8 @@ async function main() {
       });
     }
     perContainer.push({
-      ตู้: name, แทรค: parsed.aggregated.length, กล่อง: boxes, kg: round(wt, 2), คิว: round(cbm, 4),
-      "PR-มาร์ค": prMark, "PR-เดิมCS": prReuse, "PRไม่พบในระบบ": prMiss, "มีในระบบแล้ว": inSys,
+      ตู้: `${name} → ${cab}`, แทรค: parsed.aggregated.length, กล่อง: boxes, kg: round(wt, 2), คิว: round(cbm, 4),
+      "PR-มาร์ค": prMark, "PR-เดิมCS": prReuse, "PRไม่พบในระบบ": prMiss, "มีในระบบแล้ว": inSys, "ข้ามเจ้าอื่น": skippedOthers,
     });
     if (parsed.warnings.length) console.log(`  ⚠ ${name}: ${parsed.warnings.join("; ")}`);
   }
