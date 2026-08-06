@@ -26,7 +26,8 @@
  * → tb_forwarder) + the recipient-grouping model from the batch DETAIL page,
  * so the parcel set is identical — only the sort/format differ. One sticker
  * per delivery STOP (recipient + address group), showing ผู้รับ / ที่อยู่เต็ม
- * / เบอร์ / เลขแทรคกิง / #กล่อง / PR + a Code128 of the primary tracking.
+ * / เบอร์ (ตจว. เท่านั้น — ดู `isUpcountry`) / เลขแทรคกิง / #กล่อง / PR
+ * + a Code128 of the primary tracking.
  *
  * ── Notes ────────────────────────────────────────────────────────────
  *  - PURE READ — no writes (a sticker sheet is print-only). NO money fields
@@ -49,6 +50,7 @@ import { nameShipBy } from "@/lib/freight/shipping-methods";
 import { code128SvgDataUrl, qrSvgDataUrl } from "@/lib/barcode";
 import { transportModeFromCabinetName } from "@/lib/forwarder/cabinet-transport";
 import { routeOrderOf } from "@/lib/admin/driver-route-order";
+import { canonicalProvince } from "@/lib/forwarder/carrier-province-coverage";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
 
 // รถ/เรือ/อากาศ ตามโหมดตู้ (ประเภทขนส่ง บนสติกเกอร์ · ปอน 2026-07-24)
@@ -95,6 +97,35 @@ const FORWARDER_COLS =
 function isWarehousePlaceholder(name: string | null | undefined): boolean {
   const n = (name ?? "").trim();
   return n === "" || /รับ.*โกดัง|รับเอง|pacred/i.test(n);
+}
+
+/**
+ * ต่างจังหวัด = "ไม่ใช่กรุงเทพ" (owner 2026-08-06 · "ถ้าไม่ใช่ กรุงเทพ เพิ่มเบอร์
+ * โทรลูกค้าเข้าไปหน่อย") — ของ ตจว. ส่งต่อ**ขนส่งเอกชน** คนส่งปลายทางไม่ได้ถือ
+ * บิลจัดส่งของเรา ต้องโทรนัดผู้รับเองจากหน้ากล่อง. ส่วน กทม. รถเราวิ่งเอง คนขับ
+ * มีเบอร์อยู่บนบิลจัดส่ง/หน้ารอบอยู่แล้ว → ไม่ต้องพ่น PII ลงกล่อง.
+ *
+ * ใช้ `canonicalProvince` (SOT ตัวเดียวกับตัวเลือกขนส่ง) → รองรับรูปที่ prod เก็บ
+ * จริงครบ: "จ.กรุงเทพมหานคร" · "กทม." · "กรุงเทพฯ" · zero-width ปน.
+ * จังหวัดว่าง/อ่านไม่ออก → นับเป็น ตจว. (โชว์เบอร์ไว้ก่อน ปลอดภัยกว่าไม่โชว์).
+ */
+function isUpcountry(province: string | null | undefined): boolean {
+  return canonicalProvince(province) !== "กรุงเทพมหานคร";
+}
+
+/**
+ * เบอร์ติดต่อผู้รับสำหรับสติกเกอร์ — เบอร์บน**ที่อยู่จัดส่ง**ก่อน (คนที่รอรับของ
+ * จริง) ไม่มีค่อยตกมาที่เบอร์บัญชีลูกค้า `tb_users.userTel`. ตัดซ้ำ + กรอง "-"
+ * ที่ legacy ใช้แทนค่าว่าง (แพทเทินเดียวกับหน้ารายละเอียดรอบ/บิลจัดส่ง) และ
+ * จำกัด 2 เบอร์ กันป้ายล้นบรรทัด.
+ */
+function recipientPhones(f: Forwarder, customerTel: string): string[] {
+  const clean = (list: (string | null)[]) =>
+    list
+      .map((p) => (p ?? "").trim())
+      .filter((p, i, a) => p !== "" && p !== "-" && a.indexOf(p) === i);
+  const fromAddress = clean([f.faddresstel, f.faddresstel2]);
+  return (fromAddress.length > 0 ? fromAddress : clean([customerTel])).slice(0, 2);
 }
 
 /** Does this stop have a clear, shippable delivery address? (spec gate) */
@@ -213,16 +244,19 @@ export default async function DriverStickerSheetPage({
     forwarders = (fwdData ?? []) as unknown as Forwarder[];
   }
 
-  // 4. Resolve the CUSTOMER name for every forwarder (legacy links by userid
-  //    TEXT, not an FK → one tb_users .in() lookup · camelCase exception).
+  // 4. Resolve the CUSTOMER name + account phone for every forwarder (legacy
+  //    links by userid TEXT, not an FK → one tb_users .in() lookup · camelCase
+  //    exception). `userTel` = the fallback contact when the ship-to address
+  //    itself carries no phone (see `recipientPhones`).
   const custIds = Array.from(
     new Set(forwarders.map((f) => (f.userid ?? "").trim()).filter(Boolean)),
   );
   const custNameById = new Map<string, string>();
+  const custTelById = new Map<string, string>();
   if (custIds.length > 0) {
     const { data: custRows, error: custErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName")
+      .select("userID, userName, userLastName, userTel")
       .in("userID", custIds);
     if (custErr) {
       console.error(`/admin/drivers/${id}/stickers: customer name lookup failed`, {
@@ -234,13 +268,18 @@ export default async function DriverStickerSheetPage({
       userID: string;
       userName: string | null;
       userLastName: string | null;
+      userTel: string | null;
     }[]) {
       const name = `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim();
       if (name) custNameById.set(u.userID, name);
+      const tel = (u.userTel ?? "").trim();
+      if (tel) custTelById.set(u.userID, tel);
     }
   }
   const customerNameOf = (uid: string | null | undefined): string =>
     custNameById.get((uid ?? "").trim()) || "—";
+  const customerTelOf = (uid: string | null | undefined): string =>
+    custTelById.get((uid ?? "").trim()) || "";
 
   // 5. Group by delivery STOP (userID + ship-to address), exactly like the
   //    batch detail page — different customers at the same placeholder never
@@ -465,6 +504,10 @@ export default async function DriverStickerSheetPage({
               ]
                 .filter(Boolean)
                 .join(" ");
+              // เบอร์ผู้รับ — โชว์เฉพาะ ตจว. (ขนส่งเอกชนต้องโทรนัดเอง · owner 2026-08-06).
+              const phones = isUpcountry(f.faddressprovince)
+                ? recipientPhones(f, customerTelOf(f.userid))
+                : [];
               const trackingList = Array.from(new Set(s.trackings));
               const primaryTracking = trackingList[0] ?? "";
               const primaryFNo = s.fNos[0] ?? `#${f.id}`;
@@ -501,6 +544,11 @@ export default async function DriverStickerSheetPage({
                   <div className="mt-1 flex-1">
                     <div className="text-[13px] font-bold leading-snug">{recipient}</div>
                     <div className="mt-0.5 text-[12px] font-medium leading-snug">{address}</div>
+                    {phones.length > 0 && (
+                      <div className="mt-0.5 text-[12px] font-bold leading-snug">
+                        โทร. <span className="font-mono">{phones.join(" · ")}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* ── ล่าง: ขนส่ง/บาร์โค้ด + น้ำหนัก/ปริมาตร | QR ── */}

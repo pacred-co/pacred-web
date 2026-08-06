@@ -54,6 +54,11 @@ export type RunDocVariant = {
   /** true = รวมเป็น 1 ที่อยู่ = 1 แถว (สรุป · บิลจัดส่งคนขับ) · false/undefined =
    *  แจกแจงทุกแทรคกิ้ง 1 แถว/ชิ้น (บิลหาสินค้าคลัง ต้องหาของรายชิ้น) — owner 2026-07-25 */
   summaryByAddress?: boolean;
+  /** true = เพิ่มแถว "ผู้หาสินค้า" เป็นช่องเว้นว่างให้คนคลัง**เขียนมือ**บนใบที่พิมพ์
+   *  (owner 2026-08-06) — ระบบไม่มีข้อมูลผู้หยิบของเก็บไว้ (`tb_forwarder_driver`
+   *  มีแค่ชื่อรอบ/คนขับ/วันที่) จึงไม่ใช่ค่าที่ derive ได้ ต้องให้คนกรอกเอง.
+   *  เปิดเฉพาะบิลหาสินค้า — บิลจัดส่งคนขับไม่ต้องมี. */
+  pickerNameRow?: boolean;
 };
 
 export const RUN_DOC_DELIVERY: RunDocVariant = {
@@ -73,6 +78,7 @@ export const RUN_DOC_PICKING: RunDocVariant = {
   crossLinkHref: (id) => `/admin/drivers/${id}/print`,
   crossLinkLabel: "บิลจัดส่ง (คนขับ) →",
   shortName: "บิลหาสินค้า",
+  pickerNameRow: true,
 };
 
 
@@ -395,7 +401,28 @@ export async function DriverRunDocument({
                   </>
                 }
               />
-              <DocMetaRow k="วันที่สร้าง" v={dateLabel} last />
+              <DocMetaRow
+                k="วันที่สร้าง"
+                v={dateLabel}
+                last={!variant.pickerNameRow}
+              />
+              {/* ผู้หาสินค้า — เว้นว่างให้คนคลังเขียนมือบนใบที่พิมพ์ (owner 2026-08-06):
+                  ใครเป็นคนหยิบของรอบนี้ จะได้ตามถูกคนเวลาของขาด/สลับ. เส้นประ
+                  = ที่ให้เขียน (ไม่ใช่ค่าที่ระบบรู้). พิมพ์อยู่ในกล่องเดียวกับ meta
+                  ทั้งชุด จึงไม่กินความสูงเพิ่มนอกกรอบ. */}
+              {variant.pickerNameRow && (
+                <DocMetaRow
+                  k="ผู้หาสินค้า"
+                  v={
+                    <span
+                      aria-hidden
+                      className="inline-block w-[160px] max-w-full align-bottom"
+                      style={{ height: "1.15em", borderBottom: "1px dotted #94a3b8" }}
+                    />
+                  }
+                  last
+                />
+              )}
             </DocMetaBox>
           </div>
         </div>
