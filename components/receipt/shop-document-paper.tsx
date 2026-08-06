@@ -202,9 +202,11 @@ function ShopDocumentPage({
             {/* CUSTOMER */}
             <div>
               <InfoLine label="ลูกค้า :" value={customerName || "-"} valueBold />
-              {doc.header.usercompany === "1" && (
-                <InfoLine label="เลขที่ภาษี :" value={doc.corporateNumber || "-"} />
-              )}
+              {/* เดิมโชว์เฉพาะนิติ · ตอนนี้โชว์ทุกคนที่ "มีเลข" — บุคคลธรรมดาที่กรอก
+                  personal_tax_id ก็ขึ้น (owner 2026-08-06) · ไม่มีเลข = ไม่ขึ้นบรรทัด */}
+              {doc.corporateNumber ? (
+                <InfoLine label="เลขที่ภาษี :" value={doc.corporateNumber} />
+              ) : null}
               <InfoLine label="รหัสสมาชิก :" value={doc.header.userid} />
               <InfoLine label="ที่อยู่ :" value={doc.header.fulladdress || "-"} preWrap />
               <InfoLine label="อีเมล :" value={doc.header.useremail || "-"} />

@@ -326,7 +326,7 @@ async function loadImportCargo(admin: Admin, entry: ServiceCatalogEntry, monthSt
     admin
       .from("tb_forwarder")
       .select(
-        "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany, fcosttotalprice",
+        "paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany, fcosttotalprice",
       )
       .limit(50_000),
   ]);

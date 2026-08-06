@@ -83,9 +83,22 @@ export function splitShopTrackingTokens(value: string | null | undefined): strin
 /**
  * Canonical shipment-family key. MOMO can split a base tracking into `-N` or
  * `-N/M` box rows. A legitimate non-numeric suffix is preserved.
+ *
+ * owner 2026-08-06 (เคส P22375 ↔ #53237 · mirror ของ SQL `shop_tracking_base`
+ * mig 0296): เลขเดียวกันถูกคีย์คนละแบบ — ลูกค้า/ร้านจีนคีย์ **เลขดิบ**
+ * "987498054" · โกดัง/MOMO คีย์ **มี prefix ขนส่ง** "KY987498054" → จับคู่ไม่ติด
+ * งานตกหล่น สถานะฝากสั่งไม่ไหลต่อฝั่งนำเข้า. FIX: ตัด -N/M แล้วถ้าเหลือ
+ * **ตัวเลข ≥ 8 หลัก** ใช้ตัวเลขล้วนเป็นคีย์ (KY987498054 = 987498054 =
+ * KY987498054-1/2). เลขสั้น/รูปแบบแปลกคงพฤติกรรมเดิม (กันจับคู่มั่ว · เคยมี
+ * เลขจริง "733") · ผู้เรียกทุกตัว scope ด้วย userid เดียวกันอยู่แล้ว.
  */
 export function shopTrackingBase(value: string | null | undefined): string {
-  return (value ?? "").trim().replace(/-\d+(?:\/\d+)?$/, "");
+  const noSuffix = (value ?? "").trim().replace(/-\d+(?:\/\d+)?$/, "");
+  // เฉพาะทรง "อักษรนำหน้า 0-4 ตัว + ตัวเลขล้วน ≥8 หลัก" (KY987498054 · SF1573784113120 ·
+  // 987498054) → คีย์ = ตัวเลข. ทรงอื่น (กระสอบ CBX260620-SEA07 · เลขตู้ · มีอักษร
+  // แทรกกลาง) คงเดิมทั้งสตริง — กันจับคู่ผิดข้ามงาน.
+  const m = /^([A-Za-z]{0,4})(\d{8,})$/.exec(noSuffix);
+  return m ? m[2] : noSuffix;
 }
 
 export function shopTrackingsMatch(

@@ -135,6 +135,12 @@ export type Row = {
   products_type: string | null;
   /** 2026-07-06 — legacy fshipby · TH-delivery carrier · nameShipBy label */
   ship_by: string | null;
+  /**
+   * owner 2026-08-06 ("บัญชีตรวจตู้ไม่ได้ ไม่รู้ติดอะไร โทษกันมั่ว") — แถวที่
+   * "ไม่มีที่อยู่จัดส่ง" (จังหวัด+zip ว่าง · ไม่ใช่ PCS รับเอง) จะติดด่านเข้าคิว
+   * ตรวจ/แจ้งชำระ (address gate 2026-07-18) → จอต้องบอกเอง ไม่ให้คนเดา.
+   */
+  noDeliveryAddress: boolean;
   detail: string | null;
   cover: string | null;
   /**
@@ -1540,6 +1546,17 @@ export function ForwardersTable({
                             {fsAct ? "🔔 " : ""}{fsNext}
                           </div>
                         ) : null}
+                        {/* owner 2026-08-06 — บอกเองว่า "ติดอะไร ใครต้องทำอะไร" (บัญชี
+                            ตรวจตู้ไม่ได้เพราะแถวไม่มีที่อยู่ แต่จอไม่บอก → โทษกันมั่ว).
+                            fstatus=4 + ไม่มีที่อยู่ = ติดด่านเข้าคิวตรวจ/แจ้งชำระ (18/07) */}
+                        {r.status === "4" && r.noDeliveryAddress && (
+                          <div
+                            className="mt-1 inline-flex items-center gap-1 rounded border border-red-300 bg-red-50 px-1.5 py-0.5 text-[11px] font-semibold text-red-700 whitespace-nowrap"
+                            title="ด่านเข้าคิวตรวจ/แจ้งชำระ (กันค่าส่งไทยตกตอนวางบิล) — ต้องมีจังหวัด/รหัสไปรษณีย์ หรือเลือก PCS รับเองโกดัง · CS ใส่ที่อยู่ที่หน้ารายละเอียดออเดอร์"
+                          >
+                            ⛔ ตรวจตู้/แจ้งชำระไม่ได้ — ไม่มีที่อยู่จัดส่ง → CS ใส่ที่อยู่
+                          </div>
+                        )}
                         {r.cabinet_number && (
                           isMomoRoutingBatch(r.cabinet_number) ? (
                             <div

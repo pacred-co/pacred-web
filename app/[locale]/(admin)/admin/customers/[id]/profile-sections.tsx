@@ -17,6 +17,7 @@
  * file owns ONLY the non-rate editable profile sections.
  */
 
+import { formatThaiTaxId } from "@/lib/admin/customer-identity";
 import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Link } from "@/i18n/navigation";
@@ -121,6 +122,8 @@ export type IdentityValues = {
   userBirthday: string;   // YYYY-MM-DD | ""
   userLineID: string;
   userFacebook: string;
+  /** owner 2026-08-06 — เลขผู้เสียภาษี/บัตร ปชช. ของบุคคลธรรมดา (digits 13 · mig 0298) */
+  personalTaxId: string;
   adminIDSale: string;
   coID: string;
 };
@@ -172,6 +175,7 @@ export function IdentityEditor({
         userBirthday: v.userBirthday.trim(),
         userLineID:   v.userLineID.trim(),
         userFacebook: v.userFacebook.trim(),
+        personalTaxId: v.personalTaxId.replace(/\D/g, ""),
         ...(isSenior ? { adminIDSale: v.adminIDSale.trim(), coID: v.coID.trim() } : {}),
       });
       if (!res.ok) { setError(res.error); return; }
@@ -210,6 +214,8 @@ export function IdentityEditor({
             <IdField label="วันเกิด" value={initial.userBirthday || "—"} />
             <IdField label="LINE ID" value={initial.userLineID || "—"} />
             <IdField label="Facebook" value={initial.userFacebook || "—"} />
+            {/* owner 2026-08-06 — เลขผู้เสียภาษีบุคคลธรรมดา (ขึ้นบนใบเสร็จ/เอกสาร) */}
+            <IdField label="เลขผู้เสียภาษี (บุคคล)" value={formatThaiTaxId(initial.personalTaxId) || "—"} />
           </dl>
         ) : (
           <div className="grid sm:grid-cols-2 gap-3">
@@ -230,6 +236,13 @@ export function IdentityEditor({
             <Labeled label="วันเกิด"><input className={inputCls} value={v.userBirthday} onChange={(e) => set("userBirthday", e.target.value)} type="date" /></Labeled>
             <Labeled label="LINE ID"><input className={inputCls} value={v.userLineID} onChange={(e) => set("userLineID", e.target.value)} maxLength={50} /></Labeled>
             <Labeled label="Facebook"><input className={inputCls} value={v.userFacebook} onChange={(e) => set("userFacebook", e.target.value)} maxLength={255} /></Labeled>
+            {/* owner 2026-08-06: "บุคคลก็ควรมีเลขผู้เสียภาษีบนใบเสร็จ" — ช่องนี้ของ
+                บุคคลธรรมดา (นิติใช้ช่องเลขนิติในการ์ด "ข้อมูลบริษัท" ด้านล่าง คนละช่อง) */}
+            <Labeled label="เลขผู้เสียภาษี / บัตรประชาชน (บุคคล)">
+              <input className={inputCls} value={v.personalTaxId}
+                onChange={(e) => set("personalTaxId", e.target.value.replace(/\D/g, "").slice(0, 13))}
+                inputMode="numeric" placeholder="13 หลัก (เว้นว่างได้)" />
+            </Labeled>
 
             {isSenior && (
               <>

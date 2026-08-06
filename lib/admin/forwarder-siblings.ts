@@ -326,3 +326,69 @@ export async function propagateShipmentEdit(
   }
   return out;
 }
+
+/**
+ * เติมที่อยู่ให้ "ทุกแทรคกิ้งที่ยังว่าง" ของลูกค้าคนเดียวกัน (owner 2026-08-06:
+ * "ทำยังไงให้ CS ไม่ต้องเข้าไปใส่ที่อยู่ซ้ำๆ ตามแทรคกิ้ง — คนทำหลายแทรคกิ้งท้อ").
+ *
+ * propagateShipmentEdit แผ่เฉพาะกล่องพี่น้องในชิปเม้นเดียวกัน — ตัวนี้แผ่ข้าม
+ * "ชิปเม้นอื่นของลูกค้าคนเดียวกัน" ที่**ยังไม่มีที่อยู่เลย** (จังหวัด+zip ว่าง):
+ * CS ใส่ครั้งเดียว → งานค้างทุกแทรคกิ้งของลูกค้าได้ที่อยู่ตาม.
+ *
+ * กติกาปลอดภัย (เงินไม่แตะ):
+ *  - เติมเฉพาะแถว "ว่างสนิท" (ไม่ทับที่อยู่ที่มีคนตั้งไว้แล้ว — งานส่งคนละที่มีจริง)
+ *  - เฉพาะ fstatus 1-4 (ยังไม่แจ้งชำระ/จัดส่ง — แถว 5+ ผ่านด่านที่อยู่มาแล้ว)
+ *  - ข้าม fshipby='PCS' (รับเองโกดัง ไม่ต้องมีที่อยู่)
+ *  - เขียนแค่ faddress* (ไม่แตะ carrier/paymethod/ราคา — ค่าส่งไทยถูก quote ตาม flow เดิม)
+ *  - best-effort: พลาด = log ไม่ล้มการบันทึกหลัก
+ */
+export async function fillEmptyAddressAcrossCustomer(
+  admin: SupabaseClient,
+  userid: string,
+  address: {
+    faddressname: string; faddresslastname: string; faddressno: string;
+    faddresssubdistrict: string; faddressdistrict: string; faddressprovince: string;
+    faddresszipcode: string; faddressnote: string; faddresstel: string; faddresstel2: string;
+  },
+  opts: { exceptFids?: number[]; legacyAdminId?: string } = {},
+): Promise<number> {
+  try {
+    const uid = (userid ?? "").trim();
+    if (!uid) return 0;
+    // ที่อยู่ที่จะเติมต้องผ่านด่านเองก่อน (มีจังหวัดหรือ zip) — ไม่งั้นเติมของว่างทับของว่าง
+    if ((address.faddressprovince ?? "").trim() === "" && (address.faddresszipcode ?? "").trim() === "") return 0;
+
+    const { data, error } = await admin
+      .from("tb_forwarder")
+      .select("id,fshipby,faddressprovince,faddresszipcode,fstatus")
+      .eq("userid", uid)
+      .in("fstatus", ["1", "2", "3", "4"]);
+    if (error) {
+      console.error("[fillEmptyAddressAcrossCustomer select]", { code: error.code, message: error.message });
+      return 0;
+    }
+    const except = new Set(opts.exceptFids ?? []);
+    const targets = ((data ?? []) as Array<{ id: number; fshipby: string | null; faddressprovince: string | null; faddresszipcode: string | null }>)
+      .filter((r) =>
+        !except.has(Number(r.id)) &&
+        (r.fshipby ?? "").trim() !== "PCS" &&
+        (r.faddressprovince ?? "").trim() === "" &&
+        (r.faddresszipcode ?? "").trim() === "");
+    if (targets.length === 0) return 0;
+
+    const ids = targets.map((r) => Number(r.id));
+    const { error: upErr } = await admin
+      .from("tb_forwarder")
+      .update({ ...address, ...(opts.legacyAdminId ? { adminidupdate: opts.legacyAdminId } : {}) })
+      .in("id", ids);
+    if (upErr) {
+      console.error("[fillEmptyAddressAcrossCustomer update]", { code: upErr.code, message: upErr.message, ids });
+      return 0;
+    }
+    console.log("[fillEmptyAddressAcrossCustomer] เติมที่อยู่ให้แทรคกิ้งอื่นที่ว่าง", { userid: uid, filled: ids.length });
+    return ids.length;
+  } catch (e) {
+    console.error("[fillEmptyAddressAcrossCustomer]", e instanceof Error ? e.message : String(e));
+    return 0;
+  }
+}

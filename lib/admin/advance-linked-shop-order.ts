@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { countShopArrivals, deriveShopStatus } from "./shop-order-arrivals";
+import { shopTrackingBase, splitShopTrackingTokens } from "./shop-order-status-rule";
 
 /**
  * RE-DERIVE the ฝากสั่งซื้อ shop order whose linked forwarder just changed state.
@@ -35,6 +36,8 @@ export async function advanceLinkedShopOrder(
   forwarder: {
     reforder: string | null | undefined;
     ftrackingchn: string | null | undefined;
+    /** เจ้าของงาน — scope การจับคู่ base-key ให้อยู่ในลูกค้าคนเดียวกัน (owner 2026-08-06) */
+    userid?: string | null;
     // owner 2026-06-26 — 3-stage: ถึงโกดังจีน(fstatus=2, ไม่มีเลขตู้)→40 ·
     // เลขตู้/fstatus≥4→5. The DB trigger (mig 0234/0235) is the systemic SOT that
     // fires from EVERY path; these are passed best-effort so the in-action
@@ -61,6 +64,24 @@ export async function advanceLinkedShopOrder(
       return null;
     }
     hno = (oRow?.hno ?? "").trim();
+    // owner 2026-08-06 (P22375 ↔ #53237) — exact ไม่เจอ = อาจคีย์คนละ convention
+    // (โกดัง "KY987498054" vs ลูกค้า "987498054") → เทียบด้วย base key เดียวกับ
+    // SQL `shop_tracking_base` (mig 0296) · scope userid เดียวกันกันจับคู่ข้ามคน.
+    if (!hno && forwarder.userid) {
+      const base = shopTrackingBase(tracking);
+      if (base) {
+        const { data: cand, error: cErr } = await admin
+          .from("tb_order")
+          .select("hno,ctrackingnumber")
+          .eq("userid", forwarder.userid)
+          .neq("hno", "")
+          .limit(2000);
+        if (cErr) console.error("[advanceLinkedShopOrder] base lookup failed", { code: cErr.code, message: cErr.message });
+        const hit = ((cand ?? []) as Array<{ hno: string | null; ctrackingnumber: string | null }>)
+          .find((r) => splitShopTrackingTokens(r.ctrackingnumber).some((t) => shopTrackingBase(t) === base));
+        hno = (hit?.hno ?? "").trim();
+      }
+    }
   }
   if (!hno) return null;
 

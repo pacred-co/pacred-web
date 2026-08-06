@@ -116,6 +116,7 @@ type ForwarderRowForReceipt = {
   // once-per-DELIVERY เหมาๆ flat fee (computeForwarderDebitBatch · one container = one fee).
   fcabinetnumber: string | null;
   fshipby: string | null;
+  paymethod: number | string | null;
   // For per-row totals (matches grenrateReceiptF L548)
   ftotalprice: number | string | null;
   ftransportprice: number | string | null;
@@ -159,7 +160,7 @@ function toNumber(v: number | string | null | undefined): number {
 function perRowRaw(r: ForwarderRowForReceipt): number {
   return (
     toNumber(r.ftotalprice) +
-    toNumber(r.ftransportprice) +
+    (String(r.paymethod ?? "").trim() === "2" ? 0 : toNumber(r.ftransportprice)) +
     toNumber(r.fpriceupdate) +
     toNumber(r.fshippingservice) +
     toNumber(r.pricecrate) +
@@ -249,7 +250,7 @@ export async function adminIssueForwarderInvoice(
       const { data: fwRows, error: readErr } = await admin
         .from("tb_forwarder")
         .select(
-          "id, userid, fstatus, fcredit, paydeposit, ftrackingchn, fcabinetnumber, fshipby, " +
+          "id, userid, fstatus, fcredit, paydeposit, ftrackingchn, fcabinetnumber, fshipby, paymethod, " +
             "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
             "pricecrate, ftransportpricechnthb, priceother, fdiscount",
         )
@@ -335,6 +336,7 @@ export async function adminIssueForwarderInvoice(
       const maoBatch = computeForwarderDebitBatch(
         rows.map((r) => ({
           id: r.id, fshipby: r.fshipby, ftrackingchn: r.ftrackingchn, fcabinetnumber: r.fcabinetnumber,
+          paymethod: r.paymethod,
           ftotalprice: r.ftotalprice, ftransportprice: r.ftransportprice,
           fpriceupdate: r.fpriceupdate, fshippingservice: r.fshippingservice,
           pricecrate: r.pricecrate, ftransportpricechnthb: r.ftransportpricechnthb,

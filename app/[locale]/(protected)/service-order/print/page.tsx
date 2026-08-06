@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
+import { formatThaiTaxId } from "@/lib/admin/customer-identity";
 
 /**
  * ฝากสั่งซื้อ (China-shop) order PRINT document — a FAITHFUL 1:1
@@ -314,7 +315,8 @@ export default async function ServiceOrderPrintPage({
     // The legacy joins tb_users for the customer name / email.
     const { data: userRow, error: userRowErr } = await admin
       .from("tb_users")
-      .select("userName, userLastName, userEmail, userPicture, userCompany")
+      // personal_tax_id (mig 0298) = เลขผู้เสียภาษีของบุคคลธรรมดา (owner 2026-08-06)
+      .select("userName, userLastName, userEmail, userPicture, userCompany, personal_tax_id")
       .eq("userID", headerRow.userid)
       .maybeSingle<{
         userName: string | null;
@@ -322,6 +324,7 @@ export default async function ServiceOrderPrintPage({
         userEmail: string | null;
         userPicture: string | null;
         userCompany: string | null;
+        personal_tax_id: string | null;
       }>();
     if (userRowErr) {
       console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
@@ -415,6 +418,14 @@ export default async function ServiceOrderPrintPage({
       corporateNumber = "0105563083534";
       header.fulladdress =
         "55 อาคารไบโอเฮ้าส์ ชั้น 5 ห้องเลขที่ 508 ซอยสุขุมวิท 39 ถนนสุขุมวิท แขวงคลองตันเหนือ เขตวัฒนา กรุงเทพมหานคร 10110";
+    }
+
+    // บุคคลธรรมดา (owner 2026-08-06) — เดิมเลขภาษีมาจาก tb_corporate ทางเดียว
+    // ⇒ คนธรรมดาไม่มีเลขขึ้นเอกสารเลย. เติมจาก tb_users.personal_tax_id (mig 0298)
+    // เป็นทางเลือกสุดท้าย (นิติ/hardcode ข้างบนชนะเสมอ).
+    // 🔴 ไม่แตะ header.usercompany — ค่านั้นคือธง "นิติบุคคล" ห้ามเพี้ยนเพราะเลขบุคคล.
+    if (!corporateNumber) {
+      corporateNumber = formatThaiTaxId(userRow?.personal_tax_id ?? "");
     }
 
     // printShop.php L84-94 — the document title + heading colour.
@@ -595,8 +606,10 @@ export default async function ServiceOrderPrintPage({
                       {doc.fName}
                       {doc.header.userfullname}
                     </div>
-                    {/* printShop.php L213-215 — tax number, juristic only */}
-                    {doc.header.usercompany === "1" ? (
+                    {/* printShop.php L213-215 — เดิมโชว์เฉพาะนิติ · ตอนนี้โชว์ทุกคน
+                        ที่ "มีเลข" (บุคคลธรรมดาที่กรอก personal_tax_id ก็ขึ้น ·
+                        ไม่มีเลข = ไม่ขึ้นบรรทัด · owner 2026-08-06) */}
+                    {doc.corporateNumber ? (
                       <div className="h-sub">
                         <b>{t("taxId")} : </b>
                         {doc.corporateNumber}

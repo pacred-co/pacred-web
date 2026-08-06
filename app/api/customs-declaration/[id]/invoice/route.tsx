@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveDeclarationByConfirmToken } from "@/lib/customs/confirm-token-access";
 import { registerPdfFonts } from "@/lib/pdf/register-fonts";
+import { formatThaiTaxId } from "@/lib/admin/customer-identity";
 import { CargoCommercialInvoicePdf, type CargoCommercialInvoiceData } from "@/components/pdf/cargo-commercial-invoice";
 
 export const dynamic = "force-dynamic";
@@ -74,14 +75,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       transportMode = fwd.ftransporttype === "2" ? "ทางเรือ" : fwd.ftransporttype === "3" ? "ทางอากาศ" : "ทางรถ";
       if (fwd.userid) {
         const [{ data: u, error: uErr }, { data: corp, error: corpErr }] = await Promise.all([
-          admin.from("tb_users").select("userName, userLastName").eq("userID", fwd.userid).maybeSingle<{ userName: string | null; userLastName: string | null }>(),
+          // personal_tax_id (mig 0298) = เลขผู้เสียภาษีของบุคคลธรรมดา (owner 2026-08-06)
+          admin.from("tb_users").select("userName, userLastName, personal_tax_id").eq("userID", fwd.userid).maybeSingle<{ userName: string | null; userLastName: string | null; personal_tax_id: string | null }>(),
           admin.from("tb_corporate").select("corporatename, corporateaddress, corporatenumber").eq("userid", fwd.userid).maybeSingle<{ corporatename: string | null; corporateaddress: string | null; corporatenumber: string | null }>(),
         ]);
         if (uErr) console.error(`[cargo-invoice tb_users] failed`, { code: uErr.code, message: uErr.message });
         if (corpErr) console.error(`[cargo-invoice tb_corporate] failed`, { code: corpErr.code, message: corpErr.message });
         consigneeName = corp?.corporatename?.trim() || `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim() || fwd.userid;
         consigneeAddress = corp?.corporateaddress?.trim() || "";
-        consigneeTaxId = corp?.corporatenumber?.trim() || null;
+        // บุคคลธรรมดา (owner 2026-08-06) — fallback → tb_users.personal_tax_id
+        // (mig 0298) เมื่อไม่มีเลขนิติ. แสดงผลเท่านั้น · ไม่เปลี่ยนสถานะนิติบุคคล.
+        consigneeTaxId = corp?.corporatenumber?.trim() || formatThaiTaxId(u?.personal_tax_id ?? "") || null;
       }
     }
   }

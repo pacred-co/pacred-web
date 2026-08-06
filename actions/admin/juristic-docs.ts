@@ -49,13 +49,15 @@ export type CustomerJuristicDocs = {
 /** Resolve the customer's CURRENT registered identity (the target for a re-stamp). */
 async function resolveCurrentIdentity(admin: ReturnType<typeof createAdminClient>, userid: string) {
   const [{ data: u }, { data: corp }] = await Promise.all([
-    admin.from("tb_users").select("\"userCompany\", \"userName\", \"userLastName\"").eq("userID", userid)
+    admin.from("tb_users").select("\"userCompany\", \"userName\", \"userLastName\", personal_tax_id").eq("userID", userid)
       .maybeSingle<{ userCompany: string | null; userName: string | null; userLastName: string | null }>(),
     admin.from("tb_corporate").select("corporatename, corporatenumber, corporateaddress").eq("userid", userid)
       .maybeSingle<{ corporatename: string | null; corporatenumber: string | null; corporateaddress: string | null }>(),
   ]);
   return resolveBillingIdentity({
     userCompany: u?.userCompany, userName: u?.userName, userLastName: u?.userLastName, corp: corp ?? null,
+    // owner 2026-08-06 — บุคคลก็มีเลขผู้เสียภาษี (mig 0298) → re-stamp ต้องประทับให้ด้วย
+    personalTaxId: (u as { personal_tax_id?: string | null } | null)?.personal_tax_id ?? null,
   });
 }
 
@@ -147,7 +149,10 @@ export async function adminRestampCustomerDocs(
     }
     const isJ = identity.isJuristic;
     const name = identity.name;
-    const taxId = isJ ? identity.taxId : "";
+    // owner 2026-08-06 — เดิมล้างเลขทิ้งถ้าไม่ใช่นิติ → ตอนนี้บุคคลก็มีเลขผู้เสียภาษี
+    // (identity.taxId คืนเลขบุคคลให้เอง) · `corporatetype`/`is_juristic` ยังตัดสิน
+    // จาก isJ เหมือนเดิม ⇒ WHT 1% ไม่กระทบ.
+    const taxId = identity.taxId;
     const address = identity.registeredAddress;
 
     let invCount = 0;

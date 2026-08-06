@@ -95,7 +95,7 @@ export async function loadCustomerBillingParty(
 
   const uRes = (await admin
     .from("tb_users")
-    .select("userID, userName, userLastName, userCompany, userTel, userEmail")
+    .select("userID, userName, userLastName, userCompany, userTel, userEmail, personal_tax_id")
     .eq("userID", code)
     .maybeSingle()) as {
     data: {
@@ -139,6 +139,8 @@ export async function loadCustomerBillingParty(
     userName: u.userName,
     userLastName: u.userLastName,
     corp,
+    // owner 2026-08-06 — บุคคลธรรมดาก็มีเลขผู้เสียภาษีบนเอกสาร (mig 0298)
+    personalTaxId: (u as { personal_tax_id?: string | null }).personal_tax_id ?? null,
   });
 
   // ── ที่อยู่: registered company address wins; else the customer's main address ──

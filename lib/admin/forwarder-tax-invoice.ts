@@ -138,11 +138,11 @@ export async function issueForwarderTaxInvoice(
   }
 
   // 2. Read the forwarder rows (same buckets the receipt sums).
-  type FwRow = ForwarderCharges & { id: number; userid: string };
+  type FwRow = ForwarderCharges & { id: number; userid: string; paymethod: string | number | null };
   const { data: fwRows, error: fwErr } = await admin
     .from("tb_forwarder")
     .select(
-      "id, userid, ftotalprice, ftransportprice, ftransportpricechnthb, " +
+      "id, userid, paymethod, ftotalprice, ftransportprice, ftransportpricechnthb, " +
       "fshippingservice, pricecrate, fpriceupdate, priceother, fdiscount",
     )
     .in("id", fids)
@@ -192,7 +192,7 @@ export async function issueForwarderTaxInvoice(
   //    VAT-0%) + applies VAT 7% on the vatable base.
   const agg: ForwarderCharges = {
     ftotalprice:           rows.reduce((s, r) => s + num(r.ftotalprice), 0),
-    ftransportprice:       rows.reduce((s, r) => s + num(r.ftransportprice), 0),
+    ftransportprice:       rows.reduce((s, r) => s + (String(r.paymethod ?? "").trim() === "2" ? 0 : num(r.ftransportprice)), 0),
     ftransportpricechnthb: rows.reduce((s, r) => s + num(r.ftransportpricechnthb), 0),
     fshippingservice:      rows.reduce((s, r) => s + num(r.fshippingservice), 0),
     pricecrate:            rows.reduce((s, r) => s + num(r.pricecrate), 0),
@@ -290,7 +290,7 @@ export async function issueForwarderTaxInvoice(
     invoice_id:            invoiceId,
     fid:                   r.id,
     ftotalprice:           num(r.ftotalprice),
-    ftransportprice:       num(r.ftransportprice),
+    ftransportprice:       String(r.paymethod ?? "").trim() === "2" ? 0 : num(r.ftransportprice),
     ftransportpricechnthb: num(r.ftransportpricechnthb),
     fshippingservice:      num(r.fshippingservice),
     pricecrate:            num(r.pricecrate),

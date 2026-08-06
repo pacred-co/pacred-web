@@ -679,6 +679,7 @@ export async function getReceiptDetail(id: number): Promise<ReceiptDetail | null
     fweight: number | string | null;
     fvolume: number | string | null;
     famount: number | null;
+    paymethod: number | string | null;
     ftotalprice: number | string | null;
     ftransportprice: number | string | null;
     fpriceupdate: number | string | null;
@@ -695,7 +696,7 @@ export async function getReceiptDetail(id: number): Promise<ReceiptDetail | null
       .from("tb_forwarder")
       .select(
         "id, ftrackingchn, fcabinetnumber, fweight, fvolume, famount, " +
-          "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+          "paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
           "pricecrate, ftransportpricechnthb, priceother, fdiscount",
       )
       .in("id", fids);
@@ -711,7 +712,7 @@ export async function getReceiptDetail(id: number): Promise<ReceiptDetail | null
     const fw = fwById.get(it.fid);
     const perRowRaw = fw
       ? toNumber(fw.ftotalprice) +
-        toNumber(fw.ftransportprice) +
+        (String(fw.paymethod ?? "").trim() === "2" ? 0 : toNumber(fw.ftransportprice)) +
         toNumber(fw.fpriceupdate) +
         toNumber(fw.fshippingservice) +
         toNumber(fw.pricecrate) +
@@ -728,7 +729,7 @@ export async function getReceiptDetail(id: number): Promise<ReceiptDetail | null
       fvolume:               fw?.fvolume ?? null,
       famount:               fw?.famount ?? null,
       ftotalprice:           fw?.ftotalprice ?? null,
-      ftransportprice:       fw?.ftransportprice ?? null,
+      ftransportprice:       String(fw?.paymethod ?? "").trim() === "2" ? 0 : (fw?.ftransportprice ?? null),
       fpriceupdate:          fw?.fpriceupdate ?? null,
       fshippingservice:      fw?.fshippingservice ?? null,
       pricecrate:            fw?.pricecrate ?? null,

@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { splitShopTrackingTokens, type LinkedForwarderArrivalRow } from "./shop-order-status-rule";
+import { splitShopTrackingTokens, shopTrackingBase, type LinkedForwarderArrivalRow } from "./shop-order-status-rule";
 
 export type LinkedShopForwarder = LinkedForwarderArrivalRow & {
   id: number;
@@ -62,7 +62,11 @@ export async function loadLinkedShopForwarders(
   ));
 
   const columns = "id,userid,reforder,ftrackingchn,fstatus,fcabinetnumber";
-  const [byRef, byTracking] = await Promise.all([
+  // owner 2026-08-06 — fallback ต้องใช้เกณฑ์เดียวกับ RPC/SQL (shopTrackingBase ·
+  // mig 0296): เลขดิบฝั่งลูกค้า "987498054" ต้องเจอ "KY987498054" ที่โกดังคีย์.
+  // ดึงงานของลูกค้าคนนี้มาแล้วเทียบด้วย base key (ชุดต่อลูกค้าเล็ก · scope userid).
+  const tokenBases = new Set(tokens.map((t) => shopTrackingBase(t)).filter(Boolean));
+  const [byRef, byCustomer] = await Promise.all([
     admin
       .from("tb_forwarder")
       .select(columns)
@@ -70,19 +74,20 @@ export async function loadLinkedShopForwarders(
       .eq("reforder", key)
       .neq("fstatus", "99")
       .limit(10_000),
-    tokens.length > 0
+    tokenBases.size > 0
       ? admin
           .from("tb_forwarder")
           .select(columns)
           .eq("userid", header.userid)
-          .in("ftrackingchn", tokens)
           .neq("fstatus", "99")
           .limit(10_000)
       : Promise.resolve({ data: [], error: null }),
   ]);
-  if (byRef.error || byTracking.error) return [];
+  if (byRef.error || byCustomer.error) return [];
+  const byTrackingRows = ((byCustomer.data ?? []) as LinkedShopForwarder[])
+    .filter((row) => tokenBases.has(shopTrackingBase(row.ftrackingchn)));
 
   const seen = new Set<number>();
-  return ([...(byRef.data ?? []), ...(byTracking.data ?? [])] as LinkedShopForwarder[])
+  return ([...(byRef.data ?? []), ...byTrackingRows] as LinkedShopForwarder[])
     .filter((row) => !seen.has(Number(row.id)) && seen.add(Number(row.id)));
 }

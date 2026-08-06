@@ -13,6 +13,7 @@
 import { Document, Page, Text, View } from "@react-pdf/renderer";
 import { styles, fmtBaht, COLORS } from "./styles";
 import { readThaiBaht } from "@/lib/utils/thai-number";
+import { formatThaiTaxId } from "@/lib/admin/customer-identity";
 import { CONTACT, ADDRESSES, BANK } from "@/components/seo/site";
 import type { ShopOrderReceiptData } from "@/actions/service-order";
 
@@ -147,8 +148,14 @@ export function ShopOrderReceipt({ data }: { data: ShopOrderReceiptData }) {
           <View style={styles.customerCol}>
             <Text style={styles.customerLabel}>ผู้สั่งซื้อ</Text>
             <Text style={styles.customerName}>{customerName}</Text>
-            {isJuristic && c.tax_id && (
-              <Text style={styles.customerLine}>เลขประจำตัวผู้เสียภาษี: {c.tax_id}</Text>
+            {/* เดิมโชว์เฉพาะนิติ · ตอนนี้โชว์ทุกคนที่ "มีเลข" — บุคคลธรรมดาที่กรอก
+                personal_tax_id ก็ขึ้น (owner 2026-08-06) · ไม่มีเลข = ไม่ขึ้นบรรทัด.
+                🔴 isJuristic ยังใช้ตัดสินอย่างอื่น (ชื่อบริษัท/WHT) เหมือนเดิม */}
+            {c.tax_id && (
+              <Text style={styles.customerLine}>
+                เลขประจำตัวผู้เสียภาษี:{" "}
+                {isJuristic ? c.tax_id : formatThaiTaxId(c.tax_id)}
+              </Text>
             )}
             {c.member_code && (
               <Text style={styles.customerLine}>รหัสสมาชิก: {c.member_code}</Text>

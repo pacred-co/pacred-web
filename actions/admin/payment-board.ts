@@ -84,7 +84,7 @@ export async function listPaymentStatus(
     let q = admin
       .from("tb_forwarder")
       .select(
-        "id, userid, fstatus, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany, fcosttotalprice, fcredit, fshipby, ftransporttype, adminid, adminidupdate, fdate, ftrackingchn, fcabinetnumber",
+        "id, userid, fstatus, paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany, fcosttotalprice, fcredit, fshipby, ftransporttype, adminid, adminidupdate, fdate, ftrackingchn, fcabinetnumber",
       )
       .in("fstatus", ["5", "6", "7"])
       .order("fdate", { ascending: false })

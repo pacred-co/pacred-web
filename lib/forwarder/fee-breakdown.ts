@@ -36,6 +36,8 @@
  *  coerced defensively). `ForwarderPriceFields` (outstanding.ts) + the billing /
  *  receipt / invoice row shapes are all structurally assignable to this. */
 export interface ForwarderFeeFields {
+  /** '2' = ปลายทาง; the courier collects this leg, so Pacred documents show ฿0. */
+  paymethod?:              number | string | null;
   ftotalprice:           number | string | null;
   ftransportprice:       number | string | null;
   fpriceupdate:          number | string | null;
@@ -73,7 +75,7 @@ function round2(n: number): number {
 export function splitForwarderFees(row: ForwarderFeeFields): NamedForwarderFees {
   return {
     freight:      toNumber(row.ftotalprice),
-    thaiShipping: toNumber(row.ftransportprice),
+    thaiShipping: String(row.paymethod ?? "").trim() === "2" ? 0 : toNumber(row.ftransportprice),
     crate:        toNumber(row.pricecrate),
     update:       toNumber(row.fpriceupdate),
     chnPlus:      toNumber(row.ftransportpricechnthb),

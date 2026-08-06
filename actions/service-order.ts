@@ -505,7 +505,8 @@ export async function getServiceOrderForReceipt(
   // 2. Customer — the signed-in customer's own legacy row (tb_users).
   const { data: legacyUser, error: legacyUserErr } = await admin
     .from("tb_users")
-    .select("userID, userName, userLastName, userEmail, userTel, userCompany")
+    // personal_tax_id (mig 0298) = เลขผู้เสียภาษีของบุคคลธรรมดา (owner 2026-08-06)
+    .select("userID, userName, userLastName, userEmail, userTel, userCompany, personal_tax_id")
     .eq("userID", memberCode)
     .maybeSingle<{
       userID:      string | null;
@@ -514,6 +515,7 @@ export async function getServiceOrderForReceipt(
       userEmail:   string | null;
       userTel:     string | null;
       userCompany: string | null;
+      personal_tax_id: string | null;
     }>();
   if (legacyUserErr) {
     console.error(`[tb_users list] failed`, { code: legacyUserErr.code, message: legacyUserErr.message });
@@ -552,6 +554,14 @@ export async function getServiceOrderForReceipt(
     company_name    = corp?.corporatename    ?? null;
     tax_id          = corp?.corporatenumber  ?? null;
     company_address = corp?.corporateaddress ?? null;
+  } else {
+    // บุคคลธรรมดา (owner 2026-08-06) — เดิม tax_id ว่างเสมอสำหรับคนธรรมดา
+    // ⇒ ใบเสร็จไม่เคยมีเลขผู้เสียภาษี. เติมจาก tb_users.personal_tax_id (mig 0298).
+    // 🔴 accountType ยังคำนวณจาก userCompany เท่านั้น — เลขนี้ไม่ทำให้กลายเป็นนิติ.
+    // เก็บเป็น "เลขดิบ" เพราะค่านี้ถูกส่งไป prefill ฟอร์มขอใบกำกับ (buyer_tax_id
+    // ต้องเป็นตัวเลข 13 หลักเป๊ะ) — จัดรูปแบบขีดตอนแสดงผลเท่านั้น.
+    const personal = (legacyUser?.personal_tax_id ?? "").trim();
+    tax_id = personal || null;
   }
 
   // 3. Items — exclude refunded lines (legacy crewallet flag = PHP cReWallet).

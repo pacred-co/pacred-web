@@ -11,6 +11,7 @@ import { calcForwarderOutstanding } from "@/lib/forwarder/outstanding";
 import { sumNamedFees, namedNonFreight } from "@/lib/forwarder/fee-breakdown";
 import { getSalesRepContactForUserid } from "@/lib/admin/sales-rep-contact";
 import { formatThaiDate } from "@/lib/utils/thai-datetime";
+import { formatThaiTaxId } from "@/lib/admin/customer-identity";
 
 /**
  * Customer-side ใบแจ้งหนี้ (invoice) view —
@@ -98,6 +99,7 @@ type ForwarderRowLite = {
   famount:                number | string | null;
   ftotalprice:            number | string | null;
   ftransportprice:        number | string | null;
+  paymethod:              number | string | null;
   fpriceupdate:           number | string | null;
   fshippingservice:       number | string | null;
   pricecrate:             number | string | null;
@@ -170,7 +172,7 @@ export default async function ServiceImportInvoicePage({
     .from("tb_forwarder")
     .select(
       "id, userid, fstatus, ftrackingchn, fdate, fweight, fvolume, famount, " +
-      "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+      "ftotalprice, ftransportprice, paymethod, fpriceupdate, fshippingservice, " +
       "pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany",
     )
     .eq("id", idNum)
@@ -251,7 +253,7 @@ export default async function ServiceImportInvoicePage({
           .from("tb_forwarder")
           .select(
             "id, userid, fstatus, ftrackingchn, fdate, fweight, fvolume, famount, " +
-            "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+            "ftotalprice, ftransportprice, paymethod, fpriceupdate, fshippingservice, " +
             "pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany",
           )
           .in("id", fids);
@@ -272,14 +274,16 @@ export default async function ServiceImportInvoicePage({
   // ── 3. Customer block — name + address (from tb_users / tb_corporate) ──
   const { data: userRow, error: userRowErr } = await admin
     .from("tb_users")
-    .select("userName, userLastName, userTel, userEmail, userCompany")
+    // personal_tax_id (mig 0298) = เลขผู้เสียภาษีของบุคคลธรรมดา (owner 2026-08-06)
+    .select("userName, userLastName, userTel, userEmail, userCompany, personal_tax_id")
     .eq("userID", customerOwnerUserid)
     .maybeSingle<{
-      userName:     string | null;
-      userLastName: string | null;
-      userTel:      string | null;
-      userEmail:    string | null;
-      userCompany:  string | null;
+      userName:        string | null;
+      userLastName:    string | null;
+      userTel:         string | null;
+      userEmail:       string | null;
+      userCompany:     string | null;
+      personal_tax_id: string | null;
     }>();
   if (userRowErr) {
     console.error(`[invoice/[fNo] tb_users lookup] failed`, {
@@ -329,6 +333,22 @@ export default async function ServiceImportInvoicePage({
       if (!custAddr  && corp.corporateaddress) custAddr = corp.corporateaddress;
     }
   }
+
+  // บุคคลธรรมดา (owner 2026-08-06) — เดิมเส้นนี้ผูกกับ userCompany==='1' อย่างเดียว
+  // ⇒ คนธรรมดาไม่เคยมีเลขภาษีขึ้นใบเลย. เติมจาก tb_users.personal_tax_id (mig 0298)
+  // เมื่อยังไม่มีเลขจาก recomp*/tb_corporate. เก็บเป็น "เลขดิบ" เพราะ custTaxId
+  // ถูกส่งไป prefill ฟอร์มขอใบกำกับ (buyer_tax_id ต้องเป็นตัวเลข 13 หลักเป๊ะ) —
+  // การจัดรูปแบบขีดทำตอนแสดงผลเท่านั้น (custTaxIdDisplay ด้านล่าง).
+  let custTaxIdIsPersonal = false;
+  if (!custTaxId) {
+    const personal = (userRow?.personal_tax_id ?? "").trim();
+    if (personal) {
+      custTaxId = personal;
+      custTaxIdIsPersonal = true;
+    }
+  }
+  // 🔴 ห้ามให้เลขนี้ไปเปลี่ยนการตัดสิน "นิติบุคคล"/WHT 1% — display เท่านั้น.
+  const custTaxIdDisplay = custTaxIdIsPersonal ? formatThaiTaxId(custTaxId) : custTaxId;
 
   // ที่อยู่ = ONE slot (owner 2026-07-13 · mig 0253) — a swapped ship-to
   // (tb_receipt.delivery_address) REPLACES the address shown so this invoice view, the
@@ -551,7 +571,7 @@ export default async function ServiceImportInvoicePage({
                   </p>
                   {custTaxId && (
                     <p className="text-xs text-slate-600 mt-0.5">
-                      เลขผู้เสียภาษี: <span className="font-mono">{custTaxId}</span>
+                      เลขผู้เสียภาษี: <span className="font-mono">{custTaxIdDisplay}</span>
                     </p>
                   )}
                   {custAddr && <p className="text-xs text-slate-600 mt-1 whitespace-pre-line">{custAddr}</p>}

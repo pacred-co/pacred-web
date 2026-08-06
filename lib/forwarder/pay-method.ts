@@ -18,10 +18,9 @@
  * Pacred does NOT prepay it; the courier collects at destination, so the COD gate
  * excludes the domestic leg from the Pacred bill (ค่าส่งไทย = 0).
  *
- * (Supersedes the 2026-07-21 morning COD LOCK "ALL ขนส่งเอกชน → ปลายทาง" — the
- * owner refined it that afternoon: the three national couriers he prepays move
- * back to ต้นทาง; only the smaller/regional/private ones stay COD. The rule is now
- * LOCKED by carrier — EditPayMethodField is read-only, no manual per-row toggle.)
+ * This mapping is the DEFAULT when a carrier is selected. A customer's/staff's
+ * explicit ต้นทาง/ปลายทาง selection wins for third-party carriers. Pacred own-fleet
+ * carriers remain ต้นทาง because Pacred itself performs/collects that delivery.
  *
  * The own-fleet subset is `isOwnFleetCarrier` (carrier-coverage-guard); the
  * pay-at-origin superset (own-fleet + the 3 national couriers) is
@@ -84,20 +83,20 @@ export function derivePayMethodForDelivery(
   fShipBy: string | null | undefined,
   _addr: { addressID?: string | number | null; zip?: string | null },
 ): "1" | "2" {
+  void _addr; // kept in the shared call signature for order-entry compatibility
   const c = (fShipBy ?? "").trim();
   if (c === "") return "1"; // no carrier chosen → ต้นทาง default (no COD yet)
   return isPayAtOriginCarrier(c) ? "1" : "2";
 }
 
 /**
- * 🔒 THE CARRIER LOCK (owner พี่ป๊อป 2026-07-21 "ให้ล็อคไปเลย") ──────────────────
- *   Refines the 2026-07-21-morning COD LOCK. The carrier decides the pair — no
- *   manual per-row override (EditPayMethodField is read-only):
- *     1. carrier ∈ pay-at-origin (own-fleet + Flash/J&T/ไปรษณีย์) ⇒ '1' ต้นทาง.
- *     2. carrier ∉ pay-at-origin (any other, non-empty)          ⇒ '2' ปลายทาง.
- *     3. paymethod '2' ⇒ ftransportprice = 0 — the courier collects at the door,
+ * Resolve the stored collection method and enforce its money invariant:
+ *     1. Pacred own-fleet ⇒ '1' ต้นทาง (รับเอง/เหมาๆ/ด่วน are Pacred services).
+ *     2. third-party carrier + explicit '1'/'2' ⇒ keep the explicit choice.
+ *     3. no explicit choice ⇒ derive the carrier default above.
+ *     4. paymethod '2' ⇒ ftransportprice = 0 — the courier collects at the door,
  *        so Pacred stores no domestic charge at all.
- *     4. carrier empty ⇒ keep the caller's chosen pay ('1'/'2') or default '1'.
+ *     5. carrier empty ⇒ keep the caller's chosen pay ('1'/'2') or default '1'.
  *
  * Rule 3 is MONEY-NEUTRAL on today's bills: every money reader already drops the leg
  * for COD (`domesticLeg = paymethod === 2 ? 0 : ftransportprice` — outstanding.ts ·
@@ -122,13 +121,18 @@ export function enforceCodDomesticZero(input: {
   const rawPrice = Number(input.transportPrice ?? 0);
   const price = Number.isFinite(rawPrice) ? rawPrice : 0;
 
-  // The carrier decides the pair (LOCKED · owner พี่ป๊อป 2026-07-21). An empty carrier
-  // has nothing to decide from → keep the caller's chosen pay, else default ต้นทาง.
+  // Own-fleet is always collected by Pacred. For a third-party carrier, the
+  // explicit customer/staff choice is authoritative; the carrier only supplies
+  // the default when no choice was submitted.
   let payMethod: "1" | "2";
-  if (carrier === "") {
-    payMethod = wanted === "1" || wanted === "2" ? wanted : "1";
+  if (isOwnFleetCarrier(carrier)) {
+    payMethod = "1";
+  } else if (wanted === "1" || wanted === "2") {
+    payMethod = wanted;
+  } else if (carrier === "") {
+    payMethod = "1";
   } else {
-    payMethod = isPayAtOriginCarrier(carrier) ? "1" : "2";
+    payMethod = derivePayMethod(carrier);
   }
 
   // Rule 3 — ปลายทาง stores no ค่าส่งไทย.

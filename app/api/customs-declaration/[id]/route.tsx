@@ -34,6 +34,7 @@ import { getAdminRoles } from "@/lib/auth/require-admin";
 import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { resolveDeclarationByConfirmToken } from "@/lib/customs/confirm-token-access";
 import { registerPdfFonts } from "@/lib/pdf/register-fonts";
+import { formatThaiTaxId } from "@/lib/admin/customer-identity";
 import {
   CustomsDeclarationPdf,
   type CustomsDeclarationPdfData,
@@ -242,19 +243,24 @@ export async function GET(
       };
       if (fwd.userid) {
         const [{ data: u, error: uErr }, { data: corp, error: corpErr }] = await Promise.all([
-          admin.from("tb_users").select("userName, userLastName").eq("userID", fwd.userid)
-            .maybeSingle<{ userName: string | null; userLastName: string | null }>(),
+          // personal_tax_id (mig 0298) = เลขผู้เสียภาษีของบุคคลธรรมดา (owner 2026-08-06)
+          admin.from("tb_users").select("userName, userLastName, personal_tax_id").eq("userID", fwd.userid)
+            .maybeSingle<{ userName: string | null; userLastName: string | null; personal_tax_id: string | null }>(),
           admin.from("tb_corporate").select("corporatename, corporatenumber, corporateaddress").eq("userid", fwd.userid)
             .maybeSingle<{ corporatename: string | null; corporatenumber: string | null; corporateaddress: string | null }>(),
         ]);
         if (uErr) console.error(`[cargo decl tb_users] failed`, { code: uErr.code, message: uErr.message });
         if (corpErr) console.error(`[cargo decl tb_corporate] failed`, { code: corpErr.code, message: corpErr.message });
         const personName = `${u?.userName ?? ""} ${u?.userLastName ?? ""}`.trim();
+        // บุคคลธรรมดา (owner 2026-08-06) — เดิมมีแต่เลขนิติ ⇒ ใบขนของคนธรรมดา
+        // ไม่มีเลขผู้เสียภาษีเลย. fallback → tb_users.personal_tax_id (mig 0298).
+        // 🔴 ใช้แสดงบนเอกสารเท่านั้น — ไม่ทำให้ลูกค้ากลายเป็นนิติบุคคล.
+        const personalTaxId = formatThaiTaxId(u?.personal_tax_id ?? "");
         consignee = {
           role:    "consignee",
           name:    corp?.corporatename?.trim() || personName || fwd.userid,
           address: corp?.corporateaddress?.trim() || "",
-          tax_id:  corp?.corporatenumber?.trim() || null,
+          tax_id:  corp?.corporatenumber?.trim() || personalTaxId || null,
           branch:  null,
         };
       }

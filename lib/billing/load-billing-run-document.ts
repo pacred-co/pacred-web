@@ -236,6 +236,7 @@ type FwdHydRow = {
   frefrate: number | string | null;
   /** '1' = ติดเครดิต (ยังไม่จ่าย · มีเทอม) · '0'/'' = เงินสด — SOT `isCreditRow` */
   fcredit: string | null;
+  paymethod: number | string | null;
   // ประเภทสินค้า + มิติกล่อง (owner 2026-07-18 · ใบวางบิล cols)
   fproductstype: string | null;
   fwidth: number | string | null;
@@ -301,7 +302,7 @@ export async function loadBillingRunDocument(
       .from("tb_forwarder")
       .select(
         "id, ftrackingchn, famount, famountcount, fweight, fvolume, fdate, fstatus, fcabinetnumber, " +
-          "ftransporttype, frefprice, frefrate, fcredit, fproductstype, fwidth, flength, fheight, " +
+          "ftransporttype, frefprice, frefrate, fcredit, paymethod, fproductstype, fwidth, flength, fheight, " +
           // price columns for the named-fee split (owner 2026-07-07)
           "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
           "pricecrate, ftransportpricechnthb, priceother, fdiscount",
@@ -332,7 +333,7 @@ export async function loadBillingRunDocument(
       .from("tb_forwarder")
       .select(
         "id, ftrackingchn, famount, famountcount, fweight, fvolume, fdate, fstatus, fcabinetnumber, " +
-          "ftransporttype, frefprice, frefrate, fcredit, fproductstype, fwidth, flength, fheight, " +
+          "ftransporttype, frefprice, frefrate, fcredit, paymethod, fproductstype, fwidth, flength, fheight, " +
           "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
           "pricecrate, ftransportpricechnthb, priceother, fdiscount",
       )

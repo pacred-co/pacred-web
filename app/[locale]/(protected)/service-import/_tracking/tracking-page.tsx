@@ -316,6 +316,7 @@ export default async function TrackingPage({
       r.pricecrate,
       r.ftransportpricechnthb,
       r.priceother,
+      r.paymethod,
     );
     const s = Number(r.fstatus ?? 0);
     if (s > c.maxStatus) c.maxStatus = s;
@@ -1012,6 +1013,7 @@ async function ContainerItemRow({
     row.pricecrate,
     row.ftransportpricechnthb,
     row.priceother,
+    row.paymethod,
   );
   const trackingChn = row.ftrackingchn2 || row.ftrackingchn;
   return (

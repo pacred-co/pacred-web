@@ -1205,13 +1205,16 @@ export async function adminSetBillingRunBuyerIdentity(
       if (!inv) return { ok: false, error: "ไม่พบใบวางบิล" };
 
       // 2. Re-stamp the buyer identity snapshot — NO amount/total/status touched.
-      //    buyer_tax_id/buyer_branch cleared for a person (บุคคลธรรมดา).
+      //    owner 2026-08-06: บุคคลธรรมดา**ก็มีเลขผู้เสียภาษี**บนเอกสารได้ (mig 0298)
+      //    → เก็บเลขที่พิมพ์ไว้ทั้ง 2 ประเภท. `buyer_branch` (สาขา) ยังนิติเท่านั้น ·
+      //    `is_juristic`/`corporatetype` ไม่แตะ ⇒ ตัวคิด WHT 1% (อ่าน corporatetype='1')
+      //    ไม่กระทบแม้แต่นิดเดียว.
       const { error: updErr } = await admin
         .from("tb_forwarder_invoice")
         .update({
           buyer_name:   buyerName,
           is_juristic:  isJuristic,
-          buyer_tax_id: isJuristic ? buyerTaxId : "",
+          buyer_tax_id: buyerTaxId,
           buyer_address: buyerAddress,
           buyer_branch: isJuristic ? buyerBranch : "",
         })
@@ -1255,7 +1258,7 @@ export async function adminSetBillingRunBuyerIdentity(
               .from("tb_receipt")
               .update({
                 recompname:    buyerName,
-                recompnumber:  isJuristic ? buyerTaxId : "",
+                recompnumber:  buyerTaxId,
                 recompaddress: buyerAddress,
                 corporatetype: isJuristic ? "1" : "2",
               })

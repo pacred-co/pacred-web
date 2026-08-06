@@ -37,9 +37,17 @@ function assertClose(label: string, actual: number, expected: number, eps = 0.00
   }
 }
 
+// COD/ปลายทาง: stored historical quote must not appear on Pacred documents.
+{
+  const f = splitForwarderFees(row({ paymethod: "2", ftransportprice: 136, ftotalprice: 500 }));
+  assertClose("COD named Thai shipping = 0", f.thaiShipping, 0);
+  assertClose("COD named gross excludes stored Thai quote", namedFeesGross(f), 500);
+}
+
 /** Minimal forwarder row builder — only the price columns matter. */
 function row(p: Partial<ForwarderFeeFields>): ForwarderFeeFields {
   return {
+    paymethod:              p.paymethod              ?? null,
     ftotalprice:           p.ftotalprice           ?? 0,
     ftransportprice:       p.ftransportprice        ?? 0,
     fpriceupdate:          p.fpriceupdate           ?? 0,

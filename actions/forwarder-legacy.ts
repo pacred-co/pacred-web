@@ -6,12 +6,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { assertNotImpersonating } from "@/lib/auth/impersonation";
 import { getCurrentUserWithProfile } from "@/lib/auth/get-user";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
-import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
+import { derivePayMethodForDelivery, enforceCodDomesticZero } from "@/lib/forwarder/pay-method";
 import { resolveMaomaoCarrier } from "@/lib/forwarder/resolve-maomao";
 import { MAO_CARRIER_CODE } from "@/lib/forwarder/mao-fee";
 import { checkCarrierForProvince } from "@/lib/forwarder/carrier-coverage-guard";
 import { ADDRESSES } from "@/components/seo/site";
+import { propagateShipmentEdit } from "@/lib/admin/forwarder-siblings";
 import { modeFromPref, prefFromMode, modeRequiresBillingSnapshot } from "@/lib/tax/tax-doc-mode";
+import { fillEmptyAddressAcrossCustomer } from "@/lib/admin/forwarder-siblings";
 
 /**
  * Legacy `tb_forwarder` writers — D1 / ADR-0017 faithful 1:1 ports of
@@ -72,6 +74,7 @@ const createForwarderLegacySchema = z.object({
   hShipBy:        z.string().trim().max(10).optional().or(z.literal("").transform(() => undefined)),
   pro:            z.string().trim().max(10).optional().or(z.literal("").transform(() => undefined)),
   crate:          z.string().trim().max(2).optional().or(z.literal("").transform(() => undefined)),
+  payMethod:      z.enum(["1", "2"] as const).optional(),
   // P1 (tax-doc at ฝากนำเข้า order entry · 2026-06-09) — the customer's doc-mode
   // pick from <CartTaxDocPref> (same field names as the cart). Persisted to
   // tb_forwarder's 0127 tax_doc_* columns. ALL optional: the /service-import
@@ -97,6 +100,7 @@ export async function createLegacyForwarder(
   if (raw.fTransportType && !raw.hTransportType) {
     raw.hTransportType = raw.fTransportType;
   }
+  if (raw.paymethod && !raw.payMethod) raw.payMethod = raw.paymethod;
 
   const parsed = createForwarderLegacySchema.safeParse(raw);
   if (!parsed.success) {
@@ -246,10 +250,14 @@ export async function createLegacyForwarder(
     if (!coverage.ok) return { ok: false, error: coverage.error };
   }
 
-  // forwarder.php L49-53 — paymethod from the FINAL carrier (setPayMethodShip),
-  // zone-aware: an external courier delivered upcountry → COD (ปลายทาง). Own-fleet
-  // (PCS/PCSF/PRF/PCSE) + self-pickup (addressID='PCS') stay carrier-derived.
-  const paymethod = derivePayMethodForDelivery(fShipBy, { addressID: d.addressID, zip: addressZIPCode });
+  // Carrier supplies the initial default; an explicit customer selection wins
+  // for third-party carriers. Pacred own-fleet/self-pickup remains ต้นทาง.
+  const defaultPayMethod = derivePayMethodForDelivery(fShipBy, { addressID: d.addressID, zip: addressZIPCode });
+  const paymethod = enforceCodDomesticZero({
+    fShipBy,
+    payMethod: d.payMethod ?? defaultPayMethod,
+    transportPrice: 0,
+  }).payMethod;
 
   // forwarder.php L89-91 — the INSERT. Every column the legacy doesn't
   // mention defaults from the schema (numbers → 0, strings → ''). The
@@ -472,6 +480,72 @@ export async function updateLegacyForwarderShipBy(
 // UPDATE fAddress — `update_fAddress` POST (forwarder.php L1620-1658)
 // ────────────────────────────────────────────────────────────
 
+// Customer-selected collection method while delivery setup is still editable.
+// Third-party carriers may be ต้นทาง or ปลายทาง; Pacred own-fleet stays ต้นทาง.
+const updatePayMethodSchema = z.object({
+  ID: z.coerce.number().int().positive(),
+  payMethod: z.enum(["1", "2"] as const),
+});
+
+export async function updateLegacyForwarderPayMethod(
+  raw: Record<string, FormDataEntryValue | undefined>,
+): Promise<ActionResult> {
+  const impErr = await assertNotImpersonating();
+  if (impErr) return impErr;
+  if (raw.paymethod && !raw.payMethod) raw.payMethod = raw.paymethod;
+  const parsed = updatePayMethodSchema.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "invalid_input" };
+
+  const session = await getCurrentUserWithProfile();
+  if (!session?.profile) return { ok: false, error: "not_signed_in" };
+  const userID = session.profile.member_code ?? "";
+  if (!userID) return { ok: false, error: "no_member_code" };
+
+  const admin = createAdminClient();
+  const { data: row, error: readErr } = await admin
+    .from("tb_forwarder")
+    .select("id, userid, fstatus, ftrackingchn, fshipby, paymethod, ftransportprice")
+    .eq("id", parsed.data.ID)
+    .eq("userid", userID)
+    .maybeSingle<{
+      id: number; userid: string | null; fstatus: string | null; ftrackingchn: string | null;
+      fshipby: string | null; paymethod: string | null; ftransportprice: number | string | null;
+    }>();
+  if (readErr) return { ok: false, error: readErr.message };
+  if (!row) return { ok: false, error: "not_found" };
+  if (Number(row.fstatus ?? 0) >= 4) return { ok: false, error: "delivery_method_locked_after_arrival" };
+
+  const resolved = enforceCodDomesticZero({
+    fShipBy: row.fshipby,
+    payMethod: parsed.data.payMethod,
+    transportPrice: row.ftransportprice,
+  });
+  if (resolved.payMethod !== parsed.data.payMethod) {
+    return { ok: false, error: "pacred_delivery_requires_origin_payment" };
+  }
+  if (row.paymethod === resolved.payMethod && Number(row.ftransportprice ?? 0) === resolved.transportPrice) {
+    return { ok: false, error: "no_change" };
+  }
+
+  const update = { paymethod: resolved.payMethod, ftransportprice: resolved.transportPrice };
+  const { error: updateErr } = await admin
+    .from("tb_forwarder")
+    .update(update)
+    .eq("id", row.id)
+    .eq("userid", userID);
+  if (updateErr) return { ok: false, error: updateErr.message };
+
+  await propagateShipmentEdit(
+    admin,
+    { id: row.id, ftrackingchn: row.ftrackingchn, userid: row.userid },
+    { money: update },
+    "customer",
+  );
+  revalidatePath(`/service-import/${row.id}`);
+  revalidatePath("/service-import");
+  return { ok: true };
+}
+
 const updateAddressSchema = z.object({
   ID:        z.coerce.number().int().positive(),
   addressID: z.string().trim().min(1).max(50),
@@ -561,6 +635,16 @@ export async function updateLegacyForwarderAddress(
     .eq("id", ID)
     .eq("userid", userID);
   if (updErr) return { ok: false, error: updErr.message };
+
+  // owner 2026-08-06 — ใส่ที่อยู่ครั้งเดียว → เติมให้แทรคกิ้งอื่นของลูกค้าที่ยังว่างสนิท
+  // (address-only · fstatus 1-4 · best-effort · CS/ลูกค้าไม่ต้องไล่ใส่ซ้ำทีละแทรคกิ้ง)
+  await fillEmptyAddressAcrossCustomer(admin, userID, {
+    faddressname: addr.addressname ?? "", faddresslastname: addr.addresslastname ?? "",
+    faddressno: addr.addressno ?? "", faddresssubdistrict: addr.addresssubdistrict ?? "",
+    faddressdistrict: addr.addressdistrict ?? "", faddressprovince: addr.addressprovince ?? "",
+    faddresszipcode: addr.addresszipcode ?? "", faddressnote: addr.addressnote ?? "",
+    faddresstel: addr.addresstel ?? "", faddresstel2: addr.addresstel2 ?? "",
+  }, { exceptFids: [Number(ID)] });
 
   revalidatePath(`/service-import/${ID}`);
   revalidatePath("/service-import");
