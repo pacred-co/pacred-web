@@ -25,6 +25,7 @@ import { Printer } from "lucide-react";
 import { ReceiptPaper } from "@/components/receipt/receipt-paper";
 import { loadReceiptDocument, fmtDateLegacy } from "@/lib/receipt/load-receipt-document";
 import { signReceiptToken } from "@/lib/receipt/receipt-token";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 import PrintButton from "./print-button";
 import BackfillItemsButton from "./backfill-items-button";
 
@@ -66,6 +67,10 @@ export default async function ForwarderInvoicePrintPage({
 
   const { receipt } = doc;
   const { issueDate, documentIssuer } = doc.commonProps;
+
+  // รหัสคนกดพิมพ์ → ชื่อเล่น (owner 2026-08-06 · เลิกพ่นรหัสดิบ).
+  // ADMIN-SHELL เท่านั้น — ไม่แตะ <ReceiptPaper> ที่หน้า public /r/[token] ใช้ร่วม.
+  const printerNames = await resolveStaffNameMap([receipt.adminidprint]);
 
   // ── อ้างอิง / เอกสารต้นทาง (owner 2026-07-15 · "เชื่อมโยง อ้างอิงถึงกัน" · F10) ──
   // Resolve (a) the covered forwarder order ids → each links to /admin/forwarders/[id],
@@ -141,7 +146,8 @@ export default async function ForwarderInvoicePrintPage({
               <p className="text-sm text-slate-500 mt-1">
                 ออกเมื่อ {issueDate} โดย {documentIssuer}
                 {receipt.statusprint === "1" && receipt.rdateprint && (
-                  <> · พิมพ์ล่าสุด {fmtDateLegacy(receipt.rdateprint)} (โดย {receipt.adminidprint || "-"})</>
+                  /* ชื่อเล่นคนกดพิมพ์ — ไม่โชว์รหัสดิบ (owner 2026-08-06) */
+                  <> · พิมพ์ล่าสุด {fmtDateLegacy(receipt.rdateprint)} (โดย {staffLabel(receipt.adminidprint, printerNames, { empty: "-" })})</>
                 )}
               </p>
             </div>

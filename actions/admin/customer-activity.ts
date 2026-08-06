@@ -30,6 +30,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdmin, type AdminActionResult } from "./common";
 import { getAdminLegacyId } from "@/lib/admin/default-queue-filter-server";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 import type { ActivityEntry } from "./customer-activity-types";
 
 // Mirror the CRM roles (super/manager/sales_admin/sales/ops) + accounting,
@@ -92,6 +93,7 @@ export async function getCustomerActivity(
           id: `call:${c.id}`,
           at: c.called_at,
           by: (c.admin_id ?? "").trim() || null,
+          byName: null, // เติมทีเดียวหลัง merge (ดูด้านล่าง)
           callStatus: c.status ?? null,
           body: (c.note ?? "").trim() || null,
         });
@@ -112,6 +114,7 @@ export async function getCustomerActivity(
           id: `note:${n.id}`,
           at: n.created_at,
           by: (n.created_by ?? "").trim() || null,
+          byName: null, // เติมทีเดียวหลัง merge (ดูด้านล่าง)
           callStatus: null,
           body: (n.body ?? "").trim() || null,
         });
@@ -125,7 +128,17 @@ export async function getCustomerActivity(
       return tb - ta;
     });
 
-    return { ok: true, data: entries.slice(0, MERGED_CAP) };
+    const capped = entries.slice(0, MERGED_CAP);
+
+    // owner 2026-08-06: จอเคยพ่นรหัสดิบ (`admin_may` / uuid) → resolve เป็น "ชื่อเล่น"
+    // ทีเดียวทั้งชุด (batch · fail-soft: resolve ไม่ได้ = byName null → จอ fallback รหัสเดิม).
+    // `admin_id` / `created_by` มีได้ทั้งทรง legacy login-id และ profile uuid → helper กลางรับครบ.
+    const nameMap = await resolveStaffNameMap(capped.map((e) => e.by));
+    for (const e of capped) {
+      e.byName = e.by ? staffLabel(e.by, nameMap) : null;
+    }
+
+    return { ok: true, data: capped };
   });
 }
 

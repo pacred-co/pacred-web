@@ -35,6 +35,7 @@ import { Explain } from "@/components/ui/tooltip";
 import { BatchDeleteInline } from "./batch-delete-inline";
 import { exportDriversAll } from "@/actions/admin/export/drivers";
 import { countPendingDispatch } from "@/lib/admin/pending-dispatch";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 import { formatThaiDate, formatThaiDateTime, formatThaiTime, anyDateToIso } from "@/lib/utils/thai-datetime";
 import { Plus, Truck, AlertCircle, CheckCircle2, XCircle, Clock, Printer, ClipboardList, MonitorSpeaker, Search, FileText, Package, MapPin, Boxes } from "lucide-react";
 
@@ -334,6 +335,19 @@ export default async function AdminDriversPage({
       }),
     );
   }
+
+  // ชื่อเล่นพนักงาน (ผู้รับผิดชอบ + ผู้สร้างรายการ) — มาตรฐานการแสดงผลทั้งระบบ
+  // (owner 2026-08-06 "เอาชื่อเล่นให้เหมือนกันไปเลย"). resolve ทีเดียวทั้งหน้า.
+  const staffNames = await resolveStaffNameMap(adminCodes);
+  /** ป้ายพนักงาน: ชื่อเล่น → ชื่อผู้ใช้ (login) → ชื่อใน tb_users → รหัสเดิม */
+  const staffNameOf = (code: string | null | undefined, tbUsersName?: string | null): string => {
+    const c = (code ?? "").trim();
+    if (!c) return "—";
+    return staffNames.get(c)
+      ?? driverUsernameByCode.get(c)
+      ?? (tbUsersName || undefined)
+      ?? staffLabel(c, staffNames);
+  };
 
   // Pending forwarders ready for assignment for the CTA badge + the alert banner.
   // 2026-06-19 (owner): the accurate "รอจัดรถ" = fstatus=6 (เตรียมส่ง · ชำระแล้ว) NOT
@@ -698,9 +712,9 @@ export default async function AdminDriversPage({
                       {r.fdadminid ? (
                         <div className="flex items-center gap-2">
                           <AdminAvatar url={avatarByCode.get(r.fdadminid) ?? null} code={r.fdadminid} />
+                          {/* ชื่อเล่นอย่างเดียว — บรรทัดรหัสดิบใต้ชื่อถูกตัดออก (owner 2026-08-06) */}
                           <div className="min-w-0">
-                            <div className="font-medium text-foreground">{driverUsernameByCode.get(r.fdadminid) ?? driver?.name ?? r.fdadminid}</div>
-                            <div className="font-mono text-[11px] text-muted">{r.fdadminid}</div>
+                            <div className="font-medium text-foreground">{staffNameOf(r.fdadminid, driver?.name)}</div>
                           </div>
                         </div>
                       ) : (
@@ -712,7 +726,8 @@ export default async function AdminDriversPage({
                       {r.fdadmincreator ? (
                         <div className="flex items-center gap-2">
                           <AdminAvatar url={avatarByCode.get(r.fdadmincreator) ?? null} code={r.fdadmincreator} />
-                          <span className="text-foreground">{r.fdadmincreator}</span>
+                          {/* ชื่อเล่นแทนรหัสดิบ (owner 2026-08-06) */}
+                          <span className="text-foreground">{staffNameOf(r.fdadmincreator)}</span>
                         </div>
                       ) : (
                         <span className="text-muted">—</span>
@@ -834,13 +849,13 @@ export default async function AdminDriversPage({
                   </div>
                 </div>
 
-                {/* 3 คน: ผู้สร้าง · เตรียมของ · จัดส่ง (โชว์ชื่อ user · owner 2026-07-24) */}
+                {/* 3 คน: ผู้สร้าง · เตรียมของ · จัดส่ง (โชว์ชื่อเล่น · owner 2026-08-06) */}
                 <div className="grid grid-cols-3 gap-2 rounded-xl bg-surface-alt/30 p-1.5">
                   <div className="flex min-w-0 items-center gap-1.5">
                     <AdminAvatar url={r.fdadmincreator ? avatarByCode.get(r.fdadmincreator) ?? null : null} code={r.fdadmincreator} />
                     <div className="min-w-0">
                       <p className="whitespace-nowrap text-[11px] text-muted">ผู้สร้าง</p>
-                      <p className="truncate text-xs font-semibold text-foreground">{(r.fdadmincreator ? driverUsernameByCode.get(r.fdadmincreator) : undefined) ?? r.fdadmincreator ?? "—"}</p>
+                      <p className="truncate text-xs font-semibold text-foreground">{staffNameOf(r.fdadmincreator)}</p>
                     </div>
                   </div>
                   <div className="flex min-w-0 items-center gap-1.5">
@@ -854,7 +869,7 @@ export default async function AdminDriversPage({
                     <AdminAvatar url={r.fdadminid ? avatarByCode.get(r.fdadminid) ?? null : null} code={r.fdadminid} />
                     <div className="min-w-0">
                       <p className="whitespace-nowrap text-[11px] text-muted">จัดส่ง</p>
-                      <p className="truncate text-xs font-semibold text-foreground">{(r.fdadminid ? driverUsernameByCode.get(r.fdadminid) : undefined) ?? driver?.name ?? r.fdadminid ?? "—"}</p>
+                      <p className="truncate text-xs font-semibold text-foreground">{staffNameOf(r.fdadminid, driver?.name)}</p>
                     </div>
                   </div>
                 </div>

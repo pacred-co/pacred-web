@@ -91,6 +91,7 @@ import {
   type FrozenWalletPaymentQuote,
 } from "@/lib/wallet/payment-quote-snapshot";
 import { safeLegacyAdminId } from "@/lib/auth/safe-legacy-admin-id";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 // ────────────────────────────────────────────────────────────
 // resolveLegacyAdminId — same helper as actions/admin/warehouse-history.ts
@@ -1220,7 +1221,11 @@ export type ReceiptDocNoPreview = {
   recompNumber: string;
   recompName: string;
   recompAddress: string;
-  /** ผู้อนุมัติ = the current admin (display only). */
+  /**
+   * ผู้อนุมัติ = แอดมินที่กำลังทำรายการ (display only).
+   * owner 2026-08-06: ต้องเป็น **ชื่อเล่น** ไม่ใช่รหัสดิบ (`admin_may` / uuid) —
+   * resolve ฝั่ง server ที่นี่ที่เดียว (panel เป็น client component).
+   */
   approver: string;
 };
 
@@ -1306,6 +1311,12 @@ export async function previewReceiptDocNo(
       .maybeSingle<{ rid: string | null; issuedate: string | null }>();
     if (prevErr && prevErr.code !== "PGRST116") console.error(`[previewReceiptDocNo: tb_receipt prev]`, { code: prevErr.code, message: prevErr.message });
 
+    // ผู้อนุมัติเอกสาร: เดิมโชว์รหัสดิบ (legacy login-id หรือ profile uuid) → แปลงเป็น
+    // ชื่อเล่น (owner 2026-08-06 · มาตรฐานเดียวทั้งระบบ). fail-soft = คืนรหัสเดิม.
+    const approverCode = (legacyAdminId || adminId) ?? "";
+    const approverMap = await resolveStaffNameMap([approverCode]);
+    const approverName = approverCode ? staffLabel(approverCode, approverMap, { empty: "" }) : "";
+
     return {
       ok: true,
       data: {
@@ -1316,7 +1327,7 @@ export async function previewReceiptDocNo(
         recompNumber: corpRow?.corporatenumber ?? "",
         recompName: corpRow?.corporatename ?? `${userRow?.userName ?? ""} ${userRow?.userLastName ?? ""}`.trim(),
         recompAddress: corpRow?.corporateaddress ?? fallbackAddress,
-        approver: (legacyAdminId || adminId) ?? "",
+        approver: approverName,
       },
     };
   });

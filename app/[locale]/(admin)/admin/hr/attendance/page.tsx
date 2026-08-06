@@ -7,6 +7,7 @@ import {
 import { AddHolidayButton, DeleteHolidayButton } from "./attendance-actions";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportHrAttendanceAll } from "@/actions/admin/export/hr-attendance";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 /**
  * D1 faithful port of time-attendance-system.php (default + add-holiday modes) —
@@ -50,6 +51,9 @@ export default async function AdminHRAttendancePage() {
     throw new Error("ไม่สามารถโหลดวันหยุดประจำปีได้");
   }
   const holidays = (data ?? []) as Holiday[];
+
+  // ผู้สร้าง = ชื่อเล่นพนักงาน (owner 2026-08-06: เลิกโชว์รหัสดิบ) · batch ทีเดียวทั้งหน้า
+  const staffNames = await resolveStaffNameMap(holidays.map((h) => h.adminidcreate));
 
   // Pending leave count for the badge (faithful: tas_leave status 1 = รอ HR ตรวจสอบ)
   const { data: pendLeaves, error: pendErr } = await admin
@@ -183,7 +187,7 @@ export default async function AdminHRAttendancePage() {
                         </td>
                         <td className="px-4 py-2 text-xs">{thYear(h.holidaydate)}</td>
                         <td className="px-4 py-2 text-xs text-muted">{h.note || "—"}</td>
-                        <td className="px-4 py-2 text-xs text-muted">{h.adminidcreate || "—"}</td>
+                        <td className="px-4 py-2 text-xs text-muted">{staffLabel(h.adminidcreate, staffNames)}</td>
                         <td className="px-4 py-2 text-right">
                           <DeleteHolidayButton id={h.id} name={h.holidayname} />
                         </td>

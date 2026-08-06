@@ -41,6 +41,7 @@ import { exportReceiptsAll } from "@/actions/admin/export/acc-receipts";
 import { type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { Info, Plus, Printer, Search } from "lucide-react";
 import { ReceiptsVoidTable } from "./receipts-void-table";
+import { resolveStaffNameMap } from "@/lib/admin/sale-rep-names";
 import { ReceiptExportToolbar } from "./receipt-export-toolbar";
 import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 
@@ -207,6 +208,15 @@ export default async function ReceiptsListPage({
       page: pageNum,
       pageSize,
     });
+
+  // รหัสคนกดพิมพ์ (ต้นฉบับ/สำเนา) → ชื่อเล่น (owner 2026-08-06 · เลิกพ่นรหัสดิบ).
+  // resolve ที่ server เพราะ helper เป็น `server-only` แล้วส่งเป็น prop ให้ตารางฝั่ง client ·
+  // batch ครั้งเดียวทั้งหน้า.
+  const staffNames = Object.fromEntries(
+    await resolveStaffNameMap(
+      rows.flatMap((r) => [r.printOriginal.adminId, r.printCopy.adminId]),
+    ),
+  );
 
   // CSV — the currently-displayed page rows. Keys match CSV_COLS + exportReceiptsAll.
   const csvRows: CsvRow[] = rows.map((r) => ({
@@ -469,7 +479,7 @@ export default async function ReceiptsListPage({
           />
 
           {/* Table — 13-col legacy layout + tick-to-VOID bulk action */}
-          <ReceiptsVoidTable rows={rows} totals={totals} />
+          <ReceiptsVoidTable rows={rows} totals={totals} staffNames={staffNames} />
         </div>
 
         {/* ── Pagination — 10/page ── */}

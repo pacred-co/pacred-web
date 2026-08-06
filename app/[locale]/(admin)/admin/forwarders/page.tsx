@@ -32,7 +32,7 @@ import {
   type PendingSlipReviewTarget,
 } from "@/lib/forwarder/pending-slip";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
-import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 import { Link } from "@/i18n/navigation";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
@@ -308,8 +308,12 @@ export type Row = {
   date_status3: string | null; // กำลังส่งมาไทย (fdatestatus3)
   date_status4: string | null; // ถึงไทย (fdatestatus4)
   date_admin_status: string | null; // last admin update
-  admin_id_last: string | null;     // last admin who touched
+  admin_id_last: string | null;     // last admin who touched (รหัสดิบ · CSV/lookup)
+  /** owner 2026-08-06 — ชื่อเล่นของ admin_id_last สำหรับโชว์บนจอ ("" = ไม่มี) */
+  admin_id_last_name: string;
   admin_creator: string | null;     // adminidcreator (empty=customer · set=admin-initiated)
+  /** owner 2026-08-06 — ชื่อเล่นของ admin_creator สำหรับโชว์บนจอ ("" = ไม่มี) */
+  admin_creator_name: string;
   ref_order: string | null;         // reforder (set = system-replicated)
   fcredit: string;             // '1' = credit order
   // 2026-07-07 — credit-tab AR columns (legacy forwarder.php q=='c') · display only
@@ -1387,36 +1391,18 @@ export async function fetchForwarderList(
     }
   }
 
-  // ── owner ④ — resolve assigned-purchaser (ผู้สั่งซื้อ) names ──────────────
-  const purchaserNameById = new Map<string, string>();
-  const purchaserIds = Array.from(
-    new Set(raw.map((r) => (r.adminidpurchaser ?? "").trim()).filter((v) => v !== "")),
-  );
-  if (purchaserIds.length > 0) {
-    const { data: padminRows, error: padminErr } = await admin
-      .from("tb_admin")
-      .select("adminID, adminName, adminLastName, adminNickname")
-      .in("adminID", purchaserIds);
-    if (padminErr) {
-      console.error("[forwarders purchaser-name join] failed", { error: padminErr.message });
-    }
-    for (const a of (padminRows ?? []) as unknown as Array<{
-      adminID: string;
-      adminName: string | null;
-      adminLastName: string | null;
-      adminNickname: string | null;
-    }>) {
-      const nm = `${a.adminName ?? ""} ${a.adminLastName ?? ""}`.trim() || a.adminNickname || a.adminID;
-      if (a.adminID) purchaserNameById.set(a.adminID, nm);
-    }
-  }
-
-  // owner 2026-08-05 — resolve sale-rep CODE (tb_users.adminIDSale เช่น "admin_center")
-  // → ชื่อคน สำหรับ display (เดิมหน้านี้โชว์ uid ดิบ · "แสดงผลหยาบจัด"). batch จาก
-  // tb_admin ทีเดียว · raw code (sale_admin) ยังเก็บไว้ทำ action/link/lookup ตามเดิม.
-  const saleRepNameMap = await resolveSaleRepNameMap(
-    Array.from(usersByUserId.values()).map((u) => u.adminIDSale),
-  );
+  // ── ชื่อพนักงานทุกคอลัมน์ (owner 2026-08-05/08-06) ────────────────────────
+  // เดิมหน้านี้โชว์ **รหัสดิบ** หลายจุด ("แสดงผลหยาบจัด" · "id uid พนักงานยังมีบัคเต็ม") —
+  // เซล (adminIDSale) · admin ล่าสุดที่แตะงาน (adminid) · คนเปิดงาน (adminidcreator) ·
+  // คนวัดขนาด (adminidkey) · ผู้สั่งซื้อ (adminidpurchaser). resolve เป็น **ชื่อเล่น**
+  // ผ่าน SOT เดียว batch ทีเดียวทั้งหน้า · รหัสดิบยังเก็บไว้ทำ action/link/CSV ตามเดิม.
+  const staffNameMap = await resolveStaffNameMap([
+    ...Array.from(usersByUserId.values()).map((u) => u.adminIDSale),
+    ...raw.map((r) => r.adminid),
+    ...raw.map((r) => r.adminidcreator),
+    ...raw.map((r) => r.adminidkey),
+    ...raw.map((r) => r.adminidpurchaser),
+  ]);
 
   // Shape into our Row type for the table.
   let rows: Row[] = raw.map((r) => {
@@ -1464,7 +1450,10 @@ export async function fetchForwarderList(
       date_status4: r.fdatestatus4,
       date_admin_status: r.fdateadminstatus,
       admin_id_last: r.adminid,
+      // ชื่อเล่นสำหรับโชว์บนจอ — รหัสดิบข้างบนยังใช้ CSV/lookup ต่อ
+      admin_id_last_name: staffLabel(r.adminid, staffNameMap, { empty: "" }),
       admin_creator: r.adminidcreator,
+      admin_creator_name: staffLabel(r.adminidcreator, staffNameMap, { empty: "" }),
       ref_order: r.reforder,
       fcredit: r.fcredit ?? "0",
       // 2026-07-07 — credit-tab AR columns (read-only) + delivering flag.
@@ -1494,7 +1483,7 @@ export async function fetchForwarderList(
       outstanding_thb: isForwarderPaid(r.paydeposit, r.fstatus, r.fcredit)
         ? 0
         : calcForwarderOutstanding(r),
-      measured_by_admin: r.adminidkey ?? null,
+      measured_by_admin: staffLabel(r.adminidkey, staffNameMap, { empty: "" }) || null,
       // Wave 18-B — 7-col fidelity backfill flags.
       print_status_1: r.printstatus1 === "1",
       print_status_2: r.printstatus2 === "1",
@@ -1514,7 +1503,7 @@ export async function fetchForwarderList(
       // owner ④ — assigned ผู้สั่งซื้อ (per-order).
       assigned_purchaser_id: (r.adminidpurchaser ?? "").trim(),
       assigned_purchaser_name:
-        purchaserNameById.get((r.adminidpurchaser ?? "").trim()) ?? null,
+        staffLabel(r.adminidpurchaser, staffNameMap, { empty: "" }) || null,
       customer: user
         ? {
             userid: user.userID,
@@ -1534,7 +1523,7 @@ export async function fetchForwarderList(
                 : null,
             sale_admin_name:
               user.adminIDSale && user.adminIDSale.trim() !== ""
-                ? saleRepLabel(user.adminIDSale.trim(), saleRepNameMap)
+                ? staffLabel(user.adminIDSale.trim(), staffNameMap)
                 : null,
           }
         : null,

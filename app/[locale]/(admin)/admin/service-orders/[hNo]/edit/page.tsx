@@ -40,6 +40,7 @@
  */
 
 import type React from "react";
+import { shopCartKey, shopCartLabel } from "@/lib/admin/shop-cart-group";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
@@ -376,18 +377,30 @@ export default async function AdminServiceOrderEditPage({
       ccolor: string | null; csize: string | null; cshippingchn: number;
     }[];
   }>();
+  // owner 2026-08-06 (P22467) — จัดกลุ่มตาม **ตะกร้าจีน (cshippingnumber)** ไม่ใช่ชื่อร้าน:
+  // ร้านเดียวกันบน 1688 เขียนได้ 2 แบบ (ชื่อสั้น vs ชื่อบริษัท) → เคยแตกเป็น 4 การ์ด/
+  // 4 ช่องแทรคกิ้ง ทั้งที่จริงมี 2 ตะกร้า = 2 แทรคกิ้ง (งานเบิ้ล · สถานะไม่ครบ).
+  // ยังไม่มีเลขตะกร้า → fallback ชื่อร้าน (พฤติกรรมเดิม) · lib/admin/shop-cart-group.ts
+  const shopNamesByKey = new Map<string, string[]>();
   for (const it of items) {
+    const key = shopCartKey(it);
+    if (!key) continue;
     const shop = (it.cnameshop ?? "").trim();
-    if (!shop) continue;
-    let g = shopFieldsMap.get(shop);
+    const names = shopNamesByKey.get(key) ?? [];
+    if (shop && !names.includes(shop)) names.push(shop);
+    shopNamesByKey.set(key, names);
+    let g = shopFieldsMap.get(key);
     if (!g) {
       g = {
         cshippingnumber: it.cshippingnumber ?? "",
         ctrackingnumber: it.ctrackingnumber ?? "",
         items: [],
       };
-      shopFieldsMap.set(shop, g);
+      shopFieldsMap.set(key, g);
     }
+    // เลขตะกร้า/แทรคกิ้งของกลุ่ม — เอาค่าแรกที่ไม่ว่าง (แถวในตะกร้าเดียวกันต้องตรงกัน)
+    if (!g.cshippingnumber && (it.cshippingnumber ?? "").trim()) g.cshippingnumber = it.cshippingnumber ?? "";
+    if (!g.ctrackingnumber && (it.ctrackingnumber ?? "").trim()) g.ctrackingnumber = it.ctrackingnumber ?? "";
     g.items.push({
       id: it.id, ctitle: it.ctitle ?? "", camount: Number(it.camount ?? 0),
       cprice: Number(it.cprice ?? 0), cpriceupdate: Number(it.cpriceupdate ?? 0),
@@ -398,9 +411,19 @@ export default async function AdminServiceOrderEditPage({
       cshippingchn: Number(it.cshippingchn ?? 0),
     });
   }
-  const shopFields = Array.from(shopFieldsMap.entries()).map(([cnameshop, v]) => ({
-    cnameshop, cshippingnumber: v.cshippingnumber, ctrackingnumber: v.ctrackingnumber, items: v.items,
-  }));
+  // ป้ายการ์ด = ชื่อร้านทุกแบบในตะกร้านั้น ("kevap168 / 广州海帝博斯五金有限公司")
+  // แต่ `cnameshop` ที่ส่งให้ action ยังเป็น "ชื่อตัวแทน" ตัวแรก (writer เดิม scope
+  // ด้วย cnameshop — ตัว writer ถูกขยายให้ครอบทั้งตะกร้าแล้ว ดู service-orders-shop-workflow).
+  const shopFields = Array.from(shopFieldsMap.entries()).map(([key, v]) => {
+    const names = shopNamesByKey.get(key) ?? [];
+    return {
+      cnameshop: names[0] ?? "",
+      shopNamesLabel: shopCartLabel(names),
+      cshippingnumber: v.cshippingnumber,
+      ctrackingnumber: v.ctrackingnumber,
+      items: v.items,
+    };
+  });
 
   // 2026-06-29 (owner: "เพิ่มแทรกกิ้งร้านที่เหลือยังไง") — per-tracking-token →
   // spawned tb_forwarder lookup, so each shop card shows ✓ฝากนำเข้าแล้ว #fNo /

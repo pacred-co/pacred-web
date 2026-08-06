@@ -71,9 +71,12 @@ function isVoidable(rstatus: string): boolean {
 function PrintStatusCell({
   print,
   tone,
+  staffNames,
 }: {
   print: { done: boolean; date: string | null; adminId: string | null };
   tone: "emerald" | "sky";
+  /** รหัสพนักงาน → ชื่อเล่น (resolve มาจาก server page · client แตะ DB ไม่ได้) */
+  staffNames: Record<string, string>;
 }) {
   if (!print.done) {
     return (
@@ -92,7 +95,12 @@ function PrintStatusCell({
         พิมพ์แล้ว
       </span>
       {print.date && <span className="text-[10px] text-slate-500 whitespace-nowrap">{fmtDate(print.date)}</span>}
-      {print.adminId && <span className="text-[10px] font-mono text-slate-400 whitespace-nowrap">{print.adminId}</span>}
+      {/* ชื่อเล่นคนกดพิมพ์ — ไม่โชว์รหัสดิบ (owner 2026-08-06) · fallback = รหัสเดิม */}
+      {print.adminId && (
+        <span className="text-[10px] text-slate-400 whitespace-nowrap">
+          {staffNames[print.adminId] ?? print.adminId}
+        </span>
+      )}
     </div>
   );
 }
@@ -100,9 +108,15 @@ function PrintStatusCell({
 export function ReceiptsVoidTable({
   rows,
   totals,
+  staffNames = {},
 }: {
   rows: ReceiptListRow[];
   totals: { totalBeforeWithholding: number; whtAmount: number; ramount: number };
+  /**
+   * รหัสพนักงาน → ชื่อเล่น (owner 2026-08-06 · เลิกพ่นรหัสดิบ).
+   * resolve จาก server page เพราะ helper เป็น `server-only` (client import ไม่ได้).
+   */
+  staffNames?: Record<string, string>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -370,11 +384,11 @@ export function ReceiptsVoidTable({
                     </td>
                     {/* ⑪b สถานะพิมพ์ต้นฉบับ (legacy statusPrint · L339-347) */}
                     <td className="px-2 py-2 text-center align-middle">
-                      <PrintStatusCell print={r.printOriginal} tone="emerald" />
+                      <PrintStatusCell print={r.printOriginal} tone="emerald" staffNames={staffNames} />
                     </td>
                     {/* ⑪c สถานะพิมพ์สำเนา (legacy statusPrintCopy · L348-356) */}
                     <td className="px-2 py-2 text-center align-middle">
-                      <PrintStatusCell print={r.printCopy} tone="sky" />
+                      <PrintStatusCell print={r.printCopy} tone="sky" staffNames={staffNames} />
                     </td>
                     {/* ⑫ สถานะ (Pacred RSTATUS_CFG · legacy ● dot style) */}
                     <td className="px-2 py-2 text-center">

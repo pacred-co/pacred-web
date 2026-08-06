@@ -1267,10 +1267,10 @@ function ForwarderTable({
                       <>
                         <div className="text-gray-600">{formatThaiDateTime(r.fdateadminstatus)}</div>
                         <div className="text-red-600">ผ่านมา {diffDateTimeNow(r.fdateadminstatus)}</div>
-                        {r.adminid_update && <div className="font-mono text-gray-500">{r.adminid_update}</div>}
+                        {r.adminid_update_name && <div className="text-gray-500">{r.adminid_update_name}</div>}
                       </>
                     ) : (
-                      r.adminid_update ?? "—"
+                      r.adminid_update_name || "—"
                     )}
                   </td>
                   <td className="px-2 py-2 text-center align-top">

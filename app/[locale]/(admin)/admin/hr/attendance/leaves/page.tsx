@@ -5,6 +5,7 @@ import { ChevronRight, Home, FileText, Plane, Calendar, Clock } from "lucide-rea
 import { LeaveDecideActions, NewLeaveButton } from "./leave-actions";
 import { LEAVE_TYPE_LABEL, LEAVE_DURATION_LABEL, LEAVE_STATUS_LABEL } from "../../_legacy-labels";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 /**
  * D1 faithful port of time-attendance-system.php case 'leave-record' — reads
@@ -89,6 +90,9 @@ export default async function AdminHRLeavesPage({
   for (const a of (adminsRes.data ?? []) as unknown as AdminRow[]) adminMap.set(a.adminID, a);
 
   const rows = (leavesRes.data ?? []) as unknown as LeaveRow[];
+
+  // "บันทึกโดย" = ชื่อเล่นพนักงาน (owner 2026-08-06: เลิกโชว์รหัสดิบ) · batch ทีเดียวทั้งหน้า
+  const staffNames = await resolveStaffNameMap(rows.map((r) => r.adminidcreate));
 
   const visible = rows.filter((r) => {
     if (filter === "all") return true;

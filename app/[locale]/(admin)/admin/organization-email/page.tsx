@@ -3,6 +3,7 @@ import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { OrgEmailForms } from "./client";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 /**
  * Admin > "อีเมลในองค์กร" — a FAITHFUL 1:1 TRANSCRIPTION of the
@@ -100,6 +101,13 @@ export default async function OrgEmailPage() {
   // is verified against the prod data (the legacy WHERE expects it).
   const allRows = rows ?? [];
 
+  // ผู้สร้าง/อัปเดตโดย = ชื่อเล่นพนักงาน (owner 2026-08-06: เลิกโชว์รหัสดิบ) — resolve บน
+  // server แล้วส่งชื่อลงไปให้ client (client component import ตัว server-only ไม่ได้).
+  // ลิงก์ href ยังใช้รหัสเดิม (เป็นคีย์ของหน้าโปรไฟล์พนักงาน · ห้ามเปลี่ยน)
+  const staffNames = await resolveStaffNameMap(
+    allRows.flatMap((r) => [r.adminidcreate, r.adminidupdate]),
+  );
+
   return (
     <div className="pcs-legacy">
       <link rel="stylesheet" href="/legacy/pcs/admin/admin-base.css" />
@@ -176,6 +184,8 @@ export default async function OrgEmailPage() {
                               emailtype_label: nameEmailType(r.emailtype),
                               adminidcreate: r.adminidcreate,
                               adminidupdate: r.adminidupdate,
+                              adminidcreateName: staffLabel(r.adminidcreate, staffNames),
+                              adminidupdateName: staffLabel(r.adminidupdate, staffNames),
                               note:          r.note,
                             }))}
                           />

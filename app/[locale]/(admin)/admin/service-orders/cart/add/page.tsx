@@ -34,19 +34,23 @@ export default async function AdminCartAddPage({
   // Resolve current admin's legacy adminid for the form's fallback cart owner.
   const admin = createAdminClient();
   let myAdminId = "";
+  // ชื่อเล่นของแอดมินคนที่ล็อกอิน — เอาไว้โชว์บนจอแทนรหัส uid (owner 2026-08-06)
+  let myAdminName = "";
   if (user.email) {
     // 2026-05-28 B-4 P0 fix: tb_admin cols are camelCase quoted post-batch-1
     // (migration 0113). Sister page at .../cart/page.tsx:136 already uses
     // adminID/adminEmail correctly — this one missed the sweep.
     const { data, error } = await admin
       .from("tb_admin")
-      .select("adminID")
+      .select("adminID, adminName, adminNickname")
       .eq("adminEmail", user.email)
-      .maybeSingle<{ adminID: string }>();
+      .maybeSingle<{ adminID: string; adminName: string | null; adminNickname: string | null }>();
     if (error) {
       console.error(`[tb_admin lookup] failed`, { code: error.code, message: error.message });
     }
     myAdminId = data?.adminID ?? "";
+    // ชื่อเล่นก่อน → ชื่อจริง → รหัส (มาตรฐานเดียวกับทั้งระบบ)
+    myAdminName = (data?.adminNickname ?? "").trim() || (data?.adminName ?? "").trim() || myAdminId;
   }
 
   // Live yuan exchange rate (tb_settings.rsdefault) — feeds the link-paste
@@ -129,6 +133,7 @@ export default async function AdminCartAddPage({
         <AdminLinkPasteSearch
           initialUserId={initialUserId}
           myAdminId={myAdminId}
+          myAdminName={myAdminName}
           rsDefault={rsDefault}
         />
       </section>

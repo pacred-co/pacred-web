@@ -35,7 +35,7 @@ import { computeShopOrderDebitTotal } from "@/lib/service-order/debit-total";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { SHIP_BY_LABEL } from "@/actions/admin/reports-profit-types";
 import { loadCustomerBillingParty } from "@/lib/admin/customer-billing-party";
-import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
+import { resolveSaleRepNameMap, saleRepLabel, resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 // ── legacy label maps (function.php · faithful) ──────────────
 /** nameProductsType — fproductstype code → label. */
@@ -348,6 +348,8 @@ export type PayUserFwdRow = {
   // (fdateadminstatus · the "ทำรายการล่าสุด" timestamp the forwarders table shows).
   fstatus: string | null;
   adminid_update: string | null;
+  /** ชื่อเล่นของ `adminid_update` (resolve ฝั่ง server · owner 2026-08-06 · จอห้ามโชว์รหัสดิบ) */
+  adminid_update_name: string;
   fdateadminstatus: string | null;
   // F5 — เอกสารที่ครอบออเดอร์นี้ (ใบวางบิล / ใบเสร็จ) — pill links (owner PR178).
   bills: PayUserLinkedBill[];
@@ -438,6 +440,11 @@ export async function getPayUserForwarderView(
       rows.map((r) => Number(r.id)),
     );
 
+    // ชื่อพนักงานที่อัปเดตสถานะล่าสุด (owner 2026-08-06 "id uid พนักงานยังมีบัคเต็มอยู่เลย") —
+    // client component ดึง server-only helper เองไม่ได้ → resolve ที่นี่ทีเดียวทั้งชุด
+    // แล้วส่งชื่อเล่นลงไปเป็น field พร้อมใช้.
+    const updateStaffNames = await resolveStaffNameMap(rows.map((r) => r.adminidupdate));
+
     const out: PayUserFwdRow[] = rows.map((r) => {
       const line = lineById.get(String(r.id));
       const creator = (r.adminidcreator ?? "").trim();
@@ -489,6 +496,7 @@ export async function getPayUserForwarderView(
         fdatestatus4: r.fdatestatus4 && r.fdatestatus4 !== "0000-00-00 00:00:00" ? r.fdatestatus4 : null,
         fstatus: r.fstatus,
         adminid_update: (r.adminidupdate ?? "").trim() || null,
+        adminid_update_name: staffLabel(r.adminidupdate, updateStaffNames, { empty: "" }),
         fdateadminstatus: r.fdateadminstatus && r.fdateadminstatus !== "0000-00-00 00:00:00" ? r.fdateadminstatus : null,
         bills: billsByFid.get(Number(r.id)) ?? [],
         receipts: receiptsByFid.get(Number(r.id)) ?? [],

@@ -134,8 +134,10 @@ export function CustomerActivityTimeline({
                   ) : e.kind === "call" ? (
                     <p className="mt-1 text-xs text-muted italic">— ไม่มีโน้ต —</p>
                   ) : null}
-                  {e.by ? (
-                    <p className="mt-1 text-[11px] text-muted/70 font-mono">โดย {e.by}</p>
+                  {/* owner 2026-08-06: โชว์ "ชื่อเล่น" ที่ server resolve มาแล้ว
+                      (byName) ไม่ใช่รหัสดิบ · เลิก font-mono เพราะไม่ใช่รหัสแล้ว */}
+                  {e.byName || e.by ? (
+                    <p className="mt-1 text-[11px] text-muted/70">โดย {e.byName || e.by}</p>
                   ) : null}
                 </div>
               </div>

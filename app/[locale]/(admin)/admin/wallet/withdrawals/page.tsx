@@ -33,6 +33,7 @@ import { fetchCorporateNameMap, resolveBillingIdentity, corpRowFromName } from "
 import { ArrowLeft } from "lucide-react";
 import { WithdrawRowActions } from "./withdraw-row-actions";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -145,6 +146,10 @@ export default async function AdminWithdrawalsQueuePage({
     userMap = new Map(((usersRaw ?? []) as unknown as URow[]).map((u) => [u.userID, u]));
     corpNames = corpRes;
   }
+
+  // ชื่อพนักงานที่กดจ่าย/ปฏิเสธ (owner 2026-08-06) — batch ทีเดียวทั้งหน้า
+  // แล้วโชว์ "ชื่อเล่น" แทนรหัสดิบ (admin_may / uuid).
+  const staffNames = await resolveStaffNameMap(rows.map((r) => r.adminidupdate));
 
   const statusTabs: { key: string; label: string }[] = [
     { key: "1", label: "รออนุมัติ" },
@@ -326,7 +331,7 @@ export default async function AdminWithdrawalsQueuePage({
                             <WithdrawRowActions id={r.id} />
                           </td>
                         ) : (
-                          <td className="px-3 py-3 text-xs font-mono text-muted">{r.adminidupdate ?? "—"}</td>
+                          <td className="px-3 py-3 text-xs text-muted">{staffLabel(r.adminidupdate, staffNames)}</td>
                         )}
                         <td className="px-3 py-3 text-xs">
                           <Link href={`/admin/wallet/${r.id}`} className="text-primary-600 hover:underline">

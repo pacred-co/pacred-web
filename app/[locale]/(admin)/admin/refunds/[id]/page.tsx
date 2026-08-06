@@ -11,6 +11,7 @@ import {
 } from "@/lib/validators/refund";
 import { RefundActions } from "./refund-actions";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap } from "@/lib/admin/sale-rep-names";
 
 /**
  * U1-6 — /admin/refunds/[id] detail page.
@@ -187,7 +188,7 @@ export default async function AdminRefundDetailPage({
     throw new Error(`Failed to load admin_audit_log (${auditErr.code}): ${auditErr.message}`);
   }
   type AuditRaw = {
-    id: string; action: string; created_at: string; payload: unknown;
+    id: string; action: string; created_at: string; payload: unknown; admin_id: string | null;
     admin: { member_code: string | null; first_name: string | null; last_name: string | null }
          | { member_code: string | null; first_name: string | null; last_name: string | null }[]
          | null;
@@ -196,8 +197,13 @@ export default async function AdminRefundDetailPage({
     id:         a.id,
     action:     a.action,
     created_at: a.created_at,
+    admin_id:   a.admin_id ?? null,
     admin:      Array.isArray(a.admin) ? a.admin[0] ?? null : a.admin,
   }));
+  // ชื่อพนักงานบน timeline — โชว์ "ชื่อเล่น" ไม่ใช่ uid ดิบ (owner 2026-08-06)
+  const auditNames = await resolveStaffNameMap(audit.map((a) => a.admin_id));
+  const auditActor = (a: (typeof audit)[number]) =>
+    auditNames.get(a.admin_id ?? "") ?? a.admin?.member_code ?? "—";
 
   const canMutate = isGodRole(roles) || roles.includes("accounting");
 
@@ -325,8 +331,7 @@ export default async function AdminRefundDetailPage({
                 </span>
                 <span className="font-medium">{a.action}</span>
                 <span className="text-muted">
-                  by {a.admin?.member_code ?? "—"}
-                  {a.admin?.first_name && ` (${a.admin.first_name}${a.admin.last_name ? " " + a.admin.last_name : ""})`}
+                  โดย {auditActor(a)}
                 </span>
               </li>
             ))}

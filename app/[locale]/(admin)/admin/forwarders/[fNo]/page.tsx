@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
-import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 // owner 2026-08-03 — ประวัติการแก้ขนาด/คิว เปิดเผยคิวที่ MOMO วัด + เรทขาย จึงกัน
@@ -415,9 +415,10 @@ async function tryRenderTbForwarder(
     userCreditValue: number | string | null; userCreditDate: number | string | null;
   } | null;
 
-  // owner 2026-08-05 — sale-rep CODE → ชื่อคน สำหรับป้าย Sale (เดิมโชว์ uid ดิบ).
-  const saleRepNameMap = await resolveSaleRepNameMap([u?.adminIDSale]);
-  const saleRepDisplay = saleRepLabel(u?.adminIDSale ?? null, saleRepNameMap);
+  // owner 2026-08-05/08-06 — รหัสพนักงาน (เซล + คนเปิดงาน) → **ชื่อเล่น** ผ่าน SOT
+  // เดียวทั้งระบบ (เดิมโชว์ uid ดิบ เช่น admin_may). batch ทีเดียวต่อหน้า.
+  const staffNameMap = await resolveStaffNameMap([u?.adminIDSale, r.adminidcreator]);
+  const saleRepDisplay = staffLabel(u?.adminIDSale ?? null, staffNameMap);
 
   // ── ภูม 2026-06-18: ที่อยู่จัดส่งสินค้า ─────────────────────────────────
   // The forwarder row snapshots the delivery address into faddress* at create
@@ -668,7 +669,7 @@ async function tryRenderTbForwarder(
   const sourceTag: { label: string; cls: string } = r.reforder && r.reforder !== ""
     ? { label: `ฝากสั่งซื้อ : ${r.reforder}`, cls: "bg-sky-50 text-sky-700 border-sky-200" }
     : r.adminidcreator && r.adminidcreator !== ""
-      ? { label: `ฝากนำเข้า : ${r.adminidcreator}`, cls: "bg-amber-50 text-amber-700 border-amber-200" }
+      ? { label: `ฝากนำเข้า : ${staffLabel(r.adminidcreator, staffNameMap)}`, cls: "bg-amber-50 text-amber-700 border-amber-200" }
       : { label: "ฝากนำเข้าจาก : users", cls: "bg-gray-50 text-gray-600 border-gray-200" };
 
   // 2026-06-10 (ปอน) — header copied 1:1 from /service-import/[fNo]:

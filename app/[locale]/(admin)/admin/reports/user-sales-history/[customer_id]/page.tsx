@@ -33,7 +33,7 @@ import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { notFound } from "next/navigation";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
-import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -314,15 +314,12 @@ export default async function UserSalesHistoryDrillIn({
   const fullname = billing.name || "—";
   const isJuristic = billing.isJuristic;
 
-  // เซล code → ชื่อคน (owner 2026-08-05 · เลิกโชว์ uid ดิบเป็นข้อความลิงก์). ลิงก์ยัง
-  // ชี้ /admin/admins/<code> เหมือนเดิม. SOT: sale-rep-names.ts (tb_admin).
+  // เซล code → ชื่อเล่น (owner 2026-08-06 · เลิกโชว์ uid ดิบเป็นข้อความลิงก์ ทุกจอ).
+  // ลิงก์ยังชี้ /admin/admins/<code> เหมือนเดิม. SOT: sale-rep-names.ts
   const saleCode = (u.adminIDSale ?? "").trim();
-  const saleRepNames = await resolveSaleRepNameMap([saleCode]);
-  const saleRepText = !saleCode
-    ? ""
-    : saleCode === "admin_center"
-      ? "เซลส่วนกลาง"
-      : saleRepLabel(saleCode, saleRepNames);
+  const staffNames = await resolveStaffNameMap([saleCode]);
+  const saleRepText =
+    saleCode === "admin_center" ? "เซลส่วนกลาง" : staffLabel(saleCode, staffNames);
 
   // Lifetime totals (same status gates as the list page · sales-by-rep view)
   const lifetimeForwarderRevenue = fws
@@ -396,7 +393,7 @@ export default async function UserSalesHistoryDrillIn({
                   href={`/admin/admins/${encodeURIComponent(u.adminIDSale)}`}
                   className="text-primary-600 hover:underline"
                 >
-                  {saleRepText || u.adminIDSale}
+                  {saleRepText}
                 </Link>
               </p>
             )}

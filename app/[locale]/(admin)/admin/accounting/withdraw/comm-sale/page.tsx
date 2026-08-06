@@ -11,6 +11,7 @@ import {
   listCommissionPayees,
 } from "@/actions/admin/withdraw-comm-batch";
 import { formatThaiDate } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 /**
  * /admin/accounting/withdraw/comm-sale — Sales-rep batch payouts (legacy
@@ -82,6 +83,10 @@ export default async function AdminWithdrawCommSalePage({
     : [null, null];
   const payees = payeesRes?.ok ? payeesRes.data?.payees ?? [] : [];
   const accounts = accountsRes?.ok ? accountsRes.data?.accounts ?? [] : [];
+
+  // รหัสผู้รับเงิน → ชื่อเล่น (owner 2026-08-06 · เลิกพ่นรหัสดิบ) · batch ครั้งเดียว.
+  // display เท่านั้น — CSV/ค่าในระบบยังใช้รหัสเดิม.
+  const payeeNames = await resolveStaffNameMap(result.rows.map((b) => b.adminid));
 
   const total = (result.counts["1"] ?? 0) + (result.counts["2"] ?? 0) + (result.counts["3"] ?? 0);
   const sumCommBefore = result.rows.reduce((s, r) => s + r.commbefore, 0);
@@ -218,7 +223,8 @@ export default async function AdminWithdrawCommSalePage({
                         </Link>
                       </td>
                       <td className="px-3 py-2 text-xs text-muted whitespace-nowrap">{fmtDate(b.date)}</td>
-                      <td className="px-3 py-2 font-mono text-xs">{b.adminid}</td>
+                      {/* ชื่อเล่นผู้รับเงิน — ไม่โชว์รหัสดิบ (owner 2026-08-06) */}
+                      <td className="px-3 py-2 text-xs">{staffLabel(b.adminid, payeeNames)}</td>
                       <td className="px-3 py-2 text-xs">{b.title || "—"}</td>
                       {showMoney && <td className="px-3 py-2 text-right font-mono text-xs">{thb(b.commbefore)}</td>}
                       {showMoney && <td className="px-3 py-2 text-right font-mono text-xs text-muted">{thb(b.withholding)}</td>}

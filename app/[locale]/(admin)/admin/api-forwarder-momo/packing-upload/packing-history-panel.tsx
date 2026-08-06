@@ -107,7 +107,9 @@ export function PackingHistoryPanel({ nonce }: { nonce: number }) {
                       <td className="px-2 py-1.5 text-[11px] whitespace-nowrap">{formatThaiDateTime(r.uploadedAt)}</td>
                       <td className={`px-2 py-1.5 font-mono font-semibold ${superseded ? "text-muted" : "text-sky-800"}`}>{r.containerNo ?? "—"}</td>
                       <td className="px-2 py-1.5 text-[11px] max-w-[14rem] truncate" title={r.fileName ?? ""}>📎 {r.fileName ?? "—"}</td>
-                      <td className="px-2 py-1.5 text-[11px] whitespace-nowrap" title={r.uploadedBy ?? ""}>{r.uploadedByName ?? r.uploadedBy ?? "—"}</td>
+                      {/* ผู้อัพ = ชื่อเล่นที่ loader resolve มาแล้ว · ถ้า resolve ไม่ได้โชว์ "—"
+                          (ไม่พ่น uuid ตัดสั้นออกจอ — รหัสดิบยังดูได้จาก tooltip) */}
+                      <td className="px-2 py-1.5 text-[11px] whitespace-nowrap" title={r.uploadedBy ?? ""}>{r.uploadedByName ?? "—"}</td>
                       <td className="px-2 py-1.5 text-center">
                         {r.status === "applied" || r.appliedAt ? (
                           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800" title={r.appliedAt ? `ใช้แล้ว ${formatThaiDateTime(r.appliedAt)}` : "ใช้แล้ว"}>✓ ใช้แล้ว</span>

@@ -112,7 +112,11 @@ export type Row = {
   date_status4: string | null;
   date_admin_status: string | null;
   admin_id_last: string | null;
+  /** owner 2026-08-06 — ชื่อเล่นพนักงาน (resolve ฝั่ง server) · "" = ไม่มี */
+  admin_id_last_name: string;
   admin_creator: string | null;
+  /** owner 2026-08-06 — ชื่อเล่นพนักงาน (resolve ฝั่ง server) · "" = ไม่มี */
+  admin_creator_name: string;
   ref_order: string | null;
   fcredit: string;
   // 2026-07-07 — credit-tab AR columns (legacy forwarder.php q=='c') · display only

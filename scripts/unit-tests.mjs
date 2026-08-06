@@ -248,6 +248,7 @@ export const UNIT_TESTS = [
   "lib/admin/momo-invoice-create-row.test.ts",
   "lib/admin/momo-no-code-flow-contract.test.ts",
   "lib/admin/dimension-audit-verdict.test.ts",
+  "lib/admin/shop-cart-group.test.ts",
 ];
 
 /**

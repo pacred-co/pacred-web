@@ -41,6 +41,7 @@ import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { parsePage } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -217,6 +218,10 @@ export default async function ReportForwarderPage({
   // Juristic display: batched tb_corporate name lookup (no N+1) so นิติบุคคล
   // rows show the company name, not the contact person.
   const corpNames = await fetchCorporateNameMap(admin, userIds);
+
+  // ชื่อพนักงานผู้อัปเดต — batch ครั้งเดียวทั้งหน้า แล้วโชว์ "ชื่อเล่น"
+  // (owner 2026-08-06: จอไหนก็ห้ามพ่นรหัสดิบ admin_xxx/sys-live/uuid ให้คนอ่าน)
+  const staffNames = await resolveStaffNameMap(forwarders.map((f) => f.adminidupdate));
 
   // 4) Shape rows (legacy revenue = ftotalprice + ftransportprice + fpriceupdate - fdiscount).
   const rows: Row[] = forwarders.map((f) => {
@@ -432,7 +437,7 @@ export default async function ReportForwarderPage({
                           {legacyForwarderStatusThai(r.fstatus ?? "") || r.fstatus || "—"}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-muted">{r.adminidupdate ?? "—"}</td>
+                      <td className="px-4 py-3 text-xs text-muted">{staffLabel(r.adminidupdate, staffNames)}</td>
                     </tr>
                   ))}
                 </tbody>

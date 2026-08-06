@@ -39,6 +39,7 @@ import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { parsePage } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -208,6 +209,10 @@ export default async function AdminReportPaymentPage({
   // Juristic display: batched tb_corporate name lookup (no N+1) so นิติบุคคล
   // rows show the company name, not the contact person.
   const corpNames = await fetchCorporateNameMap(admin, userIds);
+
+  // ชื่อพนักงานผู้ทำรายการ — batch ครั้งเดียวทั้งหน้า แล้วโชว์ "ชื่อเล่น"
+  // (owner 2026-08-06: จอไหนก็ห้ามพ่นรหัสดิบ admin_xxx/uuid ให้คนอ่าน)
+  const staffNames = await resolveStaffNameMap(payments.map((p) => p.adminidupdate));
 
   // 3) Shape rows.
   const rows: Row[] = payments.map((p) => {
@@ -410,7 +415,7 @@ export default async function AdminReportPaymentPage({
                           {STATUS_LABEL[r.paystatus] ?? r.paystatus}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-muted">{r.adminidupdate ?? "—"}</td>
+                      <td className="px-4 py-3 text-xs text-muted">{staffLabel(r.adminidupdate, staffNames)}</td>
                     </tr>
                   ))}
                 </tbody>

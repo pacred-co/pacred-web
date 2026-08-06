@@ -31,6 +31,7 @@ import { resolveLegacyUrl } from "@/lib/storage/legacy-resolver";
 import { SlipImage } from "@/components/admin/slip-image";
 import { ShopDisbursementPayForm } from "./pay-form";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 

@@ -55,7 +55,7 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 import { Link } from "@/i18n/navigation";
 import {
   ArrowLeft, Package, Warehouse, Truck, Plane, CheckCircle2, Clock,
@@ -304,9 +304,10 @@ export default async function AdminForwarderEditPage({
     userCreditDate: number | string | null;
   } | null;
 
-  // owner 2026-08-05 — sale-rep CODE → ชื่อคน สำหรับป้าย Sale (เดิมโชว์ uid ดิบ).
-  const saleRepNameMap = await resolveSaleRepNameMap([u?.adminIDSale]);
-  const saleRepDisplay = saleRepLabel(u?.adminIDSale ?? null, saleRepNameMap);
+  // owner 2026-08-05/08-06 — รหัสพนักงาน (เซล + คนเปิดงาน) → **ชื่อเล่น** ผ่าน SOT
+  // เดียวทั้งระบบ (เดิมโชว์ uid ดิบ เช่น admin_may). batch ทีเดียวต่อหน้า.
+  const staffNameMap = await resolveStaffNameMap([u?.adminIDSale, r.adminidcreator]);
+  const saleRepDisplay = staffLabel(u?.adminIDSale ?? null, staffNameMap);
 
   // 2026-07-04 — resolve the account-holder DISPLAY identity (นิติบุคคล → company
   // name, not the contact person). ONE batched .in() lookup on tb_corporate.
@@ -389,7 +390,7 @@ export default async function AdminForwarderEditPage({
   const sourceTag: { label: string; cls: string } = r.reforder && r.reforder !== ""
     ? { label: `🛒 ฝากสั่งซื้อ : ${r.reforder}`, cls: "bg-sky-50 text-sky-700 border-sky-200" }
     : r.adminidcreator && r.adminidcreator !== ""
-      ? { label: `ฝากนำเข้า : ${r.adminidcreator}`, cls: "bg-amber-50 text-amber-700 border-amber-200" }
+      ? { label: `ฝากนำเข้า : ${staffLabel(r.adminidcreator, staffNameMap)}`, cls: "bg-amber-50 text-amber-700 border-amber-200" }
       : { label: "ฝากนำเข้าจาก : users", cls: "bg-gray-50 text-gray-600 border-gray-200" };
 
   // นิติบุคคล → company name (billingIdentity.name); else person full name.

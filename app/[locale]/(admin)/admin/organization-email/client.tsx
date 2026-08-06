@@ -53,6 +53,9 @@ type DisplayRow = {
   emailtype_label: string;
   adminidcreate:   string;
   adminidupdate:   string;
+  /** ชื่อเล่นพนักงาน (resolve มาจาก server page — client import server-only ไม่ได้) */
+  adminidcreateName: string;
+  adminidupdateName: string;
   note:            string;
 };
 
@@ -231,7 +234,8 @@ export function OrgEmailForms({
                       <tr key={r.id}>
                         <td>{r.date}</td>
                         <td>
-                          <a href={`/admin/admins/${encodeURIComponent(r.adminidcreate)}`}>{r.adminidcreate}</a>
+                          {/* โชว์ชื่อเล่น · ลิงก์ยังใช้รหัสเดิมเป็นคีย์ */}
+                          <a href={`/admin/admins/${encodeURIComponent(r.adminidcreate)}`}>{r.adminidcreateName}</a>
                         </td>
                         <td>{r.email}</td>
                         <td>{r.emailtel}</td>
@@ -258,7 +262,7 @@ export function OrgEmailForms({
                         <td>{r.dateupdate}</td>
                         <td>
                           {r.adminidupdate && (
-                            <a href={`/admin/admins/${encodeURIComponent(r.adminidupdate)}`}>{r.adminidupdate}</a>
+                            <a href={`/admin/admins/${encodeURIComponent(r.adminidupdate)}`}>{r.adminidupdateName}</a>
                           )}
                         </td>
                         <td className="text-center">

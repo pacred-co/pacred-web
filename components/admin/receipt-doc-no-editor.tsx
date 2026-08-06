@@ -381,6 +381,8 @@ export function ReceiptDocNoEditor({
                 <span className="text-muted">—</span>
               </Row>
 
+              {/* preview.approver = ชื่อเล่นที่ server resolve มาแล้ว (owner 2026-08-06)
+                  — ไม่ใช่รหัส admin_x / uuid เหมือนเดิม */}
               <Row label="ผู้อนุมัติเอกสาร">
                 <span className="text-foreground">{preview.approver || "—"}</span>
               </Row>

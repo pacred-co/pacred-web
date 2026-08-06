@@ -12,6 +12,7 @@ import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { Link } from "@/i18n/navigation";
 import { getMomoInvoiceSettlement } from "@/actions/admin/momo-invoice-settlement";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 import { SlipImage } from "@/components/admin/slip-image";
 import { MomoSettlementActions } from "./settlement-actions";
 
@@ -31,6 +32,9 @@ export default async function MomoSettlementDetailPage({ params }: { params: Pro
   const res = await getMomoInvoiceSettlement({ id });
   if (!res.ok || !res.data) notFound();
   const s = res.data;
+
+  // ผู้ตัดจ่าย/ผู้ยกเลิก = ชื่อเล่นพนักงาน (owner 2026-08-06: เลิกโชว์รหัสดิบ) · batch ทีเดียว
+  const staffNames = await resolveStaffNameMap([s.paidBy, s.createdBy, s.voidBy]);
 
   return (
     <main className="p-4 lg:p-8 space-y-5">
@@ -57,12 +61,12 @@ export default async function MomoSettlementDetailPage({ params }: { params: Pro
             <strong className="text-foreground">฿{baht(s.totalThb)}</strong>
           </p>
           <p className="mt-0.5 text-[12px] text-muted">
-            ตัดจ่ายโดย {s.paidBy ?? s.createdBy ?? "-"} · {formatThaiDateTime(s.paidAt ?? s.createdAt)}
+            ตัดจ่ายโดย {staffLabel(s.paidBy ?? s.createdBy, staffNames)} · {formatThaiDateTime(s.paidAt ?? s.createdAt)}
             {s.note && <> · หมายเหตุ: {s.note}</>}
           </p>
           {s.status === "void" && (
             <p className="mt-1 text-[12px] text-red-700">
-              ยกเลิกโดย {s.voidBy ?? "-"} · {formatThaiDateTime(s.voidAt)} · เหตุผล: {s.voidReason ?? "—"}
+              ยกเลิกโดย {staffLabel(s.voidBy, staffNames)} · {formatThaiDateTime(s.voidAt)} · เหตุผล: {s.voidReason ?? "—"}
             </p>
           )}
         </div>

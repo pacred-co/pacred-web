@@ -27,6 +27,7 @@ import { Explain } from "@/components/ui/tooltip";
 import { isWalletCredit } from "@/lib/wallet/wallet-hs";
 import { groupDirectWalletSlips } from "@/lib/admin/wallet-slip-group";
 import { canRenderWalletBulkCheckbox } from "@/lib/admin/wallet-bulk-containment";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 const STATUS_LABEL: Record<string, string> = {
   "1": "รอตรวจสอบ",
@@ -238,6 +239,12 @@ export async function WalletTransactionsView({ kind, status, q, canSettle, sort,
   const slipUrlMap = await resolveLegacyUrlMap(
     rows.map((r) => ({ id: r.id, filename: r.imagesslip })),
     "slip",
+  );
+
+  // ชื่อพนักงานที่ตรวจ/สร้างรายการ (owner 2026-08-06 "id uid พนักงานยังมีบัคเต็มอยู่เลย") —
+  // batch ทีเดียวทั้งหน้า แล้วโชว์ "ชื่อเล่น" แทนรหัสดิบ (admin_may / sys-live / uuid).
+  const staffNames = await resolveStaffNameMap(
+    [...rows, ...paymentGroupChildren].flatMap((r) => [r.adminid, r.adminidcrate]),
   );
 
   // 2nd query — merge customer names from tb_users.
@@ -479,6 +486,7 @@ export async function WalletTransactionsView({ kind, status, q, canSettle, sort,
                         userMap={userMap}
                         corpNames={corpNames}
                         slipUrlMap={slipUrlMap}
+                        staffNames={staffNames}
                         sharedSlipCount={sharedSlipCountFor(g.row)}
                         canSettle={canSettle}
                       />
@@ -495,6 +503,7 @@ export async function WalletTransactionsView({ kind, status, q, canSettle, sort,
                       userMap={userMap}
                       corpNames={corpNames}
                       slipUrlMap={slipUrlMap}
+                      staffNames={staffNames}
                       canSettle={canSettle}
                       groupContext={{
                         siblings,
@@ -559,6 +568,7 @@ function TxRow({
   userMap,
   corpNames,
   slipUrlMap,
+  staffNames,
   groupContext,
   sharedSlipCount = 0,
   canSettle,
@@ -567,6 +577,8 @@ function TxRow({
   userMap: Map<string, URow>;
   corpNames: Map<string, string>;
   slipUrlMap: Record<string, string | null>;
+  /** รหัสพนักงาน → ชื่อเล่น (resolve มาแล้วจากหน้าแม่ · owner 2026-08-06) */
+  staffNames: Map<string, string>;
   canSettle: boolean;
   groupContext?: {
     siblings: WhsRow[];
@@ -677,7 +689,9 @@ function TxRow({
             <Explain def="รอตรวจสอบ = สลิปเข้ามายังไม่ได้ตรวจ · อนุมัติแล้ว = ตรวจผ่าน เงินเข้า/ออกแล้ว · ปฏิเสธ = สลิปไม่ถูกต้อง ไม่ตัดยอด" />
           </span>
           {(row.adminid || row.adminidcrate) ? (
-            <div className="text-muted text-[11px] mt-1 font-mono">{row.adminid ?? row.adminidcrate}</div>
+            <div className="text-muted text-[11px] mt-1">
+              {staffLabel(row.adminid ?? row.adminidcrate, staffNames)}
+            </div>
           ) : null}
         </td>
         <td className="px-3 py-3 text-xs">

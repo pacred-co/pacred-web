@@ -12,6 +12,7 @@ import {
 // Cost-reveal blur gate (owner ภูม 2026-06-16) — blur ต้นทุน/กำไร until the PIN.
 import { CostRevealRegion, CostRevealToggle } from "@/components/admin/cost-reveal";
 import { formatThaiDate } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 /**
  * /admin/accounting/margin-monitor — Profit/margin retrospective.
@@ -95,6 +96,9 @@ export default async function AdminMarginMonitorPage({
   const dateTo   = sp.date_to   && /^\d{4}-\d{2}-\d{2}$/.test(sp.date_to)   ? sp.date_to   : defaults.to;
 
   const report = await getMarginReport({ dateFrom, dateTo });
+
+  // รหัสเซล → ชื่อเล่น (owner 2026-08-06 · เลิกพ่นรหัสดิบ) · batch ครั้งเดียวทั้งตาราง
+  const repNames = await resolveStaffNameMap(report.byRep.map((r) => r.adminID));
 
   // CSV — focus on over-cap and negative-margin actionables
   const csvOverCap: CsvRow[] = report.topOverCap.map((r) => ({
@@ -298,7 +302,8 @@ export default async function AdminMarginMonitorPage({
                   {report.byRep.map((r, idx) => (
                     <tr key={r.adminID} className="border-t border-border">
                       <td className="px-3 py-2 text-xs font-mono">{idx + 1}</td>
-                      <td className="px-3 py-2 font-mono text-xs">{r.adminID}</td>
+                      {/* ชื่อเล่นเซล — ไม่โชว์รหัสดิบ (owner 2026-08-06) */}
+                      <td className="px-3 py-2 text-xs">{staffLabel(r.adminID, repNames)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs">{r.count.toLocaleString("th-TH")}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs">฿{thb(r.avgMargin)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">฿{thb(r.totalMargin)}</td>

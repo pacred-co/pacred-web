@@ -18,6 +18,7 @@ import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-butt
 import { getSignedBucketUrl } from "@/lib/storage/upload";
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap } from "@/lib/admin/sale-rep-names";
 
 /**
  * /admin/accounting/cargo-declarations/[id] — CARGO ใบขนรวม detail (P3).
@@ -261,7 +262,7 @@ export default async function CargoDeclarationDetailPage({
   // Audit timeline.
   const { data: auditRaw, error: auditErr } = await admin
     .from("admin_audit_log")
-    .select("id, action, created_at, admin:profiles!admin_id ( member_code, first_name )")
+    .select("id, action, created_at, admin_id, admin:profiles!admin_id ( member_code, first_name )")
     .eq("target_type", "customs_declaration")
     .eq("target_id", id)
     .order("created_at", { ascending: false })
@@ -270,13 +271,17 @@ export default async function CargoDeclarationDetailPage({
     console.error("[cargo-declaration detail audit]", { id, code: auditErr.code, message: auditErr.message });
   }
   type AuditRaw = {
-    id: string; action: string; created_at: string;
+    id: string; action: string; created_at: string; admin_id: string | null;
     admin: { member_code: string | null; first_name: string | null } | { member_code: string | null; first_name: string | null }[] | null;
   };
   const audit = ((auditRaw ?? []) as unknown as AuditRaw[]).map((a) => ({
-    id: a.id, action: a.action, created_at: a.created_at,
+    id: a.id, action: a.action, created_at: a.created_at, admin_id: a.admin_id ?? null,
     admin: Array.isArray(a.admin) ? a.admin[0] ?? null : a.admin,
   }));
+  // ชื่อพนักงานบน timeline — โชว์ "ชื่อเล่น" ไม่ใช่ uid ดิบ (owner 2026-08-06)
+  const auditNames = await resolveStaffNameMap(audit.map((a) => a.admin_id));
+  const auditActor = (a: (typeof audit)[number]) =>
+    auditNames.get(a.admin_id ?? "") ?? a.admin?.member_code ?? "—";
 
   const isDraft = header.status === "draft";
   const TRANSPORT_LABEL: Record<string, string> = { "1": "รถ", "2": "เรือ", "3": "แอร์" };
@@ -559,7 +564,7 @@ export default async function CargoDeclarationDetailPage({
                   {formatThaiDateTime(a.created_at)}
                 </span>
                 <span className="font-medium">{a.action}</span>
-                <span className="text-muted">by {a.admin?.member_code ?? "—"}</span>
+                <span className="text-muted">โดย {auditActor(a)}</span>
               </li>
             ))}
           </ul>

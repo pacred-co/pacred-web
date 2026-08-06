@@ -46,6 +46,7 @@ import {
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -136,7 +137,6 @@ export default async function RateChangeHistoryReport({
 
   const nameOf = {
     user: new Map<string, string>(),
-    admin: new Map<string, string>(),
   };
 
   if (userIds.length > 0) {
@@ -162,21 +162,9 @@ export default async function RateChangeHistoryReport({
     }
   }
 
-  if (adminIds.length > 0) {
-    const { data: aRaw, error: aErr } = await admin
-      .from("tb_admin")
-      .select("adminID,adminName,adminLastName,adminNickname")
-      .in("adminID", adminIds);
-    if (aErr) {
-      console.error(`[rate-change-history tb_admin] failed`, { code: aErr.code, message: aErr.message });
-    }
-    type A = { adminID: string; adminName: string | null; adminLastName: string | null; adminNickname: string | null };
-    for (const a of (aRaw ?? []) as unknown as A[]) {
-      const nick = (a.adminNickname ?? "").trim();
-      const full = `${a.adminName ?? ""} ${a.adminLastName ?? ""}`.trim();
-      nameOf.admin.set(a.adminID, nick || full || a.adminID);
-    }
-  }
+  // ชื่อพนักงานที่ปรับเรท — ใช้ตัว resolve กลางของทั้งระบบ (ชื่อเล่นเป็นมาตรฐาน ·
+  // รับรหัสได้ทุกทรง login-id / AD### / uuid · owner 2026-08-06 ห้ามโชว์รหัสดิบ)
+  const staffNames = await resolveStaffNameMap(adminIds);
 
   // ── 3. Count child (cell) changes per header — KG + CBM in one pass ──────
   const headerIds = headers.map((h) => h.id);
@@ -213,6 +201,10 @@ export default async function RateChangeHistoryReport({
         .maybeSingle<HistHeaderRow>();
       if (hErr) console.error(`[rate-change-history detail header] failed`, { detailId, code: hErr.code, message: hErr.message });
       detailHeader = hRaw ?? null;
+      // แถวนี้อยู่นอกลิสต์ที่ batch ไว้ → resolve ชื่อพนักงานของแถวนี้เพิ่ม
+      if (detailHeader?.adminid) {
+        for (const [k, v] of await resolveStaffNameMap([detailHeader.adminid])) staffNames.set(k, v);
+      }
     }
 
     const [{ data: kgRaw, error: kgErr }, { data: cbmRaw, error: cbmErr }] = await Promise.all([
@@ -331,7 +323,7 @@ export default async function RateChangeHistoryReport({
                   </span>{" "}
                   · ปรับโดย{" "}
                   <span className="font-medium text-foreground">
-                    {detailHeader.adminid ? nameOf.admin.get(detailHeader.adminid) ?? detailHeader.adminid : "—"}
+                    {staffLabel(detailHeader.adminid, staffNames)}
                   </span>{" "}
                   · {fmtDate(detailHeader.date)}
                 </p>
@@ -411,13 +403,10 @@ export default async function RateChangeHistoryReport({
                             href={`/admin/admins/${encodeURIComponent(h.adminid)}`}
                             className="text-primary-600 hover:underline"
                           >
-                            {nameOf.admin.get(h.adminid) ?? h.adminid}
+                            {staffLabel(h.adminid, staffNames)}
                           </Link>
                         ) : (
                           "—"
-                        )}
-                        {h.adminid && (
-                          <span className="block font-mono text-[11px] text-muted">{h.adminid}</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-xs">

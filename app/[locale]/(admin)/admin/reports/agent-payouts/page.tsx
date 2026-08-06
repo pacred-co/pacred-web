@@ -35,6 +35,7 @@ import { Link } from "@/i18n/navigation";
 import { ReportShell } from "@/components/admin/reports/report-shell";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { getAgentPayoutReport } from "@/actions/admin/reports-agent-payouts";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 import {
   resolveDateRange,
   thb,
@@ -80,6 +81,10 @@ export default async function AgentPayoutsReportPage({
   const agents = res.ok ? res.data.agents : [];
   const history = res.ok ? res.data.history : [];
   const minWithdrawal = res.ok ? res.data.minWithdrawalThb : 1000;
+
+  // ชื่อพนักงานผู้ทำรายการจ่าย — batch ครั้งเดียว แล้วโชว์ "ชื่อเล่น"
+  // (owner 2026-08-06: จอไหนก็ห้ามพ่นรหัสดิบ admin_xxx/uuid ให้คนอ่าน)
+  const staffNames = await resolveStaffNameMap(history.map((h) => h.created_by));
 
   // ── Grand totals for the summary cards ──
   const totalOpenNet = agents.reduce((s, a) => s + a.open_net, 0);
@@ -233,7 +238,7 @@ export default async function AgentPayoutsReportPage({
                         </td>
                       )}
                       <td className="px-4 py-3 text-xs whitespace-nowrap text-muted">
-                        {h.created_by || "—"}
+                        {staffLabel(h.created_by, staffNames)}
                       </td>
                       <td className="px-4 py-3 text-center text-xs">
                         {h.has_slip ? (

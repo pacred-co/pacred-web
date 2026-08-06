@@ -19,6 +19,7 @@ import { AccountingMenubar } from "@/components/admin/accounting-menubar";
 import { getShopDisbursementHistory } from "@/actions/admin/shop-disbursement";
 import { CsvButton, type CsvCol, type CsvRow } from "@/components/admin/csv-button";
 import { exportShopDisbursementHistoryAll } from "@/actions/admin/export/shop-disbursement-history";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +72,10 @@ export default async function AdminShopDisbursementHistoryPage() {
 
   const res = await getShopDisbursementHistory();
   const batches = res.ok ? res.data!.batches : [];
+
+  // รหัสผู้ทำรายการ → ชื่อเล่น (owner 2026-08-06 · เลิกพ่นรหัสดิบ) · batch ครั้งเดียว.
+  // display เท่านั้น — CSV ยังส่งรหัสเดิม.
+  const staffNames = await resolveStaffNameMap(batches.map((b) => b.adminidcreate));
 
   // On-screen rows → flat CSV rows (mirrors the <tbody> cell values 1:1).
   const csvRows: CsvRow[] = batches.map((b) => ({
@@ -144,7 +149,8 @@ export default async function AdminShopDisbursementHistoryPage() {
                       {b.date ? b.date.replace("T", " ").slice(0, 19) + " น." : "—"}
                     </td>
                     <td className="px-3 py-2">{b.title ?? "—"}</td>
-                    <td className="px-3 py-2 text-xs">{b.adminidcreate ?? "—"}</td>
+                    {/* ชื่อเล่นผู้ทำรายการ — ไม่โชว์รหัสดิบ (owner 2026-08-06) */}
+                    <td className="px-3 py-2 text-xs">{staffLabel(b.adminidcreate, staffNames)}</td>
                     <td className="px-3 py-2 text-right font-medium">{fmt2(b.amount)}</td>
                     <td className="px-3 py-2 text-center">
                       <StatusPill status={b.status} />

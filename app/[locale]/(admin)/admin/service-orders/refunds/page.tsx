@@ -44,6 +44,7 @@ import {
   DEFAULT_REFUND_WINDOW_DAYS,
 } from "@/lib/admin/refund-history-helpers";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -102,12 +103,6 @@ type RawUser = {
 type RawHeader = {
   hno:    string;
   htitle: string | null;
-};
-
-type RawAdmin = {
-  adminID:       string;
-  adminName:     string | null;
-  adminLastName: string | null;
 };
 
 function thb(n: number): string {
@@ -220,28 +215,9 @@ export default async function ShopRefundHistoryPage({
     }
   }
 
-  // ── Join: tb_admin for the "ผู้ทำรายการ" display name ──────────
-  const adminIds = Array.from(
-    new Set(hsRows.map((r) => r.adminid).filter((a): a is string => !!a)),
-  );
-  const adminByAdminId = new Map<string, RawAdmin>();
-  if (adminIds.length > 0) {
-    // tb_admin uses camelCase columns (post-0113 rename) — match the
-    // refund action and lib/admin/assign-sales-rep.ts query shapes.
-    const { data: adminRows, error: adminErr } = await admin
-      .from("tb_admin")
-      .select("adminID,adminName,adminLastName")
-      .in("adminID", adminIds);
-    if (adminErr) {
-      console.error(
-        "[/admin/service-orders/refunds] tb_admin join failed",
-        { code: adminErr.code, message: adminErr.message },
-      );
-    }
-    for (const a of (adminRows ?? []) as RawAdmin[]) {
-      adminByAdminId.set(a.adminID, a);
-    }
-  }
+  // ── ชื่อพนักงานผู้ทำรายการ — ใช้ตัว resolve กลาง (ชื่อเล่นเป็นมาตรฐาน) ──────
+  // owner 2026-08-06: จอไหนก็ห้ามพ่นรหัสดิบ admin_xxx/uuid ให้คนอ่าน
+  const staffNames = await resolveStaffNameMap(hsRows.map((r) => r.adminid));
 
   // ── Aggregate totals (for the header summary card) ─────────────
   const sumThb = hsRows.reduce(
@@ -376,10 +352,7 @@ export default async function ShopRefundHistoryPage({
                     const u = userByUid.get(r.userid);
                     const customerName = customerNameOf(u);
                     const o = r.reforder ? orderByHno.get(r.reforder) : undefined;
-                    const a = r.adminid ? adminByAdminId.get(r.adminid) : undefined;
-                    const adminName = a
-                      ? `${a.adminName ?? ""} ${a.adminLastName ?? ""}`.trim()
-                      : "";
+                    const adminName = staffLabel(r.adminid, staffNames, { empty: "" });
                     return (
                       <tr
                         key={r.id}
@@ -431,14 +404,8 @@ export default async function ShopRefundHistoryPage({
                         </td>
                         <td className="px-3 py-2 text-xs">
                           {r.adminid ? (
-                            <>
-                              <p className="font-mono">{r.adminid}</p>
-                              {adminName && (
-                                <p className="text-[11px] text-muted">
-                                  {adminName}
-                                </p>
-                              )}
-                            </>
+                            /* owner 2026-08-06 — ชื่อเล่นเป็นหลัก (staffLabel fallback รหัสเดิมเมื่อ resolve ไม่ได้) */
+                            <p>{adminName || r.adminid}</p>
                           ) : (
                             <span className="text-muted">—</span>
                           )}

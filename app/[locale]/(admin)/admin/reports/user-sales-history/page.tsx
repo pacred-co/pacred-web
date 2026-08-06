@@ -33,6 +33,7 @@ import { parsePage, DEFAULT_PAGE_SIZE } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { computeCommission } from "@/lib/sales-commission/calc";
 import { formatThaiDate } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 // The legacy per-team commission rate (`$percen` — report-user-sales-history.php
 // L46-55 · 0.01 for every VIP team). Single point of truth mirrored here.
@@ -298,6 +299,10 @@ export default async function UserSalesHistoryEntry({
   const offset = (page - 1) * DEFAULT_PAGE_SIZE;
   const pageRows = aggregates.slice(offset, offset + DEFAULT_PAGE_SIZE);
 
+  // ชื่อเซลผู้ดูแล — batch ครั้งเดียวเฉพาะแถวที่แสดงจริง แล้วโชว์ "ชื่อเล่น"
+  // (owner 2026-08-06: จอไหนก็ห้ามพ่นรหัสดิบ admin_xxx/uuid ให้คนอ่าน)
+  const staffNames = await resolveStaffNameMap(pageRows.map((a) => a.adminidsale));
+
   // Stat summary
   const totalRevenue = aggregates.reduce((s, a) => s + a.total_revenue_thb, 0);
   const activeCount = aggregates.filter(
@@ -541,7 +546,7 @@ export default async function UserSalesHistoryEntry({
                             href={`/admin/admins/${encodeURIComponent(a.adminidsale)}`}
                             className="text-primary-600 hover:underline"
                           >
-                            {a.adminidsale}
+                            {staffLabel(a.adminidsale, staffNames)}
                           </Link>
                         ) : (
                           <span className="text-muted">—</span>

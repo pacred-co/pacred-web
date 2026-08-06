@@ -37,6 +37,7 @@ import { fetchCorporateNameMap, resolveBillingIdentity, corpRowFromName } from "
 import { TbYuanBulkBar, TbYuanRowCheckbox } from "./tb-bulk-bar";
 import { Explain } from "@/components/ui/tooltip";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -197,6 +198,12 @@ export default async function AdminYuanPaymentsPage({
   const slipUrlMap = await resolveLegacyUrlMap(
     rows.map((r) => ({ id: r.id, filename: r.imagesslip })),
     "slip",
+  );
+
+  // ชื่อพนักงาน (ผู้ดำเนินการ + ผู้อัปเดต) — owner 2026-08-06 "เอาชื่อเล่นให้เหมือนกัน
+  // ไปเลย". batch ทีเดียวทั้งหน้า แทนการพ่นรหัสดิบ (admin_may / uuid).
+  const staffNames = await resolveStaffNameMap(
+    rows.flatMap((r) => [r.adminid, r.adminidupdate]),
   );
 
   // 2nd query — merge customer names from tb_users
@@ -575,14 +582,14 @@ export default async function AdminYuanPaymentsPage({
                         {r.paydateadmin ? (
                           <div className="text-muted text-[11px] mt-1">
                             {new Date(r.paydateadmin).toLocaleDateString("th-TH")}
-                            {r.adminid ? ` · ${r.adminid}` : ""}
+                            {r.adminid ? ` · ${staffLabel(r.adminid, staffNames)}` : ""}
                           </div>
                         ) : null}
                       </td>
                       {/* อัปเดต — admin ที่อัปเดตสถานะ (legacy col 8) */}
                       <td className="px-3 py-3 text-[11px] text-center whitespace-nowrap">
                         {r.adminidupdate ? (
-                          <span className="text-slate-600">{r.adminidupdate}</span>
+                          <span className="text-slate-600">{staffLabel(r.adminidupdate, staffNames)}</span>
                         ) : (
                           <span className="text-muted">—</span>
                         )}

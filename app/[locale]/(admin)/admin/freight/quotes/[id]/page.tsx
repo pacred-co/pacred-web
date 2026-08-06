@@ -8,6 +8,7 @@ import {
 } from "@/lib/validators/freight-quote";
 import { QuoteDetailClient, type QuoteDetailData, type LineItem } from "./quote-detail-client";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap } from "@/lib/admin/sale-rep-names";
 
 /**
  * V-E6 — /admin/freight/quotes/[id]
@@ -124,15 +125,20 @@ export default async function AdminFreightQuoteDetailPage({
     console.error(`[admin_audit_log list] failed`, { code: auditRawErr.code, message: auditRawErr.message });
   }
   type AuditRaw = {
-    id: string; action: string; created_at: string; payload: unknown;
+    id: string; action: string; created_at: string; payload: unknown; admin_id: string | null;
     admin: { member_code: string | null; first_name: string | null; last_name: string | null } | { member_code: string | null; first_name: string | null; last_name: string | null }[] | null;
   };
   const audit = ((auditRaw ?? []) as unknown as AuditRaw[]).map((a) => ({
     id:      a.id,
     action:  a.action,
     created_at: a.created_at,
+    admin_id: a.admin_id ?? null,
     admin:   Array.isArray(a.admin) ? a.admin[0] ?? null : a.admin,
   }));
+  // ชื่อพนักงานบน timeline — โชว์ "ชื่อเล่น" ไม่ใช่ uid ดิบ (owner 2026-08-06)
+  const auditNames = await resolveStaffNameMap(audit.map((a) => a.admin_id));
+  const auditActor = (a: (typeof audit)[number]) =>
+    auditNames.get(a.admin_id ?? "") ?? a.admin?.member_code ?? "—";
 
   const isSuper       = isGodRole(roles);
 
@@ -253,8 +259,7 @@ export default async function AdminFreightQuoteDetailPage({
                 </span>
                 <span className="font-medium">{a.action}</span>
                 <span className="text-muted">
-                  by {a.admin?.member_code ?? "—"}
-                  {a.admin?.first_name && ` (${a.admin.first_name}${a.admin.last_name ? " " + a.admin.last_name : ""})`}
+                  โดย {auditActor(a)}
                 </span>
               </li>
             ))}

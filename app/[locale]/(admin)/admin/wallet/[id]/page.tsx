@@ -88,6 +88,7 @@ import { loadLinkedForwarderPaymentBatch } from "@/lib/forwarder/linked-payment-
 import { parseCashbackNoteTag } from "@/lib/cashback/note-tag";
 import { parseFrozenWalletPaymentQuote } from "@/lib/wallet/payment-quote-snapshot";
 import { bangkokClockParts } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -712,6 +713,10 @@ export default async function AdminWalletDetail({
     }
   }
 
+  // ── ชื่อพนักงานที่ดำเนินรายการ (owner 2026-08-06 "id uid พนักงานยังมีบัคเต็มอยู่เลย") ──
+  // เดิมพ่นรหัสดิบ (admin_may / uuid) → resolve เป็น "ชื่อเล่น" มาตรฐานเดียวทั้งระบบ.
+  const staffNames = await resolveStaffNameMap([row.adminidupdate]);
+
   // ────────────────────────────────────────────────────────────
   // RENDER
   // ────────────────────────────────────────────────────────────
@@ -1196,7 +1201,7 @@ export default async function AdminWalletDetail({
               <div className="flex justify-center pt-1">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FF4961] px-4 py-1.5 text-[13px] font-medium text-white">
                   ดำเนินรายการแล้ว โดย :{" "}
-                  <span className="font-mono font-semibold">{row.adminidupdate ?? "—"}</span>
+                  <span className="font-semibold">{staffLabel(row.adminidupdate, staffNames)}</span>
                 </span>
               </div>
             )}

@@ -12,6 +12,7 @@ import { canViewCostProfit } from "@/lib/admin/money-visibility";
 import { Link } from "@/i18n/navigation";
 import { listMomoInvoiceSettlements } from "@/actions/admin/momo-invoice-settlement";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,9 @@ export default async function MomoSettlementHistoryPage() {
   const res = await listMomoInvoiceSettlements({ limit: 200 });
   const rows = res.ok && res.data ? res.data.rows : [];
   const loadError = res.ok ? null : res.error;
+
+  // ผู้ทำรายการ = ชื่อเล่นพนักงาน (owner 2026-08-06: เลิกโชว์รหัสดิบ admin_xxx) · batch ทีเดียวทั้งหน้า
+  const staffNames = await resolveStaffNameMap(rows.map((r) => r.createdBy));
 
   return (
     <main className="p-4 lg:p-8 space-y-5">
@@ -115,7 +119,7 @@ export default async function MomoSettlementHistoryPage() {
                     </td>
 
                     <td className="px-4 py-3 text-center text-xs whitespace-nowrap">
-                      <span className="font-medium text-foreground">{r.createdBy ?? "-"}</span>
+                      <span className="font-medium text-foreground">{staffLabel(r.createdBy, staffNames)}</span>
                     </td>
 
                     <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">{r.lineCount}</td>

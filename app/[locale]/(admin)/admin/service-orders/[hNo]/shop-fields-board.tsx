@@ -74,6 +74,8 @@ export type ShopFieldsItem = {
 };
 export type ShopFieldsRow = {
   cnameshop: string;
+  /** owner 2026-08-06 (P22467) — ชื่อร้านทุกแบบในตะกร้าเดียวกัน ("สั้น / ชื่อบริษัท") */
+  shopNamesLabel?: string;
   cshippingnumber: string;
   ctrackingnumber: string;
   items?: ShopFieldsItem[];   // per-line ¥ cPriceUpdate (legacy update3.php L85)
@@ -401,7 +403,7 @@ export function ShopFieldsBoard({
                 <div className="bg-primary-50 dark:bg-primary-950/30 border-b border-primary-200 px-3 py-2 flex flex-wrap items-center gap-2">
                   <Store className="h-4 w-4 text-primary-600 shrink-0" />
                   <span className="text-sm font-bold text-foreground">
-                    ชื่อร้าน: <span className="font-normal">{sh.cnameshop}</span>
+                    ชื่อร้าน: <span className="font-normal">{sh.shopNamesLabel || sh.cnameshop}</span>
                   </span>
                   <span className="ml-auto inline-flex items-center gap-2 text-[11px]">
                     {/* per-shop spawn status (legacy update4.php ตรวจสอบสถานะนำเข้า) */}

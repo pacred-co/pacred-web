@@ -39,6 +39,7 @@ import { TruckBookingCopyBox } from "./truck-booking-copy-box";
 import { EditStopDeliveryAddress } from "./stop-address-edit";
 import { loadCustomerAddressRows, type CustomerAddressRow } from "@/lib/legacy/customer-address-options";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -339,10 +340,15 @@ export default async function AdminDriverBatchDetailPage({
       if (code && login) adminUsernameByCode.set(code, login);
     }
   }
+  // ชื่อเล่นพนักงาน = มาตรฐานการแสดงผลทั้งระบบ (owner 2026-08-06 "เอาชื่อเล่นให้เหมือนกัน
+  // ไปเลย") — resolve ทั้ง 2 รหัสทีเดียว.
+  const staffNicknames = await resolveStaffNameMap(adminCodes);
   const adminNameOf = (code: string | null | undefined): string =>
-    adminNameByCode.get((code ?? "").trim()) ?? "";
-  // Prefer the profiles staff name; fall back to the tb_users driver name (for a
-  // customer-driver) then to the raw code so the field is never blank.
+    staffNicknames.get((code ?? "").trim())
+    ?? adminNameByCode.get((code ?? "").trim())
+    ?? "";
+  // ชื่อเล่นก่อน → ชื่อจริงใน profiles → ชื่อใน tb_users (คนขับที่เป็นลูกค้า) → รหัสเดิม
+  // (ช่องนี้ห้ามว่าง)
   const driverDisplayName = adminNameOf(batch.fdadminid) || (driverName !== "—" ? driverName : "") || (batch.fdadminid ?? "");
   const creatorDisplayName = adminNameOf(batch.fdadmincreator) || (batch.fdadmincreator ?? "");
   // ชื่อผู้ใช้ (login admin_xxx) — โชว์แทนชื่อจริงในหัวการ์ด (owner 2026-07-24) · ไม่มี login → fallback ชื่อจริง

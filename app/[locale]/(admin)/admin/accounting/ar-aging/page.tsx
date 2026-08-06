@@ -9,6 +9,7 @@ import {
   type AgingBucket,
 } from "@/actions/admin/ar-aging";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 /**
  * /admin/accounting/ar-aging — AR-aging cockpit (ลูกหนี้ค้างชำระ).
@@ -50,6 +51,14 @@ export default async function AdminARAgingPage() {
 
   const report = await getForwarderAgingReport();
   const asOfDisplay = formatThaiDateTime(report.asOf);
+
+  // รหัสเซล → ชื่อเล่น (owner 2026-08-06 · เลิกพ่นรหัสดิบ) · batch ครั้งเดียว.
+  // repName ที่ report คืนมาเป็นชื่อ-นามสกุล → ใช้เป็น fallback ถ้า resolve ไม่ได้.
+  const repNames = await resolveStaffNameMap(report.topReps.map((r) => r.adminID));
+  const repText = (code: string, fallback: string | null): string => {
+    const label = staffLabel(code, repNames);
+    return label === code ? (fallback?.trim() || code) : label;
+  };
 
   // CSV rows — flatten top-customer table for accounting collection workflow
   const csvRows: CsvRow[] = report.topCustomers.map((c, idx) => ({
@@ -225,10 +234,8 @@ export default async function AdminARAgingPage() {
                   {report.topReps.map((r, idx) => (
                     <tr key={r.adminID} className="border-t border-border hover:bg-surface-alt/30">
                       <td className="px-3 py-2 text-xs font-mono">{idx + 1}</td>
-                      <td className="px-3 py-2 text-xs">
-                        <span className="font-mono">{r.adminID}</span>
-                        {r.repName && <span className="text-muted ml-2">· {r.repName}</span>}
-                      </td>
+                      {/* ชื่อเล่นเซล — ไม่โชว์รหัสดิบ (owner 2026-08-06) */}
+                      <td className="px-3 py-2 text-xs">{repText(r.adminID, r.repName)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs">{r.count.toLocaleString("th-TH")}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">{thb(r.sumOutstanding)}</td>
                     </tr>

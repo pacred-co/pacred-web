@@ -52,9 +52,13 @@ export default async function AdminNearChurnPage({
 
   const report = await getNearChurnReport({ daysIdle, limit: 200 });
 
-  // เซล code → ชื่อคน (owner 2026-08-05 · เลิกโชว์ uid ดิบ). "" ถ้าไม่มีเซล ·
+  // เซล code → ชื่อเล่น (owner 2026-08-06 · เลิกโชว์ uid ดิบทุกจอ). "" ถ้าไม่มีเซล ·
   // "เซลส่วนกลาง" ถ้า admin_center. SOT: sale-rep-names.ts (tb_admin).
-  const saleRepNames = await resolveSaleRepNameMap(report.rows.map((r) => r.adminIDSale));
+  // batch ครั้งเดียวครอบทั้ง 2 ตาราง (byRep + rows) — ไม่ resolve ทีละแถว.
+  const saleRepNames = await resolveSaleRepNameMap([
+    ...report.rows.map((r) => r.adminIDSale),
+    ...report.byRep.map((r) => r.adminID),
+  ]);
   const saleText = (code: string | null): string => {
     const c = (code ?? "").trim();
     return !c ? "" : c === "admin_center" ? "เซลส่วนกลาง" : saleRepLabel(c, saleRepNames);
@@ -173,7 +177,8 @@ export default async function AdminNearChurnPage({
                   {report.byRep.map((r, idx) => (
                     <tr key={r.adminID} className="border-t border-border">
                       <td className="px-3 py-2 text-xs font-mono">{idx + 1}</td>
-                      <td className="px-3 py-2 font-mono text-xs">{r.adminID}</td>
+                      {/* ชื่อเล่นเซล — ไม่โชว์รหัสดิบ (owner 2026-08-06) */}
+                      <td className="px-3 py-2 text-xs">{saleText(r.adminID) || "—"}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs">{r.count.toLocaleString("th-TH")}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs">฿{thb(r.revenue)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">฿{thb(r.margin)}</td>

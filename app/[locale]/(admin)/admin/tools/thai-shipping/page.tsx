@@ -8,6 +8,7 @@ import {
   lookupProvinceByZip,
   ALL_SHIPBY_CARRIERS,
 } from "@/lib/tools/thai-shipby-rules";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 /**
  * /admin/tools/thai-shipping — ตรวจสอบขนส่งไทย (hub of 6 read-only checkers).
@@ -422,6 +423,9 @@ async function renderMaomaoFreeTab() {
   }
   const rows = data ?? [];
 
+  // ผู้สร้าง = ชื่อเล่นพนักงาน (owner 2026-08-06: เลิกโชว์รหัสดิบ) · batch ทีเดียวทั้งตาราง
+  const staffNames = await resolveStaffNameMap(rows.map((r) => r.adminid));
+
   return (
     <section className="space-y-4">
       <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
@@ -472,7 +476,7 @@ async function renderMaomaoFreeTab() {
                   <td className="px-4 py-2.5">{r.addressdistrict}</td>
                   <td className="px-4 py-2.5">{r.addressprovince}</td>
                   <td className="px-4 py-2.5 font-mono text-xs">{r.addresszipcode}</td>
-                  <td className="px-4 py-2.5 text-xs text-muted">{r.adminid}</td>
+                  <td className="px-4 py-2.5 text-xs text-muted">{staffLabel(r.adminid, staffNames)}</td>
                 </tr>
               ))}
             </tbody>

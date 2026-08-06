@@ -43,6 +43,9 @@ import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportCombineBillAll } from "@/actions/admin/export/combine-bill";
 import { CombineBillRowActions } from "./combine-bill-row-actions";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+// owner 2026-08-06 — คอลัมน์ "ผู้รวมบิล" เคยพ่นรหัสดิบ (admin_may) → resolve เป็น
+// ชื่อเล่นผ่าน SOT เดียวทั้งระบบ. รหัสดิบยังอยู่ใน CSV/lookup ตามเดิม.
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 // ^ Wired client island (delete + print buttons). Kept on the page so super
 //   role retains the existing functional delete; visual chrome of the
 //   buttons inside renders without `.pcs-legacy` wrapper — Wave 21 will
@@ -246,6 +249,9 @@ export default async function CombineBillPage({
     if (arr) arr.push(r.fid);
     else itemsByBill.set(r.billid, [r.fid]);
   }
+
+  // ชื่อพนักงานผู้รวมบิล — batch ทีเดียวต่อหน้า (ห้าม await ในลูปแถว)
+  const staffNameMap = await resolveStaffNameMap(bills.map((b) => b.adminid));
 
   // ── Filter banner copy (forwarder-bill.php L111-114) ─────────
   const filterBanner =
@@ -456,7 +462,7 @@ export default async function CombineBillPage({
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-xs font-mono">{row.adminid}</td>
+                      <td className="px-4 py-3 text-xs">{staffLabel(row.adminid, staffNameMap)}</td>
                       <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
                         {row.date
                           ? formatThaiDateTime(row.date)

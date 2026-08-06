@@ -701,7 +701,9 @@ async function resolvePayeeNames(
       if (!id) continue;
       const full = (r.adminName ?? "").trim();
       const nick = (r.adminNickname ?? "").trim();
-      const label = full && nick ? `${full} (${nick})` : full || nick;
+      // owner 2026-08-06 — ป้ายพนักงานมาตรฐานเดียวทั้งระบบ: **ชื่อเล่น** ก่อนเสมอ
+      // (เดิม "ชื่อจริง (ชื่อเล่น)" = คนละทรงกับจออื่น) · ไม่มีชื่อเล่นค่อยใช้ชื่อจริง
+      const label = nick || full;
       if (label) names.set(id, label);
     }
   }

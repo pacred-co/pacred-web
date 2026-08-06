@@ -91,6 +91,7 @@
  *   quote handler (4-CH); ordered + completed do 2-3 CH and skip SMS.
  */
 
+import { shopCartKey } from "@/lib/admin/shop-cart-group";
 import { revalidatePath } from "next/cache";
 import { bustAdminChrome } from "@/lib/cache/revalidate-chrome";
 import { z } from "zod";
@@ -957,14 +958,53 @@ export async function adminUpdateShopTracking(
       return { ok: false, error: `กรอกเลข Tracking ได้เฉพาะออเดอร์สถานะ "รอร้านจีนจัดส่ง" (4) หรือ "ถึงโกดังจีน" (40) · สถานะปัจจุบัน = ${header.hstatus}` };
     }
 
+    // owner 2026-08-06 (P22467) — เขียนแทรคกิ้ง "ทั้งตะกร้าจีน" ไม่ใช่แค่ชื่อร้านที่ส่งมา:
+    // ร้านเดียวกันบน 1688 เขียนได้หลายชื่อ (สั้น/ชื่อบริษัท) แต่อยู่ตะกร้า (cshippingnumber)
+    // เดียวกัน = แทรคกิ้งเดียวกัน. เดิม scope `cnameshop` → คีย์ชื่อหนึ่ง อีกชื่อไม่ได้เลข
+    // → slot ไม่ครบ ออเดอร์ค้าง / คนคีย์ซ้ำจนเสี่ยง spawn เบิ้ล.
+    // โหลดแถวมาแมปคีย์ตะกร้าก่อน แล้ว update by id (ไม่มีทาง match กว้างเกิน).
+    const { data: rowsForKey, error: rowsForKeyErr } = await admin
+      .from("tb_order")
+      .select("id, cnameshop, cshippingnumber")
+      .eq("hno", header.hno)
+      .limit(10_000);
+    if (rowsForKeyErr) return { ok: false, error: `db_error:${rowsForKeyErr.code ?? "unknown"}` };
+    const idsByCartKey = new Map<string, number[]>();
+    for (const r of (rowsForKey ?? []) as Array<{ id: number; cnameshop: string | null; cshippingnumber: string | null }>) {
+      const key = shopCartKey(r);
+      if (!key) continue;
+      const ids = idsByCartKey.get(key) ?? [];
+      ids.push(Number(r.id));
+      idsByCartKey.set(key, ids);
+    }
+    // ชื่อร้านที่ส่งมา → คีย์ตะกร้าของมัน (ชื่อเดียวกันอยู่ได้ตะกร้าเดียวเท่านั้น · verify prod)
+    const cartKeyByShopName = new Map<string, string>();
+    for (const r of (rowsForKey ?? []) as Array<{ cnameshop: string | null; cshippingnumber: string | null }>) {
+      const nm = (r.cnameshop ?? "").trim();
+      const key = shopCartKey(r);
+      if (nm && key && !cartKeyByShopName.has(nm)) cartKeyByShopName.set(nm, key);
+    }
+
     let rowsUpdated = 0;
     let shopsUpdated = 0;
+    const doneCartKeys = new Set<string>();
     for (const sh of d.shops) {
-      const { error: shErr, count } = await admin
-        .from("tb_order")
-        .update({ ctrackingnumber: sh.ctrackingnumber }, { count: "exact" })
-        .eq("hno", header.hno)
-        .eq("cnameshop", sh.cnameshop);
+      const cartKey = cartKeyByShopName.get(sh.cnameshop);
+      const targetIds = cartKey ? (idsByCartKey.get(cartKey) ?? []) : [];
+      // ตะกร้าเดียวถูกส่งมาหลายชื่อร้าน (บอร์ดเก่า) → เขียนครั้งเดียวพอ
+      if (cartKey && doneCartKeys.has(cartKey)) continue;
+      if (cartKey) doneCartKeys.add(cartKey);
+      const { error: shErr, count } = targetIds.length > 0
+        ? await admin
+            .from("tb_order")
+            .update({ ctrackingnumber: sh.ctrackingnumber }, { count: "exact" })
+            .eq("hno", header.hno)
+            .in("id", targetIds)
+        : await admin
+            .from("tb_order")
+            .update({ ctrackingnumber: sh.ctrackingnumber }, { count: "exact" })
+            .eq("hno", header.hno)
+            .eq("cnameshop", sh.cnameshop);
       if (shErr) {
         console.error(`[tb_order per-shop tracking update] failed`, {
           code: shErr.code, message: shErr.message, shop: sh.cnameshop,

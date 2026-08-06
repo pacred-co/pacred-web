@@ -54,14 +54,25 @@ export function PurchaserCell({
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
 
+  // ป้ายพนักงานมาตรฐานเดียวทั้งระบบ (owner 2026-08-06): ชื่อเล่นก่อน → ชื่อจริง → รหัส
+  function labelOfOption(a: { adminID: string; name: string; nickname: string | null }) {
+    return (a.nickname ?? "").trim() || (a.name ?? "").trim() || a.adminID;
+  }
+
+  // ชื่อที่โชว์บนแถว: เอา "ชื่อเล่น" จากลิสต์แอดมินก่อน (ถ้ามีลิสต์) แล้วค่อย fallback
+  // ไปชื่อที่ server ส่งมา · รหัสดิบเป็นทางสุดท้าย (ไม่ให้ข้อมูลหายไปเฉยๆ)
   const currentLabel =
     purchaserAdminId && purchaserAdminId !== ""
-      ? purchaserName || purchaserAdminId
+      ? (() => {
+          const opt = admins.find((a) => a.adminID === purchaserAdminId);
+          return (opt ? labelOfOption(opt) : "") || purchaserName || purchaserAdminId;
+        })()
       : null;
 
   function nameOf(adminId: string): string {
     if (!adminId) return "ยังไม่มอบหมาย";
-    return admins.find((a) => a.adminID === adminId)?.name || adminId;
+    const opt = admins.find((a) => a.adminID === adminId);
+    return opt ? labelOfOption(opt) : adminId;
   }
 
   async function submit() {
@@ -90,7 +101,7 @@ export function PurchaserCell({
         {currentLabel ? (
           <span
             className="rounded-full border border-teal-200 bg-teal-50 px-1.5 py-0.5 font-medium text-teal-700"
-            title={`ผู้สั่งซื้อ (${purchaserAdminId})`}
+            title={`ผู้สั่งซื้อ: ${currentLabel}`}
           >
             {currentLabel}
           </span>
@@ -128,10 +139,10 @@ export function PurchaserCell({
             className="rounded-md border border-border bg-white px-1.5 py-1 text-[11px] dark:bg-surface"
           >
             <option value="">— ยังไม่มอบหมาย —</option>
+            {/* ป้าย option = ชื่อเล่นล้วน (มาตรฐานเดียวทั้งระบบ) · value ยังเป็นรหัสเดิม */}
             {admins.map((a) => (
               <option key={a.adminID} value={a.adminID}>
-                {a.name}
-                {a.nickname ? ` (${a.nickname})` : ""}
+                {labelOfOption(a)}
               </option>
             ))}
           </select>

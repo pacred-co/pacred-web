@@ -44,6 +44,8 @@ import {
   DeleteBillButton,
 } from "./edit-actions";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+// owner 2026-08-06 — การ์ด "ผู้รวมบิล" เคยโชว์รหัสดิบ (admin_may) → ชื่อเล่น (SOT เดียว).
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -176,6 +178,9 @@ export default async function CombineBillDetailPage({
       .filter((f): f is ForwarderLine => f !== undefined);
   }
 
+  // ชื่อพนักงานผู้รวมบิล (ชื่อเล่น) — resolve ทีเดียว
+  const staffNameMap = await resolveStaffNameMap([billData.adminid]);
+
   const printHref = buildCombineBillPrintHref(fids);
   const totalBoxes = lines.reduce((sum, l) => sum + Number(l.famount ?? 0), 0);
 
@@ -239,7 +244,7 @@ export default async function CombineBillDetailPage({
         </div>
         <div className="rounded-2xl border border-border bg-white dark:bg-surface p-4">
           <p className="text-xs text-muted flex items-center gap-1.5"><UserCog className="h-3.5 w-3.5" aria-hidden /> ผู้รวมบิล</p>
-          <p className="mt-1 text-sm font-mono font-medium">{billData.adminid ?? "—"}</p>
+          <p className="mt-1 text-sm font-medium">{staffLabel(billData.adminid, staffNameMap)}</p>
         </div>
       </div>
 

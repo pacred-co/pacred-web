@@ -64,6 +64,11 @@ export type ServiceOrderRow = {
   adminidcreate: string | null;
   adminidip: string | null;
   adminidupdate: string | null;
+  /**
+   * ชื่อเล่นของผู้อัปเดตล่าสุด — resolve มาจากฝั่ง server แล้ว (page.tsx)
+   * เพราะไฟล์นี้เป็น client component จะ import ตัว resolve (server-only) ไม่ได้.
+   */
+  adminidupdateName: string | null;
   userid: string;
   customerName: string | null;
   /** Contact-person sub-line when customerName=company (juristic). "" = none. */
@@ -585,8 +590,8 @@ export function ServiceOrdersTable({
                         ) : (
                           <span className="text-muted">—</span>
                         )}
-                        {r.adminidupdate && r.adminidupdate !== "" && (
-                          <div className="text-[11px] text-muted font-mono mt-0.5">{r.adminidupdate}</div>
+                        {r.adminidupdateName && (
+                          <div className="text-[11px] text-muted mt-0.5">{r.adminidupdateName}</div>
                         )}
                       </td>
                       <td

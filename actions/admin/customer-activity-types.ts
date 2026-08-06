@@ -17,6 +17,12 @@ export type ActivityEntry = {
   at: string | null;
   /** Rep who logged it (legacy admin code / profile uuid), or null. */
   by: string | null;
+  /**
+   * ชื่อเล่นพนักงานที่ resolve แล้วฝั่ง server (owner 2026-08-06 "เอาชื่อเล่นให้เหมือนกัน
+   * ไปเลย") — จอต้องโชว์ตัวนี้ ไม่ใช่ `by` ที่เป็นรหัสดิบ. null = resolve ไม่ได้ →
+   * ให้จอ fallback ไปที่ `by` ตามเดิม (ข้อมูลไม่หายไปเฉยๆ).
+   */
+  byName: string | null;
   /** For calls only — the call-outcome status (lead_call_log.status), else null. */
   callStatus: string | null;
   /** The note text / call note, or null. */

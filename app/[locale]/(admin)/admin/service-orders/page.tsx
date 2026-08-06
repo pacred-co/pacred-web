@@ -38,7 +38,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
-import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
+import { resolveSaleRepNameMap, saleRepLabel, resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 import { isGeneralCoid } from "@/lib/forwarder/coid";
 import { HSTATUS_CFG } from "@/lib/admin/service-order-status";
 import { Link } from "@/i18n/navigation";
@@ -534,6 +534,11 @@ export default async function AdminServiceOrdersPage({
     Array.from(usersByUserId.values()).map((u) => u.adminIDSale),
   );
 
+  // ── ชื่อพนักงานผู้อัปเดตล่าสุด (adminidupdate) → "ชื่อเล่น" ────────────────
+  // ตารางเป็น client component (import server-only ไม่ได้) → resolve ที่นี่
+  // แล้วส่งชื่อที่พร้อมแสดงลงไปเป็น field เดียว (owner 2026-08-06 ห้ามโชว์รหัสดิบ).
+  const updaterNames = await resolveStaffNameMap(raw.map((r) => r.adminidupdate));
+
   // ── Shape into ServiceOrderRow for the table ─────────────────────
   const rows: ServiceOrderRow[] = raw.map((r) => {
     const user = usersByUserId.get(r.userid);
@@ -585,6 +590,10 @@ export default async function AdminServiceOrdersPage({
       adminidcreate: r.adminidcreate,
       adminidip: r.adminidip,
       adminidupdate: r.adminidupdate,
+      // ชื่อเล่นของผู้อัปเดต — resolve ฝั่ง server แล้วส่งลง client (ไม่ส่งรหัสดิบไปโชว์)
+      adminidupdateName: (r.adminidupdate ?? "").trim()
+        ? staffLabel(r.adminidupdate, updaterNames)
+        : null,
       userid: r.userid,
       customerName: name,
       contactName,
@@ -829,9 +838,9 @@ export default async function AdminServiceOrdersPage({
                   >
                     <option value="">ผู้สั่งซื้อทั้งหมด</option>
                     {purchaserAdmins.map((a) => (
+                      // โชว์ "ชื่อเล่น" เป็นมาตรฐาน (value ยังเป็นรหัสเดิม ห้ามแตะ)
                       <option key={a.adminID} value={a.adminID}>
-                        {a.name}
-                        {a.nickname ? ` (${a.nickname})` : ""}
+                        {a.nickname?.trim() || a.name}
                       </option>
                     ))}
                   </select>

@@ -17,6 +17,7 @@ import { WarehouseWorkspaceNav } from "@/components/admin/warehouse-workspace-na
 import { YiwuDeliveryClient } from "./yiwu-client";
 import { fstatusBadge } from "@/lib/admin/forwarder-status";
 import { formatThaiDate } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,9 @@ export default async function AdminApiForwarderYiwuPage() {
     if (usErr) console.error("[api-forwarder-yiwu name lookup] failed", { code: usErr.code, message: usErr.message });
     for (const u of (us ?? []) as { userID: string; userName: string | null }[]) nameByPr[u.userID] = u.userName ?? "";
   }
+
+  // "คีย์โดย" = ชื่อเล่นพนักงาน (owner 2026-08-06: เลิกโชว์รหัสดิบ) · batch ทีเดียวทั้งหน้า
+  const staffNames = await resolveStaffNameMap(hist.map((r) => r.adminidcreator));
 
   return (
     <main className="p-4 lg:p-8 space-y-5">
@@ -153,7 +157,7 @@ export default async function AdminApiForwarderYiwuPage() {
                       <td className="text-right tabular-nums">{num(r.fvolume, 4)}</td>
                       <td className="whitespace-nowrap text-muted">{r.fcabinetnumber?.trim() || "—"}</td>
                       <td><span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] ${st.chip}`}>{st.label}</span></td>
-                      <td className="whitespace-nowrap text-[11px] text-muted">{r.adminidcreator ?? "—"}</td>
+                      <td className="whitespace-nowrap text-[11px] text-muted">{staffLabel(r.adminidcreator, staffNames)}</td>
                     </tr>
                   );
                 })}

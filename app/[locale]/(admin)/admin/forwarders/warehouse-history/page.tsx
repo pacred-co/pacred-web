@@ -8,6 +8,7 @@ import { FSTATUS_CFG, fstatusVivid, type FStatus } from "@/lib/admin/forwarder-s
 import { TopMenuReport } from "@/components/admin/top-menu-report";
 import { CsvButton, type CsvRow, type CsvCol } from "@/components/admin/csv-button";
 import { exportWarehouseHistoryAll } from "@/actions/admin/export/warehouse-history";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 import {
   WarehouseHistoryRelinkButton,
   WarehouseHistoryDeleteButton,
@@ -443,6 +444,16 @@ export default async function AdminForwardersWarehouseHistoryPage({
     };
   });
 
+  // ── ชื่อพนักงาน (owner 2026-08-06 · "id uid พนักงานยังมีบัคเต็มอยู่เลย") ─────
+  // จอนี้เคยพ่นรหัสดิบ 4 จุด: คนสแกน (orphan + matched) · คนเปิดงาน (f_adminidcreator)
+  // · คนวัดขนาด (f_adminidkey) → resolve เป็น **ชื่อเล่น** ทีเดียวทั้งหน้า (ห้าม await ในลูป).
+  const staffNameMap = await resolveStaffNameMap([
+    ...orphanRaw.map((r) => r.adminid),
+    ...matchedRows.map((r) => r.adminid),
+    ...matchedRows.map((r) => r.f_adminidcreator),
+    ...matchedRows.map((r) => r.f_adminidkey),
+  ]);
+
   // ── Dupe-detection scan (L248-258 inside the matched loop) ──────
   const trackingChnList = Array.from(
     new Set(
@@ -836,7 +847,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
                           <td className="px-3 py-2 text-right text-muted">—</td>
                           <td className="px-3 py-2 text-muted">—</td>
                           <td className="px-3 py-2 text-center text-muted">—</td>
-                          <td className="px-3 py-2 text-center text-[11px] text-muted">{row.adminid}</td>
+                          <td className="px-3 py-2 text-center text-[11px] text-muted">{staffLabel(row.adminid, staffNameMap)}</td>
                           <td className="px-3 py-2 text-center">
                             <WarehouseHistoryDeleteButton scanId={row.id} />
                           </td>
@@ -979,7 +990,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
                                 <div className="mt-1 flex flex-wrap gap-1">
                                   {row.f_adminidcreator && row.f_adminidcreator !== "" && (!row.f_reforder || row.f_reforder === "") && (
                                     <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[11px] font-medium">
-                                      ฝากนำเข้า: {row.f_adminidcreator}
+                                      ฝากนำเข้า: {staffLabel(row.f_adminidcreator, staffNameMap)}
                                     </span>
                                   )}
                                   {(!row.f_adminidcreator || row.f_adminidcreator === "") && (!row.f_reforder || row.f_reforder === "") && (
@@ -1011,7 +1022,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
                             )}
                             {row.f_adminidkey && (
                               <div className="text-[11px] text-muted mt-0.5" title="admin ที่วัดขนาด">
-                                @{row.f_adminidkey}
+                                @{staffLabel(row.f_adminidkey, staffNameMap)}
                               </div>
                             )}
                           </td>
@@ -1055,7 +1066,7 @@ export default async function AdminForwardersWarehouseHistoryPage({
                           <td className="px-3 py-2 text-center whitespace-nowrap">
                             <div className="text-[11px] text-muted">วันที่ถึงจีน</div>
                             <div className="text-[11px]">{row.f_fdatestatus2?.slice(0, 10) ?? "—"}</div>
-                            <div className="text-[11px] text-muted mt-1">@{row.adminid}</div>
+                            <div className="text-[11px] text-muted mt-1">@{staffLabel(row.adminid, staffNameMap)}</div>
                           </td>
                           {/* 10 — ตัวเลือก */}
                           <td className="px-3 py-2 text-center">

@@ -46,6 +46,8 @@ type Props = {
   initialUserId: string;
   /** Pacred-admin's own legacy adminid — fallback if userid blank. */
   myAdminId: string;
+  /** ชื่อเล่นของแอดมินคนที่ล็อกอิน — โชว์บนจอแทนรหัส uid (owner 2026-08-06) */
+  myAdminName?: string;
   /** Live yuan exchange rate (tb_settings.rsdefault) for ฿ preview. */
   rsDefault: number;
 };
@@ -140,7 +142,7 @@ function composeVariantStrings(
   return { ccolor, csize, cdetails };
 }
 
-export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Props) {
+export function AdminLinkPasteSearch({ initialUserId, myAdminId, myAdminName, rsDefault }: Props) {
   // Form state
   const [userid, setUserid]   = useState(initialUserId);
   const [url, setUrl]         = useState("");
@@ -377,7 +379,7 @@ export function AdminLinkPasteSearch({ initialUserId, myAdminId, rsDefault }: Pr
           value={userid}
           onChange={(e) => setUserid(e.target.value)}
           className={`${INPUT_CLS} font-mono`}
-          placeholder={`PR123 (เว้นว่าง = รถเข็นแอดมิน${myAdminId ? ` ${myAdminId}` : ""})`}
+          placeholder={`PR123 (เว้นว่าง = รถเข็นแอดมิน${myAdminId ? ` ${myAdminName || myAdminId}` : ""})`}
         />
       </div>
 

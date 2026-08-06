@@ -38,6 +38,7 @@ import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { HsRateEditForm, type HsCellInitial } from "./edit-form";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName, type CorporateIdentityRow } from "@/lib/admin/customer-identity";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -187,6 +188,10 @@ export default async function CustomHsRatesPage({
       corp: u ? corpRowFromName(historyCorpNames.get(u.userID)) : null,
     }).name || "—";
 
+  // แอดมินที่แก้เรท = ชื่อเล่นพนักงาน (owner 2026-08-06: เลิกโชว์รหัสดิบ) · batch ทีเดียว
+  // (CSV export ยังคงส่งรหัสดิบเหมือนเดิม — ไม่แตะคอลัมน์/ค่าในไฟล์)
+  const staffNames = await resolveStaffNameMap(history.map((h) => h.adminid));
+
   // Drill-in: show full matrix for one customer (latest rates by joining children to their LATEST crhsid)
   const selectedUserid = sp.userid?.trim().toUpperCase() ?? null;
   let selectedUser: URow | null = null;
@@ -323,7 +328,7 @@ export default async function CustomHsRatesPage({
                         <td className="px-3 py-2 text-xs">
                           {h.date ? formatThaiDateTime(h.date) : "—"}
                         </td>
-                        <td className="px-3 py-2 font-mono text-xs">{h.adminid ?? "—"}</td>
+                        <td className="px-3 py-2 text-xs">{staffLabel(h.adminid, staffNames)}</td>
                         <td className="px-3 py-2">
                           <Link
                             href={`/admin/rates/custom-hs?userid=${encodeURIComponent(h.userid)}`}

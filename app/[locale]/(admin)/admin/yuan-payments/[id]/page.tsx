@@ -59,6 +59,7 @@ import { YuanVerifyFlow } from "./verify-flow";
 import { paystatusToPacred } from "@/lib/legacy-paystatus-map";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -288,6 +289,9 @@ export default async function AdminYuanPaymentDetail({
     }
   }
 
+  // ชื่อพนักงานที่ดำเนินรายการ (owner 2026-08-06) — เดิมพ่นรหัสดิบ → โชว์ "ชื่อเล่น"
+  const staffNames = await resolveStaffNameMap([row.adminid]);
+
   return (
     <main className="p-4 lg:p-6 space-y-4">
       {/* ── 1. TOP CARDS: per-user + system-wide ── */}
@@ -352,7 +356,7 @@ export default async function AdminYuanPaymentDetail({
             </span>
             {row.adminid && status !== "1" ? (
               <p className="text-[11px] text-muted">
-                ดำเนินรายการแล้ว โดย: <span className="font-mono">{row.adminid}</span>
+                ดำเนินรายการแล้ว โดย: <span className="font-medium">{staffLabel(row.adminid, staffNames)}</span>
               </p>
             ) : null}
             {row.paydateadmin ? (

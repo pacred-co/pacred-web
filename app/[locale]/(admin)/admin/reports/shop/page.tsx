@@ -38,6 +38,7 @@ import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { parsePage } from "@/lib/admin/paginate";
 import { Pagination } from "@/components/admin/pagination";
 import { formatThaiDateTime } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -243,6 +244,10 @@ export default async function AdminReportShopPage({
       }
     }
   }
+
+  // ชื่อพนักงานผู้อัปเดต — batch ครั้งเดียวทั้งหน้า แล้วโชว์ "ชื่อเล่น"
+  // (owner 2026-08-06: จอไหนก็ห้ามพ่นรหัสดิบ admin_xxx/uuid ให้คนอ่าน)
+  const staffNames = await resolveStaffNameMap(headers.map((h) => h.adminidupdate));
 
   // 4) Shape rows.
   const rows: Row[] = headers.map((h) => {
@@ -460,7 +465,7 @@ export default async function AdminReportShopPage({
                           {legacyOrderStatusThai(r.hstatus) || r.hstatus}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-muted">{r.adminidupdate ?? "—"}</td>
+                      <td className="px-4 py-3 text-xs text-muted">{staffLabel(r.adminidupdate, staffNames)}</td>
                     </tr>
                   );
                 })}

@@ -50,6 +50,7 @@ import { PageTopMenubar } from "@/components/admin/page-top-menubar";
 import { PageHeader } from "@/components/admin/page-header";
 import { DISBURSEMENT_MENUBAR } from "@/lib/admin/disbursement-menubar";
 import { nameShipBy } from "@/lib/freight/shipping-methods";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 import { parseDbInstant, formatThaiDateTime, formatThaiDate } from "@/lib/utils/thai-datetime";
 
 export const dynamic = "force-dynamic";
@@ -122,6 +123,8 @@ type DetailGroup = {
 // Per-driver summary (myTableByAdmin).
 type DriverSummary = {
   adminID: string;
+  /** ชื่อเล่นพนักงาน (มาตรฐานการแสดงผลทั้งระบบ) — fallback ชื่อจริง → รหัสเดิม */
+  nickname: string;
   name: string;
   points: number; // จำนวนจุดที่ส่ง = # of detail groups
   countF: number; // จำนวนแทรคกิ้ง
@@ -336,6 +339,21 @@ export default async function DriverRunsPage({
     return u ? `${u.userName ?? ""} ${u.userLastName ?? ""}`.trim() : "";
   };
 
+  // 5a. ชื่อพนักงาน (คนขับ + ผู้มอบงาน) — resolve ทีเดียวทั้งหน้า (batch เดียว ไม่ยิงราย
+  // แถว). owner 2026-08-06: จอไหนที่เคยพ่นรหัสดิบ (AD020 / admin_may) ต้องโชว์ "ชื่อเล่น"
+  // เป็นมาตรฐานเดียวกัน. ดึง token จาก `batches` (superset ของทุก group).
+  const staffNames = await resolveStaffNameMap(
+    batches.flatMap((b) => [b.fdadminid, b.fdadmincreator]),
+  );
+  /** ป้ายคนขับ: ชื่อเล่น → ชื่อจริงใน tb_users (คนขับที่เป็นลูกค้า) → รหัสเดิม */
+  const driverLabel = (id: string | null | undefined): string => {
+    const c = (id ?? "").trim();
+    if (!c) return "—";
+    const nick = staffNames.get(c);
+    if (nick) return nick;
+    return driverName(c) || staffLabel(c, staffNames);
+  };
+
   // ── 6. Per-driver summary + grand totals ───────────────────────────────────
   const summaryMap = new Map<string, DriverSummary>();
   let totCountF = 0, totBoxes = 0, totWeight = 0, totVolume = 0, totWorkMinutes = 0;
@@ -350,6 +368,7 @@ export default async function DriverRunsPage({
     if (!s) {
       s = {
         adminID: g.fdadminid,
+        nickname: driverLabel(g.fdadminid),
         name: driverName(g.fdadminid),
         points: 0, countF: 0, boxes: 0, weight: 0, volume: 0,
         workMinutesSum: 0, completedGroups: 0,
@@ -373,7 +392,8 @@ export default async function DriverRunsPage({
 
   // ── 7. Chart series (per driver) ───────────────────────────────────────────
   const chartDrivers = summaries.slice(0, 20); // cap labels for legibility
-  const chartLabels = chartDrivers.map((s) => (s.name ? `${s.adminID} · ${s.name}` : s.adminID));
+  // แกนกราฟ = ชื่อเล่น (เดิมเป็น "AD020 · ชื่อจริง" — คนอ่านกราฟไม่ได้อ่านรหัส)
+  const chartLabels = chartDrivers.map((s) => s.nickname);
 
   // ── 8. Live cue derived from the same batch set (zero extra queries) ───────
   const activeBatches = batches.filter((b) => b.fdstatus === "1");
@@ -381,10 +401,8 @@ export default async function DriverRunsPage({
   // ── 9. Driver directory for the filter (from the loaded batches) ───────────
   const directory = Array.from(new Set(batches.map((b) => b.fdadminid)))
     .filter(Boolean)
-    .map((id) => {
-      const n = driverName(id);
-      return { id, label: n ? `${id} · ${n}` : id };
-    });
+    // ป้ายในดรอปดาว = ชื่อเล่น (value ยังเป็นรหัสเดิม → ตัวกรองทำงานเหมือนเดิม)
+    .map((id) => ({ id, label: driverLabel(id) }));
 
   const rangeLabel = `${formatThaiDate(`${start}T00:00:00`)} – ${formatThaiDate(`${end}T00:00:00`)}`;
 
@@ -394,7 +412,7 @@ export default async function DriverRunsPage({
       <main className="p-4 lg:p-6 space-y-5">
         <PageHeader
           eyebrow="ออกรายงาน · คนขับรถ"
-          title={filterDriver ? `รายงานคนขับ ${filterDriver}` : "รายการคนขับรถ (เปรียบเทียบ)"}
+          title={filterDriver ? `รายงานคนขับ ${driverLabel(filterDriver)}` : "รายการคนขับรถ (เปรียบเทียบ)"}
           subtitle={
             <>
               เทียบผลงานคนขับตามช่วงเวลา — จำนวนงาน · แทรคกิ้ง · กล่อง · น้ำหนัก · CBM · เวลาทำงาน.
@@ -504,15 +522,17 @@ export default async function DriverRunsPage({
                 ) : (
                   summaries.map((s) => (
                     <tr key={s.adminID} className="hover:bg-surface-alt/40">
-                      <td className="px-3 py-2 font-mono">
+                      {/* คนขับรถ = ชื่อเล่น (ลิงก์ยังยิงด้วยรหัสเดิม) */}
+                      <td className="px-3 py-2">
                         <Link
                           href={`/admin/driver-runs?start=${start}&end=${end}&driver=${encodeURIComponent(s.adminID)}`}
                           className="text-primary-600 hover:underline"
                         >
-                          {s.adminID}
+                          {s.nickname}
                         </Link>
                       </td>
-                      <td className="px-3 py-2">{s.name || "—"}</td>
+                      {/* ชื่อ-นามสกุล (ชื่อจริง) — ซ่อนถ้าซ้ำกับชื่อเล่นคอลัมน์ซ้าย */}
+                      <td className="px-3 py-2">{s.name && s.name !== s.nickname ? s.name : "—"}</td>
                       <td className="px-3 py-2 text-right font-mono">{intTh(s.points)}</td>
                       <td className="px-3 py-2 text-right font-mono">{intTh(s.countF)}</td>
                       <td className="px-3 py-2 text-right font-mono">{intTh(s.boxes)}</td>
@@ -583,8 +603,7 @@ export default async function DriverRunsPage({
                 <li key={b.id} className="px-4 py-2 flex items-center justify-between gap-3 flex-wrap">
                   <span>
                     <Link href={`/admin/drivers/${b.id}`} className="font-mono text-primary-600 hover:underline">รอบ #{b.id}</Link>
-                    {" · "}คนขับ <span className="font-mono">{b.fdadminid}</span>
-                    {driverName(b.fdadminid) && ` · ${driverName(b.fdadminid)}`}
+                    {" · "}คนขับ <span className="font-medium">{driverLabel(b.fdadminid)}</span>
                   </span>
                   <span className="text-muted">{formatThaiDateTime(b.fddate)}</span>
                 </li>
@@ -629,8 +648,9 @@ export default async function DriverRunsPage({
                       <td className="px-2 py-1.5">
                         <Link href={`/admin/drivers/${g.fdid}`} className="font-mono text-primary-600 hover:underline">#{g.fdid}</Link>
                       </td>
-                      <td className="px-2 py-1.5 font-mono">{g.fdadmincreator || "—"}</td>
-                      <td className="px-2 py-1.5 font-mono">{g.fdadminid}</td>
+                      {/* ผู้มอบงาน / คนขับรถ = ชื่อเล่น (เดิมเป็นรหัสดิบ) */}
+                      <td className="px-2 py-1.5">{staffLabel(g.fdadmincreator, staffNames)}</td>
+                      <td className="px-2 py-1.5">{driverLabel(g.fdadminid)}</td>
                       <td className="px-2 py-1.5 text-right font-mono">{intTh(g.countF)}</td>
                       <td className="px-2 py-1.5 text-right font-mono">{intTh(g.boxes)}</td>
                       <td className="px-2 py-1.5 text-right font-mono">{dec2(g.weight)}</td>

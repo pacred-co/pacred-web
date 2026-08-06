@@ -67,12 +67,19 @@ export async function maybeCompleteShopOrder(
     return { completed: false, slotCount: 0, trackingCount: 0 };
   }
 
-  let slotCount = 0;     // arrID  — shop sub-order slots
-  let trackingCount = 0; // arrID2 — trackings entered
+  // owner 2026-08-06 (P22467) — นับเป็น "ตะกร้าจีน" ไม่ใช่ต่อแถว/ต่อชื่อร้าน:
+  // ร้านเดียวกันเขียน 2 ชื่อ → เดิมนับ slot ได้ 4 ทั้งที่มี 2 ตะกร้า = 2 แทรคกิ้ง
+  // ⇒ slotCount ไม่มีวันเท่า trackingCount → ออเดอร์ค้างไม่ปิดตลอดกาล.
+  // ตะกร้า = distinct cshippingnumber · แทรคกิ้ง = distinct ctrackingnumber
+  // (comma-bag ยังนับแยก token เหมือนเดิม — ตะกร้าเดียวส่งหลายพัสดุได้)
+  const cartSet = new Set<string>();
+  const trackingSet = new Set<string>();
   for (const r of rows ?? []) {
-    slotCount += splitShopTrackingTokens(r.cshippingnumber).length;
-    trackingCount += splitShopTrackingTokens(r.ctrackingnumber).length;
+    for (const t of splitShopTrackingTokens(r.cshippingnumber)) cartSet.add(t);
+    for (const t of splitShopTrackingTokens(r.ctrackingnumber)) trackingSet.add(t);
   }
+  const slotCount = cartSet.size;         // arrID  — จำนวนตะกร้าจีน
+  const trackingCount = trackingSet.size; // arrID2 — แทรคกิ้งที่คีย์แล้ว
 
   // 2. Re-derive the order's status as a PURE FUNCTION of the per-shop arrival
   //    roll-up (deriveShopStatus → '4' | '40' | '5'). STATUS-ONLY.

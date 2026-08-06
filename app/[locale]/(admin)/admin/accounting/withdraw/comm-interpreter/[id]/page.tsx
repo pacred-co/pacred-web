@@ -8,6 +8,7 @@ import { CommBatchPayForm } from "@/components/admin/comm-batch/comm-batch-pay-f
 import { getBatchDetail } from "@/actions/admin/withdraw-comm-batch";
 import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { formatThaiDate } from "@/lib/utils/thai-datetime";
+import { resolveStaffNameMap, staffLabel } from "@/lib/admin/sale-rep-names";
 
 /**
  * /admin/accounting/withdraw/comm-interpreter/[id] — Interpreter batch detail.
@@ -57,6 +58,13 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
   if (!detail || detail.kind !== "interpreter") notFound();
   const { header, items, totals } = detail;
 
+  // รหัสพนักงาน (ล่ามผู้รับเงิน/ผู้สร้าง/ผู้อัพเดต) → ชื่อเล่น (owner 2026-08-06) · batch ครั้งเดียว
+  const staffNames = await resolveStaffNameMap([
+    header.adminid,
+    header.adminidcreate,
+    header.adminidupdate,
+  ]);
+
   return (
     <>
       <PageTopMenubar items={DISBURSEMENT_MENUBAR} activeHref="/admin/accounting/withdraw/comm-interpreter" />
@@ -73,7 +81,8 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
           <div>
             <h1 className="text-2xl font-bold">Batch #{header.id} · {header.title || "(ไม่มีหัวข้อ)"}</h1>
             <p className="text-xs text-muted mt-1">
-              สร้าง {fmtDate(header.date)} โดย {header.adminidcreate} · อัพเดต {fmtDate(header.dateupdate)} โดย {header.adminidupdate || "—"}
+              {/* ชื่อเล่นพนักงาน — ไม่โชว์รหัสดิบ (owner 2026-08-06) */}
+              สร้าง {fmtDate(header.date)} โดย {staffLabel(header.adminidcreate, staffNames)} · อัพเดต {fmtDate(header.dateupdate)} โดย {staffLabel(header.adminidupdate, staffNames)}
             </p>
           </div>
           <span className={`rounded-full border px-3 py-1 text-xs font-medium ${STATUS_BADGE[header.status]}`}>
@@ -82,7 +91,8 @@ export default async function AdminWithdrawCommInterpreterDetailPage({
         </header>
 
         <section className={`grid gap-3 ${showMoney ? "sm:grid-cols-4" : "sm:grid-cols-1"}`}>
-          <Stat label="ผู้รับเงิน (ล่าม)" value={header.adminid} mono />
+          {/* ชื่อเล่นผู้รับเงิน — ไม่โชว์รหัสดิบ (owner 2026-08-06) */}
+          <Stat label="ผู้รับเงิน (ล่าม)" value={staffLabel(header.adminid, staffNames)} />
           {showMoney && <Stat label="ค่าคอม (ก่อน WHT)" value={thb(header.commbefore)} small />}
           {showMoney && <Stat label="หัก WHT" value={thb(header.withholding)} small />}
           {showMoney && <Stat label="รับสุทธิ" value={thb(header.amount)} />}

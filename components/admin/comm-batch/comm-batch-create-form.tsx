@@ -71,6 +71,8 @@ export function CommBatchCreateForm({
 
   const [open, setOpen] = useState(false);
   const [payeeId, setPayeeId] = useState("");
+  /** ชื่อเล่นของผู้รับเงินที่เลือกอยู่ (owner 2026-08-06 · จอห้ามพ่นรหัสดิบ) */
+  const payeeName = payees.find((p) => p.adminId === payeeId)?.name || payeeId;
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
 
@@ -251,9 +253,11 @@ export function CommBatchCreateForm({
                 className="w-full rounded-lg border border-black/15 px-3 py-2 text-sm"
               >
                 <option value="">— เลือก{payeeLabel} —</option>
+                {/* ป้าย = ชื่อเล่น (มาตรฐานเดียวทั้งระบบ · owner 2026-08-06)
+                    · fallback รหัสเดิมถ้า resolve ไม่ได้ · value ยังเป็นรหัส */}
                 {payees.map((p) => (
                   <option key={p.adminId} value={p.adminId}>
-                    {p.name ? `${p.adminId} · ${p.name}` : p.adminId}
+                    {p.name || p.adminId}
                   </option>
                 ))}
               </select>
