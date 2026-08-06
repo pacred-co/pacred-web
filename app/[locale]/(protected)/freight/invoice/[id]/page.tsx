@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PrintButton } from "@/components/print-button";
 import { MarkReceiptPrintedButton } from "@/components/freight/mark-receipt-printed-button";
 import { CONTACT, ADDRESSES, BANK, TAX_ID } from "@/components/seo/site";
+import { formatThaiTaxId } from "@/lib/admin/customer-identity";
 
 /**
  * Freight (ฝากนำเข้า / forwarder import) INVOICE document — a FAITHFUL
@@ -320,14 +321,21 @@ export default async function FreightInvoicePage({
     // the Pacred port enforces it server-side).
     if (receipt.userid !== userID) continue;
 
+    // personal_tax_id (mig 0298) — เลขผู้เสียภาษีของ **บุคคลธรรมดา** ที่ต้องพิมพ์
+    // บนใบเสร็จเหมือนของนิติ (owner 2026-08-06). ไม่มีผลกับการตัดสินนิติ/WHT.
     const { data: userRow, error: userRowErr } = await admin
       .from("tb_users")
-      .select("userName, userLastName")
+      .select("userName, userLastName, personal_tax_id")
       .eq("userID", receipt.userid)
-      .maybeSingle<{ userName: string | null; userLastName: string | null }>();
+      .maybeSingle<{
+        userName: string | null;
+        userLastName: string | null;
+        personal_tax_id: string | null;
+      }>();
     if (userRowErr) {
       console.error(`[tb_users list] failed`, { code: userRowErr.code, message: userRowErr.message });
     }
+    const personalTaxId = formatThaiTaxId(userRow?.personal_tax_id ?? "");
 
     const { data: corpRow, error: corpRowErr } = await admin
       .from("tb_corporate")
@@ -428,7 +436,9 @@ export default async function FreightInvoicePage({
           }
         }
         rowMain.corporateaddress = fullAddress;
-        rowMain.corporatenumber = "-";
+        // บุคคลธรรมดา: เดิม hardcode "-" เสมอ → ถ้ามี personal_tax_id (mig 0298)
+        // ให้พิมพ์เลขจริง ไม่มีค่อยคง "-" ตาม legacy (owner 2026-08-06).
+        rowMain.corporatenumber = personalTaxId || "-";
         rowMain.corporatename = `${rowMain.username} ${rowMain.userlastname}`;
         fName = `${rowMain.userid} ${rowMain.corporatename}`;
       } else {

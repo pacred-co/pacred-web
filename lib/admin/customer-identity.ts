@@ -68,6 +68,13 @@ export const updateUserIdentitySchema = z.object({
   userBirthday: z.union([z.literal(""), z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "วันเกิดต้องเป็น YYYY-MM-DD")]).optional().default(""),
   userLineID:   z.string().trim().max(50).optional().default(""),
   userFacebook: z.string().trim().max(255).optional().default(""),
+  // owner 2026-08-06 — เลขประจำตัวผู้เสียภาษี/บัตร ปชช. ของ **บุคคลธรรมดา** (mig 0298).
+  // รับได้ทั้งมีขีดและไม่มี → normalize เป็น digits ล้วน 13 หลัก · "" = ล้างค่า.
+  // (นิติบุคคลใช้ tb_corporate.corporatenumber เหมือนเดิม — คนละช่อง คนละความหมาย)
+  personalTaxId: z.preprocess(
+    (v) => (typeof v === "string" ? v.replace(/\D/g, "") : v),
+    z.union([z.literal(""), z.string().regex(/^\d{13}$/, "เลขผู้เสียภาษี/บัตรประชาชน ต้อง 13 หลัก")]),
+  ).optional().default(""),
   adminIDSale:  z.string().trim().max(20).optional(),
   coID:         z.string().trim().max(10).optional(),
 });
@@ -111,7 +118,13 @@ export type BillingIdentity = {
   isJuristic: boolean;
   /** Company name for juristic (falls back to the person name if the corp name is blank); else the person full name. */
   name: string;
-  /** 13-digit corporate tax id for juristic; '' when none. */
+  /**
+   * เลขประจำตัวผู้เสียภาษีที่พิมพ์บนเอกสาร — นิติ = corporatenumber ·
+   * **บุคคลธรรมดา = tb_users.personal_tax_id** (owner 2026-08-06 "ใบเสร็จของบุคคล
+   * ก็ควรมีเลขผู้เสียภาษี"). '' เมื่อไม่มี.
+   * 🔴 ห้ามเอาค่านี้ไปตัดสิน isJuristic — ตัวตัดสินอ่าน corp tax-id เท่านั้น
+   * (ไม่งั้นบุคคลที่ใส่เลข จะกลายเป็นนิติ → โดนหัก WHT 1% ผิด).
+   */
   taxId: string;
   /** Registered company address for juristic; '' when none (caller may fall back to a delivery address). */
   registeredAddress: string;
@@ -138,14 +151,30 @@ export function resolveBillingIdentity(input: {
   userName: string | null | undefined;
   userLastName: string | null | undefined;
   corp: CorporateIdentityRow | null | undefined;
+  /**
+   * เลขผู้เสียภาษีของบุคคลธรรมดา (`tb_users.personal_tax_id` · mig 0298).
+   * optional — caller เดิมที่ไม่ส่งมา ได้พฤติกรรมเดิมเป๊ะ (ไม่ต้องแก้ทีเดียวทั้งระบบ).
+   */
+  personalTaxId?: string | null;
 }): BillingIdentity {
   const personName = `${input.userName ?? ""} ${input.userLastName ?? ""}`.trim();
   const corpName = (input.corp?.corporatename ?? "").trim();
-  const taxId = (input.corp?.corporatenumber ?? "").trim();
+  const corpTaxId = (input.corp?.corporatenumber ?? "").trim();
   const registeredAddress = (input.corp?.corporateaddress ?? "").trim();
-  const isJuristic = input.userCompany === "1" || taxId !== "";
+  // 🔴 ตัวตัดสินนิติ = corp tax-id เท่านั้น (ห้ามรวมเลขบุคคล ไม่งั้น WHT 1% ผิด)
+  const isJuristic = input.userCompany === "1" || corpTaxId !== "";
   const name = isJuristic ? (corpName || personName) : personName;
+  // เลขที่พิมพ์บนเอกสาร: นิติ→corp · บุคคล→personal (owner 2026-08-06)
+  const personalTaxId = (input.personalTaxId ?? "").trim();
+  const taxId = isJuristic ? corpTaxId : personalTaxId;
   return { isJuristic, name, taxId, registeredAddress, personName };
+}
+
+/** จัดรูปแบบเลขผู้เสียภาษี/บัตร ปชช. 13 หลัก → 1-1027-00255-83-3 (แสดงผลเท่านั้น) */
+export function formatThaiTaxId(value: string | null | undefined): string {
+  const d = (value ?? "").replace(/\D/g, "");
+  if (d.length !== 13) return (value ?? "").trim();
+  return `${d[0]}-${d.slice(1, 5)}-${d.slice(5, 10)}-${d.slice(10, 12)}-${d[12]}`;
 }
 
 /**

@@ -491,7 +491,7 @@ export async function autoIssueReceiptOnPaymentLand(
   type UserRow = { userID: string; userName: string | null; userLastName: string | null; userTel: string | null; userEmail: string | null };
   const { data: userRow, error: userErr } = await admin
     .from("tb_users")
-    .select("userID, userName, userLastName, userTel, userEmail")
+    .select("userID, userName, userLastName, userTel, userEmail, personal_tax_id")
     .eq("userID", userid)
     .maybeSingle<UserRow>();
   if (userErr) {
@@ -544,7 +544,11 @@ export async function autoIssueReceiptOnPaymentLand(
 
   // G8 — a bill-snapshot value (incl "" for a personal buyer's blank tax id) wins;
   // `undefined` (no bill · direct-slip/wallet path) falls through to the live resolve.
-  const recompNumber = opts.recompNumberOverride ?? (corpRow?.corporatenumber ?? "");
+  // owner 2026-08-06 — นิติ = เลขนิติ · **บุคคล = personal_tax_id** (mig 0298) ⇒ ใบเสร็จ
+  // ของบุคคลมีเลขผู้เสียภาษีด้วย. `corporatetype` ยังตัดสินจากความเป็นนิติเหมือนเดิม
+  // (ตัวเปิดบรรทัด WHT 1% อ่าน corporatetype='1') ⇒ เงินไม่กระทบ.
+  const recompNumber = opts.recompNumberOverride
+    ?? (corpRow?.corporatenumber || (userRow as { personal_tax_id?: string | null } | null)?.personal_tax_id || "");
   const recompName = opts.recompNameOverride
     ?? corpRow?.corporatename
     ?? `${userRow?.userName ?? ""} ${userRow?.userLastName ?? ""}`.trim()

@@ -15,6 +15,7 @@ import {
   CORP_STATUS,
   corporateStatusLabel,
   resolveBillingIdentity,
+  formatThaiTaxId,
   updateUserIdentitySchema,
   convertToJuristicSchema,
 } from "./customer-identity";
@@ -205,6 +206,39 @@ ok("rejects empty company_name", !convertToJuristicSchema.safeParse({
   });
   ok("mark_verified=false respected", r.success && r.data.mark_verified === false);
 }
+
+// ── owner 2026-08-06: เลขผู้เสียภาษี "บุคคลธรรมดา" (mig 0298) ──────────────
+// กติกาเงิน: เลขบุคคล **ห้าม** ทำให้กลายเป็นนิติ (ไม่งั้นโดนหัก WHT 1% ผิด)
+{
+  const r = resolveBillingIdentity({
+    userCompany: "0", userName: "ภัสสร", userLastName: "มัติโก",
+    corp: null, personalTaxId: "1102700255833",
+  });
+  eq("person+taxid: ยังเป็นบุคคล (ห้ามกลายเป็นนิติ)", r.isJuristic, false);
+  eq("person+taxid: taxId = personal_tax_id", r.taxId, "1102700255833");
+  eq("person+taxid: ชื่อ = ชื่อคน", r.name, "ภัสสร มัติโก");
+}
+{
+  // นิติ: ต้องใช้เลขนิติเสมอ แม้เผลอมี personal ติดมา
+  const r = resolveBillingIdentity({
+    userCompany: "1", userName: "PEA", userLastName: "PEA",
+    corp: { corporatename: "HOME CAMERA CO.,LTD.", corporatenumber: "0105564077716", corporateaddress: "x" },
+    personalTaxId: "1102700255833",
+  });
+  eq("juristic: ยังเป็นนิติ", r.isJuristic, true);
+  eq("juristic: taxId = corp ไม่ใช่ personal", r.taxId, "0105564077716");
+}
+{
+  // caller เดิมที่ไม่ส่ง personalTaxId → พฤติกรรมเดิมเป๊ะ
+  const r = resolveBillingIdentity({
+    userCompany: "0", userName: "A", userLastName: "B", corp: null,
+  });
+  eq("back-compat: ไม่ส่ง personal → taxId ''", r.taxId, "");
+  eq("back-compat: ยังเป็นบุคคล", r.isJuristic, false);
+}
+eq("format: 13 หลัก → ขีดแบบไทย", formatThaiTaxId("1102700255833"), "1-1027-00255-83-3");
+eq("format: ไม่ครบ 13 → คืนเดิม", formatThaiTaxId("733"), "733");
+eq("format: ว่าง → ว่าง", formatThaiTaxId(null), "");
 
 // ── summary ────────────────────────────────────────────────────────────────
 console.log(`\n${pass} passed, ${fail} failed`);
