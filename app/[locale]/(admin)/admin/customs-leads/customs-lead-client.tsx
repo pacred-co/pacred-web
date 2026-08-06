@@ -15,6 +15,12 @@ import {
   getCustomsImporterDeclarations,
   type CustomsDeclarationRow,
 } from "@/actions/admin/customs-leads";
+import {
+  CUSTOMS_LEAD_MATCH_LABEL,
+  CUSTOMS_LEAD_STATUS_CHIP,
+  CUSTOMS_LEAD_STATUS_LABEL,
+  CUSTOMS_LEAD_TRANSPORT_LABEL,
+} from "@/lib/admin/customs-lead-labels";
 
 type Lead = {
   tax_id: string;
@@ -43,28 +49,13 @@ type Lead = {
   matched_lead_source: string | null;
 };
 
-/** How this importer matched an existing customer — shown so sales trusts (or
- *  double-checks) the phone. 'name_fuzzy' = a near-name hit → eyeball it first. */
-const MATCH_LABEL: Record<string, { text: string; cls: string }> = {
-  tax:          { text: "ชนเลขนิติ", cls: "border-emerald-300 bg-emerald-50 text-emerald-700" },
-  name_corp:    { text: "ชนชื่อนิติ", cls: "border-emerald-300 bg-emerald-50 text-emerald-700" },
-  name_user:    { text: "ชนชื่อลูกค้า", cls: "border-emerald-300 bg-emerald-50 text-emerald-700" },
-  lead_freight: { text: "จากไฟล์ booking เฟรท", cls: "border-cyan-300 bg-cyan-50 text-cyan-700" },
-  name_fuzzy:   { text: "⚠ ชื่อคล้าย — เช็คก่อนโทร", cls: "border-amber-400 bg-amber-50 text-amber-800" },
-};
-
-const STATUS_CHIP: Record<string, string> = {
-  new: "bg-rose-500 text-white border-rose-600",
-  called: "bg-amber-500 text-white border-amber-600",
-  interested: "bg-blue-600 text-white border-blue-700",
-  converted: "bg-emerald-600 text-white border-emerald-700",
-  not_interested: "bg-gray-400 text-white border-gray-500",
-  our_own: "bg-purple-500 text-white border-purple-600",
-};
-const STATUS_LABEL: Record<string, string> = {
-  new: "ยังไม่โทร", called: "โทรแล้ว", interested: "สนใจ", converted: "เปิดใบขนแล้ว", not_interested: "ไม่สนใจ", our_own: "เครือเรา",
-};
-const TRANSPORT_LABEL: Record<string, string> = { road: "🚚 รถ", sea: "🚢 เรือ", air: "✈️ แอร์" };
+// ป้ายสถานะ/ทางขนส่ง/ที่มาการจับคู่ — SOT เดียวกับที่ CSV ใช้
+// (`lib/admin/customs-lead-labels.ts`) เพื่อไม่ให้จอกับไฟล์ที่ export ออกไป
+// เรียกสถานะเดียวกันคนละชื่อ.
+const MATCH_LABEL = CUSTOMS_LEAD_MATCH_LABEL;
+const STATUS_CHIP = CUSTOMS_LEAD_STATUS_CHIP;
+const STATUS_LABEL = CUSTOMS_LEAD_STATUS_LABEL;
+const TRANSPORT_LABEL = CUSTOMS_LEAD_TRANSPORT_LABEL;
 
 const BTN = "min-h-[36px] rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50";
 const fmtHs = (t: string) => (t && t.length >= 6 ? t.slice(-8).replace(/^(\d{4})(\d{2})(\d{2})$/, "$1.$2.$3") : t);
