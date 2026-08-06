@@ -82,6 +82,10 @@ const TRANSITION_OWNERS: Record<string, readonly AdminRole[]> = {
   "2->4":   ["warehouse", "ops"],            // arrival from ถึงโกดังจีน (was missing → the bug)
   "3->4":   ["warehouse", "ops"],            // arrival from กำลังส่งมาไทย (the common path)
   "4->5":   ["accounting"],                  // Bulk-bill — Accounting / Manager / CEO (manager handled by override)
+  // owner 2026-08-06 ("โกดังต้องปรับสถานะได้ แค่ 4->6 เท่านั้น") — โกดังสแกน
+  // "เตรียมส่ง" กล่องที่ถึงไทยแล้วได้โดยตรง (mirror legacy barcode-d-prepare.php
+  // ที่ flip →6 ตรงๆ). เฉพาะ warehouse · การเก็บเงินยังคุมที่คิวบัญชี/ด่านมอบงานคนขับ.
+  "4->6":   ["warehouse"],
   "5->6":   ["accounting"],                  // Wallet pay confirmed (system observer + admin manual)
   "6->7":   ["driver", "warehouse"],         // Driver delivered (mobile photo) / warehouse force-complete
   // ── Backward / skip variants (admin dropdown — legacy allows them) ──
