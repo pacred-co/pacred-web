@@ -35,6 +35,7 @@ import { computeShopOrderDebitTotal } from "@/lib/service-order/debit-total";
 import { resolveLegacyUrlMap } from "@/lib/storage/legacy-resolver";
 import { SHIP_BY_LABEL } from "@/actions/admin/reports-profit-types";
 import { loadCustomerBillingParty } from "@/lib/admin/customer-billing-party";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 
 // ── legacy label maps (function.php · faithful) ──────────────
 /** nameProductsType — fproductstype code → label. */
@@ -307,6 +308,8 @@ export type PayUserFwdRow = {
   is_svip: boolean;
   is_juristic: boolean;
   adminid_sale: string | null;
+  /** ชื่อเซลที่ resolve แล้ว (owner 2026-08-05 · เลิกโชว์ uid ดิบ) — "" ถ้าไม่มีเซล · "เซลส่วนกลาง" ถ้า admin_center. */
+  adminid_sale_name: string;
   fdatetothai: string | null;
   ftransporttype: string | null;   // for the จะมาถึงไทย window + label
   // รายละเอียด
@@ -389,6 +392,16 @@ export async function getPayUserForwarderView(
     if (svipErr && svipErr.code !== "PGRST116") console.error("[getPayUserForwarderView tb_rate_custom_cbm] failed", { code: svipErr.code, message: svipErr.message, userid: code });
     const isSvip = svipRow != null;
 
+    // เซล code → ชื่อคน (owner 2026-08-05 · เลิกโชว์ uid ดิบบนป้าย Sale). ลูกค้าเดียว
+    // ต่อหน้า → resolve ครั้งเดียว. SOT: sale-rep-names.ts (tb_admin).
+    const saleCode = (p.panel.adminid_sale ?? "").trim();
+    const saleRepNames = await resolveSaleRepNameMap([saleCode]);
+    const adminSaleName = !saleCode
+      ? ""
+      : saleCode === "admin_center"
+        ? "เซลส่วนกลาง"
+        : saleRepLabel(saleCode, saleRepNames);
+
     const { data: raw, error: fErr } = await admin
       .from("tb_forwarder")
       .select(FWD_VIEW_COLS)
@@ -446,6 +459,7 @@ export async function getPayUserForwarderView(
         is_svip: isSvip,
         is_juristic: String(r.fusercompany ?? "") === "1" || p.panel.is_juristic,
         adminid_sale: p.panel.adminid_sale,
+        adminid_sale_name: adminSaleName,
         fdatetothai: r.fdatetothai && r.fdatetothai !== "0000-00-00" ? r.fdatetothai : null,
         ftransporttype: r.ftransporttype,
         cover_url: coverMap[String(r.id)] ?? null,

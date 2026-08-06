@@ -18,16 +18,44 @@ export const EMPLOYEE_TYPE_LABEL: Record<string, string> = {
   "5": "พาร์ทเนอร์", "6": "ฟรีแลนซ์", "7": "คนในบ้าน",
 };
 
+/**
+ * ฟิลด์ข้อมูลส่วนตัวสำคัญที่ต้องกรอกให้ครบ (owner 2026-08-05: "ขึ้นธงข้อมูลส่วนตัวไม่สมบูรณ์")
+ * — คนละเรื่องกับ hasHrRecord (ที่เช็กว่ามี tb_admin row ไหม): อันนี้ row มีแล้ว แต่ฟิลด์ยังว่าง.
+ */
+export const REQUIRED_HR_FIELD_LABELS = [
+  "เบอร์โทร", "รูป", "เลขบัตรปชช.", "วันเกิด", "เพศ", "ประเภทการจ้าง",
+] as const;
+
+/** คำนวณรายการฟิลด์ที่ยังว่าง (null/empty · adminTel ขึ้นต้น na- = placeholder เบอร์ว่าง) */
+function computeMissingHrFields(tba: AdminRaw | undefined): string[] {
+  if (!tba) return [...REQUIRED_HR_FIELD_LABELS]; // ไม่มี tb_admin = ขาดครบทุกฟิลด์
+  const has = (v: string | null | undefined) => !!(v && String(v).trim());
+  const telFilled = !!(tba.adminTel && tba.adminTel.trim() && !tba.adminTel.startsWith("na-"));
+  const missing: string[] = [];
+  if (!telFilled) missing.push("เบอร์โทร");
+  if (!has(tba.adminPicture)) missing.push("รูป");
+  if (!has(tba.nationalIDCard)) missing.push("เลขบัตรปชช.");
+  if (!has(tba.adminBirthday)) missing.push("วันเกิด");
+  if (!has(tba.adminSex)) missing.push("เพศ");
+  if (!has(tba.adminType)) missing.push("ประเภทการจ้าง");
+  return missing;
+}
+
 export type StaffRow = {
   adminId: string;               // admin_login_id (spine key)
+  profileId: string;             // profiles.id (สำหรับจัดการสิทธิ์ RBAC)
   memberCode: string | null;     // AD###
   name: string;
   nickname: string | null;
   type: string;                  // adminType (from tb_admin · "" ถ้าไม่มี)
   typeLabel: string;
   isSale: boolean;
-  roles: string[];               // จาก admins (แสดงเฉยๆ)
+  isActive: boolean;             // ทำงานอยู่ (profiles.is_active) · false = ลาออก/ล็อก
+  roles: string[];               // จาก admins (active grants)
+  primaryRole: string | null;    // role หลัก (สำหรับ control เปลี่ยนสิทธิ์)
   hasHrRecord: boolean;          // มี tb_admin ไหม (ไม่มี = ต้องเติม HR detail)
+  missingFields: string[];       // ฟิลด์ข้อมูลส่วนตัวที่ยังว่าง (label ไทย) · [] = ครบ
+  isDataComplete: boolean;       // ข้อมูลส่วนตัวครบ (missingFields.length === 0)
   orgUnitId: string | null;
   positionName: string | null;
   departmentName: string | null;
@@ -37,7 +65,7 @@ type ProfileRaw = {
   id: string; admin_login_id: string | null; member_code: string | null;
   first_name: string | null; last_name: string | null; is_active: boolean; org_unit_id: string | null;
 };
-type AdminRaw = { adminID: string; adminNickname: string | null; adminType: string | null; adminStatusSale: string | null };
+type AdminRaw = { adminID: string; adminName: string | null; adminLastName: string | null; adminNickname: string | null; adminType: string | null; adminStatusSale: string | null; adminTel: string | null; adminPicture: string | null; nationalIDCard: string | null; adminBirthday: string | null; adminSex: string | null };
 
 export function typeBucket(type: string | null): "employee" | "internship" | "partner" | null {
   if (type === "3" || type === "4") return "internship";
@@ -49,11 +77,12 @@ export function typeBucket(type: string | null): "employee" | "internship" | "pa
 /** โหลด profiles staff (active) → resolve tb_admin(HR) + admins(role) + ตำแหน่ง */
 export async function loadStaffRegister(): Promise<{ rows: StaffRow[]; error: string | null }> {
   const admin = createAdminClient();
+  // โหลดพนักงานทั้งหมด (active + ลาออก/ล็อก) — client แยก tab ตาม isActive
+  // (owner 2026-08-05: ยุบ /admin/admins มารวมที่นี่ · ต้องเห็นคนออกเพื่อปลดล็อก)
   const { data: profs, error } = await admin
     .from("profiles")
     .select("id,admin_login_id,member_code,first_name,last_name,is_active,org_unit_id")
     .not("admin_login_id", "is", null)
-    .eq("is_active", true)
     .order("admin_login_id");
   if (error) {
     console.error("[hr-staff] register load failed", { code: error.code, message: error.message });
@@ -65,7 +94,7 @@ export async function loadStaffRegister(): Promise<{ rows: StaffRow[]; error: st
 
   // tb_admin (HR detail) · admins (role) · ชื่อตำแหน่ง — batch
   const [tbaRes, admRes] = await Promise.all([
-    loginIds.length ? admin.from("tb_admin").select("adminID,adminNickname,adminType,adminStatusSale").in("adminID", loginIds) : Promise.resolve({ data: [] }),
+    loginIds.length ? admin.from("tb_admin").select("adminID,adminName,adminLastName,adminNickname,adminType,adminStatusSale,adminTel,adminPicture,nationalIDCard,adminBirthday,adminSex").in("adminID", loginIds) : Promise.resolve({ data: [] }),
     profileIds.length ? admin.from("admins").select("profile_id,role").eq("is_active", true).in("profile_id", profileIds) : Promise.resolve({ data: [] }),
   ]);
   const tbaByLogin = new Map(((tbaRes.data ?? []) as AdminRaw[]).map((a) => [a.adminID, a]));
@@ -99,23 +128,92 @@ export async function loadStaffRegister(): Promise<{ rows: StaffRow[]; error: st
     const unit = p.org_unit_id ? nameById.get(p.org_unit_id) : null;
     const dept = unit?.parentId ? nameById.get(unit.parentId) : null;
     const t = (tba?.adminType ?? "").trim();
-    const nameParts = [p.first_name, p.last_name].filter(Boolean).join(" ").trim();
+    // แหล่งเดียว = tb_admin → ชื่อจาก tb_admin ก่อน (profiles = mirror · fallback)
+    const nameParts = [tba?.adminName ?? p.first_name, tba?.adminLastName ?? p.last_name].filter(Boolean).join(" ").trim();
+    const roles = rolesByProfile.get(p.id) ?? [];
+    const missingFields = computeMissingHrFields(tba);
     return {
       adminId: login,
+      profileId: p.id,
       memberCode: p.member_code,
       name: nameParts || login,
       nickname: tba?.adminNickname ?? null,
       type: t,
       typeLabel: t ? (EMPLOYEE_TYPE_LABEL[t] ?? "—") : "— (ยังไม่มีข้อมูล HR)",
       isSale: tba?.adminStatusSale === "1",
-      roles: rolesByProfile.get(p.id) ?? [],
+      isActive: p.is_active,
+      roles,
+      primaryRole: roles[0] ?? null,
       hasHrRecord: !!tba,
+      missingFields,
+      isDataComplete: missingFields.length === 0,
       orgUnitId: p.org_unit_id,
       positionName: unit?.name ?? null,
       departmentName: dept?.name ?? null,
     };
   });
   return { rows, error: null };
+}
+
+export type StaffDetail = {
+  adminId: string;
+  memberCode: string | null;
+  hasHrRecord: boolean;
+  // identity (single-source · profiles + tb_admin เขียนตรงกัน)
+  firstName: string; lastName: string; nickname: string;
+  phone: string; photoUrl: string;
+  sex: string; birthday: string; // yyyy-mm-dd
+  // HR detail (tb_admin)
+  type: string; salaryType: string; salary: string; nationalId: string;
+  isSale: boolean;
+  roles: string[];
+  positionName: string | null;
+};
+
+/** โหลดข้อมูลพนักงานคนเดียว (profiles + tb_admin) สำหรับฟอร์มแก้ไข */
+export async function loadStaffDetail(adminLoginId: string): Promise<StaffDetail | null> {
+  const admin = createAdminClient();
+  const { data: p, error } = await admin
+    .from("profiles")
+    .select("id,admin_login_id,member_code,first_name,last_name,phone,avatar_url,sex,birthday,org_unit_id")
+    .eq("admin_login_id", adminLoginId)
+    .maybeSingle();
+  if (error) { console.error("[hr-staff] detail load failed", { code: error.code, message: error.message }); return null; }
+  if (!p) return null;
+
+  const [{ data: tba }, { data: adm }, unitName] = await Promise.all([
+    admin.from("tb_admin").select("adminName,adminLastName,adminNickname,adminTel,adminPicture,adminSex,adminBirthday,adminType,salaryType,salary,nationalIDCard,adminStatusSale").eq("adminID", adminLoginId).maybeSingle(),
+    admin.from("admins").select("role").eq("profile_id", (p as { id: string }).id).eq("is_active", true),
+    p.org_unit_id
+      ? admin.from("hr_org_units").select("name_th").eq("id", p.org_unit_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const t = tba as null | { adminName: string | null; adminLastName: string | null; adminNickname: string | null; adminTel: string | null; adminPicture: string | null; adminSex: string | null; adminBirthday: string | null; adminType: string | null; salaryType: string | null; salary: number | null; nationalIDCard: string | null; adminStatusSale: string | null };
+  const dOnly = (v: string | null | undefined) => (v ?? "").slice(0, 10); // yyyy-mm-dd
+  // เบอร์ว่าง placeholder na-* → แสดงเป็นว่าง
+  const telClean = (v: string | null | undefined) => (v && !v.startsWith("na-") ? v : "");
+
+  // แหล่งเดียว = tb_admin (owner 2026-08-05) → อ่าน identity จาก tb_admin ก่อน,
+  // profiles (mirror) เป็น fallback กันกรณียังไม่มี tb_admin
+  return {
+    adminId: adminLoginId,
+    memberCode: p.member_code,
+    hasHrRecord: !!t,
+    firstName: t?.adminName ?? p.first_name ?? "",
+    lastName: t?.adminLastName ?? p.last_name ?? "",
+    nickname: t?.adminNickname ?? "",
+    phone: telClean(t?.adminTel) || p.phone || "",
+    photoUrl: t?.adminPicture || p.avatar_url || "",
+    sex: t?.adminSex ?? p.sex ?? "",
+    birthday: dOnly(t?.adminBirthday ?? p.birthday),
+    type: (t?.adminType ?? "1").trim() || "1",
+    salaryType: (t?.salaryType ?? "2").trim() || "2",
+    salary: t?.salary != null ? String(t.salary) : "",
+    nationalId: t?.nationalIDCard ?? "",
+    isSale: t?.adminStatusSale === "1",
+    roles: ((adm ?? []) as { role: string }[]).map((r) => r.role),
+    positionName: (unitName.data as { name_th: string } | null)?.name_th ?? null,
+  };
 }
 
 /** นับคนสด per org_unit (จาก profiles spine · join tb_admin adminType เพื่อ bucket) */

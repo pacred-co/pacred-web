@@ -15,6 +15,7 @@ import { PageSizeSelect } from "@/components/admin/page-size-select";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportCustomersAll } from "@/actions/admin/export/customers";
 import { CustomersTable, PendingJuristicReviews, type CustomerTableRow, type JuristicBundle } from "./customers-table";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 
 // P0-21 (ADR-0021 corporate-SOT): the inline juristic review reads the LEGACY
 // `tb_corporate` (keyed by userid = member_code) — the same SOT /admin/juristic-check
@@ -66,6 +67,9 @@ const CUSTOMERS_MENUBAR: MenubarItem[] = [
   // under "งาน" submenu — staff couldn't find new-signup queue. Promoted
   // to a top-level tab since the E2E loop step 2 ("เซลรับลูกค้า") starts here.
   { label: "🆕 รออนุมัติ",  href: "/admin/customers/pending" },
+  // owner 2026-08-05: worklist ลูกค้าที่ยังไม่มีเซลจริง (ถือ admin_center ค่ากลาง)
+  // → พนักงานไล่ติดต่อ + ใส่ชื่อเซลจริงกัน. filter G6 (?adminidsale=) รองรับอยู่แล้ว.
+  { label: "🎯 ยังไม่มีเซล",  href: "/admin/customers?adminidsale=admin_center" },
   {
     label: "ตามประเภท",
     children: [
@@ -498,6 +502,9 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
   }
 
   // Build the serializable rows for the client table.
+  // เซล code → ชื่อคน (owner 2026-08-05 · "หน้าอื่นๆ ขึ้นรหัส uid เซล หยาบจัด")
+  const saleRepNames = await resolveSaleRepNameMap(rows.map((r) => r.adminIDSale));
+
   const tableRows: CustomerTableRow[] = rows.map((r) => {
     const birthday = formatBirthday(r.userBirthday);
     const fb = (r.userFacebook ?? "").trim();
@@ -545,6 +552,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
       facebook: fb,
       isFbUrl: /^https?:\/\//i.test(fb),
       adminIDSale: r.adminIDSale ?? "",
+      saleRepName: saleRepLabel(r.adminIDSale, saleRepNames),
       wallet: walletByUser.get(r.userID) ?? 0,
       registered: r.userRegistered,
       juristic: juristicByMember.get(r.userID) ?? null,
@@ -628,7 +636,7 @@ export default async function AdminCustomersPage({ searchParams }: { searchParam
             vip: r.vip ? "VIP" : "",
             lineId: r.lineId,
             facebook: r.facebook,
-            adminIDSale: r.adminIDSale,
+            adminIDSale: r.saleRepName,
             wallet: r.wallet.toFixed(2),
             registered: r.registered ? r.registered.slice(0, 10) : "",
             juristic_tax_id: r.juristic?.taxId ?? "",

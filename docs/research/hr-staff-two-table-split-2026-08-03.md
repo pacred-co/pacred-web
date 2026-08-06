@@ -118,3 +118,35 @@ tb_admin พร้อมกัน** (ชื่อ=first/last · เบอร์=
 
 **admin_center** = ค่ากลาง/fallback (owner: "ปกติไม่ควร · ลูกค้าควรมีเซลดูแล · แต่มีเคส
 เกิดขึ้น") → คงไว้เป็น default sales account.
+
+---
+
+## ✅ RESOLVED — tb_admin = แหล่งเดียว (owner 2026-08-05 · mig 0292)
+
+owner ปฏิเสธ dual-write (เขียน 2 ตารางให้ตรง = เปราะ เจอบัค drift ตอนกดฟอร์ม):
+> "เอาทุกอย่างเข้ามาใช้ใน tb_admin ไปเลยสิครับ ใช้ที่เดียวจบๆ ... ไม่งั้นตอนมีคนใหม่
+> หรือลูกค้าใหม่ หรือพาร์ทเนอร์ กระทบหมดเลยครับ ถ้าไม่ได้ดึงจากที่ที่เดียว"
+
+**เคาะ: tb_admin = แหล่งเดียว** (89 ไฟล์ + เซล/CS ที่ลูกค้าเห็น อ่าน tb_admin อยู่แล้ว →
+ทำ tb_admin authoritative = ทุก surface ตรงกับที่ลูกค้าเห็นทันที). profiles เอาออกไม่ได้
+(Supabase Auth บังคับใช้เป็นกุญแจ login/RLS) → ทำเป็น **เงา auto-sync**.
+
+**mig 0292 `sync_tb_admin_identity_to_profiles` (applied prod):** DB trigger
+after insert/update of `adminName/adminLastName/adminTel/adminPicture/adminSex/
+adminBirthday/org_unit_id` on tb_admin → มิเรอร์ไป profiles (first_name/last_name/
+phone[strip na-*]/avatar_url/sex/birthday::date/org_unit_id) · security definer.
+⇒ **กรอก tb_admin ที่เดียว → profiles ตามให้เอง · ไม่มี drift เชิงโครงสร้าง**
+(ไม่ใช่ app dual-write ที่พลาดกลางคันได้).
+
+**โค้ด:** `saveEmployee` + `assignStaffToPosition` เขียน tb_admin ที่เดียว ·
+loaders (`loadStaffRegister`/`loadStaffDetail`) อ่าน identity จาก tb_admin (source)
+profiles=fallback. one-time: sync org ค้าง (moo CEO→Driver) + สร้าง tb_admin ให้
+sunta (seed จาก profiles จริง เพราะ created profiles-first) → active 20/20 มี tb_admin.
+
+**verify prod+จอ:** form save เขียน tb_admin → profiles mirror เป๊ะ (หมูน้อย/
+0912223333 ตรงทั้ง 2) · assign org → mirror · ทะเบียน 20 คน ชื่อจาก tb_admin · 0 error.
+gate tsc 0 · BUILD_EXIT=0. **บน dave-pacred2 · ยังไม่ main.**
+
+**⚠️ drift เก่า 2 จุด (ยังไม่แตะ · roster reads profiles-active จึงไม่โผล่ผิด):**
+- `admin_center` = ค่ากลางเซล ไม่มี profiles → fallback ไม่ใช่พนักงาน (owner คงไว้)
+- `admin_got` = profiles ปิด แต่ tb_admin เปิด (ก๊อต) → owner ยังไม่เคาะสถานะจ้าง

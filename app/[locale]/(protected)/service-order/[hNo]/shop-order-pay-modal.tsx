@@ -66,6 +66,10 @@ export function ShopOrderPayButton({
   const [qrErr, setQrErr] = useState<string | null>(null);
   const [slipPath, setSlipPath] = useState<string | null>(null);
   const [slipName, setSlipName] = useState<string>("");
+  /** สลิปใบที่ 2+ — owner 2026-07-23: ลูกค้าโอนหลายครั้งให้ครบยอดใบเดียว (ทยอยโอน/ติดลิมิต
+   *  ต่อครั้ง) แต่เดิมแนบได้ใบเดียว บัญชีเลยตรวจหลักฐานไม่ครบ. ใบหลักยังเป็น slipPath ตัวเดิม
+   *  ไม่เปลี่ยนความหมาย · slip_paths (mig 0275) เก็บทุกใบ. */
+  const [extraSlipPaths, setExtraSlipPaths] = useState<string[]>([]);
   const [slipDate, setSlipDate] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -98,21 +102,50 @@ export function ShopOrderPayButton({
   const qrToShow = qr && qr.amountSatang === payAmountSatang ? qr : null;
 
   async function onSlipChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    // รองรับทั้งเลือกหลายไฟล์พร้อมกัน (multiple) และกด "แนบสลิปเพิ่ม" ทีละใบ.
+    const files = Array.from(e.target.files ?? []);
+    // เคลียร์ input เพื่อให้เลือกไฟล์ "ชื่อเดิม" ซ้ำได้ และแนบใบถัดไปได้ทันที
+    e.target.value = "";
+    if (files.length === 0) return;
     setErr(null);
     setUploading(true);
-    const fd = new FormData();
-    fd.append("slip", file);
-    const r = await uploadShopOrderSlip(fd);
+    // อ่านค่าปัจจุบันลง local (ปุ่มถูก disabled ระหว่างอัพ จึงไม่มีการเรียกซ้อน)
+    let main = slipPath;
+    let mainName = slipName;
+    const extras = [...extraSlipPaths];
+    for (const file of files) {
+      // เพดาน 5 ใบ (ใบหลัก + 4)
+      if (main && extras.length >= 4) break;
+      const fd = new FormData();
+      fd.append("slip", file);
+      const r = await uploadShopOrderSlip(fd);
+      if (r.ok && r.data) {
+        const path = r.data.path;
+        if (!main) {
+          main = path;
+          mainName = file.name;
+        } else if (path !== main && !extras.includes(path)) {
+          extras.push(path);
+        }
+      } else {
+        setErr(r.ok ? t("uploadFailed") : r.error);
+      }
+    }
+    setSlipPath(main);
+    setSlipName(mainName);
+    setExtraSlipPaths(extras);
     setUploading(false);
-    if (r.ok && r.data) {
-      setSlipPath(r.data.path);
-      setSlipName(file.name);
+  }
+
+  /** ถอดสลิปออกก่อนกดยืนยัน — ถอดใบหลักแล้วเลื่อนใบถัดไปขึ้นมาเป็นใบหลักแทน. */
+  function removeSlip(path: string) {
+    if (path === slipPath) {
+      const [next, ...rest] = extraSlipPaths;
+      setSlipPath(next ?? null);
+      setSlipName(next ? (next.split("/").pop() ?? "") : "");
+      setExtraSlipPaths(rest);
     } else {
-      setErr(r.ok ? t("uploadFailed") : r.error);
-      setSlipPath(null);
-      setSlipName("");
+      setExtraSlipPaths((cur) => cur.filter((p) => p !== path));
     }
   }
 
@@ -132,6 +165,7 @@ export function ShopOrderPayButton({
       const r = await submitShopOrderSlipPayment(hNo, {
         slipPath,
         slipDate: slipDate || undefined,
+        ...(extraSlipPaths.length > 0 ? { extraSlipPaths } : {}),
       });
       if (r.ok) {
         setDone(true);
@@ -228,7 +262,52 @@ export function ShopOrderPayButton({
                     {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <UploadCloud className="h-5 w-5" />}
                     {slipPath ? t("slipAttached", { name: slipName }) : t("attachSlip")}
                   </button>
-                  <input ref={fileRef} type="file" accept="image/*,application/pdf" onChange={onSlipChange} className="hidden" />
+                  <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple onChange={onSlipChange} className="hidden" />
+
+                  {/* รายการสลิปที่แนบแล้ว + ปุ่มแนบเพิ่ม — owner 2026-07-23: โอนหลายครั้งต่อ
+                      1 ใบเป็นเรื่องปกติ (ทยอยโอน/ติดลิมิตต่อครั้ง) → แนบได้สูงสุด 5 ใบ. */}
+                  {slipPath && (
+                    <div className="mt-2 space-y-2">
+                      <ul className="space-y-1.5">
+                        {[slipPath, ...extraSlipPaths].map((p, i) => (
+                          <li
+                            key={p}
+                            className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2"
+                          >
+                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                            <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-gray-700 dark:text-gray-200">
+                              สลิปที่ {i + 1}
+                              <span className="ml-1 font-normal text-gray-400">
+                                · {p.split("/").pop()}
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeSlip(p)}
+                              disabled={uploading}
+                              className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              เอาออก
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      {[slipPath, ...extraSlipPaths].length < 5 && (
+                        <button
+                          type="button"
+                          onClick={() => fileRef.current?.click()}
+                          disabled={uploading}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-emerald-400 px-3 py-1.5 text-[12.5px] font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                        >
+                          <UploadCloud className="h-4 w-4" />
+                          แนบสลิปเพิ่ม (โอนหลายครั้ง)
+                        </button>
+                      )}
+                      <p className="text-[11px] text-gray-400">
+                        โอนหลายครั้งให้ครบยอดได้ — แนบให้ครบทุกใบ บัญชีจะได้ตรวจยอดรวมได้ (สูงสุด 5 ใบ)
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-3">

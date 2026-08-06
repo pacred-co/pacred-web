@@ -1241,3 +1241,35 @@ Building the cost-reveal provider I wrote `const r = useRef(x); r.current = x;` 
 **Fix (one line, whole class):** make `app-fade-in` animate **opacity only** — no transform in any keyframe of an animation applied to a WIDE wrapper (route/layout/section shells). The 4px slide was cosmetic; every fixed overlay platform-wide instantly re-anchored to the viewport. Rule: **transform/filter/will-change/backdrop-filter (incl. inside filled animations) NEVER belong on layout-level wrappers** — put motion on leaf elements. If a wide wrapper must transform, every fixed descendant needs `createPortal(document.body)`.
 
 **Debug recipe:** modal appears "somewhere in the page" instead of the viewport → walk up the ancestors looking for transform/filter/will-change/contain AND any `animation` with fill-mode whose keyframes mention transform. Cross-link: [[fix-root-prevent-whole-class]] — the portal-per-element fix (2026-07-16) treated a symptom; the keyframe was the class.
+
+---
+
+## `server-only` value imported into a client component = BUILD error tsc can't see (2026-08-05)
+
+A `"use client"` component imported a plain const (`EMPLOYEE_TYPE_LABEL`) from a
+module that starts with `import "server-only"` (`lib/admin/hr-staff.ts`).
+**`node scripts/tsc-check.mjs` passed (0 errors)** — the `server-only` guard is a
+BUNDLER boundary, not a type. Only `next build` caught it, and the message points
+at the *chain* (`lib/supabase/admin.ts [Client Component Browser]`), not the
+offending import — because pulling the server-only file drags its whole server
+dependency graph (the service-role Supabase client) into the client bundle.
+
+**Rules:**
+- A client component may import **types** from a `server-only` file (erased at
+  build) but **never a value** (const/function/array). tsc won't stop you.
+- Fix = define the small const locally in the client file, OR move it to a
+  neutral (no `server-only`) shared module. Here: duplicated the 7-line label map
+  into the client with a comment.
+- **The build gate is not optional after touching client/server module edges** —
+  tsc-green is necessary but NOT sufficient. Always `next build` before claiming done.
+
+## `rm -rf .next` while the dev server is running corrupts the Turbopack cache (2026-08-05)
+
+Ran a production `next build` with `rm -rf .next` first *while the preview dev
+server was live*. The dev server shares `.next/dev/cache/turbopack/*.sst` — deleting
+them mid-run panicked every subsequent request (`Failed to restore task data
+(corrupted database)` · `Unable to open static sorted file …sst`), and the browser
+hung on navigate. **Fix = `preview_stop` the dev server BEFORE `rm -rf .next` +
+build, then `preview_start` fresh.** Cheaper: don't `rm -rf .next` at all unless a
+stale-cache error forces it; a plain `next build` reuses cache safely. Never delete
+`.next` out from under a running dev server.

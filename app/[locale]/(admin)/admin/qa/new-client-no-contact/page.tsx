@@ -23,6 +23,7 @@ import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { CsvButton, type CsvRow } from "@/components/admin/csv-button";
 import { exportQaNewClientNoContactAll } from "@/actions/admin/export/qa-new-client-no-contact";
 import { resolveBillingIdentity, fetchCorporateNameMap, corpRowFromName } from "@/lib/admin/customer-identity";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +98,14 @@ export default async function NewClientNoContactPage({
       corp: corpRowFromName(corpNames.get(u.userID)),
     }).name || "—";
 
+  // เซล code → ชื่อคน (owner 2026-08-05 · เลิกโชว์ uid ดิบ). "—" ถ้าไม่มีเซล ·
+  // "เซลส่วนกลาง" ถ้า admin_center. SOT: sale-rep-names.ts (tb_admin).
+  const saleRepNames = await resolveSaleRepNameMap(rows.map((u) => u.adminIDSale));
+  const saleDisplay = (code: string | null): string => {
+    const c = (code ?? "").trim();
+    return !c ? "—" : c === "admin_center" ? "เซลส่วนกลาง" : saleRepLabel(c, saleRepNames);
+  };
+
   const now = nowMs();
 
   // CSV columns mirror the <thead> labels 1:1 (skip the empty action column).
@@ -127,7 +136,7 @@ export default async function NewClientNoContactPage({
       userEmail: u.userEmail || "—",
       customerType: u.userCompany === "1" ? "นิติบุคคล" : "บุคคล",
       lastLogin: u.userLastLogin ? String(u.userLastLogin).slice(0, 10) : "ไม่เคย login",
-      adminIDSale: u.adminIDSale || "—",
+      adminIDSale: saleDisplay(u.adminIDSale),
     };
   });
 
@@ -237,7 +246,13 @@ export default async function NewClientNoContactPage({
                           <span className="text-red-600 font-medium">{lastLoginLabel}</span>
                         )}
                       </td>
-                      <td className="px-2 py-2 font-mono">{u.adminIDSale || "—"}</td>
+                      <td className="px-2 py-2">
+                        {u.adminIDSale === "admin_center" ? (
+                          <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700" title="ยังไม่มีเซลจริง — ถือเซลส่วนกลางไว้ก่อน">🎯 ส่วนกลาง</span>
+                        ) : (
+                          saleDisplay(u.adminIDSale)
+                        )}
+                      </td>
                       <td className="px-2 py-2">
                         <Link
                           href={`/admin/customers?q=${u.userID}`}

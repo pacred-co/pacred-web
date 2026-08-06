@@ -38,6 +38,7 @@ import {
   fetchCorporateNameMap,
   corpRowFromName,
 } from "@/lib/admin/customer-identity";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -141,6 +142,14 @@ export default async function SalesGroupReport({ searchParams }: { searchParams:
       corp: corpRowFromName(u.userID ? corpNames.get(u.userID) : undefined),
     }).name;
 
+  // เซล code → ชื่อคน (owner 2026-08-05 · เลิกโชว์ uid ดิบ). "" ถ้าไม่มีเซล ·
+  // "เซลส่วนกลาง" ถ้า admin_center. SOT: sale-rep-names.ts (tb_admin).
+  const saleRepNames = await resolveSaleRepNameMap(users.map((u) => u.adminIDSale));
+  const saleText = (code: string | null): string => {
+    const c = (code ?? "").trim();
+    return !c ? "" : c === "admin_center" ? "เซลส่วนกลาง" : saleRepLabel(c, saleRepNames);
+  };
+
   // ── 2) Lifetime per-service aggregates (legacy status filters) ────────────
   // ฝากสั่งซื้อ — hstatus<>6.
   const { data: shopData, error: shopErr } = await admin
@@ -219,7 +228,7 @@ export default async function SalesGroupReport({ searchParams }: { searchParams:
     payCount: r.pay.count,
     payAmt: r.pay.amount,
     total: r.total,
-    sale: r.u.adminIDSale ?? "",
+    sale: saleText(r.u.adminIDSale),
     userid: r.uid,
     fullname: displayName(r.u),
   }));
@@ -385,7 +394,13 @@ export default async function SalesGroupReport({ searchParams }: { searchParams:
                     <td className="px-3 py-3 text-right font-mono text-xs">{intFmt(r.pay.count)}</td>
                     <td className="px-3 py-3 text-right font-mono text-xs">{thb(r.pay.amount)}</td>
                     <td className="px-3 py-3 text-right font-mono text-xs font-semibold text-red-700">{thb(r.total)}</td>
-                    <td className="px-3 py-3 text-[11px] text-muted">{r.u.adminIDSale || "—"}</td>
+                    <td className="px-3 py-3 text-[11px] text-muted">
+                      {r.u.adminIDSale === "admin_center" ? (
+                        <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700" title="ยังไม่มีเซลจริง — ถือเซลส่วนกลางไว้ก่อน">🎯 ส่วนกลาง</span>
+                      ) : (
+                        saleText(r.u.adminIDSale) || "—"
+                      )}
+                    </td>
                     <td className="px-3 py-3 text-xs">
                       <Link
                         href={`/admin/customers/${encodeURIComponent(r.uid)}`}

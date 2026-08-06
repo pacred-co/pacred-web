@@ -201,7 +201,8 @@ export type Row = {
     is_juristic: boolean;
     credit_limit: number;   // CUSTTAG — วงเงินเครดิต (>0 = ลูกค้าเครดิต)
     credit_days: number;    // CUSTTAG — เทอม (วัน)
-    sale_admin: string | null;
+    sale_admin: string | null;      // raw code (adminIDSale) · ใช้ทำ action/lookup
+    sale_admin_name: string | null; // resolved ชื่อเซล (owner 2026-08-05) · null = ไม่มีเซล
   } | null;
 };
 
@@ -316,13 +317,15 @@ function CustomerBadges({
   isComparison,
   isJuristic,
   saleAdmin,
+  saleAdminName,
 }: {
   coid: string;
   isSvip: boolean;
   isCorporate: boolean;
   isComparison: boolean;
   isJuristic: boolean;
-  saleAdmin: string | null;
+  saleAdmin: string | null;      // raw code · admin_center = ยังไม่มีเซลจริง (ค่ากลาง)
+  saleAdminName: string | null;  // resolved ชื่อคน (owner 2026-08-05 · เลิกโชว์ uid ดิบ)
 }) {
   // Tier-color map mirrors the legacy `badge-vip` palette but uses our
   // Tailwind tokens (no Bootstrap badge classes).
@@ -362,16 +365,25 @@ function CustomerBadges({
           นิติ
         </span>
       )}
-      <span
-        className={`rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${
-          saleAdmin
-            ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-            : "border-gray-200 bg-gray-50 text-gray-500"
-        }`}
-        title="Sale ผู้ดูแล"
-      >
-        Sale : {saleAdmin ?? "ไม่ระบุ"}
-      </span>
+      {saleAdmin === "admin_center" ? (
+        <span
+          className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700"
+          title="ยังไม่มีเซลจริง — ถือเซลส่วนกลางไว้ก่อน (รอไล่ใส่ชื่อ)"
+        >
+          🎯 ส่วนกลาง
+        </span>
+      ) : (
+        <span
+          className={`rounded-full border px-1.5 py-0.5 text-[11px] font-medium ${
+            saleAdmin
+              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+              : "border-gray-200 bg-gray-50 text-gray-500"
+          }`}
+          title="Sale ผู้ดูแล"
+        >
+          Sale : {saleAdminName ?? "ไม่ระบุ"}
+        </span>
+      )}
     </div>
   );
 }
@@ -1174,6 +1186,7 @@ export function ForwardersTable({
                             isComparison={r.customer.is_comparison}
                             isJuristic={r.customer.is_juristic}
                             saleAdmin={r.customer.sale_admin}
+                            saleAdminName={r.customer.sale_admin_name}
                           />
                         )}
                         {/* owner ④ — assigned ผู้สั่งซื้อ + reassign control */}

@@ -9,6 +9,7 @@ import {
   resolveBillingIdentity,
   corpRowFromName,
 } from "@/lib/admin/customer-identity";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 import { CreditTable, type CreditRow, type CustomerPick } from "./credit-table";
 
 // ────────────────────────────────────────────────────────────────────
@@ -92,6 +93,9 @@ export default async function AdminCustomerCreditPage() {
   // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
   const corpNames = await fetchCorporateNameMap(admin, userIds);
 
+  // เซล code → ชื่อคน (owner 2026-08-05 · เลิกโชว์ uid ดิบ). SOT: sale-rep-names.ts (tb_admin).
+  const saleRepNames = await resolveSaleRepNameMap(userRows.map((r) => r.adminIDSale));
+
   // ── Outstanding per customer (tb_credit.creditvalue · lowercase userid) ──
   const outstandingByUser = new Map<string, number>();
   if (userIds.length > 0) {
@@ -136,6 +140,7 @@ export default async function AdminCustomerCreditPage() {
   const rows: CreditRow[] = userRows.map((r) => {
     const limit = Number(r.userCreditValue ?? 0);
     const outstanding = outstandingByUser.get(r.userID) ?? 0;
+    const saleCode = (r.adminIDSale ?? "").trim();
     return {
       userID: r.userID,
       fullName:
@@ -156,6 +161,8 @@ export default async function AdminCustomerCreditPage() {
       outstanding,
       remaining: limit - outstanding,
       adminIDSale: r.adminIDSale ?? "",
+      // ชื่อเซลที่ resolve แล้ว (owner 2026-08-05) — "" ถ้าไม่มีเซล · "เซลส่วนกลาง" ถ้า admin_center.
+      saleRepName: !saleCode ? "" : saleCode === "admin_center" ? "เซลส่วนกลาง" : saleRepLabel(saleCode, saleRepNames),
       deleted: r.userStatus === "0",
     };
   });
@@ -250,7 +257,7 @@ export default async function AdminCustomerCreditPage() {
                 creditLimit: r.creditLimit.toFixed(2),
                 outstanding: r.outstanding.toFixed(2),
                 remaining: r.remaining.toFixed(2),
-                adminIDSale: r.adminIDSale,
+                adminIDSale: r.saleRepName,
                 deleted: r.deleted ? "ลบบัญชี" : "ใช้งาน",
               }))}
               fetchAll={async () => {

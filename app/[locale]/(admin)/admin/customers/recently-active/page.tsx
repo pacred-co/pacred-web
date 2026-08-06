@@ -28,6 +28,7 @@ import {
   resolveBillingIdentity,
   corpRowFromName,
 } from "@/lib/admin/customer-identity";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,14 @@ export default async function RecentlyActiveCustomersPage({
       corp: corpRowFromName(corpNames.get(r.userID)),
     }).name;
 
+  // เซล code → ชื่อคน (owner 2026-08-05 · เลิกโชว์ uid ดิบ). "" ถ้าไม่มีเซล ·
+  // "เซลส่วนกลาง" ถ้า admin_center (ยังไม่มีเซลจริง). SOT: sale-rep-names.ts (tb_admin).
+  const saleRepNames = await resolveSaleRepNameMap(rows.map((r) => r.adminIDSale));
+  const saleText = (code: string | null): string => {
+    const c = (code ?? "").trim();
+    return !c ? "" : c === "admin_center" ? "เซลส่วนกลาง" : saleRepLabel(c, saleRepNames);
+  };
+
   const activeCount = rows.filter((r) => r.userLastLogin).length;
   const dormant30d = rows.filter((r) => {
     const d = daysSince(r.userLastLogin);
@@ -161,7 +170,7 @@ export default async function RecentlyActiveCustomersPage({
                 type: r.userCompany === "1" ? "นิติบุคคล" : "บุคคล",
                 tel: r.userTel ?? "",
                 email: r.userEmail ?? "",
-                adminIDSale: r.adminIDSale ?? "",
+                adminIDSale: saleText(r.adminIDSale),
                 registered: r.userRegistered ? r.userRegistered.slice(0, 10) : "",
                 lastLogin: r.userLastLogin ? r.userLastLogin.slice(0, 10) : "",
                 daysDormant: days === null ? "" : days,
@@ -246,7 +255,13 @@ export default async function RecentlyActiveCustomersPage({
                       </div>
                     </td>
                     <td className="px-3 py-2 text-muted">{r.userTel ?? "—"}</td>
-                    <td className="px-3 py-2 font-mono text-muted">{r.adminIDSale ?? "—"}</td>
+                    <td className="px-3 py-2 text-muted">
+                      {r.adminIDSale === "admin_center" ? (
+                        <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700" title="ยังไม่มีเซลจริง — ถือเซลส่วนกลางไว้ก่อน">🎯 ส่วนกลาง</span>
+                      ) : (
+                        saleText(r.adminIDSale) || "—"
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-muted">{dateOnly(r.userRegistered)}</td>
                     <td className="px-3 py-2">
                       {r.userLastLogin ? (

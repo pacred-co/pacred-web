@@ -116,6 +116,14 @@ export async function ensureLegacyAdminRow(
     nationalIDCardFile: "",
     copyHouseRegistrationFile: "",
     resumeFile: "",
+    // 2026-08-03 — ต้องเคลียร์ข้อมูลส่วนตัวที่ clone มาจาก template ด้วย ไม่งั้น
+    // พนักงานใหม่จะได้ วันเกิด/เพศ/ศาสนา ของคนที่เป็น template มาแสดง (privacy + ผิด)
+    adminBirthday: null,
+    adminSex: null,
+    religion: "",
+    nationality: "",
+    maritalStatus: "",
+    adminTMP: "0",
   };
 
   const { error: insErr } = await admin.from("tb_admin").insert(row);

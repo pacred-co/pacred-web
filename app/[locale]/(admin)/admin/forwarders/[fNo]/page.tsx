@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveBillingIdentity } from "@/lib/admin/customer-identity";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 import { Link } from "@/i18n/navigation";
 import { requireAdmin, isGodRole } from "@/lib/auth/require-admin";
 // owner 2026-08-03 — ประวัติการแก้ขนาด/คิว เปิดเผยคิวที่ MOMO วัด + เรทขาย จึงกัน
@@ -413,6 +414,10 @@ async function tryRenderTbForwarder(
     userCompany: string | null; userCredit: string | null;
     userCreditValue: number | string | null; userCreditDate: number | string | null;
   } | null;
+
+  // owner 2026-08-05 — sale-rep CODE → ชื่อคน สำหรับป้าย Sale (เดิมโชว์ uid ดิบ).
+  const saleRepNameMap = await resolveSaleRepNameMap([u?.adminIDSale]);
+  const saleRepDisplay = saleRepLabel(u?.adminIDSale ?? null, saleRepNameMap);
 
   // ── ภูม 2026-06-18: ที่อยู่จัดส่งสินค้า ─────────────────────────────────
   // The forwarder row snapshots the delivery address into faddress* at create
@@ -904,9 +909,18 @@ async function tryRenderTbForwarder(
                 {sourceTag.label}
               </span>
               {u?.adminIDSale && u.adminIDSale !== "" && (
-                <span className="rounded-full border border-purple-200 bg-purple-50 text-purple-700 px-2.5 py-0.5 text-xs">
-                  Sale : {u.adminIDSale}
-                </span>
+                u.adminIDSale === "admin_center" ? (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 text-amber-700 px-2.5 py-0.5 text-xs"
+                    title="ยังไม่มีเซลจริง — ถือเซลส่วนกลางไว้ก่อน (รอไล่ใส่ชื่อ)"
+                  >
+                    🎯 ส่วนกลาง
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-purple-200 bg-purple-50 text-purple-700 px-2.5 py-0.5 text-xs">
+                    Sale : {saleRepDisplay}
+                  </span>
+                )
               )}
               {r.fcredit === "1" && (
                 <span className="rounded-full border border-red-200 bg-red-50 text-red-700 px-2.5 py-0.5 text-xs">

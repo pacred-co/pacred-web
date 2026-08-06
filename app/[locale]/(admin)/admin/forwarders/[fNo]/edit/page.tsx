@@ -55,6 +55,7 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 import { Link } from "@/i18n/navigation";
 import {
   ArrowLeft, Package, Warehouse, Truck, Plane, CheckCircle2, Clock,
@@ -303,6 +304,10 @@ export default async function AdminForwarderEditPage({
     userCreditDate: number | string | null;
   } | null;
 
+  // owner 2026-08-05 — sale-rep CODE → ชื่อคน สำหรับป้าย Sale (เดิมโชว์ uid ดิบ).
+  const saleRepNameMap = await resolveSaleRepNameMap([u?.adminIDSale]);
+  const saleRepDisplay = saleRepLabel(u?.adminIDSale ?? null, saleRepNameMap);
+
   // 2026-07-04 — resolve the account-holder DISPLAY identity (นิติบุคคล → company
   // name, not the contact person). ONE batched .in() lookup on tb_corporate.
   const corpNames = await fetchCorporateNameMap(admin, [r.userid]);
@@ -447,9 +452,18 @@ export default async function AdminForwarderEditPage({
                 {sourceTag.label}
               </span>
               {u?.adminIDSale && u.adminIDSale !== "" && (
-                <span className="rounded-full border border-purple-200 bg-purple-50 text-purple-700 px-2 py-0.5 text-xs">
-                  Sale: {u.adminIDSale}
-                </span>
+                u.adminIDSale === "admin_center" ? (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 text-amber-700 px-2 py-0.5 text-xs"
+                    title="ยังไม่มีเซลจริง — ถือเซลส่วนกลางไว้ก่อน (รอไล่ใส่ชื่อ)"
+                  >
+                    🎯 ส่วนกลาง
+                  </span>
+                ) : (
+                  <span className="rounded-full border border-purple-200 bg-purple-50 text-purple-700 px-2 py-0.5 text-xs">
+                    Sale: {saleRepDisplay}
+                  </span>
+                )
               )}
               {r.fcredit === "1" && (
                 <span className="rounded-full border border-red-200 bg-red-50 text-red-700 px-2 py-0.5 text-xs">

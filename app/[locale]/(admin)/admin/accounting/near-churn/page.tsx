@@ -7,6 +7,7 @@ import { CustomerCodeLink } from "@/components/admin/customer-code-link";
 import { getNearChurnReport } from "@/actions/admin/near-churn";
 import { AlertCircle, Phone, MessageCircle, Mail } from "lucide-react";
 import { formatThaiDate } from "@/lib/utils/thai-datetime";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 
 /**
  * /admin/accounting/near-churn — inactive customer win-back report.
@@ -51,12 +52,20 @@ export default async function AdminNearChurnPage({
 
   const report = await getNearChurnReport({ daysIdle, limit: 200 });
 
+  // เซล code → ชื่อคน (owner 2026-08-05 · เลิกโชว์ uid ดิบ). "" ถ้าไม่มีเซล ·
+  // "เซลส่วนกลาง" ถ้า admin_center. SOT: sale-rep-names.ts (tb_admin).
+  const saleRepNames = await resolveSaleRepNameMap(report.rows.map((r) => r.adminIDSale));
+  const saleText = (code: string | null): string => {
+    const c = (code ?? "").trim();
+    return !c ? "" : c === "admin_center" ? "เซลส่วนกลาง" : saleRepLabel(c, saleRepNames);
+  };
+
   const csvRows: CsvRow[] = report.rows.map((r) => ({
     "userid":          r.userid,
     "ชื่อลูกค้า":       r.fullName,
     "เบอร์โทร":          r.userTel ?? "",
     "อีเมล":            r.userEmail ?? "",
-    "เซลผู้ดูแล":         r.adminIDSale ?? "",
+    "เซลผู้ดูแล":         saleText(r.adminIDSale),
     "ตู้สำเร็จทั้งหมด":   r.totalDelivered,
     "ยอดขายรวม":      r.totalRevenue,
     "กำไรรวม":         r.totalMargin,
@@ -253,7 +262,13 @@ export default async function AdminNearChurnPage({
                           )}
                         </div>
                       </td>
-                      <td className="px-3 py-2 font-mono text-[11px]">{r.adminIDSale ?? "—"}</td>
+                      <td className="px-3 py-2 text-[11px]">
+                        {r.adminIDSale === "admin_center" ? (
+                          <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700" title="ยังไม่มีเซลจริง — ถือเซลส่วนกลางไว้ก่อน">🎯 ส่วนกลาง</span>
+                        ) : (
+                          saleText(r.adminIDSale) || "—"
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-right font-mono text-xs">{r.totalDelivered.toLocaleString("th-TH")}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs">฿{thb(r.totalRevenue)}</td>
                       <td className="px-3 py-2 text-right font-mono text-xs font-bold text-primary-700">฿{thb(r.totalMargin)}</td>

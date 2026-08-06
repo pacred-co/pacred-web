@@ -146,7 +146,7 @@ export function PayUserAddClient() {
   const [modalOpen, setModalOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
   const [qrPending, setQrPending] = useState(false);
-  const [slip, setSlip] = useState<File | null>(null);
+  const [slips, setSlips] = useState<File[]>([]); // หลายสลิปต่อการจ่าย 1 ครั้ง (owner 2026-08-05)
   const [topUpAmount, setTopUpAmount] = useState<string>("");
   const [paying, startPay] = useTransition();
   // ── ใบแจ้งหนี้จริง (owner 2026-08-01 · PR187) — mint เลข FRI จากใบพรีวิวบน modal ──
@@ -335,7 +335,7 @@ export function PayUserAddClient() {
     }
     setErr(null);
     setResult(null);
-    setSlip(null);
+    setSlips([]);
     setTopUpAmount("");
     // ใบที่ออกไว้ผูกกับ "ชุดรายการตอนกด" — เปิดรอบใหม่ต้องเริ่มจากพรีวิวเสมอ
     // (กดออกซ้ำบนชุดเดิม = ด่านกันบิลซ้ำคืนเลขใบเดิมมาให้ลิงก์ ไม่ mint ซ้ำ)
@@ -346,7 +346,7 @@ export function PayUserAddClient() {
   function closeModal() {
     setModalOpen(false);
     setQrDataUrl("");
-    setSlip(null);
+    setSlips([]);
     setTopUpAmount("");
   }
 
@@ -444,14 +444,14 @@ export function PayUserAddClient() {
 
     if (keyType === "2") {
       // FORWARDER — slip DIRECT-CUT (wallet off for ฝากนำเข้า on this path).
-      if (!slip) {
+      if (slips.length === 0) {
         setErr("กรุณาแนบสลิปการโอนเงิน");
         return;
       }
       const fIds = selectedFwdRows.map((r) => r.fid);
       startPay(async () => {
         try {
-          const res = await adminPayForwardersWithTopUp({ userId: panel.user.userid, fIds }, slip);
+          const res = await adminPayForwardersWithTopUp({ userId: panel.user.userid, fIds }, slips[0], slips.slice(1));
           if (res.ok && res.data) {
             setResult({ kind: "fwd-topup", data: res.data });
             closeModal();
@@ -487,7 +487,7 @@ export function PayUserAddClient() {
     }
 
     // shop, insufficient wallet → slip + top-up.
-    if (!slip) {
+    if (slips.length === 0) {
       setErr("กรุณาแนบสลิปการโอนเงิน");
       return;
     }
@@ -502,7 +502,7 @@ export function PayUserAddClient() {
     }
     startPay(async () => {
       try {
-        const res = await adminPayOrdersWithTopUp({ userId: panel.user.userid, hNos, topUpAmount: amt }, slip);
+        const res = await adminPayOrdersWithTopUp({ userId: panel.user.userid, hNos, topUpAmount: amt }, slips[0], slips.slice(1));
         if (res.ok && res.data) {
           setResult({ kind: "shop-topup", data: res.data });
           closeModal();
@@ -785,8 +785,8 @@ export function PayUserAddClient() {
           needsSlip={needsSlip}
           shopWalletCovers={shopWalletCovers}
           walletBalance={walletBalance}
-          slip={slip}
-          onSlip={setSlip}
+          slips={slips}
+          onSlips={setSlips}
           topUpAmount={topUpAmount}
           onTopUpAmount={setTopUpAmount}
           paying={paying}
@@ -1096,7 +1096,11 @@ function ForwarderTable({
                         <span className="rounded-full bg-slate-500 px-2 py-0.5 text-[11px] font-medium text-white">นิติบุคคล</span>
                       )}
                       {r.adminid_sale && (
-                        <span className="rounded-full bg-violet-500 px-2 py-0.5 text-[11px] font-medium text-white">Sale : {r.adminid_sale}</span>
+                        r.adminid_sale === "admin_center" ? (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700" title="ยังไม่มีเซลจริง — ถือเซลส่วนกลางไว้ก่อน">🎯 ส่วนกลาง</span>
+                        ) : (
+                          <span className="rounded-full bg-violet-500 px-2 py-0.5 text-[11px] font-medium text-white">Sale : {r.adminid_sale_name}</span>
+                        )
                       )}
                     </div>
                     {/* fdatetothai is the START of an arrival WINDOW, not an exact day
@@ -1409,8 +1413,8 @@ function PayModal({
   needsSlip,
   shopWalletCovers,
   walletBalance,
-  slip,
-  onSlip,
+  slips,
+  onSlips,
   topUpAmount,
   onTopUpAmount,
   paying,
@@ -1434,8 +1438,8 @@ function PayModal({
   needsSlip: boolean;
   shopWalletCovers: boolean;
   walletBalance: number;
-  slip: File | null;
-  onSlip: (f: File | null) => void;
+  slips: File[];
+  onSlips: (f: File[]) => void;
   topUpAmount: string;
   onTopUpAmount: (v: string) => void;
   paying: boolean;
@@ -1866,12 +1870,31 @@ function PayModal({
                 )}
                 <StyledFileInput
                   accept="image/*,application/pdf"
-                  label="แนบสลิปการโอน (คลิกเพื่อเลือกรูป/PDF)"
-                  hint="รองรับรูปภาพหรือไฟล์ PDF"
-                  selectedLabel={slip ? `แนบแล้ว: ${slip.name}` : undefined}
-                  onChange={(e) => onSlip(e.target.files?.[0] ?? null)}
-                  className="min-h-[184px] flex-col"
+                  multiple
+                  label="แนบสลิปการโอน (แนบได้หลายใบ · ลูกค้าโอนหลายครั้ง)"
+                  hint="รองรับรูปภาพหรือ PDF · เลือกได้หลายไฟล์ต่อการชำระ 1 ครั้ง"
+                  selectedLabel={slips.length ? `แนบแล้ว ${slips.length} ใบ` : undefined}
+                  onChange={(e) => {
+                    const picked = Array.from(e.target.files ?? []);
+                    if (picked.length) onSlips([...slips, ...picked].slice(0, 5));
+                    e.target.value = ""; // ให้เลือกไฟล์เดิมซ้ำได้
+                  }}
+                  className="min-h-[140px] flex-col"
                 />
+                {slips.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {slips.map((f, i) => (
+                      <li key={`${f.name}-${i}`} className="flex items-center justify-between gap-2 rounded-md border border-gray-200 bg-white px-2 py-1 text-[12px]">
+                        <span className="truncate">
+                          {i === 0 && <span className="mr-1 rounded bg-emerald-100 px-1 text-emerald-700">ใบหลัก</span>}
+                          {f.name}
+                        </span>
+                        <button type="button" onClick={() => onSlips(slips.filter((_, j) => j !== i))}
+                          className="shrink-0 rounded px-1 text-red-500 hover:bg-red-50">ลบ</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </>
           )}
@@ -1923,7 +1946,7 @@ function PayModal({
             <button
               type="button"
               onClick={onSubmit}
-              disabled={paying || (needsSlip && !slip)}
+              disabled={paying || (needsSlip && slips.length === 0)}
               className="rounded-md bg-red-600 px-5 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
             >
               {paying ? "กำลังทำรายการ..." : "ยืนยันการชำระเงิน"}

@@ -27,6 +27,7 @@ import {
   fetchCorporateNameMap,
   corpRowFromName,
 } from "@/lib/admin/customer-identity";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 import type {
   PaymentBoardRow,
   PaymentBoardFilters,
@@ -117,6 +118,15 @@ export async function listPaymentStatus(
     // นิติบุคคล → company name (not the contact person). One batched .in() lookup.
     const corpNames = await fetchCorporateNameMap(admin, ids);
 
+    // เซล code → ชื่อคน (owner 2026-08-05 · เลิกโชว์ uid ดิบบนบอร์ด). SOT: sale-rep-names.ts (tb_admin).
+    const saleRepNames = await resolveSaleRepNameMap(
+      Array.from(userMap.values()).map((u) => u.adminIDSale),
+    );
+    const saleRepDisplay = (code: string): string => {
+      const c = code.trim();
+      return !c ? "—" : c === "admin_center" ? "เซลส่วนกลาง" : saleRepLabel(c, saleRepNames);
+    };
+
     const term = (filters.q ?? "").trim().toLowerCase();
     const rows: PaymentBoardRow[] = [];
     let totalOwed = 0;
@@ -169,7 +179,7 @@ export async function listPaymentStatus(
         carrierLabel: SHIP_BY_LABEL[(r.fshipby ?? "").trim()] ?? ((r.fshipby ?? "").trim() || "—"),
         fstatus: r.fstatus ?? "",
         statusLabel: LEGACY_FORWARDER_STATUS[(r.fstatus ?? "") as LegacyForwarderCode]?.thai ?? PAY_HINT[r.fstatus ?? ""] ?? r.fstatus ?? "—",
-        repAdmin: (u?.adminIDSale ?? "").trim() || "—",
+        repAdmin: saleRepDisplay(u?.adminIDSale ?? ""),
         lastAdmin: (r.adminidupdate ?? r.adminid ?? "").trim() || "—",
         fdate: r.fdate,
         tracking: (r.ftrackingchn ?? "").trim() || (r.fcabinetnumber ?? "").trim() || "—",

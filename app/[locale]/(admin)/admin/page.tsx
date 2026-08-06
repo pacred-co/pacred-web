@@ -48,6 +48,7 @@ import { requireAdmin, getAdminRoles } from "@/lib/auth/require-admin";
 import { resolveViewAsRole } from "@/lib/admin/view-as-role";
 import { isGodRole } from "@/lib/admin/god-role";
 import { canViewCost } from "@/lib/admin/money-visibility";
+import { resolveSaleRepNameMap, saleRepLabel } from "@/lib/admin/sale-rep-names";
 import { Link, redirect } from "@/i18n/navigation";
 import { getLocale } from "next-intl/server";
 import { ShoppingBasket, Box, ArrowLeftRight, Wallet as WalletIcon, Users, UserX, XCircle, Eye, LayoutGrid, ArrowRight } from "lucide-react";
@@ -634,6 +635,10 @@ type RowShape = {
   // Owner 2026-06-21: show a slip thumbnail inline on the queue so the admin sees
   // at a glance that a slip is attached + it renders (signed URL · null = no slip).
   slipUrl?: string | null;
+  // Owner 2026-07-23: จำนวนสลิปทั้งหมดของการจ่ายนี้ (จาก tb_wallet_hs.slip_paths · mig 0275).
+  // >1 = ลูกค้าโอนหลายครั้งต่อ 1 ใบ → โชว์ป้าย "+N" บนรูปให้บัญชีรู้ว่ามีหลักฐานหลายใบ (ดูครบใน
+  // หน้ารายละเอียด). undefined/≤1 = ใบเดียว ไม่โชว์ป้าย (ไม่ regress แถวเดิม).
+  slipCount?: number;
   // ── Legacy-fidelity per-tab columns (owner 2026-07-04 ·
   //    docs/research/dashboard-tabstrip-fidelity-2026-07-04.md). Optional: only a
   //    tab-group that renders its TAILORED legacy table populates these; tabs still
@@ -884,7 +889,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       // real thumbnail (the bare filename was used as a broken href before).
       const base = admin
         .from("tb_wallet_hs")
-        .select("id,date,dateslip,amount,status,imagesslip,userid,note,type,typeservice,reforder,reforder2");
+        .select("id,date,dateslip,amount,status,imagesslip,slip_paths,userid,note,type,typeservice,reforder,reforder2");
       // Route the LIST through the SAME shared SOT filters as the badge/tabs
       // (lib/wallet/wallet-hs.ts) so the list, the tab count, and the sidebar badge
       // can never disagree. Direction is keyed off `type`, never the amount sign.
@@ -899,6 +904,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
         dateslip: string | null; note: string | null; type: string | null;
         typeservice: string | null;
         reforder: string | null; reforder2: string | number | null;
+        slip_paths: string[] | null;
       }>;
       // ── COLLAPSE the "เติม-แล้วจ่าย" pair to ONE row (owner 2026-06-21: "คนเดียวกัน
       //    ยอดเดียวกัน → แถวเดียว · ก็แค่รอตรวจสลิป"). Each import payment makes a
@@ -917,6 +923,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       // no amount/date heuristic is involved.
       const slipGroups = groupDirectWalletSlips(rows);
       const users = await loadUsersByUserId(admin, slipGroups.map((g) => g.anchor.userid));
+      const saleRepNames = await resolveSaleRepNameMap([...users.values()].map((u) => u.adminIDSale));
       const walletRows = await Promise.all(slipGroups.map(async (group) => {
         const r = group.anchor;
         const u = users.get(r.userid);
@@ -934,8 +941,11 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           : (r.note && r.note.trim())
             ? r.note.trim()
             : `${WALLET_TYPE_LABEL[r.type ?? ""] ?? "ชำระเงิน"}${r.reforder ? ` #${r.reforder}` : ""}`;
+        // จำนวนสลิปทั้งหมดของการจ่ายนี้ (owner 2026-07-23 · slip_paths mig 0275) — โอนหลายครั้ง
+        // ต่อ 1 ใบ. ยึด anchor (ใบที่ถือสลิป) · undefined ถ้ามีใบเดียว/ไม่มีข้อมูล (ไม่โชว์ป้าย).
+        const slipCount = Array.isArray(r.slip_paths) ? r.slip_paths.length : 0;
         const slipNote = slipUrl
-          ? `📎 แนบสลิปแล้ว`
+          ? (slipCount > 1 ? `📎 แนบสลิป ${slipCount} ใบ (โอนหลายครั้ง)` : `📎 แนบสลิปแล้ว`)
           : (r.imagesslip ? `⚠️ มีสลิปแต่เปิดไม่ได้ (${escapeHtmlInline(r.imagesslip)})` : `— ไม่มีสลิป`);
         return {
           id: String(r.id),
@@ -949,10 +959,11 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           link: `/admin/wallet/${r.id}`,
           status: r.status ?? "1",
           slipUrl,
+          slipCount: slipCount > 1 ? slipCount : undefined,
           statusLabel: "รอดำเนินการ",
           statusTone: "warning" as const,
           vip: vipTierBadge(u?.coID),
-          saleRep: (u?.adminIDSale ?? "").trim() || null,
+          saleRep: (u?.adminIDSale ?? "").trim() ? saleRepLabel(u!.adminIDSale, saleRepNames) : null,
         };
       }));
       // ภูม 2026-06-30 — รวมสลิป "ใบวางบิล" (เซลแนบ · รอบัญชีตรวจ) เข้าคิว "ชำระเงิน"
@@ -1007,6 +1018,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       }
       const rows = (data ?? []) as unknown as RawHeaderOrderRow[];
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
+      const saleRepNames = await resolveSaleRepNameMap([...users.values()].map((u) => u.adminIDSale));
       // Product cover thumbnail (self-explaining-row §0g — "ดึงรูปสินค้ามาโชว์").
       const coverMap = await resolveLegacyUrlMap(rows.map((r) => ({ id: r.id, filename: r.hcover })), "cover");
       return rows.map((r) => {
@@ -1037,7 +1049,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           statusLabel: st.label,
           statusTone: st.tone,
           vip: vipTierBadge(u?.coID),
-          saleRep: (u?.adminIDSale ?? "").trim() || null,
+          saleRep: (u?.adminIDSale ?? "").trim() ? saleRepLabel(u!.adminIDSale, saleRepNames) : null,
           ipc: (r.adminidcreate ?? "").trim() || null,
           promo: null,
           note: noteTxt || null,
@@ -1095,6 +1107,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           : rows.filter((r) => !driverSet.has(Number(r.id)));
       }
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
+      const saleRepNames = await resolveSaleRepNameMap([...users.values()].map((u) => u.adminIDSale));
       const fcoverMap = await resolveLegacyUrlMap(rows.map((r) => ({ id: r.id, filename: r.fcover })), "cover");
       return rows.map((r) => {
         const u = users.get(r.userid);
@@ -1131,7 +1144,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           noteVisibility: (r.fnote ?? "").trim() ? "both" as const : null,
           updateAdmin: (r.adminidupdate ?? "").trim() || null,
           vip: vipTierBadge(u?.coID),
-          saleRep: (u?.adminIDSale ?? "").trim() || null,
+          saleRep: (u?.adminIDSale ?? "").trim() ? saleRepLabel(u!.adminIDSale, saleRepNames) : null,
         };
       });
     }
@@ -1150,6 +1163,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       }
       const rows = (data ?? []) as unknown as RawPaymentRow[];
       const users = await loadUsersByUserId(admin, rows.map((r) => r.userid));
+      const saleRepNames = await resolveSaleRepNameMap([...users.values()].map((u) => u.adminIDSale));
       const paySlipMap = await resolveLegacyUrlMap(rows.map((r) => ({ id: r.id, filename: r.imagesslip })), "slip");
       return rows.map((r) => {
         const u = users.get(r.userid);
@@ -1179,7 +1193,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           statusLabel: "รอดำเนินการ",
           statusTone: "warning",
           vip: vipTierBadge(u?.coID),
-          saleRep: (u?.adminIDSale ?? "").trim() || null,
+          saleRep: (u?.adminIDSale ?? "").trim() ? saleRepLabel(u!.adminIDSale, saleRepNames) : null,
         };
       });
     }
@@ -1257,6 +1271,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           if (c.userid && nm) corpNameByUser.set(c.userid, nm);
         }
       }
+      const saleRepNames = await resolveSaleRepNameMap([...extraMap.values()].map((e) => e.adminIDSale));
       return rows.map((u) => {
         const ex = extraMap.get(u.userID);
         const identity = resolveBillingIdentity({
@@ -1280,7 +1295,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           channelLabel: ex?.channel ? (CHANNEL_LABEL[ex.channel] ?? "—") : "—",
           note: (ex?.userNote ?? "").trim() || null,
           vip: vipTierBadge(ex?.coID),
-          saleRep: (ex?.adminIDSale ?? "").trim() || null,
+          saleRep: (ex?.adminIDSale ?? "").trim() ? saleRepLabel(ex!.adminIDSale, saleRepNames) : null,
         };
       });
     }
@@ -1894,12 +1909,18 @@ function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
                     {/* Slip thumbnail (owner 2026-06-21) — proves a slip is attached
                         + renders; click opens the full slip in a new tab. */}
                     {r.slipUrl ? (
-                      <a href={r.slipUrl} target="_blank" rel="noopener noreferrer" className="shrink-0" title="เปิดสลิปเต็ม">
+                      <a href={r.slipUrl} target="_blank" rel="noopener noreferrer" className="relative shrink-0" title={r.slipCount && r.slipCount > 1 ? `เปิดสลิปใบหลัก (โอน ${r.slipCount} ครั้ง · ดูครบในหน้ารายละเอียด)` : "เปิดสลิปเต็ม"}>
                         <SlipImage
                           src={r.slipUrl}
                           pdfMode="tile"
                           className="h-16 w-16 rounded-lg border border-border object-cover bg-surface-alt hover:ring-2 hover:ring-primary-300"
                         />
+                        {/* หลายสลิป (owner 2026-07-23) — ป้าย +N มุมบนขวา บอกว่าโอนหลายครั้ง */}
+                        {r.slipCount && r.slipCount > 1 ? (
+                          <span className="absolute -right-1.5 -top-1.5 inline-flex min-w-[18px] items-center justify-center rounded-full bg-primary-600 px-1 text-[10px] font-bold leading-[16px] text-white shadow ring-2 ring-white" title={`โอน ${r.slipCount} ครั้ง`}>
+                            +{r.slipCount - 1}
+                          </span>
+                        ) : null}
                       </a>
                     ) : null}
                     <div className="min-w-0">

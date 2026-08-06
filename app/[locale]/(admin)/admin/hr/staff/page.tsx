@@ -17,7 +17,8 @@ import { StaffAssignClient } from "./staff-assign-client";
 export const dynamic = "force-dynamic";
 
 export default async function StaffPage() {
-  await requireAdmin(["super", "accounting"]);
+  const { roles } = await requireAdmin(["super", "accounting"]);
+  const canManageRoles = roles.includes("super") || roles.includes("ultra"); // จัดสิทธิ์/ล็อก = super/ultra
   const [{ rows, error }, positions] = await Promise.all([loadStaffRegister(), loadPositionOptions()]);
 
   return (
@@ -33,25 +34,30 @@ export default async function StaffPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-xs font-semibold tracking-widest text-primary-600">ADMIN · HUMAN RESOURCES</p>
-          <h1 className="flex items-center gap-2 text-2xl font-bold"><Users className="h-6 w-6 text-primary-600" /> ทะเบียนพนักงาน · จัดคนเข้าตำแหน่ง</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-bold"><Users className="h-6 w-6 text-primary-600" /> พนักงานทั้งหมด · จัดตำแหน่ง + สิทธิ์</h1>
           <p className="mt-0.5 text-xs text-muted leading-relaxed">
-            รายชื่อพนักงานทั้งหมดจาก profiles (ที่เดียว · รวม login+สิทธิ์+HR) — จัดแต่ละคนเข้าตำแหน่งในผัง แล้วผังจะนับคนสดเอง
+            หน้าเดียวรวมทุกอย่าง (ยุบ /admin/admins มารวม · owner 2026-08-05) — ตัวตน/ตำแหน่งในผัง/สิทธิ์ระบบ/สถานะ ดึงจากแหล่งเดียว (tb_admin + ผัง HR)
           </p>
         </div>
-        <Link href="/admin/hr/org-chart" className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
-          <Building2 className="h-4 w-4" /> ดูผังองค์กร
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/admin/hr/staff/new" className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700">
+            + เพิ่มพนักงาน
+          </Link>
+          <Link href="/admin/hr/org-chart" className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">
+            <Building2 className="h-4 w-4" /> ดูผังองค์กร
+          </Link>
+        </div>
       </header>
 
       <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-[11.5px] text-sky-800 leading-relaxed">
-        📌 <b>เฟส 2</b> — เลือกตำแหน่งในช่องขวาของแต่ละคน → บันทึกทันที · ตำแหน่งที่ยังไม่มีคนจัดเข้าจะขึ้น <b>แดง</b> บนผัง (ต้องจัดคน) ·
-        ข้อมูล legacy เก่าจัดตำแหน่งไม่ตรง จึงต้องจัดใหม่ทีละคน
+        📌 <b>ตำแหน่งในผัง</b> = อยู่ทีมไหน (นับคนสดบนผัง) · <b>สิทธิ์ระบบ (role)</b> = เห็น/ทำอะไรได้ (คนละแกน) ·
+        แท็บ "ลาออก · ล็อก" ดูคนออก + <b>กดเปิดกลับ</b>ได้ (ปลดล็อกทุกชั้น){canManageRoles ? "" : " · (เฉพาะ super แก้สิทธิ์/ล็อกได้)"}
       </div>
 
       {error ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">โหลดทะเบียนไม่สำเร็จ ({error})</div>
       ) : (
-        <StaffAssignClient rows={rows} positions={positions} />
+        <StaffAssignClient rows={rows} positions={positions} canManageRoles={canManageRoles} />
       )}
     </main>
   );

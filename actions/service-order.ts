@@ -1334,7 +1334,7 @@ export async function uploadShopOrderSlip(
  */
 export async function submitShopOrderSlipPayment(
   hNo: string,
-  opts: { slipPath: string; slipDate?: string },
+  opts: { slipPath: string; slipDate?: string; extraSlipPaths?: string[] },
 ): Promise<ActionResult<{ tx_id: string; already_submitted: boolean }>> {
   const impErr = await assertNotImpersonating();
   if (impErr) return impErr;
@@ -1353,6 +1353,23 @@ export async function submitShopOrderSlipPayment(
   if (!slipPath.startsWith(`${userId}/`)) return { ok: false, error: "slip_not_owned" };
   const slipOk = await validateStoredFile("slips", slipPath, ["image", "pdf"]);
   if (!slipOk.ok) return { ok: false, error: `slip_invalid: ${slipOk.error}` };
+
+  // สลิปใบที่ 2+ (owner 2026-07-23 · เคส PR172 โอนหลายครั้งรวมเป็นยอดใบเดียว · mig 0275).
+  // `slipPath` ยังเป็น "ใบหลัก" ที่ลง tb_wallet_hs.imagesslip ตามเดิมทุกประการ — ใบพวกนี้
+  // ต่อท้ายลง slip_paths เพื่อให้บัญชีตรวจหลักฐานได้ครบ. ต้องผ่าน "ด่านเดียวกันเป๊ะ" กับใบหลัก
+  // (เจ้าของโฟลเดอร์ + magic-byte) + กันซ้ำใบเดิม (คลาสเดียวกับ submitForwarderPayment).
+  const extraSlips: string[] = [];
+  for (const raw of opts.extraSlipPaths ?? []) {
+    const p = (raw ?? "").trim();
+    if (!p || p === slipPath || extraSlips.includes(p)) continue; // ว่าง/ซ้ำใบหลัก/ซ้ำกันเอง = ข้ามเงียบๆ
+    if (!p.startsWith(`${userId}/`)) return { ok: false, error: "slip_not_owned" };
+    const chk = await validateStoredFile("slips", p, ["image", "pdf"]);
+    if (!chk.ok) return { ok: false, error: `slip_invalid: ${chk.error}` };
+    extraSlips.push(p);
+    if (extraSlips.length >= 4) break; // รวมใบหลัก = สูงสุด 5 ใบ
+  }
+  // สลิปทุกใบ · ใบหลักมาก่อนเสมอ (ตรงกับ imagesslip ที่ INSERT เขียน).
+  const allSlipPaths = [slipPath, ...extraSlips];
 
   const admin = createAdminClient();
 
@@ -1447,6 +1464,22 @@ export async function submitShopOrderSlipPayment(
   if (insErr || !hsRow) {
     console.error(`[submitShopOrderSlipPayment insert] failed`, { code: insErr?.code, message: insErr?.message, hNo });
     return { ok: false, error: `insert_failed: ${insErr?.message ?? "no_row"}` };
+  }
+
+  // แนบสลิปหลายใบ (owner 2026-07-23 · mig 0275) — best-effort หลัง INSERT ใบหลัก:
+  // imagesslip = ใบหลัก เขียนไปแล้วในแถวข้างบนเหมือนเดิมทุกประการ ส่วน slip_paths เป็นหลักฐาน
+  // เสริม → ถ้าเขียนพลาด การจ่าย "ยังสมบูรณ์" และมีสลิปใบหลักครบ (degrade ไม่ใช่พัง). ห้าม fail
+  // การจ่ายที่บันทึกแล้วเพราะรูปแนบใบที่สอง (เส้นเงินเดียวกับ submitForwarderPayment).
+  if (allSlipPaths.length > 1) {
+    const { error: slipsErr } = await admin
+      .from("tb_wallet_hs")
+      .update({ slip_paths: allSlipPaths })
+      .eq("id", hsRow.id);
+    if (slipsErr) {
+      console.error(`[submitShopOrderSlipPayment slip_paths] failed`, {
+        code: slipsErr.code, message: slipsErr.message, hsId: hsRow.id, count: allSlipPaths.length,
+      });
+    }
   }
 
   revalidatePath(`/service-order/${header.hno}`);
