@@ -635,6 +635,10 @@ type RowShape = {
   // Owner 2026-06-21: show a slip thumbnail inline on the queue so the admin sees
   // at a glance that a slip is attached + it renders (signed URL · null = no slip).
   slipUrl?: string | null;
+  // Owner 2026-07-23: จำนวนสลิปทั้งหมดของการจ่ายนี้ (จาก tb_wallet_hs.slip_paths · mig 0275).
+  // >1 = ลูกค้าโอนหลายครั้งต่อ 1 ใบ → โชว์ป้าย "+N" บนรูปให้บัญชีรู้ว่ามีหลักฐานหลายใบ (ดูครบใน
+  // หน้ารายละเอียด). undefined/≤1 = ใบเดียว ไม่โชว์ป้าย (ไม่ regress แถวเดิม).
+  slipCount?: number;
   // ── Legacy-fidelity per-tab columns (owner 2026-07-04 ·
   //    docs/research/dashboard-tabstrip-fidelity-2026-07-04.md). Optional: only a
   //    tab-group that renders its TAILORED legacy table populates these; tabs still
@@ -885,7 +889,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
       // real thumbnail (the bare filename was used as a broken href before).
       const base = admin
         .from("tb_wallet_hs")
-        .select("id,date,dateslip,amount,status,imagesslip,userid,note,type,typeservice,reforder,reforder2");
+        .select("id,date,dateslip,amount,status,imagesslip,slip_paths,userid,note,type,typeservice,reforder,reforder2");
       // Route the LIST through the SAME shared SOT filters as the badge/tabs
       // (lib/wallet/wallet-hs.ts) so the list, the tab count, and the sidebar badge
       // can never disagree. Direction is keyed off `type`, never the amount sign.
@@ -900,6 +904,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
         dateslip: string | null; note: string | null; type: string | null;
         typeservice: string | null;
         reforder: string | null; reforder2: string | number | null;
+        slip_paths: string[] | null;
       }>;
       // ── COLLAPSE the "เติม-แล้วจ่าย" pair to ONE row (owner 2026-06-21: "คนเดียวกัน
       //    ยอดเดียวกัน → แถวเดียว · ก็แค่รอตรวจสลิป"). Each import payment makes a
@@ -936,8 +941,11 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           : (r.note && r.note.trim())
             ? r.note.trim()
             : `${WALLET_TYPE_LABEL[r.type ?? ""] ?? "ชำระเงิน"}${r.reforder ? ` #${r.reforder}` : ""}`;
+        // จำนวนสลิปทั้งหมดของการจ่ายนี้ (owner 2026-07-23 · slip_paths mig 0275) — โอนหลายครั้ง
+        // ต่อ 1 ใบ. ยึด anchor (ใบที่ถือสลิป) · undefined ถ้ามีใบเดียว/ไม่มีข้อมูล (ไม่โชว์ป้าย).
+        const slipCount = Array.isArray(r.slip_paths) ? r.slip_paths.length : 0;
         const slipNote = slipUrl
-          ? `📎 แนบสลิปแล้ว`
+          ? (slipCount > 1 ? `📎 แนบสลิป ${slipCount} ใบ (โอนหลายครั้ง)` : `📎 แนบสลิปแล้ว`)
           : (r.imagesslip ? `⚠️ มีสลิปแต่เปิดไม่ได้ (${escapeHtmlInline(r.imagesslip)})` : `— ไม่มีสลิป`);
         return {
           id: String(r.id),
@@ -951,6 +959,7 @@ async function fetchTabRows(tab: TabKey): Promise<RowShape[]> {
           link: `/admin/wallet/${r.id}`,
           status: r.status ?? "1",
           slipUrl,
+          slipCount: slipCount > 1 ? slipCount : undefined,
           statusLabel: "รอดำเนินการ",
           statusTone: "warning" as const,
           vip: vipTierBadge(u?.coID),
@@ -1900,12 +1909,18 @@ function ActiveTabTable({ tab, rows }: { tab: TabKey; rows: RowShape[] }) {
                     {/* Slip thumbnail (owner 2026-06-21) — proves a slip is attached
                         + renders; click opens the full slip in a new tab. */}
                     {r.slipUrl ? (
-                      <a href={r.slipUrl} target="_blank" rel="noopener noreferrer" className="shrink-0" title="เปิดสลิปเต็ม">
+                      <a href={r.slipUrl} target="_blank" rel="noopener noreferrer" className="relative shrink-0" title={r.slipCount && r.slipCount > 1 ? `เปิดสลิปใบหลัก (โอน ${r.slipCount} ครั้ง · ดูครบในหน้ารายละเอียด)` : "เปิดสลิปเต็ม"}>
                         <SlipImage
                           src={r.slipUrl}
                           pdfMode="tile"
                           className="h-16 w-16 rounded-lg border border-border object-cover bg-surface-alt hover:ring-2 hover:ring-primary-300"
                         />
+                        {/* หลายสลิป (owner 2026-07-23) — ป้าย +N มุมบนขวา บอกว่าโอนหลายครั้ง */}
+                        {r.slipCount && r.slipCount > 1 ? (
+                          <span className="absolute -right-1.5 -top-1.5 inline-flex min-w-[18px] items-center justify-center rounded-full bg-primary-600 px-1 text-[10px] font-bold leading-[16px] text-white shadow ring-2 ring-white" title={`โอน ${r.slipCount} ครั้ง`}>
+                            +{r.slipCount - 1}
+                          </span>
+                        ) : null}
                       </a>
                     ) : null}
                     <div className="min-w-0">

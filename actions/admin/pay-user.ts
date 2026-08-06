@@ -1017,6 +1017,27 @@ async function uploadPayUserSlip(
   return { ok: true, filename: up.filename };
 }
 
+/**
+ * อัปโหลดสลิปเพิ่ม (ลูกค้าโอนหลายครั้งต่อการจ่าย 1 ครั้ง · owner 2026-08-05) →
+ * คืน array ทุกใบ [ใบหลัก, ...ใบเพิ่ม] สำหรับ `tb_wallet_hs.slip_paths` (mig 0275).
+ * `imagesslip` = ใบหลักคงเดิม (67 ไฟล์อ่าน). ใบเพิ่มที่อัปไม่ขึ้น = ข้าม (best-effort ·
+ * ไม่ทำให้การจ่ายล้ม เพราะใบหลักสำเร็จแล้ว).
+ */
+async function uploadExtraPayUserSlips(
+  mainFilename: string,
+  extraSlipFiles: File[] | null | undefined,
+  userId: string,
+): Promise<string[]> {
+  const paths = [mainFilename];
+  for (const f of (extraSlipFiles ?? []).slice(0, 4)) {
+    if (!(f instanceof File) || f.size === 0) continue;
+    const up = await uploadPayUserSlip(f, userId);
+    if (up.ok) paths.push(up.filename);
+    else console.error("[pay-user extra slip] upload failed", { userId, error: up.error });
+  }
+  return paths;
+}
+
 // ── PHASE 3 · SHOP — top-up-and-pay ───────────────────────────────────────
 
 const payWithTopUpSchema = z.object({
@@ -1051,6 +1072,7 @@ export type PayWithTopUpResult = {
 export async function adminPayOrdersWithTopUp(
   input: unknown,
   slipFile?: File | null,
+  extraSlipFiles?: File[] | null, // สลิปเพิ่ม (owner 2026-08-05: จ่ายแทนลูกค้าแนบได้หลายใบ)
 ): Promise<AdminActionResult<PayWithTopUpResult>> {
   return withAdmin(undefined, async () => {
     const parsed = payWithTopUpSchema.safeParse(input);
@@ -1152,6 +1174,8 @@ export async function adminPayOrdersWithTopUp(
     //    file after insert; we upload first so the filename is real).
     const slip = await uploadPayUserSlip(slipFile, userId);
     if (!slip.ok) return { ok: false, error: slip.error };
+    // สลิปเพิ่ม (หลายใบต่อการจ่าย 1 ครั้ง) — imagesslip = ใบหลักคงเดิม · slip_paths = ทุกใบ
+    const slipPaths = await uploadExtraPayUserSlips(slip.filename, extraSlipFiles, userId);
 
     // 6. ZERO the existing wallet (legacy L113) — only if non-zero.
     if (oldBalance !== 0) {
@@ -1178,6 +1202,7 @@ export async function adminPayOrdersWithTopUp(
         typeservice:     "1",
         paydeposit:      "1",
         imagesslip:      slip.filename,
+        slip_paths:      slipPaths,
         depositnamebank: PAYUSER_DEPOSIT_NAMEBANK,
         nameuserbank:    "",
         nouserbank:      "",
@@ -1397,6 +1422,7 @@ export type PayForwardersWithTopUpResult = {
 export async function adminPayForwardersWithTopUp(
   input: unknown,
   slipFile?: File | null,
+  extraSlipFiles?: File[] | null, // สลิปเพิ่ม (owner 2026-08-05: จ่ายแทนลูกค้าแนบได้หลายใบ)
 ): Promise<AdminActionResult<PayForwardersWithTopUpResult>> {
   return withAdmin(undefined, async () => {
     const parsed = payForwardersWithTopUpSchema.safeParse(input);
@@ -1509,6 +1535,8 @@ export async function adminPayForwardersWithTopUp(
     // 4. upload slip BEFORE the deposit.
     const slip = await uploadPayUserSlip(slipFile, userId);
     if (!slip.ok) return { ok: false, error: slip.error };
+    // สลิปเพิ่ม (หลายใบต่อการจ่าย 1 ครั้ง) — imagesslip = ใบหลักคงเดิม · slip_paths = ทุกใบ
+    const slipPaths = await uploadExtraPayUserSlips(slip.filename, extraSlipFiles, userId);
 
     // 5. PCSF first-item side-effect (legacy L386-389) — set fTransportPrice=50
     //    on the first PCSF-zero row BEFORE the ledger/status writes, exactly as
@@ -1540,6 +1568,7 @@ export async function adminPayForwardersWithTopUp(
         typeservice:     "2",                 // legacy L365 typeService='2' (forwarder)
         paydeposit:      "1",
         imagesslip:      slip.filename,
+        slip_paths:      slipPaths,
         depositnamebank: PAYUSER_DEPOSIT_NAMEBANK,
         nameuserbank:    "",
         nouserbank:      "",
