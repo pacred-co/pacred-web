@@ -15,6 +15,9 @@
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { WarehouseWorkspaceNav } from "@/components/admin/warehouse-workspace-nav";
 import { createAdminClient } from "@/lib/supabase/admin";
+// owner 2026-08-07 — ชื่อสินค้าในแพคกิ้ง TTW เป็นจีนล้วน (品名) → แปลไทยให้พนักงานอ่านออก
+import { translateZhToTh } from "@/lib/translate/zh-to-th";
+import { containsCJK } from "@/lib/translate/cjk";
 import { TtwStagingClient, type TtwLine } from "./ttw-staging-client";
 import { YiwuPackingClient } from "../api-forwarder-yiwu/yiwu-packing-client";
 
@@ -37,6 +40,23 @@ export default async function AdminApiForwarderTtwPage() {
   }
 
   const rows = (data ?? []) as TtwLine[];
+
+  // ── แปลชื่อสินค้าจีน → ไทย (owner 2026-08-07: "สินค้ายังเป็นภาษาจีนอยู่เลย") ──
+  // DISPLAY-ONLY · ผ่าน SOT translateZhToTh (cache translation_cache mig 0246 →
+  // ชื่อซ้ำข้ามแถว/ข้ามตู้ยิง upstream ครั้งเดียว) · แปลไม่ได้ = คืนต้นฉบับ ไม่เคยว่าง.
+  // เก็บต้นฉบับไว้คู่กันเสมอ (จอมีปุ่มดูข้อความจีนต้นฉบับ — TTW อ้างอิงจากตัวจีน).
+  const zhNames = Array.from(
+    new Set(rows.map((r) => (r.product_name ?? "").trim()).filter((v) => containsCJK(v))),
+  ).slice(0, 300);
+  const thaiByZh: Record<string, string> = {};
+  for (const zh of zhNames) {
+    try {
+      const t = await translateZhToTh(zh);
+      if (t.ok && t.thai) thaiByZh[zh] = t.thai;
+    } catch (e) {
+      console.error("[api-forwarder-ttw] แปลชื่อสินค้าไม่สำเร็จ", { zh, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
 
   // Resolve customer names for the assigned PRs (feedback badge · one query).
   const prs = Array.from(new Set(rows.map((r) => r.member_code).filter((v): v is string => !!v)));
@@ -81,7 +101,7 @@ export default async function AdminApiForwarderTtwPage() {
         <span className="text-[11px] font-medium tracking-widest text-muted">รายการค้างในตู้ · ใส่ PR ให้ลูกค้า</span>
         <div className="h-px flex-1 bg-gray-200" />
       </div>
-      <TtwStagingClient rows={rows} nameByPr={nameByPr} loadError={!!error} hideTitle />
+      <TtwStagingClient rows={rows} nameByPr={nameByPr} thaiByZh={thaiByZh} loadError={!!error} hideTitle />
     </main>
   );
 }

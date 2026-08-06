@@ -38,11 +38,14 @@ type Filter = "all" | "no_pr" | "pending" | "committed";
 export function TtwStagingClient({
   rows,
   nameByPr,
+  thaiByZh,
   loadError,
   hideTitle = false,
 }: {
   rows: TtwLine[];
   nameByPr: Record<string, string>;
+  /** ชื่อสินค้าจีน → ไทย (แปลฝั่ง server · cache · owner 2026-08-07) · ไม่มีคีย์ = แปลไม่ได้ โชว์จีน */
+  thaiByZh?: Record<string, string>;
   loadError: boolean;
   hideTitle?: boolean;
 }) {
@@ -322,7 +325,22 @@ export function TtwStagingClient({
                             <td className="text-muted-foreground">{i + 1}</td>
                             <td className="font-mono text-[12px]">{r.base_tracking}</td>
                             <td className="text-[12px]">{r.shipping_mark ?? "—"}</td>
-                            <td className="max-w-[160px] truncate text-[12px]" title={r.product_name ?? ""}>{r.product_name ?? "—"}</td>
+                            {/* owner 2026-08-07 — ไทยเป็นตัวหลัก · จีนต้นฉบับอยู่ใต้ (TTW อ้างอิงตัวจีน
+                                ต้องเทียบได้) · แปลไม่ได้ = โชว์จีนตัวเดียวเหมือนเดิม ไม่เคยว่าง */}
+                            <td className="max-w-[190px] text-[12px]">
+                              {(() => {
+                                const zh = (r.product_name ?? "").trim();
+                                if (!zh) return "—";
+                                const th = thaiByZh?.[zh];
+                                if (!th) return <span className="block truncate" title={zh}>{zh}</span>;
+                                return (
+                                  <span className="block" title={`${th} (${zh})`}>
+                                    <span className="block truncate font-medium text-foreground">{th}</span>
+                                    <span className="block truncate text-[11px] text-muted">{zh}</span>
+                                  </span>
+                                );
+                              })()}
+                            </td>
                             <td className="text-right">{num(r.boxes)}</td>
                             <td className="text-right">{num(r.weight_kg, 1)}</td>
                             <td className="text-right">{num(r.cbm, 4)}</td>
