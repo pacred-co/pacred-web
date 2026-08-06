@@ -62,7 +62,7 @@ export const dynamic = "force-dynamic";
 
 // The fields calcForwarderOutstanding needs from each fCredit='1' row.
 const FORWARDER_COST_COLS =
-  "userid, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany";
+  "userid, paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany";
 
 // PostgREST default row ceiling is 1000 — page through explicitly.
 const PAGE_SIZE = 1000;

@@ -81,6 +81,7 @@ type RawForwarder = {
   fweight:               number | string | null;
   fvolume:               number | string | null;
   fdate:                 string | null;
+  paymethod:             number | string | null;
   ftotalprice:           number | string | null;
   ftransportprice:       number | string | null;
   fpriceupdate:          number | string | null;
@@ -235,7 +236,7 @@ export async function loadReceiptDocument(
       .from("tb_forwarder")
       .select(
         "id, userid, ftrackingchn, fcabinetnumber, famount, famountcount, fweight, fvolume, fdate, " +
-          "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+          "paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
           "pricecrate, ftransportpricechnthb, priceother, fdiscount, " +
           // ภูม flag round 8 — extra cols the /service-import table already shows:
           //   ftransporttype  '1'=รถ(EK) '2'=เรือ(SEA)
@@ -344,7 +345,7 @@ export async function loadReceiptDocument(
       .from("tb_forwarder")
       .select(
         "id, userid, ftrackingchn, fcabinetnumber, famount, famountcount, fweight, fvolume, fdate, " +
-          "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+          "paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
           "ftransportpricechnthb, pricecrate, priceother, fdiscount, ftransporttype, frefprice, frefrate",
       )
       .eq("userid", receipt.userid)
@@ -388,7 +389,7 @@ export async function loadReceiptDocument(
         return null;
       }
       const fTotalPrice           = toNumber(f.ftotalprice);
-      const fTransportPrice       = toNumber(f.ftransportprice);
+      const fTransportPrice       = String(f.paymethod ?? "").trim() === "2" ? 0 : toNumber(f.ftransportprice);
       const fPriceUpdate          = toNumber(f.fpriceupdate);
       const fShippingService      = toNumber(f.fshippingservice);
       const fTransportPriceCHNTHB = toNumber(f.ftransportpricechnthb);

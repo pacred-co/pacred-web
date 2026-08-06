@@ -412,6 +412,7 @@ export function ForwarderRowView({
     row.pricecrate,
     row.ftransportpricechnthb,
     row.priceother,
+    row.paymethod,
   );
 
   // L751-765 — the "จะถึงไทยประมาณ" range.

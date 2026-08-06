@@ -25,11 +25,13 @@ export function calPriceForwarderSumCompany(
   priceCrate: number,
   fTransportPriceChnThb: number,
   priceOther: number,
+  payMethod?: string | number | null,
 ): number {
+  const domesticShipping = String(payMethod ?? "").trim() === "2" ? 0 : fTransportPrice;
   let pricePayAll =
     fPriceUpdate +
     fTotalPrice +
-    fTransportPrice +
+    domesticShipping +
     fShippingService +
     priceCrate +
     fTransportPriceChnThb +

@@ -65,11 +65,12 @@ To copy a whole external Supabase project's tables into the main DB (owner: "ย
   clean `hs_codes` (133) would pollute it. Land into `doc_bot_hs_codes` faithfully → reconcile the
   good entries later as a "develop further" step.
 
-## 4. ค่าส่งไทย default REVERSED — ต้นทาง (prepaid Flash+margin), COD manual-only
+## 4. ค่าส่งไทย — ต้นทางใช้ราคาจริง, ปลายทางไม่คิดในบิล Pacred
 
 Owner 2026-07-09 reversed the 2026-07-08 COD-default (`ad31a708`): `derivePayMethodForDelivery`
 now returns `"1"` (ต้นทาง / prepaid) for ALL carriers+zones. The auto-fill charges the REAL Flash
-cost (`calPriceFlash` by zip zone + weight/size · `lib/tools/flash-price.ts`) + a `TH_SHIPPING_PROFIT_MARGIN`
+cost (`calPriceFlash` by zip zone + weight/size · `lib/tools/flash-price.ts`) ตามราคาจริง
+รวมค่าพื้นที่ห่างไกล/ท่องเที่ยว โดยไม่บวกกำไร ลูกค้าเลือกปลายทางได้และยอดในบิล Pacred ต้องเป็น 0
 (15% · in the owner's 5-20 range · admin-editable). COD `"2"` is now a MANUAL admin choice only
 (when the customer asks for เอกชน ปลายทาง COD). Own-fleet เหมาๆ keeps its flat ฿100 + ต้นทาง.
 Billed `fstatus 5/6/7` frozen · unresolvable zone → ฿50 floor.

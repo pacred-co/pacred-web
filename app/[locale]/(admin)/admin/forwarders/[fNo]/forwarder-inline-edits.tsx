@@ -68,6 +68,7 @@ import { adminSetForwarderBillToOverride } from "@/actions/admin/forwarders";
 import { StyledFileInput } from "@/components/ui/styled-file-input";
 import { confirm } from "@/components/ui/confirm";
 import { carrierLabel } from "@/lib/freight/shipping-methods";
+import { isOwnFleetCarrier } from "@/lib/forwarder/carrier-coverage-guard";
 import {
   THAI_PROVINCES,
   carriersForProvince,
@@ -539,7 +540,7 @@ export function ForwarderInlineEdits(p: Props) {
           <>
             <select className={selectCls} value={payVal} onChange={(e) => setPayVal(e.target.value as "1" | "2")}>
               <option value="1">ต้นทาง</option>
-              <option value="2">ปลายทาง</option>
+              <option value="2" disabled={isOwnFleetCarrier(p.fshipby)}>ปลายทาง</option>
             </select>
             <div className="flex gap-2">
               <button
@@ -991,35 +992,49 @@ export function EditCrateField({ fId, crate, pricecrate }: { fId: number; crate:
   );
 }
 
-/** การเก็บเงิน · PCS L2428 — paymethod "1" ต้นทาง / "2" ปลายทาง.
- *  Owner 2026-07-09: DEFAULT = ต้นทาง (คิดค่าส่งจริง — the real Flash cost + margin
- *  is auto-filled + billed upfront). COD (ปลายทาง) is a MANUAL choice only, shown in
- *  red when the stored paymethod === "2" (the customer asked for เอกชน ปลายทาง). The
- *  dropdown stays editable behind the EditableRow "แก้ไข" toggle. */
-/**
- * 🔒 READ-ONLY (owner พี่ป๊อป 2026-07-21 "ให้ล็อคไปเลย"). การเก็บเงินค่าขนส่งในไทย
- * ถูกล็อคตามบริษัทขนส่ง — ไม่มีปุ่มแก้มือ. เปลี่ยนได้ทางเดียว = เปลี่ยนขนส่งในช่อง
- * "บริษัทขนส่ง" (adminUpdateForwarderShipBy → enforceCodDomesticZero ตั้ง paymethod
- * ตามขนส่งให้เอง). โชว์ค่า paymethod ที่บันทึกไว้ (= ค่าที่บิลใช้จริง) + เหตุผลล็อค.
- */
 export function EditPayMethodField({
+  fId,
   paymethod,
   fshipby,
 }: { fId: number; paymethod: string | null; zip?: string | null; fshipby?: string | null }) {
+  const { pending, err, run } = useEditor();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState<"1" | "2">(paymethod === "2" ? "2" : "1");
   const carrier = (fshipby ?? "").trim();
-  const isCod = paymethod === "2"; // ค่าที่บันทึก = ค่าที่บิลใช้จริง
-  const ruleLabel = isCod ? "ปลายทาง COD" : "ต้นทาง (คิดค่าส่งจริง)";
+  const ownFleet = isOwnFleetCarrier(carrier);
+  const isCod = paymethod === "2";
   return (
-    <div className="text-sm text-foreground">
-      <p>
-        <b className="font-semibold">การเก็บเงินค่าขนส่งในไทย : </b>
-        <span className={isCod ? "rounded bg-red-50 text-red-700 px-1.5 py-0.5 text-xs font-semibold" : "font-semibold"}>
-          {ruleLabel}
-        </span>
-      </p>
-      <p className="text-[11px] text-muted-foreground mt-0.5">
-        🔒 ล็อคอัตโนมัติตามขนส่ง{carrier ? ` (${carrierLabel(carrier)})` : ""} — เปลี่ยนได้ที่ช่อง “บริษัทขนส่ง”
-      </p>
+    <div>
+      {err && <div className="mb-1 rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">⚠ {err}</div>}
+      <EditableRow
+        compact
+        label="การเก็บเงินค่าขนส่งในไทย"
+        editing={editing}
+        setEditing={setEditing}
+        display={
+          <span className={isCod ? "rounded bg-red-50 px-1.5 py-0.5 text-xs font-semibold text-red-700" : "font-semibold"}>
+            {isCod ? "ปลายทาง · ไม่รวมค่าส่งไทยในบิล" : "ต้นทาง · คิดเรทขนส่งจริง"}
+          </span>
+        }
+      >
+        {(close) => (
+          <>
+            <select className={selectCls} value={value} onChange={(e) => setValue(e.target.value as "1" | "2")} disabled={pending}>
+              <option value="1">ต้นทาง — รวมเรทขนส่งจริงในบิล</option>
+              <option value="2" disabled={ownFleet}>ปลายทาง — ไม่รวมค่าส่งไทยในบิล</option>
+            </select>
+            <p className="text-[11px] text-muted">
+              {ownFleet
+                ? `${carrierLabel(carrier)} เป็นขนส่งของ Pacred จึงรับชำระต้นทาง`
+                : "บริษัทขนส่งเป็นเพียงค่าเริ่มต้น พนักงานแก้ตามวิธีที่ลูกค้าเลือกได้"}
+            </p>
+            <div className="flex gap-2">
+              <button type="button" className={btnSave} disabled={pending} onClick={() => run(() => adminUpdateForwarderPayMethod({ fId, paymethod: value }), close)}>บันทึก</button>
+              <button type="button" className={btnCancel} disabled={pending} onClick={close}>ยกเลิก</button>
+            </div>
+          </>
+        )}
+      </EditableRow>
     </div>
   );
 }
@@ -1038,9 +1053,10 @@ export function EditThShippingField({
 }: { fId: number; ftransportprice: number | string | null; paymethod?: string | null }) {
   const { pending, err, run } = useEditor();
   const [editing, setEditing] = useState(false);
-  const current = Number(ftransportprice ?? 0);
-  const [val, setVal] = useState(current > 0 ? String(current) : "");
   const isCod = paymethod === "2";
+  const stored = Number(ftransportprice ?? 0);
+  const current = isCod ? 0 : stored;
+  const [val, setVal] = useState(current > 0 ? String(current) : "");
   return (
     <div>
       {err && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700 mb-1">⚠ {err}</div>}
@@ -1064,8 +1080,14 @@ export function EditThShippingField({
       >
         {(close) => (
           <>
+            {isCod ? (
+              <p className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-700">
+                งานนี้จ่ายปลายทาง จึงไม่รับค่าขนส่งไทยเข้าบิล Pacred หากต้องเรียกเก็บให้เปลี่ยนเป็น “ต้นทาง” ก่อน
+              </p>
+            ) : (
+              <>
             <p className="text-[11px] text-muted-foreground mb-1">
-              ค่าส่งในไทย (บาท) — ปกติระบบคิด Flash อัตโนมัติเมื่อวัดขนาด+น้ำหนักครบ · กรอกเองได้ถ้ายังไม่ขึ้น
+              ค่าส่งในไทย (บาท) — ระบบคิดเรท Flash จริงเมื่อวัดขนาด+น้ำหนักครบ (ไม่บวกกำไร) · กรอกเองได้ถ้ายังไม่ขึ้น
             </p>
             <input
               type="number"
@@ -1089,10 +1111,12 @@ export function EditThShippingField({
               >
                 บันทึก
               </button>
-              <button type="button" disabled={pending} className={btnCancel} onClick={close}>
-                ยกเลิก
-              </button>
             </div>
+              </>
+            )}
+            <button type="button" disabled={pending} className={btnCancel} onClick={close}>
+              {isCod ? "ปิด" : "ยกเลิก"}
+            </button>
           </>
         )}
       </EditableRow>
