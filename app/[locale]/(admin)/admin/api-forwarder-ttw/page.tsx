@@ -80,11 +80,11 @@ export default async function AdminApiForwarderTtwPage() {
       {/* Header */}
       <header>
         <p className="text-xs font-semibold tracking-widest text-primary-600">
-          ADMIN · TTW / อี้อู · PACKING LIST <span className="ml-1 rounded-full bg-primary-600 px-2 py-0.5 text-[11px] font-semibold text-white">แผนก DOC</span>
+          ADMIN · โกดังอี้อู · PACKING LIST <span className="ml-1 rounded-full bg-primary-600 px-2 py-0.5 text-[11px] font-semibold text-white">แผนก DOC</span>
         </p>
         <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold">
           <span className="grid h-9 w-9 place-items-center rounded-xl bg-amber-500 text-white shadow-sm">📦</span>
-          TTW / อี้อู — Packing List
+          โกดังอี้อู — Packing List
         </h1>
         <p className="mt-1.5 text-sm text-muted">
           แผนก DOC อัปไฟล์ <strong>packing list</strong> → <strong>ผูกเลขตู้จริง</strong> + เลื่อนสถานะเป็น{" "}

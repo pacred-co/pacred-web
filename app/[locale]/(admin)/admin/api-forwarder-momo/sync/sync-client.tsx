@@ -557,7 +557,7 @@ function MomoDetail({ d, raw }: { d: MomoRawDisplay; raw: unknown }) {
     // และถูก render เป็นลูกเดี่ยวใน <dd>{val}</dd> ข้างล่าง โดย key จริงอยู่ที่
     // wrapper แล้ว (<div key={label}>) → React ไม่มีทาง warn เรื่อง key ตรงนี้.
     // eslint-disable-next-line react/jsx-key
-    ["ลูกค้า (MOMO)", <CustomerCodeLink code={d.memberCode} />],
+    ["ลูกค้า (จากโกดัง)", <CustomerCodeLink code={d.memberCode} />],
     ["สถานะ MOMO (เลข)", d.statusCode ?? "—"],
     ["เลขพัสดุจีน", d.tracking || "—"],
     ["ขนส่ง", d.shipBy && d.shipByLabel !== d.shipBy ? `${d.shipByLabel} (${d.shipBy})` : d.shipByLabel],

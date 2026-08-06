@@ -99,7 +99,7 @@ export type IngestTrack = {
   liveWeight: number | null;
   liveCbm: number | null;
   // 🚩 "MOMO มั่ว" — box_detail ต่อกล่องขัดกับก้อนรวม + dims ก็ซ่อมไม่ได้ (แถวย่อยหนัก
-  // เกินก้อนรวม) → แตกกล่องอัตโนมัติไม่ได้ · ต้องอัพ packing list แต้ม. null = ปกติ.
+  // เกินก้อนรวม) → แตกกล่องอัตโนมัติไม่ได้ · ต้องอัพแพคกิ้งลิสต์. null = ปกติ.
   momoGarbage: {
     reason: "weight" | "cbm";
     boxCount: number;
@@ -266,7 +266,7 @@ const fx = (v: number | null | undefined, d: number) =>
 const perBox = (total: number, qty: number | null) => (qty && qty > 0 ? total / qty : total);
 const dateOnly = (s: string | null) => (s ? s.slice(0, 10) : null);
 /** คอลัมน์ที่มีในไฟล์ packing list แต่ MOMO API ไม่ส่งมา — โชว์ไว้ให้ครบฟอร์ม (ไม่เดาค่า) */
-const NO_FEED = "MOMO API ไม่ส่งคอลัมน์นี้มา — มีเฉพาะในไฟล์ packing list ของแต้ม";
+const NO_FEED = "API โกดังไม่ส่งคอลัมน์นี้มา — มีเฉพาะในไฟล์แพคกิ้งลิสต์";
 const thNoFeed = "px-2 py-2 text-center font-normal italic text-muted/50";
 // (tdNoFeed ถูกลบ 2026-07-25 — ทุกคอลัมน์กรอกได้แล้ว ไม่มีช่อง "no-feed" ที่ตายตัวอีก)
 const DASH = <span className="text-gray-300">—</span>;
@@ -1224,7 +1224,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
                 t.momoGarbage.reason === "weight"
                   ? `น้ำหนัก ${n2(t.momoGarbage.boxWeightSum)} กก. เกินก้อนรวม ${n2(t.momoGarbage.aggWeight)} กก.`
                   : `คิว ${n6(t.momoGarbage.boxCbmSum)} เกินก้อนรวม ${n6(t.momoGarbage.aggCbm)}`
-              } · ขนาดกล่องก็เช็คไม่ได้ → แตกกล่องอัตโนมัติไม่ได้ · ต้องอัพ packing list แต้ม`}>
+              } · ขนาดกล่องก็เช็คไม่ได้ → แตกกล่องอัตโนมัติไม่ได้ · ต้องอัพแพคกิ้งลิสต์`}>
               🚩 ข้อมูล MOMO ขัดกันเอง
             </div>
           )}
@@ -1410,7 +1410,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
         {counts.garbage > 0 && (
           <button type="button" onClick={() => setTab("garbage")}
             className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${tab === "garbage" ? "bg-red-600 text-white" : "bg-red-100 text-red-700 hover:bg-red-200"}`}
-            title="MOMO ส่งน้ำหนัก/คิว ต่อกล่อง ขัดกับก้อนรวม (แถวย่อยหนักเกินก้อนรวม) · ระบบแตกกล่องอัตโนมัติไม่ได้ → ต้องอัพ packing list แต้ม">
+            title="MOMO ส่งน้ำหนัก/คิว ต่อกล่อง ขัดกับก้อนรวม (แถวย่อยหนักเกินก้อนรวม) · ระบบแตกกล่องอัตโนมัติไม่ได้ → ต้องอัพแพคกิ้งลิสต์">
             🚩 ข้อมูล MOMO ขัดกัน {counts.garbage}
           </button>
         )}
@@ -1559,7 +1559,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           (แถบเลื่อนซ้าย-ขวาติดขอบล่างกล่องเสมอ ไม่ต้องไล่หาท้าย 394 แถว · หัวตาราง sticky).
           min-h กันจอเตี้ยมากแล้วกล่องแบนจนใช้ไม่ได้. */}
       <div className="max-h-[calc(100dvh-21rem)] min-h-[16rem] overflow-auto scrollbar-x-visible rounded-2xl border border-border bg-white dark:bg-surface shadow-sm">
-        {/* หัวตาราง = ไฟล์ packing list "Shipment Report" (ของแต้ม) เรียง A→Z ตรงตัว
+        {/* หัวตาราง = ไฟล์ packing list "Shipment Report" (จากโกดังต้นทาง) เรียง A→Z ตรงตัว
             (owner ปอน 2026-07-14 · "ลอกมาเลย ตามภาพ") + คอลัมน์ "รูป" ของเราที่เก็บไว้
             + ปุ่ม "นำเข้าระบบ" (ฟังก์ชันของหน้านี้). ลำดับคอลัมน์ = CANON ตัวจริงใน
             lib/admin/taem-reconcile-parser.ts (A Container Name … Z eta). */}
@@ -1970,7 +1970,7 @@ export function MomoIngestClient({ tracks, missing, loadError }: { tracks: Inges
           </p>
           <p className="italic text-muted/70">
             คอลัมน์ที่จางไว้ (SM Number · Branch · Product · Dum · Rem · Note. · Return) = <strong>MOMO API ไม่ส่งมา</strong> —
-            มีอยู่ในไฟล์ packing list ของแต้ม แต่ตอนนี้ระบบยังไม่ได้เก็บ (ถ้าอยากให้ขึ้น ต้องเก็บเพิ่มตอน ingest ไฟล์).
+            มีอยู่ในไฟล์แพคกิ้งลิสต์ แต่ตอนนี้ระบบยังไม่ได้เก็บ (ถ้าอยากให้ขึ้น ต้องเก็บเพิ่มตอน ingest ไฟล์).
           </p>
         </div>
       </details>

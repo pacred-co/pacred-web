@@ -21,7 +21,7 @@ const DASH = <span className="text-gray-300">—</span>;
 const DiffHint = () => <div className="text-[11px] font-normal text-muted/70">ระบบ→packing</div>;
 /** คอลัมน์ที่ชีทมี แต่ไฟล์ packing list ของ MOMO ไม่มี — โชว์ไว้ให้ครบฟอร์ม (ไม่เดาค่า) */
 const NO_FEED = "ไฟล์ packing list ของกวางโจว ไม่มีคอลัมน์นี้ (ไฟล์มี 18 คอลัมน์) — ไม่เดาค่าใส่";
-const NO_FEED_ETD = "ไฟล์ packing list ของกวางโจว ไม่มี ETD/ETA — มาจากไฟล์ของแต้ม (ดูที่หน้ากวางโจว · ตู้)";
+const NO_FEED_ETD = "ไฟล์แพคกิ้งลิสต์ของกวางโจวไม่มี ETD/ETA — ระบบประมาณการให้จากวันปิดตู้ + สถิติเส้นทาง (ดูที่หน้ากวางโจว · ตู้)";
 const thNoFeed = "px-2 py-2 text-center font-normal italic text-muted/50";
 const tdNoFeed = "px-2 py-1.5 text-center text-gray-300";
 
@@ -251,7 +251,7 @@ export function MomoPackingUploadClient() {
     <div className="space-y-5">
       {/* ── UPLOAD ────────────────────────────────────────────────────────────── */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-5 shadow-sm space-y-3">
-        <label className="block text-sm font-medium">อัปโหลด packing list ของกวางโจว (MOMO) (.xlsx)</label>
+        <label className="block text-sm font-medium">อัปโหลดแพคกิ้งลิสต์ของโกดังกวางโจว (.xlsx)</label>
         <p className="text-xs text-muted leading-relaxed">
           อัปโหลด packing list ที่ <strong>กวางโจว (MOMO)</strong> ส่งมาตอนปิดตู้ (หนึ่งไฟล์ = หนึ่งตู้) → ระบบรวมกล่องย่อยของแต่ละแทรคกิ้ง แล้วเทียบกับข้อมูลในระบบให้
           → ติ๊ก &quot;สร้างของที่หาย&quot; เฉพาะที่ต้องการ → กดยืนยัน. ระบบจะแก้เฉพาะรายการที่<strong>ยังไม่วางบิล</strong> แล้วคิดราคาขายใหม่ให้อัตโนมัติ.
