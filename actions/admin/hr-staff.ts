@@ -95,11 +95,21 @@ export async function assignStaffToPosition(input: AssignStaffInput): Promise<Ad
     const actorCanGrant = actorRoles.some((r) => r === "super" || r === "ultra");
     if (mappedRole && actorCanGrant) {
       // มี active grant ของ role นี้อยู่แล้วไหม · หรือมี role ที่สูงกว่า (protected) อยู่
-      const { data: grants } = await admin
+      // §0c — ต้องรับ `error` เสมอ. อ่าน grant เดิมไม่ได้ = **ห้ามเดาว่าไม่มี**
+      // (ไม่งั้นจะ upsert ทับคนที่มี role สูงกว่า/protected อยู่) → ข้ามการให้สิทธิ์
+      // ไปเลย ส่วนการจัดตำแหน่งยังสำเร็จตามเดิม (best-effort เหมือนเดิม).
+      const { data: grants, error: grantsErr } = await admin
         .from("admins").select("role,is_active").eq("profile_id", profileId).eq("is_active", true);
+      if (grantsErr) {
+        console.error("[hr-staff] อ่านสิทธิ์เดิมไม่ได้ — ข้ามการให้สิทธิ์ตามตำแหน่ง", {
+          code: grantsErr.code, message: grantsErr.message, profileId,
+        });
+      }
       const activeRoles = new Set(((grants ?? []) as { role: string }[]).map((g) => g.role));
       const hasProtected = [...activeRoles].some((r) => PROTECTED_ROLES.has(r));
-      if (!activeRoles.has(mappedRole) && !hasProtected) {
+      // fail-CLOSED: grantsErr = ไม่ให้สิทธิ์ (เซตว่างจะแปลว่า "ไม่มี role เลย" แล้วให้
+      // สิทธิ์ทับคนที่อาจมี role สูงกว่าอยู่ = อันตรายกว่าการไม่ให้)
+      if (!grantsErr && !activeRoles.has(mappedRole) && !hasProtected) {
         const { error: gErr } = await admin.from("admins").upsert(
           { profile_id: profileId, role: mappedRole, is_active: true, granted_by: actor, granted_at: new Date().toISOString() },
           { onConflict: "profile_id,role" },
