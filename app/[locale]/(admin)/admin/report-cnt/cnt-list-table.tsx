@@ -216,11 +216,14 @@ function EtdEtaCell({
   source,
   momoValue,
   label,
+  estimateNote,
 }: {
   value: string | null;
-  source: "taem" | "momo" | null;
+  source: "taem" | "momo" | "estimate" | null;
   momoValue: string | null;
   label: "ETD" | "ETA";
+  /** ข้อความอธิบายที่มาของ "ประมาณการ" (owner 2026-08-07) */
+  estimateNote?: string | null;
 }) {
   if (!value) {
     return (
@@ -232,8 +235,11 @@ function EtdEtaCell({
   const v = value.slice(0, 10);
   const m = momoValue?.slice(0, 10) ?? null;
   const isTaem = source === "taem";
+  const isEstimate = source === "estimate";
   const momoDiffers = isTaem && m != null && m !== v;
-  const title = isTaem
+  const title = isEstimate
+    ? estimateNote ?? `${label} ประมาณการ (แต้ม/MOMO ยังไม่ส่งของจริง)`
+    : isTaem
     ? momoDiffers
       ? `${label} จากแต้ม (iTAM · ยึดเป็นหลัก) · MOMO เทียบ = ${m}`
       : `${label} จากแต้ม (iTAM · ยึดเป็นหลัก)`
@@ -243,9 +249,10 @@ function EtdEtaCell({
       <span className="inline-flex items-center justify-end gap-1">
         <span
           aria-hidden
-          className={`inline-block h-1.5 w-1.5 rounded-full ${isTaem ? "bg-emerald-500" : "bg-gray-400"}`}
+          className={`inline-block h-1.5 w-1.5 rounded-full ${isTaem ? "bg-emerald-500" : isEstimate ? "bg-amber-400" : "bg-gray-400"}`}
         />
-        <span className={isTaem ? "text-foreground" : "text-muted"}>{v}</span>
+        <span className={isTaem ? "text-foreground" : isEstimate ? "text-muted italic" : "text-muted"}>{v}</span>
+        {isEstimate && <span className="text-[11px] text-amber-600" title="ประมาณการ — ยังไม่ใช่วันเฟิม">~</span>}
         {momoDiffers && <span className="text-[11px] text-amber-600" aria-hidden>≠MOMO</span>}
       </span>
     </td>
@@ -858,12 +865,14 @@ export function CntListTable({
                     source={momo?.etdSource ?? null}
                     momoValue={momo?.momoEtd ?? null}
                     label="ETD"
+                    estimateNote={momo?.estimateNote ?? null}
                   />
                   <EtdEtaCell
                     value={momo?.eta ?? null}
                     source={momo?.etaSource ?? null}
                     momoValue={momo?.momoEta ?? null}
                     label="ETA"
+                    estimateNote={momo?.estimateNote ?? null}
                   />
                   {/* T/T (transit time) = ETA − ETD · owner ภูม 2026-06-20 */}
                   {(() => {

@@ -64,6 +64,7 @@ import {
   resolveMomoContainerInfo,
   type MomoContainerInfo,
 } from "@/lib/admin/momo-container-resolve";
+import { loadEtaEstimates } from "@/lib/admin/container-eta-loader";
 import {
   loadCabinetBillingCoverage,
   type CabinetBillingCoverage,
@@ -490,6 +491,43 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
     grouped.length > 0
       ? await resolveMomoContainerInfo(admin, grouped.map((g) => g.fcabinetnumber), tracksByCab)
       : {};
+
+  // ── ETD/ETA **ประมาณการ** เมื่อไม่มีของจริง (owner 2026-08-07) ──────────────
+  // owner: "มันเป็นวันประมาณการ ไม่ใช่วันเฟิมแบบ ATD/ATA … ETD อิงวันปิดตู้ (เลขตู้)
+  // ปกติปิดแล้วออกเลย · ETA ดู data เก่าว่าเคยวิ่งเท่าไร (แทรคแรกที่ยิงรับ ย้อน 1 วัน
+  // เพราะโกดังเราต้องรอเขาลงของก่อน)". prod: `taem_container_etd_eta` มี 0 แถวทั้ง 80 ตู้
+  // ⇒ 3 คอลัมน์นี้ว่างมาตลอด. **ของจริง (แต้ม/MOMO) ชนะเสมอ** — เติมเฉพาะช่องที่ว่าง.
+  if (grouped.length > 0) {
+    try {
+      const est = await loadEtaEstimates(admin, grouped.map((g) => g.fcabinetnumber));
+      for (const [cab, e] of Object.entries(est)) {
+        const cur = momoInfoByCab[cab];
+        const note =
+          `ประมาณการจากข้อมูลจริง — ETD = วันปิดตู้ตามเลขตู้ · ` +
+          `ETA = +${e.transitDays} วัน (มัธยฐานเส้นทาง ${e.route}` +
+          (e.sampleSize > 0 ? ` จาก ${e.sampleSize} ตู้ที่ถึงแล้ว` : " จากค่าที่วัดไว้") +
+          `) · ยังไม่ใช่วันเฟิม ATD/ATA`;
+        if (!cur) {
+          momoInfoByCab[cab] = {
+            realContainer: null, sackNo: null,
+            etd: e.etd, eta: e.eta,
+            etdSource: e.etd ? "estimate" : null,
+            etaSource: e.eta ? "estimate" : null,
+            momoEtd: null, momoEta: null,
+            estimateNote: note,
+          };
+          continue;
+        }
+        if (!cur.etd && e.etd) { cur.etd = e.etd; cur.etdSource = "estimate"; cur.estimateNote = note; }
+        if (!cur.eta && e.eta) { cur.eta = e.eta; cur.etaSource = "estimate"; cur.estimateNote = note; }
+      }
+    } catch (err) {
+      // fail-soft — ประมาณการพังต้องไม่ทำให้รายงานตู้ล้ม
+      console.error("[report-cnt] ETD/ETA ประมาณการล้มเหลว", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   // G1 combo-flow (2026-07-08) — which of the visible containers are packing-confirmed.
   // Drives the "📦 packing ✓ / ⏳ ยังไม่อัพ" badge so staff see which containers are
