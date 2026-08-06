@@ -77,6 +77,7 @@ type ForwarderRow = {
   fdatestatus6: string | null;
   fdatestatus7: string | null;
   // price fields (calcForwarderOutstanding)
+  paymethod: number | string | null;
   ftotalprice: number | string | null;
   ftransportprice: number | string | null;
   fpriceupdate: number | string | null;
@@ -196,13 +197,13 @@ export default async function AdminDeliveryHistoryPage({
   //   (ไม่ join ลูกค้า / ไม่สร้าง CSV) เพื่อให้การ์ดสรุปยังถูกครบทั้งชุด แม้จะแสดงทีละหน้า.
   type StatsRow = Pick<
     ForwarderRow,
-    | "fstatus" | "ftotalprice" | "ftransportprice" | "fpriceupdate" | "fshippingservice"
+    | "fstatus" | "paymethod" | "ftotalprice" | "ftransportprice" | "fpriceupdate" | "fshippingservice"
     | "pricecrate" | "ftransportpricechnthb" | "priceother" | "fdiscount" | "fusercompany"
   >;
   const { data: statsRaw, error: statsErr, count: matchCount } = await admin
     .from("tb_forwarder")
     .select(
-      "fstatus, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+      "fstatus, paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
         "pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany",
       { count: "exact" },
     )
@@ -232,7 +233,7 @@ export default async function AdminDeliveryHistoryPage({
     .select(
       "id, userid, ftrackingchn, ftrackingth, fcabinetnumber, " +
         "faddressname, faddresslastname, fstatus, fdate, fdatestatus6, fdatestatus7, " +
-        "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, " +
+        "paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, pricecrate, " +
         "ftransportpricechnthb, priceother, fdiscount, fusercompany",
     )
     .in("fstatus", statusCodes)

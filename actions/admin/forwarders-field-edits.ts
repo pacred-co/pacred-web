@@ -1420,7 +1420,7 @@ export async function adminUpdateForwarderThShipping(
     if (codLock.payMethod === "2" && d.ftransportprice > 0) {
       return {
         ok: false,
-        error: "งานนี้เก็บเงินปลายทาง (COD) — ค่าขนส่งไทยต้องเป็น ฿0 (ขนส่งเก็บกับลูกค้าที่ปลายทาง). ถ้าจะเก็บค่าส่งเอง ให้เปลี่ยนเป็นขนส่งของ Pacred + วิธีเก็บเงินต้นทางก่อน",
+        error: "งานนี้เก็บเงินปลายทาง (COD) — ค่าขนส่งไทยในบิล Pacred ต้องเป็น ฿0 หาก Pacred จะเรียกเก็บ ให้เปลี่ยนวิธีชำระเป็นต้นทางก่อน",
       };
     }
 
@@ -1481,9 +1481,8 @@ export async function adminUpdateForwarderPayMethod(
     }
     if (!fwd) return { ok: false, error: "ไม่พบรายการฝากนำเข้า" };
 
-    // 🔒 COD LOCK (owner 2026-07-21) — ขนส่งเอกชน = ปลายทางเสมอ · ปลายทาง = ค่าส่งไทย 0.
-    // REFUSE loudly instead of silently correcting: the admin picked ต้นทาง on purpose,
-    // so tell them why it can't be (the ตัวเลือก in the UI is disabled for the same reason).
+    // Third-party carrier: respect the explicit staff choice. Pacred own-fleet
+    // remains ต้นทาง. In every case ปลายทาง means Pacred bills ฿0 domestic shipping.
     const locked = enforceCodDomesticZero({
       fShipBy: fwd.fshipby,
       payMethod: d.paymethod,
@@ -1492,7 +1491,7 @@ export async function adminUpdateForwarderPayMethod(
     if (locked.payMethod !== d.paymethod) {
       return {
         ok: false,
-        error: "ขนส่งเอกชนต้องเก็บเงินปลายทาง (COD) เท่านั้น — ถ้าจะเก็บต้นทาง ให้เปลี่ยนเป็นขนส่งของ Pacred (รับเองโกดัง / เหมาๆ / ด่วน) ก่อน",
+        error: "ขนส่งของ Pacred ต้องเก็บต้นทาง — หากลูกค้าจะจ่ายปลายทาง กรุณาเลือกบริษัทขนส่งภายนอก",
       };
     }
     if ((fwd.paymethod ?? "").trim() === d.paymethod && Number(fwd.ftransportprice ?? 0) === locked.transportPrice) {

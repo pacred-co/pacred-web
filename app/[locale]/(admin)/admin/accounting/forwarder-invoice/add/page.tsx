@@ -100,7 +100,7 @@ export default async function AddForwarderInvoicePage({
     .from("tb_forwarder")
     .select(
       "id, userid, fdate, fstatus, ftrackingchn, fcabinetnumber, famount, fweight, fvolume, " +
-        "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+        "paymethod, ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
         "pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany",
     )
     .eq("fstatus", "5")

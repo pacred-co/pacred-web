@@ -59,6 +59,7 @@ type RawForwarder = {
   userid: string;
   fidorco: string | null;
   paydeposit: string | null;
+  paymethod: number | string | null;
   // Outstanding-calc inputs (Wave 15 P0-3 — calcForwarderOutstanding)
   ftotalprice:           number | string | null;
   ftransportprice:       number | string | null;
@@ -127,7 +128,7 @@ export default async function CreditPendingReport({
   let fq = admin
     .from("tb_forwarder")
     .select(
-      "id,fdate,fstatus,ftransporttype,userid,fidorco,paydeposit," +
+      "id,fdate,fstatus,ftransporttype,userid,fidorco,paydeposit,paymethod," +
       "ftotalprice,ftransportprice,fpriceupdate,fshippingservice,pricecrate," +
       "ftransportpricechnthb,priceother,fdiscount,fusercompany," +
       "fdatestatus3,fdatestatus4",

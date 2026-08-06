@@ -35,6 +35,8 @@ import {
   getShipByOptions,
   type LegacyShipByOption,
 } from "@/actions/forwarder-legacy";
+import { derivePayMethodForDelivery } from "@/lib/forwarder/pay-method";
+import { isOwnFleetCarrier } from "@/lib/forwarder/carrier-coverage-guard";
 
 type Mode =
   | { kind: "idle" } // no address chosen yet
@@ -44,13 +46,14 @@ type Mode =
       kind: "carriers";
       options: LegacyShipByOption[];
       inFreeArea: boolean;
-      defaultShipBy: string;
     }
   | { kind: "error"; message: string };
 
 export function ServiceImportShipBySelect({ compact = false }: { compact?: boolean }) {
   const t = useTranslations("serviceImportAdd");
   const [mode, setMode] = useState<Mode>({ kind: "idle" });
+  const [selectedCarrier, setSelectedCarrier] = useState("");
+  const [payMethod, setPayMethod] = useState<"1" | "2">("1");
   // The "Pacred เหมา ๆ" promo (#input-12, pro='f'). Legacy hides the courier
   // select + drops `required` when ticked because the action forces
   // fShipBy='PCSF' regardless (forwarder.php L122-124 + the inline JS that
@@ -66,7 +69,11 @@ export function ServiceImportShipBySelect({ compact = false }: { compact?: boole
     async function load(addressID: string) {
       const aid = (addressID ?? "").trim();
       if (!aid) {
-        if (!cancelled) setMode({ kind: "idle" });
+        if (!cancelled) {
+          setMode({ kind: "idle" });
+          setSelectedCarrier("");
+          setPayMethod("1");
+        }
         return;
       }
       setMode({ kind: "loading" });
@@ -78,14 +85,20 @@ export function ServiceImportShipBySelect({ compact = false }: { compact?: boole
       }
       if (res.warehousePickup) {
         setMode({ kind: "warehouse" });
+        setSelectedCarrier("PCS");
+        setPayMethod("1");
         return;
       }
+      const defaultCarrier = res.options.some((o) => o.id === res.userShipBy)
+        ? res.userShipBy
+        : "";
       setMode({
         kind: "carriers",
         options: res.options,
         inFreeArea: res.inFreeArea,
-        defaultShipBy: res.userShipBy,
       });
+      setSelectedCarrier(defaultCarrier);
+      setPayMethod(derivePayMethodForDelivery(defaultCarrier, { addressID: aid, zip: null }));
     }
 
     // Initial load (a default-selected address) + on every change.
@@ -124,7 +137,12 @@ export function ServiceImportShipBySelect({ compact = false }: { compact?: boole
   if (mode.kind === "warehouse") {
     // รับเองหน้าโกดัง — no courier; still submit hShipBy="PCS" so the action's
     // PCS-pickup branch fires (faithful to forwarder.php L55-66).
-    return <input type="hidden" name="hShipBy" value="PCS" />;
+    return (
+      <>
+        <input type="hidden" name="hShipBy" value="PCS" />
+        <input type="hidden" name="payMethod" value="1" />
+      </>
+    );
   }
 
   if (mode.kind === "loading") {
@@ -153,7 +171,10 @@ export function ServiceImportShipBySelect({ compact = false }: { compact?: boole
   // exactly like legacy `$('.selectProF').hide()`.
   if (promoActive) {
     return (
-      <input type="hidden" name="hShipBy" value="" data-promo-hidden="1" />
+      <>
+        <input type="hidden" name="hShipBy" value="" data-promo-hidden="1" />
+        <input type="hidden" name="payMethod" value="1" />
+      </>
     );
   }
   return (
@@ -171,12 +192,12 @@ export function ServiceImportShipBySelect({ compact = false }: { compact?: boole
         name="hShipBy"
         id="hShipBy"
         required
-        defaultValue={
-          mode.defaultShipBy &&
-          mode.options.some((o) => o.id === mode.defaultShipBy)
-            ? mode.defaultShipBy
-            : ""
-        }
+        value={selectedCarrier}
+        onChange={(e) => {
+          const carrier = e.target.value;
+          setSelectedCarrier(carrier);
+          setPayMethod(derivePayMethodForDelivery(carrier, { addressID: null, zip: null }));
+        }}
       >
         <option value="">{t("carrierSelectPlaceholder")}</option>
         {mode.options.map((o) => (
@@ -185,6 +206,35 @@ export function ServiceImportShipBySelect({ compact = false }: { compact?: boole
           </option>
         ))}
       </select>
+      {selectedCarrier !== "" && (
+        <fieldset className="mt-3 rounded-lg border border-border bg-surface-alt/40 p-3">
+          <legend className="px-1 text-sm font-medium text-foreground">การชำระค่าขนส่งในไทย</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {(["1", "2"] as const).map((value) => (
+              <label
+                key={value}
+                className={`cursor-pointer rounded-lg border px-3 py-2 text-center text-sm ${
+                  payMethod === value ? "border-primary-600 bg-primary-50 font-semibold text-primary-700" : "border-border bg-white"
+                }`}
+              >
+                <input
+                  className="sr-only"
+                  type="radio"
+                  name="payMethod"
+                  value={value}
+                  checked={payMethod === value}
+                  onChange={() => setPayMethod(value)}
+                  disabled={value === "2" && isOwnFleetCarrier(selectedCarrier)}
+                />
+                {value === "1" ? "จ่ายต้นทาง" : "จ่ายปลายทาง"}
+              </label>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            จ่ายต้นทาง: รวมค่าจริงของขนส่งที่เลือก (Flash คำนวณอัตโนมัติเมื่อวัดครบ) · จ่ายปลายทาง: Pacred ไม่รวมค่าส่งไทยในยอดชำระ
+          </p>
+        </fieldset>
+      )}
     </div>
   );
 }

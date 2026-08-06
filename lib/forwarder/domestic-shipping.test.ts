@@ -18,19 +18,19 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "10110" }), "maomao",
 assert.equal(classifyDomesticZone({ addressID: "123", zip: "74130" }), "upcountry", "สมุทรสาคร 74130 (อ้อมน้อย) = OUT of เหมาๆ zone");
 assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountry", "เชียงใหม่ = upcountry");
 
-// ── เหมาๆ in-zone: PRF ฿100 flat · ต้นทาง · not COD ──
+// ── เหมาๆ in-zone: PRF row ฿0 + shipment anchor ฿100 once · ต้นทาง ──
 {
   const { zone, options } = domesticShippingOptions({ addressID: "123", zip: "10110", weightKg: 13 });
   assert.equal(zone, "maomao");
   const mao = options[0];
   assert.equal(mao.carrier, MAO_CARRIER_CODE, "first option = PRF เหมาๆ");
-  assert.equal(mao.cost, MAO_FLAT_FEE, "เหมาๆ = flat ฿100 (no weight)");
+  assert.equal(mao.cost, 0, "เหมาๆ row = ฿0 (flat ฿100 rides the shipment anchor once)");
   assert.equal(mao.payMethod, "1", "เหมาๆ = ต้นทาง");
   assert.equal(mao.forceCod, false);
   assert.ok(options.some((o) => o.carrier === "PCS"), "self-pickup always offered");
 }
 
-// ── upcountry: Flash by weight (auto) + FORCE COD ──
+// ── upcountry: Flash actual tariff defaults to origin; payment remains selectable ──
 {
   const { zone, options } = domesticShippingOptions({
     addressID: "123", zip: "74130", province: "สมุทรสาคร", amphoe: "กระทุ่มแบน",
@@ -40,14 +40,8 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
   const flash = options.find((o) => o.carrier === "2");
   assert.ok(flash, "Flash offered upcountry");
   assert.ok(flash!.cost > 0, "Flash cost computed by weight");
-  assert.equal(flash!.payMethod, "2", "upcountry Flash = ปลายทาง (COD)");
-  assert.equal(flash!.forceCod, true, "upcountry FORCES COD (owner: บังคับเก็บปลายทาง)");
-  // every non-self-pickup upcountry option is COD
-  for (const o of options) {
-    if (o.carrier === "PCS" || o.carrier === "PCSE") continue;
-    assert.equal(o.payMethod, "2", `${o.carrier} upcountry must be COD`);
-    assert.equal(o.forceCod, true, `${o.carrier} upcountry must force COD`);
-  }
+  assert.equal(flash!.payMethod, "1", "Flash actual tariff defaults to ต้นทาง");
+  assert.equal(flash!.forceCod, false, "Flash must not force COD");
   // manual carriers (J&T / ไปรษณีย์) have 0 auto-cost
   const jt = options.find((o) => o.carrier === "24");
   assert.ok(jt && jt.manual && jt.cost === 0, "J&T = manual cost");
@@ -221,22 +215,26 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
   // ── owner 2026-07-13: upcountry external Flash-priced, but ONLY when fully measured ──
   {
     const fill = resolveAutoThShippingFill({ fshipby: "2", ftransportprice: 0, zip: "50000", weightKg: 13, sizeCm: 180, province: "เชียงใหม่" });
-    assert.ok(fill, "upcountry external ฿0 + measured (kg+dims) → auto-fills (Flash + margin)");
+    assert.ok(fill, "upcountry Flash ฿0 + measured (kg+dims) → auto-fills actual Flash tariff");
     assert.equal(fill!.carrier, "2", "upcountry external → Flash carrier '2'");
-    // owner 2026-07-18 — ANY ขนส่งเอกชน → ปลายทาง '2' COD.
-    assert.equal(fill!.payMethod, "2", "owner 2026-07-18: ขนส่งเอกชน → ปลายทาง '2' (COD)");
+    assert.equal(fill!.payMethod, "1", "Flash auto quote is billed at origin");
     assert.equal(fill!.zone, "upcountry");
-    // 🔒 owner 2026-07-21 — "พอเลือกชำระปลายทาง ก็ต้องไม่ใส่ ค่าขนส่งไทย · ควรเป็น 0":
-    // a COD fill STORES ฿0 (the courier collects at the door). The Flash estimate is
-    // still shown to staff in the label, it just isn't written as a charge.
-    assert.equal(fill!.cost, 0, "owner 2026-07-21: ปลายทาง (COD) → เก็บค่าส่งไทย ฿0");
     const quoted = resolveThShippingAutoPrice({ zip: "50000", kg: 13, sizeCm: 180 })!;
-    assert.ok(quoted > MAO_FLAT_FEE, "13kg/180cm upcountry Flash+margin > ฿100 (ยังประเมินได้)");
+    assert.equal(fill!.cost, quoted, "Flash origin stores the actual tariff without markup");
+    assert.ok(quoted > MAO_FLAT_FEE, "13kg/180cm upcountry actual Flash tariff > ฿100");
     assert.ok(
       fill!.label.includes(quoted.toLocaleString("th-TH")),
-      "ป้ายกำกับยังบอกยอดประเมินให้พนักงานเห็น",
+      "ป้ายกำกับบอกยอดจริงให้พนักงานเห็น",
     );
   }
+  assert.equal(
+    resolveAutoThShippingFill({ fshipby: "", ftransportprice: 0, zip: "50000", weightKg: 13, sizeCm: 180 }),
+    null, "unset carrier → no Flash substitution",
+  );
+  assert.equal(
+    resolveAutoThShippingFill({ fshipby: "24", ftransportprice: 0, zip: "50000", weightKg: 13, sizeCm: 180 }),
+    null, "J&T → manual actual price, not Flash tariff",
+  );
   // owner 2026-07-13: weight-only (no dims measured) → NO fake fill — force measurement.
   assert.equal(
     resolveAutoThShippingFill({ fshipby: "2", ftransportprice: 0, zip: "50000", weightKg: 13, province: "เชียงใหม่" }),
@@ -273,12 +271,12 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
   }
 }
 
-// ── resolveThShippingAutoPrice — REAL Flash cost + margin, or null (owner 2026-07-13) ──
+// ── resolveThShippingAutoPrice — actual Flash tariff, no customer markup ──
 {
-  // measured ตจว 13kg + 180cm girth: max(kg ฿155, size ฿290)=290 · +15% = round(333.5)=334
-  assert.equal(resolveThShippingAutoPrice({ zip: "50000", kg: 13, sizeCm: 180 }), Math.round(290 * 1.15), "measured ตจว Flash+margin");
+  // measured ตจว 13kg + 180cm girth: max(kg ฿155, size ฿290)=290, no markup
+  assert.equal(resolveThShippingAutoPrice({ zip: "50000", kg: 13, sizeCm: 180 }), 290, "measured ตจว actual Flash tariff");
   // BKK column — same measured parcel (10120 in BKK_ZIPS)
-  assert.equal(resolveThShippingAutoPrice({ zip: "10120", kg: 13, sizeCm: 180 }), Math.round(290 * 1.15), "BKK column Flash+margin");
+  assert.equal(resolveThShippingAutoPrice({ zip: "10120", kg: 13, sizeCm: 180 }), 290, "BKK actual Flash tariff");
   // NOT fully measured → null (no fake floor · force measure)
   assert.equal(resolveThShippingAutoPrice({ zip: "50000", kg: 13 }), null, "no dims → null");
   assert.equal(resolveThShippingAutoPrice({ zip: "50000", kg: 0, sizeCm: 180 }), null, "no weight → null");
@@ -286,7 +284,7 @@ assert.equal(classifyDomesticZone({ addressID: "123", zip: "50000" }), "upcountr
   // over Flash's cap → null (freight/manual)
   assert.equal(resolveThShippingAutoPrice({ zip: "50000", kg: 104, sizeCm: 200 }), null, "over 50kg → null");
   assert.equal(resolveThShippingAutoPrice({ zip: "10230", kg: 10, sizeCm: 310 }), null, "over 280cm → null");
-  // remote-area zip adds +50 before margin (both measured)
+  // remote-area zip adds the real +50 surcharge (both measured)
   {
     const base = resolveThShippingAutoPrice({ zip: "50000", kg: 13, sizeCm: 180 })!; // ตจว, no surcharge
     const remote = resolveThShippingAutoPrice({ zip: "20120", kg: 13, sizeCm: 180 })!; // remote-area zip (+50)

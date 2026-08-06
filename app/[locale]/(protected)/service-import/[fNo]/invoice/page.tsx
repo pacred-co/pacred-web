@@ -99,6 +99,7 @@ type ForwarderRowLite = {
   famount:                number | string | null;
   ftotalprice:            number | string | null;
   ftransportprice:        number | string | null;
+  paymethod:              number | string | null;
   fpriceupdate:           number | string | null;
   fshippingservice:       number | string | null;
   pricecrate:             number | string | null;
@@ -171,7 +172,7 @@ export default async function ServiceImportInvoicePage({
     .from("tb_forwarder")
     .select(
       "id, userid, fstatus, ftrackingchn, fdate, fweight, fvolume, famount, " +
-      "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+      "ftotalprice, ftransportprice, paymethod, fpriceupdate, fshippingservice, " +
       "pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany",
     )
     .eq("id", idNum)
@@ -252,7 +253,7 @@ export default async function ServiceImportInvoicePage({
           .from("tb_forwarder")
           .select(
             "id, userid, fstatus, ftrackingchn, fdate, fweight, fvolume, famount, " +
-            "ftotalprice, ftransportprice, fpriceupdate, fshippingservice, " +
+            "ftotalprice, ftransportprice, paymethod, fpriceupdate, fshippingservice, " +
             "pricecrate, ftransportpricechnthb, priceother, fdiscount, fusercompany",
           )
           .in("id", fids);

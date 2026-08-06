@@ -12,6 +12,7 @@ import { code128SvgDataUrl } from "@/lib/barcode";
 import { ADDRESSES, CONTACT } from "@/components/seo/site";
 import { ServiceImportEditShipByForm } from "./service-import-edit-ship-by-form";
 import { ServiceImportEditAddressForm } from "./service-import-edit-address-form";
+import { ServiceImportEditPayMethodForm } from "./service-import-edit-pay-method-form";
 import { ServiceImportPayButton } from "./service-import-pay-button";
 import { Explain, GUIDE } from "@/components/ui/tooltip";
 import {
@@ -199,13 +200,6 @@ const NAME_SHIP_BY: Record<string, string> = {
 };
 function nameShipBy(fShipBy: string | null, t: T): string {
   return NAME_SHIP_BY[fShipBy ?? ""] ?? t("notFound");
-}
-
-// Legacy `namePayMethod($data)` — function.php L624-633.
-function namePayMethod(data: string | null, t: T) {
-  if (data === "2")
-    return <span className="inline-flex items-center rounded bg-red-600 px-1.5 py-0.5 text-xs font-medium text-white">{t("payMethodDestination")}</span>;
-  return t("payMethodOrigin");
 }
 
 // Legacy `nameCrate($data)` — function.php L634-643.
@@ -890,6 +884,7 @@ export default async function ServiceImportDetailPage({
     priceCrate,
     fTransportPriceChnThb,
     priceOther,
+    row.paymethod,
   );
 
   // ── 2026-06-19 (Unit A) — ยอดเก็บจริง breakdown (READ-ONLY, customer labels) ──
@@ -1439,7 +1434,12 @@ export default async function ServiceImportDetailPage({
                             </div>
                             <p className="text-sm text-foreground">
                               <b className="font-semibold">{t("payMethodLabel")} : </b>
-                              {namePayMethod(row.paymethod, t)}
+                              <ServiceImportEditPayMethodForm
+                                forwarderId={row.id}
+                                currentPayMethod={row.paymethod}
+                                carrier={row.fshipby}
+                                isEditable={Number(fStatusValue) < 4}
+                              />
                             </p>
                             <div className="text-sm">
                               <b className="font-semibold text-foreground">{t("deliveryAddressLabel")} : </b>

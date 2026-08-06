@@ -74,6 +74,7 @@ function summarizeContainer(rows: ForwarderRow[]): ContainerSummary {
       r.pricecrate,
       r.ftransportpricechnthb,
       r.priceother,
+      r.paymethod,
     );
   }
   return { boxes, weight, volume, total };
@@ -244,6 +245,7 @@ export function ForwarderInteractivity({
         row.pricecrate,
         row.ftransportpricechnthb,
         row.priceother,
+        row.paymethod,
       );
       const eligibleForPay =
         row.fstatus === "5" || row.fcredit === "1";

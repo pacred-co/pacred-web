@@ -446,6 +446,7 @@ export default async function ForwarderTablePage({
       row.pricecrate ?? 0,
       row.ftransportpricechnthb ?? 0,
       row.priceother ?? 0,
+      row.paymethod,
     );
     rowNet.set(row.id, net);
   }

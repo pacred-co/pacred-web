@@ -1,7 +1,7 @@
 /**
  * pay-method.test.ts — carrier → ต้นทาง/ปลายทาง derivation.
  * Owner พี่ป๊อป 2026-07-21: pay-at-origin (own-fleet + Flash/J&T/ไปรษณีย์) → ต้นทาง "1";
- * everything else → ปลายทาง "2" (COD). Locked by carrier (no manual per-row toggle).
+ * everything else → ปลายทาง "2" (COD) by default. Explicit third-party choice wins.
  * Run: tsx lib/forwarder/pay-method.test.ts
  */
 import assert from "node:assert";
@@ -83,8 +83,7 @@ t("no carrier chosen (null) → '1' ต้นทาง default (no COD yet)", ()
 t("empty carrier '' → '1' ต้นทาง default", () =>
   assert.strictEqual(derivePayMethodForDelivery("", { zip: "50000" }), "1"));
 
-// ── enforceCodDomesticZero — the CARRIER LOCK (owner พี่ป๊อป 2026-07-21) ──────
-// pay-at-origin ⇒ '1' (ค่าส่งไทยคงไว้) · ที่เหลือ ⇒ '2' (ค่าส่งไทย = 0) · locked.
+// ── enforceCodDomesticZero — explicit third-party choice + COD zero invariant ──
 t("Flash ต้นทาง — keeps ค่าส่งไทย ฿311", () => {
   const r = enforceCodDomesticZero({ fShipBy: "2", payMethod: "1", transportPrice: 311 });
   assert.strictEqual(r.payMethod, "1");
@@ -100,11 +99,22 @@ t("ไปรษณีย์ ต้นทาง — keeps ค่าส่งไ�
   assert.strictEqual(r.payMethod, "1");
   assert.strictEqual(r.transportPrice, 60);
 });
-t("Kerry LOCKED ปลายทาง — even if caller wants '1', forced '2' + ค่าส่งไทย 0", () => {
+t("Kerry explicit ต้นทาง — keeps choice and ค่าส่งไทย", () => {
   const r = enforceCodDomesticZero({ fShipBy: "4", payMethod: "1", transportPrice: 311 });
+  assert.strictEqual(r.payMethod, "1");
+  assert.strictEqual(r.transportPrice, 311);
+  assert.strictEqual(r.changed, false);
+});
+t("Flash explicit ปลายทาง — keeps choice and zeros Pacred bill", () => {
+  const r = enforceCodDomesticZero({ fShipBy: "2", payMethod: "2", transportPrice: 136 });
   assert.strictEqual(r.payMethod, "2");
   assert.strictEqual(r.transportPrice, 0);
   assert.strictEqual(r.changed, true);
+});
+t("Kerry with no explicit choice — derives ปลายทาง", () => {
+  const r = enforceCodDomesticZero({ fShipBy: "4", transportPrice: 311 });
+  assert.strictEqual(r.payMethod, "2");
+  assert.strictEqual(r.transportPrice, 0);
 });
 t("Nim ปลายทาง — ค่าส่งไทย zeroed", () => {
   const r = enforceCodDomesticZero({ fShipBy: "5", payMethod: "2", transportPrice: 200 });
