@@ -31,7 +31,7 @@ const PW = process.env.SUPABASE_DB_PASSWORD;
 if (!PW) { console.error("SUPABASE_DB_PASSWORD required"); process.exit(1); }
 
 // ตู้ที่จะ ingest (ชื่อไฟล์ = เลขตู้ → fcabinetnumber ในอนาคต)
-const FILES = ["YWS260720-9T", "YWS260722-10T", "YWS260723-1T", "YWS260724-2T"];
+const FILES = ["YWS260803-3T", "YWS260726-4T"];
 
 // ── กติกาใหม่ owner 2026-08-07 (บังคับก่อนแตะ DB · fail-loud) ──────────────────
 // 1. เลขตู้อี้อูต้องเป็นแพทเทิร์น YW[S|E]YYMMDD-N เท่านั้น (SOT yiwu-cabinet-name.ts ·
@@ -177,6 +177,11 @@ async function main() {
       // ── SKIP_NON_PR (owner 2026-08-07): ไม่มี PR ในมาร์ค + ไม่มีในระบบ + reuse ไม่ได้
       // = ลูกค้าเจ้าอื่นของ TTW (แพคกิ้งเขาส่งรวมทุกเจ้า) → ไม่เอาเข้า staging เลย
       if (!member && !rawPr && !exists) { skippedOthers++; continue; }
+
+      // ── HOLD_VERIFY (owner 2026-08-07): มาร์คแบบ "PCS####" = สุ่มเสี่ยงของเรา
+      // ที่ร้าน/โกดังจีนอาจออกแทรคกิ้งผิด → ปักธงรอตรวจ ห้าม commit จนกว่า CS ยืนยัน
+      // (CS กดใส่ PR ซ้ำบนหน้า TTW = ปลดธงเอง เพราะ assign เขียน pr_source='cs')
+      if (/PCS\d/i.test(mark ?? "")) source = "hold_verify";
 
       const b = a.parcelCount == null ? null : Math.round(a.parcelCount);
       const w = a.totalWeight == null ? null : round(a.totalWeight, 3);

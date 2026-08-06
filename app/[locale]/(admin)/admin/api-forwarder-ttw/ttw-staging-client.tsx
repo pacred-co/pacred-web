@@ -355,7 +355,15 @@ export function TtwStagingClient({
                                       <span className="text-[11px] text-amber-600">⚠ ยังไม่พบ PR นี้</span>
                                     ))}
                                     {r.pr_source === "mark" && !savedInfo && (
-                                      <span className="text-[10px] text-sky-600" title="เดาจากมาร์ค PR ในแพคกิ้งลิสต์">(จากมาร์ค)</span>
+                                      <span className="text-[11px] text-sky-600" title="เดาจากมาร์ค PR ในแพคกิ้งลิสต์">(จากมาร์ค)</span>
+                                    )}
+                                    {r.pr_source === "hold_verify" && (
+                                      <span
+                                        className="rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-semibold text-red-700"
+                                        title="มาร์คแบบ PCS — ร้าน/โกดังจีนอาจออกแทรคกิ้งผิด (owner 2026-08-07) · ยืนยันกับลูกค้า/TTW แล้วกดใส่ PR ซ้ำเพื่อปลดธง · ระหว่างนี้กด 'เอาเข้าระบบ' ไม่ได้"
+                                      >
+                                        🚩 รอตรวจสอบ
+                                      </span>
                                     )}
                                   </div>
                                   {committedPr && (

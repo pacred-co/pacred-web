@@ -189,7 +189,7 @@ export async function adminCreateForwarderFromTtwStaging(
 
     const { data: row, error: rowErr } = await admin
       .from("ttw_packing_line")
-      .select("id, base_tracking, member_code, boxes, weight_kg, cbm, container_no, committed_forwarder_id")
+      .select("id, base_tracking, member_code, pr_source, boxes, weight_kg, cbm, container_no, committed_forwarder_id")
       .eq("id", id)
       .maybeSingle();
     if (rowErr) {
@@ -198,11 +198,19 @@ export async function adminCreateForwarderFromTtwStaging(
     }
     if (!row) return { ok: false, error: "ไม่พบรายการนี้" };
     const r = row as {
-      id: string; base_tracking: string | null; member_code: string | null;
+      id: string; base_tracking: string | null; member_code: string | null; pr_source: string | null;
       boxes: number | null; weight_kg: number | string | null; cbm: number | string | null;
       container_no: string | null; committed_forwarder_id: number | null;
     };
     if (r.committed_forwarder_id != null) return { ok: false, error: "รายการนี้ commit เข้าระบบแล้ว" };
+    // 🚩 owner 2026-08-07: มาร์คแบบ "PCS####" = ร้าน/โกดังจีนอาจออกแทรคกิ้งผิด → ปักธงรอตรวจ
+    // ห้ามเอาเข้าระบบจนกว่า CS ยืนยันกับลูกค้า/TTW แล้วกดใส่ PR ซ้ำ (ปลดธงเป็น 'cs' อัตโนมัติ)
+    if (r.pr_source === "hold_verify") {
+      return {
+        ok: false,
+        error: "แถวนี้ถูกปักธง 🚩 รอตรวจสอบ (มาร์คแบบ PCS — เลขแทรคอาจออกมาผิด) — ยืนยันกับลูกค้า/TTW ก่อน แล้วกด \"ใส่ PR\" ซ้ำเพื่อปลดธง",
+      };
+    }
 
     const pr = (r.member_code ?? "").trim().toUpperCase();
     if (!/^PR\d+$/.test(pr)) {
