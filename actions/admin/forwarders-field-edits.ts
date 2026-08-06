@@ -86,7 +86,7 @@ import { getShipByOptionsForAddress } from "@/lib/cart/ship-by-eligibility";
 import { isFreeShippingZip } from "@/lib/bkk-zip";
 import { derivePayMethodForDelivery, enforceCodDomesticZero, isPayAtOriginCarrier } from "@/lib/forwarder/pay-method";
 import { autoFillThShippingForForwarder } from "@/lib/admin/auto-fill-th-shipping";
-import { propagateShipmentEdit } from "@/lib/admin/forwarder-siblings";
+import { propagateShipmentEdit, fillEmptyAddressAcrossCustomer } from "@/lib/admin/forwarder-siblings";
 import { assertNotRefunded } from "@/lib/admin/refund-rebill-guard";
 import { checkCarrierForProvince, isOwnFleetCarrier } from "@/lib/forwarder/carrier-coverage-guard";
 import { isMaoCarrier } from "@/lib/forwarder/mao-fee";
@@ -297,6 +297,16 @@ export async function adminPickForwarderAddress(
       legacyAdminId,
     );
 
+    // owner 2026-08-06 — "CS ไม่ต้องใส่ที่อยู่ซ้ำๆ ตามแทรคกิ้ง": ใส่ครั้งเดียว →
+    // เติมให้ทุกแทรคกิ้งอื่นของลูกค้าที่ยังว่างสนิท (fstatus 1-4 · address-only · best-effort)
+    await fillEmptyAddressAcrossCustomer(admin, fwd.userid ?? "", {
+      faddressname: address.addressname, faddresslastname: address.addresslastname,
+      faddressno: address.addressno, faddresssubdistrict: address.addresssubdistrict,
+      faddressdistrict: address.addressdistrict, faddressprovince: address.addressprovince,
+      faddresszipcode: address.addresszipcode, faddressnote: address.addressnote,
+      faddresstel: address.addresstel, faddresstel2: address.addresstel2,
+    }, { exceptFids: [d.fId], legacyAdminId });
+
     await logAdminAction(adminId, "tb_forwarder.update_address", "tb_forwarder", String(d.fId), {
       addressId: d.addressId,
       userid:    fwd.userid,
@@ -461,6 +471,13 @@ export async function adminUpdateForwarderAddressDetails(
       },
       legacyAdminId,
     );
+
+    // owner 2026-08-06 — ใส่ครั้งเดียว เติมทุกแทรคกิ้งอื่นของลูกค้าที่ยังว่าง (address-only)
+    await fillEmptyAddressAcrossCustomer(admin, fwd.userid ?? "", {
+      faddressname: d.name, faddresslastname: d.lastname, faddressno: d.addressno,
+      faddresssubdistrict: d.subdistrict, faddressdistrict: d.district, faddressprovince: d.province,
+      faddresszipcode: d.zipcode, faddressnote: d.note, faddresstel: d.tel, faddresstel2: d.tel2,
+    }, { exceptFids: [d.fId], legacyAdminId });
 
     await logAdminAction(adminId, "tb_forwarder.update_address_details", "tb_forwarder", String(d.fId), {
       userid: fwd.userid,

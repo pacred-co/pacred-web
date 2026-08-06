@@ -7,6 +7,7 @@ import { TaxInvoiceRequestPanel } from "@/components/tax-invoice-request-panel";
 import { CONTACT, ADDRESSES } from "@/components/seo/site";
 import { CustomerWhtUploadPanel } from "@/components/customer-wht-upload-panel";
 import { isShopYuanTaxInvoiceEnabled } from "@/lib/tax/shop-yuan-flag";
+import { formatThaiTaxId } from "@/lib/admin/customer-identity";
 
 /**
  * Print-ready service-order (ฝากสั่งซื้อ — China-shop) receipt view.
@@ -171,6 +172,14 @@ export default async function ShopOrderReceiptPage({
               {o.customer.tax_id && <p>เลขประจำตัวผู้เสียภาษี: {o.customer.tax_id}</p>}
               {o.customer.company_address && <p>{o.customer.company_address}</p>}
             </div>
+          )}
+
+          {/* บุคคลธรรมดา (owner 2026-08-06) — เลขผู้เสียภาษีจาก tb_users.personal_tax_id
+              (mig 0298) ขึ้นบนใบเสร็จเหมือนของนิติ · ไม่มีเลข = ไม่ขึ้นบรรทัด */}
+          {o.customer.account_type !== "juristic" && o.customer.tax_id && (
+            <p className="mt-2 text-xs">
+              เลขประจำตัวผู้เสียภาษี: {formatThaiTaxId(o.customer.tax_id)}
+            </p>
           )}
         </section>
 

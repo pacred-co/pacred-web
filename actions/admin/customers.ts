@@ -72,7 +72,7 @@ export async function adminUpdateUserIdentity(
 
     const { data: before, error: beforeErr } = await admin
       .from("tb_users")
-      .select("userID, userName, userLastName, userEmail, userTel, userSex, userBirthday, userLineID, userFacebook, adminIDSale, coID")
+      .select("userID, userName, userLastName, userEmail, userTel, userSex, userBirthday, userLineID, userFacebook, adminIDSale, coID, personal_tax_id")
       .eq("userID", userid)
       .maybeSingle<{
         userID: string;
@@ -81,6 +81,7 @@ export async function adminUpdateUserIdentity(
         userSex: string | null; userBirthday: string | null;
         userLineID: string | null; userFacebook: string | null;
         adminIDSale: string | null; coID: string | null;
+        personal_tax_id: string | null;
       }>();
     if (beforeErr) {
       console.error(`[adminUpdateUserIdentity read] failed`, { userid, code: beforeErr.code, message: beforeErr.message });
@@ -119,6 +120,9 @@ export async function adminUpdateUserIdentity(
       userBirthday: d.userBirthday || null,
       userLineID:   d.userLineID ?? "",
       userFacebook: d.userFacebook ?? "",
+      // owner 2026-08-06 — เลขผู้เสียภาษีบุคคลธรรมดา (mig 0298 · digits ล้วน 13 หลัก ·
+      // "" = ล้างค่า). ไม่แตะ tb_corporate → ไม่กระทบการเป็นนิติ/หัก WHT 1%.
+      personal_tax_id: d.personalTaxId ? d.personalTaxId : null,
     };
     if (isSenior) {
       if (d.adminIDSale !== undefined) update.adminIDSale = d.adminIDSale;

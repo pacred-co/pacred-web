@@ -311,7 +311,7 @@ export async function renderLegacyCustomerView(
   const { data: userRaw, error: userErr } = await admin
     .from("tb_users")
     .select(
-      "userID,userName,userLastName,userCompany,userEmail,userTel,userActive,userRegistered,userLastLogin,adminIDSale,adminIDCS,adminIDInterpreter,adminIDPricing,adminIDPurchaser,userNote,userPicture,userSex,userBirthday,userLineID,userFacebook,coID,userComparison,userComparisonValue,userCredit,userCreditValue,userCreditDate",
+      "userID,userName,userLastName,userCompany,userEmail,userTel,userActive,userRegistered,userLastLogin,adminIDSale,adminIDCS,adminIDInterpreter,adminIDPricing,adminIDPurchaser,userNote,userPicture,userSex,userBirthday,userLineID,userFacebook,coID,userComparison,userComparisonValue,userCredit,userCreditValue,userCreditDate,personal_tax_id",
     )
     .eq("userID", id)
     .maybeSingle();
@@ -575,6 +575,8 @@ export async function renderLegacyCustomerView(
     userName: u.userName,
     userLastName: u.userLastName,
     corp,
+    // owner 2026-08-06 — บุคคลธรรมดาก็มีเลขผู้เสียภาษี (ขึ้นใบเสนอราคา/เอกสาร)
+    personalTaxId: (u as { personal_tax_id?: string | null }).personal_tax_id ?? null,
   });
   const isJuristic = identity.isJuristic;
   const fullName = identity.name || "—";
@@ -1383,6 +1385,7 @@ export async function renderLegacyCustomerView(
           userBirthday: u.userBirthday ?? "",
           userLineID:   u.userLineID ?? "",
           userFacebook: u.userFacebook ?? "",
+          personalTaxId: (u as { personal_tax_id?: string | null }).personal_tax_id ?? "",
           adminIDSale:  u.adminIDSale ?? "",
           coID:         u.coID ?? "",
         }}
