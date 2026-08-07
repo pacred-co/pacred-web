@@ -6,6 +6,7 @@ import { BookingHero }   from "./BookingHero";
 import { BookingTabs }   from "./BookingTabs";
 import { BookingPortTabs, type CustomsPortCode } from "./BookingPortTabs";
 import { BookingSubbar } from "./BookingSubbar";
+import { SourcingLinkPanel } from "./SourcingLinkPanel";
 import { SalesModal }    from "./SalesModal";
 import { CustomDropdown, TextDropdown } from "./CustomDropdown";
 import { ResultBox }     from "./ResultBox";
@@ -24,7 +25,6 @@ import {
   CUSTOMS_PORT_SECTIONS_KEYS,
   CUSTOMS_COUNTRY_SECTIONS_KEYS,
   CUSTOMS_PRODUCT_SECTIONS_KEYS,
-  PLATFORM_SECTIONS,
   CURRENCY_SECTIONS_KEYS,
   resolveSections,
   resolveChips,
@@ -32,7 +32,7 @@ import {
 import type {
   TabMode, SeaMode, Term, LclDoc, FclSize, TruckSub,
   CalcResult, SalesCard,
-  LCLForm, FCLForm, TruckForm, AirForm, CustomsForm, SourcingForm, RemitForm,
+  LCLForm, FCLForm, TruckForm, AirForm, CustomsForm, RemitForm,
 } from "@/types/booking";
 
 function ctrl(className?: string) {
@@ -71,6 +71,8 @@ function PanelFooter({ hint, calcLabel, tel, callPrefix, contactLabel, onCalc, o
 export function BookingCalculator({
   landing,
   services,
+  hideTabs = false,
+  topCta,
   defaultHero = false,
   heroTitle,
   heroHighlight,
@@ -89,6 +91,14 @@ export function BookingCalculator({
   /** Page-specific hero banner image overrides. */
   heroBgMobile?: string;
   heroBgDesktop?: string;
+  /** Drop the service tab strip entirely — for a landing page that IS one service
+   *  (ปอน 2026-08-07: หน้าแลนดิ้งสั่งซื้อจีน ไม่ต้องโชว์ 7 แท็บ). Needs `landing`
+   *  so there's still a tab to show, and force-opens the panel: with no tabs
+   *  there is nothing left to click that would open it. */
+  hideTabs?: boolean;
+  /** ปุ่ม CTA ที่จะแทรก "ใต้แบนเนอร์ เหนือกล่องพาเนล" (ปอน 2026-08-07 — ย้ายปุ่ม
+   *  ใช้บริการ/ปรึกษาฟรี ขึ้นมาให้เห็นตั้งแต่จอแรก). หน้าไหนไม่ส่งมา = ไม่มีอะไรเปลี่ยน. */
+  topCta?: React.ReactNode;
 } = {}) {
   const t = useTranslations("bookingCalc");
   const tData = useTranslations("bookingCalc.data");
@@ -98,7 +108,6 @@ export function BookingCalculator({
   const tTruck = useTranslations("bookingCalc.truck");
   const tAir = useTranslations("bookingCalc.air");
   const tCustoms = useTranslations("bookingCalc.customs");
-  const tSourcing = useTranslations("bookingCalc.sourcing");
   const tRemit = useTranslations("bookingCalc.remit");
   const tSales = useTranslations("salesTeam");
 
@@ -140,7 +149,7 @@ export function BookingCalculator({
   // Form panel stays closed by default — tab is highlighted via `activeTab` but
   // user has to click the tab to expand the form. Lets landing pages (eg.
   // /customs-clearance-shipping-suvarnabhumi) pre-highlight a tab without forcing the form open.
-  const [panelOpen,  setPanelOpen]  = useState(false);
+  const [panelOpen,  setPanelOpen]  = useState(hideTabs);
   // Customs landing tab strip — replaces the 6 mode tabs with 7 port tabs
   // (สุวรรณภูมิ / ดอนเมือง / ไปรษณีย์หลักสี่ / คลองเตย / แหลมฉบัง / ICD / ด่านชายแดน).
   // The selected port auto-fills customsForm.port + portLabel, so the form
@@ -182,10 +191,9 @@ export function BookingCalculator({
     productType: "general", productLabel: tData("productTruckGeneral"),
     awb: "", contact: "",
   });
-  const [sourcingForm, setSourcingForm] = useState<SourcingForm>({
-    platform: "1688", platformLabel: "1688",
-    url: "", qty: "", budget: "",
-  });
+  // ฝากสั่งซื้อไม่มี state ฟอร์มแล้ว — พาเนลเป็น <SourcingLinkPanel> ที่ถือ state ของตัวเอง
+  // (ปอน 2026-08-07). `SourcingForm` / `PLATFORM_SECTIONS` ยังอยู่ใน types + booking-data
+  // เผื่อกลับมาใช้ แต่จอนี้ไม่อ้างถึงแล้ว
   const [remitForm, setRemitForm] = useState<RemitForm>({
     currency: "cny", currencyLabel: tData("currencyCny"),
     amount: "", country: "", purpose: "",
@@ -253,15 +261,18 @@ export function BookingCalculator({
 
   return (
     <div className="w-full max-w-[1280px] mx-auto pb-1 md:pb-10">
-      <BookingHero activeTab={activeTab} seaMode={seaMode} forceDefault={defaultHero} customTitle={heroTitle} customHighlight={heroHighlight} customBgMobile={heroBgMobile} customBgDesktop={heroBgDesktop} />
+      <BookingHero activeTab={activeTab} seaMode={seaMode} forceDefault={defaultHero} customTitle={heroTitle} customHighlight={heroHighlight} customBgMobile={heroBgMobile} customBgDesktop={heroBgDesktop} overlayCta={topCta} />
 
       {/* Mobile (ปอน 2026-06-19): no negative margin → the icon area does NOT
           overlap the hero banner, and no card frame (border/shadow/rounded) so the
           circular icons sit clean like Trip. Desktop keeps the overlapping card. */}
-      <div className="relative z-10 max-w-[1280px] mx-auto mt-1.5 px-3 md:mt-0 md:-mt-16 md:px-5">
+      {/* การ์ดปกติถูกดึงขึ้นทับแบนเนอร์ (`md:-mt-16`) ตามดีไซน์เดิม — แต่หน้าที่ตัดแถบแท็บออก
+          พาเนลจะสูงกว่ามากและกินแบนเนอร์ทั้งท่อน (ปอน 2026-08-07 "ขยับลงไม่ให้ไปทับแบนเนอร์")
+          → เฉพาะโหมดนั้นไม่ต้องดึงขึ้น. หน้าอื่นเหมือนเดิมเป๊ะ */}
+      <div className={`relative z-10 max-w-[1280px] mx-auto px-3 md:px-5 ${hideTabs ? "mt-0 md:mt-0" : "mt-1.5 md:mt-0 md:-mt-16"}`}>
         <div className="bg-white md:rounded-2xl md:shadow-[0_10px_40px_rgba(0,0,0,0.08)] md:border md:border-gray-100">
 
-          {isCustomsLanding ? (
+          {hideTabs ? null : isCustomsLanding ? (
             <BookingPortTabs
               active={customsPort}
               onChange={handleCustomsPortChange}
@@ -514,32 +525,12 @@ export function BookingCalculator({
             </div>
           )}
 
-          {/* ── Sourcing Panel ── */}
+          {/* ── Sourcing Panel ──
+              ปอน 2026-08-07: เลิกใช้ฟอร์มประเมิน (แพลตฟอร์ม/ลิงก์เดียว/จำนวน/งบ) ที่จบด้วย
+              การเปิด modal ติดต่อเซล → เปลี่ยนเป็นตารางวางลิงก์ที่พาเข้า flow สั่งซื้อจริง
+              (owner "เอาตัววางลิงก์จากหลังบ้านมาขึ้นหน้าบ้าน"). */}
           {panelOpen && activeTab === "sourcing" && (
-            <div className="p-4 md:p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
-                <CustomDropdown label={tSourcing("platformLabel")} displayValue={sourcingForm.platformLabel} sections={PLATFORM_SECTIONS}
-                  onSelect={(v, l) => setSourcingForm(f => ({ ...f, platform: v, platformLabel: l }))} />
-                <div className="flex flex-col gap-1.5 md:col-span-2">
-                  <FieldLabel>{tSourcing("urlLabel")}</FieldLabel>
-                  <input type="text" placeholder={tSourcing("urlPh")} className={ctrl()}
-                    value={sourcingForm.url} onChange={e => setSourcingForm(f => ({ ...f, url: e.target.value }))} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>{tSourcing("qtyLabel")}</FieldLabel>
-                  <input type="number" min="0" placeholder={tSourcing("qtyPh")} className={ctrl()}
-                    value={sourcingForm.qty} onChange={e => setSourcingForm(f => ({ ...f, qty: e.target.value }))} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <FieldLabel>{tSourcing("budgetLabel")}</FieldLabel>
-                  <input type="number" min="0" placeholder={tSourcing("budgetPh")} className={ctrl()}
-                    value={sourcingForm.budget} onChange={e => setSourcingForm(f => ({ ...f, budget: e.target.value }))} />
-                </div>
-              </div>
-              <PanelFooter hint={tSourcing("hint")} calcLabel={tSourcing("calcLabel")}
-                tel={tel} callPrefix={callPrefix} contactLabel={contactLabel}
-                onCalc={() => setModalOpen(true)} onModal={() => setModalOpen(true)} />
-            </div>
+            <SourcingLinkPanel />
           )}
 
           {/* ── Remit Panel ── */}

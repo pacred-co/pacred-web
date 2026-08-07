@@ -52,7 +52,10 @@ export function BookingSubbar(props: BookingSubbarProps) {
   const t = useTranslations("bookingCalc");
   const { activeTab, seaMode } = props;
 
-  const visible = activeTab === "sea" || activeTab === "truck" || activeTab === "sourcing";
+  // ฝากสั่งซื้อไม่มีแถบนี้แล้ว (ปอน 2026-08-07 "เอาออก") — พาเนลเปลี่ยนเป็นตารางวางลิงก์
+  // ที่พาไปหน้าตรวจสอบสินค้าจริง ตัวเลือกเอกสารไปอยู่ตอนออกบิล ไม่ใช่ตอนวางลิงก์.
+  // เรือ/รถ ไม่แตะ.
+  const visible = activeTab === "sea" || activeTab === "truck";
   if (!visible) return null;
 
   const baseWrap = "border-b border-gray-100 bg-[#fcfcfd] py-3.5 px-5";
@@ -133,19 +136,6 @@ export function BookingSubbar(props: BookingSubbarProps) {
         <ChipRow chips={[
           { label: t("truckShare"), active: props.truckSub === "share", onClick: () => props.onTruckSubChange("share") },
           { label: t("truckFull"),  active: props.truckSub === "full",  onClick: () => props.onTruckSubChange("full") },
-        ]} />
-      </div>
-    );
-  }
-
-  if (activeTab === "sourcing") {
-    return (
-      <div className={`${baseWrap} flex flex-wrap gap-3 items-center justify-center`}>
-        <span className="text-[12px] font-bold text-gray-600">{t("docLabel")}</span>
-        <ChipRow chips={[
-          { label: t("docInvoice"), active: props.srcDoc === "invoice", onClick: () => props.onSrcDocChange("invoice") },
-          { label: t("docCustoms"), active: props.srcDoc === "customs", onClick: () => props.onSrcDocChange("customs") },
-          { label: t("docNone"),    active: props.srcDoc === "none",    onClick: () => props.onSrcDocChange("none") },
         ]} />
       </div>
     );
