@@ -176,6 +176,24 @@ export default async function AdminLeadsPage({
           subtitle="โทรหาลูกค้าจากบนลงล่างเพื่อปิดการขาย"
         />
 
+        {/* owner 2026-08-07 "ข้อมูลลูกค้า โทรตาม ก็ให้ไปรวมไว้กับ โทรตามลูกค้า" —
+            กองใบขน (NetBay 254 ราย) เป็นคนละตาราง/คนละที่มา (customs_importer_lead
+            ดึงจากใบขนจริง ไม่ใช่ imported_leads ที่เซลกรอก) → ไม่ merge ข้อมูล
+            แต่ทำให้ "อยู่ด้วยกัน" = กดสลับได้จากตรงนี้ ไม่ต้องหาในเมนูอื่น. */}
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface-alt/40 px-3 py-2">
+          <span className="text-[11px] font-semibold text-muted">กองที่โทรตามได้:</span>
+          <span className="rounded-full bg-primary-600 px-3 py-1 text-[11px] font-semibold text-white">
+            ลูกค้าทั่วไป (Leads)
+          </span>
+          <Link
+            href="/admin/customs-leads"
+            className="rounded-full border border-border px-3 py-1 text-[11px] font-medium hover:bg-surface-alt"
+            title="ผู้นำเข้าที่เคยยื่นใบขนจริง (จากกรมศุลฯ) — โทรชวนมาใช้บริการเรา"
+          >
+            ลูกค้าใช้ใบขน (จากกรมศุลฯ) →
+          </Link>
+        </div>
+
         {/* Stat cards — ปอน 2026-06-23: 4 การ์ด compact (เตี้ยลง) จาก imported_leads
             (getImportedLeadStats · สัมพันธ์ตาราง · scoped ตาม role). ติดต่อวันนี้ = daily
             reset · ปิด/ไม่รับสาย/ไม่สนใจ = ยอดสะสมตามสถานะ. */}

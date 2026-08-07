@@ -54,7 +54,6 @@ import type { AdminRole } from "@/lib/auth/require-admin";
  */
 export const PHASE_2_PLUS_ROUTES = [
   // Phase 2 — soon-to-launch
-  "/admin/bookings",                     // marketing/bookings
   "/admin/broadcasts",                   // marketing/broadcasts
   "/admin/commissions",                  // interpreter / sales commissions
   "/admin/customers/pending",            // customer approval queue (QA-like)
@@ -72,7 +71,6 @@ export const PHASE_2_PLUS_ROUTES = [
   // is tracked separately and is NOT made worse by un-blocking the gate;
   // staff would just see an empty page instead of a silent redirect.
   "/admin/forwarder-sales",              // freight withdrawal (commissions)
-  "/admin/freight/declarations",         // customs declarations (service #8 not live)
   // 2026-07-02 — "/admin/incidents" moved to PHASE_1_CARVEOUTS below: its READ
   // is broad (super/ops/accounting/sales_admin/warehouse/driver/interpreter);
   // the page's own requireAdmin([...]) is the gate + the WRITE actions self-gate
@@ -96,7 +94,6 @@ export const PHASE_2_PLUS_ROUTES = [
   // action-level role gate inside the QA module is still enforced, so a
   // non-warehouse non-super clicking it gets a "no permission" inside the
   // page rather than a silent redirect.
-  "/admin/withdrawal/freight-th",        // freight-th stub (placeholder per brief)
   // 2026-06-29 (ปอน) — "/admin/learning" UN-GATED: Learning is part of the shared
   // tail every position sees (its sidebar blocks are now phase 1). Removed from this
   // block list so non-god roles can actually open it (was bouncing to notFound).

@@ -20,7 +20,7 @@ type Side = "cargo" | "freight";
 // parent component's render) — React 19 lint flags inline component decls.
 function Pill({ side, label, active }: { side: Side; label: string; active: Side }) {
   const isActive = active === side;
-  const href = side === "cargo" ? "/admin/accounting/cargo" : "/admin/accounting/freight";
+  const href = "/admin/accounting/cargo"; // 2026-08-07: ตัดกองเฟรทออกจากแอดมิน — เหลือเลนคาร์โก้
   return (
     <Link
       href={href}

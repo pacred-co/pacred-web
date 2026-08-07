@@ -303,19 +303,6 @@ export default async function AdminGlobalSearchPage({
         </Section>
       )}
 
-      {willRun && freightShips.length > 0 && (
-        <Section title="Freight shipments" count={freightShips.length} moreHref={`/admin/freight/shipments?q=${encodeURIComponent(q)}`}>
-          {freightShips.map((fs) => (
-            <Link key={fs.id} href={`/admin/freight/shipments/${fs.id}`} className="block px-4 py-2 hover:bg-surface-alt/50 border-t border-border">
-              <div className="flex items-center justify-between gap-3 flex-wrap text-xs">
-                <span className="font-mono font-medium text-primary-700">{fs.job_no ?? "(no job_no)"}</span>
-                <span className="rounded-full border border-border px-2 py-0.5 text-[11px]">{fs.status}</span>
-                <span className="text-muted">{new Date(fs.created_at).toLocaleDateString("th-TH")}</span>
-              </div>
-            </Link>
-          ))}
-        </Section>
-      )}
 
       {willRun && taxInvoices.length > 0 && (
         <Section title="ใบกำกับภาษี (tax invoices)" count={taxInvoices.length} moreHref="/admin/accounting/etax">
@@ -354,19 +341,6 @@ export default async function AdminGlobalSearchPage({
         </Section>
       )}
 
-      {willRun && freightQuotes.length > 0 && (
-        <Section title="Freight quotes" count={freightQuotes.length} moreHref={`/admin/freight/quotes?q=${encodeURIComponent(q)}`}>
-          {freightQuotes.map((fq) => (
-            <Link key={fq.id} href={`/admin/freight/quotes/${fq.id}`} className="block px-4 py-2 hover:bg-surface-alt/50 border-t border-border">
-              <div className="flex items-center justify-between gap-3 flex-wrap text-xs">
-                <span className="font-mono font-medium text-primary-700">{fq.quote_no ?? fq.id.slice(0, 8)}</span>
-                <span className="rounded-full border border-border px-2 py-0.5 text-[11px]">{fq.status}</span>
-                <span className="text-muted">{new Date(fq.created_at).toLocaleDateString("th-TH")}</span>
-              </div>
-            </Link>
-          ))}
-        </Section>
-      )}
 
       {willRun && totalHits === 0 && (
         <div className="rounded-2xl border border-border bg-surface-alt/30 p-8 text-center text-sm text-muted">

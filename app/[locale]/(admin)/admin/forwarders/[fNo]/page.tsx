@@ -1287,12 +1287,6 @@ async function tryRenderTbForwarder(
 
           {/* owner 2026-06-28 #1 — เลือกสินค้า → สร้างใบขน/ใบกำกับ (ร่าง) จากรายการนี้. */}
           <div className="mt-3 flex flex-wrap gap-2">
-            <Link
-              href={`/admin/forwarders/${r.id}/customs-doc`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
-            >
-              📄 เลือกสินค้า → สร้างใบขน/ใบกำกับ (ร่าง)
-            </Link>
             {/* พี่ป๊อป spec 2026-07-06 #8 — printable บิลรับสินค้า (โกดังจีน):
                SM+barcode/QR · PR# · ประเภทขนส่ง · วันรับ · จำนวนกล่อง · เบอร์ผู้ส่ง ·
                เซ็นรับ+ถ่ายรูป → = ถึงโกดังจีนแล้ว. Display/print-only (no mutation). */}

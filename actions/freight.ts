@@ -138,7 +138,7 @@ export async function customerAcceptQuote(
         severity:  "info",
         title:     `ลูกค้าตอบรับใบเสนอราคา ${quote.quote_no}`,
         body:      `${quote.buyer_name_snapshot} · ฿${Number(quote.total).toLocaleString("th-TH")} — รอแปลงเป็นงานขนส่ง`,
-        link_href: `/admin/freight/quotes/${quote.id}`,
+        link_href: `/admin/board`, // 2026-08-07 ตัดหน้าแอดมินเฟรท
         // No `freight_quote` reference_type exists; omit (link_href deep-links)
       });
     }

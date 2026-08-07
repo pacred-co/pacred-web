@@ -148,6 +148,20 @@ export default async function CustomsLeadsPage({ searchParams }: { searchParams:
               }}
               filename={`customs-leads-${view}${sp.transport ? `-${sp.transport}` : ""}${sp.status ? `-${sp.status}` : ""}${sp.sale ? `-${sp.sale}` : ""}-${new Date().toISOString().slice(0, 10)}.csv`}
             />
+
+        {/* owner 2026-08-07 — กองนี้อยู่คู่กับ "โทรตามลูกค้า" (คนละที่มา แต่งานเดียวกัน) */}
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface-alt/40 px-3 py-2">
+          <span className="text-[11px] font-semibold text-muted">กองที่โทรตามได้:</span>
+          <Link
+            href="/admin/leads"
+            className="rounded-full border border-border px-3 py-1 text-[11px] font-medium hover:bg-surface-alt"
+          >
+            ← ลูกค้าทั่วไป (Leads)
+          </Link>
+          <span className="rounded-full bg-primary-600 px-3 py-1 text-[11px] font-semibold text-white">
+            ลูกค้าใช้ใบขน (จากกรมศุลฯ)
+          </span>
+        </div>
             <Link href="/admin" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">← Admin</Link>
           </>
         }

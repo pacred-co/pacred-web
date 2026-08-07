@@ -345,7 +345,7 @@ export default async function AdminEtaxPage({
             <li>RD Code 86 XML xs:schema validation + <strong>XAdES-BES digital signature</strong> envelope (XML นี้เป็น preview shape only · unsigned)</li>
             <li>Submit-to-RD via e-Tax-by-Email (RD-INET รับ XML) หรือ e-Tax API (RD-MAP) · ต้องมี RD API credentials</li>
             <li>50-ทวิ certificate chasing UI สำหรับ <code className="bg-surface-alt px-1 rounded">tb_forwarder_wht_entry.cert_status=&apos;pending&apos;</code> · juristic customers จะออก 50-ทวิ ให้</li>
-            <li>PDF re-render — เชื่อมไปยัง <Link href="/admin/tax-invoices" className="underline">/admin/tax-invoices/[id]</Link> ของ World-A สำหรับ legacy invoices</li>
+            <li>PDF re-render — เชื่อมไปยัง หน้านี้ ของ World-A สำหรับ legacy invoices</li>
           </ul>
         </section>
       </main>

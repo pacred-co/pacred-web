@@ -248,8 +248,7 @@ export default async function AdminPeakExportPage({
           )}
           <p className="text-[11px] text-muted">
             3 ราคาแยกกันเสมอ: ขาย (→ รายได้/AR + ใบกำกับ) ≠ ต้นทุน (→ COGS/stock-in) ≠ สำแดง (→ ใบขนรวม · memo).
-            รายงานนี้สรุปต่องาน (tb_cargo_taxdoc_job) — ดูงานที่{" "}
-            <Link href="/admin/pricing/taxdoc-workspace" className="text-primary-600 hover:underline">Tax-doc Workspace</Link>.
+            รายงานนี้สรุปต่องาน (tb_cargo_taxdoc_job) — ดูงานที่{" "}.
           </p>
         </section>
 
@@ -258,7 +257,7 @@ export default async function AdminPeakExportPage({
           <ul className="list-disc list-inside text-muted space-y-1">
             <li>PEAK direct API import (ปัจจุบัน export เป็น CSV ไปใช้ใน PEAK)</li>
             <li>FlowAccount template-format export (ปัจจุบัน standard Pacred CSV)</li>
-            <li>e-Tax XML (RD Code 86) export — ต่อจาก <Link href="/admin/tax-invoices" className="underline">/admin/tax-invoices</Link></li>
+            <li>e-Tax XML (RD Code 86) export — ต่อจาก หน้า e-Tax</li>
           </ul>
         </section>
       </main>

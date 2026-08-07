@@ -195,29 +195,6 @@ export const CARGO_MENUBAR: MenubarItem[] = [
           { label: "ออกแล้ว (e-Tax)",    href: "/admin/accounting/etax" },     // live tb_* — forwarder + shop/yuan lanes
         ],
       },
-      // 2026-06-05 (ภูม D7 · CEO 3-tax-doc trio LAST LEG): ใบขนสินค้า
-      // hub สำหรับ admin. Backend actions (V-E11) มาตั้งแต่ 2026 ต้น —
-      // หน้านี้คือ admin nav แรกที่เข้าถึงได้ตรงๆ (เลิก orphan ตาม §0d).
-      {
-        label: "ใบขนสินค้า",
-        href: "/admin/accounting/customs-declarations",
-        children: [
-          { label: "ดูทั้งหมด",     href: "/admin/accounting/customs-declarations" },
-          { label: "ร่าง (Draft)",    href: "/admin/accounting/customs-declarations?status=draft" },
-          { label: "ส่งแล้ว",         href: "/admin/accounting/customs-declarations?status=submitted" },
-          { label: "ศุลฯ รับ",        href: "/admin/accounting/customs-declarations?status=accepted" },
-          { label: "ปล่อยแล้ว",      href: "/admin/accounting/customs-declarations?status=released" },
-          { label: "ยกเลิก",          href: "/admin/accounting/customs-declarations?status=cancelled" },
-        ],
-      },
-      // 2026-06-09 (เดฟ · tax-invoice P3): ใบขนรวม CARGO — ฝากสั่งซื้อ/ฝากนำเข้า
-      // = งาน Freight-LCL ที่ออกใบขนรวมใบเดียวในชื่อบริษัทขนส่ง. ใช้โมเดล
-      // customs_declarations ตัวเดียวกับ Freight (bridge mig 0162). มูลค่าสำแดง
-      // ตั้งจากต้นทุน (mig 0158) · Docs ปรับลด. P3 = capture/surface เท่านั้น.
-      {
-        label: "ใบขนรวม (CARGO)",
-        href: "/admin/accounting/cargo-declarations",
-      },
       { label: "ใบลดหนี้",                              children: notesStatuses("credit-note") },
       { label: "ใบเพิ่มหนี้",                            children: notesStatuses("debit-note") },
       // 2026-06-03 (R-2 · เดฟ): ใบวางบิล wired to the live billing-run port
@@ -382,12 +359,6 @@ export const ACCOUNTING_HUB_CARDS = [
   // Backend ใส่ตั้งแต่ V-E11 ต้นปี · หน้านี้ surface admin discovery
   // (เคยเป็น orphan · 0 inbound link). MVP read-only · mutate UI ตามมา
   // หลัง accounting sign-off VAT-base policy.
-  {
-    title: "ใบขนสินค้า (Customs Declaration)",
-    desc: "Status: ร่าง→ส่ง→รับ→ปล่อย ↘ ยกเลิก · PDF download · CEO 3-tax-doc trio",
-    href: "/admin/accounting/customs-declarations",
-    badge: "live",
-  },
   // 2026-06-02 (poom-wave §4 · ภูม) — AR-aging cockpit · ลูกหนี้ค้างชำระ
   // bucketed 0-30/30-60/60-90/90+ days. Surfaces ~457 outstanding rows
   // for collection-team follow-up.

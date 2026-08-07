@@ -452,7 +452,6 @@ function revalidateParent(
     // Specific shipment id is the parent of the invoice; broad invalidate is
     // safer than computing FK chain here.
   }
-  revalidatePath("/admin/tax-invoices");
 }
 
 function revalidateParentFromRow(row: {

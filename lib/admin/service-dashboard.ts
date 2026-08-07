@@ -408,7 +408,7 @@ async function loadFreight(admin: Admin, entry: ServiceCatalogEntry, monthStartI
     // report selling + declared; cost left out (hasMoney true · cost 0 · margin null).
     money: { sellingThb: selling, costThb: 0, marginThb: null, declaredThb: declared, hasMoney: true },
     sourceTable: "freight_shipments",
-    drillHref: isExport ? "/admin/freight/quotes" : "/admin/freight/operations",
+    drillHref: null, // 2026-08-07: ตัดกองแอดมินเฟรทออก — การ์ดยังนับ แต่ไม่มีหน้าให้กดเข้า
     isEmpty: total.count === 0, errors,
   };
 }
@@ -443,7 +443,7 @@ async function loadCustoms(admin: Admin, entry: ServiceCatalogEntry, monthStartI
     orderCount: total.count, monthCount: month.count, inTransitCount: inTransit,
     statuses: buildStatusSlices(countMap, CUSTOMS_STATUS_LABEL),
     money: emptyMoney(),
-    sourceTable: "customs_declarations", drillHref: "/admin/accounting/cargo-declarations",
+    sourceTable: "customs_declarations", drillHref: null, // 2026-08-07: ตัดหน้าใบขนออก
     isEmpty: total.count === 0, errors,
   };
 }

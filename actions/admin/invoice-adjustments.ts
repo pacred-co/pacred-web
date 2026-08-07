@@ -120,7 +120,6 @@ async function resolveInvoiceTarget(
     profile_id: data.profile_id,
     link_href: `/freight/invoice/${data.id}`,
     revalidate_paths: [
-      `/admin/freight/invoices/${data.id}`,
       `/freight/invoice/${data.id}`,
     ],
   };

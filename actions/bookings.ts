@@ -669,7 +669,7 @@ export async function submitBooking(
         severity:       "info",
         title:          `จองใหม่ · ${serviceTitle}`,
         body:           `฿${fmtThb(existing.estimate_total)} (ประมาณ) · ${d.contactName} ${d.contactPhone}`,
-        link_href:      `/admin/bookings/${bookingNo}`,
+        link_href:      `/admin/board`, // 2026-08-07 ตัดหน้า /admin/bookings (6 แถว MOCK)
         reference_type: "booking",
         reference_id:   d.bookingId,
       });

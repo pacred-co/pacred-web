@@ -59,9 +59,9 @@ export function workEntityHref(type: WorkEntityType, ref: string): string {
     // to a useful destination.
     case "cargo_container":     return `/admin/report-cnt`;
     case "cargo_shipment":      return `/admin/report-cnt`;
-    case "freight_shipment":    return `/admin/freight/shipments/${ref}`;
-    case "customs_declaration": return `/admin/freight/declarations/${ref}`;
-    case "freight_invoice":     return `/admin/freight/shipments`;
+    case "freight_shipment":    return `/admin/board`;    // 2026-08-07 ตัดหน้าแอดมินเฟรท → กลับบอร์ดงาน
+    case "customs_declaration": return `/admin/board`;    // 2026-08-07 ตัดหน้าใบขน
+    case "freight_invoice":     return `/admin/board`;    // 2026-08-07
     case "contact_message":     return `/admin/contact-messages`;
     case "refund_request":      return `/admin/refunds`;
     case "qa_inspection":       return `/admin/warehouse/qa-inspections`;

@@ -31,7 +31,6 @@ async function computeAccountingBadges(): Promise<Record<string, number>> {
 
   const out: Record<string, number> = {};
   if (!billing.error && billing.count) out["/admin/billing-run"] = billing.count;
-  if (!customs.error && customs.count) out["/admin/accounting/customs-declarations"] = customs.count;
   if (!ar.error && ar.count) out["/admin/accounting/ar-aging"] = ar.count;
   return out;
 }

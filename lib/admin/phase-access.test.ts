@@ -65,7 +65,6 @@ const stillBlockedForWarehouse = [
   "/admin/commissions",
   "/admin/sales-payouts",
   "/admin/team-leaders",
-  "/admin/withdrawal/freight-th",
   "/admin/cnt-hs",                         // container payments (accounting)
   "/admin/forwarders/container-cost-check",
   "/admin/reports/system",

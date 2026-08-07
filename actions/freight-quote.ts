@@ -167,7 +167,7 @@ export async function submitFreightQuote(
     // staff straight to the lead so they can triage/convert in one tap.
     await notifyStaffGroup(lines.join("\n"), {
       title: "ขอราคา Freight ใหม่ 📦",
-      url: `/admin/freight/leads/${ref}`,
+      url: `/admin/board`, // 2026-08-07 ตัดหน้าแอดมินเฟรท
     });
   } catch {
     /* swallow — lead is saved; sales sees it on next dashboard load */

@@ -1,11 +1,18 @@
 /**
- * G1 freight lane — per-position WORKSPACE resolution + freight queue counts.
+ * WORKSPACE resolution + the freight queue-count mechanism.
  *
- * Locks (1) that every freight_* role resolves to a DEDICATED freight workspace
- * (not the cargo oversight DEFAULT — the bug this lane fixed), (2) that those
- * freight queues carry `freightBadge` keys (counted from the freight SOT, not a
- * cargo BadgeKey), (3) that every `freightBadge` used is a real FreightQueueKey,
- * and (4) that NON-freight resolution is UNCHANGED (no regression).
+ * 2026-08-07 (owner "คลีนที่ไร้สาระออก") — the ADMIN freight surfaces were cut
+ * (0 real customer jobs ever: freight_quotes/invoices = 0 rows · freight_shipments
+ * = seed/mock only). So a freight_* position now falls back to the CARGO oversight
+ * DEFAULT instead of landing on pages that no longer exist. This test flipped from
+ * "every freight role owns a dedicated freight workspace" (the old truth) to
+ * "no workspace points at a deleted freight page" (the new truth).
+ *
+ * Still locked: (1) freight_* roles resolve to a REAL workspace (graceful fallback,
+ * never a crash/empty), (2) no queue href points into the removed admin freight
+ * tree, (3) the freightBadge count MECHANISM still works — kept as a toolbox
+ * capability for when freight is rebuilt (docs/reference/freight-toolbox.md),
+ * and (4) NON-freight resolution is UNCHANGED (no regression on cargo).
  *
  * Pure — no DB. workspace.ts only `import type`s the count types + value-imports
  * the pure isGodRole, so this runs on the tsx unit harness with no env.
@@ -38,28 +45,33 @@ const FREIGHT_ROLES: AdminRole[] = [
 ];
 const FREIGHT_KEY_SET = new Set<FreightQueueKey>(ALL_FREIGHT_QUEUE_KEYS);
 
-// ── (a) every freight role → a DEDICATED freight workspace (not the cargo default) ──
-section("(a) each freight_* position resolves to a freight workspace");
+// ── (a) freight roles still resolve GRACEFULLY (fallback, never empty/crash) ──
+section("(a) each freight_* position falls back to a real workspace");
 const CARGO_DEFAULT_HEADING = "พื้นที่งานของฉัน (ภาพรวม)";
 for (const r of FREIGHT_ROLES) {
   const ws = resolveWorkspace([r], r);
-  assert(`${r}: heading is freight-specific (not the cargo DEFAULT)`,
-    ws.headingTh !== CARGO_DEFAULT_HEADING && ws.queues.length > 0);
-  // It must own at least one freight queue (a freightBadge), not only cargo queues.
-  assert(`${r}: owns ≥1 freight queue`,
-    ws.queues.some((q) => q.freightBadge !== undefined));
+  // 2026-08-07: the dedicated freight specs were removed with the admin pages.
+  // The contract is now "never strand a seated staffer" — a real heading + queues.
+  assert(`${r}: resolves to a real workspace (has queues)`, ws.queues.length > 0);
+  assert(`${r}: heading is non-empty`, ws.headingTh.length > 0);
 }
 
-// ── (b) every freightBadge used in any freight workspace is a real FreightQueueKey ──
-section("(b) freight queue keys are valid + counted from the freight SOT");
-for (const r of FREIGHT_ROLES) {
-  const ws = resolveWorkspace([r], r);
-  for (const q of ws.queues) {
-    if (q.freightBadge !== undefined) {
-      assert(`${r}/${q.key}: '${q.freightBadge}' is a FreightQueueKey`,
-        FREIGHT_KEY_SET.has(q.freightBadge));
-    }
-    // A queue carries EXACTLY one count source (cargo badge XOR freight badge).
+// ── (b) NO workspace queue points into the removed admin-freight tree ──
+section("(b) no queue links to a deleted freight/customs admin page");
+const DEAD_PREFIXES = [
+  "/admin/freight/", "/admin/accounting/freight", "/admin/accounting/customs-declarations",
+  "/admin/accounting/cargo-declarations", "/admin/accounting/customs-doc-kit",
+  "/admin/accounting/hs-triage", "/admin/accounting/hs-consult",
+  "/admin/pricing", "/admin/commission/freight", "/admin/bookings",
+  "/admin/withdrawal/freight-th",
+];
+const ALL_ROLES: AdminRole[] = [...FREIGHT_ROLES, "super", "accounting", "warehouse",
+  "sales", "sales_admin", "ops", "driver", "pricing"] as AdminRole[];
+for (const r of ALL_ROLES) {
+  for (const q of resolveWorkspace([r], r).queues) {
+    assert(`${r}/${q.key}: href ไม่ชี้หน้าที่ลบไปแล้ว (${q.href})`,
+      !DEAD_PREFIXES.some((d) => q.href.startsWith(d)));
+    // A queue still carries EXACTLY one count source (cargo badge XOR freight badge).
     const sources = [q.badge, q.freightBadge].filter((x) => x !== undefined).length;
     assertEq(`${r}/${q.key}: exactly one count source`, sources, 1);
   }
@@ -109,11 +121,11 @@ assertEq("super/no-position → cargo oversight DEFAULT", god.headingTh, CARGO_D
 assert("DEFAULT is cargo-only (no freight queues)",
   god.queues.every((q) => q.freightBadge === undefined));
 
-// a position ALWAYS wins over the tier — a super-tier person seated as freight CS
-// gets the freight workspace (the position is the job).
+// a position ALWAYS wins over the tier — and after the 2026-08-07 cut a seated
+// freight person lands on the cargo oversight DEFAULT instead of a dead page.
 const seated = resolveWorkspace(["super"], "freight_import_cs");
-assert("super-tier seated as freight_import_cs → freight workspace",
-  seated.queues.some((q) => q.freightBadge !== undefined));
+assert("super-tier seated as freight_import_cs → ยังได้ workspace ที่เปิดได้จริง",
+  seated.queues.length > 0 && seated.queues.every((q) => !q.href.startsWith("/admin/freight/")));
 
 // ── (f) ALL_FREIGHT_QUEUE_KEYS is exhaustive (no key drift) ──
 section("(f) freight queue-key list is complete");

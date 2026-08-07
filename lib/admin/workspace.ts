@@ -109,7 +109,6 @@ const Q = {
   corpPending:  { key: "corpPending",  label: "นิติบุคคล รอตรวจอนุมัติ",        badge: "corporatePending" as BadgeKey, href: "/admin/juristic-check",  nextAction: "ตรวจเอกสาร → อนุมัติ",       icon: "ClipboardCheck" },
   custPending:  { key: "custPending",  label: "ลูกค้าใหม่ รออนุมัติ",           badge: "customerPending"  as BadgeKey, href: "/admin/customers",       nextAction: "ตรวจ → อนุมัติลูกค้า",       icon: "Users" },
   contactMsg:   { key: "contactMsg",   label: "ข้อความติดต่อใหม่",             badge: "contactMessages"  as BadgeKey, href: "/admin/contact-messages", nextAction: "ตอบ / มอบหมายเซล",          icon: "MessageSquare" },
-  bookings:     { key: "bookings",     label: "คิวการจอง (RFQ)",              badge: "bookingsPending"  as BadgeKey, href: "/admin/bookings",        nextAction: "ติดต่อ → เปิดใบเสนอราคา",    icon: "Inbox" },
   refunds:      { key: "refunds",      label: "คืนเงินลูกค้า รอดำเนินการ",      badge: "refundsPending"   as BadgeKey, href: "/admin/refunds",         nextAction: "ตรวจ → คืนเงิน",             icon: "Undo2" },
 
   // ── QA / Incident ──────────────────────────────────────────────────────────
@@ -125,20 +124,6 @@ const Q = {
 // (app/(admin)/admin/workspace/page.tsx · Inbox · BadgePercent · Truck ·
 // ClipboardCheck · PackageCheck · Banknote · …); unknown names fall back to
 // Inbox, so we reuse the page's existing set to avoid a generic-fallback icon.
-const FQ = {
-  // ── Freight SALES funnel (freight_quote leads → freight_quotes lifecycle) ───
-  fLeads:     { key: "fLeads",     label: "ใบขอราคา Freight (RFQ) รอติดต่อ",  freightBadge: "freightLeads"        as FreightQueueKey, href: "/admin/freight/leads",       nextAction: "ติดต่อ → เปิดใบเสนอราคา",     icon: "Inbox" },
-  fQuotePrice:{ key: "fQuotePrice",label: "ใบเสนอราคา รอประเมินราคา/อนุมัติ", freightBadge: "freightQuoteToPrice" as FreightQueueKey, href: "/admin/freight/quotes",      nextAction: "ลงราคา → ส่งอนุมัติ",        icon: "BadgePercent" },
-  fQuoteSend: { key: "fQuoteSend", label: "ใบเสนอราคา อนุมัติแล้ว รอส่ง",     freightBadge: "freightQuoteToSend"  as FreightQueueKey, href: "/admin/freight/quotes",      nextAction: "ส่งใบเสนอราคาให้ลูกค้า",     icon: "Inbox" },
-  fQuoteSent: { key: "fQuoteSent", label: "ใบเสนอราคา ส่งแล้ว รอลูกค้าตอบ",   freightBadge: "freightQuoteSent"    as FreightQueueKey, href: "/admin/freight/quotes",      nextAction: "ติดตาม → ตอบรับ/แปลงเป็นงาน",  icon: "ClipboardCheck" },
-
-  // ── Freight OPERATION / DOC / CLEARANCE (freight_shipments lifecycle) ───────
-  fShipPrep:     { key: "fShipPrep",     label: "งาน Freight ยืนยันแล้ว รอเตรียมเอกสาร/ใบขน", freightBadge: "freightShipPrep"      as FreightQueueKey, href: "/admin/freight/operations", nextAction: "เตรียมเอกสาร / ออกใบขน",   icon: "ClipboardCheck" },
-  fShipTransit:  { key: "fShipTransit",  label: "งาน Freight กำลังขนส่ง / พิธีการ",          freightBadge: "freightShipInTransit" as FreightQueueKey, href: "/admin/freight/operations", nextAction: "ติดตามขนส่ง → ผ่านพิธีการ", icon: "Truck" },
-  fShipCleared:  { key: "fShipCleared",  label: "ผ่านศุลกากรแล้ว รอส่งมอบ",                 freightBadge: "freightShipCleared"   as FreightQueueKey, href: "/admin/freight/shipments",  nextAction: "นัดส่งมอบ / ปิดงานขนส่ง",  icon: "PackageCheck" },
-  fShipDelivered:{ key: "fShipDelivered",label: "งาน Freight ส่งมอบแล้ว รอวางบิล",          freightBadge: "freightShipDelivered" as FreightQueueKey, href: "/admin/freight/shipments",  nextAction: "วางบิล / ออกใบแจ้งหนี้",   icon: "Banknote" },
-} as const satisfies Record<string, WorkspaceQueue>;
-
 // ── workspace_role → the queues that position owns ────────────────────────────────────
 // Keyed by every AdminRole that a POSITION can map to (admin_positions.workspace_role).
 // Order = the order the seat works the queues. Heading = the seat's plain-Thai name.
@@ -177,11 +162,11 @@ const WORKSPACE_BY_ROLE: Partial<Record<AdminRole, WorkspaceSpec>> = {
   // ── Sales / CS (biz_cs · share a base · doc §3 "Cs กับ เซลล์ประมาณนี้") ──────
   sales: {
     headingTh: "พื้นที่งานเซลล์ (Sales)",
-    queues: [Q.shopPending, Q.contactMsg, Q.bookings, Q.custPending, Q.corpPending],
+    queues: [Q.shopPending, Q.contactMsg, Q.custPending, Q.corpPending],
   },
   sales_admin: {
     headingTh: "พื้นที่งาน CS / บริการลูกค้า",
-    queues: [Q.shopPending, Q.shopNote, Q.contactMsg, Q.bookings, Q.custPending, Q.corpPending, Q.refunds],
+    queues: [Q.shopPending, Q.shopNote, Q.contactMsg, Q.custPending, Q.corpPending, Q.refunds],
   },
 
   // ── FREIGHT — per-role workspaces over the freight spine (G1 freight lane) ──
@@ -191,68 +176,13 @@ const WORKSPACE_BY_ROLE: Partial<Record<AdminRole, WorkspaceSpec>> = {
   // freight_quotes / freight_shipments lifecycle).
 
   // Freight SALES — leads → pricing → send → follow-up (the whole funnel · oversight).
-  freight_sales_manager: {
-    headingTh: "พื้นที่งานหัวหน้าเซลล์ Freight",
-    isOversight: true,
-    queues: [FQ.fLeads, FQ.fQuotePrice, FQ.fQuoteSend, FQ.fQuoteSent, FQ.fShipDelivered],
-  },
-  freight_sales: {
-    headingTh: "พื้นที่งานเซลล์ Freight",
-    queues: [FQ.fLeads, FQ.fQuoteSent],
-  },
 
   // Freight EXPORT — manager (oversight) · CS · Doc · Clearance · Messenger.
-  freight_export_manager: {
-    headingTh: "พื้นที่งานผู้จัดการ Freight (Export)",
-    isOversight: true,
-    queues: [FQ.fQuotePrice, FQ.fShipPrep, FQ.fShipTransit, FQ.fShipCleared, FQ.fShipDelivered],
-  },
-  freight_export_cs: {
-    headingTh: "พื้นที่งาน CS / เอกสาร Freight (Export)",
-    queues: [FQ.fLeads, FQ.fQuoteSent, FQ.fShipPrep],
-  },
-  freight_export_doc: {
-    headingTh: "พื้นที่งานเอกสาร Freight (Export)",
-    queues: [FQ.fShipPrep, FQ.fShipCleared],
-  },
-  freight_export_clearance: {
-    headingTh: "พื้นที่งานพิธีการ Freight (Export)",
-    queues: [FQ.fShipTransit, FQ.fShipCleared],
-  },
-  freight_export_messenger: {
-    headingTh: "พื้นที่งานแมสเซนเจอร์ Freight (Export)",
-    queues: [FQ.fShipCleared, FQ.fShipDelivered],
-  },
 
   // Shared Import & Export clearance (one role, both dept's พิธีการ).
-  freight_clearance_both: {
-    headingTh: "พื้นที่งานพิธีการ Freight (นำเข้า/ส่งออก)",
-    queues: [FQ.fShipTransit, FQ.fShipCleared],
-  },
 
   // Freight IMPORT — manager (oversight) · CS · Doc · Clearance · Messenger.
-  freight_import_manager: {
-    headingTh: "พื้นที่งานผู้จัดการ Freight (Import)",
-    isOversight: true,
-    queues: [FQ.fQuotePrice, FQ.fShipPrep, FQ.fShipTransit, FQ.fShipCleared, FQ.fShipDelivered],
-  },
-  freight_import_cs: {
-    headingTh: "พื้นที่งาน CS / เอกสาร Freight (Import)",
-    queues: [FQ.fLeads, FQ.fQuoteSent, FQ.fShipPrep],
-  },
   // Document / CS-Import (logistics · เอกสาร) — owns the DOC prep + clearance stages.
-  freight_import_doc: {
-    headingTh: "พื้นที่งานเอกสาร Freight (Import)",
-    queues: [FQ.fShipPrep, FQ.fShipCleared, Q.corpPending],
-  },
-  freight_import_clearance: {
-    headingTh: "พื้นที่งานพิธีการ Freight (Import)",
-    queues: [FQ.fShipTransit, FQ.fShipCleared],
-  },
-  freight_import_messenger: {
-    headingTh: "พื้นที่งานแมสเซนเจอร์ Freight (Import)",
-    queues: [FQ.fShipCleared, FQ.fShipDelivered],
-  },
 
   // ── QA / Ops ──────────────────────────────────────────────────────────────
   qa: {
