@@ -993,6 +993,30 @@ export async function renderLegacyCustomerView(
               </div>
               <p className="mt-1 text-foreground">{mainAddrText}</p>
             </div>
+
+            {/* owner 2026-08-07 "ข้อมูลส่วนตัวลูกค้า เอาย้ายขึ้นไปข้างบนเข้าไปใน
+                กรอบ ข้อมูลบัญชีด้านบน และสามารถแก้ไข ใส่ข้อมูลรายละเอียดเพิ่มเติมได้เลย"
+                — ยกขึ้นจากท้ายหน้า (เดิมอยู่ล่างสุด ต้องเลื่อนหา) มาอยู่ในการ์ดเดียวกัน
+                แบบ embedded (ไม่วาดกรอบซ้อนกรอบ) · ปุ่ม "แก้ไขข้อมูลลูกค้า" ติดมาด้วย. */}
+            <IdentityEditor
+              embedded
+              userid={u.userID}
+              isSenior={isSeniorAdmin}
+              admins={salesAdmins}
+              initial={{
+              userName:     u.userName ?? "",
+              userLastName: u.userLastName ?? "",
+              userEmail:    u.userEmail ?? "",
+              userTel:      u.userTel ?? "",
+              userSex:      u.userSex ?? "",
+              userBirthday: u.userBirthday ?? "",
+              userLineID:   u.userLineID ?? "",
+              userFacebook: u.userFacebook ?? "",
+              personalTaxId: (u as { personal_tax_id?: string | null }).personal_tax_id ?? "",
+              adminIDSale:  u.adminIDSale ?? "",
+              coID:         u.coID ?? "",
+              }}
+            />
           </div>
 
           {/* Inline note editor (tb_users.userNote) — legacy โน้ต, under ข้อมูลบัญชี */}
@@ -1372,24 +1396,6 @@ export async function renderLegacyCustomerView(
       {/* ── 3 ชุดที่พนักงานแก้ได้เลย ไม่ต้องใส่ PIN (owner/ภูม 2026-08-03) — ดึงออกจาก
           "เครื่องมือผู้ดูแล" (PIN) มาไว้ตรงนี้: (1) ข้อมูลส่วนตัวลูกค้า (2) ข้อมูลบริษัท
           นิติบุคคล (3) เอกสารนิติบุคคล. เครื่องมือเงิน/แท็ก/Danger ยังอยู่ใต้ PIN ด้านล่าง. */}
-      <IdentityEditor
-        userid={u.userID}
-        isSenior={isSeniorAdmin}
-        admins={salesAdmins}
-        initial={{
-          userName:     u.userName ?? "",
-          userLastName: u.userLastName ?? "",
-          userEmail:    u.userEmail ?? "",
-          userTel:      u.userTel ?? "",
-          userSex:      u.userSex ?? "",
-          userBirthday: u.userBirthday ?? "",
-          userLineID:   u.userLineID ?? "",
-          userFacebook: u.userFacebook ?? "",
-          personalTaxId: (u as { personal_tax_id?: string | null }).personal_tax_id ?? "",
-          adminIDSale:  u.adminIDSale ?? "",
-          coID:         u.coID ?? "",
-        }}
-      />
 
       {isJuristic ? (
         <div className="space-y-5">

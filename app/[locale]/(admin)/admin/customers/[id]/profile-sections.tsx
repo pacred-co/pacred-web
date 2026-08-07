@@ -80,11 +80,26 @@ function SectionShell({
   title,
   action,
   children,
+  embedded = false,
 }: {
   title: string;
   action?: React.ReactNode;
   children: React.ReactNode;
+  /** owner 2026-08-07 "ย้ายขึ้นไปในกรอบข้อมูลบัญชี" — เมื่อ render อยู่ใน
+   *  การ์ดอื่นแล้ว ไม่ต้องวาดกรอบ/พื้นหลังซ้อนอีก (กันกรอบซ้อนกรอบ). */
+  embedded?: boolean;
 }) {
+  if (embedded) {
+    return (
+      <div className="pt-3 border-t border-border/40">
+        <div className="flex items-center justify-between gap-2 pb-2">
+          <h3 className="text-sm font-semibold">{title}</h3>
+          {action}
+        </div>
+        {children}
+      </div>
+    );
+  }
   return (
     <div className="rounded-2xl border border-border bg-white dark:bg-surface overflow-hidden">
       <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
@@ -138,11 +153,14 @@ function sexDisplay(s: string): string {
 }
 
 export function IdentityEditor({
+  embedded = false,
   userid,
   initial,
   isSenior,
   admins,
 }: {
+  /** owner 2026-08-07 — render ในกรอบ "ข้อมูลบัญชี" (ไม่วาดกรอบของตัวเอง) */
+  embedded?: boolean;
   userid: string;
   initial: IdentityValues;
   isSenior: boolean;
@@ -189,6 +207,7 @@ export function IdentityEditor({
 
   return (
     <SectionShell
+      embedded={embedded}
       title="ข้อมูลส่วนตัวลูกค้า"
       action={
         !editing ? (
@@ -202,7 +221,7 @@ export function IdentityEditor({
         ) : null
       }
     >
-      <div className="p-4 space-y-3">
+      <div className={embedded ? "space-y-3" : "p-4 space-y-3"}>
         {error && <ErrBox msg={error} />}
         {!editing ? (
           <dl className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
