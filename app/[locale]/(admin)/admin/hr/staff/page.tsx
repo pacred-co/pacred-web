@@ -51,7 +51,7 @@ export default async function StaffPage() {
 
       <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5 text-[11.5px] text-sky-800 leading-relaxed">
         📌 <b>ตำแหน่งในผัง</b> = อยู่ทีมไหน (นับคนสดบนผัง) · <b>สิทธิ์ระบบ (role)</b> = เห็น/ทำอะไรได้ (คนละแกน) ·
-        แท็บ "ลาออก · ล็อก" ดูคนออก + <b>กดเปิดกลับ</b>ได้ (ปลดล็อกทุกชั้น){canManageRoles ? "" : " · (เฉพาะ super แก้สิทธิ์/ล็อกได้)"}
+        แท็บ &ldquo;ลาออก · ล็อก&rdquo; ดูคนออก + <b>กดเปิดกลับ</b>ได้ (ปลดล็อกทุกชั้น){canManageRoles ? "" : " · (เฉพาะ super แก้สิทธิ์/ล็อกได้)"}
       </div>
 
       {error ? (

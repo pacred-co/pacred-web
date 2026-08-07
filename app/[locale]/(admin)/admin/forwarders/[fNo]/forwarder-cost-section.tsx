@@ -209,7 +209,7 @@ export async function ForwarderCostSection({
   let sellNet = 0;
   // fcosttotalprice — the forwarder header COST total; the prorate numerator for
   // the direct-forwarder declared-value auto-seed (GAP 1). Has an authoritative
-  // writer (the ไอแต้ม container-cost-sheet sync) — we only READ it here.
+  // writer (the external container-cost-sheet sync) — we only READ it here.
   let fCostTotal = 0;
   // The header row's cost dims (carrier × mode × type × city + kg/cbm) — used to
   // resolve the live matrix cost below. null until the header loads.

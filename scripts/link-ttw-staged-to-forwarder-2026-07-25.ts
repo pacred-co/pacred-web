@@ -45,6 +45,7 @@ async function main() {
        FROM ttw_packing_line
       WHERE ($1::text[] = '{}' OR container_no = ANY($1))
         AND member_code IS NOT NULL AND committed_forwarder_id IS NULL
+        AND coalesce(pr_source,'') <> 'hold_verify' -- 🚩 owner 2026-08-07: แถวปักธงรอตรวจ ห้ามเชื่อมอัตโนมัติ
       ORDER BY container_no, base_tracking`,
     [CONTAINERS],
   );

@@ -34,7 +34,7 @@ export function ContainerDetailClient({ d }: { d: MomoContainerDetail }) {
             </span>
           )}
           {d.garbageCount > 0 && (
-            <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white" title="ตัวเลข MOMO ขัดกันเอง (แถวย่อยหนักเกินก้อนรวม) — ระบบแตกกล่องอัตโนมัติไม่ได้ · ต้องอัพ packing list แต้ม">
+            <span className="rounded-full bg-red-600 px-2 py-0.5 text-[11px] font-bold text-white" title="ตัวเลข MOMO ขัดกันเอง (แถวย่อยหนักเกินก้อนรวม) — ระบบแตกกล่องอัตโนมัติไม่ได้ · ต้องอัพแพคกิ้งลิสต์">
               🚩 ข้อมูล MOMO ขัดกัน {d.garbageCount}
             </span>
           )}
@@ -56,14 +56,14 @@ export function ContainerDetailClient({ d }: { d: MomoContainerDetail }) {
             แถวที่มี 🚩 ในตาราง = MOMO ส่งน้ำหนัก/คิว ต่อกล่อง <strong>ไม่ตรงกับก้อนรวม</strong> (แถวย่อยหนักเกินก้อนรวม)
             และขนาดกล่อง (ก×ย×ส) ก็เช็คไม่ได้ → เชื่อตัวเลข MOMO ไม่ได้ · ต้อง{" "}
             <Link href="/admin/api-forwarder-momo/packing-upload" className="font-semibold underline hover:text-red-900">
-              อัพ packing list ของแต้ม
+              อัพแพคกิ้งลิสต์
             </Link>{" "}
             เพื่อได้ตัวเลขจริงก่อนวางบิล.
           </p>
         </section>
       )}
 
-      {/* ── PER-PR SUMMARY (ไอแต้ม "ข้อมูลสรุปในตู้") ─────────────────────── */}
+      {/* ── PER-PR SUMMARY (สรุปต่อลูกค้าในตู้) ─────────────────────── */}
       <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
         <h2 className="mb-2 text-sm font-semibold">ข้อมูลสรุปในตู้ (ต่อลูกค้า PR)</h2>
         <div className="overflow-x-auto scrollbar-x-visible">
@@ -99,7 +99,7 @@ export function ContainerDetailClient({ d }: { d: MomoContainerDetail }) {
         </div>
       </section>
 
-      {/* ── TABS (ไอแต้ม tab strip) ─────────────────────────────────────── */}
+      {/* ── TABS (แถบแท็บ) ─────────────────────────────────────── */}
       <div className="flex flex-wrap gap-1 border-b border-border">
         {([["items", `📋 รายการในตู้ (ระบบ) ${d.items.length}`], ["packing", `📦 เทียบ packing list${d.packing ? "" : " (ยังไม่มี)"}`], ["images", `🖼️ รูปสินค้า ${d.images.length}`]] as [Tab, string][]).map(([k, label]) => (
           <button key={k} type="button" onClick={() => setTab(k)}
@@ -109,7 +109,7 @@ export function ContainerDetailClient({ d }: { d: MomoContainerDetail }) {
         ))}
       </div>
 
-      {/* ── TAB: รายการในตู้ (ระบบ) — item table (ไอแต้ม image 4) ────────── */}
+      {/* ── TAB: รายการในตู้ (ระบบ) — item table  ────────── */}
       {tab === "items" && (
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm overflow-x-auto scrollbar-x-visible">
           <table className="w-full text-xs border-collapse [&_th]:border [&_th]:border-border [&_td]:border [&_td]:border-border">
@@ -138,7 +138,7 @@ export function ContainerDetailClient({ d }: { d: MomoContainerDetail }) {
                           it.garbage.reason === "weight"
                             ? `น้ำหนัก ${n2(it.garbage.boxWeightSum)} กก. เกินก้อนรวม ${n2(it.garbage.aggWeight)} กก.`
                             : `คิว ${n3(it.garbage.boxCbmSum)} เกินก้อนรวม ${n3(it.garbage.aggCbm)}`
-                        } · ขนาดกล่องก็เช็คไม่ได้ → ต้องอัพ packing list แต้ม`}
+                        } · ขนาดกล่องก็เช็คไม่ได้ → ต้องอัพแพคกิ้งลิสต์`}
                       >🚩</span>
                     )}
                     {it.tracking ?? "—"}
@@ -212,7 +212,7 @@ export function ContainerDetailClient({ d }: { d: MomoContainerDetail }) {
         </section>
       )}
 
-      {/* ── TAB: รูปสินค้า (ไอแต้ม image 5) ──────────────────────────────── */}
+      {/* ── TAB: รูปสินค้า  ──────────────────────────────── */}
       {tab === "images" && (
         <section className="rounded-2xl border border-border bg-white dark:bg-surface p-4 shadow-sm">
           {d.images.length === 0 ? (

@@ -207,24 +207,30 @@ const TRANSPORT_PILL: Record<string, { label: string; cls: string }> = {
   "3": { label: "ทางอากาศ", cls: "bg-[#ff9149]" },
 };
 
-// ── ETD/ETA cell (report-cnt #4) — แต้ม (iTAM) PRIMARY · MOMO fallback ──
-// Owner 2026-06-19/20: "ETD/ETA เอาของ MOMO มาเทียบ แต่ยึดของ iTAM (แต้ม) เป็นหลัก".
-// A small source dot distinguishes the two; when the displayed value is แต้ม's but
-// MOMO carries a DIFFERENT date, the tooltip surfaces MOMO's value for comparison.
+// ── ETD/ETA cell — ของจริงจากโกดังต้นทางชนะ · ประมาณการเป็นชั้นสุดท้าย ──
+// 3 ชั้น (owner 2026-08-07): ของจริงชั้นแรก (เขียว) > แหล่งสำรอง (เทา) > ประมาณการ
+// ที่ระบบคำนวณเอง (เหลือง + "~"). จุดสีบอกชั้น · ถ้า 2 แหล่งไม่ตรงกัน tooltip กางให้เทียบ.
+//
+// owner 2026-08-07: **ห้ามเอาชื่อคู่ค้า (โกดังจีนที่เราใช้) มาขึ้นเป็นคำอธิบาย/หัวข้อ**
+// — "MOMO/TTW เป็นแค่โกดังจีน branch ที่เราใช้ · ถ้ากวางโจวเราใช้มากกว่า 1 โกดัง
+// หรือเปิดมณฑลอื่น/ประเทศอื่น/ทำเองหละ" ⇒ ข้อความบนจอเรียก "โกดังต้นทาง" เสมอ.
 function EtdEtaCell({
   value,
   source,
   momoValue,
   label,
+  estimateNote,
 }: {
   value: string | null;
-  source: "taem" | "momo" | null;
+  source: "taem" | "momo" | "estimate" | null;
   momoValue: string | null;
   label: "ETD" | "ETA";
+  /** ข้อความอธิบายที่มาของ "ประมาณการ" (owner 2026-08-07) */
+  estimateNote?: string | null;
 }) {
   if (!value) {
     return (
-      <td className="px-2 py-2 text-right text-muted" title={`ยังไม่มีข้อมูล ${label} (รอจากแต้ม หรือ MOMO ปิดตู้)`}>
+      <td className="px-2 py-2 text-right text-muted" title={`ยังไม่มีข้อมูล ${label} — ยังประมาณการไม่ได้ (เส้นทางนี้ยังไม่เคยมีตู้ถึงไทยให้เทียบ)`}>
         —
       </td>
     );
@@ -232,20 +238,24 @@ function EtdEtaCell({
   const v = value.slice(0, 10);
   const m = momoValue?.slice(0, 10) ?? null;
   const isTaem = source === "taem";
+  const isEstimate = source === "estimate";
   const momoDiffers = isTaem && m != null && m !== v;
-  const title = isTaem
+  const title = isEstimate
+    ? estimateNote ?? `${label} ประมาณการ (โกดังต้นทางยังไม่ส่งวันจริงมา)`
+    : isTaem
     ? momoDiffers
-      ? `${label} จากแต้ม (iTAM · ยึดเป็นหลัก) · MOMO เทียบ = ${m}`
-      : `${label} จากแต้ม (iTAM · ยึดเป็นหลัก)`
-    : `${label} จาก MOMO (แต้มยังไม่ส่ง · ใช้ค่า MOMO ชั่วคราว)`;
+      ? `${label} จากโกดังต้นทาง (ยึดเป็นหลัก) · อีกแหล่งเทียบ = ${m}`
+      : `${label} จากโกดังต้นทาง (ยึดเป็นหลัก)`
+    : `${label} จากแหล่งสำรอง (โกดังต้นทางยังไม่ส่งวันจริงมา)`;
   return (
     <td className="px-2 py-2 text-right" title={title}>
       <span className="inline-flex items-center justify-end gap-1">
         <span
           aria-hidden
-          className={`inline-block h-1.5 w-1.5 rounded-full ${isTaem ? "bg-emerald-500" : "bg-gray-400"}`}
+          className={`inline-block h-1.5 w-1.5 rounded-full ${isTaem ? "bg-emerald-500" : isEstimate ? "bg-amber-400" : "bg-gray-400"}`}
         />
-        <span className={isTaem ? "text-foreground" : "text-muted"}>{v}</span>
+        <span className={isTaem ? "text-foreground" : isEstimate ? "text-muted italic" : "text-muted"}>{v}</span>
+        {isEstimate && <span className="text-[11px] text-amber-600" title="ประมาณการ — ยังไม่ใช่วันเฟิม">~</span>}
         {momoDiffers && <span className="text-[11px] text-amber-600" aria-hidden>≠MOMO</span>}
       </span>
     </td>
@@ -629,14 +639,14 @@ export function CntListTable({
               </th>
               <SortableTH sortKeyValue="fdatecontainerclose" align="left"   activeKey={sortKey} sortDir={sortDir} onSort={onSort}>วันที่ปิดตู้</SortableTH>
               {/* ETD/ETA (report-cnt #4) — sea-departure (ETD) + Thailand-arrival
-                  (ETA) per container · แต้ม (iTAM) PRIMARY · MOMO fallback (from
+                  (ETA) per container · ข้อมูลจริงจากโกดังต้นทาง PRIMARY · fallback (from
                   momo_container_details · the Container Closed sync · 0120).
                   T/T = ETA − ETD (carrier-estimated transit). Plain headers. */}
               <th className="px-2 py-2 text-right">
-                <Explain align="right" label="ETD" def="ETD (Estimated Time of Departure) = วันที่เรือ/รถออกจากจีนโดยประมาณ · ยึดของแต้ม (iTAM) เป็นหลัก · MOMO เอามาเทียบ" />
+                <Explain align="right" label="ETD" def="ETD (Estimated Time of Departure) = วันที่เรือ/รถออกจากจีนโดยประมาณ · ยึดข้อมูลจากโกดังต้นทางเป็นหลัก · ถ้ายังไม่ส่งมา ระบบประมาณการจากวันปิดตู้ให้" />
               </th>
               <th className="px-2 py-2 text-right">
-                <Explain align="right" label="ETA" def="ETA (Estimated Time of Arrival) = วันที่ถึงไทยโดยประมาณ · ยึดของแต้ม (iTAM) เป็นหลัก · MOMO เอามาเทียบ" />
+                <Explain align="right" label="ETA" def="ETA (Estimated Time of Arrival) = วันที่ถึงไทยโดยประมาณ · ยึดข้อมูลจากโกดังต้นทางเป็นหลัก · ถ้ายังไม่ส่งมา ระบบประมาณการจากสถิติการเดินทางจริงของเส้นทางนั้น" />
               </th>
               <th className="px-2 py-2 text-right">
                 <Explain align="right" label="T/T" def="T/T (Transit Time) = ระยะเวลาเดินทางโดยประมาณ (วัน) = ETA − ETD" />
@@ -757,7 +767,7 @@ export function CntListTable({
                           are synthetic — MOMO writes them before the container closes.
                           Show the REAL container (GZS…) when MOMO has it; else the sack
                           number (เลขกระสอบ · CBX…) while the container is still open;
-                          else keep the placeholder + a "รอจากแต้ม" note. The link still
+                          else keep the placeholder + a "รอเลขตู้จริง" note. The link still
                           drills into the cabinet detail (keyed by fcabinetnumber). */}
                       {isPlaceholder && momo?.realContainer ? (
                         <span className="flex flex-col leading-tight">
@@ -775,11 +785,11 @@ export function CntListTable({
                           <Link
                             href={`/admin/report-cnt/${encodeURIComponent(r.fcabinetnumber)}`}
                             className="font-semibold text-[#1e9ff2] hover:underline"
-                            title={`เลขตู้จริงรอจากแต้ม · ตอนนี้แสดงเลขกระสอบ · placeholder MOMO = ${r.fcabinetnumber}`}
+                            title={`ยังไม่ได้เลขตู้จริงจากโกดังต้นทาง · ตอนนี้แสดงเลขกระสอบ · เลขชั่วคราวของระบบ = ${r.fcabinetnumber}`}
                           >
                             {momo.sackNo}
                           </Link>
-                          <span className="text-[11px] text-amber-600">เลขกระสอบ · เลขตู้จริงรอจากแต้ม</span>
+                          <span className="text-[11px] text-amber-600">เลขกระสอบ · รอเลขตู้จริงจากโกดังต้นทาง</span>
                         </span>
                       ) : isPlaceholder ? (
                         // Unresolved MOMO routing placeholder (2026-07-10 · ภูม) — its
@@ -849,21 +859,23 @@ export function CntListTable({
                   <td className="px-2 py-2">{warehouseLabel[r.fwarehousename] ?? r.fwarehousename}</td>
                   <td className="px-2 py-2 text-muted-foreground">{warehouseChinaLabel[r.fwarehousechina] ?? "—"}</td>
                   <td className="px-2 py-2 text-right">{fmtDate(r.fdatecontainerclose)}</td>
-                  {/* ETD/ETA (report-cnt #4 · A) — แต้ม (iTAM) PRIMARY · MOMO fallback.
-                      Source dot: green = แต้ม (ยึดเป็นหลัก) · gray = MOMO (มาเทียบ).
-                      Tooltip notes MOMO's value when it disagrees with แต้ม. "—" when
+                  {/* ETD/ETA — ของจริงจากโกดังต้นทาง PRIMARY · แหล่งสำรอง fallback · ประมาณการ (amber)
+                      เป็นชั้นสุดท้าย. จุดสี: เขียว = ของจริงชั้นแรก · เทา = แหล่งสำรอง ·
+                      เหลือง = ประมาณการของระบบ. "—" when
                       no source has it yet. */}
                   <EtdEtaCell
                     value={momo?.etd ?? null}
                     source={momo?.etdSource ?? null}
                     momoValue={momo?.momoEtd ?? null}
                     label="ETD"
+                    estimateNote={momo?.estimateNote ?? null}
                   />
                   <EtdEtaCell
                     value={momo?.eta ?? null}
                     source={momo?.etaSource ?? null}
                     momoValue={momo?.momoEta ?? null}
                     label="ETA"
+                    estimateNote={momo?.estimateNote ?? null}
                   />
                   {/* T/T (transit time) = ETA − ETD · owner ภูม 2026-06-20 */}
                   {(() => {

@@ -30,7 +30,7 @@ export function MomoGuideButton() {
 
             <ol className="flex-1 space-y-3 overflow-auto px-6 py-5 text-xs leading-relaxed text-foreground/90 [&>li]:list-decimal [&>li]:ml-4 marker:font-bold marker:text-emerald-600">
               <li>
-                <strong>หน้านี้ทำอะไร:</strong> รวมข้อมูลจาก <strong>MOMO API</strong> + <strong>packing list (แต้ม)</strong> +
+                <strong>หน้านี้ทำอะไร:</strong> รวมข้อมูลจาก <strong>MOMO API</strong> + <strong>แพคกิ้งลิสต์</strong> +
                 <strong> MOMO Live</strong> มาเป็น &quot;รายแทรคกิ้งลูกค้า&quot; (1 แถว = 1 แทรค) → ตรวจ/แก้ให้ถูก →
                 กด &quot;นำเข้าระบบ&quot; เพื่อสร้างรายการบิล (tb_forwarder).
               </li>
@@ -55,7 +55,7 @@ export function MomoGuideButton() {
               </li>
               <li>
                 <strong>🚩 flag &quot;ข้อมูล MOMO ขัดกันเอง&quot;:</strong> แถวที่มี <span className="font-semibold text-red-700">🚩 พื้นแดง</span> = ข้อมูลกล่องของ MOMO (box_detail) <strong>ขัดกันเอง</strong>
-                {" "}(แถวย่อยรวมหนักเกินก้อนรวม) → ต้อง<strong>อัพ packing list แต้ม</strong> ที่ตู้นั้น (auto ซ่อมไม่ได้) · กด pill 🚩 บนแถบบน = กรองเฉพาะแถวมั่ว.
+                {" "}(แถวย่อยรวมหนักเกินก้อนรวม) → ต้อง<strong>อัพแพคกิ้งลิสต์</strong> ที่ตู้นั้น (auto ซ่อมไม่ได้) · กด pill 🚩 บนแถบบน = กรองเฉพาะแถวมั่ว.
               </li>
               <li>
                 <strong>ตรวจ PR ให้ถูก:</strong> คลิกรูปป้ายเพื่อดู PR บนกล่อง · ป้าย <span className="font-semibold text-emerald-700">พบในระบบ</span> = PR ใช้ได้ ·{" "}

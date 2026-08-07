@@ -15,7 +15,7 @@
  *
  * ── โครงใหม่ (ที่เดียว ใช้ทุกหน้า) ────────────────────────────────────────
  *   บรรทัด 1  breadcrumb  Admin › ฝากนำเข้า › <โกดัง> › <หน้านี้>
- *   บรรทัด 2  แท็บโกดัง    [ 🚢 โกดังกวางโจว (MOMO) ] [ 🧾 โกดังอี้อู (TTW) ]
+ *   บรรทัด 2  แท็บโกดัง    [ 🚢 โกดังกวางโจว ] [ 🧾 โกดังอี้อู ]
  *   บรรทัด 3  เครื่องมือ   ปุ่มกลมของโกดังที่เลือก (หน้าปัจจุบันไฮไลต์) + ปุ่มร่วม + ↩ ทางกลับ
  *
  * โกดังคือ "หัวข้อใหญ่" — เครื่องมือทุกตัวอยู่ใต้โกดังของมัน ไม่ปนกัน. กดแท็บอีกโกดัง =
@@ -38,7 +38,7 @@ type Tool = {
 
 const WAREHOUSES: Record<WarehouseKey, { label: string; icon: string; home: string; tools: Tool[] }> = {
   guangzhou: {
-    label: "โกดังกวางโจว (MOMO)",
+    label: "โกดังกวางโจว",
     icon: "🚢",
     home: "/admin/momo-containers",
     tools: [
@@ -51,7 +51,7 @@ const WAREHOUSES: Record<WarehouseKey, { label: string; icon: string; home: stri
     ],
   },
   yiwu: {
-    label: "โกดังอี้อู (TTW)",
+    label: "โกดังอี้อู",
     icon: "🧾",
     home: "/admin/api-forwarder-yiwu",
     tools: [

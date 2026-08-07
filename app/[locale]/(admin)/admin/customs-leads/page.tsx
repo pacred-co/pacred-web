@@ -2,6 +2,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { Link } from "@/i18n/navigation";
 import { PageHeader } from "@/components/admin/page-header";
+import { CsvButton } from "@/components/admin/csv-button";
+import { CUSTOMS_LEAD_CSV_COLS, customsLeadCsvRow } from "@/lib/admin/customs-lead-csv";
+import { exportCustomsLeadsAll } from "@/actions/admin/export/customs-leads";
 import { CustomsLeadRow } from "./customs-lead-client";
 
 /**
@@ -125,7 +128,28 @@ export default async function CustomsLeadsPage({ searchParams }: { searchParams:
           <>ดึงจากใบขน NetBay (รถ/เรือ/แอร์) · <strong>{all.length}</strong> บริษัท · <strong>{totalDecl}</strong> ใบขน · เซลโทรตามมาเปิดใบขนกับเรา</>
         }
         actions={
-          <Link href="/admin" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">← Admin</Link>
+          <>
+            {/* CSV — ปุ่มซ้าย = แถวที่เห็นบนจอตาม filter ปัจจุบัน · ปุ่มขวา = ทั้งชุด
+                ตาม filter (ยิง query ซ้ำไม่จำกัดหน้า + เขียน admin_export_log
+                เพราะไฟล์มี ชื่อบริษัท/เลขนิติ/เบอร์โทร). คอลัมน์ใช้ชุดเดียวกัน
+                ทั้ง 2 ปุ่ม (lib/admin/customs-lead-csv.ts) → ไฟล์หน้าตาเหมือนกัน */}
+            <CsvButton
+              rows={rows.map(customsLeadCsvRow)}
+              cols={CUSTOMS_LEAD_CSV_COLS}
+              fetchAll={async () => {
+                "use server";
+                return exportCustomsLeadsAll({
+                  view,
+                  transport: sp.transport,
+                  status: sp.status,
+                  sale: sp.sale,
+                  q: sp.q,
+                });
+              }}
+              filename={`customs-leads-${view}${sp.transport ? `-${sp.transport}` : ""}${sp.status ? `-${sp.status}` : ""}${sp.sale ? `-${sp.sale}` : ""}-${new Date().toISOString().slice(0, 10)}.csv`}
+            />
+            <Link href="/admin" className="rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-alt">← Admin</Link>
+          </>
         }
       />
 

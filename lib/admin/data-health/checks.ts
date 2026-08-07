@@ -863,6 +863,31 @@ const CHECKS: CheckDef[] = [
     },
   },
   {
+    id: "container_cost_zero",
+    title: "อยู่ตู้แล้ว มีปริมาณ แต่ต้นทุนที่เก็บ = 0",
+    severity: "red",
+    why:
+      "ทางสร้างแถว (MOMO commit · ใบส่งของอี้อู) เขียน fcosttotalprice=0 เสมอ แล้วเติมทีหลัง — " +
+      "จอ report-cnt คิดต้นทุนสดเลยดูถูก แต่ **ค่าที่เก็บเป็น 0** ⇒ CSV/export + ตัวอ่าน raw ผิด " +
+      "และวันไหนตู้ถูกตัดจ่าย (tb_cnt_item) rollup จะสลับไปใช้ค่าที่เก็บ = ต้นทุนหายทั้งก้อน " +
+      "(กำไรโชว์เกินจริง). prod 2026-08-07 เคยค้าง 227 แถว/15 ตู้ Σ ฿228,992 โดยไม่มีใครรู้",
+    action:
+      "รัน `PGPW='<prod>' npx tsx scripts/backfill-container-cost-empty-2026-07-29.ts` (dry-run ก่อน · --apply) — " +
+      "เติมด้วยเครื่องเดียวกับหน้าจอ (resolveRowContainerCost) · ข้ามตู้จ่ายแล้ว/แถวบิลแล้วอัตโนมัติ",
+    run: async (_admin, ctx) => {
+      const out = ctx.fwd
+        .filter((r) => {
+          const cab = (r.fcabinetnumber ?? "").trim();
+          if (!cab || /MOCK/i.test(cab)) return false;
+          if (!(r.fstatus >= "1" && r.fstatus <= "5")) return false; // บิลแล้ว 6/7 = เงิน frozen ไม่นับ
+          const hasQty = Number(r.fvolume ?? 0) > 0 || Number(r.fweight ?? 0) > 0;
+          return hasQty && Number(r.fcosttotalprice ?? 0) === 0;
+        })
+        .map((r) => ({ id: r.id, tracking: r.ftrackingchn, cabinet: r.fcabinetnumber, userid: r.userid }));
+      return { count: out.length, sample: cap(out) };
+    },
+  },
+  {
     id: "dispatch_blocked_g6",
     title: "เตรียมส่ง (6) + paydeposit=1 → หายจากคิวมอบงานคนขับ (G6)",
     severity: "info",

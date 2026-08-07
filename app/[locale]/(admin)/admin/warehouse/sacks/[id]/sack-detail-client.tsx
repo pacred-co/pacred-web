@@ -97,7 +97,7 @@ export function SackDetailClient({
             <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-[11px] text-gray-500">
-                  <th className="py-2 pr-2">เลขแทรค (MOMO)</th>
+                  <th className="py-2 pr-2">เลขแทรคจากโกดัง</th>
                   <th className="py-2 pr-2">รหัสลูกค้า (PR)</th>
                   <th className="py-2 pr-2">รหัสชิ้น (CG)</th>
                   <th className="py-2 pr-2 text-right">จำนวน</th>

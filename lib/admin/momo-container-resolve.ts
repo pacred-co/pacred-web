@@ -57,9 +57,16 @@ export type MomoContainerInfo = {
   etd: string | null;
   /** ETA shown to staff — แต้ม-primary, MOMO-fallback (date string yyyy-mm-dd | null). */
   eta: string | null;
-  /** Which source the displayed etd/eta came from ("taem" | "momo" | null when both null). */
-  etdSource: "taem" | "momo" | null;
-  etaSource: "taem" | "momo" | null;
+  /**
+   * Which source the displayed etd/eta came from.
+   * `"estimate"` = ประมาณการที่เราคำนวณเอง (owner 2026-08-07) — ETD = วันปิดตู้ตามชื่อตู้ ·
+   * ETA = ETD + มัธยฐานวันเดินทางของเส้นทางนั้นที่วัดจากตู้ที่ถึงแล้วจริง.
+   * ของจริง (taem/momo) ชนะเสมอ · จอต้องติดป้ายให้เห็นว่าอันไหนเป็นประมาณการ.
+   */
+  etdSource: "taem" | "momo" | "estimate" | null;
+  etaSource: "taem" | "momo" | "estimate" | null;
+  /** คำอธิบายที่มาของประมาณการ (มีเฉพาะเมื่อ source = "estimate") */
+  estimateNote?: string | null;
   /** MOMO's own etd/eta (kept for a compare note when it disagrees with แต้ม). */
   momoEtd: string | null;
   momoEta: string | null;
