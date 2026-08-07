@@ -44,7 +44,7 @@ import { getCustomerRateMatrix } from "@/actions/admin/customer-rate";
 import { getQuoteDefaultRates } from "@/lib/admin/quote-default-rates";
 import { getQuotePackages } from "@/lib/quote/quote-packages";
 import { getSellFloorCbm, getSellFloorKg } from "@/lib/admin/sell-floor-config";
-import { getCustomerStatCounts, listSalesAdmins, listCsAdmins, listActiveAdmins } from "@/actions/admin/customer-profile";
+import { getCustomerStatCounts, listSalesAdmins, listCsAdmins, listActiveAdmins, listPurchasingUnitAdmins, listPricingUnitAdmins } from "@/actions/admin/customer-profile";
 import { getCustomerMarginSummary } from "@/actions/admin/customer-margin";
 // Legacy status vocabularies (D1 faithful-port SOT) — Thai labels for the
 // single-char tb_* status codes the order tables show.
@@ -701,7 +701,7 @@ export async function renderLegacyCustomerView(
   // is fetched here in parallel with the other profile sub-readers. Best-
   // effort — never throws (the loader degrades to "0 delivered ตู้" empty
   // state if tb_forwarder query fails).
-  const [rateMatrix, quoteDefaults, quotePackages, statCounts, salesAdminsRes, csAdminsRes, activeAdminsRes, marginSummary, tagsRes, activityRes] = await Promise.all([
+  const [rateMatrix, quoteDefaults, quotePackages, statCounts, salesAdminsRes, csAdminsRes, activeAdminsRes, purchasingUnitRes, pricingUnitRes, marginSummary, tagsRes, activityRes] = await Promise.all([
     getCustomerRateMatrix(u.userID),
     // เรท default ใบเสนอราคา = เรททั่วไป tb_rate_g_* (owner ปอน 2026-07-17) — global,
     // ส่งให้ QuoteTab ใช้เป็นชั้น default (SVIP ▸ แพ็ก ▸ general ▸ promo/FDA).
@@ -713,12 +713,19 @@ export async function renderLegacyCustomerView(
     listCsAdmins(),
     // FEATURE D (owner 2026-06-26) — active-admin list for ล่ามจีน/Pricing/ผู้สั่งซื้อ.
     listActiveAdmins(),
+    // owner 2026-08-07 — คนที่นั่งตำแหน่ง Purchasing / Pricing ในผังองค์กร
+    listPurchasingUnitAdmins(),
+    listPricingUnitAdmins(),
     getCustomerMarginSummary(u.userID),
     // CRM depth (2026-06-08) — best-effort: degrade to empty on error.
     getTags(u.userID),
     getCustomerActivity(u.userID),
   ]);
   const salesAdmins = salesAdminsRes.ok ? salesAdminsRes.data?.rows ?? [] : [];
+  // owner 2026-08-07 — id ของคนที่นั่งตำแหน่ง Purchasing / Pricing ในผังองค์กร
+  // (ช่องมอบหมายในทีมลูกค้าจะโชว์เฉพาะคนกลุ่มนี้ ไม่ใช่พนักงานทุกคน)
+  const purchasingIds = (purchasingUnitRes.ok ? purchasingUnitRes.data?.rows ?? [] : []).map((a) => a.adminID);
+  const pricingIds = (pricingUnitRes.ok ? pricingUnitRes.data?.rows ?? [] : []).map((a) => a.adminID);
   // Active sales-rep id set (adminStatusA='1' AND adminStatusSale='1') — the
   // SaleBadge resolves a RETIRED assigned rep to the central line via this set
   // (owner 2026-07-09). `salesAdminsLoaded` distinguishes a genuinely-empty pool
@@ -885,6 +892,8 @@ export async function renderLegacyCustomerView(
                 purchaser={u.adminIDPurchaser}
                 pricing={u.adminIDPricing}
                 admins={activeAdmins}
+                purchasingIds={purchasingIds}
+                pricingIds={pricingIds}
               />
               {/* อัพเกรดเป็นนิติบุคคล (owner 2026-07-05) — เฉพาะลูกค้า "บุคคล" · เซล/CS ทำเองได้
                   ไม่ต้องปลดล็อกรหัส · เปิด popup กรอกข้อมูล + แนบเอกสารในตัว. */}

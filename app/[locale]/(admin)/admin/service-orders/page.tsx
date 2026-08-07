@@ -46,7 +46,7 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { isPurchaserScoped, canReassignPurchaser } from "@/lib/admin/purchaser-scope";
 import { getStafferWorkspaceRole } from "@/lib/admin/positions";
 import { canEditShopOrder } from "@/lib/admin/shop-order-access";
-import { listActiveAdmins, type SalesAdminOption } from "@/actions/admin/customer-profile";
+import { listActiveAdmins, listPurchaserAdmins, type SalesAdminOption } from "@/actions/admin/customer-profile";
 import { PageTopMenubar, type MenubarItem } from "@/components/admin/page-top-menubar";
 import { PageHeader, SectionHeading } from "@/components/admin/page-header";
 import { Explain } from "@/components/ui/tooltip";
@@ -235,7 +235,8 @@ export default async function AdminServiceOrdersPage({
   // control — only fetched for viewers who can reassign (interpreter/lead/god).
   let purchaserAdmins: SalesAdminOption[] = [];
   if (canReassignPurchaserRole) {
-    const res = await listActiveAdmins();
+    // owner 2026-08-07 — เฉพาะคนที่นั่งตำแหน่ง Purchasing/Pricing ในผังองค์กร
+    const res = await listPurchaserAdmins();
     if (res.ok) purchaserAdmins = res.data?.rows ?? [];
   }
   // ?purchaser=<adminID> filter — only honored for non-scoped viewers (a scoped
@@ -539,6 +540,15 @@ export default async function AdminServiceOrdersPage({
   // แล้วส่งชื่อที่พร้อมแสดงลงไปเป็น field เดียว (owner 2026-08-06 ห้ามโชว์รหัสดิบ).
   const updaterNames = await resolveStaffNameMap(raw.map((r) => r.adminidupdate));
 
+  // owner 2026-08-07 "เลข IPC บัคครับ มันต่างกับคอลัมน์ผู้สั่งซื้อตรงไหน" —
+  // IPC = **ล่ามจีน/คนเปิดออเดอร์ให้ลูกค้า** (legacy badgeAdminIP · adminIDIP →
+  // adminIDCreate) คนละแกนกับ "ผู้สั่งซื้อ" (adminIDPurchaser · คนไปกดสั่งของจีน) —
+  // แต่เดิมโชว์ **uid ดิบ** เลยดูเหมือนบัค/ดูไม่ออกว่าต่างกันตรงไหน. resolve เป็น
+  // ชื่อเล่นด้วย SOT ตัวเดียวกับผู้อัปเดต (กัน uid ดิบโผล่อีกทั้งระบบ).
+  const ipcNames = await resolveStaffNameMap(
+    raw.flatMap((r) => [r.adminidip, r.adminidcreate]),
+  );
+
   // ── Shape into ServiceOrderRow for the table ─────────────────────
   const rows: ServiceOrderRow[] = raw.map((r) => {
     const user = usersByUserId.get(r.userid);
@@ -614,6 +624,13 @@ export default async function AdminServiceOrdersPage({
       // owner ④ — responsible ผู้สั่งซื้อ (auto-display like PCS): stored
       // assignment → interpreter → creator. Shows the handling admin, never a
       // forced-assign amber "ยังไม่มอบหมาย".
+      // IPC (ล่าม/คนเปิดออเดอร์) — ส่ง "ชื่อที่พร้อมแสดง" ลงไป ห้ามให้ตารางโชว์ uid
+      ipcName: (() => {
+        const id = (r.adminidip ?? "").trim() !== "" && r.adminidip !== "customer"
+          ? r.adminidip
+          : ((r.adminidcreate ?? "").trim() !== "" && r.adminidcreate !== "customer" ? r.adminidcreate : null);
+        return id ? staffLabel(id, ipcNames, { empty: "พนักงาน" }) : null;
+      })(),
       assignedPurchaserId: purchaserResp(r),
       assignedPurchaserName: purchaserNameById.get(purchaserResp(r)) ?? null,
       // true = the id is a fallback, not a real stored assignment (soften UI).

@@ -63,6 +63,8 @@ export type ServiceOrderRow = {
   adminid: string | null;
   adminidcreate: string | null;
   adminidip: string | null;
+  /** ชื่อเล่นของ "ล่าม/คนเปิดออเดอร์ให้" (resolve ฝั่ง server · ห้ามโชว์ uid ดิบ) */
+  ipcName?: string | null;
   adminidupdate: string | null;
   /**
    * ชื่อเล่นของผู้อัปเดตล่าสุด — resolve มาจากฝั่ง server แล้ว (page.tsx)
@@ -370,7 +372,13 @@ export function ServiceOrdersTable({
                   const ipInterp = r.adminidip && r.adminidip !== "" && r.adminidip !== "customer" ? r.adminidip : "";
                   const ipCreator = r.adminidcreate && r.adminidcreate !== "" && r.adminidcreate !== "customer" ? r.adminidcreate : "";
                   const ipcAdmin = ipInterp || ipCreator;
-                  const sourceLabel = ipcAdmin ? `IPC : ${ipcAdmin}` : "ฝากสั่งจาก: users";
+                  // owner 2026-08-07 — เดิมพิมพ์ `IPC : <uid ดิบ>` ทำให้อ่านไม่ออกว่า
+                  // ต่างจากคอลัมน์ "ผู้สั่งซื้อ" ตรงไหน. IPC = คนเปิดออเดอร์ให้ลูกค้า
+                  // (ล่ามจีน) · ผู้สั่งซื้อ = คนไปกดสั่งของจีน → เขียนให้เป็นภาษาคน
+                  // + ใช้ชื่อเล่นที่ server resolve มา (fallback = ไม่โชว์ uid).
+                  const sourceLabel = ipcAdmin
+                    ? `เปิดออเดอร์โดย: ${r.ipcName ?? "พนักงาน"}`
+                    : "ลูกค้าเปิดเอง";
                   const sourceBadgeCls = ipcAdmin
                     ? "bg-purple-50 text-purple-700 border-purple-200"
                     : "bg-gray-50 text-gray-600 border-gray-200";

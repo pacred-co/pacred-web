@@ -38,7 +38,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/require-admin";
 import { isPurchaserScoped, canReassignPurchaser } from "@/lib/admin/purchaser-scope";
 import { getStafferWorkspaceRole } from "@/lib/admin/positions";
-import { listActiveAdmins, type SalesAdminOption } from "@/actions/admin/customer-profile";
+import { listActiveAdmins, listPurchaserAdmins, type SalesAdminOption } from "@/actions/admin/customer-profile";
 import { ForwardersTable } from "./forwarders-table";
 import { ForwardersSearchBar } from "./search-bar";
 import { Suspense } from "react";
@@ -431,7 +431,8 @@ export default async function AdminForwardersPage({ searchParams }: { searchPara
   const ownAdminId = await resolvePurchaserAdminId(admin0, user.email);
   let purchaserAdmins: SalesAdminOption[] = [];
   if (canReassignPurchaserRole) {
-    const res = await listActiveAdmins();
+    // owner 2026-08-07 — เฉพาะคนที่นั่งตำแหน่ง Purchasing/Pricing ในผังองค์กร
+    const res = await listPurchaserAdmins();
     if (res.ok) purchaserAdmins = res.data?.rows ?? [];
   }
   const purchaserFilter = purchaserScoped ? undefined : sp.purchaser?.trim() || undefined;

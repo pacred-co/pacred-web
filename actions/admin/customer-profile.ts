@@ -235,6 +235,81 @@ export async function listCsAdmins(): Promise<AdminActionResult<{ rows: SalesAdm
 // Unlike sales/CS there is no dedicated tb_admin status flag for these three
 // roles, so the dropdown lists every ACTIVE admin (adminStatusA='1'). Same
 // shape as listSalesAdmins/listCsAdmins so the UI components are interchangeable.
+/**
+ * ตำแหน่งในผังองค์กรที่ "ทำงานสั่งซื้อจีน" ได้จริง (owner 2026-08-07:
+ * "ในระบบเรามี สั่งซื้อกับไพร้ซิ่ง ที่ทำส่วนนี้ แค่ 2 คนนี่ครับ
+ *  ทำไมมีมอบหมายมาหมดทุกคนทุก row เลย").
+ *
+ * ⚠️ ทำไมถึงเคยโชว์ทุกคน: ตัวเลือกเดิมเรียก listActiveAdmins() = พนักงาน active
+ * ทั้งหมด — **ไม่ได้อ่านผังองค์กรเลย** (คนละแกน: tb_admin = ตัวตน · hr_org_units
+ * = ตำแหน่ง). ข้อมูลพนักงานรวมเป็นตารางเดียวแล้วจริง (tb_admin · mig 0292) แต่
+ * "ใครทำงานอะไรได้" ต้องถามผัง ⇒ กรองด้วยชื่อตำแหน่งในผังตรงนี้.
+ * แก้ผังที่ /admin/hr/org-chart แล้วลิสต์นี้เปลี่ยนตามทันที (ไม่ต้องแก้โค้ด).
+ */
+const PURCHASER_UNIT_NAMES = ["Purchasing", "Pricing"] as const;
+/** ช่อง "สั่งซื้อ" ในทีมลูกค้า = ตำแหน่ง Purchasing เท่านั้น */
+const UNIT_PURCHASING = ["Purchasing"] as const;
+/** ช่อง "Pricing" = ตำแหน่ง Pricing เท่านั้น */
+const UNIT_PRICING = ["Pricing"] as const;
+
+/**
+ * รายชื่อ "ผู้สั่งซื้อ" ที่มอบหมายงานได้ — ตามผังองค์กร ไม่ใช่ทุกคนในบริษัท.
+ * fail-OPEN ไม่ได้: ถ้าอ่านผังไม่ได้ = คืนลิสต์ว่าง + error (ดีกว่าโชว์ทุกคนแล้ว
+ * มอบงานผิดคน) แต่ถ้าผังยังไม่มีใครนั่งตำแหน่งนี้ = คืนว่างพร้อมข้อความบอก.
+ */
+export async function listPurchaserAdmins(): Promise<AdminActionResult<{ rows: SalesAdminOption[] }>> {
+  return listAdminsByOrgUnitNames(PURCHASER_UNIT_NAMES as unknown as string[]);
+}
+
+/** ช่อง "สั่งซื้อ" ของทีมลูกค้า — ตำแหน่ง Purchasing ในผัง */
+export async function listPurchasingUnitAdmins(): Promise<AdminActionResult<{ rows: SalesAdminOption[] }>> {
+  return listAdminsByOrgUnitNames(UNIT_PURCHASING as unknown as string[]);
+}
+/** ช่อง "Pricing" ของทีมลูกค้า — ตำแหน่ง Pricing ในผัง */
+export async function listPricingUnitAdmins(): Promise<AdminActionResult<{ rows: SalesAdminOption[] }>> {
+  return listAdminsByOrgUnitNames(UNIT_PRICING as unknown as string[]);
+}
+
+async function listAdminsByOrgUnitNames(names: string[]): Promise<AdminActionResult<{ rows: SalesAdminOption[] }>> {
+  return withAdmin<{ rows: SalesAdminOption[] }>(
+    [...WRITE_ROLES, "interpreter", "purchaser_lead"],
+    async () => {
+      const admin = createAdminClient();
+      const { data: units, error: uErr } = await admin
+        .from("hr_org_units")
+        .select("id, name_th")
+        .in("name_th", names);
+      if (uErr) {
+        console.error("[listPurchaserAdmins hr_org_units] failed", { code: uErr.code, message: uErr.message });
+        return { ok: false, error: `db_error:${uErr.code ?? "unknown"}` };
+      }
+      const unitIds = ((units ?? []) as Array<{ id: string }>).map((u) => u.id);
+      if (unitIds.length === 0) return { ok: true, data: { rows: [] } };
+
+      const { data, error } = await admin
+        .from("tb_admin")
+        .select("adminID, adminName, adminLastName, adminNickname")
+        .eq("adminStatusA", "1")
+        .in("org_unit_id", unitIds)
+        .order("adminNickname", { ascending: true })
+        .limit(200);
+      if (error) {
+        console.error("[listPurchaserAdmins tb_admin] failed", { code: error.code, message: error.message });
+        return { ok: false, error: `db_error:${error.code ?? "unknown"}` };
+      }
+      type Raw = { adminID: string; adminName: string | null; adminLastName: string | null; adminNickname: string | null };
+      const rows: SalesAdminOption[] = ((data ?? []) as unknown as Raw[])
+        .filter((r) => !!r.adminID)
+        .map((r) => ({
+          adminID: r.adminID,
+          name: `${r.adminName ?? ""} ${r.adminLastName ?? ""}`.trim() || r.adminID,
+          nickname: r.adminNickname,
+        }));
+      return { ok: true, data: { rows } };
+    },
+  );
+}
+
 export async function listActiveAdmins(): Promise<AdminActionResult<{ rows: SalesAdminOption[] }>> {
   // 2026-07-06 (owner ④) — the ผู้สั่งซื้อ reassign UI on /admin/service-orders +
   // /admin/forwarders needs this active-admin list for interpreter/purchaser_lead

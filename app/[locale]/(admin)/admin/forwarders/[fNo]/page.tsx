@@ -46,7 +46,6 @@ import { ForwarderPerTrackingEditor } from "./forwarder-per-tracking-editor";
 // ฝากโอน confirmation). Self-gates super/accounting/pricing · writes ONLY
 // tb_forwarder.doc_tier_confirmed · the discount stays dormant until the owner
 // flips business_config cargo.doc_tier_discount.enabled (§0e isolated).
-import { ForwarderDocTierConfirm } from "./forwarder-doc-tier-confirm";
 // 2026-06-10 (ปอน) — legacy "ลบการสั่งซื้อถาวร" (destructive · guarded · 2-step confirm).
 import { ForwarderDeleteButton } from "./forwarder-delete-button";
 // 2026-06-11 (ปอน · owner "ฟอร์มแก้ไขต้อง status-driven · แต่ละสถานะมีให้แก้ไม่
@@ -95,7 +94,6 @@ import { fetchCountableForwarderSiblings } from "@/lib/admin/forwarder-siblings"
 // Staff flag a ฝากนำเข้า row as an exception (ของแตก/ไม่ใช่ของลูกค้า/ตู้ตีกลับ/
 // ติดด่าน/PR สลับ), record a note + photo, and resolve it. RECORD-ONLY — the
 // panel/actions write ONLY fexception_* (never money/status/ownership · §0e).
-import { ForwarderExceptionPanel } from "./forwarder-exception-panel";
 import { getTranslations } from "next-intl/server";
 import { TranslateButton } from "@/components/translate/translate-button";
 import {
@@ -1259,15 +1257,10 @@ async function tryRenderTbForwarder(
         >
 
 
-          {/* owner 2026-07-08: ย่อกรุปข้อมูลเพิ่มเติม (ใบขน→WeChat) ซ่อนไว้ก่อน — เกะกะ ยังไม่ใช้.
-             (ต้นทุน ถูกยกขึ้นไปไว้ใต้รายการสินค้าแล้ว · owner 2026-07-17 — ป้ายหัวข้อตัดคำว่า
-             "ต้นทุน" ออกด้วย ไม่งั้นป้ายโกหกว่ามีต้นทุนอยู่ข้างใน · §0f) */}
-          <details className="mt-4 rounded-2xl border border-border bg-surface-alt/30 [&_summary]:list-none">
-            <summary className="flex cursor-pointer select-none items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-muted hover:text-foreground">
-              <span className="text-xs">▸</span> ข้อมูลเพิ่มเติม — ใบขน · ส่วนลดเอกสาร · WeChat <span className="text-[11px] opacity-70">(คลิกเพื่อเปิด · ย่อไว้)</span>
-            </summary>
-            <div className="px-2 pb-3">
-
+          {/* owner 2026-08-07 "พวกเรื่อง WeChat ตู้อยู่ไหนอะไรนั่นด้วย เอาออกไปเลย" —
+             แผงแชท WeChat ถูกถอดออกจากระบบไปแล้ว เหลือแต่ <details> ที่ยังพาดหัวว่า
+             "ข้อมูลเพิ่มเติม — WeChat" ทั้งที่ข้างในมีแค่ปุ่มพิมพ์บิลรับสินค้า
+             = ป้ายโกหก + ต้องกดกางถึงจะเจอปุ่ม → กางทิ้ง ให้ปุ่มโผล่ตรงๆ. */}
           {/* owner 2026-06-28 #1 — เลือกสินค้า → สร้างใบขน/ใบกำกับ (ร่าง) จากรายการนี้. */}
           <div className="mt-3 flex flex-wrap gap-2">
             {/* พี่ป๊อป spec 2026-07-06 #8 — printable บิลรับสินค้า (โกดังจีน):
@@ -1280,17 +1273,6 @@ async function tryRenderTbForwarder(
               🖨 พิมพ์บิลรับสินค้า (โกดังจีน)
             </Link>
           </div>
-
-          {/* ── ส่วนลดเอกสาร (doc-tier) ยืนยันเงื่อนไข — owner-locked · dormant-safe
-             (ภูม 2026-06-18 · C · mig 0188). Self-gates super/accounting/pricing.
-             Writes ONLY doc_tier_confirmed; the discount stays ฿0 until the owner
-             flips cargo.doc_tier_discount.enabled. ── */}
-          <div className="mt-4">
-            <ForwarderDocTierConfirm fId={r.id} />
-          </div>
-
-            </div>
-          </details>
         </ForwarderStatusWorkflow>
 
         {/* ── สร้างใบวางบิล (owner 2026-06-22) — at รอชำระเงิน/เตรียมส่ง (5/6). ── */}
@@ -1377,15 +1359,6 @@ async function tryRenderTbForwarder(
            ของลูกค้า/ตู้ตีกลับ/ติดด่าน/PR สลับ with a note + photo · resolve when
            handled. The action writes ONLY fexception_* — money/status/ownership
            stay on the existing audited paths (แก้ไขลูกค้า · สร้างใบวางบิล). ── */}
-        {/* owner 2026-07-08: ย่อ แจ้งปัญหาพัสดุ ซ่อนไว้ก่อน — เกะกะ ยังไม่ใช้. */}
-        <details className="mt-4 rounded-2xl border border-border bg-surface-alt/30 [&_summary]:list-none">
-          <summary className="flex cursor-pointer select-none items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-muted hover:text-foreground">
-            <span className="text-xs">▸</span> แจ้งปัญหาพัสดุ (ของแตก/ไม่ใช่ของลูกค้า/ตู้ตีกลับ/ติดด่าน) <span className="text-[11px] opacity-70">(คลิกเพื่อเปิด · ย่อไว้)</span>
-          </summary>
-          <div className="px-2 pb-3">
-            <ForwarderExceptionPanel fNo={r.id} />
-          </div>
-        </details>
 
         {/* ── footer: ลบการสั่งซื้อถาวร (left · destructive · guarded) +
            ย้อนกลับ (right) — legacy update.php footer, 1:1. ── */}

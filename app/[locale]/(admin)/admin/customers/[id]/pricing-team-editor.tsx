@@ -54,12 +54,19 @@ export function PricingTeamEditor({
   purchaser,
   pricing,
   admins,
+  purchasingIds,
+  pricingIds,
 }: {
   userid: string;
   interpreter: string | null;
   purchaser: string | null;
   pricing: string | null;
   admins: SalesAdminOption[];
+  /** owner 2026-08-07 "ทำไมมีมอบหมายมาหมดทุกคน" — id ของคนที่นั่งตำแหน่ง
+   *  Purchasing / Pricing ในผังองค์กร. แต่ละบทบาทเห็นเฉพาะคนของตำแหน่งนั้น
+   *  (ล่ามยังเลือกได้ทุกคน — ผังยังไม่มีตำแหน่ง "ล่าม" แยก). */
+  purchasingIds?: string[];
+  pricingIds?: string[];
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -131,6 +138,17 @@ export function PricingTeamEditor({
     );
   }
 
+  // owner 2026-08-07 — รายชื่อในช่อง "ผู้ดูแล" ผูกกับบทบาทที่เลือก: สั่งซื้อ →
+  // เฉพาะตำแหน่ง Purchasing · Pricing → เฉพาะตำแหน่ง Pricing (อ่านจากผังองค์กร
+  // ฝั่ง server) · ล่าม → ทุกคน (ผังยังไม่มีตำแหน่งล่ามแยก). ถ้าผังยังไม่ได้จัดคน
+  // (ลิสต์ว่าง) → ไม่ล็อกจนใช้งานไม่ได้ ปล่อยให้เลือกได้ทั้งหมดไปก่อน.
+  const allowIds =
+    role === "purchaser" ? purchasingIds : role === "pricing" ? pricingIds : undefined;
+  const peopleForRole =
+    allowIds && allowIds.length > 0
+      ? admins.filter((a) => allowIds.includes(a.adminID))
+      : admins;
+
   // ── Inline editor — pick a person, pick a role, save ──
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[11px]">
@@ -145,7 +163,7 @@ export function PricingTeamEditor({
         className="max-w-[160px] rounded border border-border bg-white px-1 py-0.5 text-[11px] dark:bg-surface"
       >
         <option value="">— เลือกผู้ดูแล —</option>
-        {admins.map((a) => (
+        {peopleForRole.map((a) => (
           <option key={a.adminID} value={a.adminID}>
             {a.nickname ? `${a.nickname} · ` : ""}
             {a.name} ({a.adminID})
