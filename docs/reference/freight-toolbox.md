@@ -85,10 +85,28 @@
 
 ---
 
-## วิธีหยิบของกลับมา
-โค้ดทั้งหมด**ยังอยู่ในระบบ** (ไม่ได้ลบ) — เปิดอ่านได้ตรงๆ ตาม path ข้างบน.
-ถ้าอนาคตตัดหน้าจอบางส่วนออก ของยังอยู่ใน git ทุกเวอร์ชัน: `git log --all -- <path>` แล้ว
-`git show <commit>:<path>` เพื่อดู/กู้กลับ.
+## สถานะหลังคลีน 2026-08-07 — อะไรอยู่ อะไรไป
+
+**ยังอยู่ในระบบ (เปิดอ่าน/หยิบใช้ได้ทันทีตาม path ข้างบน):**
+ทุกอย่างในหมวด 1-7 — เครื่องคิดเรท · journey-catalog · PDF ศุลกากรทุกใบ · ใบเสนอราคา ·
+คอมมิชชั่น · actions ทั้ง 8 ตัว · **หน้าฝั่งลูกค้าทั้งหมด**.
+
+**ตัดออกแล้ว = เฉพาะ "หน้าจอฝั่งแอดมิน"** (commit `b49103b6` · 79 ไฟล์) —
+`/admin/freight/*` · `/admin/accounting/{freight,customs-declarations,cargo-declarations,customs-doc-kit,hs-triage,hs-consult}` ·
+`/admin/pricing/taxdoc-workspace` · `/admin/commission/freight` · `/admin/withdrawal/freight-th-list` ·
+`/admin/bookings` · `/admin/tax-invoices` · `/admin/cargothai` · `workspace/booking/{export,other,shop-order,yuan-transfer}`.
+เหตุผล: prod ไม่เคยมีงานลูกค้าจริงสักงาน (วัดแล้ว — ดูหัวไฟล์) แต่กินที่ในเมนู
+ทำให้คนทำงานคาร์โก้หลง. **ตัวเครื่อง (backend) ไม่ได้ตัด** → พอจะเปิดบริการเฟรทจริง
+เขียนหน้าจอใหม่ให้ตรงงานจริงได้เลย โดยไม่ต้องสร้างเครื่องใหม่.
+
+**กู้หน้าจอเดิมกลับมาดู:**
+```bash
+git show b49103b6^:'app/[locale]/(admin)/admin/freight/operations/page.tsx'
+git log --all --diff-filter=D -- 'app/[locale]/(admin)/admin/freight/**'
+```
+
+**เก็บไว้แต่ไม่มีหน้าให้เข้าแล้ว** (นับ/คิดได้ แต่ไม่มี UI): `lib/freight/freight-queue-keys.ts`
+(กลไกนับคิวงานเฟรท · เทสยังล็อกไว้ที่ `lib/admin/workspace.test.ts`) — พอทำหน้าใหม่ ต่อกลับได้ทันที.
 
 **กติกาของผม (Claude):** ก่อนเริ่มงานที่แตะ *ราคา · ขนส่งระหว่างประเทศ · เอกสารศุลกากร ·
 ใบเสนอราคา · คอมมิชชั่น · สถานะงานหลายขั้น* → **อ่านไฟล์นี้ก่อน** แล้วเสนอ owner ว่ามีของเดิม
