@@ -85,6 +85,7 @@ The user (เดฟ) described it as: *"นักปราชญ์ผู้เ�
 
 Cross-link: [`docs/STRATEGY.md`](../STRATEGY.md) §12 · [`.claude/skills/scholar-immortal/SKILL.md`](../../.claude/skills/scholar-immortal/SKILL.md).
 
+- [`cut-dead-surfaces-measure-first.md`](cut-dead-surfaces-measure-first.md) — ตัดของที่ไม่ได้ใช้: วัด prod ก่อนตัด · หน้าที่โชว์ 0 ตลอดกาล (§0e) · tsc ไม่จับลิงก์ตาย · เทสเก่าเขียนใหม่ไม่ใช่ลบ · "รวม DB" ≠ "ทุกจอถามที่เดียวกัน"
 - [owner เปลี่ยนกฎเงินกลางวันเดียวกัน — ต้องตามแก้ทั้งโค้ดและข้อมูลที่ backfill ไปแล้ว](owner-rule-refined-same-day.md)
 - [symmetric-guard-both-arrival-orders](symmetric-guard-both-arrival-orders.md) — dedup guard ที่ตัดสินจาก "อะไร live อยู่แล้ว" มีทิศเท่าลำดับการมาถึง · ใส่ exception ทิศเดียว = อีกทิศ refuse เงียบ = เงินขาด (899020867609 · 80kg ค้าง 1 วัน) · discriminator ตัวเดียว สลับ argument + ยืนยัน `bareHasOwnBox` จริงเสมอ
 - [ui-toggle-must-not-decide-money](ui-toggle-must-not-decide-money.md) — ฐาน/หน่วยของเงินต้องมาจาก ข้อเท็จจริงที่วัดได้ (ขนส่ง) ห้ามมาจากปุ่มบนจอ (โมดัลตั้งต้นทุนตู้ · โกดังว่าง → ตกไปใช้ toggle → 78.5kg×4700 = ฿368,950 ขยะ · 12/105 ครั้งเคยกด weight) · เลขเดียวกัน 2 เครื่องคิด = ต้อง drift (list สรุปค่าที่เก็บ vs detail คิดสด) → engine เดียว · **ด่านต้องอยู่ตรงรอยต่อที่มีผลจริง (ก่อนคิดเงิน/ออกเอกสาร) ไม่ใช่ปลายทางกายภาพ** (owner แก้: ที่อยู่ต้องกันก่อนรอชำระ ไม่ใช่ตอนมอบคนขับ) · วัดรัศมีด่านกับ prod ก่อน ship (ด่านแรก จะกัน 18 แถวที่ 7 แถวทำงานได้อยู่) · ป้ายที่ขัดกับราคาแย่กว่าไม่มีป้าย · เทสที่ไม่ลงทะเบียน = ไม่เคยรัน (2026-07-23)
