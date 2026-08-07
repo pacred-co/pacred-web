@@ -168,7 +168,7 @@ export function SourcingLinkPanel() {
               key={r.id}
               className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border p-2.5 md:grid md:grid-cols-[34px_minmax(0,1fr)_96px_auto] md:rounded-none md:border-0 md:border-t md:border-t-gray-100 md:p-0 md:py-2"
             >
-              <span className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-lg bg-surface-alt text-[12px] font-extrabold text-gray-600">
+              <span className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-full bg-surface-alt text-[12px] font-extrabold text-gray-600">
                 {String(i + 1).padStart(2, "0")}
               </span>
 
