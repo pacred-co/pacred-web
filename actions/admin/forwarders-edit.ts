@@ -781,13 +781,38 @@ export async function adminUpdateForwarderDimensions(
         if (isCbmRateBelowCost(typedCbmRate, cbmCost)) {
           const modeLabel = reconciledTransportType === "1" ? "ทางรถ" : "ทางเรือ";
           const whLabel = costWh === "2" ? "อี้อู" : "กวางโจว";
-          return {
-            ok: false,
-            error:
-              `❌ ห้ามตั้งเรทขายต่ำกว่าทุนจริง — เรทกำหนดเอง ฿${typedCbmRate.toLocaleString("th-TH")}/คิว`
-              + ` แต่ทุน ${whLabel} ${modeLabel} = ฿${cbmCost.toLocaleString("th-TH")}/คิว`
-              + ` (ขายแล้วขาดทุนแน่นอน). ปรับขึ้นอย่างน้อยให้เท่าทุนก่อนบันทึก`,
-          };
+          // 🔓 owner 2026-08-07 (เคสจริง #53389 · PR ลูกค้าไม่พอใจของค้างอี้อูเกือบเดือน
+          //    → owner อนุมัติ "ส่งทางรถแต่เก็บเรทเรือ" เป็นการชดเชย):
+          //      "ปลดลอคตรงกรอบนี้ไปก่อนครับ เพราะกดเลือกว่าจะกำหนดราคาเองไปแล้ว
+          //       แต่เก็บ log ไปให้ดีเอาไว้ตรวจสอบ ออกรีพอต"
+          //    ⇒ ช่อง "คิดราคา + ค่าเทียบ แบบกำหนดเอง" = **เจตนาของคนตั้งราคา** (ติ๊กเอง
+          //    รู้ตัวว่าจะขายต่ำกว่าทุน) → เปลี่ยนจาก **บล็อก → ผ่าน + ลง audit log**.
+          //    ⚠️ ด่านอีก 2 ทางที่ owner สั่งไว้ 30/07 (เรทกลาง `tb_rate_g_cbm` ·
+          //    เรทเฉพาะตัว `tb_rate_custom_*`) **ยังบล็อกเหมือนเดิม** — พวกนั้นเป็นเรท
+          //    ตั้งไว้ใช้ยาวกับลูกค้าทุกงาน ต่างจากอันนี้ที่เป็นราคา "งานเดียว" ที่คนกดเอง.
+          //    log ไปที่ `admin_audit_log` action `tb_forwarder.custom_rate_below_cost`
+          //    → ออกรายงาน "งานที่ตั้งราคาต่ำกว่าทุน" ได้ (ใครตั้ง · งานไหน · ต่ำกว่าทุนเท่าไร).
+          const lossPerCbm = Math.round((cbmCost - typedCbmRate) * 100) / 100;
+          await logAdminAction(
+            adminId,
+            "tb_forwarder.custom_rate_below_cost",
+            "tb_forwarder",
+            String(d.fNo),
+            {
+              fidorco:        before.fidorco ?? null,
+              userid:         before.userid ?? null,
+              typed_cbm_rate: typedCbmRate,
+              cost_cbm:       cbmCost,
+              loss_per_cbm:   lossPerCbm,
+              warehouse:      whLabel,
+              transport_mode: modeLabel,
+              fstatus:        before.fstatus ?? null,
+              note:           "owner 2026-08-07 ปลดล็อกช่องกำหนดราคาเอง — บันทึกไว้ตรวจสอบ/ออกรายงาน",
+            },
+          );
+          console.warn("[sell-floor] ตั้งราคาต่ำกว่าทุน (อนุญาตตามคำสั่ง owner · มี audit log)", {
+            fNo: d.fNo, typedCbmRate, cbmCost, lossPerCbm, whLabel, modeLabel,
+          });
         }
       }
 

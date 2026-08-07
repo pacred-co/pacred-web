@@ -44,6 +44,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { canViewCost } from "@/lib/admin/money-visibility";
 import { getCbmCostFloor, isCbmRateBelowCost } from "@/lib/admin/sell-cost-floor";
 
 // ────────────────────────────────────────────────────────────
@@ -258,7 +259,7 @@ export async function adminUpdateGeneralRateCells(
 
   return withAdmin<{ kg_writes: number; cbm_writes: number }>(
     ["accounting", "super"],
-    async ({ adminId }) => {
+    async ({ adminId, roles: actorRoles }) => {
       const admin = createAdminClient();
       const legacyAdminId = await resolveLegacyAdminId();
 
@@ -296,9 +297,11 @@ export async function adminUpdateGeneralRateCells(
           const cost = cbmCost[wh][tt];
           for (const [tier, v] of [["ขั้นที่ 1", c.cbm1], ["ขั้นที่ 2", c.cbm2], ["ขั้นที่ 3", c.cbm3]] as const) {
             if (v != null && isCbmRateBelowCost(v, cost)) {
+              // owner 2026-08-07: เลขทุนโชว์เฉพาะ level ที่เห็นต้นทุนได้ · คนอื่นบอกแค่ "ต่ำกว่าทุน"
               belowCost.push(
                 `${wh === "2" ? "อี้อู" : "กวางโจว"}/${tt === "1" ? "รถ" : "เรือ"}`
-                + `/ประเภท ${c.rgproductstype} ${tier} ฿${v.toLocaleString("th-TH")} (ทุน ฿${cost.toLocaleString("th-TH")}/คิว)`,
+                + `/ประเภท ${c.rgproductstype} ${tier} ฿${v.toLocaleString("th-TH")}`
+                + (canViewCost(actorRoles) ? ` (ทุน ฿${cost.toLocaleString("th-TH")}/คิว)` : " (ต่ำกว่าทุน)"),
               );
             }
           }

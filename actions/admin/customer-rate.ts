@@ -34,6 +34,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { withAdmin, logAdminAction, type AdminActionResult } from "./common";
+import { canViewCost } from "@/lib/admin/money-visibility";
 import {
   DEFAULT_START,
   PRODUCTS,
@@ -187,7 +188,7 @@ export async function adminSaveCustomerRate(
   // cell never breaks an unrelated edit). A 0 = "ไม่คิดตามหน่วยนี้" → never below.
   return withAdmin<{ changed: number; created: boolean; belowFloor: number; repriced: number }>(
     ["super", "accounting", "sales_admin"],
-    async ({ adminId }) => {
+    async ({ adminId, roles: actorRoles }) => {
       const admin = createAdminClient();
       const legacyAdminId = await resolveLegacyAdminId();
 
@@ -254,7 +255,15 @@ export async function adminSaveCustomerRate(
         // ตั้งแต่วินาทีที่คิดราคา. ต่ำกว่า "พื้นราคา" แต่ยังเหนือทุน = ยกเว้นเหมือนเดิม.
         // ดู lib/admin/sell-cost-floor.ts (ทุนมาจาก tb_settings ชุดเดียวกับ resolve-cost).
         if (isCbmRateBelowCost(c.rcbm, cbmCost[wh][c.t])) {
-          belowCost.push(`CBM ${tS}/${pL} ฿${c.rcbm} (ทุนจริง ฿${cbmCost[wh][c.t]}/คิว)`);
+          // owner 2026-08-07: "ยอดต้นทุนแบบตัวเงินเลยนี่ไม่ควรให้พนักงานเห็นนะครับ
+          // ถ้า level ไม่ถึง · แค่บอกว่า ต่ำกว่าทุนหรือขาดทุนก็พอ" → เลขทุนโชว์เฉพาะ
+          // role ที่เห็นต้นทุนได้ (canViewCost = ultra/accounting/pricing) · คนอื่นเห็น
+          // แค่ "ต่ำกว่าทุน" พอ (ยังบอกได้ว่าต้องแก้ตรงไหน แต่ไม่หลุดตัวเลขทุน).
+          belowCost.push(
+            canViewCost(actorRoles)
+              ? `CBM ${tS}/${pL} ฿${c.rcbm} (ทุนจริง ฿${cbmCost[wh][c.t]}/คิว)`
+              : `CBM ${tS}/${pL} ฿${c.rcbm} (ต่ำกว่าทุน)`,
+          );
         }
         if (c.rcbm > 0 && cbmFloor != null && c.rcbm < cbmFloor) {
           belowFloor++;

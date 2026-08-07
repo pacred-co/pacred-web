@@ -340,7 +340,11 @@ export default async function AdminReportCntPage({ searchParams }: { searchParam
       const inDateWindow = (g: { fdatecontainerclose: string | null }): boolean => {
         if (isWaiting || !startDate || !endDate) return true;
         const c = (g.fdatecontainerclose ?? "").slice(0, 10);
-        return c !== "" && c >= startDate && c <= endDate;
+        // 0299 (owner 2026-08-07 "ตู้แสดงผลไม่ครบ") — ตู้ที่ **ไม่มีวันปิดตู้เลย**
+        // ตัดสินด้วยวันไม่ได้ → ต้องเห็น ไม่ใช่หายทั้งตู้ (prod 3 ตู้ · YWS260707-1).
+        // กติกาเดียวกับ RPC เป๊ะ (ไม่งั้น fallback จะโชว์คนละจำนวนกับตัวนับ).
+        if (c === "") return true;
+        return c >= startDate && c <= endDate;
       };
       const bucketed = tmp.filter(
         (g) => isContainerInBucket(g.maxFstatus ?? "", page) && inDateWindow(g),
