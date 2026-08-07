@@ -31,7 +31,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "@/i18n/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  ClipboardList, ClipboardPaste, ExternalLink, Plus,
+  ClipboardPaste, ExternalLink, Plus,
   Search, Trash2,
 } from "lucide-react";
 import {
@@ -149,7 +149,7 @@ export function SourcingLinkPanel() {
   return (
     <div className="p-4 md:p-6">
       {/* ── หัวคอลัมน์ (เดสก์ท็อปเท่านั้น — จอแคบยุบเป็นแถวเดี่ยว) ── */}
-      <div className="hidden items-center gap-2.5 px-1 pb-2 text-[11.5px] font-bold text-muted md:grid md:grid-cols-[34px_minmax(0,1fr)_220px_auto]">
+      <div className="hidden items-center gap-2.5 px-1 pb-2 text-[11.5px] font-bold text-muted md:grid md:grid-cols-[34px_minmax(0,1fr)_96px_auto]">
         <div />
         <div>วางลิงก์สินค้า <span className="font-medium">(ใส่ได้มากกว่าหนึ่งลิงก์)</span></div>
         {/* คอลัมน์โลโก้ร้าน — ไม่มีหัวคอลัมน์ (ปอน 2026-08-07 "เอาออก") แต่ยังต้องมี
@@ -166,7 +166,7 @@ export function SourcingLinkPanel() {
           return (
             <div
               key={r.id}
-              className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border p-2.5 md:grid md:grid-cols-[34px_minmax(0,1fr)_220px_auto] md:rounded-none md:border-0 md:border-t md:border-t-gray-100 md:p-0 md:py-2"
+              className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border p-2.5 md:grid md:grid-cols-[34px_minmax(0,1fr)_96px_auto] md:rounded-none md:border-0 md:border-t md:border-t-gray-100 md:p-0 md:py-2"
             >
               <span className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-lg bg-surface-alt text-[12px] font-extrabold text-gray-600">
                 {String(i + 1).padStart(2, "0")}
@@ -219,15 +219,11 @@ export function SourcingLinkPanel() {
                 )}
               </div>
 
-              {/* ตัวอย่างสินค้า — โครงว่างไว้ตามม็อกอัพ. รูป/ชื่อ/ราคาจริงดึงที่หน้าถัดไป
-                  (owner เคาะ: "ทำคอลัมน์ไว้ตามภาพ แต่ดึงจริงที่หน้าถัดไปเหมือนเดิม") */}
-              <div className="flex min-w-0 items-center gap-2">
-                <span
-                  aria-hidden
-                  className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-lg border border-dashed border-border bg-surface text-gray-300"
-                >
-                  <ClipboardList className="h-4 w-4" />
-                </span>
+              {/* โลโก้ร้าน — บอกว่าลิงก์นี้มาจากเว็บไหน. รูป/ชื่อ/ราคาจริงดึงที่หน้าถัดไป
+                  (owner เคาะ: "ทำคอลัมน์ไว้ตามภาพ แต่ดึงจริงที่หน้าถัดไปเหมือนเดิม").
+                  ถอดกล่องประดับ 42px ออกแล้ว — กินที่ฟรีๆ โดยไม่บอกอะไรเพิ่ม (ปอน
+                  2026-08-07 "ยืดแถบค้นหาให้เต็ม") */}
+              <div className="flex min-w-0 items-center">
                 <span className="min-w-0 text-[11.5px] leading-tight">
                   {badge ? (
                     // 🔴 `SOURCE_BADGE.icon` เป็น "พาธรูป" ไม่ใช่อีโมจิ — เรนเดอร์เป็น <img>
@@ -241,7 +237,7 @@ export function SourcingLinkPanel() {
                       loading="lazy"
                     />
                   ) : (
-                    <span className="text-muted">{url ? "กรอกข้อมูลเองหน้าถัดไป" : "รอวางลิงก์"}</span>
+                    <span className="text-muted">{url ? "กรอกเอง" : "รอลิงก์"}</span>
                   )}
                 </span>
               </div>

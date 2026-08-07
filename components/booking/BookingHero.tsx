@@ -20,7 +20,7 @@ interface BookingHeroProps {
   customBgMobile?: string;
   customBgDesktop?: string;
   /** ปุ่ม CTA ที่วาง "ทับบนแบนเนอร์" มุมล่างซ้าย (ปอน 2026-08-07 "ยกขึ้นไปวางในภาพ").
-   *  มุมล่างซ้ายของ BannerShop07 เป็นพื้นถนนสีขาว ไม่มีอาร์ตเวิร์ก → ไม่บังอะไร */
+   *  มุมล่างซ้ายของ BannerShop08 เป็นพื้นถนนสีขาว ไม่มีอาร์ตเวิร์ก → ไม่บังอะไร */
   overlayCta?: ReactNode;
 }
 
@@ -36,19 +36,19 @@ const BG_OVERRIDES_DESKTOP: Record<string, string> = {
   truck:    "/images/bannerdesktop/truckdesktop01.png",
   lcl:      "/images/bannerdesktop/bannershipdesktop01.png",
   fcl:      "/images/bannerdesktop/bannershipdesktop01.png",
-  // ปอน 2026-08-07 — BannerShop07 มีหัวข้อ + โลโก้ร้านจีนฝังมาในรูปแล้ว
+  // ปอน 2026-08-07 — BannerShop08 มีหัวข้อ + โลโก้ร้านจีนฝังมาในรูปแล้ว
   // (mobile ยังใช้ shop.png ที่ไม่มีตัวหนังสือ → overlay ยังต้องขึ้นบนมือถือ ดู `isSourcing` ล่าง)
-  sourcing: "/images/bannerdesktop/BannerShop07.png",
+  sourcing: "/images/bannerdesktop/BannerShop08.png",
 };
 
 // Per-banner background-position (default `center`). The hero is a fixed
 // `md:h-[400px]` full-width box, so `cover` crops any artwork that is relatively
-// taller — at 1280px the 1280×460 BannerShop07 loses 30px off BOTH ends, which
+// taller — at 1280px the 1280×460 BannerShop08 loses 30px off BOTH ends, which
 // clipped the headline's headroom (ปอน 2026-08-07 "ขยับลงมาหน่อย มันโดนทับ").
 // Anchoring to `top` spends the whole crop on the bottom (decorative truck/ship)
 // and keeps the headline + shop logos intact at every width.
 // …and below ~1113px `cover` flips to cropping HORIZONTALLY instead (at 768px it
-// ate the headline from the left, x0→x198). BannerShop07 is left-weighted — copy
+// ate the headline from the left, x0→x198). BannerShop08 is left-weighted — copy
 // + logos on the left, decorative map/ship/truck on the right — so `left top`
 // spends every crop, on both axes, on the decorative side only.
 const BG_POS_DESKTOP: Record<string, string> = {
@@ -56,7 +56,7 @@ const BG_POS_DESKTOP: Record<string, string> = {
 };
 
 // ความสูงกรอบฝั่งเดสก์ท็อป. ค่าปกติ `md:h-[400px]` ตายตัว → รูปที่สัดส่วนไม่ตรงจะโดน
-// `cover` ตัดทิ้งเสมอ (BannerShop07 1280×460 โดนกิน 60px). ปอน 2026-08-07 "ทำให้ภาพเต็ม
+// `cover` ตัดทิ้งเสมอ (BannerShop08 1280×460 โดนกิน 60px). ปอน 2026-08-07 "ทำให้ภาพเต็ม
 // นะ อันนี้โดนตัดขาดหาย" → ให้กรอบใช้ "สัดส่วนของรูป" แทนความสูงตายตัว = ไม่ตัดเลยสัก
 // พิกเซล ทุกความกว้าง. ใส่เฉพาะคีย์ที่ระบุ — แบนเนอร์อื่นออกแบบมาสำหรับ 400px คงเดิม
 const BG_BOX_DESKTOP: Record<string, string> = {
@@ -124,7 +124,7 @@ export function BookingHero({ activeTab, seaMode, forceDefault = false, customTi
   // headline + ฿2,800 + partner logos baked into the artwork, so the HTML text overlay is
   // hidden on EVERY viewport (ปอน 2026-06-21 "เอา text ออก · ใช้รูปนี้แทน ทั้งมือถือ+คอม").
   const isCustoms = !isDefault && contentKey === "customs";
-  // ฝากสั่งซื้อ (ปอน 2026-08-07): DESKTOP-only baked artwork — BannerShop07 already carries the
+  // ฝากสั่งซื้อ (ปอน 2026-08-07): DESKTOP-only baked artwork — BannerShop08 already carries the
   // headline + sub-line + partner logos, so the overlay would double up on md+. Mobile still uses
   // the text-less shop.png, so the overlay must survive there → `md:hidden`, not `hidden`.
   const isSourcing = !isDefault && contentKey === "sourcing";
