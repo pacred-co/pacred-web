@@ -103,6 +103,16 @@ const TRANSPORT_LABEL: Record<string, string> = {
 const CRATE_LABEL: Record<string, string> = { "1": "ตีลังไม้", "2": "ไม่ตีลังไม้" };
 const PAY_LABEL: Record<string, string> = { "1": "ต้นทาง", "2": "ปลายทาง" };
 
+/** owner 2026-08-07 "ยังมีแสดงผล PCSF อยู่อีกหรอครับ" — own-fleet เก็บโค้ดเดิม
+ *  (PCS/PCSF/PCSE = data ห้ามแตะ) แต่บนจอต้องเห็นแค่ชื่อแบรนด์ใหม่ (PRF/PRE).
+ *  ขนส่งภายนอกยังโชว์โค้ดในวงเล็บได้ (พนักงานใช้เทียบกับใบขนส่ง). */
+function carrierDisplay(code: string | null | undefined): string {
+  if (!code) return "—";
+  const name = nameShipBy(code);
+  if (/^PCS/i.test(code)) return name;            // own-fleet → ชื่ออย่างเดียว
+  return name !== "ไม่พบข้อมูล" ? `${name} (${code})` : `(${code})`;
+}
+
 export function OrderInlineEdits({
   hNo,
   htransporttype,
@@ -255,7 +265,7 @@ export function OrderInlineEdits({
         label="บริษัทขนส่ง"
         editing={editShipBy}
         setEditing={setEditShipBy}
-        display={hshipby ? `${nameShipBy(hshipby)} (${hshipby})` : "—"}
+        display={carrierDisplay(hshipby)}
       >
         {(close) => (
           <>
@@ -268,7 +278,7 @@ export function OrderInlineEdits({
                   offered set, so saving never silently drops it. */}
               {hshipby && !carrierCodes.includes(hshipby) && (
                 <option value={hshipby}>
-                  {nameShipBy(hshipby) !== "ไม่พบข้อมูล" ? `${nameShipBy(hshipby)} (${hshipby})` : `(${hshipby})`}
+                  {carrierDisplay(hshipby)}
                 </option>
               )}
               {carrierOptions.map((o) => (

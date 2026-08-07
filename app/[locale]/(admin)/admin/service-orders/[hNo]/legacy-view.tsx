@@ -47,12 +47,10 @@ import { fstatusBadge } from "@/lib/admin/forwarder-status";
 // Carrier label SOT — show the Thai carrier name (legacy nameShipBy) not the
 // raw code on the read-only detail (owner 2026-06-29: faithful display).
 import { nameShipBy } from "@/lib/freight/shipping-methods";
-import { getShopOrderDocuments } from "@/lib/admin/order-documents";
 import { countShopArrivals } from "@/lib/admin/shop-order-arrivals";
 import { loadLinkedShopForwarders } from "@/lib/admin/shop-order-linked-forwarders";
 import { shopTrackingBase } from "@/lib/admin/shop-order-status-rule";
 import { buildTrackingGroups } from "@/lib/admin/shop-order-tracking-groups";
-import { OrderDocumentsPanel } from "@/components/admin/order-documents-panel";
 import { BillToOverridePanel } from "@/components/admin/bill-to-override-panel";
 import { autoExpireOverdueShopOrder } from "@/lib/service-order/auto-expire";
 import type { EditorItem } from "./items-editor";
@@ -61,7 +59,6 @@ import { OrderNoteForm, OrderDangerZone } from "./order-actions";
 import { canEditShopOrder } from "@/lib/admin/shop-order-access";
 // 2026-06-09 (P2 · tax-invoice platform): per-line COST + DECLARED capture
 // (the `pricing` role) — isolated from the selling-price/quote flow.
-import { ShopOrderCostSection } from "./shop-cost-section";
 // 2026-06-12 (GAP 2 · cargo-acct workflow audit) — surface the customer's
 // tax-document choice + juristic-WHT signal on the shop detail header (the
 // forwarder detail already has it; the shop side was the gap). Display-only.
@@ -172,6 +169,16 @@ type ORow = {
   input_currency: string | null; input_price: number | string | null;
   hcrate: string | null;
 };
+
+/** owner 2026-08-07 "ยังมีแสดงผล PCSF อยู่อีกหรอครับ" — own-fleet เก็บโค้ดเดิม
+ *  (PCS/PCSF/PCSE = data ห้ามแตะ) แต่บนจอต้องเห็นแค่ชื่อแบรนด์ใหม่ (PRF/PRE).
+ *  ขนส่งภายนอกยังโชว์โค้ดในวงเล็บได้ (พนักงานใช้เทียบกับใบขนส่ง). */
+function carrierDisplay(code: string | null | undefined): string {
+  if (!code) return "—";
+  const name = nameShipBy(code);
+  if (/^PCS/i.test(code)) return name;            // own-fleet → ชื่ออย่างเดียว
+  return name !== "ไม่พบข้อมูล" ? `${name} (${code})` : `(${code})`;
+}
 
 export async function renderLegacyServiceOrderView(hno: string) {
   const { roles } = await requireAdmin();
@@ -297,7 +304,6 @@ export async function renderLegacyServiceOrderView(hno: string) {
 
   // B3 (2026-06-22) — per-order document registry (read-only · tax invoices +
   // receipts issued for this hno). Empty until tax-doc issuance is enabled.
-  const orderDocs = await getShopOrderDocuments(r.hno);
 
   // legacy fidelity gap fixed 2026-06-08 · ภูม B5 lane — reflect the
   // auto-expire flip in the rendered status (matches /edit/page.tsx:287).
@@ -528,7 +534,7 @@ export async function renderLegacyServiceOrderView(hno: string) {
             />
             <KV
               label="บริษัทขนส่ง"
-              value={r.hshipby ? `${nameShipBy(r.hshipby)} (${r.hshipby})` : "—"}
+              value={carrierDisplay(r.hshipby)}
             />
             <KV
               label="การเก็บเงินค่าขนส่งในไทย"
@@ -767,14 +773,10 @@ export async function renderLegacyServiceOrderView(hno: string) {
         </section>
       )}
 
-      {/* ── B3: เอกสารของออเดอร์ (read-only doc registry) ── */}
-      <OrderDocumentsPanel docs={orderDocs} />
-
       {/* 2026-06-09 (P2 · tax-invoice platform) — per-line COST + DECLARED
           capture (Pricing role). Separate control · calls ONLY the cost action
           (setShopOrderItemCost) · does NOT touch selling price / hStatus /
           notifications (AGENTS.md §0e). */}
-      <ShopOrderCostSection hno={r.hno} />
 
       {/* 2026-06-05 (ภูม flag) — amber signpost "ไปหน้าแก้ไข/อัปเดต" ลบออก
           เพราะซ้ำกับปุ่ม "แก้ไข/อัปเดต" สีแดงมุมขวาบน (เด่นกว่าอยู่แล้ว ·
