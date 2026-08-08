@@ -124,6 +124,7 @@ export const SHIPPING_METHODS: readonly ShippingMethod[] = [
   { code: "51",   name: "Mong Seng Buriram",              nameTh: "ม่งเส็งบุรีรัมย์ขนส่ง",           type: "truck", etaDays: 3, description: "บุรีรัมย์ · กรุงเทพฯ (สาขาสาย 2)" },
   // owner/ภูม 2026-08-03 — ลูกค้ารีเควส (PR9522 · ปทุมธานี ลำลูกกา). พื้นที่จริงอยู่ที่ carrier-extra.ts
   { code: "52",   name: "Nakhon Khueankhan Rungrueang",   nameTh: "นครเขื่อนขันธ์รุ่งเรือง ขนส่ง",  type: "truck", etaDays: 4, description: "ปทุมธานี · กรุงเทพฯ · หนองบัวลำภู" },
+  { code: "53",   name: "Leng Pichit Transport",          nameTh: "บจก. เล้งพิชิตขนส่ง",            type: "truck", etaDays: 3, description: "กรุงเทพฯ · ชายแดนใต้ (นราธิวาส · ยะลา · ปัตตานี · สงขลา/หาดใหญ่ · พัทลุง)" },
   { code: "PCS",  name: "Pacred Warehouse Pickup",        nameTh: "รับเองโกดัง Pacred (สมุทรสาคร)", type: "truck", etaDays: 1, description: "รับด้วยตนเองที่โกดัง Pacred สมุทรสาคร" },
   { code: "F",    name: "Auto-assigned by Pacred",        nameTh: "บริษัทจัดหาให้อัตโนมัติ",        type: "truck", etaDays: 4 },
   { code: "PCSF", name: "Pacred Mao Mao (bulk)",          nameTh: "PRF เหมาๆ",                      type: "truck", etaDays: 3, description: "Pacred เหมาส่งทั้งคันรถ (PRF)" },
