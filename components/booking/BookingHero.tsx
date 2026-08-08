@@ -19,6 +19,9 @@ interface BookingHeroProps {
   /** Page-specific banner image overrides (used with the custom-title variant). */
   customBgMobile?: string;
   customBgDesktop?: string;
+  /** ปุ่ม CTA ที่วาง "ทับบนแบนเนอร์" มุมล่างซ้าย (ปอน 2026-08-07 "ยกขึ้นไปวางในภาพ").
+   *  มุมล่างซ้ายของ BannerShop08 เป็นพื้นถนนสีขาว ไม่มีอาร์ตเวิร์ก → ไม่บังอะไร */
+  overlayCta?: ReactNode;
 }
 
 // Per-tab background overrides — mobile/desktop pair for landing pages that
@@ -28,12 +31,38 @@ const BG_OVERRIDES_MOBILE: Record<string, string> = {
   customs: "/images/bannermobile/clearmobile6.png",
 };
 const BG_OVERRIDES_DESKTOP: Record<string, string> = {
-  default: "/images/bannerdesktop/maindesktop01.png",
-  customs: "/images/bannerdesktop/cleardesktop008.png",
-  truck:   "/images/bannerdesktop/truckdesktop01.png",
-  lcl:     "/images/bannerdesktop/bannershipdesktop01.png",
-  fcl:     "/images/bannerdesktop/bannershipdesktop01.png",
+  default:  "/images/bannerdesktop/maindesktop01.png",
+  customs:  "/images/bannerdesktop/cleardesktop008.png",
+  truck:    "/images/bannerdesktop/truckdesktop01.png",
+  lcl:      "/images/bannerdesktop/bannershipdesktop01.png",
+  fcl:      "/images/bannerdesktop/bannershipdesktop01.png",
+  // ปอน 2026-08-07 — BannerShop08 มีหัวข้อ + โลโก้ร้านจีนฝังมาในรูปแล้ว
+  // (mobile ยังใช้ shop.png ที่ไม่มีตัวหนังสือ → overlay ยังต้องขึ้นบนมือถือ ดู `isSourcing` ล่าง)
+  sourcing: "/images/bannerdesktop/BannerShop08.png",
 };
+
+// Per-banner background-position (default `center`). The hero is a fixed
+// `md:h-[400px]` full-width box, so `cover` crops any artwork that is relatively
+// taller — at 1280px the 1280×460 BannerShop08 loses 30px off BOTH ends, which
+// clipped the headline's headroom (ปอน 2026-08-07 "ขยับลงมาหน่อย มันโดนทับ").
+// Anchoring to `top` spends the whole crop on the bottom (decorative truck/ship)
+// and keeps the headline + shop logos intact at every width.
+// …and below ~1113px `cover` flips to cropping HORIZONTALLY instead (at 768px it
+// ate the headline from the left, x0→x198). BannerShop08 is left-weighted — copy
+// + logos on the left, decorative map/ship/truck on the right — so `left top`
+// spends every crop, on both axes, on the decorative side only.
+const BG_POS_DESKTOP: Record<string, string> = {
+  sourcing: "left top",
+};
+
+// ความสูงกรอบฝั่งเดสก์ท็อป. ค่าปกติ `md:h-[400px]` ตายตัว → รูปที่สัดส่วนไม่ตรงจะโดน
+// `cover` ตัดทิ้งเสมอ (BannerShop08 1280×460 โดนกิน 60px). ปอน 2026-08-07 "ทำให้ภาพเต็ม
+// นะ อันนี้โดนตัดขาดหาย" → ให้กรอบใช้ "สัดส่วนของรูป" แทนความสูงตายตัว = ไม่ตัดเลยสัก
+// พิกเซล ทุกความกว้าง. ใส่เฉพาะคีย์ที่ระบุ — แบนเนอร์อื่นออกแบบมาสำหรับ 400px คงเดิม
+const BG_BOX_DESKTOP: Record<string, string> = {
+  sourcing: "md:aspect-[1280/460] md:h-auto",
+};
+const BG_BOX_DESKTOP_DEFAULT = "md:aspect-auto md:h-[400px]";
 
 // English-locale banner overrides (ปอน 2026-07-03) — when the site is in EN, the
 // customs hero uses the English-baked artwork instead of the Thai one. Only keys
@@ -45,7 +74,7 @@ const BG_OVERRIDES_DESKTOP_EN: Record<string, string> = {
   customs: "/images/bannerdesktop/cleardesktop008en.png",
 };
 
-export function BookingHero({ activeTab, seaMode, forceDefault = false, customTitle, customHighlight, customBgMobile, customBgDesktop }: BookingHeroProps) {
+export function BookingHero({ activeTab, seaMode, forceDefault = false, customTitle, customHighlight, customBgMobile, customBgDesktop, overlayCta }: BookingHeroProps) {
   const t = useTranslations("bookingCalc.hero");
   const locale = useLocale();
   // Raw messages for the sub-line emptiness guard below. A plain t(subKey) on a
@@ -76,6 +105,8 @@ export function BookingHero({ activeTab, seaMode, forceDefault = false, customTi
   // EN swaps only where an English banner exists (customs); else falls back to Thai.
   const bgMobile = (isEn ? BG_OVERRIDES_MOBILE_EN[imgKey] : undefined) ?? BG_OVERRIDES_MOBILE[imgKey] ?? fallbackBg;
   const bgDesktop = (isEn ? BG_OVERRIDES_DESKTOP_EN[imgKey] : undefined) ?? BG_OVERRIDES_DESKTOP[imgKey] ?? fallbackBg;
+  const bgPosDesktop = BG_POS_DESKTOP[imgKey] ?? "center";
+  const bgBoxDesktop = BG_BOX_DESKTOP[imgKey] ?? BG_BOX_DESKTOP_DEFAULT;
   const keys = HERO_CONTENT_KEYS[contentKey] ?? HERO_CONTENT_KEYS.default;
   const rawSub = rawMessages.bookingCalc?.hero?.[keys.subKey] ?? "";
 
@@ -93,9 +124,14 @@ export function BookingHero({ activeTab, seaMode, forceDefault = false, customTi
   // headline + ฿2,800 + partner logos baked into the artwork, so the HTML text overlay is
   // hidden on EVERY viewport (ปอน 2026-06-21 "เอา text ออก · ใช้รูปนี้แทน ทั้งมือถือ+คอม").
   const isCustoms = !isDefault && contentKey === "customs";
+  // ฝากสั่งซื้อ (ปอน 2026-08-07): DESKTOP-only baked artwork — BannerShop08 already carries the
+  // headline + sub-line + partner logos, so the overlay would double up on md+. Mobile still uses
+  // the text-less shop.png, so the overlay must survive there → `md:hidden`, not `hidden`.
+  const isSourcing = !isDefault && contentKey === "sourcing";
+  const hideText = isCustoms ? " hidden" : isSourcing ? " md:hidden" : "";
   const contentCls  = isDefault
     ? "relative z-10 w-full max-w-[1000px] mx-auto text-center text-white"
-    : `relative z-10 max-w-[1000px] mx-auto text-center text-white${isCustoms ? " hidden" : ""}`;
+    : `relative z-10 max-w-[1000px] mx-auto text-center text-white${hideText}`;
 
   // Custom headline variant — default banner image + a page-specific title
   // (overrides the i18n hero text). Used by import-china-lcl.
@@ -117,7 +153,7 @@ export function BookingHero({ activeTab, seaMode, forceDefault = false, customTi
   }
 
   return (
-    <div className={`relative overflow-hidden aspect-[768/340] md:aspect-auto md:h-[400px] flex flex-col ${outerAlign} justify-center ${outerPad} ${mobilePb} ${desktopPb} rounded-b-2xl md:rounded-b-3xl`}>
+    <div className={`relative overflow-hidden aspect-[768/340] ${bgBoxDesktop} flex flex-col ${outerAlign} justify-center ${outerPad} ${mobilePb} ${desktopPb} rounded-b-2xl md:rounded-b-3xl`}>
       {/* Mobile background */}
       <div
         aria-hidden
@@ -128,8 +164,11 @@ export function BookingHero({ activeTab, seaMode, forceDefault = false, customTi
       <div
         aria-hidden
         className="hidden md:block absolute inset-0"
-        style={{ background: `url('${bgDesktop}') center/cover no-repeat` }}
+        style={{ background: `url('${bgDesktop}') ${bgPosDesktop}/cover no-repeat` }}
       />
+      {overlayCta && (
+        <div className="absolute inset-x-4 bottom-3 z-20 md:inset-x-7 md:bottom-5">{overlayCta}</div>
+      )}
       <div className={contentCls}>
         <h1 className="relative top-2 md:top-4 text-[clamp(26px,7.3vw,28px)] md:text-[clamp(34px,4.2vw,56px)] font-black tracking-tight leading-[1.1] md:leading-[1.1] mb-1.5 md:mb-4 text-white [-webkit-text-stroke:1px_#7f1d1d] sm:[-webkit-text-stroke:2px_#7f1d1d] md:[-webkit-text-stroke:8px_#7f1d1d] [paint-order:stroke_fill] [text-shadow:0_3px_8px_rgba(0,0,0,0.85),0_6px_18px_rgba(0,0,0,0.6)]">
           {t.rich(keys.titleKey, {

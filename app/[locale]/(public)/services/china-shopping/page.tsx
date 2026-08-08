@@ -249,7 +249,36 @@ export default async function ChinaShoppingPage({
       <NavBar />
       <SearchBar hideOnMobile defaultCollapsed />
       <main>
-        <BookingCalculator landing="sourcing" />
+        {/* หน้านี้คือบริการฝากสั่งซื้อโดยตรง → ไม่ต้องโชว์แถบ 7 บริการ
+            (ปอน 2026-08-07 "ตัดออกนะ ใช้แค่กับแลนดิ้งสั่งซื้อจีน booking")
+            + ปุ่ม CTA 2 อัน ย้ายขึ้นมาอยู่ใต้แบนเนอร์ เหนือกล่องวางลิงก์ */}
+        <BookingCalculator
+          landing="sourcing"
+          hideTabs
+          topCta={
+            <div className="grid grid-cols-2 gap-2 max-w-[340px] md:max-w-[400px]">
+              <Link
+                href="/register"
+                aria-label={tp("heroCtaUseAria")}
+                className="inline-flex items-center justify-center gap-1.5 h-10 md:h-11 rounded-full bg-primary-600 text-white font-bold text-[13px] md:text-[14px] hover:bg-primary-700 hover:-translate-y-0.5 transition-all shadow-[0_4px_14px_rgba(179,0,0,0.28)]"
+              >
+                {tp("heroCtaUse")}
+                <ArrowRight className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2.8} />
+              </Link>
+              <TrackedExternalLink
+                href={LINE_URL}
+                cta="line_consult"
+                surface={SURFACE}
+                ctaProps={{ position: "hero_cta" }}
+                aria-label={tp("heroCtaConsultAria")}
+                className="inline-flex items-center justify-center gap-1.5 h-10 md:h-11 rounded-full border border-primary-200 bg-white text-primary-600 font-bold text-[13px] md:text-[14px] hover:bg-primary-50 hover:border-primary-300 hover:-translate-y-0.5 transition-all shadow-[0_4px_14px_rgba(0,0,0,0.12)]"
+              >
+                <MessageCircle className="w-3.5 h-3.5 md:w-4 md:h-4 text-primary-600" strokeWidth={2.6} />
+                {tp("heroCtaConsult")}
+              </TrackedExternalLink>
+            </div>
+          }
+        />
 
         {/* ─── Breadcrumb ─── */}
         <nav
@@ -297,28 +326,8 @@ export default async function ChinaShoppingPage({
 
             <TrustStatsStrip className="mt-3 md:mt-4" />
 
-            {/* 2 primary CTAs */}
-            <div className="mt-4 md:mt-5 grid grid-cols-2 gap-2 md:gap-3 max-w-[560px]">
-              <Link
-                href="/register"
-                aria-label={tp("heroCtaUseAria")}
-                className="inline-flex items-center justify-center gap-2 h-12 md:h-14 rounded-xl bg-primary-600 text-white font-black text-[14px] md:text-[16px] hover:bg-primary-700 hover:-translate-y-0.5 transition-all shadow-[0_8px_20px_rgba(179,0,0,0.30)]"
-              >
-                {tp("heroCtaUse")}
-                <ArrowRight className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.8} />
-              </Link>
-              <TrackedExternalLink
-                href={LINE_URL}
-                cta="line_consult"
-                surface={SURFACE}
-                ctaProps={{ position: "hero_cta" }}
-                aria-label={tp("heroCtaConsultAria")}
-                className="inline-flex items-center justify-center gap-2 h-12 md:h-14 rounded-xl bg-[#06C755] text-white font-black text-[14px] md:text-[16px] hover:bg-[#05B04C] hover:-translate-y-0.5 transition-all shadow-[0_8px_20px_rgba(6,199,85,0.35)]"
-              >
-                <MessageCircle className="w-4 h-4 md:w-5 md:h-5" strokeWidth={2.6} />
-                {tp("heroCtaConsult")}
-              </TrackedExternalLink>
-            </div>
+            {/* ปุ่ม CTA 2 อัน ย้ายขึ้นไปใต้แบนเนอร์แล้ว (ปอน 2026-08-07) → ดู `heroCtas`
+                ที่ส่งเข้า <BookingCalculator topCta={…}> ด้านบนของหน้า */}
 
             {/* Service scope highlights — themed card */}
             <div className="mt-5 md:mt-7 rounded-2xl md:rounded-3xl border border-primary-200 dark:border-primary-800/60 bg-gradient-to-br from-primary-50/60 via-white to-primary-50/30 dark:from-primary-900/15 dark:via-surface dark:to-primary-900/10 p-4 md:p-6 shadow-[0_8px_22px_rgba(179,0,0,0.06)]">
