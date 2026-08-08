@@ -16,7 +16,7 @@
  * the browser. It imports no server code.
  */
 
-import { isTransientAbortError, isChunkLoadError } from "./is-transient-abort";
+import { isNonActionableClientError } from "./is-transient-abort";
 
 const INGEST_URL = "/api/observability/incident";
 
@@ -45,8 +45,13 @@ export async function reportClientIncident(error: Error & { digest?: string }): 
   // NODE_ENV ถูก inline ใน client bundle: `next dev` = development → ไม่รายงาน ·
   // โปรดักชันจริงรายงานเหมือนเดิมทุกประการ.
   if (process.env.NODE_ENV !== "production") return;
-  // Skip pure transient aborts + deploy-churn chunk-load errors — not incidents.
-  if (isTransientAbortError(error) || isChunkLoadError(error)) return;
+  // ข้ามคลาสที่ "ไม่ใช่บั๊กที่แก้ได้" — transient abort · chunk-load (deploy churn) ·
+  // NEXT_REDIRECT/notFound (control flow ที่ทำงานถูกอยู่แล้ว) · transition ถูกยกเลิก
+  // (ผู้ใช้เปลี่ยนหน้ากลางคัน · เจอเฉพาะ LINE in-app + มือถือ) · Server Action หาย
+  // (แท็บเก่าหลัง deploy) · เบราว์เซอร์เก่าไม่รองรับ WebSocket.
+  // owner 2026-08-08 "ไล่เก็บ /admin/incidents ให้หมด" — อุดต้นตอก่อนล้าง ไม่งั้น
+  // เต็มใหม่วันรุ่งขึ้น (บทเรียน incident-queue-hygiene 2026-07-27).
+  if (isNonActionableClientError(error)) return;
 
   try {
     // Route — best-effort from the browser location. The server

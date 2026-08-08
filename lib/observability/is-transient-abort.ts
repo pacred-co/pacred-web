@@ -126,3 +126,90 @@ export function isChunkLoadError(
     msg.includes("failed to fetch dynamically imported module")
   );
 }
+
+/**
+ * Next.js **control-flow signals** that surface to a client error boundary as
+ * if they were errors — `redirect()` / `notFound()` from a Server Component or
+ * Server Action. The navigation actually SUCCEEDS (307/404 renders fine); only
+ * the report is wrong.
+ *
+ * 🔴 prod 2026-08-08 (owner "ไล่เก็บ /admin/incidents ให้หมด"): 3 ใบค้างบนคิวจาก
+ * `/profile` และ `/account-settings` — digest `NEXT_REDIRECT;push;/;307;` คือ
+ * **ระบบเด้งคนที่ยังไม่ล็อกอินกลับหน้าแรก = ทำงานถูกต้อง** แต่ถูกรายงานเป็นบั๊ก
+ * ⇒ พนักงานเห็นคิวไม่มีวันว่าง แล้วเลิกเชื่อคิว (บทเรียน incident-queue-hygiene
+ * 2026-07-27: ต้องอุดต้นตอก่อนล้าง ไม่งั้นเต็มใหม่วันรุ่งขึ้น).
+ *
+ * ตรวจจาก `digest` เป็นหลัก (Next ประทับ `NEXT_REDIRECT;…` / `NEXT_NOT_FOUND`)
+ * และ message เป็นตัวสำรอง — ไม่ substring-match ข้อความทั่วไป.
+ */
+export function isNextControlFlowSignal(
+  error: (Error & { digest?: string }) | null | undefined,
+): boolean {
+  if (!error) return false;
+  const d = typeof error.digest === "string" ? error.digest : "";
+  if (d.startsWith("NEXT_REDIRECT") || d === "NEXT_NOT_FOUND" || d.startsWith("NEXT_HTTP_ERROR_FALLBACK")) {
+    return true;
+  }
+  const m = (error.message ?? "").trim();
+  return m === "NEXT_REDIRECT" || m === "NEXT_NOT_FOUND";
+}
+
+/**
+ * React `startTransition` ที่ถูกยกเลิกกลางคัน — "Transition was aborted because
+ * of invalid state". เกิดเมื่อผู้ใช้กดต่อ/เปลี่ยนหน้า/สลับแอป ระหว่างที่ transition
+ * ยังทำงาน (React ยกเลิกให้เอง = พฤติกรรมปกติ ไม่ใช่บั๊กของเรา).
+ *
+ * 🔴 prod 2026-08-08: 6 ครั้งบน `/service-import` · `/dashboard` — **ทุกใบมาจาก
+ * เบราว์เซอร์ในแอป LINE (Line/26.11.0/IAB) และมือถือ** ซึ่งพักแท็บบ่อยมาก.
+ * หน้าจอผู้ใช้ไม่ได้พัง (React re-render ให้ใหม่) — รายงานอย่างเดียวที่ผิด.
+ */
+export function isAbortedTransition(error: Error | null | undefined): boolean {
+  if (!error) return false;
+  const m = (error.message ?? "").trim().toLowerCase();
+  return m === "transition was aborted because of invalid state";
+}
+
+/**
+ * ข้อความที่เกิดจาก **deploy ทับ** (แท็บเก่ายิงหา Server Action / chunk ของ
+ * deployment ที่ถูกแทนแล้ว) — ไม่ใช่บั๊กในโค้ด แก้ด้วยการโหลดหน้าใหม่.
+ * มี SOT แปลเป็นภาษาคนอยู่แล้วที่ `lib/observability/action-dispatch-error.ts`
+ * (จอบอกผู้ใช้ให้โหลดใหม่) — ตรงนี้แค่ไม่ให้ไหลเข้าคิว incidents ซ้ำๆ.
+ *
+ * 🔴 prod 2026-08-08: 4 ครั้ง (`/admin/drivers/new` · `/admin/wallet/pay-user`)
+ */
+export function isDeployChurnError(error: (Error & { name?: string }) | null | undefined): boolean {
+  if (!error) return false;
+  if (error.name === "UnrecognizedActionError") return true;
+  const m = (error.message ?? "").trim().toLowerCase();
+  return (
+    /^server action "[0-9a-f]+" was not found on the server\./.test(m) ||
+    m === "an unexpected response was received from the server."
+  );
+}
+
+/**
+ * เบราว์เซอร์เก่าที่ไลบรารีเรียกใช้ WebSocket ไม่ได้ — แก้ที่ฝั่งเราไม่ได้
+ * (prod 2026-08-08: Chrome 83 บน `/services/export-worldwide`).
+ */
+export function isUnsupportedRuntimeError(error: Error | null | undefined): boolean {
+  if (!error) return false;
+  return (error.message ?? "").trim().toLowerCase()
+    .startsWith("unknown javascript runtime without websocket support");
+}
+
+/**
+ * รวมทุกคลาสที่ "ไม่ใช่บั๊กที่แก้ได้" — ตัวเดียวที่ client-report เรียกใช้.
+ * เพิ่มคลาสใหม่ที่นี่ที่เดียว (พร้อมหลักฐานจาก prod) — ห้ามใส่แบบเดา.
+ */
+export function isNonActionableClientError(
+  error: (Error & { digest?: string; name?: string }) | null | undefined,
+): boolean {
+  return (
+    isTransientAbortError(error) ||
+    isChunkLoadError(error) ||
+    isNextControlFlowSignal(error) ||
+    isAbortedTransition(error) ||
+    isDeployChurnError(error) ||
+    isUnsupportedRuntimeError(error)
+  );
+}

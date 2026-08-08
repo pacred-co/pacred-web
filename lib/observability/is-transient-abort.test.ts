@@ -12,7 +12,7 @@
  * Run with:  tsx lib/observability/is-transient-abort.test.ts
  */
 
-import { isTransientAbortError, isChunkLoadError } from "./is-transient-abort";
+import { isTransientAbortError, isChunkLoadError, isNextControlFlowSignal, isAbortedTransition, isDeployChurnError, isUnsupportedRuntimeError, isNonActionableClientError } from "./is-transient-abort";
 import {
   isServerActionDispatchError,
   describeActionDispatchError,
@@ -233,5 +233,46 @@ assertEq(
 );
 
 // ── Summary ──
+// ── คลาสที่ "ไม่ใช่บั๊กที่แก้ได้" (owner 2026-08-08 · เคสจริงจากคิว prod) ──
+console.log("non-actionable classes → true (suppressed)");
+{
+  const mk = (msg: string, extra: Record<string, unknown> = {}) =>
+    Object.assign(new Error(msg), extra) as Error & { digest?: string; name?: string };
+
+  // NEXT_REDIRECT — ระบบเด้งคนยังไม่ล็อกอินกลับหน้าแรก = ทำงานถูกอยู่แล้ว
+  assertEq("NEXT_REDIRECT digest (/profile · /account-settings)",
+    isNextControlFlowSignal(mk("NEXT_REDIRECT", { digest: "NEXT_REDIRECT;push;/;307;" })), true);
+  assertEq("NEXT_NOT_FOUND digest", isNextControlFlowSignal(mk("boom", { digest: "NEXT_NOT_FOUND" })), true);
+  assertEq("message ล้วนก็จับได้", isNextControlFlowSignal(mk("NEXT_REDIRECT")), true);
+  assertEq("ข้อความทั่วไปที่มีคำว่า redirect = ยังรายงาน",
+    isNextControlFlowSignal(mk("redirect ไปหน้าอื่นไม่สำเร็จ")), false);
+
+  // transition ถูกยกเลิก (LINE in-app browser + มือถือ)
+  assertEq("transition aborted (LINE IAB)",
+    isAbortedTransition(mk("Transition was aborted because of invalid state")), true);
+  assertEq("transition อื่นที่พังจริง = ยังรายงาน", isAbortedTransition(mk("Transition failed for a real reason")), false);
+
+  // deploy churn — แท็บเก่ายิงหา action ของ deployment ที่ถูกแทนแล้ว
+  assertEq("Server Action not found",
+    isDeployChurnError(mk('Server Action "6026f4edc078632a19fc8453fe80839555175edca7" was not found on the server.')), true);
+  assertEq("unexpected response", isDeployChurnError(mk("An unexpected response was received from the server.")), true);
+  assertEq("UnrecognizedActionError by name", isDeployChurnError(mk("boom", { name: "UnrecognizedActionError" })), true);
+  assertEq("500 จริง = ยังรายงาน", isDeployChurnError(mk("Server returned 500")), false);
+
+  // เบราว์เซอร์เก่า (Chrome 83)
+  assertEq("unsupported runtime",
+    isUnsupportedRuntimeError(mk("Unknown JavaScript runtime without WebSocket support.")), true);
+
+  // 🔴 บั๊กจริงต้องไม่ถูกกลบ
+  for (const real of [
+    "Cannot read properties of undefined (reading 'map')",
+    "x is not defined",
+    "Failed to update forwarder: db_error:42703",
+  ]) {
+    assertEq(`บั๊กจริงยังรายงาน: ${real.slice(0, 34)}`, isNonActionableClientError(mk(real)), false);
+  }
+  assertEq("null = ไม่ใช่ non-actionable", isNonActionableClientError(null), false);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);
