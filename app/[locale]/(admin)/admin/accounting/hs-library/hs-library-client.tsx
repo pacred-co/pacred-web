@@ -14,6 +14,7 @@
  * ⚠️ Reference data (§0e) — nothing here touches a selling price / order / money.
  */
 
+import { searchHsRows } from "@/lib/admin/hs-search";
 import { useMemo, useState, useTransition } from "react";
 import {
   Search, Plus, Pencil, X, AlertTriangle, Layers, PackageSearch,
@@ -143,30 +144,23 @@ function CodesSection({ initialRows }: { initialRows: HsRow[] }) {
   }), [rows]);
 
   const visible = useMemo(() => {
-    const t = search.trim().toLowerCase();
-    const td = digitsOf(search);
-    return rows.filter((r) => {
+    // ตัวกรองสถานะก่อน (ถูก/เร็ว) แล้วค่อยค้นข้อความผ่าน SOT `lib/admin/hs-search.ts`
+    // (owner 2026-08-08 "พิมพ์ผิด/เรียกคนละคำ แล้วหาไม่เจอ") — SOT คืนด้วยว่าเจอ
+    // จากชั้นไหน เพื่อให้จอแยกป้าย "ตรงคำ" vs "ใกล้เคียง" ได้ · 43 เทสล็อกไว้.
+    const base = rows.filter((r) => {
       if (filter === "confirmed"   && !r.duty_confirmed) return false;
       if (filter === "unconfirmed" &&  r.duty_confirmed) return false;
       if (filter === "canonical"   && !r.is_canonical) return false;
       if (filter === "used"        && (r.decl_count ?? 0) === 0) return false;
       if (filter === "conflict"    && !isConflict(r)) return false;
       if (filter === "padded"      && !r.hs8_is_padded) return false;
-      if (!t) return true;
-      if (r.code.toLowerCase().includes(t)) return true;
-      // Cross-style digit match: "4202.29" must find a row stored as "42022900".
-      if (td.length >= 2 && digitsOf(r.code).includes(td)) return true;
-      const n = norm(search);
-      if (!n) return true;
-      if (norm(r.description).includes(n)) return true;
-      if (norm(r.description_en).includes(n)) return true;
-      if (norm(r.hs_note).includes(n)) return true;
-      if (clean(r.source).toLowerCase().includes(t)) return true;
-      // ชื่อสินค้าที่เคยถาม/ตอบ — งานเดิมของแท็บ "สินค้า → พิกัด" มาอยู่ในลิสต์นี้
-      if (aliasHit(r, n) !== null) return true;
-      return false;
+      return true;
     });
+    return searchHsRows(base, search);
   }, [rows, search, filter]);
+
+  /** จำนวนที่เจอแบบ "เดาให้" — จอบอกตรงๆ ว่ามีผลใกล้เคียงกี่รายการ */
+  const fuzzyCount = useMemo(() => visible.filter((r) => r.match.kind === "fuzzy").length, [visible]);
 
   const RENDER_CAP = 400;
   const shown = visible.slice(0, RENDER_CAP);
